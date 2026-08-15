@@ -1,0 +1,2186 @@
+<title>Arquitectura de Psicogestión</title>
+
+<style>
+/* ─────────────────────────────────────────────────────────────
+   PSICOGESTIÓN · Documento maestro
+   Paleta: porcelana clínica + tinta petróleo + verde instrumental
+   Tipografía: serif humanista (prosa) / sans de sistema (datos) / mono (identificadores)
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Superficies */
+  --papel:         #F1F4F2;
+  --superficie:    #FBFCFB;
+  --superficie-2:  #E6EBE8;
+  --borde:         #D3DAD6;
+  --borde-fuerte:  #AFBAB5;
+
+  /* Tinta */
+  --tinta:         #0F1A18;
+  --tinta-media:   #45544F;
+  --tinta-suave:   #6D7C76;
+
+  /* Acento */
+  --verde:         #0E5A4E;
+  --verde-fuerte:  #093F37;
+  --verde-tenue:   #DCEAE5;
+
+  /* Semánticos */
+  --ambar:         #7F5310;
+  --ambar-tenue:   #F4EAD6;
+  --granate:       #8A2E38;
+  --granate-tenue: #F5E3E4;
+  --azul:          #22506B;
+  --azul-tenue:    #DFE9F0;
+
+  /* Tipografía */
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Charter, Georgia, ui-serif, serif;
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Cascadia Mono", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace;
+
+  --medida: 68ch;
+  --rail: 268px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --papel:         #09100F;
+    --superficie:    #0F1917;
+    --superficie-2:  #15211E;
+    --borde:         #24312D;
+    --borde-fuerte:  #3B4A45;
+    --tinta:         #DEE7E3;
+    --tinta-media:   #9CAEA8;
+    --tinta-suave:   #788983;
+    --verde:         #5CBFA6;
+    --verde-fuerte:  #8AD8C2;
+    --verde-tenue:   #12302A;
+    --ambar:         #D6A254;
+    --ambar-tenue:   #2C2314;
+    --granate:       #D68992;
+    --granate-tenue: #2C191C;
+    --azul:          #7FB2D0;
+    --azul-tenue:    #12222C;
+  }
+}
+
+:root[data-theme="dark"] {
+  --papel:         #09100F;
+  --superficie:    #0F1917;
+  --superficie-2:  #15211E;
+  --borde:         #24312D;
+  --borde-fuerte:  #3B4A45;
+  --tinta:         #DEE7E3;
+  --tinta-media:   #9CAEA8;
+  --tinta-suave:   #788983;
+  --verde:         #5CBFA6;
+  --verde-fuerte:  #8AD8C2;
+  --verde-tenue:   #12302A;
+  --ambar:         #D6A254;
+  --ambar-tenue:   #2C2314;
+  --granate:       #D68992;
+  --granate-tenue: #2C191C;
+  --azul:          #7FB2D0;
+  --azul-tenue:    #12222C;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.62;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Estructura ─────────────────────────────────────────────── */
+
+.lienzo {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  gap: 0;
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 40px 28px 40px 32px;
+  border-right: 1px solid var(--borde);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.cuerpo {
+  padding: 0 48px 160px;
+  min-width: 0;
+}
+
+.col { max-width: var(--medida); }
+
+/* ── Rail de navegación ─────────────────────────────────────── */
+
+.rail-marca {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tinta);
+  margin-bottom: 2px;
+}
+
+.rail-sub {
+  color: var(--tinta-suave);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.rail nav { display: flex; flex-direction: column; gap: 1px; }
+
+.rail a {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 6px;
+  color: var(--tinta-media);
+  text-decoration: none;
+  padding: 5px 8px 5px 6px;
+  border-radius: 3px;
+  border-left: 2px solid transparent;
+  transition: color .12s, background .12s, border-color .12s;
+}
+
+.rail a:hover { color: var(--tinta); background: var(--superficie-2); }
+.rail a:focus-visible { outline: 2px solid var(--verde); outline-offset: 1px; }
+
+.rail a .n {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--tinta-suave);
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}
+
+.rail a.activo {
+  color: var(--verde);
+  border-left-color: var(--verde);
+  background: var(--verde-tenue);
+  font-weight: 600;
+}
+
+.rail a.activo .n { color: var(--verde); }
+
+.rail-pie {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--borde);
+  color: var(--tinta-suave);
+  font-size: 11.5px;
+}
+
+/* ── Portada ────────────────────────────────────────────────── */
+
+.portada {
+  padding: 96px 0 56px;
+  border-bottom: 2px solid var(--tinta);
+  margin-bottom: 56px;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--verde);
+  margin-bottom: 22px;
+}
+
+.portada h1 {
+  font-size: clamp(48px, 7vw, 82px);
+  line-height: 0.94;
+  letter-spacing: -0.032em;
+  font-weight: 600;
+  margin: 0 0 20px;
+  text-wrap: balance;
+  max-width: 15ch;
+}
+
+.portada .tesis {
+  font-size: 21px;
+  line-height: 1.5;
+  color: var(--tinta-media);
+  max-width: 56ch;
+  margin: 0 0 44px;
+  text-wrap: pretty;
+}
+
+.ficha {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1px;
+  background: var(--borde);
+  border: 1px solid var(--borde);
+  max-width: 980px;
+}
+
+.ficha div { background: var(--papel); padding: 14px 16px; }
+
+.ficha dt {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+  margin-bottom: 5px;
+}
+
+.ficha dd {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* ── Tipografía de secciones ────────────────────────────────── */
+
+section { scroll-margin-top: 24px; padding-top: 20px; }
+
+h2 {
+  font-size: 34px;
+  line-height: 1.12;
+  letter-spacing: -0.022em;
+  font-weight: 600;
+  margin: 76px 0 6px;
+  text-wrap: balance;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: baseline;
+}
+
+h2 .n {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--verde);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.h2-sub {
+  font-family: var(--sans);
+  font-size: 14.5px;
+  color: var(--tinta-suave);
+  margin: 0 0 34px 46px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--borde);
+  max-width: 60ch;
+}
+
+h3 {
+  font-family: var(--sans);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  margin: 44px 0 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: baseline;
+  text-wrap: balance;
+}
+
+h3 .n {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--tinta-suave);
+  font-variant-numeric: tabular-nums;
+}
+
+h4 {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--tinta-media);
+  margin: 30px 0 10px;
+}
+
+p { margin: 0 0 16px; max-width: var(--medida); text-wrap: pretty; }
+
+.lede {
+  font-size: 19px;
+  line-height: 1.55;
+  color: var(--tinta-media);
+  max-width: 62ch;
+}
+
+ul, ol { max-width: var(--medida); margin: 0 0 18px; padding-left: 20px; }
+li { margin-bottom: 7px; }
+li::marker { color: var(--tinta-suave); }
+
+strong { font-weight: 700; }
+em { font-style: italic; }
+
+a { color: var(--verde); text-underline-offset: 2px; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.855em;
+  background: var(--superficie-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--tinta);
+  border: 1px solid var(--borde);
+}
+
+/* ── Callouts ───────────────────────────────────────────────── */
+
+.nota {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 0;
+  margin: 24px 0 26px;
+  max-width: var(--medida);
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--tinta-suave);
+  background: var(--superficie);
+  font-family: var(--sans);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.nota .etq {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 14px 10px 14px 14px;
+  color: var(--tinta-suave);
+  border-right: 1px solid var(--borde);
+  align-self: stretch;
+}
+
+.nota .txt { padding: 13px 16px; }
+.nota .txt p { margin: 0 0 9px; font-size: inherit; }
+.nota .txt p:last-child { margin: 0; }
+.nota .txt ul { margin: 8px 0 0; font-size: inherit; }
+
+.nota.norma      { border-left-color: var(--verde);   background: var(--verde-tenue); }
+.nota.norma .etq { color: var(--verde-fuerte); border-right-color: color-mix(in srgb, var(--verde) 28%, transparent); }
+.nota.decision      { border-left-color: var(--azul);  background: var(--azul-tenue); }
+.nota.decision .etq { color: var(--azul); border-right-color: color-mix(in srgb, var(--azul) 28%, transparent); }
+.nota.riesgo      { border-left-color: var(--granate); background: var(--granate-tenue); }
+.nota.riesgo .etq { color: var(--granate); border-right-color: color-mix(in srgb, var(--granate) 28%, transparent); }
+.nota.aviso      { border-left-color: var(--ambar); background: var(--ambar-tenue); }
+.nota.aviso .etq { color: var(--ambar); border-right-color: color-mix(in srgb, var(--ambar) 28%, transparent); }
+
+/* ── Tablas ─────────────────────────────────────────────────── */
+
+.tabla-env {
+  overflow-x: auto;
+  margin: 26px 0 30px;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  line-height: 1.42;
+}
+
+thead th {
+  text-align: left;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+  font-weight: 400;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--borde-fuerte);
+  background: var(--superficie-2);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+tbody td, tbody th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--borde);
+  vertical-align: top;
+  text-align: left;
+  font-weight: 400;
+}
+
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
+tbody th { font-weight: 600; color: var(--tinta); }
+td code, th code { background: none; border: none; padding: 0; font-size: 0.9em; }
+
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.si  { color: var(--verde);   font-weight: 700; }
+.no  { color: var(--tinta-suave); }
+.par { color: var(--ambar);   font-weight: 700; }
+
+/* ── Píldoras ───────────────────────────────────────────────── */
+
+.pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.pill.p1 { color: var(--granate); }
+.pill.p2 { color: var(--ambar); }
+.pill.p3 { color: var(--verde); }
+.pill.p4 { color: var(--tinta-suave); }
+
+/* ── Catálogo de tablas de BD ───────────────────────────────── */
+
+.dominios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1px;
+  background: var(--borde);
+  border: 1px solid var(--borde);
+  margin: 26px 0 30px;
+  max-width: 1040px;
+}
+
+.dominio { background: var(--superficie); padding: 16px 18px 18px; }
+
+.dominio h5 {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--verde);
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.dominio dl { margin: 0; font-family: var(--sans); font-size: 13px; }
+.dominio dt {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta);
+  margin-top: 11px;
+}
+.dominio dt:first-child { margin-top: 0; }
+.dominio dd { margin: 2px 0 0; color: var(--tinta-suave); line-height: 1.4; font-size: 12.5px; }
+
+/* ── Figuras / diagramas ────────────────────────────────────── */
+
+figure {
+  margin: 34px 0 36px;
+  max-width: 1040px;
+}
+
+figure .marco {
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  padding: 26px 22px 20px;
+  overflow-x: auto;
+}
+
+figure svg { display: block; width: 100%; height: auto; min-width: 520px; }
+
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--tinta-suave);
+  margin-top: 11px;
+  line-height: 1.5;
+  max-width: 74ch;
+}
+figcaption b { color: var(--tinta-media); font-weight: 600; }
+
+/* Estilos de los diagramas SVG */
+.dg-caja   { fill: var(--superficie-2); stroke: var(--borde-fuerte); stroke-width: 1; }
+.dg-caja-a { fill: var(--verde-tenue);  stroke: var(--verde); stroke-width: 1.5; }
+.dg-caja-r { fill: var(--granate-tenue); stroke: var(--granate); stroke-width: 1.5; }
+.dg-caja-m { fill: var(--ambar-tenue);  stroke: var(--ambar); stroke-width: 1.5; }
+.dg-caja-h { fill: none; stroke: var(--borde-fuerte); stroke-width: 1; stroke-dasharray: 4 4; }
+.dg-t      { fill: var(--tinta); font-family: var(--sans); font-size: 12.5px; }
+.dg-t-b    { fill: var(--tinta); font-family: var(--sans); font-size: 12.5px; font-weight: 700; }
+.dg-t-s    { fill: var(--tinta-suave); font-family: var(--sans); font-size: 11px; }
+.dg-t-m    { fill: var(--tinta-media); font-family: var(--mono); font-size: 10.5px; }
+.dg-t-a    { fill: var(--verde-fuerte); font-family: var(--sans); font-size: 12.5px; font-weight: 700; }
+.dg-t-r    { fill: var(--granate); font-family: var(--sans); font-size: 11px; font-weight: 700; }
+.dg-lin    { stroke: var(--borde-fuerte); stroke-width: 1.4; fill: none; }
+.dg-lin-a  { stroke: var(--verde); stroke-width: 1.8; fill: none; }
+.dg-lin-r  { stroke: var(--granate); stroke-width: 1.8; fill: none; stroke-dasharray: 5 3; }
+.dg-flecha { fill: var(--borde-fuerte); }
+.dg-flecha-a { fill: var(--verde); }
+.dg-flecha-r { fill: var(--granate); }
+
+/* ── Fases del roadmap ──────────────────────────────────────── */
+
+.fases { max-width: 1040px; margin: 26px 0 30px; }
+
+.fase {
+  display: grid;
+  grid-template-columns: 116px 1fr;
+  gap: 24px;
+  padding: 20px 0;
+  border-top: 1px solid var(--borde);
+}
+.fase:last-child { border-bottom: 1px solid var(--borde); }
+
+.fase-id { font-family: var(--mono); font-size: 12px; }
+.fase-id .f { display: block; color: var(--verde); font-weight: 600; letter-spacing: 0.06em; }
+.fase-id .d { display: block; color: var(--tinta-suave); font-size: 11px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+.fase-c h4 { margin: 0 0 8px; text-transform: none; letter-spacing: -0.005em; font-size: 15.5px; color: var(--tinta); }
+.fase-c p  { margin: 0 0 10px; font-family: var(--sans); font-size: 14px; color: var(--tinta-media); }
+.fase-c ul { margin: 0; font-family: var(--sans); font-size: 13.5px; color: var(--tinta-media); columns: 2; column-gap: 30px; }
+.fase-c li { margin-bottom: 4px; break-inside: avoid; }
+
+/* ── Cierre ─────────────────────────────────────────────────── */
+
+.cierre {
+  margin-top: 84px;
+  padding-top: 28px;
+  border-top: 2px solid var(--tinta);
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--tinta-suave);
+  max-width: 76ch;
+}
+
+hr.sep {
+  border: none;
+  border-top: 1px solid var(--borde);
+  margin: 40px 0;
+  max-width: var(--medida);
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+
+@media (max-width: 1020px) {
+  .lienzo { grid-template-columns: 1fr; }
+  .rail {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--borde);
+    padding: 26px 24px;
+  }
+  .rail nav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0 12px;
+  }
+  .rail-pie { display: none; }
+  .cuerpo { padding: 0 24px 100px; }
+  .portada { padding-top: 44px; }
+  .fase { grid-template-columns: 1fr; gap: 10px; }
+  .fase-c ul { columns: 1; }
+  .nota { grid-template-columns: 1fr; }
+  .nota .etq { border-right: none; border-bottom: 1px solid var(--borde); padding: 9px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+</style>
+
+<div class="lienzo">
+
+<!-- ══════════════════ RAIL ══════════════════ -->
+<aside class="rail">
+  <div class="rail-marca">Psicogestión</div>
+  <div class="rail-sub">Documento maestro · v1.3</div>
+  <nav id="toc">
+    <a href="#s0"><span class="n">00</span><span>Resumen ejecutivo</span></a>
+    <a href="#s1"><span class="n">01</span><span>Decisiones fundacionales</span></a>
+    <a href="#s2"><span class="n">02</span><span>Marco normativo</span></a>
+    <a href="#s3"><span class="n">03</span><span>Arquitectura</span></a>
+    <a href="#s4"><span class="n">04</span><span>Modelo de datos</span></a>
+    <a href="#s5"><span class="n">05</span><span>Seguridad y privacidad</span></a>
+    <a href="#s6"><span class="n">06</span><span>Especificación funcional</span></a>
+    <a href="#s7"><span class="n">07</span><span>Sistema de diseño</span></a>
+    <a href="#s8"><span class="n">08</span><span>Plan de construcción</span></a>
+    <a href="#s9"><span class="n">09</span><span>Riesgos</span></a>
+    <a href="#s10"><span class="n">10</span><span>Decisiones cerradas</span></a>
+  </nav>
+  <div class="rail-pie">
+    Especificación técnica.<br>No constituye asesoramiento jurídico:<br>el RAT y la EIPD deben validarse<br>con DPD o asesoría legal.
+  </div>
+</aside>
+
+<!-- ══════════════════ CUERPO ══════════════════ -->
+<main class="cuerpo">
+
+<header class="portada">
+  <div class="eyebrow">Documento maestro de producto y arquitectura</div>
+  <h1>Psicogestión</h1>
+  <p class="tesis">Gestión clínica y facturación para consultas sanitarias españolas, construida sobre una premisa: <em>nada de lo que se escribe se puede borrar, y todo lo que se escribe se puede demostrar.</em></p>
+
+  <dl class="ficha">
+    <div><dt>Versión</dt><dd>1.3 — 15 ago 2026</dd></div>
+    <div><dt>Stack</dt><dd>Next.js 16 · TypeScript · Supabase · Vercel</dd></div>
+    <div><dt>Tenencia</dt><dd>Instancia dedicada por cliente</dd></div>
+    <div><dt>Residencia</dt><dd>Unión Europea (París)</dd></div>
+    <div><dt>Cumplimiento</dt><dd>RGPD · LOPDGDD · Verifactu · eIDAS</dd></div>
+    <div><dt>Estado</dt><dd>Dieciocho decisiones cerradas</dd></div>
+  </dl>
+</header>
+
+<!-- ─────────── 00 ─────────── -->
+<section id="s0">
+  <h2><span class="n">00</span><span>Resumen ejecutivo</span></h2>
+  <p class="h2-sub">Qué se construye, para quién, y por qué las decisiones difíciles son las que son.</p>
+
+  <p class="lede">Psicogestión es el sistema operativo de una consulta sanitaria: agenda, historia clínica, evaluaciones, informes y facturación en una sola aplicación, diseñada para que un profesional pueda pasar una inspección de la AEPD y una de la AEAT sin cambiar de herramienta ni improvisar.</p>
+
+  <p>El mercado ya tiene software de gestión de clínicas. Casi todo él comete el mismo error: trata el cumplimiento normativo como una capa que se añade al final —un aviso de cookies, un checkbox de consentimiento— sobre un modelo de datos que permite editar y borrar registros clínicos. Eso funciona hasta el día en que hay un litigio, una reclamación de un paciente o un requerimiento judicial, y entonces no hay forma de demostrar qué se escribió, cuándo y quién lo escribió.</p>
+
+  <p>Este documento parte del extremo contrario. La <strong>inalterabilidad es el cimiento</strong>, no el acabado. Una nota clínica no se modifica: se versiona, y cada versión se encadena criptográficamente con la anterior. Una factura no se corrige: se anula con un registro que también se encadena. El mismo mecanismo —una cadena de huellas SHA-256— sirve simultáneamente a la <strong>Ley 41/2002</strong> de historia clínica y al <strong>Reglamento Verifactu</strong> de facturación. Esa coincidencia no es casual, y es la idea de la que cuelga toda la arquitectura.</p>
+
+  <h3><span class="n">0.1</span><span>A quién sirve</span></h3>
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Perfil</th><th>Tamaño</th><th>Qué le resuelve</th><th>Qué le duele hoy</th></tr></thead>
+      <tbody>
+        <tr><th>Psicólogo autónomo</th><td class="num">1 usuario</td><td>Agenda, historias, cobros y trimestral en un sitio</td><td>Excel + Google Calendar + gestoría, sin trazabilidad</td></tr>
+        <tr><th>Consulta pequeña</th><td class="num">2–6 usuarios</td><td>Separación de agendas y de secreto profesional entre colegas</td><td>Todo el mundo ve todo, o nadie ve nada</td></tr>
+        <tr><th>Centro sanitario</th><td class="num">7–40 usuarios</td><td>Roles, auditoría, cuadro económico por profesional</td><td>Software genérico que no entiende la exención de IVA sanitaria</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3><span class="n">0.2</span><span>Los cinco compromisos del producto</span></h3>
+  <ol>
+    <li><strong>Nada se pierde.</strong> Todo registro clínico es de solo-adición. Las correcciones se añaden, con autor y fecha, y la versión anterior permanece legible.</li>
+    <li><strong>Todo deja rastro.</strong> Cada lectura de una historia clínica queda registrada, no solo cada escritura. Es la única forma de responder a «¿quién ha visto mi historial?».</li>
+    <li><strong>El secreto es del profesional, no del cargo.</strong> Ser administrador da control sobre la plataforma, no acceso automático a las notas clínicas de otros.</li>
+    <li><strong>Los datos son del cliente.</strong> Exportación íntegra, cifrada y con la contraseña que él elija, en cualquier momento y sin pedir permiso.</li>
+    <li><strong>La factura es legal el primer día.</strong> Verifactu integrado, no prometido para una versión futura.</li>
+  </ol>
+</section>
+
+<!-- ─────────── 01 ─────────── -->
+<section id="s1">
+  <h2><span class="n">01</span><span>Decisiones fundacionales</span></h2>
+  <p class="h2-sub">Las cuatro decisiones tomadas antes de escribir una línea de código, y lo que cada una compra y cuesta.</p>
+
+  <div class="nota decision">
+    <div class="etq">Decisión 1</div>
+    <div class="txt">
+      <p><strong>Instancia dedicada por cliente.</strong> Cada clínica recibe su propio proyecto Supabase y su propio despliegue Vercel, alimentados desde un único repositorio.</p>
+      <p><b>Compra:</b> aislamiento físico de los datos de salud. Ante una brecha, el radio de explosión es un cliente. Ante una auditoría, la respuesta «los datos de esta clínica están en su propia base de datos» es incontestable. Permite además que un cliente exija su propia región, su propio ciclo de actualización o una copia completa de su instancia.</p>
+      <p><b>Cuesta:</b> el coste y la operación crecen linealmente con el número de clientes. Sin automatización, cada cliente nuevo es un día de trabajo manual y cada migración es un despliegue multiplicado por N. Esto obliga a construir un plano de control desde el principio — ver <a href="#s3">§3.3</a>.</p>
+    </div>
+  </div>
+
+  <div class="nota decision">
+    <div class="etq">Decisión 2</div>
+    <div class="txt">
+      <p><strong>Verifactu desde el diseño.</strong> El módulo de facturación emite facturas legalmente válidas conforme al RD&nbsp;1007/2023, no un registro interno de cobros.</p>
+      <p><b>Compra:</b> el producto es autosuficiente. El usuario no necesita un segundo software para facturar, y eso duplica el valor percibido del módulo económico.</p>
+      <p><b>Cuesta:</b> la factura pasa a ser inmutable de verdad. No hay «editar factura»; hay anulación y reemisión. Requiere una declaración responsable del productor de software y un compromiso permanente de mantenimiento frente a cambios de la AEAT.</p>
+    </div>
+  </div>
+
+  <div class="nota decision">
+    <div class="etq">Decisión 3</div>
+    <div class="txt">
+      <p><strong>Next.js App Router + TypeScript.</strong> Sigue siendo React, Tailwind y Node sobre Vercel; se añade renderizado en servidor y tipado estricto.</p>
+      <p><b>Compra:</b> los historiales se renderizan en el servidor y nunca viajan completos al navegador. Supabase genera los tipos de la base de datos, de modo que un cambio de esquema rompe la compilación en vez de filtrar una columna sensible en producción. La generación de PDF y el cifrado ocurren en el servidor, donde deben ocurrir.</p>
+      <p><b>Cuesta:</b> curva de aprendizaje mayor que una SPA y disciplina para no marcar componentes como <code>"use client"</code> por comodidad.</p>
+    </div>
+  </div>
+
+  <div class="nota decision">
+    <div class="etq">Decisión 4</div>
+    <div class="txt">
+      <p><strong>Cifrado de exportaciones con clave derivada del usuario.</strong> Los documentos y copias descargables se cifran con una contraseña que fija el usuario y que el sistema nunca almacena.</p>
+      <p><b>Compra:</b> los archivos que salen del sistema siguen protegidos aunque acaben en un pendrive perdido o en un correo mal dirigido.</p>
+      <p><b>Cuesta:</b> es criptografía real, con consecuencias reales. Si el usuario pierde la contraseña, el archivo es irrecuperable. Esto debe decirse en la interfaz, con esas palabras, antes de generar el archivo.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">1.1</span><span>Alcance de la versión 1</span></h3>
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Ámbito</th><th>Decisión</th><th>Reversible</th></tr></thead>
+      <tbody>
+        <tr><th>Idioma</th><td>Castellano como único idioma en v1; arquitectura preparada para i18n (catalán, euskera, gallego, inglés)</td><td class="si">Sí</td></tr>
+        <tr><th>Codificación diagnóstica</th><td>CIE-10-ES estructurado como catálogo principal, con campo paralelo para nomenclatura DSM-5-TR</td><td class="par">Con migración</td></tr>
+        <tr><th>Firma de documentos</th><td>Dos capas: rúbrica manuscrita capturada en pantalla + firma electrónica cualificada eIDAS (<a href="#s6">§6.7</a>)</td><td class="no">Estructural</td></tr>
+        <tr><th>Firma del paciente</th><td>Dentro de v1: firma de asistencia por cita y consentimientos firmados en pantalla</td><td class="par">Desactivable</td></tr>
+        <tr><th>Recordatorios al paciente</th><td>Dentro de v1: enlace <code>wa.me</code> con envío manual desde una cola diaria, más correo. Cloud API solo cuando el volumen lo exija</td><td class="par">Canal configurable</td></tr>
+        <tr><th>Sector público</th><td>Aparcado en v1. Se diseña compatible con ENS pero no se certifica: ninguna decisión cierra la puerta (<a href="#s2">§2.5</a>)</td><td class="par">Reabrible con pliego</td></tr>
+        <tr><th>Migración de entrada</th><td>Dentro de v1: importador de Excel y CSV con plantilla, previsualización, detección de duplicados e informe de errores por fila</td><td class="no">Imprescindible</td></tr>
+        <tr><th>Equipo</th><td>Un solo desarrollador asistido por IA. Condiciona el plan más que ninguna decisión técnica (<a href="#s8">§8</a>)</td><td class="no">Estructural</td></tr>
+        <tr><th>Acceso del administrador a notas ajenas</th><td>Denegado por defecto, con acceso de emergencia justificado, temporal y auditado</td><td class="no">Cerrado — <a href="#s10">§10</a></td></tr>
+        <tr><th>Modo Verifactu</th><td>Modo VERI*FACTU con remisión inmediata a la AEAT (evita exigir firma cualificada de los registros de facturación)</td><td class="par">Configurable</td></tr>
+        <tr><th>Videoconsulta</th><td>Fuera de v1. Se modela el tipo de cita «online» pero no se integra proveedor</td><td class="si">Sí</td></tr>
+        <tr><th>Portal del paciente</th><td>Fuera de v1. El registro de accesos ya lo hace posible en v2 sin rehacer el modelo de datos</td><td class="si">Sí</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ─────────── 02 ─────────── -->
+<section id="s2">
+  <h2><span class="n">02</span><span>Marco normativo</span></h2>
+  <p class="h2-sub">Cada requisito legal que condiciona una decisión técnica, con la norma concreta que lo impone.</p>
+
+  <p class="lede">Una aplicación que trata datos de salud en España se mueve en la intersección de cuatro cuerpos normativos que no se hablan entre sí: protección de datos, historia clínica, facturación electrónica y fiscalidad. Esta sección los reconcilia.</p>
+
+  <h3><span class="n">2.1</span><span>Protección de datos</span></h3>
+
+  <div class="nota norma">
+    <div class="etq">RGPD 9</div>
+    <div class="txt">
+      <p>Los datos de salud son <strong>categoría especial</strong> (art. 9.1) y su tratamiento está prohibido salvo excepción. La aplicable aquí es el <strong>art. 9.2.h</strong>: fines de diagnóstico médico y prestación de asistencia sanitaria, condicionado por el <strong>art. 9.3</strong> a que el tratamiento lo realice un profesional sujeto a secreto profesional.</p>
+      <p><b>Consecuencia técnica:</b> el acceso a datos clínicos se ancla al rol profesional, no a la jerarquía de la organización. Un técnico administrativo no queda amparado por el art. 9.2.h para leer una nota clínica, por mucho que trabaje en el mismo centro. Esto es lo que fuerza la separación de tablas de <a href="#s4">§4.4</a>.</p>
+    </div>
+  </div>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Norma</th><th>Obligación</th><th>Implementación</th></tr></thead>
+      <tbody>
+        <tr><th>RGPD art. 5.1.e</th><td>Limitación del plazo de conservación</td><td>Política de retención con reloj vinculado al fin del proceso asistencial (<a href="#s5">§5.7</a>)</td></tr>
+        <tr><th>RGPD art. 30</th><td>Registro de actividades de tratamiento (RAT)</td><td>Plantilla de RAT precumplimentada por instancia, exportable</td></tr>
+        <tr><th>RGPD art. 32</th><td>Seguridad del tratamiento</td><td>Cifrado en tránsito y reposo, MFA, RLS, auditoría, pruebas de restauración</td></tr>
+        <tr><th>RGPD art. 33–34</th><td>Notificación de brechas en 72 h</td><td>Detección por alertas de acceso anómalo + guion de respuesta y plantilla de notificación</td></tr>
+        <tr><th>RGPD art. 35</th><td>EIPD obligatoria (tratamiento a gran escala de categoría especial)</td><td>Documento de EIPD como entregable de la fase 5, previo a producción</td></tr>
+        <tr><th>RGPD art. 28 — tus proveedores</th><td>Contrato de encargado del tratamiento</td><td>DPA firmado con Supabase y con Vercel; registro de subencargados</td></tr>
+        <tr><th>RGPD art. 28 — tú mismo</th><td><strong>Tú eres encargado de tus clientes.</strong> Cada clínica es responsable del tratamiento y tú tratas datos de salud por cuenta de ella</td><td>Contrato de encargado propio, como anexo del contrato de servicio, más registro de subencargados comunicado al cliente. <em>Sin esto no puedes vender legalmente</em></td></tr>
+        <tr><th>LOPDGDD art. 34.1.k</th><td>Delegado de Protección de Datos obligatorio para centros obligados a mantener historias clínicas</td><td>Campo de DPD en ajustes de empresa. <em>No aplica al profesional que ejerce a título individual</em></td></tr>
+        <tr><th>Art. 199 CP · Código Deontológico COP</th><td>Secreto profesional</td><td>El administrador no accede a notas ajenas por defecto (<a href="#s5">§5.2</a>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3><span class="n">2.2</span><span>Historia clínica y conservación</span></h3>
+
+  <div class="nota norma">
+    <div class="etq">L 41/2002</div>
+    <div class="txt">
+      <p><strong>Art. 17.1:</strong> la historia clínica se conserva <em>como mínimo</em> cinco años desde la fecha del alta de cada proceso asistencial. <strong>Art. 15</strong> fija el contenido mínimo. <strong>Art. 18</strong> reconoce el derecho de acceso del paciente.</p>
+      <p><b>Atención:</b> ese mínimo estatal está ampliado por normativa autonómica y varía de forma significativa. Cataluña (Ley 21/2000) llega a quince años; otras comunidades fijan plazos y criterios distintos. Y varias de ellas obligan a conservar <strong>indefinidamente</strong> un núcleo documental —consentimientos informados, informes de alta, hojas de anamnesis y evolución, informes de exploraciones— aunque el resto se purgue.</p>
+    </div>
+  </div>
+
+  <p>De aquí salen tres exigencias de diseño que casi ningún software de gestión implementa:</p>
+  <ul>
+    <li>El reloj de retención arranca en el <strong>fin del proceso asistencial</strong>, no en la fecha de creación del registro. Un paciente con diez años de terapia continuada no tiene notas «caducadas».</li>
+    <li>La retención es una <strong>propiedad por tipo de documento</strong>, no una constante global. El núcleo de la historia se marca como conservación indefinida.</li>
+    <li>Los <strong>25 años</strong> solicitados superan el mínimo legal. Es una política de empresa perfectamente válida, pero el art. 5.1.e del RGPD exige justificarla: debe constar en el RAT como decisión motivada, no como valor por defecto sin explicación.</li>
+  </ul>
+
+  <h3><span class="n">2.3</span><span>Facturación: Verifactu</span></h3>
+
+  <div class="nota norma">
+    <div class="etq">RD 1007/23</div>
+    <div class="txt">
+      <p>El Reglamento de los Sistemas Informáticos de Facturación —RD 1007/2023, modificado por RD 254/2025 y desarrollado por la Orden HAC/1177/2024— exige que el software garantice <strong>integridad, conservación, accesibilidad, legibilidad, trazabilidad e inalterabilidad</strong> de los registros de facturación.</p>
+      <p>Calendario: obligatorio para contribuyentes del Impuesto sobre Sociedades desde el <strong>1 de enero de 2026</strong> y para el resto —autónomos en IRPF— desde el <strong>1 de julio de 2026</strong>. Ambas fechas ya han vencido.</p>
+    </div>
+  </div>
+
+  <p>Requisitos que se traducen directamente en el modelo de datos:</p>
+  <ul>
+    <li><strong>Registro de alta</strong> por cada factura, con NIF del emisor, serie y número, fecha, tipo de factura, importe total, cuota, y <strong>huella SHA-256 encadenada</strong> con la del registro inmediatamente anterior.</li>
+    <li><strong>Registro de anulación</strong> para cada factura anulada. No existe borrado, y no existe edición.</li>
+    <li><strong>Código QR obligatorio</strong> en la factura, con la leyenda «Factura verificable en la sede electrónica de la AEAT» o «VERI*FACTU».</li>
+    <li><strong>Numeración correlativa e inalterable</strong> por serie y ejercicio, generada por el sistema y jamás editable a mano.</li>
+    <li><strong>Declaración responsable</strong> del productor del software, incorporada al propio programa.</li>
+  </ul>
+
+  <div class="nota aviso">
+    <div class="etq">Elección</div>
+    <div class="txt">
+      <p>El reglamento admite dos modos. En <strong>modo VERI*FACTU</strong> los registros se remiten a la AEAT en el momento de su generación, y a cambio se relajan los requisitos de conservación local y no se exige firma electrónica de los registros. En <strong>modo no verificable</strong> los registros se conservan localmente, pero exigen firma electrónica y un registro de eventos mucho más estricto.</p>
+      <p>Se adopta el <strong>modo VERI*FACTU</strong>: menos superficie criptográfica que mantener, menos que auditar, y elimina la necesidad de gestionar certificados de firma por cliente. Se mantiene una cola durable para reintentar la remisión si la AEAT no responde, porque la factura debe poder emitirse aunque el servicio esté caído.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">2.4</span><span>Fiscalidad de la consulta sanitaria</span></h3>
+
+  <p>Aquí es donde el software genérico falla, y donde este producto puede diferenciarse con muy poco esfuerzo. La casilla «con IVA / sin IVA» que pedías es correcta, pero <strong>el tipo de IVA no debe ser una elección libre: debe derivarse del tipo de servicio</strong>, porque la propia ley lo determina.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Servicio</th><th>IVA</th><th>Fundamento</th><th>Retención IRPF</th></tr></thead>
+      <tbody>
+        <tr><th>Sesión de terapia / asistencia sanitaria</th><td class="num">Exento</td><td>Art. 20.Uno.3º LIVA — asistencia a personas físicas por profesional sanitario</td><td>15 % si el destinatario es empresario o profesional</td></tr>
+        <tr><th>Evaluación psicológica con fin diagnóstico</th><td class="num">Exento</td><td>Art. 20.Uno.3º LIVA</td><td>15 %</td></tr>
+        <tr><th>Informe pericial para procedimiento judicial</th><td class="num">21 %</td><td>Finalidad no asistencial — no ampara la exención</td><td>15 %</td></tr>
+        <tr><th>Informe para compañía aseguradora</th><td class="num">21 %</td><td>Finalidad no asistencial</td><td>15 %</td></tr>
+        <tr><th>Formación, docencia o conferencias</th><td class="num">Variable</td><td>Exención condicionada del art. 20.Uno.9º</td><td>15 %</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li>La retención de IRPF baja al <strong>7 %</strong> durante el año de inicio de actividad y los dos siguientes (art. 95 RD 439/2007). El sistema debe conocer la fecha de alta del profesional y proponer el tipo correcto.</li>
+    <li>Una factura exenta debe <strong>indicar el motivo de la exención</strong> con mención expresa al precepto. Es un campo obligatorio, no un texto libre opcional.</li>
+    <li>El libro de gastos y el cuadro de resultados se diseñan para alimentar directamente los <strong>modelos 130</strong> (pago fraccionado IRPF) y <strong>303</strong> (IVA), que es lo que el usuario realmente necesita cada trimestre.</li>
+  </ul>
+
+  <h3><span class="n">2.5</span><span>Sector público: preparado, no certificado</span></h3>
+
+  <p>El sector público queda <strong>fuera de la versión 1</strong>. La decisión no se toma por desconocimiento sino al revés: se toma sabiendo exactamente qué haría falta, y qué lo hace caro ahora.</p>
+
+  <div class="nota riesgo">
+    <div class="etq">El hallazgo</div>
+    <div class="txt">
+      <p>El <strong>Esquema Nacional de Seguridad</strong> (RD 311/2022) no se detiene en tu sistema: alcanza a <strong>los proveedores de los que depende el servicio público</strong>, y la guía CCN-STIC-823 regula ese alcance en la nube. AWS, Azure y Google Cloud tienen certificación ENS. <strong>De Supabase y Vercel no consta</strong> en el registro del CCN.</p>
+      <p>Eso significa que certificar el producto no bastaría: habría que resolver antes la cadena de proveedores, y eso no se arregla escribiendo documentación. Es una tensión real entre la <a href="#s1">Decisión 3</a> y la ambición de vender al sector público, y por eso la segunda se aparca.</p>
+    </div>
+  </div>
+
+  <h4>Lo que se hace igualmente</h4>
+  <p>Todo lo que es barato ahora y caro después se mantiene, aunque nadie lo exija:</p>
+  <ul>
+    <li>Las medidas técnicas que el Anexo II del ENS pediría —trazabilidad, cifrado, control de acceso granular, copias verificadas— <strong>ya están en el diseño por otras razones</strong> y se documentan como tales. El día que haga falta, existe el sustrato.</li>
+    <li><strong>WCAG 2.2 AA como objetivo de calidad</strong> verificado en el pipeline. Sin declaración de accesibilidad ni auditoría formal, pero el producto no queda inaccesible por omisión.</li>
+    <li><strong>i18n preparado desde la fase 0</strong> aunque solo se publique castellano. Es casi gratis al principio y costosísimo después, y el día que aparezca un pliego en Catalunya o Euskadi, el idioma no será el bloqueo.</li>
+  </ul>
+
+  <h4>Lo que haría falta el día que aparezca un pliego</h4>
+  <ul>
+    <li>Categorización del sistema, política de seguridad formal, análisis de riesgos y auditoría de certificación por entidad acreditada. Entre cuatro y seis semanas más el coste del auditor.</li>
+    <li>Auditoría de accesibilidad, declaración publicada y mecanismo de comunicación de incidencias.</li>
+    <li>Y lo importante: <strong>resolver la cadena de proveedores</strong>, desplegando la instancia de ese cliente sobre infraestructura certificada. <em>Eso el modelo de instancia dedicada lo permite sin tocar a nadie más</em>, y es justamente el tipo de problema para el que sirve el aislamiento físico de la <a href="#s1">Decisión 1</a>.</li>
+  </ul>
+
+  <h3><span class="n">2.6</span><span>Firma electrónica</span></h3>
+
+  <p>El sistema firma en <strong>dos capas que no compiten</strong>: una es lo que se ve, la otra es lo que vale.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Capa</th><th>Qué es</th><th>Qué aporta</th><th>Qué no aporta</th></tr></thead>
+      <tbody>
+        <tr><th>Rúbrica manuscrita</th><td>Trazo capturado en pantalla con lápiz, dedo o ratón, guardado como imagen y estampado en el PDF</td><td>Reconocimiento inmediato, continuidad con el documento en papel, aceptación del paciente</td><td>Ningún valor probatorio por sí sola: una imagen se copia</td></tr>
+        <tr><th>Firma cualificada</th><td>Certificado cualificado de persona física bajo eIDAS (Reglamento UE 910/2014), aplicado al PDF con sellado de tiempo</td><td>Equivalencia jurídica con la firma manuscrita (art. 25.2 eIDAS) e integridad demostrable del documento</td><td>Nada visible: sin la rúbrica, el documento «no parece firmado»</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <ul>
+    <li>El certificado lo aporta el profesional: FNMT-RCM, DNIe, o el prestador cualificado que ofrezca su colegio profesional. La aplicación no custodia claves privadas de personas físicas.</li>
+    <li><strong>Sellado de tiempo cualificado</strong> en toda firma, para que la fecha sea oponible frente a terceros y no dependa del reloj del servidor.</li>
+    <li>La Ley 39/2015 rige la relación electrónica con las administraciones: un informe que entra por registro electrónico necesita la capa cualificada, no la rúbrica.</li>
+  </ul>
+
+  <div class="nota decision">
+    <div class="etq">Sigue en pie</div>
+    <div class="txt">
+      <p>Esta decisión se tomó pensando en el sector público, que luego se aparcó — pero <strong>sobrevive por un motivo mejor</strong>: los <strong>informes periciales van a juzgados</strong>. Un informe pericial es, por definición, un documento destinado a ser discutido por la parte contraria, y una imagen de firma pegada en un PDF no resiste esa discusión.</p>
+      <p>Es además el único servicio de la tabla de <a href="#s2">§2.4</a> que lleva IVA, es decir, el mejor pagado. Renunciar a firmarlo bien para ahorrar semana y media de desarrollo sería ahorrar en el sitio equivocado.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">2.7</span><span>Canal de mensajería con el paciente</span></h3>
+
+  <div class="nota aviso">
+    <div class="etq">Inferencia</div>
+    <div class="txt">
+      <p>Un recordatorio de cita de una consulta de psicología <strong>es dato de salud aunque no diga nada clínico</strong>: el mero hecho de recibirlo revela por inferencia que la persona está en tratamiento. Eso lo coloca en el art. 9 del RGPD y obliga a tratarlo como tal, no como una notificación comercial.</p>
+    </div>
+  </div>
+
+  <p>El canal elegido es <strong><code>wa.me</code></strong>, el enlace oficial de WhatsApp. La aplicación compone el mensaje completo y una persona lo envía con un clic desde el WhatsApp que la clínica ya usa. <strong>No es una API, y ahí está su virtud.</strong></p>
+
+  <div class="nota decision">
+    <div class="etq">wa.me</div>
+    <div class="txt">
+      <p><b>Compra:</b> ningún encargado del tratamiento nuevo. La aplicación no habla con Meta: construye una URL que se abre localmente en WhatsApp. No hay transferencia internacional que documentar más allá del uso de WhatsApp que la clínica ya hace —y que ya debe constar en su RAT—. Es además una función <strong>oficial y sancionada por Meta</strong>: cero riesgo de suspensión del número, a diferencia de las pasarelas que conectan escaneando un QR. Cero coste por mensaje, cero verificación de empresa, cero aprobación de plantillas. Funciona el primer día.</p>
+      <p><b>Cuesta:</b> alguien tiene que pulsar enviar, no hay envío desatendido. La aplicación <strong>no sabe si el mensaje se entregó ni si se leyó</strong>, solo que se preparó. Y no hay botones interactivos nativos: eso es exclusivo de la Cloud API.</p>
+    </div>
+  </div>
+
+  <h4>Cómo se consiguen igualmente los dos botones</h4>
+  <p>WhatsApp no dará botones nativos por esta vía, pero el efecto se obtiene con <strong>dos enlaces dentro del propio mensaje</strong>:</p>
+  <ul>
+    <li>El mensaje incluye <em>Confirmar</em> y <em>Solicitar cambio</em> como dos URL cortas y firmadas.</li>
+    <li>Cada URL lleva un <strong>token firmado, de un solo uso y caducado con la cita</strong>. No contiene nombre, ni identificador de paciente, ni nada legible.</li>
+    <li>Al pulsarlo se abre una página pública mínima que muestra solo fecha y hora, con dos botones grandes. Sin nombre del paciente, sin motivo, sin logotipo que identifique la especialidad.</li>
+    <li>La respuesta entra en el sistema igual que entraría por la API: confirmación directa sobre la cita, o tarea en la bandeja para el cambio.</li>
+  </ul>
+
+  <p>Los requisitos de privacidad se mantienen intactos, porque no dependen del canal técnico:</p>
+  <ol>
+    <li><strong>Nombre público neutro.</strong> El nombre del perfil de WhatsApp de la clínica aparece en el teléfono del paciente. «Centro de Psicología …» revela el dato en la pantalla de bloqueo de un móvil compartido o mirado por encima del hombro.</li>
+    <li><strong>Contenido mínimo.</strong> Fecha, hora y profesional. Nunca motivo de consulta, tipo de terapia, diagnóstico ni el término «psicología» en el cuerpo del mensaje.</li>
+    <li><strong>Consentimiento separado y revocable</strong> para el canal, distinto del consentimiento asistencial, con alternativa real: correo, o ningún recordatorio. Marcar la casilla no puede ser condición para ser atendido.</li>
+  </ol>
+
+  <div class="nota aviso">
+    <div class="etq">Cuándo migrar</div>
+    <div class="txt">
+      <p><code>wa.me</code> escala hasta donde escala una persona pulsando botones. El umbral práctico está en torno a los <strong>40 envíos diarios</strong>: por encima, la cola deja de despacharse y los recordatorios simplemente no salen.</p>
+      <p>Llegado ese punto, el salto a la Cloud API vía BSP certificado <strong>no obliga a rehacer nada</strong>: mismas tablas, misma máquina de estados, mismos textos. Cambia el transporte y se ganan botones nativos y estados de entrega. Por eso el modelo de datos de <a href="#s4">§4.1</a> ya contempla estados que <code>wa.me</code> nunca rellenará.</p>
+    </div>
+  </div>
+
+  <div class="nota riesgo">
+    <div class="etq">Límite</div>
+    <div class="txt">
+      <p>Este documento es una especificación técnica. Las tablas anteriores reflejan el criterio general aplicable a una consulta de psicología sanitaria, pero el encaje fiscal concreto de un servicio depende de circunstancias que el software no conoce. El producto debe <strong>proponer</strong> el tratamiento fiscal y permitir al usuario cambiarlo dejando constancia, nunca imponerlo en silencio. La EIPD, el RAT y el contrato de encargado que ofreces a cada clínica deben ser validados por un DPD o una asesoría antes de producción.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── 03 ─────────── -->
+<section id="s3">
+  <h2><span class="n">03</span><span>Arquitectura</span></h2>
+  <p class="h2-sub">Un repositorio, muchas instancias, y el plano de control que impide que eso se convierta en un problema.</p>
+
+  <h3><span class="n">3.1</span><span>Pila tecnológica</span></h3>
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Capa</th><th>Tecnología</th><th>Por qué</th></tr></thead>
+      <tbody>
+        <tr><th>Interfaz</th><td>Next.js 16 (App Router), React, TypeScript</td><td>Server Components: los historiales se renderizan en servidor y no viajan al cliente</td></tr>
+        <tr><th>Estilos</th><td>Tailwind CSS + shadcn/ui sobre Radix</td><td>Accesibilidad de teclado y foco resueltas de origen; tematización por tokens CSS</td></tr>
+        <tr><th>Editor</th><td>TipTap (ProseMirror)</td><td>Documento estructurado en JSON, no HTML opaco: versionable y comparable</td></tr>
+        <tr><th>Calendario</th><td>A medida sobre <code>date-fns</code></td><td>Es la pantalla que el usuario mira cuarenta veces al día; ninguna librería da la leyenda de avisos ni las series sin pelearse con ella (<a href="#s3">§3.5</a>)</td></tr>
+        <tr><th>Formularios</th><td>react-hook-form + Zod</td><td>El mismo esquema Zod valida en el navegador y dentro de la Server Action: una sola definición, dos fronteras</td></tr>
+        <tr><th>Tablas</th><td>TanStack Table</td><td>Sin estilos propios: ordenación, filtrado y virtualización sobre el sistema de diseño propio</td></tr>
+        <tr><th>Documentos</th><td>React-PDF en servidor</td><td>Chrome sin interfaz pesa diez veces más y arranca lento en una función; el PDF aquí es estructurado, no una captura de pantalla</td></tr>
+        <tr><th>Datos</th><td>Supabase — PostgreSQL 16 + RLS</td><td>La autorización vive en la base de datos, no solo en la aplicación</td></tr>
+        <tr><th>Autenticación</th><td>Supabase Auth + TOTP</td><td>MFA obligatorio para todo rol con acceso clínico</td></tr>
+        <tr><th>Archivos</th><td>Supabase Storage, buckets privados</td><td>URLs firmadas de vida corta; nunca acceso público</td></tr>
+        <tr><th>Cómputo</th><td>Vercel Functions (Fluid Compute, Node 24), región <code>cdg1</code></td><td>PDF, cifrado y remisión a AEAT en servidor; 5 GB de paquete permiten PDFKit y libs de Office</td></tr>
+        <tr><th>Trabajos diferidos</th><td>Vercel Cron + Vercel Queues</td><td>Avisos de notas pendientes, purgas de retención, reintentos de AEAT</td></tr>
+        <tr><th>Observabilidad</th><td>Vercel Observability + logs de auditoría en Postgres</td><td>Separación deliberada: la traza técnica y la traza legal no son la misma cosa</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3><span class="n">3.2</span><span>Topología de instancia dedicada</span></h3>
+
+  <figure>
+    <div class="marco">
+      <svg viewBox="0 0 900 400" role="img" aria-label="Un repositorio único alimenta un plano de control que aprovisiona y migra instancias independientes; cada cliente tiene su propio proyecto Vercel y su propio proyecto Supabase, sin ninguna conexión entre clientes.">
+        <defs>
+          <marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0,0 10,5 0,10" class="dg-flecha"/>
+          </marker>
+          <marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0,0 10,5 0,10" class="dg-flecha-a"/>
+          </marker>
+        </defs>
+
+        <!-- Origen -->
+        <rect x="20" y="24" width="180" height="52" rx="3" class="dg-caja"/>
+        <text x="110" y="46" class="dg-t-b" text-anchor="middle">Repositorio único</text>
+        <text x="110" y="63" class="dg-t-s" text-anchor="middle">Next.js · migraciones SQL</text>
+
+        <line x1="200" y1="50" x2="288" y2="50" class="dg-lin" marker-end="url(#f1)"/>
+        <text x="244" y="42" class="dg-t-m" text-anchor="middle">push a main</text>
+
+        <!-- Plano de control -->
+        <rect x="290" y="18" width="230" height="64" rx="3" class="dg-caja-a"/>
+        <text x="405" y="42" class="dg-t-a" text-anchor="middle">Plano de control</text>
+        <text x="405" y="59" class="dg-t-s" text-anchor="middle">aprovisiona · migra · vigila</text>
+        <text x="405" y="74" class="dg-t-m" text-anchor="middle">canario → 10 % → total</text>
+
+        <!-- Registro -->
+        <rect x="560" y="24" width="180" height="52" rx="3" class="dg-caja"/>
+        <text x="650" y="46" class="dg-t-b" text-anchor="middle">Registro de instancias</text>
+        <text x="650" y="63" class="dg-t-s" text-anchor="middle">versión · región · estado</text>
+        <line x1="520" y1="50" x2="558" y2="50" class="dg-lin" marker-end="url(#f1)"/>
+
+        <!-- Bajadas -->
+        <line x1="405" y1="82" x2="405" y2="108" class="dg-lin-a"/>
+        <line x1="150" y1="108" x2="660" y2="108" class="dg-lin-a"/>
+        <line x1="150" y1="108" x2="150" y2="146" class="dg-lin-a" marker-end="url(#f1a)"/>
+        <line x1="405" y1="108" x2="405" y2="146" class="dg-lin-a" marker-end="url(#f1a)"/>
+        <line x1="660" y1="108" x2="660" y2="146" class="dg-lin-a" marker-end="url(#f1a)"/>
+        <text x="700" y="102" class="dg-t-m">migración versionada</text>
+
+        <!-- Instancias -->
+        <g>
+          <rect x="42" y="148" width="216" height="196" rx="3" class="dg-caja-h"/>
+          <text x="150" y="170" class="dg-t-b" text-anchor="middle">Clínica Ávila</text>
+          <rect x="62" y="182" width="176" height="46" rx="3" class="dg-caja"/>
+          <text x="150" y="201" class="dg-t" text-anchor="middle">Proyecto Vercel</text>
+          <text x="150" y="217" class="dg-t-m" text-anchor="middle">avila.psicogestion.es</text>
+          <line x1="150" y1="228" x2="150" y2="254" class="dg-lin" marker-end="url(#f1)"/>
+          <rect x="62" y="256" width="176" height="46" rx="3" class="dg-caja"/>
+          <text x="150" y="275" class="dg-t" text-anchor="middle">Proyecto Supabase</text>
+          <text x="150" y="291" class="dg-t-m" text-anchor="middle">Postgres + Storage</text>
+          <text x="150" y="325" class="dg-t-s" text-anchor="middle">PITR 7 días</text>
+        </g>
+
+        <g>
+          <rect x="297" y="148" width="216" height="196" rx="3" class="dg-caja-h"/>
+          <text x="405" y="170" class="dg-t-b" text-anchor="middle">Gabinete Serra</text>
+          <rect x="317" y="182" width="176" height="46" rx="3" class="dg-caja"/>
+          <text x="405" y="201" class="dg-t" text-anchor="middle">Proyecto Vercel</text>
+          <text x="405" y="217" class="dg-t-m" text-anchor="middle">serra.psicogestion.es</text>
+          <line x1="405" y1="228" x2="405" y2="254" class="dg-lin" marker-end="url(#f1)"/>
+          <rect x="317" y="256" width="176" height="46" rx="3" class="dg-caja"/>
+          <text x="405" y="275" class="dg-t" text-anchor="middle">Proyecto Supabase</text>
+          <text x="405" y="291" class="dg-t-m" text-anchor="middle">Postgres + Storage</text>
+          <text x="405" y="325" class="dg-t-s" text-anchor="middle">PITR 7 días</text>
+        </g>
+
+        <g>
+          <rect x="552" y="148" width="216" height="196" rx="3" class="dg-caja-h"/>
+          <text x="660" y="170" class="dg-t-b" text-anchor="middle">Cliente N</text>
+          <rect x="572" y="182" width="176" height="46" rx="3" class="dg-caja"/>
+          <text x="660" y="201" class="dg-t" text-anchor="middle">Proyecto Vercel</text>
+          <text x="660" y="217" class="dg-t-m" text-anchor="middle">dominio propio</text>
+          <line x1="660" y1="228" x2="660" y2="254" class="dg-lin" marker-end="url(#f1)"/>
+          <rect x="572" y="256" width="176" height="46" rx="3" class="dg-caja"/>
+          <text x="660" y="275" class="dg-t" text-anchor="middle">Proyecto Supabase</text>
+          <text x="660" y="291" class="dg-t-m" text-anchor="middle">Postgres + Storage</text>
+          <text x="660" y="325" class="dg-t-s" text-anchor="middle">PITR 7 días</text>
+        </g>
+
+        <!-- No hay conexión lateral -->
+        <line x1="262" y1="246" x2="293" y2="246" class="dg-lin-r"/>
+        <line x1="517" y1="246" x2="548" y2="246" class="dg-lin-r"/>
+        <text x="277" y="240" class="dg-t-r" text-anchor="middle">✕</text>
+        <text x="532" y="240" class="dg-t-r" text-anchor="middle">✕</text>
+
+        <text x="405" y="372" class="dg-t-s" text-anchor="middle">Sin ruta de datos entre clientes — el aislamiento es físico, no lógico</text>
+        <text x="405" y="390" class="dg-t-m" text-anchor="middle">Todas las instancias: región eu-west-3 · París</text>
+      </svg>
+    </div>
+    <figcaption><b>Figura 1.</b> La ventaja del modelo está en las dos aspas rojas: no existe consulta posible que cruce datos de dos clientes, porque no existe conexión. El coste está en la línea verde: cada cambio de esquema debe llegar a todas las instancias, lo que convierte al plano de control en infraestructura crítica desde el primer cliente.</figcaption>
+  </figure>
+
+  <h3><span class="n">3.3</span><span>Plano de control</span></h3>
+
+  <p>Es la pieza que decide si el modelo de instancia dedicada es sostenible o insoportable. Debe existir <strong>antes</strong> del segundo cliente, no después del décimo.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Capacidad</th><th>Qué hace</th><th>Cómo</th></tr></thead>
+      <tbody>
+        <tr><th>Aprovisionamiento</th><td>Crea proyecto Supabase, aplica esquema, crea proyecto Vercel, configura dominio y variables, siembra la organización y el primer administrador</td><td>Script idempotente sobre Management API de Supabase + API de Vercel</td></tr>
+        <tr><th>Migraciones</th><td>Aplica migraciones versionadas en orden, con verificación previa y capacidad de detener el despliegue</td><td>Supabase CLI en CI; despliegue por oleadas: instancia canario → 10 % → resto</td></tr>
+        <tr><th>Inventario</th><td>Qué versión de esquema y de aplicación corre cada cliente, y desde cuándo</td><td>Registro central; ninguna instancia puede quedar huérfana</td></tr>
+        <tr><th>Salud</th><td>Latencia, errores, backups verificados, cola de AEAT atascada</td><td>Sonda periódica por instancia con alerta agregada</td></tr>
+        <tr><th>Baja de cliente</th><td>Exporta el volcado cifrado íntegro, lo entrega, y destruye la instancia con certificado de borrado</td><td>Procedimiento documentado y ensayado, no improvisado</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota riesgo">
+    <div class="etq">Regla</div>
+    <div class="txt">
+      <p>Toda migración debe ser <strong>compatible hacia atrás durante un despliegue</strong>. En un momento dado habrá instancias con esquema nuevo y aplicación vieja. Se prohíben las migraciones destructivas en un solo paso: renombrar o eliminar una columna se hace siempre en dos versiones —añadir y escribir en ambas, luego retirar—, nunca en una.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">3.4</span><span>Residencia y flujo de datos</span></h3>
+  <ul>
+    <li>Postgres, Storage y funciones fijados a la <strong>Unión Europea</strong>, en <strong>París</strong> (<code>eu-west-3</code> / <code>cdg1</code>). Se elige París y no Fráncfort por latencia: es el centro de datos europeo más cercano a España, con diez o quince milisegundos menos en cada ida y vuelta. No suena a mucho hasta que se acumulan en una pantalla que consulta seis veces por paciente. Ninguna transferencia internacional en el flujo normal.</li>
+    <li>Sin herramientas de analítica de terceros en páginas autenticadas. Ningún píxel, ningún mapa de calor, ningún grabador de sesión: capturarían datos de salud en pantalla.</li>
+    <li>Los identificadores de paciente son <strong>UUID</strong> y jamás aparecen en la URL junto al nombre. La URL de una historia no debe filtrar quién es el paciente al hombro de quien mira.</li>
+    <li>Los registros técnicos (logs) se filtran para que ningún dato de salud llegue a ellos. Un <em>stack trace</em> con el contenido de una nota clínica es una brecha.</li>
+  </ul>
+
+  <h3><span class="n">3.5</span><span>Construir o integrar</span></h3>
+
+  <p>Con un solo desarrollador, cada decisión de construir algo a mano se paga en semanas que no están en ningún otro sitio. La regla que ordena esas decisiones aquí es sencilla:</p>
+
+  <div class="nota decision">
+    <div class="etq">Regla</div>
+    <div class="txt">
+      <p><strong>Se integra todo lo que es infraestructura invisible. Se construye lo que el usuario mira todos los días.</strong></p>
+      <p>Ordenar una tabla, validar un formulario, generar un PDF o manejar fechas no diferencian a nadie: ahí se coge lo que ya existe y funciona. La pantalla que el profesional abre cuarenta veces al día <em>sí</em> diferencia, y es donde se nota si el producto lo ha hecho alguien que entiende el problema.</p>
+    </div>
+  </div>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Pieza</th><th>Decisión</th><th>Motivo</th></tr></thead>
+      <tbody>
+        <tr><th>Calendario</th><td class="si">A medida · 2–3 semanas</td><td>Las tres vistas, la leyenda lateral de avisos, las series con desviaciones y el arrastrar para reprogramar son requisitos concretos. Con una librería se pelea contra sus decisiones en cada uno de ellos</td></tr>
+        <tr><th>Ficha del paciente</th><td class="si">A medida</td><td>Bloques reordenables por el usuario. Es la segunda pantalla más vista</td></tr>
+        <tr><th>Editor de notas</th><td class="par">TipTap, extendido</td><td>Escribir un editor de texto enriquecido desde cero no lo justifica nada</td></tr>
+        <tr><th>Tablas, formularios, PDF, fechas</th><td class="no">Integrado</td><td>Infraestructura resuelta hace años. Construirla es tiempo regalado</td></tr>
+        <tr><th>Autenticación, almacenamiento, copias</th><td class="no">Supabase</td><td>Es exactamente lo que se compra al elegir Supabase; rehacerlo contradiría la <a href="#s1">Decisión 3</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Sobre FullCalendar, que sería la alternativa obvia: sus <strong>vistas por recurso</strong> —ver a varios profesionales en columnas paralelas, imprescindible en un centro— están en los complementos premium, con licencia comercial de renovación anual. Pagar todos los años por la pantalla central del producto y seguir sin poder darle la forma que se quiere es el peor de los dos mundos.</p>
+</section>
+
+<!-- ─────────── 04 ─────────── -->
+<section id="s4">
+  <h2><span class="n">04</span><span>Modelo de datos</span></h2>
+  <p class="h2-sub">El catálogo de dominios, el ciclo que los une y la cadena que hace que nada se pueda alterar en silencio.</p>
+
+  <h3><span class="n">4.1</span><span>Catálogo por dominio</span></h3>
+
+  <div class="dominios">
+    <div class="dominio">
+      <h5>Organización</h5>
+      <dl>
+        <dt>organizacion</dt><dd>Fila única. Razón social, CIF/NIF, domicilio fiscal, logotipo, DPD, tokens de marca</dd>
+        <dt>centros</dt><dd>Sedes o consultas físicas, con dirección propia para la factura</dd>
+        <dt>perfiles</dt><dd>Extiende <code>auth.users</code>: nombre, rol, nº de colegiado, colegio, firma, centro, fecha de alta de actividad</dd>
+        <dt>preferencias_usuario</dt><dd>Escala tipográfica, densidad, columnas visibles, filtros guardados</dd>
+      </dl>
+    </div>
+
+    <div class="dominio">
+      <h5>Paciente · identificativo</h5>
+      <dl>
+        <dt>pacientes</dt><dd>Nombre, apellidos, fecha de nacimiento, teléfono, teléfono de emergencia, residencia, centro, profesional responsable, fecha de alta, estado</dd>
+        <dt>pacientes_identificacion</dt><dd>DNI/NIE y domicilio completo, cifrados a nivel de columna. Tabla aparte con RLS propia</dd>
+        <dt>consentimientos</dt><dd>Tipo, fecha, documento firmado, fecha de revocación</dd>
+      </dl>
+    </div>
+
+    <div class="dominio">
+      <h5>Paciente · clínico</h5>
+      <dl>
+        <dt>episodios_asistenciales</dt><dd>Motivo de consulta, apertura y cierre. <b>Arranca el reloj de retención</b></dd>
+        <dt>diagnosticos</dt><dd>Código CIE-10-ES, descripción, fecha, profesional, estado</dd>
+        <dt>valoraciones_riesgo</dt><dd>Nivel, escala aplicada, fecha, próxima revisión, protocolo asociado</dd>
+        <dt>notas_clinicas</dt><dd>Cabecera: cita, paciente, profesional, tipo de sesión, estado</dd>
+        <dt>notas_clinicas_versiones</dt><dd>Contenido TipTap, autor, motivo de cambio, huella y huella anterior. <b>Solo adición</b></dd>
+        <dt>evaluaciones</dt><dd>Prueba aplicada, fecha, descripción, observaciones sobre resultados</dd>
+        <dt>evaluacion_archivos</dt><dd>Ruta en Storage, tipo MIME, tamaño, huella, quién subió</dd>
+        <dt>informes</dt><dd>Tipo (clínico, pericial, asistencial), plantilla, contenido, estado, PDF firmado</dd>
+      </dl>
+    </div>
+
+    <div class="dominio">
+      <h5>Agenda</h5>
+      <dl>
+        <dt>tipos_terapia</dt><dd>Nombre, duración por defecto, tarifa base, régimen de IVA aplicable</dd>
+        <dt>series_cita</dt><dd>Regla de repetición, inicio, fin o número de sesiones, profesional y paciente. <b>La serie es la intención; las citas son los hechos</b></dd>
+        <dt>citas</dt><dd>Paciente, profesional, centro, inicio, fin, tipo, estado, sala, serie de origen y marca de desviación</dd>
+        <dt>disponibilidad</dt><dd>Franjas horarias, ausencias y festivos por profesional y centro</dd>
+        <dt>alertas_documentacion</dt><dd>Citas pasadas sin nota firmada, con nivel de escalado</dd>
+      </dl>
+    </div>
+
+    <div class="dominio">
+      <h5>Económico</h5>
+      <dl>
+        <dt>tarifas_paciente</dt><dd>Excepción al precio base para un paciente: importe, motivo, vigencia. El caso normal no la usa</dd>
+        <dt>series_facturacion</dt><dd>Prefijo, ejercicio, contador. Inalterable</dd>
+        <dt>facturas</dt><dd>Serie, número, fechas, base, IVA, motivo de exención, retención IRPF, total, estado, huella encadenada, QR, estado AEAT</dd>
+        <dt>factura_lineas</dt><dd>Concepto, cantidad, precio, régimen de IVA, cita vinculada</dd>
+        <dt>cobros</dt><dd>Importe, fecha, modalidad, factura o cita asociada</dd>
+        <dt>bonos</dt><dd>Sesiones contratadas, consumidas, importe, caducidad</dd>
+        <dt>gastos</dt><dd>Fecha, concepto, proveedor, NIF, base, IVA soportado, categoría, justificante, deducibilidad</dd>
+        <dt>registro_eventos_sif</dt><dd>Eventos del sistema informático de facturación exigidos por el reglamento</dd>
+      </dl>
+    </div>
+
+    <div class="dominio">
+      <h5>Cumplimiento</h5>
+      <dl>
+        <dt>auditoria</dt><dd>Actor, acción, tabla, registro, estado anterior y posterior, IP, agente, sello temporal. Sin UPDATE ni DELETE</dd>
+        <dt>accesos_historia</dt><dd>Quién leyó qué historia, cuándo y desde dónde</dd>
+        <dt>notificaciones</dt><dd>Incidencias de pacientes dirigidas a un profesional, con fecha, hora y acuse de lectura</dd>
+        <dt>politicas_retencion</dt><dd>Plazo por tipo documental y marca de conservación indefinida</dd>
+        <dt>exportaciones</dt><dd>Alcance, filtros, algoritmo, huella del archivo, caducidad de descarga</dd>
+      </dl>
+    </div>
+
+    <div class="dominio">
+      <h5>Firmas</h5>
+      <dl>
+        <dt>firmas_profesional</dt><dd>Biblioteca de rúbricas del profesional: etiqueta, trazo en PNG, marca de predeterminada, fecha, estado</dd>
+        <dt>certificados_firma</dt><dd>Referencia al certificado cualificado: emisor, huella, caducidad. <b>Nunca la clave privada</b></dd>
+        <dt>firmas_paciente</dt><dd>Firma de asistencia por cita: cita, trazo, sello temporal, dispositivo de captura</dd>
+        <dt>consentimientos_firmados</dt><dd>Tipo, <b>versión exacta del texto firmado</b>, trazo, fecha, revocación</dd>
+        <dt>documentos_firmados</dt><dd>Documento, firmante, capa aplicada, huella del PDF, sello de tiempo cualificado</dd>
+      </dl>
+    </div>
+
+    <div class="dominio">
+      <h5>Mensajería</h5>
+      <dl>
+        <dt>canales_paciente</dt><dd>Canal preferido, consentimiento específico, fecha de otorgamiento y de revocación</dd>
+        <dt>plantillas_mensaje</dt><dd>Texto por tipo de cita, idioma y variables. Con Cloud API, además su estado de aprobación</dd>
+        <dt>envios_mensaje</dt><dd>Destinatario, plantilla, cita, estado. <b>Entregado y leído quedan vacíos con wa.me</b></dd>
+        <dt>enlaces_respuesta</dt><dd>Token firmado de un solo uso, acción asociada, caducidad y momento de uso</dd>
+        <dt>respuestas_mensaje</dt><dd>Enlace pulsado, momento y acción derivada en la agenda</dd>
+      </dl>
+    </div>
+  </div>
+
+  <h3><span class="n">4.2</span><span>El ciclo que une los módulos</span></h3>
+
+  <figure>
+    <div class="marco">
+      <svg viewBox="0 0 900 300" role="img" aria-label="Una cita realizada abre dos obligaciones paralelas e independientes: documentar la sesión con una nota clínica firmada, y cobrarla mediante una factura. Si la nota no se firma tras la hora de la cita, se dispara un aviso escalado.">
+        <defs>
+          <marker id="f2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0,0 10,5 0,10" class="dg-flecha"/>
+          </marker>
+          <marker id="f2m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0,0 10,5 0,10" style="fill: var(--ambar)"/>
+          </marker>
+        </defs>
+
+        <!-- Fila central -->
+        <rect x="20" y="118" width="132" height="54" rx="3" class="dg-caja"/>
+        <text x="86" y="141" class="dg-t-b" text-anchor="middle">Cita</text>
+        <text x="86" y="157" class="dg-t-s" text-anchor="middle">programada</text>
+
+        <line x1="152" y1="145" x2="196" y2="145" class="dg-lin" marker-end="url(#f2)"/>
+        <text x="174" y="137" class="dg-t-m" text-anchor="middle">se atiende</text>
+
+        <rect x="198" y="118" width="132" height="54" rx="3" class="dg-caja-a"/>
+        <text x="264" y="141" class="dg-t-a" text-anchor="middle">Cita realizada</text>
+        <text x="264" y="157" class="dg-t-s" text-anchor="middle">abre dos deberes</text>
+
+        <!-- Rama superior: documentación -->
+        <path d="M 330 132 L 360 132 L 360 62 L 396 62" class="dg-lin" marker-end="url(#f2)"/>
+        <rect x="398" y="38" width="150" height="50" rx="3" class="dg-caja"/>
+        <text x="473" y="59" class="dg-t-b" text-anchor="middle">Nota clínica</text>
+        <text x="473" y="75" class="dg-t-s" text-anchor="middle">borrador → firmada</text>
+
+        <line x1="548" y1="63" x2="592" y2="63" class="dg-lin" marker-end="url(#f2)"/>
+        <text x="570" y="55" class="dg-t-m" text-anchor="middle">firma</text>
+        <rect x="594" y="38" width="150" height="50" rx="3" class="dg-caja-a"/>
+        <text x="669" y="59" class="dg-t-a" text-anchor="middle">Versión sellada</text>
+        <text x="669" y="75" class="dg-t-m" text-anchor="middle">entra en la cadena</text>
+
+        <!-- Aviso -->
+        <path d="M 473 88 L 473 112 L 300 112" class="dg-lin" style="stroke: var(--ambar); stroke-dasharray: 5 3" marker-end="url(#f2m)"/>
+        <rect x="756" y="38" width="126" height="50" rx="3" class="dg-caja-m"/>
+        <text x="819" y="58" class="dg-t" text-anchor="middle" style="fill: var(--ambar); font-weight:700">Aviso</text>
+        <text x="819" y="74" class="dg-t-s" text-anchor="middle">0 h · 24 h · 72 h</text>
+        <path d="M 744 63 L 754 63" class="dg-lin" style="stroke: var(--ambar)"/>
+        <text x="640" y="106" class="dg-t-m" text-anchor="middle" style="fill: var(--ambar)">si pasa la hora sin firmar → escala al administrador</text>
+
+        <!-- Rama inferior: cobro -->
+        <path d="M 330 158 L 360 158 L 360 228 L 396 228" class="dg-lin" marker-end="url(#f2)"/>
+        <rect x="398" y="204" width="150" height="50" rx="3" class="dg-caja"/>
+        <text x="473" y="225" class="dg-t-b" text-anchor="middle">Cobro</text>
+        <text x="473" y="241" class="dg-t-s" text-anchor="middle">pendiente → pagado</text>
+
+        <line x1="548" y1="229" x2="592" y2="229" class="dg-lin" marker-end="url(#f2)"/>
+        <text x="570" y="221" class="dg-t-m" text-anchor="middle">pago</text>
+        <rect x="594" y="204" width="150" height="50" rx="3" class="dg-caja-a"/>
+        <text x="669" y="225" class="dg-t-a" text-anchor="middle">Factura emitida</text>
+        <text x="669" y="241" class="dg-t-m" text-anchor="middle">entra en la cadena</text>
+
+        <line x1="744" y1="229" x2="788" y2="229" class="dg-lin" marker-end="url(#f2)"/>
+        <rect x="790" y="204" width="92" height="50" rx="3" class="dg-caja"/>
+        <text x="836" y="225" class="dg-t" text-anchor="middle">AEAT</text>
+        <text x="836" y="241" class="dg-t-s" text-anchor="middle">VERI*FACTU</text>
+
+        <text x="450" y="288" class="dg-t-s" text-anchor="middle">Las dos ramas son independientes: una sesión impagada se documenta igual, y una sesión cobrada sigue exigiendo su nota</text>
+      </svg>
+    </div>
+    <figcaption><b>Figura 2.</b> Este ciclo es la razón de que Pacientes y Facturación no sean módulos separados sino dos vistas del mismo hecho. La rama ámbar es el requisito del <em>warning</em> que pediste, modelado como escalado en tres tiempos en lugar de una alerta única que se ignora.</figcaption>
+  </figure>
+
+  <h3><span class="n">4.3</span><span>La cadena de integridad</span></h3>
+
+  <p>Un solo mecanismo resuelve dos obligaciones legales que a primera vista no tienen nada que ver. Cada registro sellado calcula su huella incluyendo la huella del registro anterior, de forma que alterar cualquier eslabón invalida todos los posteriores y la manipulación deja de ser silenciosa.</p>
+
+  <figure>
+    <div class="marco">
+      <svg viewBox="0 0 900 320" role="img" aria-label="Tres registros encadenados, cada uno con una huella SHA-256 que incluye la huella del anterior. Alterar el registro central hace que su huella deje de coincidir con la referencia guardada en el registro siguiente, rompiendo la cadena de forma detectable. El mismo mecanismo sirve a las versiones de notas clínicas y a los registros de facturación Verifactu.">
+        <defs>
+          <marker id="f3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0,0 10,5 0,10" class="dg-flecha"/>
+          </marker>
+        </defs>
+
+        <!-- Registro n-1 -->
+        <rect x="30" y="40" width="230" height="96" rx="3" class="dg-caja"/>
+        <text x="46" y="63" class="dg-t-b">Registro n−1</text>
+        <line x1="46" y1="74" x2="244" y2="74" style="stroke: var(--borde-fuerte)"/>
+        <text x="46" y="93" class="dg-t-m">anterior · 4f2a…</text>
+        <text x="46" y="110" class="dg-t-s">contenido sellado</text>
+        <text x="46" y="128" class="dg-t-m" style="fill: var(--verde)">huella · 9c71…</text>
+
+        <path d="M 260 88 L 300 88" class="dg-lin" marker-end="url(#f3)"/>
+        <text x="280" y="80" class="dg-t-m" text-anchor="middle">↓</text>
+
+        <!-- Registro n -->
+        <rect x="302" y="40" width="230" height="96" rx="3" class="dg-caja"/>
+        <text x="318" y="63" class="dg-t-b">Registro n</text>
+        <line x1="318" y1="74" x2="516" y2="74" style="stroke: var(--borde-fuerte)"/>
+        <text x="318" y="93" class="dg-t-m" style="fill: var(--verde)">anterior · 9c71…</text>
+        <text x="318" y="110" class="dg-t-s">contenido sellado</text>
+        <text x="318" y="128" class="dg-t-m" style="fill: var(--verde)">huella · b0e5…</text>
+
+        <path d="M 532 88 L 572 88" class="dg-lin" marker-end="url(#f3)"/>
+
+        <!-- Registro n+1 -->
+        <rect x="574" y="40" width="230" height="96" rx="3" class="dg-caja"/>
+        <text x="590" y="63" class="dg-t-b">Registro n+1</text>
+        <line x1="590" y1="74" x2="788" y2="74" style="stroke: var(--borde-fuerte)"/>
+        <text x="590" y="93" class="dg-t-m" style="fill: var(--verde)">anterior · b0e5…</text>
+        <text x="590" y="110" class="dg-t-s">contenido sellado</text>
+        <text x="590" y="128" class="dg-t-m" style="fill: var(--verde)">huella · 3ad9…</text>
+
+        <!-- Fórmula -->
+        <text x="417" y="168" class="dg-t-m" text-anchor="middle">huella(n) = SHA-256( contenido(n) ‖ huella(n−1) )</text>
+
+        <!-- Manipulación -->
+        <rect x="302" y="192" width="230" height="46" rx="3" class="dg-caja-r"/>
+        <text x="417" y="211" class="dg-t" text-anchor="middle" style="fill: var(--granate); font-weight: 700">Alguien edita el registro n</text>
+        <text x="417" y="228" class="dg-t-s" text-anchor="middle">directamente en la base de datos</text>
+        <path d="M 417 192 L 417 140" class="dg-lin-r"/>
+
+        <path d="M 532 215 L 640 215 L 640 142" class="dg-lin-r"/>
+        <text x="656" y="200" class="dg-t-r">huella recalculada ≠ b0e5…</text>
+        <text x="656" y="216" class="dg-t-s">la cadena se rompe aquí y en todo lo posterior</text>
+
+        <!-- Doble uso -->
+        <line x1="30" y1="266" x2="870" y2="266" style="stroke: var(--borde)"/>
+        <text x="30" y="292" class="dg-t-s">El mismo mecanismo sirve a:</text>
+        <rect x="212" y="276" width="290" height="28" rx="3" class="dg-caja-a"/>
+        <text x="357" y="295" class="dg-t-a" text-anchor="middle">notas_clinicas_versiones — Ley 41/2002</text>
+        <rect x="518" y="276" width="290" height="28" rx="3" class="dg-caja-a"/>
+        <text x="663" y="295" class="dg-t-a" text-anchor="middle">facturas — RD 1007/2023 Verifactu</text>
+      </svg>
+    </div>
+    <figcaption><b>Figura 3.</b> La coincidencia entre lo que exige la ley de historia clínica y lo que exige el reglamento de facturación permite construir <b>una sola primitiva</b> y usarla dos veces. Verificar la cadena completa de una instancia es una consulta recursiva que se ejecuta cada noche y cuyo resultado se registra: si alguna vez falla, se sabe exactamente en qué eslabón y en qué fecha.</figcaption>
+  </figure>
+
+  <h4>Cómo se aplica a la modificación de una nota clínica</h4>
+  <p>El requisito que planteaste —«esta modificación aparecerá en la auditoría y no se eliminará lo anterior, aparecerá como añadido lo modificado»— se implementa así:</p>
+  <ol>
+    <li>Firmar una nota crea la <strong>versión 1</strong>, sellada e inmutable. Un <em>trigger</em> de Postgres rechaza cualquier <code>UPDATE</code> o <code>DELETE</code> sobre versiones selladas, incluso ejecutado con credenciales de administrador.</li>
+    <li>Modificarla crea la <strong>versión 2</strong>, que exige un motivo de cambio y encadena su huella con la anterior.</li>
+    <li>La vista muestra por defecto la versión vigente, con un indicador «modificada el · por» y acceso a la comparación entre versiones, resaltando lo añadido y lo retirado.</li>
+    <li>La descarga incluye todas las versiones, en orden, con sus autores y fechas. Es la única representación honesta ante un juzgado.</li>
+  </ol>
+
+  <h3><span class="n">4.4</span><span>Separación por sensibilidad</span></h3>
+  <p>El técnico administrativo debe ver nombre, antigüedad, edad, residencia y teléfono, y nada más. La forma frágil de conseguirlo es filtrar columnas en la consulta; basta un <code>select *</code> olvidado para romperlo. La forma robusta es que <strong>los datos que no puede ver no estén en la tabla que sí puede leer</strong>:</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Tabla</th><th>Contiene</th><th>Lo lee</th></tr></thead>
+      <tbody>
+        <tr><th><code>pacientes</code></th><td>Nombre, apellidos, fecha de nacimiento, teléfonos, localidad, alta, profesional asignado</td><td>Los tres roles</td></tr>
+        <tr><th><code>pacientes_identificacion</code></th><td>DNI/NIE, domicilio completo, datos de facturación del paciente</td><td>Administrador y profesional asignado</td></tr>
+        <tr><th><code>episodios_asistenciales</code></th><td>Motivo de consulta, diagnósticos, riesgo</td><td>Solo profesional asignado</td></tr>
+        <tr><th><code>notas_clinicas_versiones</code></th><td>Contenido de sesión</td><td>Solo profesional autor o asignado</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Con esta separación, la política RLS del rol administrativo es una sola línea trivial de auditar, y una consulta mal escrita no puede filtrar nada porque no tiene la tabla delante.</p>
+</section>
+
+<!-- ─────────── 05 ─────────── -->
+<section id="s5">
+  <h2><span class="n">05</span><span>Seguridad y privacidad</span></h2>
+  <p class="h2-sub">Quién puede ver qué, cómo se demuestra, y qué pasa cuando algo sale mal.</p>
+
+  <h3><span class="n">5.1</span><span>Matriz de permisos</span></h3>
+
+  <div class="tabla-env">
+    <table>
+      <thead>
+        <tr>
+          <th>Recurso</th>
+          <th>Administrador</th>
+          <th>Profesional sanitario</th>
+          <th>Técnico administrativo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><th>Ficha básica del paciente</th><td class="si">Total</td><td class="si">Sus pacientes</td><td class="par">Lectura de subconjunto</td></tr>
+        <tr><th>DNI y domicilio completo</th><td class="si">Total</td><td class="si">Sus pacientes</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Motivo de consulta y diagnósticos</th><td class="par">Solo los suyos</td><td class="si">Sus pacientes</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Nivel de riesgo</th><td class="par">Solo los suyos</td><td class="si">Sus pacientes</td><td class="par">Solo indicador «protocolo activo»</td></tr>
+        <tr><th>Notas clínicas</th><td class="par">Solo las suyas <span class="pill p2">emergencia</span></td><td class="si">Autor o asignado</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Evaluaciones e informes</th><td class="par">Solo los suyos</td><td class="si">Sus pacientes</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Firmar documentos con certificado</th><td class="par">Los suyos</td><td class="si">Los suyos</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Recoger firma del paciente en recepción</th><td class="si">Sí</td><td class="si">Sí</td><td class="si">Sí</td></tr>
+        <tr><th>Enviar recordatorio de cita</th><td class="si">Sí</td><td class="par">Sus citas</td><td class="si">Sí</td></tr>
+        <tr><th>Agenda</th><td class="si">Todas</td><td class="si">La suya</td><td class="par">Todas, sin tipo de terapia</td></tr>
+        <tr><th>Cobros y facturas</th><td class="si">Total</td><td class="par">Los suyos</td><td class="par">Gestión sin dato clínico</td></tr>
+        <tr><th>Libro de gastos</th><td class="si">Total</td><td class="no">Sin acceso</td><td class="par">Alta de gastos</td></tr>
+        <tr><th>Cuadro económico global</th><td class="si">Total y por profesional</td><td class="par">Solo el propio</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Gestión de usuarios y roles</th><td class="si">Total</td><td class="no">Sin acceso</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Notificar incidencia a profesional</th><td class="si">Sí</td><td class="si">Sí</td><td class="si">Sí</td></tr>
+        <tr><th>Ajustes de empresa y marca</th><td class="si">Total</td><td class="no">Sin acceso</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Registro de auditoría</th><td class="par">Lectura</td><td class="par">Sobre sus propios registros</td><td class="no">Sin acceso</td></tr>
+        <tr><th>Exportar copia íntegra</th><td class="si">Sí</td><td class="par">Sus pacientes</td><td class="no">Sin acceso</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota norma">
+    <div class="etq">Criterio</div>
+    <div class="txt">
+      <p><strong>El secreto profesional no es un privilegio administrativo.</strong> El art. 9.3 del RGPD ampara el tratamiento por profesional sujeto a secreto; el Código Deontológico del COP y el art. 199 del Código Penal lo refuerzan. Ser administrador de la plataforma no convierte a nadie en el profesional que atiende a ese paciente.</p>
+      <p>Por eso el administrador tiene <strong>control total sobre la plataforma y acceso clínico solo a sus propios pacientes</strong>. Para las situaciones legítimas —baja médica de un colega, urgencia, requerimiento judicial— existe un <strong>acceso de emergencia</strong>: exige escribir una justificación, se concede por un tiempo limitado, se registra en la auditoría de forma destacada y notifica al profesional titular. Un acceso excepcional que deja rastro es defendible; un acceso permanente y silencioso no lo es.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">5.2</span><span>Autenticación y sesión</span></h3>
+  <ul>
+    <li><strong>MFA (TOTP) obligatorio</strong> para administrador y profesional sanitario. Recomendado y activable para el rol administrativo.</li>
+    <li>Sesión con caducidad por inactividad configurable (por defecto 30 minutos) y bloqueo de pantalla: una consulta es un espacio físico compartido.</li>
+    <li>Panel de sesiones activas con revocación individual, visible por el propio usuario.</li>
+    <li>Contraseñas contrastadas contra listas de credenciales filtradas en el alta y en cada cambio.</li>
+    <li>Alta de usuario siempre por invitación de un administrador. No hay registro abierto en una instancia dedicada.</li>
+  </ul>
+
+  <h3><span class="n">5.3</span><span>Autorización en la base de datos</span></h3>
+  <p>Row Level Security activo en <strong>todas</strong> las tablas, sin excepción, desde la primera migración. La aplicación no es la última línea de defensa: es la primera.</p>
+  <ul>
+    <li>Ninguna consulta desde el navegador usa la clave de servicio. Las operaciones privilegiadas viven en Server Actions y funciones de servidor.</li>
+    <li>Las políticas se apoyan en funciones auxiliares (<code>rol_actual()</code>, <code>es_profesional_asignado(paciente)</code>) para que se lean como frases y se puedan revisar sin ser experto en SQL.</li>
+    <li>Cada política tiene su <strong>prueba automatizada</strong>: un test que se autentica como cada rol e intenta leer lo que no debe. Una política sin test se considera código no escrito.</li>
+    <li>Prueba de humo obligatoria en cada despliegue: el rol administrativo intenta un <code>select</code> sobre <code>notas_clinicas_versiones</code> y debe obtener cero filas.</li>
+  </ul>
+
+  <h3><span class="n">5.4</span><span>Cifrado</span></h3>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Superficie</th><th>Protección</th><th>Nota</th></tr></thead>
+      <tbody>
+        <tr><th>En tránsito</th><td>TLS 1.3, HSTS con precarga</td><td>Sin excepciones, tampoco en desarrollo</td></tr>
+        <tr><th>En reposo (Postgres y Storage)</th><td>Cifrado de disco AES-256 gestionado por Supabase</td><td>Protege ante robo de soporte, no ante credencial comprometida</td></tr>
+        <tr><th>Columnas identificativas</th><td>Cifrado a nivel de columna sobre DNI/NIE y domicilio</td><td>Clave en el gestor de secretos, fuera de la base de datos</td></tr>
+        <tr><th>Documentos descargados</th><td>PDF con cifrado AES-256, contraseña del usuario</td><td>Abre en cualquier lector; sin herramientas propietarias</td></tr>
+        <tr><th>Lotes y copias</th><td>ZIP AES-256 (7-Zip, Keka, WinRAR)</td><td>Formato estándar, no un contenedor inventado</td></tr>
+        <tr><th>Derivación de clave</th><td>Argon2id con parámetros publicados en el propio archivo</td><td>Permite descifrar dentro de veinte años sin depender de nosotros</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota aviso">
+    <div class="etq">Manejo</div>
+    <div class="txt">
+      <p>La contraseña de cifrado se recibe una sola vez sobre TLS, se usa en memoria dentro de una función efímera y <strong>nunca se persiste, ni se registra, ni se envía a la telemetría</strong>. No existe recuperación. La interfaz debe decirlo con esas palabras —«si pierdes esta contraseña, este archivo no se podrá abrir nunca»— antes de generar nada, y exigir confirmación explícita.</p>
+      <p>El archivo generado se entrega mediante URL firmada de vida corta y se destruye del almacenamiento temporal tras la descarga o a las 24 horas, lo que antes ocurra.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">5.5</span><span>Auditoría</span></h3>
+  <p>Dos registros distintos, porque responden a preguntas distintas:</p>
+  <ul>
+    <li><code>auditoria</code> — toda <strong>escritura</strong>: quién, qué, cuándo, estado anterior y posterior, IP y agente. Poblada por <em>triggers</em>, no por la aplicación, para que ninguna ruta de código pueda saltársela.</li>
+    <li><code>accesos_historia</code> — toda <strong>lectura</strong> de datos clínicos. Es lo que permite responder a un paciente que ejerce su derecho de acceso preguntando quién ha consultado su historial, y lo que detecta la curiosidad indebida entre compañeros.</li>
+  </ul>
+  <p>Ambas tablas son de solo adición: se revoca <code>UPDATE</code> y <code>DELETE</code> a todos los roles, incluido el propietario de la aplicación. La retención de la auditoría es independiente de la del dato auditado y nunca menor.</p>
+
+  <h3><span class="n">5.6</span><span>Copias y recuperación</span></h3>
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Nivel</th><th>Qué</th><th>Frecuencia</th><th>Retención</th></tr></thead>
+      <tbody>
+        <tr><th>Continuo</th><td>PITR de Supabase</td><td>Continuo</td><td class="num">7 días</td></tr>
+        <tr><th>Diario</th><td>Volcado lógico cifrado a almacenamiento frío en la UE</td><td>Diario</td><td class="num">90 días</td></tr>
+        <tr><th>Mensual</th><td>Volcado íntegro con huella registrada</td><td>Mensual</td><td class="num">7 años</td></tr>
+        <tr><th>Bajo demanda</th><td>Exportación del usuario, cifrada con su contraseña</td><td>Cuando quiera</td><td class="num">Suya</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota riesgo">
+    <div class="etq">Ensayo</div>
+    <div class="txt">
+      <p>Una copia de seguridad que nunca se ha restaurado no es una copia de seguridad: es una suposición. <strong>Prueba de restauración trimestral obligatoria</strong> sobre una instancia desechable, con acta del resultado y del tiempo empleado. Es el control que casi nadie ejecuta y el único que demuestra que los otros funcionan.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">5.7</span><span>Retención y purga</span></h3>
+  <ul>
+    <li>El reloj arranca al <strong>cerrar el episodio asistencial</strong>, no al crear el registro.</li>
+    <li>Plazo por defecto <strong>25 años</strong>, configurable por instancia y por tipo documental, con mínimos legales bloqueados por debajo.</li>
+    <li>Consentimientos, informes de alta y documentos del núcleo de la historia se marcan como <strong>conservación indefinida</strong>, en línea con lo que exigen varias comunidades autónomas.</li>
+    <li>La purga <strong>no borra en silencio</strong>: propone, notifica al administrador con 60 días de antelación y exige confirmación. La ejecución queda en la auditoría.</li>
+    <li>Cumplido el plazo, se anonimiza de forma irreversible en lugar de borrar, conservando solo agregados sin capacidad de reidentificación. Esto preserva el histórico económico y estadístico sin conservar datos personales.</li>
+  </ul>
+</section>
+
+<!-- ─────────── 06 ─────────── -->
+<section id="s6">
+  <h2><span class="n">06</span><span>Especificación funcional</span></h2>
+  <p class="h2-sub">Cada pantalla, con el detalle que hace falta para construirla sin volver a preguntar.</p>
+
+  <h3><span class="n">6.1</span><span>Marco de navegación</span></h3>
+  <p>Cabecera mínima: nada a la izquierda salvo el disparador del menú, y a la derecha únicamente el avatar del usuario. Al pulsarlo se despliegan <strong>Ajustes</strong> y <strong>Cerrar sesión</strong>.</p>
+  <p>La barra lateral se abre desde el icono de menú y contiene: <strong>Inicio</strong>, <strong>Pacientes</strong>, <strong>Facturación</strong>, <strong>Usuarios</strong> (solo administrador) y <strong>Ajustes</strong>.</p>
+  <ul>
+    <li>En escritorio la barra puede fijarse abierta; recuerda el estado por usuario. En móvil es un panel superpuesto que se cierra al navegar.</li>
+    <li>Las entradas para las que el rol no tiene permiso <strong>no se muestran</strong>, no se muestran deshabilitadas: una entrada gris revela que existe una función y a quién pertenece.</li>
+    <li>Atajos: <code>⌘K</code> abre un buscador global de pacientes y acciones; <code>Esc</code> cierra cualquier panel.</li>
+    <li>La cabecera muestra un aviso persistente cuando hay notas clínicas pendientes, con el recuento. Es lo primero que se ve y lo último que desaparece.</li>
+  </ul>
+
+  <h3><span class="n">6.2</span><span>Inicio · Panel</span></h3>
+
+  <h4>Calendario</h4>
+  <ul>
+    <li>Tres vistas: <strong>semanal</strong> (por defecto, rejilla horaria), <strong>mensual</strong> (celdas con recuento y puntos de color por estado) y <strong>anual</strong> (mapa de densidad de ocupación por semanas).</li>
+    <li>La transición entre vistas conserva la fecha enfocada. Cambiar de mensual a semanal lleva a la semana que se estaba mirando, no a la actual.</li>
+    <li>Arrastrar una cita la reprograma, con confirmación y registro en auditoría.</li>
+    <li>Colores por estado, nunca solo por color: cada estado lleva además forma o etiqueta, para daltonismo y para impresión.</li>
+  </ul>
+
+  <h4>Panel lateral derecho</h4>
+  <p>Tres bloques, en este orden de prioridad visual:</p>
+  <ol>
+    <li><strong>Citas próximas</strong> — las siguientes del día y del día siguiente, con hora, paciente y tipo.</li>
+    <li><strong>Pendientes</strong> — citas confirmadas sin preparación o sin cobro registrado.</li>
+    <li><strong>Documentación pendiente</strong> — citas ya pasadas sin nota clínica firmada, ordenadas de más antigua a más reciente, con el nivel de escalado visible.</li>
+  </ol>
+
+  <div class="nota decision">
+    <div class="etq">Escalado</div>
+    <div class="txt">
+      <p>El aviso de nota pendiente no es una alerta única. Se dispara al pasar la hora de fin de la cita (<b>nivel 1</b>, discreto), se refuerza a las 24 h (<b>nivel 2</b>, destacado en cabecera) y a las 72 h notifica al administrador (<b>nivel 3</b>). Tres tiempos, porque una alerta que siempre está encendida deja de leerse a la semana.</p>
+    </div>
+  </div>
+
+  <h4>Añadir cita</h4>
+  <p>Panel modal en cuatro pasos:</p>
+  <ol>
+    <li><strong>Paciente</strong> — buscador sobre la lista existente, con creación rápida si no está dado de alta.</li>
+    <li><strong>Tipo de terapia</strong> — determina duración por defecto, tarifa y régimen de IVA.</li>
+    <li><strong>Hora</strong> — con <strong>banner de sugerencia</strong> derivado del historial del paciente.</li>
+    <li><strong>Repetición</strong> — cita suelta, o serie con periodicidad y número de sesiones.</li>
+  </ol>
+
+  <p>La sugerencia es determinista y explicable, sin nada de aprendizaje automático: toma la moda del intervalo entre las últimas seis citas, cruza el día de la semana y la franja horaria habituales, y busca el primer hueco libre compatible en la agenda del profesional. El banner dice exactamente en qué se basa —«martes 12:00, coincide con sus 6 últimas sesiones»— porque una sugerencia que no se puede explicar no se usa.</p>
+
+  <h4>Series de citas</h4>
+
+  <div class="nota decision">
+    <div class="etq">Modelo</div>
+    <div class="txt">
+      <p>La terapia es semanal por naturaleza: se cita «los martes a las 12 durante ocho sesiones», no ocho veces una cita. Pero una serie de terapia <strong>se rompe constantemente</strong> —el paciente se va de viaje, el profesional enferma, cae festivo— y un modelo que no lo prevea acaba obligando a borrar la serie y rehacerla a mano.</p>
+      <p>Por eso <strong>la serie guarda la intención y las citas guardan los hechos</strong>. Al crear la serie se materializan las citas una a una; a partir de ahí cada cita puede desviarse por su cuenta y queda marcada como desviada. La serie nunca sobrescribe una cita que alguien ya tocó.</p>
+    </div>
+  </div>
+
+  <ul>
+    <li>Periodicidad semanal, quincenal o mensual, con número de sesiones o fecha de fin. Nada de reglas de recurrencia arbitrarias: una consulta no las necesita y complican la interfaz.</li>
+    <li>Al crear la serie se <strong>saltan los festivos y las ausencias</strong> del profesional, proponiendo el desplazamiento y dejando decidir.</li>
+    <li>Al modificar o cancelar una cita de una serie, la pregunta es siempre <strong>«¿solo esta, o esta y las siguientes?»</strong>. Nunca «todas», que es la opción que destruye el histórico.</li>
+    <li>Las citas <strong>ya pasadas de una serie no se tocan jamás</strong>, ni siquiera eligiendo «esta y las siguientes». Tienen notas clínicas y cobros colgando: son historia, no planificación.</li>
+    <li>Cancelar la serie entera solo afecta a las citas futuras que no se hayan desviado. Lo desviado se respeta, porque alguien lo decidió a propósito.</li>
+    <li>El calendario distingue visualmente la cita de serie de la cita suelta, y marca la desviada. Sin eso, mover una cita da miedo.</li>
+  </ul>
+
+  <h4>Cuadro inferior</h4>
+  <ul>
+    <li><strong>Adherencia</strong>, desglosada en tres métricas en lugar de un porcentaje único: tasa de asistencia, tasa de ausencia sin aviso y tasa de abandono (pacientes activos sin cita en más de X semanas). El tercero es el clínicamente relevante y el que ningún software muestra.</li>
+    <li><strong>Ingresos del mes</strong>, con comparativa contra el mismo mes del año anterior y contra la media móvil de tres meses.</li>
+  </ul>
+
+  <h3><span class="n">6.3</span><span>Pacientes</span></h3>
+
+  <h4>Lista y previsualización</h4>
+  <p>Dos columnas. A la izquierda, la lista con filtros persistentes y guardables por usuario (profesional, centro, estado, nivel de riesgo, antigüedad, con documentación pendiente). Al seleccionar un paciente, la derecha muestra la ficha resumida:</p>
+  <ul>
+    <li>Nombre, DNI, motivo de consulta, antigüedad</li>
+    <li>Las <strong>tres últimas notas clínicas</strong> con fecha y tipo de sesión</li>
+    <li>Observaciones</li>
+    <li>Botón <strong>Ver</strong> que abre la ficha completa</li>
+  </ul>
+  <p>Los bloques de esta previsualización son <strong>reordenables y ocultables por el usuario</strong>, y la configuración se guarda en su perfil. Un forense y un terapeuta infantil no necesitan ver lo mismo primero.</p>
+
+  <h4>Ficha completa</h4>
+  <p>Cabecera fija con: nombre y apellidos, motivo de consulta, centro, antigüedad, <strong>nivel de riesgo</strong>, teléfono y teléfono de emergencia, edad y residencia.</p>
+
+  <div class="nota aviso">
+    <div class="etq">Riesgo</div>
+    <div class="txt">
+      <p>Un indicador de riesgo sin fecha de valoración es peligroso: un «riesgo alto» de hace tres años induce a error tanto como su ausencia. El campo se modela como <strong>valoración fechada</strong> —nivel, escala aplicada, fecha, próxima revisión— y la interfaz marca visiblemente cuándo está caducada. El teléfono de emergencia se muestra siempre junto al indicador cuando el nivel es alto o crítico.</p>
+    </div>
+  </div>
+
+  <p><strong>Pestaña 1 · Inicio.</strong> Datos demográficos completos e historial diagnóstico: códigos CIE-10-ES con fecha de registro, profesional y estado (activo, remitido, descartado). Cronología de episodios asistenciales.</p>
+
+  <p><strong>Pestaña 2 · Evaluaciones.</strong> Tabla de pruebas aplicadas con fecha, nombre, profesional, descripción y observaciones sobre resultados. El alta se hace en un panel con zona de <strong>arrastrar y soltar</strong>:</p>
+  <ul>
+    <li>Formatos admitidos: <code>.pdf</code>, <code>.xlsx</code> / <code>.xls</code> / <code>.csv</code>, <code>.png</code> / <code>.jpg</code> / <code>.webp</code>. Límite de 25 MB por archivo.</li>
+    <li>Campos obligatorios: <strong>nombre de la prueba</strong> y fecha de aplicación. Observaciones opcionales.</li>
+    <li>Validación real del tipo de archivo por su contenido, no por la extensión, y análisis antivirus antes de aceptar.</li>
+    <li>Miniatura para imágenes y PDF; para hojas de cálculo, previsualización de la primera hoja.</li>
+    <li>Cada archivo guarda su huella SHA-256: permite demostrar que el documento entregado es el mismo que se subió.</li>
+  </ul>
+
+  <p><strong>Pestaña 3 · Notas clínicas e informes.</strong> Dos tablas.</p>
+  <ul>
+    <li><strong>Notas</strong>: fecha, tipo de sesión, estado (pendiente, borrador, firmada, modificada) y acciones <strong>Ver</strong> y <strong>Modificar</strong>. «Ver» abre un panel en modo lectura, sin controles de edición a la vista. «Modificar» exige motivo y crea versión nueva conforme a <a href="#s4">§4.3</a>.</li>
+    <li><strong>Informes</strong>: tipo, fecha, estado, profesional firmante, con acceso al PDF sellado.</li>
+    <li>Selección múltiple con casillas y <strong>filtro por rango de meses</strong> para descarga en lote, cifrada con la contraseña que fije el usuario.</li>
+  </ul>
+
+  <p><strong>Pestaña 4 · Facturación del paciente.</strong> Una fila por sesión, con estado <strong>pendiente</strong> o <strong>pagado</strong>. Registrar un pago abre el selector de modalidad (efectivo, transferencia, tarjeta, Bizum, bono) y <strong>genera la factura automáticamente</strong> con el régimen de IVA que corresponda al tipo de servicio. Si el paciente tiene bono activo, la sesión lo consume y muestra el saldo restante. Todo lo registrado aquí aparece en el módulo de Facturación: son la misma tabla vista desde dos sitios.</p>
+
+  <h3><span class="n">6.4</span><span>Facturación</span></h3>
+
+  <h4>Resumen</h4>
+  <p>Rejilla tipo <em>bento</em> con: facturado en el periodo, cobrado, pendiente de cobro, gastos, resultado, y previsión del próximo trimestre. Cada tarjeta lleva su miniatura de evolución. El administrador dispone de un selector para ver el total del centro o filtrar por profesional; el profesional solo ve lo propio, sin selector visible.</p>
+
+  <h4>Emisión</h4>
+  <p>El botón <strong>Añadir</strong> abre un panel con: paciente, tipo de sesión, bono aplicable si existe, y régimen fiscal.</p>
+  <ul>
+    <li><strong>El precio se propone solo.</strong> Sale de la tarifa base del tipo de terapia, salvo que el paciente tenga una tarifa propia vigente, que manda sobre la base. La interfaz dice cuál se ha aplicado y por qué —«tarifa reducida acordada en marzo de 2026»— para que nadie tenga que recordarlo. Es lo que evita el atajo de corregir la factura a mano, que con Verifactu ya no existe.</li>
+    <li>La casilla <strong>«Operación exenta de IVA»</strong> viene marcada o desmarcada <em>según el tipo de servicio</em>, con el precepto ya redactado. El usuario puede cambiarla, pero el cambio queda registrado.</li>
+    <li>Retención de IRPF propuesta automáticamente al 15 %, o al 7 % si el profesional está dentro de sus tres primeros años de actividad.</li>
+    <li>Numeración por serie y ejercicio, generada por el sistema. <strong>No editable en ningún caso.</strong></li>
+    <li>Al emitir: se calcula la huella encadenada, se genera el QR y se remite el registro a la AEAT. Si la remisión falla, la factura se emite igual y queda en cola de reintento con estado visible.</li>
+    <li>No existe «editar factura». Existe <strong>anular y reemitir</strong>, que genera el registro de anulación correspondiente.</li>
+  </ul>
+
+  <h4>Libro de facturación y gastos</h4>
+  <ul>
+    <li>Pestaña con tabla de gastos. El botón <strong>Añadir</strong> abre un panel con concepto, proveedor y NIF, fecha, base, IVA soportado, categoría, marca de deducibilidad, y zona de <strong>arrastrar y soltar</strong> para el justificante.</li>
+    <li>Categorías precargadas para consulta sanitaria: alquiler, suministros, colegiación, seguro de responsabilidad civil, formación, supervisión, material, gestoría, software.</li>
+    <li>Exportación del libro en formato compatible con gestoría (CSV y XLSX) y resumen de <strong>modelo 130</strong> y <strong>modelo 303</strong> por trimestre. Ese es el entregable que realmente le ahorra el trimestre al usuario.</li>
+  </ul>
+
+  <h4>Análisis</h4>
+  <ul>
+    <li>Pérdidas y ganancias por mes y por trimestre.</li>
+    <li>Tendencia con media móvil y comparativa interanual.</li>
+    <li>Antigüedad de la deuda: cuánto lleva pendiente cada cobro, agrupado en tramos de 30, 60 y 90 días.</li>
+    <li>Ingreso medio por sesión y por paciente, con desglose por tipo de terapia.</li>
+  </ul>
+
+  <h3><span class="n">6.5</span><span>Usuarios</span></h3>
+  <ul>
+    <li>Lista de miembros con rol, centro, estado, MFA activo y último acceso.</li>
+    <li>Alta por invitación con correo de un solo uso y caducidad.</li>
+    <li>Cambio de rol con confirmación y registro en auditoría.</li>
+    <li><strong>Baja de un profesional</strong>: no se elimina. Se desactiva, se conservan sus notas y facturas —son suyas y legalmente deben permanecer—, y se reasignan sus pacientes activos a otro profesional mediante un asistente que exige indicar destino paciente a paciente.</li>
+    <li><strong>Notificar incidencia</strong>: panel con paciente, profesional destinatario, fecha y hora del hecho, y descripción. Aparece como notificación al profesional, con acuse de lectura registrado. Es el canal del técnico administrativo para avisar de una anulación, un retraso o un incidente sin acceder a datos clínicos.</li>
+  </ul>
+
+  <h3><span class="n">6.6</span><span>Ajustes</span></h3>
+
+  <p><strong>Pestaña 1 · Usuario.</strong> Nombre, número de colegiado y colegio, foto, centro por defecto, fecha de inicio de actividad (determina el tipo de retención). Cambio de contraseña, gestión de MFA, sesiones activas y contraseña por defecto para documentos cifrados. Contiene además la subsección <strong>Mis firmas</strong>, detallada en <a href="#s6">§6.7</a>.</p>
+
+  <p><strong>Pestaña 2 · Modelos de informe.</strong> Editor TipTap con plantillas separadas para informe <strong>clínico</strong>, <strong>pericial</strong> y <strong>asistencial</strong>. Variables que se rellenan solas desde el perfil y la organización: <code>{{profesional.nombre}}</code>, <code>{{profesional.colegiado}}</code>, <code>{{organizacion.logo}}</code>, <code>{{paciente.nombre}}</code>, <code>{{fecha}}</code>.</p>
+
+  <div class="nota decision">
+    <div class="etq">Word</div>
+    <div class="txt">
+      <p>La importación de una plantilla de Word <strong>no necesita aprendizaje automático</strong>, y es mejor noticia de la que parece. El proceso es un canal determinista: <code>.docx</code> (OOXML) → <code>mammoth.js</code> con mapeo explícito de estilos → HTML normalizado → nodos de TipTap.</p>
+      <p>Determinista significa <strong>reproducible y auditable</strong>: el mismo documento produce siempre el mismo resultado, y cuando algo no se puede convertir —tablas anidadas, cuadros de texto flotantes, ecuaciones— se marca visiblemente y se pide confirmación al usuario en lugar de inventar. Un modelo estadístico haría lo contrario: resultados distintos en ejecuciones distintas, sin forma de explicar por qué. En documentos clínicos, eso es inaceptable.</p>
+    </div>
+  </div>
+
+  <p><strong>Pestaña 3 · Tamaño de letra.</strong> Control continuo de pequeño a grande con animación de muelle.</p>
+  <ul>
+    <li>Una única variable <code>--escala-tipo</code> (de 0.875 a 1.375) sobre la que se apoya todo el sistema, que está íntegramente en <code>rem</code>.</li>
+    <li>Animación con muelle real —no una curva de <em>easing</em> imitándolo— sobre el valor numérico, para que arrastrar el control se sienta continuo.</li>
+    <li>Con <code>prefers-reduced-motion</code> activo, el cambio es instantáneo.</li>
+    <li>La preferencia se guarda en cookie y se lee en el componente raíz de servidor, de modo que se aplica <strong>antes del primer pintado</strong>. Sin esto, cada carga empieza en tamaño pequeño y salta: el defecto más visible y más común de esta función.</li>
+  </ul>
+
+  <p><strong>Pestaña 4 · Empresa</strong> (solo administrador). Razón social, CIF/NIF, domicilio fiscal, centros y sus direcciones, logotipo, datos del DPD, series de facturación, política de retención, y textos legales del pie de factura.</p>
+
+  <p><strong>Pestaña 5 · Colores.</strong> Selección de color corporativo del que se deriva automáticamente la escala completa de tonos en OKLCH, para claro y oscuro.</p>
+
+  <div class="nota aviso">
+    <div class="etq">Contraste</div>
+    <div class="txt">
+      <p>La personalización de color <strong>valida el contraste antes de guardar</strong>. Si la combinación elegida incumple WCAG 2.2 AA sobre alguna superficie, se avisa y se propone el tono más cercano que sí cumple. Un administrador con buen gusto y mala vista no debe poder dejar la aplicación ilegible para su equipo.</p>
+    </div>
+  </div>
+
+  <h3><span class="n">6.7</span><span>Firmas</span></h3>
+
+  <p>La firma aparece en tres lugares distintos del producto, y conviene no confundirlos: el profesional guarda su rúbrica, el paciente firma en consulta, y un documento se sella. Las tres se apoyan en el mismo lienzo de captura.</p>
+
+  <h4>a · Mis firmas — Ajustes › Usuario</h4>
+  <ul>
+    <li>Lienzo de captura por eventos de puntero: vale <strong>lápiz, dedo o ratón</strong>. El trazo se suaviza con curvas cuadráticas entre puntos medios y el grosor responde a la presión cuando el dispositivo la reporta, para que la rúbrica se parezca a la de verdad.</li>
+    <li><strong>Biblioteca de varias rúbricas</strong> etiquetadas —firma completa, inicial, firma con sello— con una marcada como predeterminada. Es lo que ya resuelve el prototipo <em>Rúbrica</em>.</li>
+    <li>Alternativa a dibujar: subir una imagen de firma existente. Se normaliza a fondo transparente y se recorta al trazo.</li>
+    <li>Vista previa en modo lectura sobre un documento de muestra, para ver cómo queda impresa antes de guardarla.</li>
+    <li><strong>Certificado cualificado</strong>: alta de la referencia, comprobación de vigencia contra el prestador y aviso 60 días antes de la caducidad. La aplicación guarda emisor, huella y caducidad; <strong>nunca la clave privada</strong>.</li>
+  </ul>
+
+  <h4>b · Firma del paciente en consulta</h4>
+  <ul>
+    <li>Pantalla <strong>Hoy</strong>: la agenda del día con el estado de firma de cada cita y un contador de pendientes en la barra lateral.</li>
+    <li>Al llegar el paciente se abre su cita y se le pasa el dispositivo: <strong>firma de asistencia</strong> más las casillas de consentimiento que apliquen —tratamiento de datos, hoja informativa, grabación si procede—.</li>
+    <li>Se guarda el trazo, el sello temporal, la cita y, crucialmente, <strong>la versión exacta del texto que firmó</strong>. Poder demostrar que alguien consintió no sirve de nada si no puedes demostrar a qué.</li>
+    <li>La revocación de un consentimiento <strong>no borra nada</strong>: se marca como revocado con fecha. Lo tratado lícitamente antes sigue siendo lícito.</li>
+    <li><strong>Negarse a firmar es una opción válida</strong> y se registra como tal, con motivo. El sistema no puede bloquear la atención sanitaria por una firma.</li>
+    <li>Modo tableta: apaisado, sin navegación visible, salida protegida por PIN del profesional. El paciente no debe poder navegar a la historia de nadie con el dispositivo en la mano.</li>
+  </ul>
+
+  <h4>c · Sellado de un documento</h4>
+  <ol>
+    <li>Se estampa la <strong>rúbrica predeterminada</strong> junto al nombre, número de colegiado y colegio, tomados del perfil, y el logotipo de la empresa.</li>
+    <li>Se aplica la <strong>firma cualificada</strong> al PDF con sellado de tiempo cualificado.</li>
+    <li>La huella del documento entra en la <strong>cadena de integridad</strong> de <a href="#s4">§4.3</a>, igual que una nota clínica o una factura.</li>
+  </ol>
+  <p>El <strong>historial de firmas</strong> es una tabla de auditoría transversal: fecha, paciente, tipo (asistencia, consentimiento, informe), profesional y estado. Responde a «¿tenemos el consentimiento de este paciente?» en un vistazo, que hoy es la pregunta que obliga a levantarse a buscar una carpeta.</p>
+
+  <h3><span class="n">6.8</span><span>Recordatorios de cita</span></h3>
+
+  <div class="nota decision">
+    <div class="etq">Clave</div>
+    <div class="txt">
+      <p>Con envío manual, <strong>todo depende de agrupar</strong>. Un botón de WhatsApp repartido por cada ficha de cita es un botón que nadie pulsa: exige acordarse, navegar y repetir. Una <strong>única pantalla con la cola del día</strong> convierte la tarea en tres minutos de recepción, y es la diferencia entre que la función se use o se abandone en la segunda semana.</p>
+    </div>
+  </div>
+
+  <h4>Pantalla «Recordatorios»</h4>
+  <ul>
+    <li>Lista de las citas del día siguiente —umbral configurable por tipo de terapia, 24 h por defecto— con paciente, hora, profesional y canal disponible.</li>
+    <li>Un botón por fila. Al pulsarlo se abre WhatsApp con el mensaje <strong>ya redactado y los dos enlaces incrustados</strong>; la persona solo pulsa enviar y vuelve.</li>
+    <li>La fila se marca como <strong>enviada de forma optimista</strong> al abrir el enlace, con deshacer. Es lo honesto: <code>wa.me</code> no devuelve confirmación, así que el sistema no puede afirmar más de lo que sabe.</li>
+    <li>Contador de pendientes y filtro por profesional o centro. Al vaciar la cola, la pantalla lo dice.</li>
+    <li>Los pacientes sin consentimiento de canal <strong>no aparecen</strong> en la cola: aparecen en una lista aparte para llamada telefónica.</li>
+  </ul>
+
+  <h4>Respuesta del paciente</h4>
+  <ul>
+    <li><strong>«Confirmar»</strong> marca la cita como confirmada en el calendario, sin intervención de nadie.</li>
+    <li><strong>«Solicitar cambio» no reprograma nada</strong>: crea una tarea en la bandeja del técnico administrativo o del profesional. Un enlace no mueve una agenda clínica sin que una persona lo mire.</li>
+    <li>Estados visibles sobre la cita: sin preparar, preparado, confirmado, cambio solicitado. <em>Entregado</em> y <em>leído</em> existen en el modelo pero permanecen vacíos hasta que se migre a la Cloud API.</li>
+  </ul>
+
+  <h4>Alternativas y límites</h4>
+  <ul>
+    <li><strong>Degradación</strong>: si el paciente no tiene WhatsApp o no ha consentido ese canal, la fila ofrece correo; si tampoco, queda como aviso para llamar. Nunca un silencio.</li>
+    <li>La cola se genera dentro del horario del centro. Nada que empuje a nadie a enviar mensajes a las tres de la mañana.</li>
+    <li>Cada mensaje incluye la vía para <strong>darse de baja del canal</strong>, y hacerlo no afecta a la cita ni a la atención.</li>
+    <li>Aviso automático al administrador cuando la cola diaria supere de forma sostenida los <strong>40 envíos</strong>: es la señal de que toca migrar a la Cloud API antes de que los recordatorios dejen de salir.</li>
+  </ul>
+
+  <h3><span class="n">6.9</span><span>Migración de entrada</span></h3>
+
+  <p>Ningún cliente llega vacío. Llega con doscientos pacientes en un Excel, en otro programa o en carpetas de papel, y <strong>el primer día decide si te adoptan o te prueban dos semanas y vuelven a lo suyo</strong>. Es la funcionalidad menos vistosa del producto y una de las que más venden.</p>
+
+  <ul>
+    <li><strong>Plantilla descargable</strong> en Excel con las columnas esperadas y una fila de ejemplo rellena. La mayoría de los problemas se evitan aquí y no en el validador.</li>
+    <li>Subida por arrastrar y soltar, con <strong>detección automática de codificación y separador</strong>. El CSV exportado en España usa punto y coma y <code>latin-1</code> muchas más veces de lo que nadie reconoce.</li>
+    <li><strong>Mapeo de columnas asistido</strong>: la aplicación propone la correspondencia y el usuario la corrige. No se le pide a nadie que renombre cabeceras a mano.</li>
+    <li><strong>Previsualización de las primeras veinte filas ya interpretadas</strong>, antes de escribir nada en la base de datos.</li>
+    <li>Validación por fila de DNI, fechas y teléfonos, con <strong>informe descargable de errores indicando el número de fila</strong>. Un error sin número de fila es un error que el usuario no puede arreglar.</li>
+    <li><strong>Detección de duplicados</strong> por DNI y por nombre más fecha de nacimiento, resuelta caso a caso: crear, fusionar u omitir.</li>
+    <li><strong>Importación transaccional</strong>: entra todo lo válido o no entra nada. Nada de importaciones a medias que luego hay que limpiar a mano.</li>
+    <li>La operación completa queda en auditoría y <strong>el archivo original se conserva</strong>, para poder responder a «esto no lo escribí yo» dentro de tres años.</li>
+  </ul>
+
+  <div class="nota riesgo">
+    <div class="etq">Lo que no se importa</div>
+    <div class="txt">
+      <p><strong>Las notas clínicas históricas no se importan como notas clínicas.</strong> Se adjuntan al paciente como documento histórico, fechado y atribuido al sistema de origen.</p>
+      <p>El motivo es el cimiento del producto: una nota clínica firmada tiene un autor, una fecha y una huella encadenada, y <strong>una importación no puede fabricar ninguna de las tres</strong>. Convertir un Excel en notas «firmadas» sería falsificar exactamente aquello que este sistema existe para poder demostrar. La historia previa se conserva y se consulta; simplemente no miente sobre su origen.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── 07 ─────────── -->
+<section id="s7">
+  <h2><span class="n">07</span><span>Sistema de diseño</span></h2>
+  <p class="h2-sub">Los principios que hacen que una herramienta clínica se pueda usar durante ocho horas seguidas.</p>
+
+  <ul>
+    <li><strong>Densidad alta, respiración suficiente.</strong> Un profesional consulta esta herramienta docenas de veces al día, entre paciente y paciente. Prioriza ver mucho de un vistazo sobre lucir espacioso.</li>
+    <li><strong>El estado se codifica en forma, no solo en color.</strong> Pendiente, pagado, firmado, vencido: cada uno con su forma o etiqueta además de su tono. Funciona con daltonismo, con brillo bajo y en papel.</li>
+    <li><strong>El color semántico no es el color de marca.</strong> Verde de «pagado» y verde corporativo son escalas distintas. Si el cliente elige un rojo corporativo, la alerta crítica sigue leyéndose como alerta.</li>
+    <li><strong>Nada se destruye sin fricción.</strong> Cancelar una cita, anular una factura o desactivar un usuario exigen confirmación explícita. Y como casi nada se borra de verdad, la fricción es honesta: describe lo que realmente ocurre.</li>
+    <li><strong>Teclado completo.</strong> Toda acción frecuente alcanzable sin ratón, con foco visible siempre. Quien introduce diez notas seguidas no quiere tocar el ratón.</li>
+    <li><strong>Movimiento con propósito.</strong> Transiciones que orientan —de dónde viene un panel, hacia dónde se va— y nada más. Ninguna animación decorativa en una herramienta de uso diario.</li>
+    <li><strong>Números alineados.</strong> Cifras tabulares en toda columna numérica. Un cuadro económico con dígitos de anchura variable es ilegible de un vistazo.</li>
+    <li><strong>Los mensajes de error dicen qué pasó y qué hacer.</strong> Nunca «Ha ocurrido un error». Siempre «No se pudo remitir la factura a la AEAT. Está guardada y se reintentará en 5 minutos».</li>
+  </ul>
+
+  <p>Base técnica: Tailwind con tokens en variables CSS y shadcn/ui sobre Radix, que resuelve foco, roles ARIA y navegación por teclado de origen.</p>
+
+  <div class="nota decision">
+    <div class="etq">Accesibilidad</div>
+    <div class="txt">
+      <p>Objetivo <strong>WCAG 2.2 AA</strong>, verificado con pruebas automatizadas en el pipeline. Al aparcarse el sector público no es obligación legal, pero se mantiene el listón por dos razones prácticas: la EN 301 549 remite a WCAG 2.1 AA, del que 2.2 AA es superconjunto, de modo que el día que aparezca un pliego el trabajo ya está hecho; y porque una parte real de los pacientes de una consulta de psicología usa la aplicación con la vista cansada, con el móvil a contraluz o con las manos temblando.</p>
+      <p>Lo que <em>no</em> se hace ahora: declaración de accesibilidad publicada, mecanismo formal de incidencias y auditoría externa. Son entregables de certificación, no de calidad.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── 08 ─────────── -->
+<section id="s8">
+  <h2><span class="n">08</span><span>Plan de construcción</span></h2>
+  <p class="h2-sub">Seis fases ordenadas para que cada una deje algo utilizable y nada haya que rehacer, y una ruta más corta para llegar antes a un cliente que pague.</p>
+
+  <div class="nota riesgo">
+    <div class="etq">Una persona</div>
+    <div class="txt">
+      <p>Esto lo construye <strong>un solo desarrollador asistido por IA</strong>, y ese es el dato que más condiciona el plan — más que cualquier decisión técnica de las anteriores.</p>
+      <p>Con un equipo, las fases se solapan y el riesgo se reparte. En solitario no hay solape: el calendario es la suma, no el máximo. Y hay un riesgo que no aparece en ninguna tabla de Gantt: <strong>construir medio año a ciegas antes de que nadie use nada</strong>. Es la forma más común de que un producto bueno acabe siendo un producto que no quería nadie.</p>
+      <p>Por eso el plan completo va abajo, pero la recomendación operativa es la <b>ruta corta</b> que lo cierra.</p>
+    </div>
+  </div>
+
+  <div class="nota decision">
+    <div class="etq">El piloto</div>
+    <div class="txt">
+      <p><strong>El primer usuario es la propia consulta de quien lo construye.</strong> Eso desactiva casi entero el riesgo anterior, y es la única forma de detectar la fricción el mismo día en que aparece, sin reuniones y sin que nadie tenga que ser amable.</p>
+      <p>Pero cambia el orden de las prioridades dentro de cada fase, y conviene decirlo: <strong>lo primero de cada fase es lo que se usa cada día</strong>. Agenda y notas clínicas antes que informes. Cobro de una sesión antes que el cuadro de tendencias. Un solo profesional antes que la gestión de roles.</p>
+      <p>Y trae una trampa que hay que vigilar: <strong>un producto usado solo por quien lo escribe se adapta a una sola forma de trabajar</strong>. Todo lo que sea «esto ya me lo sé» —los atajos sin explicar, los campos sin etiqueta, los estados que solo se entienden por el color— pasa desapercibido y bloquea al segundo cliente. Conviene enseñárselo a un colega antes de la fase 3, aunque no lo use.</p>
+    </div>
+  </div>
+
+  <div class="fases">
+    <div class="fase">
+      <div class="fase-id"><span class="f">FASE 0</span><span class="d">2–3 semanas</span></div>
+      <div class="fase-c">
+        <h4>Cimientos</h4>
+        <p>Nada de esto es visible, y todo lo posterior depende de ello. Saltárselo es la forma más cara de ahorrar tiempo.</p>
+        <ul>
+          <li>Repositorio, Next.js, Tailwind, CI</li>
+          <li>Supabase con RLS activo desde la primera tabla</li>
+          <li>Autenticación, roles y MFA</li>
+          <li>Marco de auditoría por triggers</li>
+          <li>Primitiva de cadena de huellas</li>
+          <li>Tokens de diseño y componentes base</li>
+          <li>Marco de pruebas de políticas RLS</li>
+          <li>Migraciones versionadas en CI</li>
+          <li>Andamiaje de i18n aunque solo haya castellano</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="fase">
+      <div class="fase-id"><span class="f">FASE 1</span><span class="d">7–8 semanas</span></div>
+      <div class="fase-c">
+        <h4>Núcleo clínico</h4>
+        <p>Primera versión con valor real: una consulta puede dejar su Excel y su calendario — y traerse lo que ya tenía dentro. Es la fase que más pesa y la que no admite recortes.</p>
+        <ul>
+          <li>Importador de Excel y CSV</li>
+          <li>Mapeo, validación y duplicados</li>
+          <li>Calendario a medida, tres vistas</li>
+          <li>Series de citas con desviaciones</li>
+          <li>Disponibilidad, ausencias y festivos</li>
+          <li>Pacientes: lista, filtros, ficha</li>
+          <li>Separación identificativo / clínico</li>
+          <li>Episodios y valoraciones de riesgo</li>
+          <li>Calendario semanal, mensual y anual</li>
+          <li>Alta de cita con sugerencia de hora</li>
+          <li>Notas clínicas versionadas y selladas</li>
+          <li>Avisos de documentación escalados</li>
+          <li>Registro de accesos a historia</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="fase">
+      <div class="fase-id"><span class="f">FASE 2</span><span class="d">5–6 semanas</span></div>
+      <div class="fase-c">
+        <h4>Documentación y firmas</h4>
+        <p>Todo lo que el profesional produce, firma y necesita entregar. Absorbe el prototipo <em>Rúbrica</em> ya construido.</p>
+        <ul>
+          <li>Evaluaciones con arrastrar y soltar</li>
+          <li>Validación y análisis de archivos</li>
+          <li>Plantillas de informe en TipTap</li>
+          <li>Importador determinista de Word</li>
+          <li>Lienzo de captura de rúbrica</li>
+          <li>Biblioteca «Mis firmas» con predeterminada</li>
+          <li>Firma cualificada eIDAS y sellado de tiempo</li>
+          <li>Firma de asistencia del paciente</li>
+          <li>Consentimientos versionados y revocables</li>
+          <li>Modo tableta con salida por PIN</li>
+          <li>Historial de firmas y auditoría</li>
+          <li>Generación de PDF sellado</li>
+          <li>Descarga en lote con filtro por meses</li>
+          <li>Cifrado AES-256 con clave del usuario</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="fase">
+      <div class="fase-id"><span class="f">FASE 3</span><span class="d">5–6 semanas</span></div>
+      <div class="fase-c">
+        <h4>Económico y Verifactu</h4>
+        <p>La fase de mayor riesgo regulatorio. Requiere pruebas contra el entorno de la AEAT antes de tocar producción.</p>
+        <ul>
+          <li>Cobros, bonos y modalidades</li>
+          <li>Series y numeración inalterable</li>
+          <li>Régimen de IVA por tipo de servicio</li>
+          <li>Retención de IRPF automática</li>
+          <li>Cadena de registros y QR</li>
+          <li>Remisión a AEAT con cola de reintento</li>
+          <li>Anulación y reemisión</li>
+          <li>Libro de gastos y modelos 130 / 303</li>
+          <li>Cuadro económico y tendencias</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="fase">
+      <div class="fase-id"><span class="f">FASE 4</span><span class="d">3–4 semanas</span></div>
+      <div class="fase-c">
+        <h4>Administración y comunicación</h4>
+        <p>Lo que convierte una herramienta individual en una herramienta de centro, más el canal con el paciente. Corto porque <code>wa.me</code> no exige integración.</p>
+        <ul>
+          <li>Gestión de usuarios y roles</li>
+          <li>Reasignación de pacientes en bajas</li>
+          <li>Notificaciones de incidencias</li>
+          <li>Los cinco paneles de ajustes</li>
+          <li>Escala tipográfica con muelle</li>
+          <li>Marca y color con validación de contraste</li>
+          <li>Acceso de emergencia auditado</li>
+          <li>Política de retención y purga asistida</li>
+          <li>Cola diaria de recordatorios</li>
+          <li>Composición de mensaje y enlace wa.me</li>
+          <li>Enlaces firmados de confirmación y cambio</li>
+          <li>Degradación a correo y a aviso en recepción</li>
+          <li>Consentimiento de canal y baja</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="fase">
+      <div class="fase-id"><span class="f">FASE 5</span><span class="d">4–5 semanas</span></div>
+      <div class="fase-c">
+        <h4>Industrialización</h4>
+        <p>Sin esta fase, el modelo de instancia dedicada colapsa alrededor del quinto cliente. Con uno o dos, se puede aplazar entera.</p>
+        <ul>
+          <li>Plano de control y aprovisionamiento</li>
+          <li>Despliegue por oleadas con canario</li>
+          <li>Inventario y sondas de salud</li>
+          <li>Prueba de restauración automatizada</li>
+          <li>EIPD y RAT documentados</li>
+          <li>Contrato de encargado para tus clientes</li>
+          <li>Declaración responsable de software</li>
+          <li>Procedimiento de baja de cliente</li>
+          <li>Revisión de seguridad externa</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p><strong>Plan completo: 26 a 32 semanas</strong> de desarrollo efectivo, entre seis y ocho meses en solitario. La fase 1 ya es utilizable en consulta propia; la fase 3 es la que permite cobrar por el producto completo; la fase 5 es la que permite venderlo más de cinco veces.</p>
+
+  <h3><span class="n">8.1</span><span>Ruta corta: llegar antes a un cliente que pague</span></h3>
+
+  <p>Seis meses construyendo sin que nadie use nada es el mayor riesgo del proyecto, y no aparece en ninguna tabla de plazos. Esta ruta recorta a lo imprescindible para que <strong>una consulta real trabaje entera dentro del producto</strong> y empiece a pagar; el resto se construye después, ya con alguien diciéndote qué falta.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Fase</th><th>Entra en la ruta corta</th><th>Se aplaza</th></tr></thead>
+      <tbody>
+        <tr><th>0 · Cimientos</th><td><strong>Todo, sin recortar.</strong> Es lo único que no se puede añadir después: RLS, auditoría y cadena de huellas no se retrofitan</td><td class="no">Nada</td></tr>
+        <tr><th>1 · Núcleo clínico</th><td>Todo, incluido el importador. Es la fase que sustituye lo que el cliente usa hoy</td><td>Vista anual del calendario</td></tr>
+        <tr><th>2 · Documentación</th><td>Rúbrica, firma del paciente, consentimientos, PDF sellado, descarga cifrada</td><td>Firma cualificada hasta el primer pericial; importador de Word; plantillas avanzadas</td></tr>
+        <tr><th>3 · Económico</th><td>Cobros, facturas con Verifactu, libro de gastos, resumen trimestral</td><td>Bonos, análisis de tendencia, antigüedad de deuda</td></tr>
+        <tr><th>4 · Administración</th><td>Usuarios, roles y los ajustes imprescindibles</td><td>Recordatorios <code>wa.me</code>, color de empresa, escala tipográfica</td></tr>
+        <tr><th>5 · Industrialización</th><td class="no">Nada. Con uno o dos clientes se aprovisiona a mano y se tarda menos</td><td>Todo, hasta el tercer cliente</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>Ruta corta: 18 a 22 semanas</strong> — cuatro o cinco meses hasta facturar a un tercero. Con la consulta propia como piloto, lo utilizable llega mucho antes: <strong>al final de la fase 1, sobre la semana ocho</strong>, ya se puede llevar la agenda y la historia clínica dentro del producto. Lo aplazado no desaparece: vuelve en el orden que marque el uso real, que es mejor orden que el que pueda decidir este documento.</p>
+
+  <div class="nota riesgo">
+    <div class="etq">Intocable</div>
+    <div class="txt">
+      <p>Tres cosas no se recortan por mucho que aprieten los plazos, porque recortarlas no ahorra tiempo: cambia de producto.</p>
+      <p><b>Verifactu</b>, porque es ley y ya está en vigor. <b>RLS, auditoría y cadena de huellas</b>, porque son la razón de existir de este producto frente a los que ya hay en el mercado — y porque son lo único que no se puede añadir encima después. Y <b>el importador</b>, porque sin él el cliente no llega a usar nada de lo demás.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── 09 ─────────── -->
+<section id="s9">
+  <h2><span class="n">09</span><span>Riesgos</span></h2>
+  <p class="h2-sub">Lo que puede salir mal, ordenado por lo que costaría si sale mal.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>Riesgo</th><th>Impacto</th><th>Mitigación</th></tr></thead>
+      <tbody>
+        <tr>
+          <th>Política RLS defectuosa expone datos de salud</th>
+          <td><span class="pill p1">Crítico</span><br>Hasta 20 M€ o 4 % de facturación</td>
+          <td>RLS desde la primera migración, prueba por rol para cada política, prueba de humo en cada despliegue, revisión externa antes de producción</td>
+        </tr>
+        <tr>
+          <th>Incumplimiento de Verifactu en producción</th>
+          <td><span class="pill p1">Crítico</span><br>Sanción y retirada del módulo</td>
+          <td>Modo VERI*FACTU, validación contra entorno de pruebas de la AEAT, cadena verificada cada noche, declaración responsable incorporada</td>
+        </tr>
+        <tr>
+          <th>Medio año construyendo sin ningún usuario</th>
+          <td><span class="pill p2">Alto</span><br>Un producto terminado que no quería nadie</td>
+          <td><strong>Muy mitigado</strong>: la consulta propia es el piloto desde la semana ocho, y la ruta corta de §8.1 lleva a un tercero que paga en 18–22. Era el riesgo crítico del proyecto; usar lo que construyes es lo que lo desactiva</td>
+        </tr>
+        <tr>
+          <th>El producto se ajusta a una sola forma de trabajar</th>
+          <td><span class="pill p3">Medio</span><br>Funciona para su autor y bloquea al segundo cliente</td>
+          <td>Es la contrapartida de usarlo uno mismo: los atajos sin explicar y los estados que solo se entienden por el color pasan desapercibidos. Enseñárselo a un colega antes de la fase 3, aunque no lo use</td>
+        </tr>
+        <tr>
+          <th>Un solo desarrollador es un único punto de fallo</th>
+          <td><span class="pill p2">Alto</span><br>Una baja larga deja a clientes sanitarios sin soporte</td>
+          <td>Este documento como memoria externa; decisiones cerradas y escritas; código convencional sin invenciones propias; pruebas de RLS que documentan la intención. Contractualmente: comprometer soporte razonable, no continuidad heroica</td>
+        </tr>
+        <tr>
+          <th>Migración rompe instancias en producción</th>
+          <td><span class="pill p2">Alto</span><br>Caída simultánea de varios clientes</td>
+          <td>Oleadas con canario, prohibición de migraciones destructivas en un paso, reversión ensayada</td>
+        </tr>
+        <tr>
+          <th>Coste operativo del modelo dedicado</th>
+          <td><span class="pill p2">Alto</span><br>Margen que se erosiona con cada cliente</td>
+          <td>Plano de control automatizado desde el segundo cliente; coste de instancia repercutido explícitamente en el precio</td>
+        </tr>
+        <tr>
+          <th>La cola de recordatorios no se despacha</th>
+          <td><span class="pill p3">Medio</span><br>La función se abandona y la tasa de ausencia no mejora</td>
+          <td>Cola agrupada en una sola pantalla en vez de un botón por ficha; contador visible; aviso al administrador si se supera de forma sostenida el umbral de 40 envíos diarios, que es la señal para migrar a la Cloud API</td>
+        </tr>
+        <tr>
+          <th>Certificados cualificados caducados</th>
+          <td><span class="pill p3">Medio</span><br>Informes firmados sin validez jurídica</td>
+          <td>Aviso 60 días antes; bloqueo de la firma cualificada con certificado caducado; la rúbrica sola nunca se presenta al usuario como si fuera firma cualificada</td>
+        </tr>
+        <tr>
+          <th>Tableta de firma como puerta de entrada</th>
+          <td><span class="pill p3">Medio</span><br>El paciente accede a datos con el dispositivo en la mano</td>
+          <td>Modo tableta sin navegación, salida por PIN del profesional, sesión limitada a la cita abierta y expiración corta</td>
+        </tr>
+        <tr>
+          <th>Copia de seguridad que no restaura</th>
+          <td><span class="pill p2">Alto</span><br>Pérdida irreversible de historias</td>
+          <td>Prueba de restauración trimestral con acta; tres niveles de copia independientes</td>
+        </tr>
+        <tr>
+          <th>Usuario pierde la contraseña de cifrado</th>
+          <td><span class="pill p3">Medio</span><br>Archivo inservible, no pérdida de datos</td>
+          <td>Aviso explícito antes de generar; el original permanece siempre en el sistema; posibilidad de regenerar</td>
+        </tr>
+        <tr>
+          <th>Rechazo profesional al aviso de notas pendientes</th>
+          <td><span class="pill p3">Medio</span><br>Se ignora y deja de cumplir su función</td>
+          <td>Escalado en tres tiempos en lugar de alerta permanente; umbrales configurables por el centro</td>
+        </tr>
+        <tr>
+          <th>Conversión imperfecta de plantillas Word</th>
+          <td><span class="pill p4">Bajo</span><br>Fricción en la puesta en marcha</td>
+          <td>Canal determinista con marcado explícito de lo no convertible y confirmación del usuario; nunca conversión silenciosa</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ─────────── 10 ─────────── -->
+<section id="s10">
+  <h2><span class="n">10</span><span>Decisiones cerradas</span></h2>
+  <p class="h2-sub">Las dieciocho decisiones de alcance, resueltas, con lo que cada respuesta arrastra al resto del documento. Las ocho últimas surgieron de auditar dos veces lo que este documento daba por supuesto.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead><tr><th>#</th><th>Pregunta</th><th>Decisión</th><th>Qué arrastra</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><th>¿Puede el administrador leer notas clínicas ajenas?</th><td><strong>No</strong>, con acceso de emergencia que exige justificación escrita, caduca solo, se audita de forma destacada y notifica al profesional titular</td><td>Matriz de <a href="#s5">§5.1</a>; tabla <code>accesos_historia</code>; flujo de justificación en fase 1</td></tr>
+        <tr><td class="num">2</td><th>¿Ve el técnico administrativo el nivel de riesgo?</th><td><strong>Solo el indicador binario</strong> «protocolo especial activo», sin nivel ni motivo</td><td>Columna derivada, nunca el dato; RLS propia sobre <code>valoraciones_riesgo</code></td></tr>
+        <tr><td class="num">3</td><th>¿Qué catálogo diagnóstico?</th><td><strong>CIE-10-ES</strong> estructurado como principal, con campo paralelo para nomenclatura <strong>DSM-5-TR</strong></td><td>Dos columnas en <code>diagnosticos</code>; catálogo CIE-10-ES precargado por instancia</td></tr>
+        <tr><td class="num">4</td><th>¿Cuánta retención y quién la cambia?</th><td><strong>25 años</strong> configurables, solo el administrador, con los mínimos legales bloqueados por debajo y registro del cambio</td><td><code>politicas_retencion</code>; purga asistida de <a href="#s5">§5.7</a></td></tr>
+        <tr><td class="num">5</td><th>¿Cómo se firman los documentos?</th><td><strong>Dos capas</strong>: rúbrica manuscrita capturada en pantalla, más firma cualificada eIDAS con sellado de tiempo <span class="pill p2">amplía alcance</span></td><td><a href="#s2">§2.6</a> y <a href="#s6">§6.7</a>; +2 semanas en fase 2; un certificado por profesional</td></tr>
+        <tr><td class="num">6</td><th>¿Firma el paciente en consulta?</th><td><strong>Sí</strong>: firma de asistencia por cita y consentimientos versionados, firmados en pantalla <span class="pill p2">amplía alcance</span></td><td>Dominio Firmas en <a href="#s4">§4.1</a>; modo tableta; absorbe el prototipo <em>Rúbrica</em></td></tr>
+        <tr><td class="num">7</td><th>¿Recordatorios al paciente?</th><td><strong>Sí en v1, por enlace <code>wa.me</code></strong>: la aplicación redacta el mensaje y una persona lo envía con un clic desde una cola diaria. Correo como alternativa</td><td><a href="#s2">§2.7</a> y <a href="#s6">§6.8</a>; ningún encargado del tratamiento nuevo; los dos botones se resuelven con enlaces firmados de un solo uso</td></tr>
+        <tr><td class="num">8</td><th>¿Hay cliente de sector público?</th><td><strong>Aparcado en v1.</strong> Se diseña compatible con ENS, pero no se certifica <span class="pill p1">revertida</span></td><td>Motivo: la cadena de conformidad ENS no alcanza a Supabase ni a Vercel (<a href="#s2">§2.5</a>). La fase 5 vuelve a 4–5 semanas</td></tr>
+        <tr><td class="num">9</td><th>¿Portal del paciente?</th><td><strong>Fuera de v1</strong></td><td>El registro de accesos lo deja preparado para v2 sin migración de datos</td></tr>
+        <tr><td class="num">10</td><th>¿Cómo se cobra?</th><td><strong>Base por instancia + tramo por usuario activo</strong></td><td>Refleja el suelo de coste fijo que tiene cada instancia dedicada aunque solo la use una persona</td></tr>
+        <tr><td class="num">11</td><th>¿Migración de datos de entrada?</th><td><strong>Sí, importador de Excel y CSV en v1</strong>, con plantilla, mapeo asistido, duplicados e informe de errores <span class="pill p2">amplía alcance</span></td><td><a href="#s6">§6.9</a>; +1 semana en fase 1. Las notas históricas se adjuntan como documento, nunca como notas firmadas</td></tr>
+        <tr><td class="num">12</td><th>¿Quién lo construye?</th><td><strong>Un solo desarrollador asistido por IA</strong></td><td>Condiciona el plan entero: aparece la ruta corta de <a href="#s8">§8.1</a>, con piloto cobrable en 17–21 semanas</td></tr>
+        <tr><td class="num">13</td><th>¿Lenguas cooficiales?</th><td><strong>Solo castellano en v1</strong>, con el andamiaje de i18n puesto desde la fase 0</td><td>Barato ahora, carísimo después. El día que aparezca un pliego en Catalunya o Euskadi, el idioma no será el bloqueo</td></tr>
+        <tr><td class="num">14</td><th>¿Quién es responsable y quién encargado?</th><td><strong>Cada clínica es responsable; tú eres su encargado del tratamiento</strong></td><td>Necesitas tu propio contrato del art. 28 como anexo del contrato de servicio, más registro de subencargados. <em>Sin eso no puedes vender legalmente</em> (<a href="#s2">§2.1</a>)</td></tr>
+        <tr><td class="num">15</td><th>¿Cómo se modelan las citas de terapia?</th><td><strong>Series con excepciones.</strong> La serie guarda la intención; las citas guardan los hechos, y cada una puede desviarse sola <span class="pill p2">amplía alcance</span></td><td>Tabla <code>series_cita</code>; <a href="#s6">§6.2</a>; +1 semana en fase 1. Las citas pasadas de una serie no se tocan nunca</td></tr>
+        <tr><td class="num">16</td><th>¿Calendario a medida o librería?</th><td><strong>A medida</strong> sobre <code>date-fns</code></td><td><a href="#s3">§3.5</a>; 2–3 semanas dentro de la fase 1. Fija la regla general: se integra lo invisible, se construye lo que el usuario mira a diario</td></tr>
+        <tr><td class="num">17</td><th>¿Dónde vive el precio de una sesión?</th><td><strong>Tarifa base por tipo de terapia, con excepción por paciente</strong> —importe, motivo y vigencia—</td><td>Tabla <code>tarifas_paciente</code>; <a href="#s6">§6.4</a>. Es lo que evita corregir facturas a mano, que con Verifactu ya no se puede</td></tr>
+        <tr><td class="num">18</td><th>¿Quién es el primer usuario?</th><td><strong>La propia consulta</strong> de quien lo construye</td><td>Reordena las prioridades dentro de cada fase hacia lo que se usa a diario, y baja el riesgo crítico de <a href="#s9">§9</a> de crítico a alto</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nota decision">
+    <div class="etq">Balance</div>
+    <div class="txt">
+      <p>De las dieciocho, ocho confirmaron el diseño previo. Las otras diez lo movieron, y merece la pena saber en qué dirección.</p>
+      <p>Cuatro de ellas —<b>citas recurrentes</b>, <b>calendario a medida</b>, <b>tarifas por paciente</b> y <b>piloto en consulta propia</b>— salieron de auditar el documento por segunda vez, y la primera era un hueco tan real como lo fue el importador: la terapia es semanal y yo solo había modelado citas sueltas. Retrofitar recurrencia después es de lo más caro que hay.</p>
+      <p><b>Firma en dos capas</b>, <b>firma del paciente</b> y <b>el importador</b> añaden alcance real: unas tres semanas entre las tres. A cambio, dos de ellas llegan con trabajo hecho —el prototipo <em>Rúbrica</em>— y la tercera es la que decide si un cliente llega a usar el producto.</p>
+      <p>Los <b>recordatorios</b> fueron al revés: parecían caros y salieron baratos. <code>wa.me</code> en lugar de la Cloud API deja el producto <strong>sin ningún encargado del tratamiento nuevo</strong>, a cambio de que alguien pulse enviar.</p>
+      <p><b>Sector público</b> entró y volvió a salir, y ese viaje no fue en balde: al estudiarlo apareció que la conformidad ENS no alcanza a Supabase ni a Vercel. Mejor descubrirlo ahora, gratis, que delante de un pliego.</p>
+      <p>Y <b>construirlo en solitario</b> es la que más pesa de todas, aunque no sea técnica: es la que hace aparecer la ruta corta de <a href="#s8">§8.1</a>. Ninguna de las catorce obliga a rehacer nada de lo ya decidido — que es exactamente lo que se compra tomando primero las decisiones fundacionales de <a href="#s1">§1</a>.</p>
+    </div>
+  </div>
+</section>
+
+<div class="cierre">
+  <p><strong>Psicogestión · Documento maestro de producto y arquitectura, v1.3.</strong> 15 de agosto de 2026. Dieciocho decisiones cerradas.</p>
+  <p>Documento de especificación técnica. Las referencias normativas reflejan el criterio general aplicable a una consulta de psicología sanitaria en España y sirven para justificar decisiones de diseño; no constituyen asesoramiento jurídico ni fiscal. La Evaluación de Impacto (art. 35 RGPD), el Registro de Actividades de Tratamiento (art. 30 RGPD), el contrato de encargado del tratamiento que se ofrece a cada clínica (art. 28 RGPD) y la declaración responsable del productor de software deben ser revisados por un Delegado de Protección de Datos y por asesoría fiscal antes de la puesta en producción.</p>
+</div>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var enlaces = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+  var mapa = {};
+  enlaces.forEach(function (a) { mapa[a.getAttribute('href').slice(1)] = a; });
+  var secciones = Array.prototype.slice.call(document.querySelectorAll('main section'));
+  if (!('IntersectionObserver' in window) || !secciones.length) return;
+
+  var visibles = new Set();
+
+  function pintar() {
+    var activo = null;
+    for (var i = 0; i < secciones.length; i++) {
+      if (visibles.has(secciones[i].id)) { activo = secciones[i].id; break; }
+    }
+    enlaces.forEach(function (a) { a.classList.remove('activo'); });
+    if (activo && mapa[activo]) mapa[activo].classList.add('activo');
+  }
+
+  var obs = new IntersectionObserver(function (entradas) {
+    entradas.forEach(function (e) {
+      if (e.isIntersecting) visibles.add(e.target.id);
+      else visibles.delete(e.target.id);
+    });
+    pintar();
+  }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+
+  secciones.forEach(function (s) { obs.observe(s); });
+})();
+</script>
