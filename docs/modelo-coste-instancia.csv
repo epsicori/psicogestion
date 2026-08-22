@@ -1,0 +1,57 @@
+﻿Modelo de coste por instancia — Psicogestión;;;
+Edita solo la columna B (y C en las secciones 6 y 7). Lo demás se recalcula.;;;
+Razonamiento y fuentes: docs/modelo-coste-instancia.md;;;
+;;;
+1. SUPUESTOS;Valor;Unidad;Nota
+Tipo de cambio USD a EUR;0,92;EUR por USD;VERIFICAR
+Coste de tu hora;60;EUR/h;lo que decidas que vale tu tiempo
+Clientes activos;=B52+B53;instancias;se calcula desde la seccion 7
+;;;
+2. COSTE FIJO DE PLATAFORMA (no escala con clientes);Valor;Unidad;Nota
+Supabase Pro (por ORGANIZACION, no por proyecto);25;USD/mes;VERIFICAR
+Creditos de computo incluidos en Pro;-10;USD/mes;cubren la primera instancia
+Vercel Pro (por MIEMBRO del equipo, no por proyecto);20;USD/mes;VERIFICAR
+Dominio principal;1;EUR/mes;unos 12 EUR al ano
+Correo transaccional;0;USD/mes;franquicia gratuita hasta unos 3.000 al mes
+TOTAL FIJO;=(B11+B12+B13+B15)*B6+B14;EUR/mes;
+Fijo repercutido por cliente;=B16/B8;EUR/mes;
+;;;
+3. COSTE MARGINAL DE INFRAESTRUCTURA POR INSTANCIA;Valor;Unidad;Nota
+Computo Supabase (instancia Micro);10;USD/mes;VERIFICAR
+Disco por encima de los 8 GB incluidos;0;USD/mes;una consulta tarda anos en pasar de ahi
+Almacenamiento de ficheros;0;USD/mes;100 GB incluidos por organizacion
+Uso de Vercel (trafico e invocaciones);2;USD/mes;colchon. Con 10 usuarios internos es ruido
+PITR 7 dias;100;USD/mes;VERIFICAR. Es la variable que decide todo
+;;;
+Marginal SIN PITR;=(B20+B21+B22+B23)*B6;EUR/mes;copia diaria con 7 dias incluida en Pro
+Marginal CON PITR;=(B20+B21+B22+B23+B24)*B6;EUR/mes;
+;;;
+4. TU TIEMPO (el coste que nadie mete y es el mayor);Valor;Unidad;Nota
+Horas de mantenimiento por instancia y mes;0,5;h/mes;migraciones incidencias y soporte
+Coste de tiempo por instancia;=B30*B7;EUR/mes;
+Horas de alta de una instancia (una sola vez);4;h;aprovisionar dominio usuarios formacion
+Coste de alta amortizado a 24 meses;=B32*B7/24;EUR/mes;
+Horas de mantenimiento al mes con la cartera actual;=B30*B8;h/mes;
+Clientes que caben en 20 h/mes de mantenimiento;=20/B30;instancias;techo operativo
+;;;
+5. COSTE TOTAL POR INSTANCIA;Sin PITR;Con PITR;Unidad
+Infraestructura marginal;=B26;=B27;EUR/mes
+Fijo repercutido;=B17;=B17;EUR/mes
+Tu tiempo;=B31+B33;=B31+B33;EUR/mes
+TOTAL;=B38+B39+B40;=C38+C39+C40;EUR/mes
+;;;
+6. PRECIO Y MARGEN;Sin PITR;Con PITR;Unidad
+Precio propuesto — EDITA ESTO;90;450;EUR/mes
+Margen;=B44-B41;=C44-C41;EUR/mes
+Margen;=B45/B44*100;=C45/C44*100;%
+Precio minimo para 50 por ciento de margen;=B41/0,5;=C41/0,5;EUR/mes
+Precio minimo para 60 por ciento de margen;=B41/0,4;=C41/0,4;EUR/mes
+Precio minimo para 70 por ciento de margen;=B41/0,3;=C41/0,3;EUR/mes
+;;;
+7. CARTERA;Valor;Unidad;Nota
+Clientes en tramo sin PITR;7;instancias;EDITA ESTO
+Clientes en tramo con PITR;3;instancias;EDITA ESTO
+Ingresos totales;=B52*B44+B53*C44;EUR/mes;
+Coste total;=B16+B52*(B26+B31+B33)+B53*(B27+B31+B33);EUR/mes;
+Resultado antes de impuestos;=B54-B55;EUR/mes;tu tiempo ya esta pagado dentro del coste
+Tu tiempo ya retribuido dentro del coste;=B8*(B31+B33);EUR/mes;sumalo al resultado para ver lo que te llevas

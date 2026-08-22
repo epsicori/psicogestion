@@ -3,8 +3,16 @@
 # Psicogestión
 
 Gestión clínica y facturación para consultas sanitarias españolas (psicología).
-Especificación completa: `docs/documento-maestro.html` — **no la abras entera**; usa
-`docs/architecture.md` y `docs/decisions.md`, que son su destilado.
+
+Dos fuentes, dos destilados. **No abras las fuentes enteras**; lee los destilados:
+
+| Fuente | Destilado | Manda sobre |
+|---|---|---|
+| `docs/documento-maestro.html` | `docs/architecture.md` | Modelo, invariantes, **quién ve qué** |
+| Prototipo visual en `/prototipo` | `docs/interfaz.md` | Qué pantallas hay y qué muestran |
+
+Lo cerrado está en `docs/decisions.md`. **Si arquitectura e interfaz chocan, gana la
+arquitectura.**
 
 ## Stack
 
@@ -35,6 +43,9 @@ TanStack Table · date-fns.
 - Identificadores **UUID**. Jamás un nombre de paciente en la URL.
 - Ficheros y símbolos en castellano cuando nombran conceptos del dominio
   (`notas_clinicas`, `esProfesionalAsignado`); en inglés lo que es puramente técnico.
+- **Interfaz**: antes de escribir una pantalla, `docs/interfaz.md` — el prototipo está
+  dibujado sin roles, y allí están resueltos los sitios donde enseña de más. Nada de
+  controles sin un dato o una acción real detrás.
 - Migraciones en `supabase/migrations/`, siempre hacia delante y nunca destructivas en
   un solo paso.
 

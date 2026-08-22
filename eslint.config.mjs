@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generado localmente por la CLI de Supabase, no es código del proyecto.
+    "supabase/.temp/**",
+    "supabase/.branches/**",
+    // Maqueta de v0 conservada tal cual como referencia visual, no es código del
+    // proyecto: se lee, no se mantiene.
+    "app/prototipo/page.tsx",
   ]),
 ]);
 

@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase (generado localmente por la CLI, no versionado)
+/supabase/.temp/
+/supabase/.branches/
+
+# Worktrees de los agentes de la fábrica de tickets
+.claude/worktrees/
