@@ -125,3 +125,278 @@ guion SQL de este ticket. La batería completa por rol es T-003.
 - **Cada política que escribas aquí tiene su prueba en T-003.** Una política sin test es
   código no escrito (`architecture.md` §RLS): deja la lista de las que añades para que
   T-003 no tenga que deducirla.
+
+---
+
+## Diseño aprobado
+
+### 0 · Decisiones del propietario, 22-08-2026 (resuelven los tres bloqueos)
+
+| # | Bloqueo | Resolución |
+|---|---|---|
+| 1 | **Acceso del representante legal (ADR-028)** no es implementable en RLS: un representante no es un `auth.users` ni tiene perfil, y el portal del paciente es v2 (decisión 13). No hay sujeto al que aplicar una política | **Se traslada** al ticket que cree la salida dirigida al paciente (derecho de acceso / exportación), que es donde tendrá sujeto y prueba. **Sale del alcance de T-002** y se anota en `docs/state.md`. Escribir hoy una función que nadie llama sería una política sin prueba, es decir, código no escrito |
+| 2 | **Acceso de emergencia del administrador** — la matriz lo cita, el ticket no lo lista | **Confirmado fuera de T-002.** Cuando entre, entra por **función `security definer`** con justificación y aviso al titular, **jamás por política**: `authenticated` tiene `insert` sobre `accesos_historia`, así que una política del tipo «lee si hay emergencia vigente» sería auto-servicio de privilegios — cualquiera se escribiría su propia fila |
+| 3 | El relleno de `centro_id`: `state.md` proponía leer el nulo como «toda la organización» | **Fallo cerrado**, enmendando lo acordado. La organización **puede ser multicentro**, y ahí un paciente sin centro se filtraría a **todos** los técnicos, que es justo el rol que esa columna gobierna. La política del técnico es una igualdad simple; con `centro_id` nulo da `null`, o sea, no visible |
+
+### 1 · Hechos verificados contra la base (no supuestos)
+
+| Hecho | Comprobación |
+|---|---|
+| 25 tablas en `public`, **todas** con `relrowsecurity = t` y `relforcerowsecurity = f`, propietario `postgres` | `pg_class` |
+| Solo existen las 4 políticas de T-000 | `pg_policies` |
+| `postgres` **no es superusuario** pero es propietario de todo `public` y no hay `FORCE` → **una función `security definer` suya salta la RLS**. Es la base de todo el diseño | `pg_user.usesuper = f` |
+| `auth.users` es de `supabase_auth_admin`, pero `postgres` tiene `TRIGGER` y `SELECT`: `create trigger ... on auth.users` **funciona** | probado y revertido en transacción |
+| **No existe tabla `notificaciones`** (T-001 no la creó) | inventario de tablas |
+| `supabase/seed.sql` inserta `auth.users` con `raw_user_meta_data = '{}'` y **después** el perfil a mano | fichero |
+| Ningún código de aplicación consulta `perfiles` | grep en `app/` y `lib/` |
+
+**Corrección de una imprecisión del ticket**: `historia_desbloqueada()` **no invoca `crypt`**; solo lee `desbloqueos_historia`. La regla «`extensions.crypt`, no `crypt`» del ADR-026 aplica a las funciones de PIN, y ahí se cumple.
+
+### 2 · Ficheros
+
+| Fichero | Qué |
+|---|---|
+| `supabase/migrations/<ts>_rls_funciones_y_politicas.sql` | **Nuevo.** Todo el ticket |
+| `supabase/seed.sql` | **Modificar**: metadatos de rol en `auth.users` + `on conflict (id) do update` en `perfiles` |
+| `scripts/t002-rls.sql` | **Nuevo.** Mismo formato que `scripts/t001-esquema.sql` |
+| `lib/supabase/tipos-bd.ts` | **Regenerar** con `npm run tipos` |
+| `docs/state.md` | **Actualizar** al cerrar |
+| `docs/architecture.md` §RLS | **Añadir** `centro_actual()` y las dos vistas derivadas |
+
+**No se toca ninguna migración existente.** Lo que T-000 dejó mal se corrige con `drop policy` + `create policy` y `create or replace function` en la migración nueva.
+
+### 3 · Convenciones de escritura (obligatorias, no estilo)
+
+1. **`(select auth.uid())` siempre entre paréntesis**, y también las funciones **sin argumento**: `(select public.rol_actual())`, `(select public.historia_desbloqueada())` → InitPlan, una vez por sentencia.
+2. **Las funciones CON argumento de columna van SIN el envoltorio**: `public.es_profesional_asignado(paciente_id)`. Envolverla no la cachea —depende de la fila— y solo añade un SubPlan. **Es el error fácil de cometer copiando el patrón.**
+3. Enum siempre casteado: `= 'administrador'::public.rol_usuario`.
+4. Todas las políticas `to authenticated`. Ninguna a `public`, `anon` ni `service_role`.
+5. `comment on policy` cuando la expresión no se lea como frase.
+6. Nombres `<tabla>_<operacion>[_<matiz>]`, en castellano.
+
+Abreviaturas de este diseño (se escriben expandidas en el SQL):
+
+```
+U       := (select auth.uid())
+ROL     := (select public.rol_actual())
+ADMIN   := ROL = 'administrador'::public.rol_usuario
+PRO     := ROL = 'profesional_sanitario'::public.rol_usuario
+TECNICO := ROL = 'tecnico_administrativo'::public.rol_usuario
+ACTIVO  := ROL is not null          -- perfil existente Y activo (§4.1)
+CANDADO := (select public.historia_desbloqueada())
+ASIG(x) := public.es_profesional_asignado(x)
+EPI(x)  := public.es_profesional_del_episodio(x)
+```
+
+### 4 · Funciones auxiliares
+
+Todas: `set search_path = ''`, nombres cualificados, `revoke execute from public`, `grant execute to authenticated` salvo donde se diga.
+
+#### 4.1 · `rol_actual()` — se enmienda, no se reescribe
+
+Único cambio: **`and estado = 'activo'`**. Firma, volatilidad y grants intactos (`create or replace` los conserva).
+
+**Por qué**: ADR-032, «el acceso se corta entero». Es el **único punto** donde se puede hacer cumplir para `administrador` y `tecnico_administrativo`; `es_profesional_asignado()` solo cubre al profesional. A partir de aquí `ROL is not null` significa «tengo perfil y estoy activo», y **todas las políticas heredan el corte gratis**.
+
+*Descartado*: una función aparte `perfil_activo()` compuesta en cada política — dos lecturas de `perfiles` por sentencia y, sobre todo, **una política que olvide llamarla es un agujero silencioso**.
+
+**Efecto que se acepta a sabiendas**: un perfil suspendido o de baja deja de ver todo, incluida la pantalla de T-000.
+
+#### 4.2 · Las demás
+
+| Función | Volatilidad / seguridad | Qué hace y por qué |
+|---|---|---|
+| `centro_actual() → uuid` | `stable definer` | Centro del perfil activo. **Definer** para no depender de la política de `perfiles`. Nulo para admin y profesional, y es correcto: solo la usa la política del técnico, que por `check` de T-001 siempre tiene centro |
+| `es_profesional_asignado(paciente) → boolean` | `stable definer` | Resuelve el vínculo de fusión con **un solo salto** (`s.fusionado_en` es siempre nulo por el disparador de T-001) y exige `estado = 'activo'`. **Definer es obligatorio**: como *invoker* consultaría `pacientes` bajo RLS y entraría en recursión infinita. **Rol-agnóstica a propósito**: si un administrador figura como `profesional_id`, ese paciente es suyo, y así las políticas clínicas no necesitan `rol_actual()` en absoluto |
+| `es_profesional_del_episodio(episodio) → boolean` | `stable definer` | El ADR-030, «por participación y no por copia». **Incluye a los participantes dados de baja**: quien participó cuando se escribió la nota conjunta sigue siendo parte de ese acto asistencial, y una baja posterior no puede volver ilegible una nota firmada |
+| `historia_desbloqueada() → boolean` | `stable definer` | Desbloqueo vigente y no revocado. Definer porque §6 le quita el `select` a `authenticated` sobre la tabla. **No invoca `crypt`** |
+| `desbloqueo_vigente() → timestamptz` | `stable definer` | `max(caduca_en)` de los vigentes. Sustituye al `grant select` que se retira: la interfaz necesita el reloj, no la tabla |
+| `desbloqueo_propio_vigente(id) → boolean` | `stable definer` | La usa el `with check` de `accesos_historia` |
+
+#### 4.3 · Funciones del candado (volátiles, definer, `grant to authenticated`)
+
+Ninguna se invoca desde una política; las llama T-006.
+
+**`fijar_pin_historia(p_pin text)`** — valida `^[0-9]{6}$`, `upsert` con `extensions.crypt(p_pin, extensions.gen_salt('bf', 12))`. Siempre `perfil_id = (select auth.uid())`: **sin parámetro de perfil ajeno**, que es la forma de garantizar que un administrador no pueda establecer un PIN (ADR-026).
+
+**`desbloquear_historia(p_pin text)`** → devuelve `(desbloqueado, motivo, caduca_en, bloqueado_hasta)`. Orden exacto:
+
+1. `select ... for update` sobre `pines_historia` — serializa los intentos concurrentes.
+2. Si `bloqueado_hasta > now()` → `(false, 'bloqueado', …)` **sin comprobar el PIN**. Esto es lo que hace fallar el sexto intento con el PIN correcto.
+3. Compara con `extensions.crypt`. **`p_pin` es parámetro ligado; no hay `execute` en la función, y eso es parte del diseño.**
+4. Fallo: incrementa; a los 5, `bloqueado_hasta = now() + 15 min`; escribe en `auditoria`.
+5. Acierto: resetea, revoca los vigentes e inserta uno nuevo con la ventana de `organizacion.minutos_desbloqueo_historia` (`coalesce(…, 15)`).
+
+> **Por qué devuelve una fila y no lanza excepción al fallar — es la pieza crítica**: un `raise` aborta la transacción y **deshace el incremento del contador y la entrada de auditoría**. El bloqueo por intentos, que según el ADR-026 es «lo que hace seguro esto», dejaría de existir. Solo se lanza excepción en errores de forma, donde no hay estado que preservar.
+
+**`bloquear_historia() → integer`** — el botón «bloquear». **`prolongar_desbloqueo() → timestamptz`** — solo prolonga uno **ya vigente**; jamás resucita uno caducado, o la ventana sería infinita. Su comentario recuerda que se llama **desde Server Actions, jamás desde el renderizado**.
+
+**Fuera de alcance explícito**: el bloqueo administrativo del PIN de otro es T-006.
+
+#### 4.4 · La entrada en `auditoria` del bloqueo de PIN
+
+`auditoria.operacion` tiene `check in ('INSERT','UPDATE','DELETE')` y `registro_id text not null`. Se escribe así o viola la restricción: `tabla = 'pines_historia'`, `operacion = 'UPDATE'`, `registro_id = perfil_id::text`, y el evento en `estado_posterior` como `jsonb`. **Nunca el hash ni el PIN en el jsonb.**
+
+**Desviación registrada, no bloqueo**: el ADR-026 pide además **notificación al titular**, y `notificaciones` no existe en el esquema. Se escribe la auditoría, se anota la deuda en `state.md`, y el criterio 10 —que solo exige la entrada en `auditoria`— se cumple igual.
+
+#### 4.5 · Alta automática de perfil (deuda de T-000)
+
+Disparador `after insert on auth.users`, función `security definer` (el disparador corre como `supabase_auth_admin`, que no tiene privilegios sobre `public.perfiles`).
+
+**Fallo cerrado**: si `raw_user_meta_data ->> 'rol'` falta o no es del enum → **excepción**, y el alta de `auth.users` falla. Con `enable_signup = true`, un rol por defecto convertiría cualquier registro público en un profesional sanitario con acceso clínico. **Un usuario que no se puede crear es infinitamente mejor que un usuario que nace con acceso.**
+
+**Hallazgo para `state.md` y T-006**: `enable_signup = true` debería pasar a `false` en el ticket de usuarios. No se toca aquí.
+
+### 5 · Vistas derivadas (lo que un `grant select (columnas)` no puede hacer)
+
+Las dos: `security_invoker = false` **y `security_barrier = true`** —sin la barrera el planificador puede empujar una función barata del usuario por debajo del filtro y filtrar filas por el mensaje de error—, `revoke all from public, anon, service_role`, `grant select to authenticated`.
+
+**`pacientes_indicador_riesgo`** — el deber nº 2 de T-001. Columnas exactamente `(paciente_id, indicador, valorado_en)`: `nivel`, `descripcion` y `plan_seguridad` **no aparecen en el texto de la vista** — no es que se filtren, es que no están (invariante 3 aplicado a una proyección). **Solo sirve al técnico**, deliberadamente: profesional y administrador leen la tabla con su política y su candado, y así el ADR-026 sigue cubriéndola sin excepciones. Una vista que sirviera a los tres sería un segundo camino al riesgo por fuera del candado.
+
+*Descartado*: `grant select (columnas)` —imposible, los tres roles comparten `authenticated`— y columna materializada en `pacientes` —segunda verdad que se desincroniza, el error que T-001 evitó con `estado_nota`.
+
+**`directorio_perfiles`** — porque la regla permanente prohíbe que una política sobre `perfiles` invoque `rol_actual()`, y a la vez `motivo_estado` («causa de la baja de un compañero») no puede salir en un directorio. **`perfiles` conserva una sola política**, la de T-000, y **cero de escritura**: alta, cambio de rol y baja pasan por funciones definer de T-006.
+
+### 6 · Cambios de privilegios (antes de las políticas)
+
+```sql
+grant update on table public.pacientes to authenticated;      -- sin esto, «administrador total» es mentira
+revoke select on table public.desbloqueos_historia from authenticated;  -- ADR-026
+```
+
+`pines_historia` sigue sin un solo privilegio. **Verificación obligatoria**: que tras el `revoke`, un `insert` en `accesos_historia` con `desbloqueo_id` no nulo **siga funcionando** (la FK corre como propietario, que conserva `update`/`delete` sobre esa tabla, que no es de solo adición). Si fallara, la salida es quitar la FK, **no** devolver el `select`.
+
+### 7 · Índices nuevos — deber nº 4 de T-001
+
+Solo los que la RLS de este ticket pone en un `using`: `episodio_participantes (episodio_id)` —el único que había es **parcial** `where baja_en is null`, y la función mira también a los de baja—, `diagnosticos (paciente_id)`, `evaluacion_archivos (evaluacion_id)` y `alertas_documentacion (centro_id)`. No se añaden `informes(autor_id)` ni `notas_clinicas_versiones(autor_id)`: ahí la columna va dentro de un `or`, donde el índice no es utilizable.
+
+### 8 · Relleno de `pacientes.centro_id` — deber nº 3, con la enmienda aprobada
+
+Relleno en la migración: (1) centro del profesional asignado; (2) si solo hay un centro activo, ese. Después, **fallo cerrado**: la política del técnico es `centro_id = (select public.centro_actual())`, que con nulo da `null` y por tanto no visible.
+
+Como el paso 2 asigna centro a todos cuando solo hay uno, **el caso solo puede darse en una instancia multicentro, que es justo donde debe darse**. Coste operativo: un paciente sin centro es invisible para recepción hasta que el administrador se lo asigne — visible y arreglable, el mismo criterio del ADR-032 con los huérfanos.
+
+Y un disparador `before insert` que rellena por defecto (centro del profesional; el único centro activo; o nulo). **Nunca inventa un centro.** *Descartado* hacer la columna `not null`: no hay centro que poner en una instancia recién creada y rompería `crearPaciente` de T-000.
+
+### 9 · Columnas reservadas de `pacientes` (RLS no ve el `OLD`)
+
+Un `with check` no puede decir «no cambies esta columna». Sin esto, la política de `update` del profesional le permitiría **reasignarse pacientes ajenos** o **marcarse pacientes como suyos** (`titularidad`), prohibido por la enmienda del ADR-032.
+
+Disparador `before update` que lanza `42501` si quien escribe no es administrador y cambia `profesional_id`, `titularidad`, `centro_id`, o cualquiera de las columnas de fusión y traspaso. Es disparador y no política **porque la comparación exige `old`**. Deja al profesional editar nombre, apellidos y fecha de nacimiento.
+
+### 10 · Catálogo de políticas
+
+Primero, y **no es limpieza cosmética sino requisito de corrección**:
+
+```sql
+drop policy pacientes_lectura_profesional_propio on public.pacientes;
+drop policy pacientes_alta_profesional_propio    on public.pacientes;
+```
+
+Las permisivas se suman con `OR`: dejar la de T-000 —que no mira `estado` ni resuelve la fusión— haría que **un profesional de baja siguiera viendo a sus pacientes**, y el criterio 7 fallaría con las políticas nuevas perfectamente escritas. Se conservan `perfiles_lectura_propia` y `auditoria_lectura_propia`.
+
+**Organización.** `organizacion`, `centros` y `politicas_retencion`: lectura para todo perfil activo, escritura solo administrador. `preferencias_usuario`: las tres operaciones sobre la fila propia. `perfiles`: ninguna nueva. **`pines_historia` y `desbloqueos_historia`: cero políticas** — con RLS activo y sin grants, deniegan dos veces.
+
+**Paciente identificativo.**
+
+| Tabla | Política | Op. | Expresión |
+|---|---|---|---|
+| `pacientes` | `_lectura_administrador` | S | `ADMIN` |
+| `pacientes` | `_lectura_profesional_asignado` | S | `ASIG(id)` |
+| `pacientes` | `_lectura_tecnico_de_su_centro` | S | `TECNICO and centro_id = (select public.centro_actual())` |
+| `pacientes` | `_alta_administrador` | I | `ADMIN` |
+| `pacientes` | `_alta_profesional` | I | `PRO and profesional_id = U and titularidad = 'organizacion' and fusionado_en is null and traspasado_en is null` |
+| `pacientes` | `_modificacion_administrador` | U | `ADMIN` (using y check) |
+| `pacientes` | `_modificacion_profesional_asignado` | U | `using (ASIG(id) and fusionado_en is null and traspasado_en is null)` · `with check (ASIG(id))` |
+| `pacientes_identificacion` | lectura / alta / modificación | S/I/U | `ADMIN or ASIG(paciente_id)` |
+| `representantes_paciente` | lectura / alta / modificación | S/I/U | `ADMIN or ASIG(paciente_id)` |
+| `consentimientos` | lectura / alta / modificación | S/I/U | `ADMIN or ASIG(paciente_id)` |
+| `consentimiento_firmantes` | lectura / alta / modificación | S/I/U | `exists (… c.id = consentimiento_id and (ADMIN or ASIG(c.paciente_id)))` |
+
+El `fusionado_en is null` del `using` es el «solo lectura» del absorbido (ADR-031); `traspasado_en is null`, el «cerrado a nueva actividad» de la enmienda del ADR-032. El administrador sí puede tocarlos: revocar una vinculación es acto suyo.
+
+**Técnico: ni una política sobre `pacientes_identificacion`** — cero filas por construcción, no por filtro. `representantes_paciente` y `consentimientos` **no llevan candado**: el ADR-026 enumera las ocho tablas que cubre y estas no están.
+
+**Paciente clínico — todas con `CANDADO`.**
+
+| Tabla | Op. | Expresión |
+|---|---|---|
+| `episodios_asistenciales` | S | `CANDADO and (ASIG(paciente_id) or profesional_id = U or EPI(id))` |
+| `episodios_asistenciales` | I | `CANDADO and profesional_id = U and ASIG(paciente_id)` |
+| `episodios_asistenciales` | U | `CANDADO and (ASIG(paciente_id) or profesional_id = U)` |
+| `episodio_participantes` | S/I/U | `CANDADO and EPI(episodio_id)` |
+| `diagnosticos` | S/I/U | `CANDADO and ASIG(paciente_id)` |
+| `valoraciones_riesgo` | S | `CANDADO and ASIG(paciente_id)` |
+| `valoraciones_riesgo` | I | `CANDADO and ASIG(paciente_id) and valorado_por = U` |
+| `notas_clinicas` | S | `CANDADO and (autor_id = U or ASIG(paciente_id) or (episodio_id is not null and EPI(episodio_id) and exists (… v.nota_id = id and v.alcance = 'conjunta')))` |
+| `notas_clinicas` | I | `CANDADO and autor_id = U and ASIG(paciente_id)` |
+| `notas_clinicas` | U | `CANDADO and autor_id = U` |
+| `notas_clinicas_versiones` | S | `CANDADO and exists (… n.id = nota_id and (n.autor_id = U or ASIG(n.paciente_id) or (alcance = 'conjunta' and n.episodio_id is not null and EPI(n.episodio_id))))` |
+| `notas_clinicas_versiones` | I | `CANDADO and autor_id = U and exists (… n.id = nota_id and n.autor_id = U)` |
+| `evaluaciones` | S/I/U | `CANDADO and ASIG(paciente_id)` |
+| `evaluacion_archivos` | S/I | `CANDADO and exists (… e.id = evaluacion_id and ASIG(e.paciente_id))` |
+| `informes` | S | `CANDADO and (autor_id = U or ASIG(paciente_id))` |
+| `informes` | I | `CANDADO and autor_id = U and ASIG(paciente_id)` |
+| `informes` | U | `CANDADO and autor_id = U` |
+
+Cuatro decisiones que hay que entender **antes** de tocar estas líneas:
+
+1. **Ninguna política clínica menciona `rol_actual()`.** El administrador entra por `autor_id = U` o por `ASIG()`, igual que un profesional. Así «el administrador no ve notas ajenas» no depende de que nadie escriba una rama para él: **no hay rama para él**.
+2. **La participación llega a `episodios_asistenciales` y a `notas_clinicas`, y NO a `diagnosticos` ni a `valoraciones_riesgo`.** Un diagnóstico y una valoración son **de una persona** —por eso T-001 les puso `paciente_id`—; dejar que el profesional del otro miembro de la pareja los leyera filtraría el dato clínico individual de un tercero por la puerta del episodio.
+3. **La rama de participación exige `alcance = 'conjunta'`**, que solo existe en la versión sellada. Consecuencia deliberada: una nota **individual** dentro de un episodio conjunto no se comparte, y un **borrador** conjunto tampoco se ve desde fuera hasta que se firma (ADR-036). **T-003 debe firmar la nota conjunta en su fijación de datos**, o su prueba positiva será verde por el motivo equivocado.
+4. **`valoraciones_riesgo` sin política de `update`**: T-001 no concedió `update`, y corregir es añadir otra fila.
+
+**Cumplimiento.**
+
+| Tabla | Op. | Expresión |
+|---|---|---|
+| `accesos_historia` | S | `perfil_id = U or ADMIN` |
+| `accesos_historia` | I | `perfil_id = U and (ADMIN or ASIG(paciente_id)) and (desbloqueo_id is null or public.desbloqueo_propio_vigente(desbloqueo_id))` |
+| `accesos_historia_vistas` | S | `exists (… a.id = acceso_id)` |
+| `accesos_historia_vistas` | I | `exists (… a.id = acceso_id and a.perfil_id = U)` |
+| `alertas_documentacion` | S | `ADMIN or profesional_id = U or ASIG(paciente_id) or (TECNICO and centro_id = (select public.centro_actual()))` |
+| `alertas_documentacion` | U | `ADMIN or profesional_id = U or ASIG(paciente_id)` |
+
+**`accesos_historia_vistas_alta` es el deber nº 1 de T-001**, y hace dos cosas: el `exists` recorre `accesos_historia` **bajo su propia RLS** —no es una función definer, a propósito—, así que exige que el acceso exista y sea visible para quien escribe; y el `a.perfil_id = U` lo exige explícitamente, sin dejarlo depender de que la política del padre no cambie mañana.
+
+**`alertas_documentacion` es la única de este bloque sin `CANDADO`** (choque 11): recuentos y estados, no contenido. La lectura de `auditoria` por el administrador **no entra aquí**: es T-004.
+
+**Recuento**: 60 políticas nuevas, 2 borradas, 2 vistas, 12 funciones nuevas, 1 enmendada, 3 disparadores, 4 índices, 2 cambios de privilegio.
+
+### 11 · Orden del fichero (cada bloque depende del anterior)
+
+Cabecera con las reglas → `create or replace` de `rol_actual()` → funciones de política → funciones del candado → funciones de disparador y sus disparadores → **relleno de `centro_id`** (antes de las políticas, para que ninguna prueba manual vea el estado intermedio) → índices → privilegios → `drop policy` → políticas → **vistas al final** (invocan `centro_actual()` y `rol_actual()`) → `comment on policy`.
+
+### 12 · Verificación
+
+Guion `scripts/t002-rls.sql` con **fijación propia**: un administrador, dos profesionales, un técnico con centro, dos centros, un paciente fusionado, un episodio conjunto con dos participantes y su nota **firmada**.
+
+| # | Criterio | Cómo se cierra |
+|---|---|---|
+| 1 | `db reset`, `lint`, `build` | `db reset` es el que de verdad prueba el disparador de perfil y el seed nuevo |
+| 2 | Técnico: cero filas en las 9 tablas clínicas | 9 ceros, **más su gemelo positivo obligatorio**: el mismo bloque como profesional asignado con desbloqueo vigente → 9 recuentos > 0 |
+| 3 | Técnico acotado al centro; profesional no | P1 en centro A, P2 en B. Extra: paciente con `centro_id` nulo → invisible al técnico |
+| 4 | Administrador: cero notas ajenas **con desbloqueo vigente** | Se desbloquea de verdad antes de contar. Gemelo: su propia nota, sí |
+| 5 | Profesional: cero sin desbloqueo, las suyas con él, cero tras `bloquear_historia()` | Los tres estados en una transacción, imprimiendo `historia_desbloqueada()` en cada paso |
+| 6 | `alertas_documentacion` sin desbloqueo | Inmediatamente después del `bloquear_historia()` del criterio 5, para que «sin desbloqueo» sea un hecho encadenado |
+| 7 | Fusión: un salto | Profesional de B lee A |
+| 8 | Profesional en baja: cero | Gemelo positivo con `estado='activo'` en la misma transacción, antes del `update` |
+| 9 | Nota conjunta | Control negativo extra: nota **individual** del mismo episodio → el otro profesional obtiene cero |
+| 10 | Cinco fallos, auditoría, sexto con PIN correcto | Y control positivo: adelantando `bloqueado_hasta`, el PIN correcto sí abre |
+| 11 | `pines_historia` denegada | Con y sin desbloqueo. **Añadido**: lo mismo sobre `desbloqueos_historia` |
+| 12 | Sin recursión | `pg_policies` sin menciones prohibidas → 0, y cero políticas en las dos tablas del candado |
+
+**Comprobaciones que el ticket no pide y el diseño exige**: `insert` en `accesos_historia_vistas` con `acceso_id` inexistente falla y con uno propio pasa; `insert` en `accesos_historia` con `desbloqueo_id` ajeno falla; un profesional haciendo `update pacientes set profesional_id = <yo>` falla con `42501`; la vista de riesgo devuelve filas al técnico y **cero** al profesional; y su texto no contiene la columna `nivel`.
+
+### 13 · Riesgos, por probabilidad
+
+1. **Olvidar el `drop policy` de T-000.** Las permisivas se suman: el criterio 7 quedaría en verde falso o en rojo inexplicable. **Es el fallo más probable del ticket entero.**
+2. **`permission denied` que parece de políticas y es de `grant`** (falta `grant update on pacientes`). Ante ese síntoma: mirar `\dp`, no la política.
+3. **`db reset` roto por el disparador de `auth.users`**: si el disparador crea el perfil primero, choca la clave primaria; si el seed no lleva `rol` en los metadatos, aborta el alta. Ambas se arreglan en `seed.sql` en la misma migración.
+4. **La enmienda de `rol_actual()` cambia comportamiento existente**: cualquier perfil no activo pierde acceso a todo. Es lo buscado, pero **hay que verlo en el navegador antes de cerrar**.
+5. **La vista de riesgo filtrando de más.** Es definer por necesidad: si se olvida el filtro por rol o la barrera, expone el indicador a todo el mundo. Revisar su texto carácter a carácter.
+6. **`(select …)` mal aplicado**: envolver una función con argumento de columna no rompe nada pero delata que no se entendió el patrón; **no** envolver `historia_desbloqueada()` cuesta una evaluación por fila en tablas que crecerán a millones.
+7. **Pruebas verdes por el motivo equivocado** — el patrón de error escrito en `state.md` tras T-001. Toda negativa con su gemela positiva **sobre la misma fila**, y ante cada aserción: ¿seguiría verde si quito el arreglo?
+8. **`revoke select on desbloqueos_historia` rompiendo la FK de `accesos_historia`.** No debería, pero es la clase de trampa que T-001 pagó dos veces. Prueba explícita.
+9. **Coste de la subconsulta de `alcance = 'conjunta'`**: revisar con `explain` sobre la lista de notas de un paciente.
+10. **`search_path = ''` y los enums**: todo cualificado dentro de los cuerpos. Un `crypt` sin cualificar muere en ejecución, no al crear la función.
