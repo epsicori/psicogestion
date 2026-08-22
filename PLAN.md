@@ -30,7 +30,7 @@ Lo único que no se puede añadir después.
 
 | ID | Título | Modelo | Depende | Estado |
 |---|---|---|---|---|
-| T-001 | Esquema base: organización, centros, perfiles, roles | `opus` | T-000 | pendiente |
+| T-001 | Esquema base: organización, centros, perfiles, roles | `opus` | T-000 | **hecho** |
 | T-002 | RLS: funciones auxiliares y políticas | `opus` | T-001 | pendiente |
 | T-003 | Banco de pruebas de RLS por rol | `opus` | T-002 | pendiente |
 | T-004 | Auditoría por triggers, de solo adición | `opus` | T-001 | pendiente |

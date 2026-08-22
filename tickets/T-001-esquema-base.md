@@ -5,7 +5,7 @@ modelo: opus
 fase: 0
 prioridad: alta
 depende_de: [T-000]
-estado: pendiente
+estado: hecho
 ---
 
 # Contexto
@@ -38,81 +38,148 @@ para su ticket se queda en su ticket.
 
 ## Tareas
 
-- [ ] **Organización y centros.** `organizacion` con restricción de fila única, NIF, y
+- [x] **Organización y centros.** `organizacion` con restricción de fila única, NIF, y
       `zona_horaria` validada contra `pg_timezone_names`, `Europe/Madrid` por defecto.
       `centros` con `zona_horaria` **anulable**: nulo significa heredar, nunca «sin zona».
-- [ ] **`politicas_retencion` colgando del centro** (ADR-033), con la fila de la
+      → migración §2; validación por disparador `fn_validar_zona_horaria` + `es_zona_iana`.
+- [x] **`politicas_retencion` colgando del centro** (ADR-033), con la fila de la
       organización como valor por defecto heredable y mínimos legales por debajo de los
       cuales no se puede bajar. Función de resolución que **jamás devuelve nulo** para un
       centro sin política propia.
-- [ ] **`perfiles` ampliada**: `estado` (`activo`, `suspendido`, `baja`) con fecha,
+      → migración §3 (fila semilla + veto de borrado) y `retencion_efectiva()` en §14.
+- [x] **`perfiles` ampliada**: `estado` (`activo`, `suspendido`, `baja`) con fecha,
       `centro_id` **obligatorio solo para `tecnico_administrativo`** (restricción de la
       base, no de la aplicación), y restricción que **impide dar de baja al último
       administrador activo** (ADR-032).
-- [ ] **`preferencias_usuario`**, una fila por perfil.
-- [ ] **Candado (ADR-026)**: `pines_historia` (hash bcrypt, contador de fallos, instante
+      → migración §4; `check perfiles_tecnico_exige_centro` + `constraint trigger`
+      `impedir_baja_ultimo_administrador` (§15).
+- [x] **`preferencias_usuario`**, una fila por perfil. → migración §5.
+- [x] **Candado (ADR-026)**: `pines_historia` (hash bcrypt, contador de fallos, instante
       de bloqueo) **sin `select` para ningún rol**, y `desbloqueos_historia` (perfil,
       concesión, caducidad, revocación) como **estado operativo mutable**, no de solo
-      adición.
-- [ ] **`pacientes` ampliada**: `titularidad` (`organizacion` por defecto, `profesional`),
+      adición. → migración §6; cero grants en §17.
+- [x] **`pacientes` ampliada**: `titularidad` (`organizacion` por defecto, `profesional`),
       `fusionado_en` con su disparador anti-cadena (ADR-031) y las columnas de traspaso de
       la enmienda del ADR-032.
-- [ ] **`pacientes_identificacion`** (invariante 3): `dni_cifrado` (AES-256-GCM, nonce
+      → migración §7; `fn_normalizar_fusion_paciente` + `fn_repuntar_fusionados`.
+- [x] **`pacientes_identificacion`** (invariante 3): `dni_cifrado` (AES-256-GCM, nonce
       aleatorio) y `dni_indice` (HMAC-SHA-256) con **índice único**, más domicilio
-      cifrado. Ninguna columna en claro (ADR-029).
-- [ ] **`representantes_paciente`** con tipo, alcance y **vigencia desde/hasta
+      cifrado. Ninguna columna en claro (ADR-029). → migración §7.
+- [x] **`representantes_paciente`** con tipo, alcance y **vigencia desde/hasta
       obligatoria**, más `capacidad_consentimiento(paciente, fecha)` que **calcula** quién
       consiente (ADR-028). Prohibida cualquier bandera `es_menor`.
-- [ ] **`consentimientos`** con **N firmantes** y la casilla «menor oído» con fecha.
-- [ ] **Episodios**: `episodios_asistenciales` con `modalidad_relacional`
+      → migración §7 y §14. `vigente_desde not null`, `vigente_hasta` nulable: punto
+      abierto (c) del diseño, aprobado.
+- [x] **`consentimientos`** con **N firmantes** y la casilla «menor oído» con fecha.
+      → migración §7: `consentimientos` + tabla hija `consentimiento_firmantes`.
+- [x] **Episodios**: `episodios_asistenciales` con `modalidad_relacional`
       (`individual`, `pareja`, `familiar`, `grupo`) y fecha de cierre —que es la que
       arranca el reloj de retención—, `episodio_participantes` con alta y baja,
       `diagnosticos` (CIE-10-ES + columna paralela DSM-5-TR, decisión 7) y
-      `valoraciones_riesgo`.
-- [ ] **Notas**: `notas_clinicas` como **cabecera mutable** con el borrador
+      `valoraciones_riesgo`. → migración §8.
+- [x] **Notas**: `notas_clinicas` como **cabecera mutable** con el borrador
       (`borrador_contenido`, `borrador_actualizado_en`, autor) y bloqueo optimista
       (ADR-036); `notas_clinicas_versiones` de **solo adición** con `cuerpo`,
       `anotaciones_reservadas` (ADR-027), `contenido_canonico`, `huella`,
       `huella_anterior`, `algoritmo_version`, `esquema_version`, `motivo_cambio` y
-      `alcance` (`individual` | `conjunta`, ADR-030).
-- [ ] **`evaluaciones`, `evaluacion_archivos`, `informes`.**
-- [ ] **`accesos_historia`** con **tipo** (apertura, exportación, informe, emergencia),
-      pestaña y **contador de vistas** (ADR-037).
-- [ ] **`alertas_documentacion`**, que es lo que la bandeja y las métricas leen **sin
-      abrir el candado**.
-- [ ] RLS **activo en todas las tablas nuevas** desde esta migración, con `grant`
+      `alcance` (`individual` | `conjunta`, ADR-030). → migración §9. `cuerpo` y
+      `contenido_canonico` son **`text`**, verificado en `tipos-bd.ts`.
+- [x] **`evaluaciones`, `evaluacion_archivos`, `informes`.** → migración §10.
+- [x] **`accesos_historia`** con **tipo** (apertura, exportación, informe, emergencia),
+      pestaña y **contador de vistas** (ADR-037). → migración §11: el contador se calcula
+      en la vista `accesos_historia_resumen` sobre `accesos_historia_vistas`, porque un
+      contador mutable rompería el criterio 11.
+- [x] **`alertas_documentacion`**, que es lo que la bandeja y las métricas leen **sin
+      abrir el candado**. → migración §12.
+- [x] RLS **activo en todas las tablas nuevas** desde esta migración, con `grant`
       explícitos y `alter default privileges ... revoke all`. Las políticas son T-002.
+      → migración §16 y §17. `pg_tables where not rowsecurity` = 0; cero grants a `anon`
+      y `service_role`; cero `delete`; saneadas también las secuencias.
 
 ## Criterios de aceptación (verificables)
 
-- [ ] **Automático** — `npx supabase db reset` aplica las migraciones sin error y
+- [x] **Automático** — `npx supabase db reset` aplica las migraciones sin error y
       `npm run tipos` regenera `lib/supabase/tipos-bd.ts`.
-- [ ] **Automático** — `npm run lint` y `npm run build` limpios.
-- [ ] **Automático** — un segundo `insert` en `organizacion` **falla**.
-- [ ] **Automático** — `insert` de un centro con `zona_horaria = 'CEST'` o `'+02:00'`
+      → `Applying migration 20260822094547_esquema_base_organizacion_paciente_historia.sql`
+      … `Finished supabase db reset on branch main.`, sin una sola línea `ERROR:`.
+      `npm run tipos` deja el fichero en 1656 líneas, con `organizacion:` (877),
+      `pines_historia:` (1109), `accesos_historia_resumen:` (1356) y
+      `nivel_riesgo: "bajo" | "moderado" | "alto"` (1426); 1419 líneas de diferencia
+      frente a la versión anterior al ticket.
+- [x] **Automático** — `npm run lint` y `npm run build` limpios.
+      → `eslint` sin salida. `build`: `✓ Compiled successfully in 8.1s`,
+      `Finished TypeScript in 2.5s`, `✓ Generating static pages (7/7)`, rutas `/`,
+      `/login`, `/pacientes`, `/prototipo`. **`tipos-bd.ts` NO ha necesitado
+      `globalIgnores`.**
+- [x] **Automático** — un segundo `insert` en `organizacion` **falla**.
+      → `ERROR: duplicate key value violates unique constraint
+      "organizacion_fila_unica_key" · DETAIL: Key (fila_unica)=(t) already exists.`
+- [x] **Automático** — `insert` de un centro con `zona_horaria = 'CEST'` o `'+02:00'`
       **falla**; con `'Atlantic/Canary'` pasa.
-- [ ] **Automático** — un centro **sin** `politicas_retencion` propia resuelve a la de la
+      → los dos primeros: `ERROR: Zona horaria no válida: … (ADR-034)` (22023).
+      `'Atlantic/Canary'` inserta. **Además, y como exige el ADR-034 aunque el ticket no
+      lo pidiera: `'CET'` y `'Etc/GMT+2'` también fallan, pese a estar los dos en
+      `pg_timezone_names`** (comprobado en el mismo guion). Zona nula pasa y
+      `zona_horaria_centro()` la resuelve a `Europe/Madrid`.
+- [x] **Automático** — un centro **sin** `politicas_retencion` propia resuelve a la de la
       organización; la función de resolución **nunca devuelve nulo**.
-- [ ] **Automático** — bajar la retención por debajo del mínimo legal del centro **falla**.
-- [ ] **Automático** — `insert` de un `tecnico_administrativo` **sin `centro_id` falla**;
+      → `25 | 5 | organizacion` para el centro sin política, para un uuid inexistente y
+      para `null`; `filas = 1, con_nulos = 0`. Con política propia: `30 | 10 | centro`.
+      La fila de la organización **no se puede borrar**: `ERROR: La política de retención
+      de la organización no se puede borrar (ADR-033)`.
+- [x] **Automático** — bajar la retención por debajo del mínimo legal del centro **falla**.
+      → `ERROR: new row for relation "politicas_retencion" violates check constraint
+      "politicas_retencion_check"`. Bajar a 5 con mínimo 5 pasa (`UPDATE 1`).
+- [x] **Automático** — `insert` de un `tecnico_administrativo` **sin `centro_id` falla**;
       con `centro_id` pasa. Un `profesional_sanitario` sin `centro_id` pasa.
-- [ ] **Automático** — poner en `baja` al **último** administrador activo **falla**; con
+      → `ERROR: … violates check constraint "perfiles_tecnico_exige_centro"`; los dos
+      controles insertan (`INSERT 0 1`).
+- [x] **Automático** — poner en `baja` al **último** administrador activo **falla**; con
       dos administradores activos pasa.
-- [ ] **Automático** — dos `pacientes_identificacion` con el mismo `dni_indice` violan el
+      → `ERROR: La instancia no puede quedarse sin ningún administrador activo (ADR-032)`.
+      Con dos admins: `UPDATE 1` y uno queda `baja` y otro `activo`. **Cambiar el `rol`
+      del último también falla** (mismo error) y **el relevo en dos sentencias dentro de
+      una transacción pasa** con `set constraints all deferred`.
+      *Matiz honesto*: el `delete` del último administrador también falla, pero con
+      `42501` de la comprobación referencial contra `notas_clinicas_versiones`, no con el
+      disparador — ver «Hallazgos» al final y `docs/state.md`.
+- [x] **Automático** — dos `pacientes_identificacion` con el mismo `dni_indice` violan el
       índice único.
-- [ ] **Automático** — `capacidad_consentimiento` devuelve el representante para una fecha
+      → `ERROR: duplicate key value violates unique constraint
+      "pacientes_identificacion_dni_indice_unico_idx"`.
+- [x] **Automático** — `capacidad_consentimiento` devuelve el representante para una fecha
       en que el paciente tiene 15 años y el propio paciente para otra en que tiene 16, **con
       la misma fila**. Ninguna columna booleana de minoría de edad existe en
       `information_schema.columns`.
-- [ ] **Automático** — `update pacientes set fusionado_en = <ya fusionado>` **falla** o
+      → con **una sola** fila de representante (`filas_representante = 1`,
+      `sin_caducidad = t`): a `2026-01-01` → `representante | … | 15 | t`; a `2026-07-01`
+      → `paciente | | 16 | f`; a `2021-06-16` → `representante | … | 11 | f`.
+      Recuento de columnas `boolean` con nombre de minoría de edad: **0**. El control
+      confirma que `consentimientos.menor_oido_en` existe y es `date`.
+- [x] **Automático** — `update pacientes set fusionado_en = <ya fusionado>` **falla** o
       normaliza al superviviente final; no se crean cadenas de dos saltos.
-- [ ] **Automático** — `update` y `delete` sobre `notas_clinicas_versiones` y
+      → normaliza. `A→B`; `C→A` queda como `C→B`; tras `B→D`, `A`, `B` y `C` apuntan a
+      `D`. `cadenas_de_dos_saltos = 0`. Fusionarse consigo mismo: `ERROR: Ciclo de fusión
+      detectado … (ADR-031)`.
+- [x] **Automático** — `update` y `delete` sobre `notas_clinicas_versiones` y
       `accesos_historia` **fallan**; `update` sobre `notas_clinicas` (cabecera) y sobre
       `desbloqueos_historia` **pasa**.
-- [ ] **Automático** — `select` sobre `pines_historia` como `authenticated` **falla** con
+      → sin privilegio: `ERROR: permission denied for table …` en las dos tablas y en
+      `accesos_historia_vistas`. **Tras devolver `update, delete` a `postgres` a la
+      fuerza**, con fila presente: `ERROR: La tabla … es de solo adición` en `update` y
+      en `delete`. `TRUNCATE` como `postgres`: mismo error en las tres tablas. Mutables:
+      `UPDATE 1` en `notas_clinicas` (y el disparador fija `borrador_actualizado_en`) y
+      `UPDATE 1` en `desbloqueos_historia`.
+- [x] **Automático** — `select` sobre `pines_historia` como `authenticated` **falla** con
       permiso denegado.
-- [ ] **Automático** — `select count(*) from pg_tables where schemaname = 'public' and not
+      → `ERROR: permission denied for table pines_historia`, igual como `anon` y como
+      `service_role`. `role_table_grants` sobre esa tabla: solo `postgres`.
+- [x] **Automático** — `select count(*) from pg_tables where schemaname = 'public' and not
       rowsecurity` devuelve **0**.
+      → `tablas_sin_rls = 0`. Extras del mismo bloque: `concesiones_a_anon_o_service_role
+      = 0`, `grants_de_delete = 0`, `concesiones_en_secuencias = 0`, las políticas RLS
+      siguen siendo **solo las cuatro de T-000**, y `perfiles` tiene
+      `relforcerowsecurity = f`.
 
 ## Guion de comprobación manual
 
@@ -631,3 +698,148 @@ cuarto obliga a subir dos tablas al destilado al cerrar el ticket.
 | b | Dónde vive la ventana configurable del PIN | `organizacion.minutos_desbloqueo_historia`, ajuste del administrador. **Descartado** ponerlo en `preferencias_usuario`: que cada usuario alargue su propio candado vacía el control |
 | c | «Vigencia desde/hasta obligatoria» del representante | `vigente_desde not null`, `vigente_hasta` nulable. El ADR-028 dice que a los 18 la representación «caduca sola» —se calcula—, y el criterio 10 exige que **la misma fila** sirva a los 15 y a los 16. Un `vigente_hasta not null` obligaría a teclear una fecha ficticia: la bandera `es_menor` disfrazada |
 | d | `consentimiento_firmantes` y `accesos_historia_vistas`, que no están en §Dominios | Aprobadas. **Se añaden a `docs/architecture.md` §Dominios de datos al cerrar el ticket**, con la nota de que son de solo adición o hijas de una que lo es |
+
+---
+
+## Resultado de la implementación (22-08-2026)
+
+**Los quince criterios de aceptación pasan.** Todos con salida real del comando, recogida
+arriba criterio a criterio. Guion reproducible:
+
+```
+npx supabase db reset
+npm run tipos && npm run lint && npm run build
+docker exec -i supabase_db_Psicogestion psql -U postgres -d postgres -f - < scripts/t001-esquema.sql
+```
+
+### Ficheros
+
+| Ruta | Qué |
+|---|---|
+| `supabase/migrations/20260822094547_esquema_base_organizacion_paciente_historia.sql` | Creada. 22 tablas, 1 vista, 12 enums, 12 funciones, 16 disparadores |
+| `scripts/t001-esquema.sql` | Creado. Verificación de los criterios 3 a 14 |
+| `lib/supabase/tipos-bd.ts` | Regenerado con `npm run tipos` |
+
+### Pendiente de verificación manual
+
+Los tres puntos del «Guion de comprobación manual», al detalle:
+
+1. `db reset` + `npm run tipos` — **hecho**, salida arriba.
+2. `\dp` en Studio — **no ejecutado en Studio**, pero comprobado por consulta equivalente
+   sobre `information_schema.role_table_grants`: cero concesiones a `anon` y a
+   `service_role` en todo `public`, y `pines_historia` sin ACL salvo el propietario.
+3. Paseo vertical en `/pacientes` con `ana@psicogestion.test` — **no ejecutado en
+   navegador**. Comprobado a nivel de base: el `insert` de T-000 con columnas explícitas
+   bajo RLS como Ana sigue devolviendo la fila, el `select id, nombre, apellidos,
+   creado_en` sigue funcionando, y ninguna columna nueva de `pacientes` ni de `perfiles`
+   es `not null` sin `default` (recuento = 0). **Queda por confirmar en navegador.**
+
+### Hallazgos que el diseño no anticipó
+
+1. **`accesos_historia_vistas` no puede llevar clave ajena a `accesos_historia`.** La
+   comprobación de integridad referencial corre como propietario (`postgres`, que en
+   Supabase local **no es superusuario**) y necesita bloquear la fila padre con
+   `FOR KEY SHARE`, lo que exige `UPDATE` o `DELETE` sobre el padre — justo lo que la
+   capa 1 del cerrojo de solo adición le revoca. Con la clave ajena, **ningún rol podía
+   insertar jamás una vista**, y el mecanismo del §2.11 del diseño quedaba muerto. Se
+   quita la clave ajena y se conserva la columna, exactamente como T-000 hizo con
+   `auditoria.actor_id`. Los tres cerrojos quedan intactos. Documentado en la propia
+   migración.
+2. **Borrar una fila de `perfiles` o de `pacientes` es ahora imposible para cualquier
+   rol**, por la misma mecánica: `notas_clinicas_versiones` y `accesos_historia` los
+   referencian y la comprobación referencial no puede tomar el bloqueo. Es coherente con
+   el proyecto («la baja no borra»), pero afecta al `on delete cascade` desde
+   `auth.users`: **borrar un usuario de Auth fallará** si tiene notas o accesos. Lo
+   recoge `docs/state.md` para T-006 y T-008.
+3. **`es_zona_iana()` y `authenticated`.** El `execute` de una función de disparador se
+   comprueba al crear el disparador, no al dispararlo, así que las `fn_*` no necesitan
+   `grant`; pero `fn_validar_zona_horaria()` es *security invoker* y llama a
+   `es_zona_iana()` en tiempo de ejecución. Hoy da igual —sin política RLS de escritura,
+   nadie salvo `postgres` escribe en `centros` ni en `organizacion`—, pero **T-002 debe
+   conceder `execute` de `es_zona_iana()` a `authenticated` o hacer el disparador
+   *definer***. Anotado en la migración y en `docs/state.md`.
+
+---
+
+## Ronda de revisión (22-08-2026) — cuatro altos y tres medios, corregidos
+
+Todo se arregla **en la misma migración**, no en una nueva: T-001 no se había integrado
+todavía, así que sigue siendo una sola migración hacia delante.
+
+| # | Sev | Hallazgo | Corrección | Prueba nueva |
+|---|---|---|---|---|
+| 1 | Alta | `fn_normalizar_fusion_paciente()` leía el destino sin bloquearlo: dos fusiones concurrentes se cruzaban y creaban la cadena de dos saltos que el tope de 50 no caza | `for no key update` en el recorrido | **R1** |
+| 2 | Alta | El suelo de retención comparaba dos columnas **ambas editables**, con `grant update` a `authenticated`: bajar las dos a 1 año pasaba | `constraint politicas_retencion_suelo_legal check (anios_minimo_legal >= 5)` | **R2** |
+| 3 | Alta | La fila de retención de la organización se podía **mover** con `update ... set centro_id`, y entonces todos los centros caían en silencio a los 25/5 del `coalesce` | El disparador pasa a `before delete or update of centro_id`, y la función distingue las dos operaciones | **R3** |
+| 4 | Alta | `notas_clinicas.paciente_id` y `.fecha_sesion` eran editables tras sellar; como el sobre canónico no los incluye, una versión firmada se reatribuía a otro paciente **sin romper la cadena de huellas** | `fn_congelar_cabecera_sellada()`, disparador `before update of paciente_id, fecha_sesion` | **R4** |
+| 5 | Media | El índice de la ventana de acceso no deduplicaba con `pestana` nula | `nulls not distinct` | **R5** |
+| 6 | Media | Un consentimiento otorgado podía quedarse sin `texto_firmado`, y eso no tiene backfill | `constraint consentimientos_otorgado_exige_texto` | **R6** |
+| 7 | Media | `es_zona_iana()` sin `execute` para `authenticated` | Concedido | **R7** |
+
+### Salida real de las siete pruebas nuevas
+
+Cada una con su gemela positiva: una prueba negativa sin control positivo no distingue
+«la guarda funciona» de «esto no pasa nunca».
+
+- **R1** — control: la segunda conexión fusiona `A→B` sin esperar (`UPDATE 1`).
+  Negativo, con `B→D` abierto en la primera: `ERROR: canceling statement due to lock
+  timeout · CONTEXT: while locking tuple (0,19) in relation "pacientes" · SQL statement
+  "select p.fusionado_en ... for no key update" · PL/pgSQL function
+  public.fn_normalizar_fusion_paciente() line 24`. Tras el `rollback`, la misma fusión
+  pasa y queda normalizada. `cadenas_de_dos_saltos = 0`, y la limpieza deja
+  `pacientes_de_prueba_restantes = 0`.
+- **R2** — negativo: `ERROR: ... violates check constraint
+  "politicas_retencion_suelo_legal" · DETAIL: Failing row contains (..., 1, 1, ...)`.
+  Controles: 5/5 pasa (`UPDATE 1`), y subir el mínimo a 15 pasa (`25 | 15`).
+- **R3** — negativo: `ERROR: La política de retención de la organización no se puede
+  reasignar a un centro (ADR-033)`. Controles: la fila **sí** deja cambiar sus años
+  (`30 | 5 | ` con `centro_id` nulo), y la política de **un centro** sí se puede mover a
+  otro centro (`UPDATE 1`). `retencion_efectiva(null)` sigue dando `25 | 5 | organizacion`.
+- **R4** — controles: sin versión sellada la cabecera es corregible
+  (`04000000-…-0002 | 2026-03-02`), y con versión sellada el **borrador** sigue editable
+  (`borrador_editable_tras_sellar = t`). Negativos: `ERROR: La nota … ya tiene versiones
+  selladas: paciente_id y fecha_sesion no se pueden cambiar (ADR-035)`, tanto al cambiar
+  `paciente_id` como `fecha_sesion`.
+- **R5** — negativo: dos `insert ... on conflict do nothing` con `pestana` nula dan
+  `INSERT 0 1` y `INSERT 0 0` → `filas_con_pestana_nula = 1`. Controles: dos pestañas
+  distintas → `2`; sin desbloqueo (el índice es parcial) → `2`, que es lo correcto.
+- **R6** — negativos: `ERROR: ... violates check constraint
+  "consentimientos_otorgado_exige_texto"`, tanto sin texto como con texto y sin versión.
+  Controles: con texto y versión pasa (`asistencial | v3 | t`), y un consentimiento
+  preparado y sin otorgar no exige texto (`asistencial | t`).
+- **R7** — control: como `authenticated`, `es_zona_iana('Europe/Madrid') = t` y
+  `es_zona_iana('CET') = f`. Contraste: `has_function_privilege` da `es_zona_iana = t`,
+  `zona_horaria_centro = t`, `fn_tocar_borrador = f`, `fn_congelar = f`. Y el disparador
+  sigue rechazando `'CET'` **también desde `authenticated`**, que antes ni llegaba.
+
+### Dos sub-pruebas que se reescribieron por vacías
+
+Los bloques de R2 y R3 «como `authenticated`» devolvían `UPDATE 0`, no un error: con RLS
+activo y **sin ninguna política hasta T-002**, `authenticated` ni siquiera ve la fila, así
+que el `update` nunca llega a la restricción. Estaban en verde por el motivo equivocado.
+Ahora están etiquetados como **contexto, no prueba**, y junto a ellos se lista
+`pg_constraint` / `pg_trigger` para dejar claro lo que sí sostiene la guarda para
+cualquier rol: que es una restricción **de tabla**, no un privilegio.
+
+### Además, dentro del mismo alcance
+
+- **Siete índices de clave ajena**, los que T-002 va a poner en el `using` de una política
+  más el de la fusión: `episodios_asistenciales.profesional_id`,
+  `episodio_participantes.paciente_id`, `notas_clinicas.autor_id`,
+  `notas_clinicas.episodio_id`, `pacientes.fusionado_en` (parcial),
+  `pacientes.centro_id`, `perfiles.centro_id`. Verificado: los siete existen.
+  Las ~23 restantes se quedan sin índice a propósito y con su razón escrita.
+- **Corregido el comentario de `valoraciones_riesgo`**, que prometía un
+  `grant select (columnas)` imposible en Supabase: los tres roles comparten el rol
+  `authenticated`, así que T-002 necesitará una vista aparte para el técnico.
+
+### Lo que sigue anotado y NO se toca aquí
+
+- `accesos_historia_vistas.acceso_id` sigue sin clave ajena por la razón ya documentada;
+  lo que falta es que **T-002 lo ate con un `with check`**, porque la base ya no lo
+  garantiza y un huérfano aquí no se podría borrar.
+- Borrar un perfil o un paciente es imposible **siempre**, no «si tiene notas o accesos»:
+  reproducido con la base entera vacía (`versiones = 0`, `accesos = 0`) sobre un paciente
+  recién insertado.
+- `pacientes.centro_id` nace nulo (`pacientes_totales = 2, con_centro = 0`); el criterio
+  de relleno para T-002 está escrito en `docs/state.md`.

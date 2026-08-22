@@ -21,13 +21,25 @@ Región **París** (`eu-west-3` / `cdg1`). En desarrollo, Supabase local con Doc
 | Dominio | Tablas |
 |---|---|
 | Organización | `organizacion` (1 fila), `centros`, `perfiles`, `preferencias_usuario` |
-| Paciente · identificativo | `pacientes`, `pacientes_identificacion`, `consentimientos`, `representantes_paciente` |
+| Paciente · identificativo | `pacientes`, `pacientes_identificacion`, `consentimientos`, `consentimiento_firmantes`, `representantes_paciente` |
 | Paciente · clínico | `episodios_asistenciales`, `episodio_participantes`, `diagnosticos`, `valoraciones_riesgo`, `notas_clinicas`, `notas_clinicas_versiones`, `evaluaciones`, `evaluacion_archivos`, `informes` |
 | Agenda | `tipos_terapia`, `series_cita`, `citas`, `disponibilidad`, `alertas_documentacion` |
 | Económico | `tarifas_paciente`, `series_facturacion`, `facturas`, `factura_lineas`, `cobros`, `bonos`, `gastos`, `registro_eventos_sif` |
 | Firmas | `firmas_profesional`, `certificados_firma`, `firmas_paciente`, `consentimientos_firmados`, `documentos_firmados` |
 | Mensajería | `canales_paciente`, `plantillas_mensaje`, `envios_mensaje`, `enlaces_respuesta`, `respuestas_mensaje` |
-| Cumplimiento | `auditoria`, `accesos_historia`, `notificaciones`, `politicas_retencion`, `exportaciones`, `pines_historia`, `desbloqueos_historia` |
+| Cumplimiento | `auditoria`, `accesos_historia`, `accesos_historia_vistas`, `notificaciones`, `politicas_retencion`, `exportaciones`, `pines_historia`, `desbloqueos_historia` |
+
+Dos tablas que no estaban en esta lista y aparecieron al implementar T-001, aprobadas por
+el propietario el 22-08-2026:
+
+- **`consentimiento_firmantes`** — los «N firmantes» que exige el ADR-028. Tabla hija y no
+  un `jsonb`: un array no admite clave ajena, ni índice, ni comprobar que el firmante
+  existe, y sin eso «N firmantes» no sería un hecho de la base.
+- **`accesos_historia_vistas`** — hija de `accesos_historia`, **también de solo adición**.
+  Existe porque el contador de vistas del ADR-037 y el invariante 2 no caben en la misma
+  tabla: un contador que se incrementa es un `UPDATE`. La apertura es una fila, cada
+  repetición dentro de la ventana es otra, y el contador se **lee** de la vista
+  `accesos_historia_resumen` (`security_invoker`), no se almacena.
 
 ## Los cuatro invariantes
 

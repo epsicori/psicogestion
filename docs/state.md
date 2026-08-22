@@ -3,13 +3,55 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 21-08-2026
+**Actualizado**: 22-08-2026
 
 ## Ticket en curso
 
-**T-001 · Esquema base** — en curso. **T-000 cerrado el 22-08-2026**: los ocho criterios
-pasan, incluido el recorrido manual en navegador. El gate de dependencias de T-001 está
-abierto.
+**T-001 · Esquema base** — implementado el 22-08-2026 y **corregido tras la primera
+revisión**, que devolvió cuatro hallazgos altos y tres medios, todos reproducidos contra
+la base y todos arreglados en la misma migración:
+
+| # | Qué estaba mal | Cómo se cierra |
+|---|---|---|
+| Alto 1 | Carrera de fusión: dos fusiones concurrentes creaban una cadena de dos saltos | `for no key update` al recorrer la cadena |
+| Alto 2 | El mínimo legal de retención no tenía suelo: bajar las dos columnas a 1 año pasaba | `check (anios_minimo_legal >= 5)`, constante legal |
+| Alto 3 | La fila de retención de la organización se podía **mover** con un `update` | El disparador cubre `delete or update of centro_id` |
+| Alto 4 | Una versión sellada se podía reatribuir a otro paciente sin romper la huella | `fn_congelar_cabecera_sellada()` |
+| Medio 5 | El índice de la ventana de acceso no deduplicaba con `pestana` nula | `nulls not distinct` |
+| Medio 6 | Un consentimiento otorgado podía no guardar el texto firmado | `consentimientos_otorgado_exige_texto` |
+| Medio 7 | `es_zona_iana()` sin `execute` para `authenticated` | Concedido |
+
+La **segunda revisión no encontró ningún hallazgo alto** y devolvió tres medios, también
+cerrados:
+
+| # | Qué estaba mal | Cómo se cierra |
+|---|---|---|
+| Medio 1 | La congelación de la cabecera sellada cubría `paciente_id` y `fecha_sesion` y dejaba fuera `autor_id` —que decide **quién puede leer** la nota— y `episodio_id` | Las cuatro columnas en el `update of` y en el `when` |
+| Medio 2 | La prueba de la carrera de fusión hacía `rollback`, así que su aserción global **daba cero también con la migración vieja** | `commit`, y se asevera que `A` acaba apuntando a `D` |
+| Medio 3 | `accesos_historia_vistas` no ejercía la capa 2: faltaba la novena pieza de «tres capas × tres tablas» | Bloques de `update` y `delete` con el privilegio recuperado, más control de que el disparador cuelga de esa tabla |
+
+Los quince criterios automáticos siguen pasando, y el guion lleva ahora **una prueba nueva
+por arreglo con su control positivo**. Sigue **sin ejecutar en navegador** el punto 3 del
+guion manual (paseo vertical de T-000 sobre el esquema nuevo): comprobado a nivel de base,
+no de pantalla.
+
+> **El patrón de error de este ticket, que conviene no repetir en T-002 y T-003.** Tres
+> pruebas distintas estuvieron en verde **por el motivo equivocado**: el `DELETE` del
+> criterio 8, que fallaba en la clave ajena y no en el candado; dos bloques «como
+> `authenticated`» que devolvían `UPDATE 0` porque con RLS activo y sin política ese rol ni
+> ve la fila; y la aserción de la carrera de fusión, que no discriminaba entre la migración
+> nueva y la vieja. **Toda prueba negativa necesita su gemela positiva sobre la misma fila**,
+> y hay que preguntarse siempre si la prueba seguiría verde con el arreglo quitado.
+
+**T-000 cerrado el 22-08-2026**: los ocho criterios pasan, incluido el recorrido manual en
+navegador.
+
+Lo que ha entrado con T-001:
+`supabase/migrations/20260822094547_esquema_base_organizacion_paciente_historia.sql`
+(22 tablas, 1 vista, 12 enums, 13 funciones, 17 disparadores, 7 índices de clave ajena),
+`scripts/t001-esquema.sql` y `lib/supabase/tipos-bd.ts` regenerado. **Ni una política
+RLS**: eso es T-002, y hasta entonces las tablas nuevas deniegan todo, que es el estado
+correcto.
 
 ## Dónde estamos
 
@@ -271,3 +313,164 @@ ADR cada vez:
 - `cookies()` es async.
 - `revalidateTag` exige segundo argumento; `revalidatePath` más seguro.
 - `next lint` desapareció; `npm run lint` independiente de `npm run build`.
+
+### Postgres — trampas pagadas en T-001 (léelas antes de tocar RLS o cerrojos)
+
+- **`postgres` NO es superusuario en Supabase local** (`pg_user.usesuper = f`). Por eso el
+  `revoke` de la capa 1 del cerrojo de solo adición le muerde de verdad… y por eso muerde
+  también donde no se esperaba (los dos puntos siguientes).
+- **Una tabla de solo adición no puede ser el destino de una clave ajena.** Insertar en la
+  hija dispara una comprobación referencial que corre como propietario y necesita
+  `SELECT … FOR KEY SHARE` sobre el padre, lo que exige `UPDATE` o `DELETE` sobre él.
+  Revocados esos dos, **nadie puede insertar en la hija**. Por eso
+  `accesos_historia_vistas.acceso_id` no lleva clave ajena, igual que
+  `auditoria.actor_id` en T-000. Si en fase 1 aparece otra hija de una tabla sellada,
+  misma regla: referencia sin clave ajena.
+  **Consecuencia que hay que tapar en T-002**: sin clave ajena, la base ya no garantiza
+  que `acceso_id` apunte a un acceso existente, y un huérfano aquí **no se puede borrar**
+  (la tabla es de solo adición). Así que la política de `insert` de
+  `accesos_historia_vistas` **debe llevar un `with check` que exija que el acceso exista
+  y sea visible para quien escribe**. Es lo único que queda sujetando esa integridad.
+- **`DELETE` sobre `perfiles` y sobre `pacientes` es imposible para cualquier rol,
+  SIEMPRE**, no solo cuando la fila tiene datos clínicos. La comprobación referencial de
+  `notas_clinicas_versiones` y `accesos_historia` pide el bloqueo **aunque no haya ni una
+  fila que comprobar**, y el privilegio para tomarlo no existe. Reproducido con la base
+  entera vacía —`versiones = 0`, `accesos = 0`— sobre un paciente recién insertado:
+  `ERROR: permission denied for table accesos_historia`. Es coherente con «la baja no
+  borra», pero **el `on delete cascade` desde `auth.users` ya no funciona nunca**: borrar
+  un usuario de Auth fallará con `42501`. A tener en cuenta en **T-006** (alta y baja de
+  usuarios: la baja es `estado = 'baja'`, jamás un `delete`) y en **T-008** (siembra: usar
+  `db reset`, nunca borrar usuarios).
+- **Dos fusiones concurrentes se cruzaban y creaban una cadena de dos saltos.** El
+  recorrido de `fn_normalizar_fusion_paciente()` leía el destino sin bloquearlo, así que
+  T1 (`A→B`) y T2 (`B→D`) se cruzaban y dejaban `A→B, B→D` — justo el «un solo salto» del
+  que cuelga la RLS de T-002. Se arregla con `for no key update` en el recorrido, y es
+  `for no key update` y no `for update` para no chocar con las comprobaciones de clave
+  ajena, que toman `for key share`. Probado con dos conexiones y `lock_timeout`.
+- **Un `grant select (columnas)` no sirve para acotar por rol en Supabase.** Los tres
+  roles del dominio comparten el MISMO rol de base de datos, `authenticated` —el rol vive
+  en `perfiles.rol`, no en el rol de Postgres—, así que un grant por columnas o se lo da a
+  los tres o a ninguno. **T-002: el indicador binario de `valoraciones_riesgo` necesita
+  una VISTA aparte** que exponga solo `(paciente_id, indicador, valorado_en)` con su
+  propia RLS. El comentario de la migración que decía lo contrario ya está corregido.
+- **El privilegio `EXECUTE` de una función de disparador se comprueba al CREAR el
+  disparador, no al dispararlo.** Por eso las `fn_*` no llevan `grant`. La excepción es la
+  función que otra función de disparador *security invoker* llama en tiempo de ejecución:
+  `fn_validar_zona_horaria()` llama a `es_zona_iana()`, que se comprueba en cada disparo y
+  con el rol que escribe. **Ya está concedido** (`grant execute on function
+  public.es_zona_iana(text) to authenticated`), así que T-002 no tiene que acordarse: si
+  no estuviera, cada alta de centro moriría con `permission denied for function`.
+- **Validar una zona horaria con «existe en `pg_timezone_names`» no basta**: el catálogo
+  contiene `CET`, `UTC` y `Etc/GMT+2`, prohibidos por el ADR-034. La regla real, ya
+  implementada en `es_zona_iana()`: existe **y** contiene `/` **y** no empieza por
+  `posix/` **ni** por `Etc/`. Y va en disparador, no en `check`: una `check` no admite
+  subconsulta y envolverla en una función `immutable` rompería una restauración.
+- **Los privilegios por defecto de secuencias** seguían concediendo `UPDATE` a `anon`,
+  `authenticated` y `service_role` pese al `alter default privileges … on tables` de
+  T-000. `UPDATE` sobre una secuencia habilita `setval()`, con el que se provoca una
+  colisión de clave primaria en una tabla de solo adición. T-001 lo cierra con
+  `alter default privileges … on sequences` **y** un `revoke all on all sequences` para
+  las que ya existían.
+- **Una guarda de dominio tiene que ser una restricción de tabla, no una comparación
+  entre dos columnas que el usuario puede editar.** El suelo de retención comparaba
+  `anios_historia_clinica >= anios_minimo_legal` con las DOS columnas editables y
+  `grant update` a `authenticated`: bajar ambas a 1 año pasaba. El suelo real es
+  `check (anios_minimo_legal >= 5)`, una constante legal (art. 17.1). Una CCAA puede
+  exigir más y la columna se puede SUBIR; bajar del suelo ya no se puede desde ninguna
+  pantalla.
+- **Un veto de borrado no es un veto de movimiento.** La fila de retención de la
+  organización estaba protegida contra `delete` pero no contra
+  `update ... set centro_id = <centro>`, que la sacaba de la herencia sin borrar nada y
+  hacía que todos los centros cayeran **en silencio** a los 25/5 constantes del
+  `coalesce`. El disparador cubre ahora `before delete or update of centro_id`.
+- **Una cabecera mutable junto a una tabla sellada necesita saber qué se congela.**
+  `notas_clinicas.paciente_id` y `.fecha_sesion` eran editables después de firmar, y como
+  el sobre canónico del ADR-035 no incluye ni el paciente ni la nota, una versión sellada
+  se podía reatribuir a otro paciente **sin romper la cadena de huellas**: el verificador
+  de T-005 lo habría dado por bueno. Las congela `fn_congelar_cabecera_sellada()` en
+  cuanto existe la versión 1. La cabecera sigue siendo mutable **para el borrador**.
+- **En un índice único, dos nulos NO chocan salvo con `nulls not distinct`.** La ventana
+  de acceso `(desbloqueo_id, paciente_id, pestana)` con `pestana` nulable dejaba entrar
+  dos filas por dos `insert ... on conflict do nothing`, y rompía «una apertura, N vistas»
+  justo en `exportacion`, `informe` y `emergencia`, que son los accesos sin pestaña.
+
+### Fusionar pacientes ahora puede dar interbloqueo — el importador debe reintentar
+
+Modo de fallo **nuevo**, introducido al cerrar la carrera de fusión de T-001. El
+disparador `fn_normalizar_fusion_paciente()` toma `for no key update` sobre la fila
+destino, y el propio `UPDATE` toma el mismo bloqueo sobre la fila que se fusiona. Dos
+fusiones cruzadas simultáneas —`A→B` y `B→A`— los piden en orden opuesto:
+
+```
+ERROR: deadlock detected
+CONTEXT: while locking tuple (0,42) in relation "pacientes"
+```
+
+**Es el precio correcto**: aborta en vez de corromper. Pero antes no existía, y el error
+que ve quien lo provoca es `40P01`, **no** el mensaje del ADR-031. Dos consecuencias que
+hay que recoger cuando llegue su ticket:
+
+- **El importador de fase 1 fusiona en lote y tiene que reintentar** ante `40P01`. Sin
+  reintento, una importación grande fallará a medias sin motivo aparente.
+- Mientras una fusión está abierta, cualquier `UPDATE` de la ficha superviviente —editar
+  el nombre, asignar centro— **espera al commit**. Las fusiones son transacciones cortas,
+  así que la contención es menor; queda escrito para que no sorprenda.
+
+*Por qué `for no key update` y no `for update`*: `for update` conflictúa con el
+`for key share` que toman las comprobaciones de clave ajena, así que cada fusión abierta
+habría bloqueado el alta de notas, episodios y accesos de ese paciente. `for no key
+update` conflictúa exactamente con lo que hay que serializar y con nada más.
+
+### El suelo de retención es el estatal, no el autonómico
+
+`politicas_retencion` lleva `check (anios_minimo_legal >= 5)`, que es el mínimo del
+art. 17.1. **Una CCAA con quince años —Cataluña— sigue pudiendo configurarse a cinco**:
+la base no lo impide porque el suelo autonómico es **dato, no esquema**.
+`centros.provincia` existe precisamente para resolverlo. Va al ticket de ajustes, no a
+una migración.
+
+### Índices de claves ajenas: lo hecho y lo pendiente
+
+T-001 crea los **siete** que muerden ya, por ser los que T-002 va a poner en el `using` de
+una política —una política sin índice detrás es un recorrido secuencial **por fila**— más
+el de la fusión: `episodios_asistenciales.profesional_id`,
+`episodio_participantes.paciente_id`, `notas_clinicas.autor_id`, `notas_clinicas.episodio_id`,
+`pacientes.fusionado_en` (parcial, y es el que evita que `fn_repuntar_fusionados()` recorra
+la tabla entera en cada fusión), `pacientes.centro_id` y `perfiles.centro_id`.
+
+**Las ~23 claves ajenas restantes siguen sin índice, a propósito**: son columnas de autoría
+y trazabilidad (`creado_por`, `valorado_por`, `diagnosticado_por`, `subido_por`,
+`actualizado_por`, `traspasado_a`, `fusionado_por`…) por las que todavía no filtra ninguna
+consulta, y un índice que nadie usa solo encarece cada escritura. Se añaden cuando exista
+la consulta que los justifique — y la que primero aparecerá es la de «qué firmó este
+profesional» cuando entren las firmas de fase 1.
+
+### `pacientes.centro_id` nace nulo: T-002 necesita relleno
+
+La columna se añadió nulable (regla de forma: nada `not null` sin `default`, para no romper
+el alta de T-000) y `crearPaciente` no la escribe, así que **hoy todos los pacientes tienen
+`centro_id` nulo** (verificado: `pacientes_totales = 2, con_centro = 0`). Criterio de
+relleno acordado para T-002, en este orden:
+
+1. Si el `profesional_id` del paciente tiene `centro_id`, ese.
+2. Si no, el único centro activo, cuando solo haya uno.
+3. Si hay varios y no se puede decidir, **se deja nulo y se resuelve como «toda la
+   organización»** en la política. Nunca se inventa un centro: un `centro_id` equivocado
+   acota mal al técnico administrativo, que es exactamente el rol que ese campo gobierna.
+
+El relleno va en la migración de T-002, no en la aplicación, y después la columna se puede
+volver obligatoria para las altas nuevas si el ticket lo pide.
+
+### Fuera del alcance de T-001, para cuando llegue su fase
+
+- **Catálogo precargado de CIE-10-ES**: `diagnosticos` tiene las columnas, pero el
+  catálogo no entra en fase 0. Es del ticket de historia clínica de fase 1.
+- **Bucket de Storage y sus políticas**: `evaluacion_archivos.ruta` e `informes`,
+  `consentimientos`, `representantes_paciente` guardan rutas, pero **T-001 no crea ningún
+  bucket ni ninguna política de Storage**. Queda para el ticket de documentos.
+- **`dni_indice` único frente al importador**: dos fichas del mismo paciente no pueden
+  tener ambas identificación con el mismo documento (consecuencia aceptada del ADR-029).
+  El importador de v1 se topará con ello el primer día; la salida es fusionar (ADR-031).
+- **Punto abierto (d) del diseño de T-001**: `consentimiento_firmantes` y
+  `accesos_historia_vistas` están aprobadas y **hay que subirlas a `docs/architecture.md`
+  §Dominios de datos** al cerrar el ticket.
