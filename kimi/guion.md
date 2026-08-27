@@ -104,6 +104,10 @@ verdad. Un criterio marcado sin salida pegada es un criterio no cumplido.
 Todo lo que hayas visto y no hayas arreglado va a `kimi/hallazgos/T-0XX.md`, con fichero,
 línea y qué pasa. **Un hallazgo bien anotado vale más que un arreglo fuera de alcance.**
 
+**Nunca en `docs/`.** La memoria del proyecto la escribe el arquitecto: tú le dejas el
+material en `kimi/hallazgos/` y en la sección **§Para `docs/state.md`** de tu informe.
+Si un ticket te manda escribir en `docs/`, el ticket está mal: eso es un hallazgo.
+
 Si el fichero se queda vacío, bórralo.
 
 ## 8 · Pasa el verificador

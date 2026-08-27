@@ -40,6 +40,12 @@ qué. **Si no hubo ninguna, escribe «ninguna»** — no lo dejes en blanco.
 Lo que viste y no arreglaste. Detalle en `kimi/hallazgos/T-0XX.md`; aquí, una línea por
 hallazgo. Si no hay, «ninguno».
 
+## Para `docs/state.md`
+
+Lo que el arquitecto tiene que transcribir a la memoria del proyecto: convenciones que
+fijaste, patrones que quedan para el siguiente. **Tú no escribes en `docs/` nunca.**
+Una línea por cosa, redactada para pegarse tal cual. Si no hay nada, «nada».
+
 ## Lo que NO hice
 
 Lo que el ticket no pedía y podría parecer que falta. Sirve para que quien revise no

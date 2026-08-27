@@ -62,8 +62,8 @@ Referencias: constitución regla **6**, ADR **033** y **051** (multi-centro), CL
       —cadena en el propio fichero de prueba, **no** una migración de mentira dentro de
       `supabase/migrations/`— que la dispara y otro que no.
 - [ ] Ejecuta el comando sobre las migraciones **que ya existen** y deja el resultado en el
-      PR. Si algo real salta, **no lo arregles aquí**: anótalo en `docs/state.md`
-      §Hallazgos anotados con fichero y línea, y marca la regla como aviso hasta que su
+      PR. Si algo real salta, **no lo arregles aquí**: anótalo en `kimi/hallazgos/T-019.md`
+      con fichero y línea, y marca la regla como aviso hasta que su
       ticket la limpie. La regla 2 de la constitución vale también para el linter.
 
 ## Criterios de aceptación (verificables)

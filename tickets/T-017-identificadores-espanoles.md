@@ -102,5 +102,4 @@ no dibuja.
 - **No toques `supabase/`, `docs/architecture.md`, `docs/decisions.md`, ninguna pantalla
   ni `lib/formularios.ts`.** Este ticket **añade** ficheros; no reescribe formularios.
 - El cifrado del DNI y la columna del índice **no son de este ticket**. Si te tienta
-  escribirlos, anótalo en `docs/state.md` §Hallazgos anotados y sigue (constitución,
-  regla 2).
+  escribirlos, anótalo en `kimi/hallazgos/T-017.md` y sigue (constitución, regla 2).

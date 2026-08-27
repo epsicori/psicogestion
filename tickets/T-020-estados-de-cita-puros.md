@@ -95,5 +95,5 @@ no parpadea — pero la animación es de T-014), `docs/interfaz.md` §Agenda.
   color de una cita no se decide con la hora del navegador. Por eso `ahora` es parámetro.
 - **No toques `supabase/`, `docs/architecture.md`, `docs/decisions.md` ni ninguna pantalla.**
 - Si al escribirlo aparece una transición que el producto necesita y no está aquí —por
-  ejemplo, deshacer una cancelación— **no la añadas**: anótala en `docs/state.md`
-  §Hallazgos anotados con el caso concreto, y que la decida T-010.
+  ejemplo, deshacer una cancelación— **no la añadas**: anótala en `kimi/hallazgos/T-020.md`
+  con el caso concreto, y que la decida T-010.

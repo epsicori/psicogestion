@@ -106,8 +106,8 @@ cliente»). Sin sección de `interfaz.md`: no dibuja.
   `date-fns` v4 y el que nombra el plan. Lee su README instalado antes de escribir código:
   la API no es la que traes aprendida.
 - **No modeles la cita, ni la serie, ni la regla de recurrencia.** Si te tienta escribir
-  RRULE, para: es **T-011**, y es `opus` por un motivo. Anótalo en `docs/state.md`
-  §Hallazgos anotados y sigue (constitución, regla 2).
+  RRULE, para: es **T-011**, y es `opus` por un motivo. Anótalo en
+  `kimi/hallazgos/T-018.md` y sigue (constitución, regla 2).
 - **No toques `supabase/`, `docs/architecture.md`, `docs/decisions.md` ni ninguna
   pantalla.** Este ticket añade `lib/fechas/`, sus pruebas y una dependencia.
 - Los nombres de día y mes en castellano salen del `locale` de `date-fns`, **no** de un

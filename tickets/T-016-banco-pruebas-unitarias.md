@@ -46,8 +46,10 @@ aplique: este ticket no dibuja nada.
       entrada**: en CI y en la fábrica se ejecuta sin terminal.
 - [ ] **Convención de ubicación, escrita y única**: el fichero de prueba vive **junto al
       módulo** que prueba (`app/login/esquemas.ts` → `app/login/esquemas.test.ts`). Nada de una
-      carpeta `__tests__` paralela. Déjalo dicho en `docs/state.md` §Aprendizajes en una
-      línea.
+      carpeta `__tests__` paralela. Déjala escrita en **dos** sitios, y ninguno es
+      `docs/`: un comentario en la cabecera de `vitest.config.ts`, donde la lee quien
+      configure, y una línea en tu informe bajo **§Para `docs/state.md`**, que el
+      arquitecto transcribe a la memoria del proyecto.
 - [ ] **Una prueba real que ya aporte**, no un `expect(true)`: los **dos** esquemas Zod que
       hoy existen, con sus casos límite —campo obligatorio vacío, tipo equivocado, recorte
       de espacios, longitud máxima—. Están en `app/login/esquemas.ts`
