@@ -33,7 +33,7 @@ necesitas y contienen decisiones que no te corresponden.
 |---|---|
 | `supabase/` | Migraciones y RLS. Hay trabajo en curso ahí; un cambio tuyo lo rompe. **T-019 las lee, y solo lee.** |
 | `docs/` | La memoria del proyecto y las decisiones cerradas. Las escribe otro. |
-| `app/`, `components/` | Pantallas. Ningún ticket tuyo dibuja nada. **T-016 puede añadir un fichero de prueba** en `components/ui/`, nada más. |
+| `app/`, `components/` | Pantallas. Ningún ticket tuyo dibuja nada. **T-016 tiene tres excepciones, y solo tres**: puede **añadir** `app/login/esquemas.test.ts`, `app/(app)/pacientes/esquemas.test.ts` y un fichero de prueba en `components/ui/`. Los ficheros que prueban, no se tocan. |
 | `app/prototipo/`, `diseño/` | Maqueta visual congelada. Se mira, no se toca — y tú ni la mires. |
 | `tickets/`, `PLAN.md`, `CLAUDE.md`, `AGENTS.md` | El contrato. No se edita el contrato desde dentro. |
 | `.claude/`, `kimi/verificar.mjs`, `kimi/alcance.json` | Herramienta y guardarraíl. Cambiarlos es hacer trampa al examen. |

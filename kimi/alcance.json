@@ -3,6 +3,7 @@
     "Alcance de escritura de cada ticket del carril paralelo. Lo lee kimi/verificar.mjs.",
     "'escritura' son patrones glob: todo fichero tocado debe casar con al menos uno.",
     "'dependencias' son los paquetes nuevos que ese ticket puede anadir, y ninguno mas.",
+    "'excepciones' levanta la zona prohibida para rutas concretas y solo en ese ticket.",
     "Este fichero lo mantiene el arquitecto. Un agente que lo edita esta haciendo trampa."
   ],
 
@@ -32,6 +33,10 @@
   "tickets": {
     "T-016": {
       "titulo": "Banco de pruebas unitarias",
+      "excepciones": [
+        "app/login/esquemas.test.ts",
+        "app/(app)/pacientes/esquemas.test.ts"
+      ],
       "escritura": [
         "package.json",
         "package-lock.json",

@@ -86,7 +86,10 @@ if (!config) {
   );
 }
 
-const permitidos = [...config.escritura, ...alcance.comun];
+// Las excepciones levantan la zona prohibida para rutas concretas y solo en este ticket.
+// Se comprueban ANTES que `prohibido`, que si no gana siempre.
+const excepciones = config.excepciones || [];
+const permitidos = [...config.escritura, ...excepciones, ...alcance.comun];
 const prohibidos = alcance.prohibido;
 
 // --- qué se ha tocado ------------------------------------------------------
@@ -119,8 +122,11 @@ if (rutas.length === 0) {
 
 const problemas = [];
 
-const enProhibido = rutas.filter((r) => casa(r, prohibidos));
-const fueraDeAlcance = rutas.filter((r) => !casa(r, prohibidos) && !casa(r, permitidos));
+const exenta = (r) => casa(r, excepciones);
+const enProhibido = rutas.filter((r) => !exenta(r) && casa(r, prohibidos));
+const fueraDeAlcance = rutas.filter(
+  (r) => !exenta(r) && !casa(r, prohibidos) && !casa(r, permitidos)
+);
 
 if (enProhibido.length) {
   problemas.push({
@@ -209,7 +215,7 @@ console.log(`\n${ticket} · ${config.titulo}`);
 console.log(gris(`base: ${base.slice(0, 8)} · ${rutas.length} fichero(s) tocado(s)\n`));
 
 for (const r of rutas) {
-  const mal = casa(r, prohibidos) || !casa(r, permitidos);
+  const mal = !exenta(r) && (casa(r, prohibidos) || !casa(r, permitidos));
   console.log(`  ${mal ? rojo("✗") : verde("✓")} ${r}`);
 }
 

@@ -45,12 +45,22 @@ aplique: este ticket no dibuja nada.
       `test:watch` y `test:cobertura`. **`test` no puede quedarse colgado esperando
       entrada**: en CI y en la fábrica se ejecuta sin terminal.
 - [ ] **Convención de ubicación, escrita y única**: el fichero de prueba vive **junto al
-      módulo** que prueba (`lib/formularios.ts` → `lib/formularios.test.ts`). Nada de una
+      módulo** que prueba (`app/login/esquemas.ts` → `app/login/esquemas.test.ts`). Nada de una
       carpeta `__tests__` paralela. Déjalo dicho en `docs/state.md` §Aprendizajes en una
       línea.
-- [ ] **Una prueba real que ya aporte**, no un `expect(true)`: los esquemas Zod de
-      `lib/formularios.ts` con sus casos límite —campo obligatorio vacío, tipo equivocado,
-      recorte de espacios— leyendo antes el fichero para no inventar campos.
+- [ ] **Una prueba real que ya aporte**, no un `expect(true)`: los **dos** esquemas Zod que
+      hoy existen, con sus casos límite —campo obligatorio vacío, tipo equivocado, recorte
+      de espacios, longitud máxima—. Están en `app/login/esquemas.ts`
+      (`esquemaInicioSesion`) y en `app/(app)/pacientes/esquemas.ts`
+      (`esquemaNuevoPaciente`). **Ábrelos antes**: no inventes campos ni mensajes.
+      - Las pruebas van **junto a ellos**, en `app/…/esquemas.test.ts`. Es la única
+        excepción a la zona prohibida de `app/` en todo el carril, y existe porque la
+        convención de «el fichero de prueba vive junto al módulo» manda sobre ella.
+      - Un `.test.ts` dentro de `app/` **no crea ninguna ruta**: Next enruta por
+        `page`, `layout` y `route`, no por cualquier fichero. Compruébalo con
+        `npm run build`, que es criterio.
+      - **No modifiques `esquemas.ts` ni ningún otro fichero de `app/`.** Solo añades
+        los dos ficheros de prueba.
 - [ ] **Una prueba de teclado de ejemplo**, sobre un componente ya existente de
       `components/ui/`, que sirva de **plantilla** para las seis primitivas de T-007:
       tabulación, `Escape`, foco devuelto al disparador. Elige el componente leyendo qué
@@ -68,9 +78,11 @@ aplique: este ticket no dibuja nada.
       ficheros de prueba.
 - [ ] **Automático** — `npm test` **no** entra en modo interactivo: se ejecuta en una
       consola sin TTY y devuelve código de salida 0.
-- [ ] **Automático** — romper a propósito un esquema de `lib/formularios.ts` hace que
+- [ ] **Automático** — romper a propósito un `min(1)` de `esquemaNuevoPaciente` hace que
       `npm test` devuelva código distinto de 0. Se demuestra rompiéndolo, viendo el rojo y
-      revirtiéndolo.
+      **revirtiéndolo**. Es la **única** vez que este ticket toca un fichero de `app/`, y
+      el cambio no sobrevive: cierra con `git status`, que tiene que salir sin ese
+      fichero. Pega las tres salidas —rojo, revertido, `git status`—.
 - [ ] **Automático** — la prueba de teclado falla si se le quita la devolución del foco al
       cerrar. Se demuestra igual: romper, ver rojo, revertir.
 - [ ] **Automático** — `npm run test:cobertura` produce informe sin fallar por umbral.
@@ -82,7 +94,8 @@ aplique: este ticket no dibuja nada.
 
 1. `npm test` — verde, y termina sin pedir nada.
 2. `npm run test:watch` — arranca, se sale con `q`.
-3. Romper un `min(1)` de un esquema de `lib/formularios.ts`, `npm test` — rojo. Revertir.
+3. Romper un `min(1)` de `app/(app)/pacientes/esquemas.ts`, `npm test` — rojo. Revertir y
+   comprobar con `git status` que no queda rastro.
 
 ## Notas para el agente
 
