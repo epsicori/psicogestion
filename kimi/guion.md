@@ -16,7 +16,8 @@ ticket, porque `tickets/` queda fuera.
 pwd
 ```
 
-Tiene que terminar en `Psicogestion`. Si termina en `kimi`, **para**: cierra la sesión y
+Tiene que ser la raíz del proyecto —`Psicogestion`, o la copia aparte que te hayan dado,
+como `Psicogestion-kimi`—. Si termina en `kimi`, **para**: cierra la sesión y
 vuelve a arrancar desde la carpeta del proyecto. No intentes salvarlo con rutas `../`.
 
 Comprobación de que estás donde debes: `package.json`, `tickets/` y `kimi/` se ven los tres
@@ -25,13 +26,27 @@ desde aquí.
 ## 1 · Sitúate
 
 ```
-git status                     # tiene que estar limpio; si no, PARA y avisa
-git checkout main
-git pull
+git status                     # tiene que estar limpio
+git branch --show-current      # ¿en qué rama estás?
 npm install
 ```
 
-Si `git status` no está limpio, hay trabajo de otro sin guardar. **No sigas.**
+**Si `git status` no está limpio**, hay trabajo de otro sin guardar: para y avisa. **No es
+tuyo decidir qué se guarda y qué se descarta**, y tampoco tienes que preguntarlo: la
+respuesta correcta es que te den una copia limpia.
+
+**Puede que trabajes en una copia aparte** (un *worktree* de git, en una carpeta hermana
+del proyecto). Si es así, **esa es tu raíz y no hay nada más**. No vayas a buscar la copia
+principal: ahí hay trabajo en curso de otra persona, y que esté sucio **no te afecta ni te
+bloquea**.
+
+Ahora mira la rama:
+
+- **Ya estás en `T-0XX-<slug>`** — te la han creado. **Sáltate el paso 3** y ve al 2. No
+  hagas `git checkout main`: en una copia aparte git lo rechaza, porque `main` está en uso
+  en otro sitio, y ese rechazo **no es un error que debas arreglar**.
+- **Estás en `main`** — `git pull` y luego el paso 3 crea tu rama.
+- **Estás en otra rama cualquiera** — para y avisa.
 
 ## 2 · Lee, y solo esto
 
@@ -44,11 +59,14 @@ contienen. Ni uno más.
 
 ## 3 · Rama
 
+**Si el paso 1 te dejó ya en `T-0XX-<slug>`, este paso está hecho. Sigue al 4.**
+
 ```
 git checkout -b T-0XX-<slug>
 ```
 
 El `<slug>` es el del nombre del ticket. Ejemplo: `T-018-fechas-y-zona-horaria`.
+**Una rama por ticket, y ni una más.** Si ya existe, no crees otra con un sufijo.
 
 ## 4 · Copia las tareas
 

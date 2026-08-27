@@ -42,6 +42,7 @@ tickets debería—, lee antes la guía en `node_modules/next/dist/docs/`.
 ## Si te rechazan `git` o `npm`
 
 Casi seguro que **tu raíz de trabajo es `kimi/` en vez de la del proyecto**. Comprueba con
-`pwd`: tiene que terminar en `Psicogestion`, no en `kimi`. Si termina en `kimi`, no lo
+`pwd`: tiene que ser la raíz del proyecto (o la copia aparte que te hayan dado), **no** la
+carpeta `kimi/`. Si termina en `kimi`, no lo
 arregles con rutas `../` — cierra la sesión y arranca de nuevo desde la carpeta del
 proyecto. Es el paso 0 del guion.
