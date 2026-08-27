@@ -1,0 +1,95 @@
+{
+  "_comentario": [
+    "Alcance de escritura de cada ticket del carril paralelo. Lo lee kimi/verificar.mjs.",
+    "'escritura' son patrones glob: todo fichero tocado debe casar con al menos uno.",
+    "'dependencias' son los paquetes nuevos que ese ticket puede anadir, y ninguno mas.",
+    "Este fichero lo mantiene el arquitecto. Un agente que lo edita esta haciendo trampa."
+  ],
+
+  "prohibido": [
+    "supabase/**",
+    "docs/**",
+    "app/**",
+    "diseño/**",
+    ".claude/**",
+    "tickets/**",
+    "PLAN.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+    "KIMI.md",
+    "kimi/alcance.json",
+    "kimi/verificar.mjs",
+    "kimi/LEEME.md",
+    "kimi/proyecto.md",
+    "kimi/guion.md"
+  ],
+
+  "comun": [
+    "kimi/informes/T-*.md",
+    "kimi/hallazgos/T-*.md"
+  ],
+
+  "tickets": {
+    "T-016": {
+      "titulo": "Banco de pruebas unitarias",
+      "escritura": [
+        "package.json",
+        "package-lock.json",
+        "vitest.config.ts",
+        "vitest.setup.ts",
+        "eslint.config.mjs",
+        "lib/**/*.test.ts",
+        "lib/**/*.test.tsx",
+        "components/ui/**/*.test.tsx"
+      ],
+      "dependencias": [
+        "vitest",
+        "@vitest/coverage-v8",
+        "jsdom",
+        "@testing-library/react",
+        "@testing-library/user-event",
+        "@testing-library/jest-dom",
+        "vite-tsconfig-paths"
+      ]
+    },
+
+    "T-017": {
+      "titulo": "Identificadores y contacto espanoles",
+      "escritura": [
+        "lib/identidad/**"
+      ],
+      "dependencias": []
+    },
+
+    "T-018": {
+      "titulo": "Fechas, zona horaria y semana",
+      "escritura": [
+        "lib/fechas/**",
+        "package.json",
+        "package-lock.json"
+      ],
+      "dependencias": [
+        "@date-fns/tz"
+      ]
+    },
+
+    "T-019": {
+      "titulo": "Linter de migraciones",
+      "escritura": [
+        "scripts/lint-migraciones.ts",
+        "scripts/lint-migraciones.test.ts",
+        "package.json",
+        "package-lock.json"
+      ],
+      "dependencias": []
+    },
+
+    "T-020": {
+      "titulo": "Estados de la cita, puros",
+      "escritura": [
+        "lib/agenda/**"
+      ],
+      "dependencias": []
+    }
+  }
+}
