@@ -57,6 +57,12 @@ Ahora mira la rama:
 Después, los ficheros del proyecto que tu ticket **nombra**, para no inventarte lo que
 contienen. Ni uno más.
 
+**Las citas a ADR y a `docs/` son procedencia, no deberes.** Cuando tu ticket dice «ADR-045»
+o «`docs/interfaz.md` §Agenda», te está diciendo de dónde viene la regla, no mandándote a
+leerla: el ticket ya la reescribe entera donde te hace falta, y `docs/` está fuera de tus
+límites. **No intentes abrirlos.** Si de verdad hay algo que necesitas y el ticket no
+recoge, eso es un hallazgo — nunca una excusa para salir de tu zona.
+
 ## 3 · Rama
 
 **Si el paso 1 te dejó ya en `T-0XX-<slug>`, este paso está hecho. Sigue al 4.**
