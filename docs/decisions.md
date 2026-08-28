@@ -1211,6 +1211,126 @@ se lea como elección, no como falta de criterio.
 
 ---
 
+## ADR-053 · Psicogestión no expide facturas: las expide el proveedor del cliente, y nosotros solo dejamos el borrador
+
+**28-08-2026** · **Estado**: aceptada · **Revierte el ADR-052**, que nunca llegó a
+transcribirse a este fichero y del que solo vivían las citas en los tickets T-021 a T-025.
+
+**Contexto**: el ADR-052 aceptaba que Psicogestión fuera el **componente principal de
+facturación (CPF)** de un SIF, con el componente de facturación (CF) delegado en una API tipo
+Verifacti. Eso dejaba encima del propietario —empresario individual, art. 1911 CC— la
+**declaración responsable (DR)** y el **art. 201.bis LGT: 150.000 € por ejercicio con ventas y
+por tipo de sistema**. Se aceptó como riesgo acotado porque se creía que no había alternativa
+sin matar el producto.
+
+La había. Verificado el 28-08-2026 contra las *«Aclaraciones a dudas de los desarrolladores»*
+de la AEAT (v1.3, 04-12-2025), leídas enteras en las aclaraciones 4, 5, 6, 8, 9, 10 y 11, y
+contra las FAQ de la Sede. Tres citas cambian el diseño:
+
+- **Aclaración 4** — «Resumidamente, un SIF expide **(o gestiona/dirige/controla la expedición
+  de)** facturas con su QR tributario […] genera (o gestiona/dirige/controla la generación) y
+  remite o conserva (o gestiona/dirige/controla la remisión o conservación) sus
+  correspondientes registros de facturación.» **No hace falta expedir para ser SIF: basta con
+  dirigir o controlar la expedición.**
+- **Aclaración 10** — «es preciso diferenciar un SIF a los efectos de la norma, de lo que sería
+  **el sistema de gestión y proceso general de las facturas** de la empresa». Y: «la
+  responsabilidad del fabricante de un SIF alcanza a los RFs de las facturas emitidas por el
+  SIF que haya certificado, **pero no alcanza en modo alguno** a los RFs correspondientes a
+  facturas emitidas con otro SIF».
+- **Aclaración 5** — «Por excepción, no será preciso certificar aquellos componentes que
+  presten funcionalidades que sean irrelevantes […] esto es, las que **no afecten** a la
+  generación del RF, a su encadenamiento, a la impresión de facturas, a la generación del QR,
+  al envío a sede electrónica, **al enlace indefectible entre componentes**, a la conservación
+  inalterada ni al registro de eventos.»
+
+Y el punto de apoyo material: en Holded, la frontera entre las dos posturas es **un booleano**.
+`approveDoc: false` crea un borrador **sin numeración** —Holded la asigna al aprobar— sin RF,
+sin QR y sin remisión. `approveDoc: true`, o llamar al endpoint de aprobación, es dirigir la
+expedición.
+
+**Decisión**: Psicogestión es **sistema de gestión clínica**, no sistema informático de
+facturación. La facturación se delega íntegra en el proveedor que ya use el cliente, con su
+propia cuenta y su propia DR.
+
+a) **No se expide.** No hay serie, ni numeración, ni registro de facturación, ni huella de
+   factura, ni QR, ni remisión a la AEAT, ni firma, ni registro de eventos SIF. Nada de eso se
+   escribe en la instancia, ni delegado en un CF. **No se firma DR** porque no hay nada que
+   certificar.
+
+b) **`approveDoc` siempre `false`, sin excepción, sin ajuste y sin bandera.** Y Psicogestión
+   **no llama nunca** al endpoint de aprobación. Es el invariante del que cuelga todo el ADR y
+   se prueba en negativo: no puede existir ruta de código que apruebe.
+
+c) **No se conserva la factura.** Ni el PDF, ni el QR, ni copia del registro. Conservar es una
+   de las ocho funcionalidades de la aclaración 5. Se guardan identificador, número, importe,
+   estado y un enlace.
+
+d) **Espejo de solo lectura.** Lo que vuelve del proveedor —número, fecha, total, estado,
+   cobrado— se guarda para que la ficha del paciente sepa lo que se debe, en tabla que la
+   aplicación **no puede editar**: entra por el sincronizador y por nadie más. Un espejo que se
+   puede tocar deja de ser un espejo y empieza a ser una segunda contabilidad.
+
+e) **Capa fina de proveedor, un solo adaptador.** Interfaz `ProveedorFacturacion` con
+   Holded como única implementación. No se acopla el dominio a Holded: media consulta ya usa
+   Quipu o lo que le imponga su gestoría, y reescribir después es peor que abstraer ahora.
+
+f) **La clave API la pone el cliente y es suya.** Se genera en su cuenta, se guarda en el
+   **Vault de Supabase** —jamás en una columna en claro ni en el navegador— y solo la lee el
+   servidor. Sin clave configurada no hay facturación: modo degradado, no error.
+
+g) **Reparto del dominio Económico.** Se queda dentro lo que está pegado al paciente y a la
+   cita: `tarifas_paciente`, `bonos`, `cobros`, pendiente derivado. Se va fuera lo puramente
+   fiscal: expedición, **libro de gastos**, resumen trimestral y modelos. Consecuencia directa:
+   **T-022 y T-024 se retiran**, T-021 pierde la mitad y T-025 cambia de naturaleza.
+
+h) **El art. 29.2.j LGT nos alcanza igual, y esto no es opcional.** Aclaración 11: la
+   obligación «despliega efectos directos desde su entrada en vigor en octubre de 2021 respecto
+   de **cualquier otro sistema informático**», y «cuando los albaranes, proformas, prefacturas
+   o facturas sin validez fiscal se expidan, **sus registros deberán conservarse de forma
+   inalterable**». Los borradores que mandamos al proveedor —y los que nunca lleguen a
+   factura— se conservan encadenados y de solo adición. **La cadena de huellas y el principio 6
+   no se van con la facturación: se quedan, con otro motivo.**
+
+i) **El concepto que sale hacia el proveedor no es clínico nunca.** «Sesión de psicología»,
+   «Informe». Ni diagnóstico, ni tipo de terapia, ni nada de lo que el técnico administrativo
+   no puede ver. El proveedor es un tercero: lo que le mandamos sale de la instancia.
+
+j) **El régimen de IVA lo marca el usuario, no se infiere.** Exento del art. 20.Uno.3.º LIVA
+   para terapia y evaluación; 21 % para el informe pericial o para aseguradora. Aunque no
+   expidamos, ese dato lo construimos nosotros, así que se pide explícitamente y se explica.
+   Sigue en pie la línea del ADR-049: llevamos registro, no liquidamos impuestos.
+
+k) **Dos preguntas quedan abiertas y bloquean la implementación del adaptador**, no el
+   esquema: **(1)** la FAQ general de la Sede dice que el sistema de pre-facturación «debe
+   estar vinculado indefectiblemente al sistema de emisión de facturas **formando una
+   unidad**», y no hay aclaración de la AEAT que resuelva expresamente el caso «software
+   externo que crea borradores en un SIF de terceros vía API». Las aclaraciones 5 y 10 apuntan
+   a que no nos arrastra, pero es lectura, no texto: va a consulta vinculante o a informe de
+   asesor fiscal. **(2)** de Holded, por escrito: en qué instante remite el RF, qué devuelve la
+   API al aprobar, y si su DR contempla la creación de documentos por API desde software de
+   terceros.
+
+**Consecuencias**:
+
+- Se gana: **desaparece la declaración responsable y con ella el art. 201.bis por SIF**, que
+  era la mayor exposición personal del proyecto. Desaparecen el motor Verifactu, el
+  encadenamiento de facturas, el QR, la remisión, la matriz de conformidad y el ligado de
+  versiones CPF↔CF. La app se concentra en lo que nadie más le va a hacer al psicólogo: la
+  agenda, la ficha y la historia clínica.
+- Se pierde: **cada cliente necesita cuenta de pago en el proveedor** —la API de Holded no
+  está en su plan gratuito—, lo que encarece la adopción y añade una dependencia externa que
+  no controlamos. El usuario salta de aplicación para emitir. Y el resumen trimestral, que era
+  petición literal de las entrevistas de UX, sale del producto.
+- Riesgo que **no** desaparece: el art. 29.2.j LGT sobre nuestros propios registros, y la
+  duda (k.1) hasta que la resuelva una persona. Esto no es exposición cero; es exposición de
+  otra clase y de otro orden de magnitud.
+- Queda bloqueado: expedir desde Psicogestión bajo cualquier forma; aprobar documentos en el
+  proveedor; conservar la factura; un ajuste que permita elegir entre motor propio y
+  proveedor; escribir en el espejo desde la aplicación; y arrancar el adaptador antes de tener
+  contestadas las dos preguntas de (k).
+
+---
+
 ## Plantilla para decisiones nuevas
 
 ```markdown
