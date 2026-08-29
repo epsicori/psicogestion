@@ -13,6 +13,7 @@
     "tipos": "supabase gen types typescript --local > lib/supabase/tipos-bd.ts"
   },
   "dependencies": {
+    "@date-fns/tz": "1.5.0",
     "@hookform/resolvers": "^5.9.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
