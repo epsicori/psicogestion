@@ -85,6 +85,9 @@ color literal), **043** (`cacheComponents`), **044** (360 px y 44 px de objetivo
 - [ ] **Manual** — con `prefers-reduced-motion` activo, ninguna primitiva anima.
 - [ ] **Automático** — `disponible: true` en `components/armazon/modulos.ts` **solo** para
       los módulos realmente integrados; el resto sigue apagado y marcado «pronto».
+- [ ] **Automático** — `components/armazon/modulos.ts` tiene **cuatro** entradas —Agenda,
+      Pacientes, Facturación, Ajustes— y ninguna llamada `Inicio`, `Clinica` ni `Usuarios`
+      (ADR-050). `app/page.tsx` redirige a `/agenda`, no a `/pacientes`.
 
 ## Guion de comprobación manual
 

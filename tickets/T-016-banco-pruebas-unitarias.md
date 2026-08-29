@@ -5,7 +5,7 @@ modelo: sonnet
 fase: 0
 prioridad: alta
 depende_de: []
-estado: pendiente
+estado: hecho
 ---
 
 # Contexto

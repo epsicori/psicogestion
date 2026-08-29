@@ -1211,6 +1211,393 @@ se lea como elección, no como falta de criterio.
 
 ---
 
+## ADR-045 · Los estados de la cita son cinco, y «en curso» lo dice el reloj
+
+**26-08-2026** · **Estado**: aceptada
+
+**Contexto**: el recorrido de nota clínica en presencial arranca cuando una cita empieza, y la
+agenda tiene que distinguir de un vistazo lo que está pasando ahora de lo que está por pasar.
+La tentación es guardar «en curso» como un estado más de la fila, junto a programada o
+cancelada. Hay que decidirlo antes de escribir la tabla `citas`: cambiar un enum con filas
+dentro es una migración.
+
+**Decisión**: `citas.estado` es un enum de **cinco valores** —`programada`, `confirmada`,
+`realizada`, `cancelada`, `no_asistida`— y **«en curso» no es uno de ellos**.
+
+- «En curso» se **calcula**: el instante actual cae entre `inicio` y `fin`, y el estado no es
+  `cancelada` ni `no_asistida`. Se resuelve en servidor, en la zona del centro, y baja como
+  dato hecho igual que el saludo del armazón. Nunca con `new Date()` en cliente.
+- Los cinco que sí se guardan son **hechos que alguien afirma**: se programó, el paciente
+  confirmó, vino, se anuló, no vino. Cada uno tiene un actor y una fecha, y por eso vive en
+  una fila auditada.
+- `realizada` es la que abre los dos deberes del ciclo —la nota y el cobro— y la que dispara
+  la alerta de documentación. Se marca a mano o al pasar el fin de la cita, según configure el
+  centro; nunca se deduce del reloj a espaldas de nadie.
+
+**Por qué no persistirlo**: exigiría una tarea que reescribiera filas cada minuto sobre una
+tabla auditada —un `UPDATE` por cita y por transición, ruido puro en `auditoria`— y obligaría
+a decidir qué pasa cuando el proceso no corre. Una cita que amanece «en curso» porque el
+servidor se cayó a las nueve de la noche es un dato falso en el sitio donde menos se puede
+permitir. El reloj ya sabe la respuesta; no hace falta guardarla.
+
+**Consecuencias**:
+
+- Se gana: cero mantenimiento, cero deriva entre lo guardado y lo cierto, y el estado se puede
+  recalcular hacia atrás sobre cualquier fecha sin haber previsto nada.
+- Se pierde: no se puede indexar «en curso» ni consultarlo desde SQL puro sin repetir la
+  expresión. Se resuelve con una función `esta_en_curso(cita)` en la migración, para que la
+  regla viva escrita una sola vez.
+- Queda bloqueado: añadir `en_curso` al enum; cualquier tarea programada que actualice estados
+  de cita por el mero paso del tiempo; y leer el reloj en cliente para decidir el color de una
+  cita.
+
+---
+
+## ADR-046 · La nota sabe si se escribió durante la sesión, y eso va dentro de la huella
+
+**26-08-2026** · **Estado**: aceptada
+
+**Contexto**: una nota clínica escrita mientras el paciente está delante y una escrita de
+memoria el viernes por la tarde valen lo mismo ante la ley y no valen lo mismo ante un
+juzgado. El propietario pidió que quede registrado que la nota se hace **durante el curso de
+la sesión**. La pregunta real no es si guardarlo, sino **dónde**: la cabecera mutable de
+`notas_clinicas` o el sobre sellado del ADR-035.
+
+**Decisión**: va **dentro del sobre canónico**, que crece con cuatro campos:
+
+| Campo | Qué es |
+|---|---|
+| `cita_id` | La cita que documenta esta nota, o nulo si no cuelga de ninguna |
+| `abierta_en` | Cuándo se abrió el editor por primera vez para esta versión |
+| `firmada_en` | Cuándo se firmó |
+| `redactada_en_sesion` | Verdadero si `abierta_en` y `firmada_en` caen dentro de la ventana de la cita más el margen del centro |
+
+- El margen es configurable por centro y **se guarda con la nota**, no se consulta al
+  verificar: la regla que aplicó ese día tiene que seguir siendo legible dentro de diez años
+  aunque el centro la haya cambiado tres veces.
+- `redactada_en_sesion` se **calcula en el servidor al firmar** y se sella. No es un campo que
+  el usuario marque: una casilla de «lo escribí en sesión» es exactamente lo que este sistema
+  existe para no tener que creerse.
+- Sube `esquema_version` del sobre. `algoritmo_version` **no cambia**: sigue siendo JCS + NFC
+  + SHA-256.
+- Este ADR **se cierra antes de T-005**, para que el canonicalizador nazca con el sobre
+  completo.
+
+**Por qué no en la cabecera mutable**: un dato que puede cambiar después no demuestra nada. Si
+`redactada_en_sesion` vive en `notas_clinicas`, cualquiera con `UPDATE` sobre esa tabla —que
+son todos los que pueden escribir un borrador— convierte un «lo escribí el viernes» en un «lo
+escribí en sesión» sin dejar rastro en la cadena. Dentro del sobre, ese cambio rompe la huella
+y la verificación nocturna lo canta con nombre y fecha.
+
+**Consecuencias**:
+
+- Se gana: un hecho oponible en lugar de una anotación de cortesía, y por el mismo precio la
+  nota queda atada a su cita dentro del sello.
+- Se pierde: añadirlo más tarde habría obligado a convivir con dos formatos de sobre para
+  siempre. Se paga ahora un campo y un cálculo; entonces se habría pagado una era nueva de
+  algoritmo.
+- Queda bloqueado: exponer `redactada_en_sesion` como casilla del formulario; derivarlo en la
+  verificación en lugar de releerlo del sobre; y guardar el margen del centro solo por
+  referencia.
+
+---
+
+## ADR-047 · El aviso de sesión no interrumpe, y el estado late en lugar de parpadear
+
+**26-08-2026** · **Estado**: aceptada
+
+**Contexto**: el propietario pidió dos cosas para la agenda: que al llegar la hora de la cita
+salte un aviso emergente que lleve a la sesión, y que el estado se vea como un icono redondo
+«parpadeante e iluminado». Las dos chocan con algo ya cerrado —el sistema de diseño dice
+«ninguna animación decorativa», el ADR-041 fija WCAG 2.2 AA verificado en el pipeline— y las
+dos son buenas ideas mal vestidas. Se resuelven aquí, una vez, para las dos pantallas.
+
+**Decisión**:
+
+**a · El aviso no roba el foco.** Al empezar la cita aparece una franja no modal —paciente,
+hora, botón «Notas»— más un ancla persistente en la cabecera mientras la sesión dure. La
+franja se descarta y no vuelve; el ancla se queda.
+
+Un diálogo modal centrado se descarta a propósito: la hora de una cita es exactamente el
+momento en que el profesional puede estar escribiendo en la historia de otro paciente o
+recogiendo una firma con el paciente delante. Una ventana que aparece encima y captura el
+teclado hace pulsar a ciegas, y en esta aplicación pulsar a ciegas puede firmar algo.
+
+**b · El estado late, no parpadea.** El indicador de «en curso» es un punto con pulso de ciclo
+largo —≈2 s, opacidad y halo, sin encendido y apagado— sujeto a tres reglas:
+
+- **Un solo elemento animado en pantalla a la vez.** Solo la cita en curso late, y solo puede
+  haber una por profesional. Una agenda con seis puntos parpadeando no señala nada.
+- **`prefers-reduced-motion` lo detiene**, y lo que queda es un punto relleno con halo. La
+  información no vive en el movimiento.
+- **El color nunca va solo**: forma y etiqueta de texto siempre, para daltonismo, brillo bajo y
+  papel. Verde con punto y «En curso», no verde a secas.
+
+Esto no es una excepción al ADR-041: es su lectura estricta. Un parpadeo de encendido y apagado
+obligaría a un control para pararlo (SC 2.2.2) y haría fallar el verificador de T-009. Un pulso
+lento que se detiene solo con la preferencia del sistema pasa, y de lejos se ve igual de vivo.
+
+**Consecuencias**:
+
+- Se gana: el aviso es imposible de perder sin ser imposible de ignorar, y la agenda se lee a un
+  metro de distancia sin romper el listón de accesibilidad.
+- Se pierde: el aviso se puede descartar sin actuar. Lo cubre el escalado de la alerta de
+  documentación, que es el mecanismo que sí insiste.
+- Queda bloqueado: cualquier diálogo modal disparado por el reloj; parpadeo de encendido y
+  apagado en cualquier pantalla; más de un elemento animado a la vez; y un estado representado
+  solo por color.
+
+---
+
+## ADR-048 · Los consentimientos no viven bajo el candado
+
+**26-08-2026** · **Estado**: aceptada
+
+**Contexto**: `docs/interfaz.md` coloca «Documentos» —consentimientos firmados, protección de
+datos, adjuntos— como quinta sub-pestaña dentro de Historia clínica, y por tanto detrás del PIN
+del ADR-026. Pero las políticas de T-002 dejaron `consentimientos` y `consentimiento_firmantes`
+**fuera** de `historia_desbloqueada()`, a propósito. Una de las dos cosas está mal, y hay que
+decidir cuál antes de dibujar la ficha del paciente.
+
+**Decisión**: manda la arquitectura. **«Documentos y consentimientos» es una pestaña de la
+ficha**, al nivel de Resumen y Facturación, y **no pide PIN**.
+
+- La pregunta que resuelve esa pestaña —«¿tenemos su consentimiento firmado?»— es de recepción,
+  se hace veinte veces al día y no es contenido clínico: es un documento administrativo con una
+  versión de texto y una fecha. Meterla detrás del PIN convierte el candado en un peaje, y un
+  candado que estorba se acaba dejando abierto todo el día.
+- Historia clínica se queda con **cuatro** sub-pestañas bajo llave: `historial_clinico`,
+  `notas_clinicas`, `evaluaciones`, `informes`. Son las que tocan contenido.
+- El enum `pestana_historia` de T-001 **no se toca**. Su valor `documentos` queda reservado para
+  los adjuntos clínicos que sí viven dentro, y una migración de enum se ahorra.
+- Esto no relaja el invariante 3: quién ve qué lo sigue decidiendo RLS. El técnico
+  administrativo ve que existe un consentimiento y su estado; no ve lo que hay dentro de un
+  informe ni de una nota, porque esas tablas nunca están en esta pestaña.
+
+**Consecuencias**:
+
+- Se gana: la interfaz y las políticas dicen lo mismo, que era la condición para que el candado
+  se entienda. Y recepción trabaja sin PIN, que es lo que hace que el PIN se respete donde
+  importa.
+- Se pierde: la ficha tiene cinco pestañas en lugar de cuatro. Cabe.
+- Queda bloqueado: enseñar consentimientos también dentro de Historia clínica —dos puertas a los
+  mismos datos son dos sitios donde poner el candado, y es el choque 11 otra vez—; y crear una
+  sub-pestaña «Observaciones y otros», que el destilado ya rechaza por ser un cajón de sastre.
+
+---
+
+## ADR-049 · Psicogestión no es producto sanitario, y esta es la línea que no se cruza
+
+**26-08-2026** · **Estado**: aceptada
+
+**Contexto**: el documento maestro reconcilia **cuatro** cuerpos normativos —protección de
+datos, historia clínica, facturación electrónica y fiscalidad— y da por cerrada la
+cuestión legal. La revisión del FOCAD 286 del Consejo General de la Psicología («Salud
+Mental Digital», Halty) enseña que faltan tres reglamentos europeos que ninguno de los
+cuatro cubre: el **MDR (UE) 2017/745** de productos sanitarios, el **AI Act (UE)
+2024/1689** y el **Espacio Europeo de Datos de Salud, Reglamento (UE) 2025/327**.
+
+Ninguno de los tres obliga hoy a cambiar una línea. Dos de ellos obligan a **no** cambiar
+ciertas líneas, y el tercero obliga a mirar de reojo. Por eso se escribe: la clasificación
+de un producto como sanitario **la hace el fabricante y responde de ella**, y una
+clasificación que no está escrita en ningún sitio es una clasificación que nadie ha hecho.
+
+**Decisión**:
+
+**a · Psicogestión no es producto sanitario, y consta por escrito por qué.** Es software de
+gestión de consulta: agenda, historia clínica, evaluaciones almacenadas, informes
+redactados por una persona y facturación. **No diagnostica, no monitoriza, no calcula nada
+clínico y no recomienda ningún tratamiento.** Queda fuera del art. 2.1 del MDR, sin
+marcado CE y sin registro en AEMPS. La clasificación se revisa en cada ADR que añada
+función clínica.
+
+**b · La línea que no se cruza.** Tres funciones convertirían el producto en «software como
+producto sanitario» (SaMD). **Si alguna entra en un ticket, el ticket se para y se abre un
+ADR antes de escribir una línea de código**:
+
+1. **Corregir una prueba**: derivar puntuaciones, baremos o interpretación de lo que se
+   introduce en `evaluaciones`. Hoy `puntuaciones` es un `jsonb` que alguien teclea, e
+   `interpretacion` es texto que alguien escribe. Que el sistema los **calcule** es otra
+   cosa. ⚠ `docs/interfaz.md` describe la sub-pestaña Evaluaciones como «pruebas,
+   **corrección** y adjuntos», y la fase 2 de `PLAN.md` incluye validación y análisis de
+   archivos: **la frontera está dibujada dentro del plan, no fuera de él**.
+2. **Calcular o proponer un nivel de riesgo.** `valoraciones_riesgo.nivel` lo fija el
+   profesional; `indicador` es un `GENERATED` trivial sobre ese nivel y no deriva nada. El
+   día que el nivel salga de las puntuaciones, sale también del ámbito de este ADR.
+3. **Proponer, priorizar o triar** un tratamiento, una derivación o un orden de atención.
+
+**c · Sin inteligencia artificial en v1, y la puerta se cierra a propósito.** La sugerencia
+de hora del alta de cita es **determinista y explicable** —la moda del intervalo de las
+seis últimas citas, cruzada con día y franja habituales— y se queda así. Se decidió por
+criterio de producto, y de paso deja el AI Act fuera entero. Si algún día entra IA:
+
+- **Nunca sale contenido clínico de la instancia.** Choca de frente con la decisión 1
+  (instancia dedicada) y con el ADR-038 (nada clínico por canales de terceros). Un modelo
+  alojado fuera es un encargado del tratamiento más, y hoy no hay ninguno.
+- Transparencia al paciente, supervisión humana real y trazabilidad del uso, que son las
+  obligaciones del **desplegador** aunque el sistema no sea de alto riesgo.
+- Y **ADR previo**, siempre.
+
+**d · El EEDS se vigila desde ahora; se implementa cuando toque.** Psicogestión **es** lo
+que el Reglamento (UE) 2025/327 llama un sistema de historia clínica electrónica, así que
+le tocarán interoperabilidad, formato europeo de intercambio y declaración de conformidad.
+La aplicación es escalonada y la parte de sistemas de HCE llega después de la aplicación
+general; **el calendario exacto se confirma contra el texto del reglamento antes de
+planificar nada**, no contra un curso de formación que lo cita de pasada.
+
+Lo único que se hace ya, porque hoy es gratis y después es una migración:
+
+- **Toda exportación de datos clínicos sale por una capa propia con su formato versionado**
+  —`exportaciones` ya guarda alcance, filtros, algoritmo y huella—, **nunca** por un
+  `select` incrustado en la pantalla que la pidió. El día que haya que emitir en un formato
+  ajeno, se añade un formato, no se reescriben veinte pantallas.
+- **Todo código clínico se guarda con su sistema y su versión.** `diagnosticos` ya lleva
+  `cie10es_codigo` y `dsm5tr_codigo` separados. Un código sin sistema no se puede mapear a
+  nada, y mapear es exactamente lo que el EEDS va a pedir.
+
+**Consecuencias**:
+
+- Se gana: una clasificación defendible por escrito, con su fecha y su motivo, que es lo
+  que el MDR pide al fabricante; y dos hábitos baratos que dejan el EEDS alcanzable.
+- Se pierde: la corrección automática de pruebas —que es una función que se vendería
+  sola— deja de ser una tarea de fase 2 y pasa a ser una decisión con su propio ADR y su
+  propio coste regulatorio. Es el precio correcto: no se puede corregir un WAIS de tapadillo.
+- Queda bloqueado: implementar cualquiera de las tres funciones de **b** sin ADR previo;
+  meter IA sobre contenido clínico; anunciar el producto con lenguaje diagnóstico,
+  terapéutico o de monitorización en cualquier material comercial —**la finalidad prevista
+  la fija lo que el fabricante afirma**, no lo que el código hace—; y planificar trabajo de
+  EEDS sobre fechas leídas de segunda mano.
+
+---
+
+## ADR-050 · Cuatro módulos, no siete: Inicio y Clínica no son pantallas, son bloques
+
+**26-08-2026** · **Estado**: aceptada
+
+**Contexto**: el armazón nace con siete módulos —Inicio, Pacientes, Agenda, Clínica,
+Facturación, Usuarios, Ajustes—, heredados del prototipo. Al dibujar el recorrido de nota
+en presencial se ve que dos de ellos no tienen contenido propio: **Inicio** es el
+calendario del día más unas métricas, es decir, la Agenda descrita otra vez; y **Clínica**
+es una bandeja que se alimenta de `alertas_documentacion` y que el maestro **ya coloca**
+en el panel lateral de Inicio. Dos pantallas que iban a ser atajos tristes la una de la
+otra.
+
+**Decisión**: **cuatro módulos**.
+
+| Módulo | Ruta | Qué absorbe |
+|---|---|---|
+| **Agenda** | `/agenda` | Calendario en tres vistas · panel derecho con citas próximas, pendientes y **documentación pendiente** · cuadro inferior con adherencia, abandono, ingresos y **trazabilidad documental** |
+| **Pacientes** | `/pacientes` | Lista, previsualización y ficha con sus cinco pestañas (ADR-048) |
+| **Facturación** | `/facturacion` | Resumen, emisión, libro de gastos |
+| **Ajustes** | `/ajustes` | Preferencias del usuario · **Mis firmas** · plantillas · **Centros y usuarios** |
+
+- **`/` redirige a `/agenda`**, no a `/pacientes`. Es la pantalla que se mira cuarenta
+  veces al día.
+- **El módulo se sigue llamando Agenda, no Calendario.** El calendario es la pieza; la
+  agenda es el dominio, y es la palabra que usan `architecture.md` §Roles («Agenda: todas ·
+  la suya · todas sin tipo de terapia»), las tablas (`series_cita`) y `modulos.ts`.
+  Renombrar el módulo desincronizaría la matriz de la navegación por un sinónimo.
+- **Ajustes deja de ser un módulo de administrador.** Lo son sus secciones de empresa,
+  centros y usuarios; las preferencias del espacio de trabajo y **Mis firmas** son de cada
+  uno. Las secciones que el rol no puede usar **no se muestran**, no se muestran en gris.
+- **El choque 6 sobrevive intacto**: Agenda no es una pantalla, son tres. El técnico
+  administrativo ve todas las citas de su centro **sin tipo de terapia** (choque 4) y **no
+  ve** adherencia, abandono ni trazabilidad, que son métricas clínicas.
+- **El choque 11 se refuerza, no se relaja.** Al fusionar, la bandeja de documentación vive
+  en la misma pantalla que mira el técnico: por eso sigue saliendo de
+  `alertas_documentacion` y **jamás enseña contenido clínico**. La historia sigue teniendo
+  una sola puerta, dentro del paciente.
+
+**Consecuencias**:
+
+- Se gana: dos pantallas menos que construir y mantener, una barra lateral que cabe en un
+  móvil sin cajón infinito, y ninguna duplicación entre Inicio y Agenda.
+- Se pierde: la bandeja de Clínica deja de tener pantalla propia, así que la lista larga
+  ordenada por antigüedad vive en un panel y no en una tabla a pantalla completa. Si algún
+  día la consulta tiene ocho profesionales, habrá que reabrirlo.
+- Queda bloqueado: reintroducir Inicio o Clínica como módulo; llamar «Calendario» al
+  módulo; y enseñar contenido clínico en Agenda, ni en la cita ni en la bandeja.
+
+---
+
+## ADR-051 · Un profesional puede pasar consulta en varios centros; uno es el principal
+
+**26-08-2026** · **Estado**: aceptada
+
+**Contexto**: `perfiles.centro_id` es una columna singular, y sobre ella se apoyan el
+`check perfiles_tecnico_exige_centro`, la función `centro_actual()` y la RLS que acota al
+técnico administrativo (ADR-033). El esquema de interfaz del 26-08 propone un asignador de
+profesionales a centros con tarjetas arrastrables, y ahí aparece la pregunta que el modelo
+no había contestado: **si el dibujo permite soltar a la misma persona en dos contenedores,
+o el dibujo miente o el modelo está incompleto.**
+
+Contestada por el propietario: **lo más frecuente es un solo centro, pero un profesional
+puede ir a varios.** Y eso es cierto en una consulta real, así que se modela ahora: hacerlo
+después es migrar datos de permisos, que es la peor clase de migración.
+
+**Decisión**: la pertenencia a centro pasa a ser una **relación con vigencia**, y uno de
+los centros es el **principal**.
+
+- **`perfiles_centros`**: `perfil_id`, `centro_id`, `principal bool`, `desde date`,
+  `hasta date`. Índice único parcial: **un solo principal vigente por perfil**, y una sola
+  fila vigente por par perfil-centro.
+- **`perfiles.centro_id` no se borra: pasa a ser el espejo del principal**, mantenido por
+  disparador desde `perfiles_centros`. La migración es hacia delante y no destructiva; el
+  `check` del técnico y todo lo que ya lee esa columna siguen funcionando el primer día.
+- **`centros_actuales()` → `setof uuid`**, `stable security definer set search_path = ''`.
+  Es la que usan las políticas: `centro_id in (select public.centros_actuales())`.
+  **`centro_actual()` se conserva** devolviendo el principal, para lo que necesita
+  exactamente uno.
+- **El técnico administrativo sigue exigiendo centro**, ahora al menos una fila vigente en
+  `perfiles_centros`. Sin centro no hay recorte, y sin recorte ve la organización entera.
+- **El alta de paciente no adivina.** `fn_rellenar_centro_paciente` usa el **principal**; si
+  el profesional trabaja en varios, **el centro del paciente se elige en el formulario**.
+  No es cosmética: por el ADR-033 el centro decide el plazo de retención que se aplicará a
+  esa historia durante veinticinco años.
+- **El centro NO decide qué pacientes lee un profesional. Nunca lo ha decidido.** El
+  profesional lee **los suyos** —los que tiene asignados y los que dio de alta él—, y eso
+  lo resuelve `es_profesional_asignado()`, que mira `pacientes.profesional_id` y **no mira
+  el centro para nada**. `centros_actuales()` **acota al técnico administrativo y a nadie
+  más**; para el profesional devuelve vacío y ninguna política clínica lo consulta.
+  Ampliarle el alcance a un profesional no es cosa de centros: es que **el administrador le
+  asigne el paciente** —o lo dé de alta en el episodio (ADR-030)—, que es el único
+  mecanismo que existe y el que debe seguir siendo.
+- **Vigencia, no bandera** (mismo patrón que el ADR-028): cerrar una pertenencia con
+  `hasta` **no le quita ni un paciente al profesional**. Lo que cambia es dónde aparece en
+  la agenda del centro, qué disponibilidad y qué salas le corresponden, y qué centro se
+  propone por defecto al dar de alta un paciente. Lo que sí le retira el acceso a sus
+  pacientes es la **baja del perfil** (ADR-032) o que el administrador **desasigne**.
+  Para el **técnico administrativo** es distinto y por eso lleva la fricción: cerrar su
+  pertenencia a un centro **sí** le cambia los pacientes que puede leer, porque su recorte
+  es el centro.
+- **Lo asigna el administrador**, nunca el profesional sobre sí mismo — como la titularidad
+  del ADR-032. Y **cada cambio pasa por confirmación explícita que dice lo que ocurre** y
+  queda en `auditoria`: reasignar a un técnico le cambia los pacientes que puede leer, y
+  eso no es un gesto de arrastre.
+
+**Sobre el asignador de tarjetas**: el arrastre queda como **acelerador de escritorio, no
+como el mecanismo**. Por debajo hay una lista con selector, por tres motivos que no son
+opinión: el criterio **2.5.7 de WCAG 2.2 AA** exige una alternativa de puntero único que no
+sea arrastrar y con el ADR-040 no hay librería que lo regale; a **360 px** el arrastre entre
+contenedores no existe y el ADR-044 no admite vista degradada; y soltar una tarjeta es
+**mover permisos**, que por el sistema de diseño no ocurre sin fricción.
+
+**Consecuencias**:
+
+- Se gana: el modelo deja de mentir sobre una situación corriente, y la interfaz puede
+  dibujar lo que de verdad pasa. El coste se paga con T-002 sin revisar y sin datos reales
+  dentro, que es el momento más barato que va a haber.
+- Se pierde: **T-002 crece**. `centro_actual()` deja de bastar en las políticas del técnico
+  —`pacientes`, `alertas_documentacion`, la vista `pacientes_indicador_riesgo` y el
+  disparador `rellenar_centro_paciente`—, y todas ellas se reescriben con
+  `centros_actuales()` **antes** de la revisión con Opus. Revisar un juego de políticas que
+  vamos a cambiar es trabajo tirado.
+- Queda bloqueado: que un profesional se asigne centros a sí mismo; borrar una pertenencia
+  en lugar de cerrarla con `hasta`; que el alta de paciente elija centro por su cuenta
+  cuando hay varios; y un asignador que solo funcione arrastrando.
+
+---
+
 ## ADR-053 · Psicogestión no expide facturas: las expide el proveedor del cliente, y nosotros solo dejamos el borrador
 
 **28-08-2026** · **Estado**: aceptada · **Revierte el ADR-052**, que nunca llegó a

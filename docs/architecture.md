@@ -20,7 +20,7 @@ Región **París** (`eu-west-3` / `cdg1`). En desarrollo, Supabase local con Doc
 
 | Dominio | Tablas |
 |---|---|
-| Organización | `organizacion` (1 fila), `centros`, `perfiles`, `preferencias_usuario` |
+| Organización | `organizacion` (1 fila), `centros`, `perfiles`, `perfiles_centros`, `preferencias_usuario` |
 | Paciente · identificativo | `pacientes`, `pacientes_identificacion`, `consentimientos`, `consentimiento_firmantes`, `representantes_paciente` |
 | Paciente · clínico | `episodios_asistenciales`, `episodio_participantes`, `diagnosticos`, `valoraciones_riesgo`, `notas_clinicas`, `notas_clinicas_versiones`, `evaluaciones`, `evaluacion_archivos`, `informes` |
 | Agenda | `tipos_terapia`, `series_cita`, `citas`, `disponibilidad`, `alertas_documentacion` |
@@ -60,8 +60,11 @@ vuelve a leer esos bytes; **jamás los deriva otra vez del objeto**.
   de todos los valores de texto antes de canonicalizar. Sin NFC, «á» compuesta y precompuesta
   dan dos huellas para el mismo texto visible.
 - Se sella un **sobre**, no solo el cuerpo: `cuerpo`, `anotaciones_reservadas`, `autor_id`,
-  `creada_en`, `motivo_cambio` y `esquema_version`. Sellar solo el cuerpo dejaría cambiar el
-  autor sin romper la cadena.
+  `creada_en`, `motivo_cambio` y `esquema_version`, más `cita_id`, `abierta_en`,
+  `firmada_en` y `redactada_en_sesion` con el margen que aplicó (**ADR-046**). Sellar solo
+  el cuerpo dejaría cambiar el autor sin romper la cadena; dejar fuera
+  `redactada_en_sesion` dejaría convertir un «lo escribí el viernes» en un «lo escribí en
+  sesión» sin rastro.
 - La huella anterior son **32 bytes fijos**, así que la concatenación no es ambigua y no
   necesita separador. El primer eslabón usa 32 bytes cero.
 - Cada versión guarda su `algoritmo_version`. Cambiar de algoritmo es abrir una era nueva,
@@ -141,7 +144,7 @@ escrita, caduca solo, se audita de forma destacada y notifica al titular.
 
 **La matriz es también el guion de la interfaz.** El prototipo está dibujado desde un
 único punto de vista y no sabe de roles: cada pantalla se filtra por esta tabla antes de
-renderizar. Los **once** sitios donde el prototipo enseña de más —bandeja clínica global,
+renderizar. Los **trece** sitios donde el prototipo enseña de más —bandeja clínica global,
 nota clínica en la cita, tipo de terapia al técnico, métricas económicas, datos de
 identificación en la previsualización, píldoras de estado confundidas con riesgo, y la
 historia clínica con dos puertas— están resueltos uno a uno en `interfaz.md` §Donde el
@@ -194,12 +197,50 @@ administrador puede reponer un TOTP perdido, auditado y con aviso; un PIN, jamá
 Activo en **todas** las tablas desde la primera migración. Las políticas se apoyan en
 funciones auxiliares para que se lean como frases:
 
-- `rol_actual()` → rol del usuario autenticado, `security definer` + `search_path = ''` + sin recursión por construcción (ninguna política sobre `perfiles` invoca `rol_actual()`)
-- `es_profesional_asignado(paciente_id)` → si el usuario actual atiende a ese paciente
-- `historia_desbloqueada()` → si el usuario tiene un desbloqueo de PIN vigente (ADR-026),
-  `stable security definer` + `search_path = ''` — invoca `extensions.crypt`, no `crypt`.
-  Sin recursión por construcción: ninguna política sobre `pines_historia` ni sobre
-  `desbloqueos_historia` la invoca
+- `rol_actual()` → rol del usuario autenticado **y solo si su perfil está `activo`**
+  (ADR-032). `security definer` + `search_path = ''` + sin recursión por construcción
+  (ninguna política sobre `perfiles` la invoca). `rol_actual() is not null` significa
+  «tengo perfil y estoy activo», y toda política que lo use hereda el corte por baja
+- `centros_actuales()` → **conjunto** de centros vigentes del perfil (ADR-033 + ADR-051).
+  Es la que usan las políticas: `centro_id in (select public.centros_actuales())`.
+  **Acota al técnico administrativo y a nadie más**: vacío para administrador y profesional,
+  y es correcto
+- `centro_actual()` → el centro **principal**, para lo que necesita exactamente uno —el alta
+  de paciente, que decide la retención de esa historia durante veinticinco años (ADR-033)
+- `es_profesional_asignado(paciente_id)` → si el usuario actual atiende a ese paciente,
+  resolviendo el vínculo de fusión en **un solo salto** (ADR-031). Definer obligatorio:
+  como *invoker* consultaría `pacientes` bajo RLS y sería recursión infinita.
+  **Rol-agnóstica**, para que ninguna política clínica necesite invocar `rol_actual()`
+- `es_profesional_del_episodio(episodio_id)` → participación, no copia (ADR-030). Incluye
+  a los participantes dados de baja **del episodio**; exige que el lector siga activo
+- `nota_tiene_version_conjunta(nota_id)` → definer **por necesidad**: sin ella, la política
+  de `notas_clinicas` y la de `notas_clinicas_versiones` se consultan mutuamente y Postgres
+  aborta con `infinite recursion detected in policy`
+- `historia_desbloqueada()` → si el usuario tiene un desbloqueo de PIN vigente **y su
+  perfil sigue activo** (ADR-026 + ADR-032), `stable security definer` + `search_path = ''`.
+  **No invoca `crypt`**: solo lee. La regla «`extensions.crypt`, no `crypt`» aplica a las
+  funciones de PIN. Sin recursión por construcción: `pines_historia` y
+  `desbloqueos_historia` **no tienen ni una política**
+- `desbloqueo_vigente()` → cuándo caduca la ventana. Sustituye al `select` sobre
+  `desbloqueos_historia`, que se le retira a `authenticated`: la interfaz necesita el
+  reloj, no la tabla
+
+**El candado es el único punto por el que pasan las ocho tablas de contenido clínico**, y
+por eso el corte por baja se hace cumplir ahí y no en cada política: las políticas clínicas
+no invocan `rol_actual()` a propósito —así el administrador no tiene rama propia— y sus
+ramas `autor_id = <yo>` no miran el estado de nadie.
+
+**Dos vistas derivadas** hacen lo que un `grant select (columnas)` no puede, porque los
+tres roles del dominio comparten el mismo rol de Postgres. Ambas
+`security_invoker = false` **y `security_barrier = true`** —sin la barrera el planificador
+puede empujar una función barata del usuario por debajo del filtro:
+
+- `pacientes_indicador_riesgo` `(paciente_id, indicador, valorado_en)` → el indicador
+  binario del técnico. `nivel`, `descripcion` y `plan_seguridad` **no aparecen en el texto
+  de la vista**. **Solo sirve al técnico**: profesional y administrador leen la tabla con
+  su política y su candado, y así el ADR-026 la cubre sin excepciones
+- `directorio_perfiles` → el directorio de compañeros, **sin `motivo_estado`**. Existe
+  porque una política sobre `perfiles` no puede invocar `rol_actual()`
 
 **Cada política tiene su prueba automatizada.** Una política sin test se considera
 código no escrito.
@@ -289,3 +330,30 @@ La reserva **no es RLS**: quien puede leer la nota lee las dos partes, incluido 
 profesional que hereda al paciente (ADR-032). Lo reservado se excluye solo de las **salidas
 dirigidas al paciente** —derecho de acceso, informe entregado, exportación, portal de v2—, y
 no se opone a un requerimiento judicial.
+
+## Clasificación regulatoria del producto
+
+**Psicogestión no es producto sanitario** (ADR-049). Es software de gestión de consulta:
+no diagnostica, no monitoriza, no calcula nada clínico y no recomienda tratamiento. Queda
+fuera del MDR (UE) 2017/745, sin marcado CE y sin registro en AEMPS. La clasificación la
+hace el fabricante y responde de ella, así que consta escrita y con fecha.
+
+**Tres funciones cruzarían la línea** y convertirían el producto en software como producto
+sanitario. Si una entra en un ticket, **el ticket se para y se abre un ADR**:
+
+1. **Corregir una prueba** — derivar puntuación, baremo o interpretación de lo que se
+   introduce en `evaluaciones`. Hoy son campos que alguien teclea.
+2. **Calcular o proponer un nivel de riesgo** — `valoraciones_riesgo.nivel` lo fija el
+   profesional; `indicador` es un `GENERATED` trivial sobre ese nivel y no deriva nada.
+3. **Proponer, priorizar o triar** tratamiento, derivación u orden de atención.
+
+**Sin IA en v1**: la sugerencia de hora del alta de cita es determinista y explicable, y se
+queda así. Eso deja el AI Act (UE) 2024/1689 fuera entero.
+
+**El EEDS —Reglamento (UE) 2025/327— se vigila, no se implementa todavía.** Psicogestión es
+un sistema de historia clínica electrónica y le tocará interoperabilidad y formato europeo
+de intercambio; el calendario se confirma contra el texto del reglamento antes de planificar
+nada. Lo único que se hace desde ya, porque hoy es gratis: **toda exportación clínica sale
+por una capa propia con formato versionado** (`exportaciones`), nunca por un `select`
+incrustado en la pantalla; y **todo código clínico se guarda con su sistema y su versión**
+(`cie10es_codigo` y `dsm5tr_codigo` separados). Un código sin sistema no se puede mapear.

@@ -21,7 +21,8 @@ forma de los números o la normalización Unicode. Un `npm update` bastaría, y 
 verificador nocturno **no podría distinguirlo de una manipulación**.
 
 Referencias: `docs/architecture.md` §Cadena de huellas. ADR **035** (canonicalización y
-sobre), **027** (los dos cuerpos entran en el cómputo), **031** (fusionar **jamás**
+sobre), **046** (el sobre crece con la cita y el sello de sesión), **027** (los dos
+cuerpos entran en el cómputo), **031** (fusionar **jamás**
 recalcula una huella), **036** (a la cadena se entra firmando), **043** (`crypto` bloquea
 el prerenderizado: esto vive en Server Actions y en la base, nunca en el render).
 
@@ -35,8 +36,12 @@ la cadena se escribe ahora **genérica**, igual que se hizo con `fn_auditar()`.
       **normalización Unicode NFC de todos los valores de texto antes de canonicalizar**.
       Salida: `Uint8Array` en UTF-8.
 - [ ] **Sobre**, no cuerpo suelto: se sellan `cuerpo`, `anotaciones_reservadas`, `autor_id`,
-      `creada_en`, `motivo_cambio` y `esquema_version`. Sellar solo el cuerpo dejaría
-      cambiar el autor sin romper la cadena.
+      `creada_en`, `motivo_cambio` y `esquema_version`, **más `cita_id`, `abierta_en`,
+      `firmada_en` y `redactada_en_sesion` con el margen que aplicó** (ADR-046, cerrado el
+      26-08-2026). Sellar solo el cuerpo dejaría cambiar el autor sin romper la cadena; y
+      dejar `redactada_en_sesion` fuera dejaría convertir un «lo escribí el viernes» en un
+      «lo escribí en sesión» sin rastro. **El sobre nace completo o se paga una era nueva
+      de algoritmo**, porque lo viejo jamás se recalcula.
 - [ ] **Encadenado**: `contenido || huella_anterior`, con la anterior en **32 bytes
       fijos** —sin separador, porque la longitud fija lo hace inambiguo— y **32 bytes cero**
       en el primer eslabón.
@@ -64,6 +69,8 @@ la cadena se escribe ahora **genérica**, igual que se hizo con `fn_auditar()`.
 - [ ] **Automático** — cambiar **un solo carácter** de `anotaciones_reservadas` cambia la
       huella (ADR-027: los dos cuerpos entran).
 - [ ] **Automático** — cambiar `autor_id` sin tocar el cuerpo **rompe** la cadena.
+- [ ] **Automático** — cambiar `redactada_en_sesion` de `false` a `true` en el sobre
+      **rompe** la huella (ADR-046). Es el criterio que hace que el sello valga algo.
 - [ ] **Automático** — el vector de regresión congelado reproduce sus huellas byte a byte.
 - [ ] **Automático** — el verificador sobre una cadena sana devuelve **cero** roturas;
       manipulando una versión intermedia **con `postgres` y los cerrojos levantados a

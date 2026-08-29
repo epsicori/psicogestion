@@ -43,7 +43,7 @@ producción, y define el marco de todas las pantallas con sesión (grupo `app/(a
 
 - **Marca**: cuadrado con el icono `Activity`, «Psicogestión» en serif y «Tu práctica, en
   calma» en versalitas espaciadas. Se repite tal cual en `/login`.
-- **Navegación**: los siete módulos de abajo. Un módulo cuyo ticket aún no está integrado
+- **Navegación**: los cuatro módulos de abajo (ADR-050). Un módulo cuyo ticket aún no está integrado
   se pinta apagado, marcado «pronto» y sin enlace (`disponible: false` en
   `components/armazon/modulos.ts`). **Al integrar el ticket de un módulo se pone su
   `disponible` a `true`** — es la única edición que ese ticket hace en el armazón.
@@ -54,39 +54,65 @@ producción, y define el marco de todas las pantallas con sesión (grupo `app/(a
 **Todavía no está**: el selector de centro (ver choque 1), la búsqueda global, la campana
 de notificaciones, el menú de «más opciones» y la banda de aviso superior.
 
-## Los siete módulos
+## Los cuatro módulos
+
+**Eran siete y son cuatro (ADR-050).** `Inicio` y `Clínica` no tenían contenido propio:
+Inicio era la agenda del día descrita otra vez, y la bandeja de Clínica ya vivía en el
+panel lateral de Inicio. Los dos se convierten en bloques dentro de Agenda. `Usuarios` baja
+a una sección de Ajustes, donde su permiso ya coincidía.
 
 | Módulo | Ruta | Estado |
 |---|---|---|
-| Inicio | `/inicio` | Pendiente |
+| Agenda | `/agenda` | Pendiente — **es la pantalla de inicio**, `/` redirige aquí |
 | Pacientes | `/pacientes` | Lista y alta, sin ficha |
-| Agenda | `/agenda` | Pendiente |
-| Clínica | `/clinica` | Pendiente |
 | Facturación | `/facturacion` | Pendiente |
-| Usuarios | `/usuarios` | Pendiente |
 | Ajustes | `/ajustes` | Pendiente |
 
 Cada módulo abre con el mismo encabezado: versalitas en color principal, título en serif
 grande, subtítulo en gris y una acción primaria a la derecha.
 
-### Inicio · «Tu día, de un vistazo»
+**El módulo se llama Agenda, no Calendario.** El calendario es la pieza; la agenda es el
+dominio, y es la palabra de `architecture.md` §Roles, de `series_cita` y de `modulos.ts`.
 
-Cuatro métricas (citas hoy, pacientes activos, ingresos del mes, horas de consulta), la
-agenda del día filtrable por centro y por profesional, la lista de profesionales con su
-color, los pacientes recientes y dos indicadores de salud de la organización. Acción
+### Agenda · «Tu día, de un vistazo»
+
+Es la pantalla de entrada y absorbe lo que eran Inicio y Clínica (ADR-050). Tres zonas:
+
+**Calendario**, en tres vistas —semanal por defecto con tira de días y rejilla horaria,
+mensual con recuento y puntos por estado, anual como mapa de densidad—. Filtros de centro y
+profesional. Hora en monoespaciada, franja de color del profesional, `tipo · profesional ·
+modalidad`, centro y sala. Cambiar de vista **conserva la fecha enfocada**. Acción
 primaria: **Nueva cita**.
+
+**Panel derecho**, tres bloques en este orden de prioridad:
+
+1. **Citas próximas** — las siguientes del día y del siguiente.
+2. **Pendientes** — citas sin preparación o sin cobro registrado.
+3. **Documentación pendiente** — la antigua bandeja de Clínica: citas pasadas sin nota
+   firmada, de más antigua a más reciente, **con el nivel de escalado visible**. Sale de
+   `alertas_documentacion` y **nunca enseña contenido clínico** (choque 11). De aquí se
+   salta a la ficha del paciente; la historia sigue teniendo una sola puerta.
+
+**Cuadro inferior**, y aquí es donde el rol manda (choque 6): adherencia desglosada en tres
+métricas —asistencia, ausencia sin aviso y **abandono**, que es la clínicamente
+relevante—, ingresos del mes, y la **trazabilidad documental** en tres porcentajes: notas
+firmadas, evaluaciones archivadas, informes revisados. **El técnico administrativo no ve
+este cuadro**, y en el calendario tampoco ve el tipo de terapia (choque 4).
+
+Al seleccionar una cita, panel con horario y duración, tipo, profesional, centro/sala,
+**nota operativa** (logística, choque 3), estado y **botón «Notas»**.
 
 ### Pacientes
 
 Tres piezas: **buscador y lista** (nombre, profesional, última actividad, píldora de
 estado), **panel de previsualización** —marcado explícitamente «Solo datos
-demográficos»— y **ficha completa** abajo con cuatro pestañas:
+demográficos»— y **ficha completa** abajo con cinco pestañas:
 
 - **Resumen**: última sesión, próxima cita, recuento de actividad.
 - **Ficha del paciente**: contacto y gestión asistencial (centro, profesional, modalidad).
-- **Historia clínica**: documentos, informes y notas, cada uno con su estado de firma.
-  Es la única puerta a la historia (choque 11) y se abre con PIN (ADR-026). Dentro,
-  **cinco sub-pestañas**, que son el invariante 3 hecho navegación:
+- **Historia clínica**: es la única puerta al contenido clínico (choque 11) y se abre con
+  PIN (ADR-026). Dentro, **cuatro sub-pestañas**, que son el invariante 3 hecho
+  navegación:
 
   | Sub-pestaña | De dónde sale |
   |---|---|
@@ -94,44 +120,53 @@ demográficos»— y **ficha completa** abajo con cuatro pestañas:
   | Notas clínicas | `notas_clinicas`, `notas_clinicas_versiones` — con versiones y cadena de huellas visibles |
   | Evaluaciones | `evaluaciones`, `evaluacion_archivos` — pruebas, corrección y adjuntos |
   | Informes | `informes` + su firma en dos capas (decisión 9). Tienen versión, destinatario y, si son periciales, IVA al 21 % |
-  | Documentos | `consentimientos_firmados`, `documentos_firmados`, adjuntos y notas históricas importadas (decisión 15, que **nunca** entran como notas firmadas) |
 
-  Informes y Documentos van **separados y no «Otros»**: el art. 15 de la Ley 41/2002
-  pone el consentimiento informado y el informe de alta en el contenido mínimo de la
-  historia, y un cajón de sastre acaba recibiendo lo que nadie sabe dónde poner.
+  Son las cuatro que tocan **contenido**, que es lo que el candado tapa.
+- **Documentos y consentimientos**: consentimientos firmados con la versión exacta del
+  texto, protección de datos, documentos sellados, adjuntos administrativos y las notas
+  históricas importadas (decisión 15, que **nunca** entran como notas firmadas). **Fuera
+  del candado** (ADR-048, choque 12): «¿tenemos su consentimiento?» es una pregunta de
+  recepción y no puede costar un PIN.
+
+  Informes y Documentos van **separados y no «Otros»**: el art. 15 de la Ley 41/2002 pone
+  el consentimiento informado y el informe de alta en el contenido mínimo de la historia,
+  y un cajón de sastre acaba recibiendo lo que nadie sabe dónde poner.
 - **Facturación**: facturado, pendiente y forma de pago.
-
-### Agenda
-
-Calendario semanal con tira de días, filtros de centro y profesional, y lista de citas
-(hora en monoespaciada, franja de color del profesional, tipo · profesional · modalidad,
-centro y sala). A la derecha, las citas del día, el **resumen de la cita seleccionada**
-(horario y duración, tipo, profesional, centro/sala, nota) y la leyenda de colores.
-
-### Clínica
-
-**Bandeja de documentación** ordenada por antigüedad, con estado por documento (borrador,
-pendiente de firma, revisión requerida), y un panel de trazabilidad con tres porcentajes:
-notas firmadas, evaluaciones archivadas, informes revisados. El prototipo lo remata con la
-frase correcta: *las notas firmadas quedan bloqueadas y cualquier modificación posterior
-genera una nueva versión auditable* — es el invariante 1.
 
 ### Facturación
 
 Tres métricas (facturado, pendiente de cobro, previsión trimestral), **facturas recientes**
-con estado —incluido **«En cola AEAT»**, que es exactamente el outbox del ADR-024— y una
-tarjeta oscura de cumplimiento fiscal con los modelos del trimestre.
+con estado —incluido **«En cola AEAT»**, que es exactamente el outbox del ADR-024—, el
+**libro de gastos** y una tarjeta oscura de cumplimiento fiscal con los modelos del
+trimestre.
 
-### Usuarios
-
-Miembros de la organización con rol, centro, último acceso y estado; y controles de
-acceso: MFA, permisos revisados, sesiones activas.
+**Una sola pantalla, con selector solo para el administrador** (choque 13): no existe una
+sección «por centro» y otra «por profesional». El administrador filtra; el profesional ve
+lo suyo **sin selector visible**, porque una entrada que no puede usar le revela que existe
+y a quién pertenece. **Nueva factura** es acción primaria de la cabecera, no una sección.
 
 ### Ajustes
 
-Empresa y centros (con la retención clínica dentro), preferencias del espacio de trabajo
-(modelos de informe, tamaño de texto, colores de agenda, exportaciones cifradas) y un
-bloque de privacidad y auditoría con contadores de eventos, exportaciones y sesiones.
+Cuatro bloques, y **cada uno se muestra solo si el rol lo puede usar**. Ajustes no es un
+módulo de administrador: sus secciones de empresa lo son.
+
+- **Usuario** — preferencias del espacio de trabajo (modelos de informe, tamaño de texto,
+  colores de agenda, exportaciones cifradas) y **Mis firmas**, con el lienzo de captura y
+  la biblioteca de rúbricas. Para los tres roles.
+- **Plantillas** — modelos de informe (asistencial, clínico, pericial…) y de facturación.
+  Fase 2.
+- **Centros y usuarios** — datos del centro con la **retención clínica** dentro (ADR-033),
+  miembros con rol, centro, último acceso y estado, y controles de acceso (MFA, permisos
+  revisados, sesiones activas). Era el módulo `Usuarios`. Solo administrador.
+- **Privacidad y auditoría** — contadores de eventos, exportaciones y sesiones.
+
+**Asignar un profesional a un centro** vive aquí, y es una **lista con columna Centro y
+selector**, no dos contenedores con tarjetas (ADR-051): un profesional puede pertenecer a
+varios centros con vigencia, el arrastre es un acelerador opcional de escritorio —WCAG 2.2
+SC 2.5.7 exige alternativa sin arrastre, y a 360 px arrastrar entre contenedores no
+existe—, y **cambiar el centro de un técnico administrativo le cambia los pacientes que
+puede leer**, así que pasa por confirmación explícita y queda en auditoría. Al profesional
+**no** le cambia ninguno: sus pacientes son los suyos, no los de su centro.
 
 ## De dónde sale cada pieza
 
@@ -226,7 +261,7 @@ Reglas tipográficas y de color:
 
 ## Donde el prototipo choca con la arquitectura
 
-Once choques leídos uno a uno contra `architecture.md`. **Ya están resueltos: no se
+Trece choques leídos uno a uno contra `architecture.md`. **Ya están resueltos: no se
 vuelven a discutir en el ticket, se implementan así.**
 
 ### 1 · El selector de la barra lateral es de centro, no de organización
@@ -334,6 +369,39 @@ componente de servidor no llega a leer la fila.
 la barra lateral y «Psicóloga sanitaria» en la lista de profesionales. Los roles reales son
 los tres del enum `rol_usuario`, y el rótulo sale de `perfiles.rol`.
 
+### 12 · Los consentimientos no están dentro de la historia clínica
+
+Este destilado los ponía como quinta sub-pestaña de Historia clínica, detrás del PIN. Las
+políticas de T-002 los dejan **fuera** de `historia_desbloqueada()`, y manda la
+arquitectura: **«Documentos y consentimientos» es una pestaña de la ficha**, al nivel de
+Resumen y Facturación, y no pide PIN (ADR-048).
+
+El motivo es operativo y por eso importa: «¿tenemos su consentimiento firmado?» es una
+pregunta de recepción que se hace veinte veces al día sobre un documento administrativo con
+su versión de texto y su fecha. Un candado que hay que abrir para eso deja de ser un
+candado y pasa a ser un peaje, y un peaje se rodea dejándolo abierto todo el día.
+
+Historia clínica se queda con **cuatro** sub-pestañas —historial, notas, evaluaciones,
+informes—, que son las que tocan contenido. El enum `pestana_historia` de T-001 no se
+toca: su valor `documentos` queda para los adjuntos clínicos que sí viven dentro.
+
+
+### 13 · Facturación no se divide en «por centro» y «por profesional»
+
+El esquema de interfaz del 26-08 proponía dos secciones con esos nombres. La matriz dice
+otra cosa: el administrador ve el total del centro **y** puede filtrar por profesional; el
+profesional **solo ve lo suyo, sin selector visible**.
+
+Dos entradas fijas rompen la regla del armazón —«las entradas para las que el rol no tiene
+permiso no se muestran, no se muestran deshabilitadas»—: una sección llamada «Facturación
+por centro» le dice a un profesional que esa vista existe y a quién pertenece. Es **una
+pantalla con un selector que solo aparece para el administrador**.
+
+«Nueva factura» es la acción primaria de la cabecera, no una sección; y el **libro de
+gastos** sí es sección propia, porque `gastos` tiene deducibilidad y justificante y no es
+una vista de las facturas.
+
+
 ## Lo que el prototipo no cubre
 
 No está dibujado, y hace falta. Ningún ticket puede darse por especificado con «mira el
@@ -355,6 +423,12 @@ prototipo» si toca algo de esta lista:
 - **Bonos, gastos, tarifas por paciente** y el libro de facturas completo.
 - **Auditoría y accesos a historia** como pantalla consultable, no como contador.
 - **Exportaciones**, importador y purga por retención.
+- **El recorrido de nota en presencial**: aviso no modal de «sesión en curso», ancla en
+  cabecera, indicador latente del estado en curso y botón «Notas» desde la ficha de la
+  cita (ADR-045, ADR-047). El prototipo dibuja la agenda sin estado y sin ese recorrido.
+- **Campana de notificaciones y escalado de la nota pendiente** en tres tiempos —0 h, 24 h
+  y 72 h al administrador— sobre `alertas_documentacion` y la tabla `notificaciones`, que
+  todavía no existe.
 - **Estados de error y de carga**: el prototipo solo dibuja el caso feliz y con datos. Cada
   pantalla real necesita además su vacío, su error y su cargando.
 
