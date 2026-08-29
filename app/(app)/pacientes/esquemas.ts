@@ -1,16 +1,18 @@
 import { z } from 'zod';
 
+import { t } from '@/lib/i18n';
+
 export const esquemaNuevoPaciente = z.object({
   nombre: z
-    .string({ error: 'Introduce el nombre' })
+    .string({ error: t('pacientes.introduceElNombre') })
     .trim()
-    .min(1, { error: 'Introduce el nombre' })
-    .max(120, { error: 'El nombre es demasiado largo' }),
+    .min(1, { error: t('pacientes.introduceElNombre') })
+    .max(120, { error: t('pacientes.elNombreEsDemasiadoLargo') }),
   apellidos: z
-    .string({ error: 'Introduce los apellidos' })
+    .string({ error: t('pacientes.introduceLosApellidos') })
     .trim()
-    .min(1, { error: 'Introduce los apellidos' })
-    .max(120, { error: 'Los apellidos son demasiado largos' }),
+    .min(1, { error: t('pacientes.introduceLosApellidos') })
+    .max(120, { error: t('pacientes.losApellidosSonDemasiadoLargos') }),
 });
 
 export type DatosNuevoPaciente = z.infer<typeof esquemaNuevoPaciente>;

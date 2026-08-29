@@ -5,6 +5,7 @@ import { useActionState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
+import { t } from '@/lib/i18n';
 import { ESTADO_INICIAL } from '@/lib/formularios';
 
 import { crearPaciente } from './acciones';
@@ -18,7 +19,7 @@ export function FormularioNuevoPaciente() {
       className="border-border bg-card rounded-xl border p-5 shadow-sm"
     >
       <p className="text-muted-foreground mb-4 text-xs font-semibold tracking-[0.16em] uppercase">
-        Nuevo paciente
+        {t('pacientes.nuevoPaciente')}
       </p>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -28,7 +29,7 @@ export function FormularioNuevoPaciente() {
             name="nombre"
             type="text"
             required
-            etiqueta="Nombre"
+            etiqueta={t('pacientes.nombre')}
             className="w-full"
             errores={estado.errores?.nombre}
           />
@@ -40,7 +41,7 @@ export function FormularioNuevoPaciente() {
             name="apellidos"
             type="text"
             required
-            etiqueta="Apellidos"
+            etiqueta={t('pacientes.apellidos')}
             className="w-full"
             errores={estado.errores?.apellidos}
           />
@@ -48,7 +49,7 @@ export function FormularioNuevoPaciente() {
 
         <Button type="submit" disabled={enviando} className="sm:mt-7">
           <Plus />
-          {enviando ? 'Creando…' : 'Crear paciente'}
+          {enviando ? t('pacientes.creando') : t('pacientes.crearPaciente')}
         </Button>
       </div>
 

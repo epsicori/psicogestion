@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+import { t } from '@/lib/i18n';
 import { ESTADO_INICIAL, type EstadoFormulario } from '@/lib/formularios';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
@@ -41,7 +42,7 @@ export async function crearPaciente(
     // El detalle se registra en servidor, para distinguir un 42501 (RLS, esperado)
     // de una base de datos caída u otro fallo real.
     console.error('crearPaciente: fallo al insertar en pacientes', error);
-    return { ...ESTADO_INICIAL, mensaje: 'No se pudo crear el paciente' };
+    return { ...ESTADO_INICIAL, mensaje: t('pacientes.noSePudoCrearElPaciente') };
   }
 
   // 5. Sin redirect: la lista se actualiza en el mismo viaje.
