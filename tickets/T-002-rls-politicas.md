@@ -419,26 +419,26 @@ porque no hay una sola fila real dentro.
 
 ## Tareas de la enmienda
 
-- [ ] **`perfiles_centros`**: `perfil_id`, `centro_id`, `principal bool`, `desde date`,
+- [x] **`perfiles_centros`**: `perfil_id`, `centro_id`, `principal bool`, `desde date`,
       `hasta date`. Índice único parcial de **un solo principal vigente por perfil** y una
       sola fila vigente por par. Auditoría con `fn_auditar()`.
-- [ ] **`perfiles.centro_id` no se borra**: pasa a ser **espejo del principal**, mantenido
+- [x] **`perfiles.centro_id` no se borra**: pasa a ser **espejo del principal**, mantenido
       por disparador desde `perfiles_centros`. Migración hacia delante, no destructiva; el
       `check perfiles_tecnico_exige_centro` y todo lo que ya lee esa columna siguen
       funcionando el primer día.
-- [ ] **`centros_actuales()` → `setof uuid`**, `stable security definer set search_path = ''`.
+- [x] **`centros_actuales()` → `setof uuid`**, `stable security definer set search_path = ''`.
       **`centro_actual()` se conserva** devolviendo el principal.
-- [ ] **Reescribir con `centros_actuales()`** las cuatro cosas que hoy usan
+- [x] **Reescribir con `centros_actuales()`** las cuatro cosas que hoy usan
       `centro_actual()`: la rama del técnico en `pacientes_lectura`, la de
       `alertas_documentacion`, la vista `pacientes_indicador_riesgo` y el disparador
       `fn_rellenar_centro_paciente` —que **usa el principal**, porque el centro del paciente
       decide su retención durante veinticinco años (ADR-033)—. Patrón:
       `centro_id in (select public.centros_actuales())`.
-- [ ] **El técnico administrativo exige al menos una pertenencia vigente**. Sin centro no
+- [x] **El técnico administrativo exige al menos una pertenencia vigente**. Sin centro no
       hay recorte, y sin recorte ve la organización entera.
-- [ ] **Políticas de `perfiles_centros`**: lectura para los tres roles (es directorio);
+- [x] **Políticas de `perfiles_centros`**: lectura para los tres roles (es directorio);
       escritura **solo administrador**. Un profesional **no se asigna centros a sí mismo**.
-- [ ] **Cerrar, no borrar**: se pone `hasta`, nunca se hace `delete`.
+- [x] **Cerrar, no borrar**: se pone `hasta`, nunca se hace `delete`.
 
 ## Lo que esta enmienda NO cambia, y conviene decirlo alto
 
@@ -455,19 +455,54 @@ administrador le asigne el paciente** o lo dé de alta en el episodio (ADR-030).
 
 ## Criterios de aceptación de la enmienda
 
-- [ ] **Automático** — un técnico con dos pertenencias vigentes lee pacientes de **los dos**
+- [x] **Automático** — un técnico con dos pertenencias vigentes lee pacientes de **los dos**
       centros; al cerrar una con `hasta`, deja de leer los de ese centro **en la misma
       sesión**.
-- [ ] **Automático** — un profesional con dos pertenencias, o con ninguna, lee **exactamente
+- [x] **Automático** — un profesional con dos pertenencias, o con ninguna, lee **exactamente
       el mismo conjunto** de pacientes: los suyos. Cerrar o abrir pertenencias **no cambia
       ni una fila**. Es la prueba que demuestra que el corte es solo del técnico.
-- [ ] **Automático** — insertar una segunda fila `principal = true` vigente para el mismo
+- [x] **Automático** — insertar una segunda fila `principal = true` vigente para el mismo
       perfil **falla** por el índice único parcial.
-- [ ] **Automático** — `perfiles.centro_id` coincide siempre con el principal vigente
+- [x] **Automático** — `perfiles.centro_id` coincide siempre con el principal vigente
       después de insertar, cambiar de principal y cerrar pertenencias.
-- [ ] **Automático** — un profesional intentando insertar en `perfiles_centros` obtiene
+- [x] **Automático** — un profesional intentando insertar en `perfiles_centros` obtiene
       violación de política; el administrador, no.
-- [ ] **Automático** — alta de paciente por un profesional con tres centros: el paciente
+- [x] **Automático** — alta de paciente por un profesional con tres centros: el paciente
       recibe el **principal**, no el primero ni uno al azar.
-- [ ] **Automático** — `delete` sobre `perfiles_centros` no ocurre en ningún camino de la
+- [x] **Automático** — `delete` sobre `perfiles_centros` no ocurre en ningún camino de la
       aplicación; el cierre es siempre `hasta`.
+
+## Resultado de la enmienda · 29-08-2026
+
+Entra `supabase/migrations/20260829120000_perfiles_centros_multicentro.sql`: la tabla
+`perfiles_centros`, dos índices únicos parciales, el disparador de espejo,
+`centros_actuales()` y `centro_principal(uuid)` nuevas, `centro_actual()` reescrita, los
+cuatro consumidores reescritos, cuatro políticas y la auditoría. Verificado con
+`scripts/t002-enmienda-multicentro.sql` —fijación propia, todo en una transacción con
+`rollback`—: **ninguna aserción en falso y cinco errores en la salida, que son las cinco
+aserciones negativas buscadas**.
+
+**Dos cosas que la enmienda descubrió y no estaban en el ticket:**
+
+1. **`fn_crear_perfil_de_usuario()` había que enmendarla también.** Escribía
+   `perfiles.centro_id` desde `raw_user_meta_data`, y con la enmienda esa columna es el
+   **espejo**: cada usuario nuevo nacía con el espejo relleno y la fuente de verdad vacía,
+   así que `centros_actuales()` devolvía cero y un técnico recién creado no veía nada. El
+   relleno de la migración no lo cubre, porque solo corre una vez. Ahora el alta crea
+   también la pertenencia, como principal.
+
+2. **«Vigente» tiene que ser exactamente `hasta is null`.** Un índice único parcial no
+   puede usar `current_date` en su predicado —no es inmutable—, así que definir la
+   vigencia por rango de fechas dejaba el índice y el tiempo de ejecución diciendo cosas
+   distintas, con una ventana en la que caben dos principales. Se cierra igualando las dos
+   definiciones y prohibiendo con un `check` que el cierre se feche en el futuro. Efecto
+   buscado: cerrar surte efecto **en la misma sesión**, que es lo que pide el criterio 1.
+
+**El técnico sin centro se resuelve solo, y conviene saber por dónde**: cerrar su última
+pertenencia pone el espejo a nulo y eso viola `perfiles_tecnico_exige_centro`, así que el
+cierre **falla desde dentro del disparador de espejo**. Es la tarea «el técnico exige al
+menos una pertenencia vigente», y el mensaje de error nombra la restricción, no el
+disparador.
+
+**Queda pendiente**: la revisión con Opus del ticket entero —políticas de T-002 más esta
+enmienda— y el punto 3 del guion manual en navegador.
