@@ -64,9 +64,12 @@ select pg_temp.assert(pg_temp.contar(format('select * from public.diagnosticos w
   'PRO1 sin desbloqueo NO ve el diagnóstico de su propio paciente: está bajo candado');
 call pg_temp.reset_sesion();
 
+-- Sin desbloqueo, esto NO distingue «no hay rama de administrador» de «el candado está
+-- cerrado» — la versión que sí distingue, con ADM desbloqueado, está más abajo, junto a
+-- la de notas_clinicas.
 call pg_temp.como(:ADM);
 select pg_temp.assert(pg_temp.contar('select * from public.diagnosticos') = 0,
-  'ADM sin desbloqueo tampoco ve ningún diagnóstico: el candado no tiene rama de administrador');
+  'ADM SIN desbloqueo: cero (ambiguo todavía — ver la aserción con desbloqueo, más abajo)');
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:TEC1);
@@ -108,19 +111,35 @@ select pg_temp.assert(pg_temp.contar(format('select * from public.notas_clinicas
 call pg_temp.reset_sesion();
 
 -- El administrador NO tiene rama propia en notas_clinicas_lectura: «ser administrador no
--- da acceso a notas ajenas» (architecture.md §RLS, en negrita). Sin desbloqueo, cero; y
--- el desbloqueo en sí exige un PIN de PROFESIONAL —ADM no puede tenerlo—, así que el
--- administrador no tiene ningún camino hacia el contenido clínico salvo el acceso de
--- emergencia, que es de otro ticket.
+-- da acceso a notas ajenas» (architecture.md §RLS, en negrita). PRIMERO, sin desbloqueo:
+-- cero, pero esto NO distingue «no hay rama de administrador» de «el candado está
+-- cerrado» — cualquiera de las dos causas daría el mismo cero. `fijar_pin_historia` NO
+-- tiene guarda de rol (verificado en la migración: solo exige `auth.uid()` no nulo), así
+-- que ADM SÍ puede fijar su propio PIN y desbloquear su propia historia. Se hace, y se
+-- repite el conteo CON el candado abierto: si sigue en cero, la causa real es
+-- `es_profesional_asignado()`, no el candado — que es la aserción que de verdad haría
+-- falta cuando algún ticket futuro le dé a ADM un paciente propio.
 call pg_temp.como(:ADM);
 select pg_temp.assert(pg_temp.contar('select * from public.notas_clinicas') = 0,
-  'ADM no lee NINGUNA nota clínica: el secreto profesional es del profesional, no del cargo');
+  'ADM SIN desbloqueo: cero (podría ser por el candado o por falta de rama — ambiguo todavía)');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:ADM);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('999999')) is not true,
+  'ADM sin PIN fijado: desbloquear_historia() no puede dar true (control antes de fijarlo)');
+select public.fijar_pin_historia('999999');
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('999999')),
+  'ADM SÍ puede fijar y usar su propio PIN: fijar_pin_historia no tiene guarda de rol');
+select pg_temp.assert(pg_temp.contar('select * from public.notas_clinicas') = 0,
+  'ADM CON el candado abierto SIGUE en cero: la causa es notas_clinicas_lectura sin rama de administrador, no el candado');
 select pg_temp.assert(pg_temp.contar('select * from public.notas_clinicas_versiones') = 0,
-  'ADM no lee ninguna versión de nota clínica');
+  'ADM con desbloqueo tampoco lee ninguna versión de nota clínica');
 select pg_temp.assert(pg_temp.contar('select * from public.episodios_asistenciales') = 0,
-  'ADM no lee ningún episodio asistencial');
+  'ADM con desbloqueo tampoco lee ningún episodio asistencial');
 select pg_temp.assert(pg_temp.contar('select * from public.valoraciones_riesgo') = 0,
-  'ADM no lee ninguna valoración de riesgo completa (sí el indicador binario, por la vista, que no es de este bloque)');
+  'ADM con desbloqueo tampoco lee ninguna valoración de riesgo completa (sí el indicador binario, por la vista, que no es de este bloque)');
+select pg_temp.assert(pg_temp.contar('select * from public.diagnosticos') = 0,
+  'ADM con desbloqueo tampoco lee ningún diagnóstico — confirma, con el candado abierto, la ambigüedad que quedó pendiente más arriba');
 call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
