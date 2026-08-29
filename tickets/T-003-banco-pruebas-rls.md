@@ -28,52 +28,52 @@ historias), **031** (un solo salto, siempre), **032** (el saliente no lee ni lo 
 
 ## Tareas
 
-- [ ] Elegir e instalar el arnés: **pgTAP** dentro de la base, o un runner en TypeScript
+- [x] Elegir e instalar el arnés: **pgTAP** dentro de la base, o un runner en TypeScript
       que abra una conexión por rol. Decidir en la etapa de diseño y **dejar escrito el
       porqué**; lo que no es negociable es que corra con un solo comando y falle con
       código de salida distinto de cero.
-- [ ] `npm run test:rls` en `package.json`, ejecutable sobre la base local recién
+- [x] `npm run test:rls` en `package.json`, ejecutable sobre la base local recién
       reseteada.
-- [ ] **Fijación de datos** propia del banco, independiente del seed de T-008: dos
+- [x] **Fijación de datos** propia del banco, independiente del seed de T-008: dos
       centros, un administrador, dos profesionales, un técnico por centro, pacientes de
       ambas titularidades, un episodio conjunto, un paciente fusionado, un menor con
       representante, notas firmadas y borrador.
-- [ ] **Matriz completa**: por cada tabla del esquema y cada uno de los tres roles, una
+- [x] **Matriz completa**: por cada tabla del esquema y cada uno de los tres roles, una
       aserción de lo que ve y otra de lo que no. La matriz de `architecture.md` §Roles es
       el guion, fila a fila.
-- [ ] **Batería del candado** (ADR-026): sin desbloqueo cero filas en las ocho tablas de
+- [x] **Batería del candado** (ADR-026): sin desbloqueo cero filas en las ocho tablas de
       contenido; con desbloqueo, las que le tocan; tras `bloquear`, cero; tras caducar la
       ventana, cero. Y `alertas_documentacion` legible en los cuatro estados.
-- [ ] **Batería de la baja** (ADR-032): profesional en `baja` no lee ni sus pacientes ni
+- [x] **Batería de la baja** (ADR-032): profesional en `baja` no lee ni sus pacientes ni
       sus notas; su autoría sigue registrada en las versiones.
-- [ ] **Batería del vínculo** (ADR-031): un solo salto, siempre; imposible encadenar.
-- [ ] **Batería del centro** (ADR-033): el técnico acotado; el profesional no; la herencia
+- [x] **Batería del vínculo** (ADR-031): un solo salto, siempre; imposible encadenar.
+- [x] **Batería del centro** (ADR-033): el técnico acotado; el profesional no; la herencia
       de `politicas_retencion` **resuelve y nunca da nulo**.
-- [ ] **Batería de capacidad** (ADR-028): `capacidad_consentimiento` evaluada en tres
+- [x] **Batería de capacidad** (ADR-028): `capacidad_consentimiento` evaluada en tres
       fechas sobre la misma fila —11, 15 y 16 años— sin ninguna bandera almacenada.
-- [ ] **Batería de identificación** (ADR-029): el índice único rechaza el alta doble; el
+- [x] **Batería de identificación** (ADR-029): el índice único rechaza el alta doble; el
       técnico no lee la tabla.
-- [ ] **Batería de accesos** (ADR-037): listar pacientes **no** crea filas en
+- [x] **Batería de accesos** (ADR-037): listar pacientes **no** crea filas en
       `accesos_historia`; abrir contenido **sí**; dos aperturas dentro de la ventana son
       **una fila con contador 2**.
-- [ ] **Batería de solo adición**: `update`, `delete` y **`truncate`** fallan en las cuatro
+- [x] **Batería de solo adición**: `update`, `delete` y **`truncate`** fallan en las cuatro
       tablas del invariante 2, incluido como `postgres`.
-- [ ] Documento corto en el propio banco: **cómo se añade una prueba** cuando un ticket
+- [x] Documento corto en el propio banco: **cómo se añade una prueba** cuando un ticket
       futuro añade una política.
 
 ## Criterios de aceptación (verificables)
 
-- [ ] **Automático** — `npm run test:rls` sobre base recién reseteada: **todo verde**,
+- [x] **Automático** — `npm run test:rls` sobre base recién reseteada: **todo verde**,
       código de salida 0, y su salida nombra cada rol y cada tabla.
-- [ ] **Automático** — cada política de `pg_policies` tiene al menos una prueba que la
+- [x] **Automático** — cada política de `pg_policies` tiene al menos una prueba que la
       nombra. Un comprobador dentro del banco lista las políticas **sin cobertura** y
       **falla** si la lista no está vacía.
-- [ ] **Automático** — comentar una política cualquiera de T-002 hace que el banco
+- [x] **Automático** — comentar una política cualquiera de T-002 hace que el banco
       **falle**. Se demuestra ejecutándolo, no razonándolo.
-- [ ] **Automático** — el banco distingue «cero filas por política correcta» de «cero filas
+- [x] **Automático** — el banco distingue «cero filas por política correcta» de «cero filas
       porque no hay datos»: cada aserción negativa tiene su positiva sobre la misma fila
       con otro rol.
-- [ ] **Automático** — `npm run lint` y `npm run build` limpios.
+- [x] **Automático** — `npm run lint` y `npm run build` limpios.
 
 ## Guion de comprobación manual
 
@@ -96,3 +96,78 @@ historias), **031** (un solo salto, siempre), **032** (el saliente no lee ni lo 
   explícitamente, no se espera quince minutos.
 - Si al probar aparece una política que falta, **no se escribe aquí**: se anota en
   `docs/state.md` y se abre el arreglo en T-002. Este ticket prueba, no parchea.
+
+## Diseño aprobado · 29-08-2026
+
+### 0 · El arnés: SQL con `assert()`, no inspección visual de la salida
+
+Los guiones de T-000/T-001/T-002/T-004 comprueban por **inspección visual**: alguien mira
+si los `f` que aparecen son los esperados. Vale para un guion que se ejecuta una vez y lo
+lee una persona; **no vale para un banco que corre en CI sin nadie delante** (criterio
+explícito del ticket).
+
+Se define `assert(condicion boolean, mensaje text)` — `raise exception` si es falsa — y
+`assert_lanza(consulta text, mensaje text)` para las negativas que hoy se comprueban
+dejando que psql muestre un error: ejecuta la consulta en un bloque con captura de
+excepción y **falla si NO lanza**. Con `-v ON_ERROR_STOP=1`, cualquier aserción rota hace
+que **psql salga con código distinto de cero**, sin que nadie tenga que leer la salida.
+
+### 1 · Ficheros, modulares por batería
+
+Los módulos viven en `scripts/rls/*.sql` y se **concatenan en el host** antes de mandarlos
+por `stdin` a `psql`: el contenedor de la base no tiene el árbol del repositorio montado,
+así que `\i` dentro del contenedor no encontraría los ficheros. `scripts/test-rls.mjs`
+hace la concatenación, localiza el contenedor con `docker ps` (nunca de memoria, por si el
+proyecto cambia de nombre) y propaga el código de salida de `psql`.
+
+| Fichero | Batería |
+|---|---|
+| `00-ayudantes.sql` | `assert`, `assert_lanza`, `contar(consulta)` |
+| `01-fijacion.sql` | Los datos: ver §2 |
+| `02-matriz-roles.sql` | Tabla × rol, la matriz de `architecture.md` §Roles |
+| `03-candado.sql` | ADR-026 |
+| `04-baja.sql` | ADR-032 |
+| `05-vinculo.sql` | ADR-031 |
+| `06-centro.sql` | ADR-033, y la enmienda del ADR-051 |
+| `07-capacidad.sql` | ADR-028 |
+| `08-identificacion.sql` | ADR-029 |
+| `09-accesos.sql` | ADR-037 |
+| `10-solo-adicion.sql` | Invariante 2, las cuatro tablas |
+| `11-cobertura.sql` | El comprobador de políticas sin prueba |
+| `README.md` | Cómo se añade una prueba |
+
+`npm run test:rls` → `node scripts/test-rls.mjs`.
+
+### 2 · Fijación de datos
+
+Dos centros (`CA`, `CB`); `ADM` sin centro; `PRO1` principal `CA`, `PRO2` principal `CB`;
+`TEC1` en `CA`, `TEC2` en `CB`. Pacientes: `P1` de `PRO1`/`CA` (titularidad `organizacion`),
+`P2` de `PRO2`/`CB` (titularidad `profesional`), `PMENOR` de 15 años con un representante
+en `representantes_paciente`, `PFUS` fusionado en `P2`, `PBAJA` de un profesional `PROBAJA`
+puesto en `baja`. Un episodio conjunto de `PRO1` sobre `P1` y `P2` (`episodio_participantes`),
+con nota conjunta y nota individual en el mismo episodio — control del criterio 9 de T-002.
+Notas: una firmada, una en borrador, una con dos versiones encadenadas. `alertas_documentacion`
+con los cuatro estados. `pines_historia` fijado para `PRO1` y `PRO2`; `TEC1` sin PIN
+(control de que el técnico no puede tenerlo).
+
+### 3 · La matriz no es un bucle genérico
+
+Un bloque explícito por tabla y rol, **no** una función que itere sobre `information_schema`:
+así el «documento corto: cómo se añade una prueba» es literalmente «copia el bloque de al
+lado y cambia la tabla», que es lo que un ticket futuro sin contexto de este diseño puede
+seguir sin releer el arnés entero.
+
+### 4 · El comprobador de cobertura es un registro declarado, no un análisis estático
+
+`11-cobertura.sql` mantiene un array de **nombres de política** que el banco pretende
+cubrir, y lo compara contra `pg_policies`. No analiza si la aserción es profunda —eso lo
+juzga la revisión humana—, pero sí que **toda política tiene una entrada**, y falla si el
+catálogo tiene una que el array no nombra: es justo el criterio «comentar una política hace
+fallar el banco», porque una política comentada desaparece de `pg_policies` y el array
+declarado sigue nombrándola: **la comparación falla en el sentido contrario, con nombre**.
+
+### 5 · Lo que no entra, y por qué
+
+`pines_historia` y `desbloqueos_historia` no tienen políticas propias —RLS activo y cero
+políticas, correcto—: se prueban por comportamiento de sus funciones, no por política.
+`preferencias_usuario` no guarda dato clínico: una fila por rol basta.

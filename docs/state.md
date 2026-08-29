@@ -924,3 +924,23 @@ volver obligatoria para las altas nuevas si el ticket lo pide.
 - **Punto abierto (d) del diseño de T-001**: `consentimiento_firmantes` y
   `accesos_historia_vistas` están aprobadas y **hay que subirlas a `docs/architecture.md`
   §Dominios de datos** al cerrar el ticket.
+
+### T-003 · `architecture.md` §Candado enumera ocho tablas; el catálogo dice nueve (o siete)
+
+Al escribir la matriz del banco de RLS (`scripts/rls/02-matriz-roles.sql`,
+`03-candado.sql`) contra las políticas reales de T-002, aparecen dos discrepancias con la
+lista de `docs/architecture.md` §Candado, que hoy enumera *episodios_asistenciales,
+diagnosticos, valoraciones_riesgo, notas_clinicas, notas_clinicas_versiones, evaluaciones,
+evaluacion_archivos, informes*:
+
+- **`episodio_participantes` TAMBIÉN pasa por `historia_desbloqueada()`** (verificado en
+  `pg_policies`: sin desbloqueo, PRO2 no lee la participación de su propio paciente P2 en
+  el episodio de PRO1 — el control está en `03-candado.sql`), y la lista no lo nombra.
+- `diagnosticos` y `valoraciones_riesgo` sí están en la lista, pero conviene anotar que
+  `valoraciones_riesgo` tiene ADEMÁS una vía fuera del candado —la vista
+  `pacientes_indicador_riesgo`, que expone solo el indicador binario al técnico— que la
+  lista tampoco menciona.
+
+No se toca el esquema ni la política: es una discrepancia de documentación. Queda para
+quien actualice `docs/architecture.md` §Candado (o el próximo ticket que la toque) añadir
+`episodio_participantes` a la lista y anotar la vía de la vista.
