@@ -968,3 +968,21 @@ severidad baja, aceptados a propósito:
   caso límite es ejecutar el banco un 29 de febrero, donde el aniversario se desplaza. Se
   deja así porque fijarlo como literal congelaría la edad del menor y el banco dejaría de
   representar "hoy" — el problema que se quería evitar en primer lugar.
+
+### T-003 · Cerrado tras dos pasadas de revisión con Opus
+
+La primera pasada encontró 3 hallazgos ALTA (política "cubierta" solo por nombre en 22
+casos; administrador sin prueba negativa en el contenido clínico; una nota individual sin
+gemela positiva) y varios MEDIA/BAJA — todos reales, corregidos en `c27905a`.
+
+La reverificación de esa corrección encontró que dos de las propias correcciones eran
+solo aparentes (H1: una colisión de clave primaria enmascaraba el rechazo real de RLS en
+`preferencias_usuario`; H2: la prueba del administrador contaba con el candado cerrado, sin
+distinguir esa causa de "no hay rama de administrador") más cuatro MEDIA/BAJA (políticas de
+modificación sin ejercer; dos negativas de alta que un futuro índice único podría
+enmascarar; dos ramas de un `OR` sin aislar). Corregidas en `621e4f8`.
+
+Cada corrección de la segunda pasada se verificó reproduciendo la fuga exacta que el
+revisor había demostrado —mutando la política en la migración, viendo el banco ponerse
+rojo con el mensaje correcto, y restaurando— antes de darla por cerrada. `npm run
+test:rls` verde (13 módulos, ~140 aserciones), `npm run lint` y `npm run build` limpios.
