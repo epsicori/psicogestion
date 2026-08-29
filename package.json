@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cobertura": "vitest run --coverage",
+    "lint:migraciones": "tsx scripts/lint-migraciones.ts",
     "tipos": "supabase gen types typescript --local > lib/supabase/tipos-bd.ts"
   },
   "dependencies": {
