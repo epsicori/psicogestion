@@ -7,6 +7,40 @@
 
 ## Ticket en curso
 
+**T-002 · enmienda del ADR-051 (multi-centro) — implementada el 29-08-2026.** Entra
+`supabase/migrations/20260829120000_perfiles_centros_multicentro.sql`: `perfiles_centros`
+con dos índices únicos parciales, disparador de espejo, `centros_actuales()` y
+`centro_principal(uuid)` nuevas, `centro_actual()` reescrita, los cuatro consumidores
+reescritos, cuatro políticas y auditoría. Verificado con
+`scripts/t002-enmienda-multicentro.sql`: **ninguna aserción en falso; los cinco errores de
+la salida son las cinco aserciones negativas buscadas**. `lint`, `test` y `build`, verdes.
+
+**Tres cosas que hay que saber antes de tocar centros:**
+
+1. **«Vigente» es exactamente `hasta is null`, y es una decisión, no un descuido.** Un
+   índice único parcial no puede usar `current_date` en su predicado —no es inmutable—, así
+   que definir la vigencia por rango dejaba el índice y el tiempo de ejecución diciendo
+   cosas distintas, con una ventana en la que caben dos principales. Se igualan las dos
+   definiciones y un `check` prohíbe fechar el cierre en el futuro. Por eso cerrar una
+   pertenencia surte efecto **en la misma sesión**, y por eso `desde` es dato histórico y no
+   gobierna nada.
+2. **`fn_crear_perfil_de_usuario()` también se enmendó, y no estaba en el ticket.** Escribía
+   `perfiles.centro_id` desde `raw_user_meta_data`; con la enmienda esa columna es el
+   **espejo**, así que cada usuario nuevo nacía con el espejo relleno y la fuente de verdad
+   vacía —`centros_actuales()` a cero, y un técnico recién creado sin ver nada—. El relleno
+   de la migración no lo tapa: solo corre una vez. **Regla que queda: nadie escribe
+   `perfiles.centro_id` a mano; se escribe `perfiles_centros` y el espejo sigue solo.**
+3. **El técnico sin centro se cierra por el `check`, no por una política.** Cerrar su última
+   pertenencia pone el espejo a nulo y eso viola `perfiles_tecnico_exige_centro`, así que la
+   operación **falla desde dentro del disparador de espejo**. Es lo buscado —sin centro no
+   hay recorte, y sin recorte vería la organización entera—, pero el error nombra la
+   restricción y no el disparador: no se busque el fallo donde no está.
+
+Sigue pendiente **la revisión con Opus** del ticket entero y el punto 3 del guion manual en
+navegador.
+
+---
+
 **T-002 · RLS: funciones auxiliares y políticas de los tres roles** — implementado el
 22-08-2026. Entra
 `supabase/migrations/20260822160000_rls_funciones_y_politicas.sql`: **60 políticas nuevas,
@@ -369,6 +403,10 @@ enmienda de T-002, MiniMax por el corte T-007·A y Kimi por T-018. El reparto co
 Alcance limpio salvo `eslint.config.mjs`, que **no es una salida de carril**: viene del
 commit `3797cb0`, cierre de T-016 (ignorar `coverage/`), arrastrado en la misma rama. Entra
 tal cual; conviene saberlo solo para no buscarle a T-017 un motivo que no tiene.
+
+**La enmienda de T-002 está hecha (29-08-2026)**; lo que queda de este bloque es **la
+revisión con Opus** y el punto 3 del guion manual. Después, **T-004**, que no depende de
+T-002 y ya se podía empezar. El texto que sigue es el porqué del orden, y se conserva.
 
 **La enmienda de T-002 (ADR-051, multi-centro), y después la revisión con Opus.** El orden
 importa: `perfiles_centros`, `centros_actuales()` y la reescritura de las cuatro políticas

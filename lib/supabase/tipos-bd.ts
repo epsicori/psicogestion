@@ -1211,6 +1211,58 @@ export type Database = {
           },
         ]
       }
+      perfiles_centros: {
+        Row: {
+          centro_id: string
+          creado_en: string
+          desde: string
+          hasta: string | null
+          id: string
+          perfil_id: string
+          principal: boolean
+        }
+        Insert: {
+          centro_id: string
+          creado_en?: string
+          desde?: string
+          hasta?: string | null
+          id?: string
+          perfil_id: string
+          principal?: boolean
+        }
+        Update: {
+          centro_id?: string
+          creado_en?: string
+          desde?: string
+          hasta?: string | null
+          id?: string
+          perfil_id?: string
+          principal?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "perfiles_centros_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "perfiles_centros_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "perfiles_centros_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pines_historia: {
         Row: {
           actualizado_en: string
@@ -1600,6 +1652,8 @@ export type Database = {
         }[]
       }
       centro_actual: { Args: never; Returns: string }
+      centro_principal: { Args: { p_perfil_id: string }; Returns: string }
+      centros_actuales: { Args: never; Returns: string[] }
       desbloquear_historia: {
         Args: { p_pin: string }
         Returns: {
