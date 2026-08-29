@@ -11,13 +11,21 @@
     "supabase/**",
     "docs/**",
     "app/**",
+    "components/**",
+    "lib/supabase/**",
+    "lib/i18n/**",
+    "lib/contraste/**",
     "diseño/**",
     ".claude/**",
+    "minimax/**",
+    "fabrica/**",
     "tickets/**",
     "PLAN.md",
     "CLAUDE.md",
     "AGENTS.md",
     "KIMI.md",
+    "MINIMAX.md",
+    "CARRILES.md",
     "kimi/alcance.json",
     "kimi/verificar.mjs",
     "kimi/LEEME.md",
@@ -35,7 +43,8 @@
       "titulo": "Banco de pruebas unitarias",
       "excepciones": [
         "app/login/esquemas.test.ts",
-        "app/(app)/pacientes/esquemas.test.ts"
+        "app/(app)/pacientes/esquemas.test.ts",
+        "components/ui/teclado.test.tsx"
       ],
       "escritura": [
         "package.json",

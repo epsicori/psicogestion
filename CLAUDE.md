@@ -29,6 +29,7 @@ TanStack Table · date-fns.
 | Servidor de desarrollo | `npm run dev` → http://localhost:3000 |
 | Lint | `npm run lint` |
 | Build | `npm run build` |
+| Pruebas unitarias | `npm test` · `npm run test:watch` · `npm run test:cobertura` |
 | Sembrar datos | `npm run seed` *(desde T-008)* |
 | Pruebas de RLS | `npm run test:rls` *(desde T-003)* |
 
@@ -78,3 +79,17 @@ TanStack Table · date-fns.
   tablas, filtros, ajustes, seed. **Va sobre-especificado y salta el diseño.**
 - **Revisión con Opus** solo en tickets `opus` y en cualquiera que toque RLS, dinero o
   datos clínicos. Un ticket de interfaz pura cierra con verificador, lint y build.
+
+## Tres carriles
+
+Desde el 29-08-2026 el plan lo ejecutan tres modelos a la vez y **el reparto es por
+fichero**: `CARRILES.md`. Tu carril —el de la fábrica— es el de la base de datos, y su cola,
+sus trampas conocidas y su deber de revisión están en **`fabrica/ORDEN.md`**. Léelo antes de
+coger un ticket.
+
+Dos consecuencias que no se deducen del enrutado de modelos:
+
+- **T-006 y T-008 los ejecutas tú aunque sean `sonnet`.** Escriben en `supabase/`, y
+  `supabase/` tiene un solo dueño o las migraciones de dos carriles se ordenan mal.
+- **`components/**`, `app/**` y `lib/{identidad,fechas,agenda}/**` tienen a alguien dentro.**
+  Si un ticket tuyo los necesita, se corta el ticket o se espera; no se toca «un momento».

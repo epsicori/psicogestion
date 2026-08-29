@@ -3,9 +3,45 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 22-08-2026
+**Actualizado**: 29-08-2026
 
 ## Ticket en curso
+
+**T-002 · RLS: funciones auxiliares y políticas de los tres roles** — implementado el
+22-08-2026. Entra
+`supabase/migrations/20260822160000_rls_funciones_y_politicas.sql`: **60 políticas nuevas,
+2 borradas, 12 funciones nuevas, 1 enmendada, 3 disparadores, 4 índices, 2 vistas y 2
+cambios de privilegio**. Verificado con `scripts/t002-rls.sql` (fijación propia, todo en
+una transacción con `rollback`; 11 errores en la salida y los once son aserciones
+negativas buscadas).
+
+**Tres cosas que este ticket descubrió y hay que saber antes de tocar la RLS:**
+
+1. **La política de `notas_clinicas` NO puede consultar `notas_clinicas_versiones`
+   directamente**, como pedía el diseño: la política de `versiones` consulta a su vez
+   `notas_clinicas` y Postgres aborta con `infinite recursion detected in policy for
+   relation "notas_clinicas"`. Reproducido antes de escribir la migración. La salida es la
+   que el propio diseño prescribe para `es_profesional_asignado()`: una función
+   `security definer`, `nota_tiene_version_conjunta(nota_id)`. La semántica no cambia.
+2. **El corte por baja del ADR-032 NO llega solo a las tablas clínicas.** El diseño daba
+   por hecho que enmendar `rol_actual()` bastaba, y no basta: las políticas clínicas no
+   invocan `rol_actual()` **a propósito** —para que el administrador no tenga rama propia—
+   y sus ramas `autor_id = <yo>` no miran el estado de nadie. Con el diseño literal, el
+   criterio 8 fallaba: un profesional de baja **seguía leyendo sus propias notas**. Se
+   cierra en `historia_desbloqueada()`, que es el único punto por el que pasan las ocho
+   tablas clínicas, más un `rol_actual() is not null` al frente de las dos políticas de
+   `alertas_documentacion`, que están fuera del candado. **Regla que queda**: toda política
+   futura que conceda por `<columna> = auth.uid()` y no lleve candado necesita su propio
+   `rol_actual() is not null`.
+3. **`caduca_en` y `bloqueado_hasta` son a la vez parámetros de salida de
+   `desbloquear_historia()` y columnas de `desbloqueos_historia`.** Sin alias de tabla,
+   `column reference "caduca_en" is ambiguous` **en ejecución, no al crear la función**.
+
+Lo que **sigue sin verificarse en navegador**: la enmienda de `rol_actual()` cambia
+comportamiento existente (un perfil suspendido o de baja deja de ver todo, incluida la
+pantalla de T-000). Comprobado a nivel de base, no de pantalla.
+
+---
 
 **T-001 · Esquema base** — implementado el 22-08-2026 y **corregido tras la primera
 revisión**, que devolvió cuatro hallazgos altos y tres medios, todos reproducidos contra
@@ -77,6 +113,125 @@ Fase 0. Primer stack completo armado:
 
 ## Últimos cambios
 
+- **El plan pasa a tres carriles, 29-08-2026.** Lo ejecutan **Claude, MiniMax y Kimi** a la
+  vez, y **el reparto es por fichero, no por dificultad**. El mapa entero está en
+  `CARRILES.md`; cada carril tiene su punto de entrada (`CLAUDE.md` + `fabrica/ORDEN.md`,
+  `MINIMAX.md` → `minimax/`, `KIMI.md` → `kimi/`) y su guardarraíl de alcance.
+  - **La base de datos tiene un solo dueño.** De ahí sale que **T-006 y T-008 los ejecute
+    el carril de Claude aunque sean `sonnet`**: dos carriles escribiendo migraciones las
+    ordenan mal entre sí. El modelo del ticket no cambia; cambia quién lo ejecuta.
+  - **T-007 y T-009 se parten en entregas** (`minimax/cortes/`). El motivo no es que sean
+    largos: es que el grueso de los dos no toca la base de datos y no tiene por qué esperar
+    a T-002 ni a T-003, y que una primitiva mal escrita debe costar una rama y no el
+    armazón entero — la copian después T-012, T-013 y T-014. **Los tickets no cambian** y
+    se cierran cuando entran todos sus cortes.
+  - `minimax/verificar.mjs` es la **versión genérica** del guardarraíl: deduce el carril del
+    nombre de su carpeta y acepta cortes con letra (`T-007a`). `kimi/verificar.mjs` es su
+    gemelo antiguo. **Un arreglo hay que hacerlo dos veces** hasta que se unifiquen, y eso
+    conviene hacerlo cuando el carril de Kimi quede libre.
+  - El carril de MiniMax **sí lee `docs/interfaz.md`** —es la especificación de sus
+    pantallas—; el de Kimi no lee `docs/` en absoluto. **Ninguno de los dos escribe en
+    `docs/`**: el material sube por la sección §Para `docs/state.md` de su informe y lo
+    transcribe el arquitecto.
+
+- **T-016 integrado, 27-08-2026.** Primer ticket del carril paralelo dentro de `main`.
+  El proyecto ya tiene corredor de pruebas —**Vitest 4 + jsdom + Testing Library**— y
+  `npm test` cierra en verde con 15 pruebas: los dos esquemas Zod que ya existían
+  (`app/login/esquemas.ts` y `app/(app)/pacientes/esquemas.ts`) y la plantilla de
+  teclado que T-007 reutiliza por primitiva. Las siete dependencias entran **ancladas de
+  versión** y ninguna es de producción. Informe con la salida real de cada criterio en
+  `kimi/informes/T-016.md`; lo que se dejó anotado, en `kimi/hallazgos/T-016.md`.
+
+- **Navegación a cuatro módulos y multi-centro, 26-08-2026.** Del esquema de interfaz del
+  propietario salen dos ADR más, y uno de ellos reabre T-002.
+  - **ADR-050** — siete módulos pasan a **cuatro**: Agenda, Pacientes, Facturación,
+    Ajustes. `Inicio` era la agenda del día descrita otra vez y `Clínica` era una bandeja
+    que el maestro ya ponía en el panel lateral de Inicio: los dos se vuelven bloques
+    **dentro de Agenda**. `Usuarios` baja a Ajustes › Centros y usuarios, donde su permiso
+    ya coincidía. **`/` redirige a `/agenda`**, no a `/pacientes`. El módulo sigue
+    llamándose **Agenda**, no Calendario: es la palabra de la matriz y de `modulos.ts`.
+  - **ADR-051** — un profesional puede pasar consulta en **varios centros**, con vigencia y
+    uno principal. Nace `perfiles_centros`; `perfiles.centro_id` sobrevive como **espejo
+    del principal** mantenido por disparador (migración hacia delante, no destructiva);
+    `centro_actual()` se conserva para el principal y aparece **`centros_actuales()`**
+    (`setof uuid`) para las políticas.
+  - ⚠ **T-002 vuelve a `en_curso`** con una enmienda al final del ticket. Entra **antes**
+    de la revisión con Opus: revisar políticas que vamos a cambiar es trabajo tirado, y hoy
+    no hay ni una fila real dentro. Se reescriben con `centros_actuales()` la rama del
+    técnico en `pacientes_lectura`, la de `alertas_documentacion`, la vista
+    `pacientes_indicador_riesgo` y `fn_rellenar_centro_paciente` —que usa el **principal**,
+    porque el centro del paciente decide su retención durante veinticinco años—.
+  - **Corrección de un error de redacción del ADR-051**, avisado por el propietario y ya
+    arreglado: se llegó a escribir que cerrar la pertenencia a un centro le quita pacientes
+    al profesional. **Es falso.** El profesional lee **los suyos** vía
+    `es_profesional_asignado()`, que mira `pacientes.profesional_id` y **no consulta el
+    centro**. `centros_actuales()` acota **solo al técnico administrativo**. Ampliar el
+    alcance de un profesional no es cosa de centros: es que el administrador **le asigne el
+    paciente** o lo dé de alta en el episodio. T-002 lleva una prueba dedicada a
+    demostrarlo: abrir y cerrar pertenencias **no cambia ni una fila** de lo que lee un
+    profesional.
+  - **Choque 13** añadido a `interfaz.md` (son trece): Facturación no se parte en «por
+    centro» y «por profesional»; es una pantalla con selector que solo ve el administrador.
+  - Rechazado del esquema, por chocar con lo cerrado: el conmutador claro/oscuro (ADR-042
+    lo deja para v2), los consentimientos dentro de la historia (ADR-048 los sacó hoy
+    mismo), y «Observaciones y otros» como cajón de sastre —que además dejaba **Informes**
+    sin sitio, y el art. 15 de la Ley 41/2002 lo pone en el contenido mínimo—.
+  - Anotado para cuando llegue Ajustes: el **asignador de profesionales a centros** es una
+    lista con selector, no dos contenedores con tarjetas. El arrastre es acelerador
+    opcional (WCAG 2.2 SC 2.5.7 exige alternativa sin arrastrar; a 360 px no existe), y
+    cambiar el centro de un **técnico** pide confirmación explícita y auditoría.
+- **ADR-049 · Clasificación regulatoria, 26-08-2026.** Revisando el FOCAD 286 del Consejo
+  General de la Psicología aparecen tres reglamentos europeos que el maestro no cubre —el
+  maestro reconcilia «cuatro cuerpos normativos» y ninguno es estos—: **MDR (UE) 2017/745**,
+  **AI Act (UE) 2024/1689** y **EEDS, Reglamento (UE) 2025/327**.
+  - **Psicogestión no es producto sanitario**, y ahora consta por escrito con su motivo.
+    La clasificación la hace el fabricante y responde de ella.
+  - **Tres funciones cruzan la línea** y exigen ADR previo: corregir una prueba, calcular un
+    nivel de riesgo, y triar o proponer tratamiento. ⚠ **La primera está dentro del plan**:
+    `interfaz.md` describe Evaluaciones como «pruebas, **corrección** y adjuntos» y la fase 2
+    incluye análisis de archivos. Quien redacte ese ticket **se para y escala**.
+  - **Sin IA en v1.** La sugerencia de hora es determinista a propósito y deja el AI Act
+    fuera entero. Si algún día entra IA, nunca sobre contenido clínico saliendo de la
+    instancia (choca con la decisión 1 y con el ADR-038).
+  - **El EEDS se vigila, no se implementa.** Psicogestión **es** un sistema de historia
+    clínica electrónica: le tocarán interoperabilidad y formato europeo de intercambio.
+    El calendario **se confirma contra el texto del reglamento**, no contra el FOCAD, que lo
+    cita en un párrafo. Dos hábitos que sí se adoptan ya porque hoy salen gratis: toda
+    exportación clínica por la capa de `exportaciones` con formato versionado, y todo código
+    clínico guardado con su sistema y su versión.
+  - `architecture.md` gana la sección **§Clasificación regulatoria del producto**.
+- **Fase 1 abierta por el recorrido de nota en presencial, 26-08-2026.** Cuatro ADR
+  cerrados y seis tickets redactados (T-010 a T-015). No se ha implementado nada: fase 0
+  manda, y se ejecutan después de T-007.
+  - **ADR-045** — `citas.estado` son **cinco** valores (`programada`, `confirmada`,
+    `realizada`, `cancelada`, `no_asistida`) y **«en curso» se calcula**, con
+    `esta_en_curso()`. Persistirlo exigía reescribir filas auditadas cada minuto.
+  - **ADR-046** — el sobre canónico crece con `cita_id`, `abierta_en`, `firmada_en` y
+    `redactada_en_sesion`, **dentro de la huella**. Sube `esquema_version`;
+    `algoritmo_version` **no**. ⚠ **T-005 no se puede escribir sin leerlo**: si el
+    canonicalizador nace con el sobre viejo, añadirlo después abre una era de algoritmo y
+    dos formatos para siempre.
+  - **ADR-047** — el aviso de sesión es **no modal** (franja + ancla en cabecera) y el
+    estado **late, no parpadea**: ciclo ≈2 s, un solo elemento animado a la vez,
+    `prefers-reduced-motion` lo detiene, color nunca solo. Es lectura estricta del
+    ADR-041, no una excepción; un parpadeo real haría fallar el verificador de T-009.
+  - **ADR-048** — «Documentos y consentimientos» sale de Historia clínica y pasa a ser
+    **pestaña de la ficha, fuera del candado**, que es lo que las políticas de T-002 ya
+    hacían. Historia clínica se queda con **cuatro** sub-pestañas. El enum
+    `pestana_historia` **no se toca**: su valor `documentos` queda para adjuntos clínicos.
+  - Destilados actualizados en el mismo movimiento: `interfaz.md` §Pacientes reescrita,
+    **choque 12** añadido (son doce, no once — corregido también en `architecture.md`
+    §Roles) y dos entradas nuevas en §Lo que el prototipo no cubre. `PLAN.md` §Fase 1
+    sustituida por los seis tickets con su grafo de dependencias.
+  - **La deuda de `notificaciones` que T-002 dejó anotada se recoge en T-015**, junto al
+    escalado 0 h · 24 h · 72 h sobre `alertas_documentacion`. La política de `insert` de
+    `alertas_documentacion`, que T-002 tampoco escribió, la recoge **T-010**.
+- **T-002 cerrado, 22-08-2026.** La matriz de roles deja de ser una tabla en un documento:
+  62 políticas en `public` (60 nuevas + las dos de T-000 que se conservan,
+  `perfiles_lectura_propia` y `auditoria_lectura_propia`). Deudas de T-001 saldadas: el
+  disparador de alta de perfil sobre `auth.users`, el relleno de `pacientes.centro_id`, la
+  vista del indicador de riesgo, el `with check` de `accesos_historia_vistas` y los cuatro
+  índices que las políticas ponen en un `using`.
 - **Fase 0 redactada entera, 22-08-2026.** Los nueve tickets T-001 a T-009 existen ya en
   `tickets/`, escritos contra los destilados y contra la tabla de reparto de ADR de
   `PLAN.md`. Dos fronteras que quedaron fijadas al redactarlos y conviene no volver a
@@ -154,7 +309,7 @@ Fase 0. Primer stack completo armado:
   pantallas reales (`/login`, `/pacientes`) revestidas. Ver sección «Sistema de diseño»
   y ADR-025. `lint` y `build` verdes; la verificación manual del criterio 8 de T-000
   sigue pendiente y ahora se hará sobre la interfaz nueva.
-- **`docs/interfaz.md`**: el prototipo destilado a especificación —los siete módulos, el
+- **`docs/interfaz.md`**: el prototipo destilado a especificación —los cuatro módulos, el
   vocabulario de componentes y diez choques con la matriz de roles, resueltos. Referenciado
   desde `CLAUDE.md`, `architecture.md` §Roles y la plantilla de tickets, que ahora exige
   dos criterios de aceptación nuevos en todo ticket de pantalla.
@@ -198,15 +353,95 @@ Ninguno. Verificación manual pendiente.
 
 ## Siguiente paso
 
-Verificación manual del criterio 8 en navegador → cierre de T-000 → `/fabrica T-001`
-(esquema base: organización, centros, perfiles, paciente e historia). Detrás,
-T-002 → T-003; T-004 se puede paralelizar con T-002, y T-006, T-007 y T-008 entre sí una
-vez cerrado T-002.
+> **Paso 0, antes que nada: comitear y empujar `main`.** Hoy el árbol de trabajo tiene sin
+> comitear los ADR-045 a 053, los cuatro módulos del ADR-050, los tickets T-010 a T-015, la
+> migración de T-002 y `scripts/t002-rls.sql`. **Dos de los tres carriles ramifican de
+> `main`** y construirían contra decisiones derogadas: MiniMax leería un `interfaz.md` con
+> siete módulos y dibujaría la navegación vieja. No es hipotético, es lo primero que haría.
+
+**Con `main` al día, los tres carriles arrancan a la vez y sin bloquearse** — Claude por la
+enmienda de T-002, MiniMax por el corte T-007·A y Kimi por T-018. El reparto completo, en
+`CARRILES.md`.
+
+**Y hay una rama esperando antes que todo eso: `T-017-identificadores-espanoles`**, en el
+*worktree* `../Psicogestion-kimi`, ya con informe y hallazgos. Siete módulos en
+`lib/identidad/` —NIF, IBAN, teléfono, código postal, colegiado, esquemas— con sus pruebas.
+Alcance limpio salvo `eslint.config.mjs`, que **no es una salida de carril**: viene del
+commit `3797cb0`, cierre de T-016 (ignorar `coverage/`), arrastrado en la misma rama. Entra
+tal cual; conviene saberlo solo para no buscarle a T-017 un motivo que no tiene.
+
+**La enmienda de T-002 (ADR-051, multi-centro), y después la revisión con Opus.** El orden
+importa: `perfiles_centros`, `centros_actuales()` y la reescritura de las cuatro políticas
+que hoy usan `centro_actual()` entran **antes** de revisar, porque revisar un juego de
+políticas que vamos a cambiar es trabajo tirado y ahora mismo no hay ni una fila real
+dentro. Después, el punto 3 del guion manual en navegador —un perfil puesto en `suspendido`
+deja de ver `/pacientes`— y **T-003**.
+
+**Nota para T-003**: la lista de políticas está en `pg_policies`, y el catálogo comentado,
+en la sección 10 del «Diseño aprobado» de `tickets/T-002-rls-politicas.md`. Y **T-003 debe
+FIRMAR la nota conjunta en su fijación de datos**: la rama de participación exige
+`alcance = 'conjunta'`, que solo existe en la versión sellada, así que una prueba positiva
+sobre un borrador saldría verde por el motivo equivocado.
+
+T-004 se puede paralelizar con T-003; T-006, T-007 y T-008 entre sí.
+
+**Aviso para T-005**: el sobre canónico ya no es el de `architecture.md` §Invariante 1. El
+**ADR-046** le añade `cita_id`, `abierta_en`, `firmada_en` y `redactada_en_sesion`, y el
+canonicalizador tiene que nacer con ellos. Escribirlo con el sobre viejo obliga a convivir
+con dos formatos para siempre, porque lo viejo **jamás se recalcula**.
+
+**Fase 1 ya redactada** en `tickets/T-010` a `T-015` y en `PLAN.md` §Fase 1. No se toca
+hasta cerrar fase 0. El orden es `T-010 → T-011 → T-014 → T-015`, con `T-013 → T-012` en
+paralelo, y **revisión con Opus en los seis**.
+
+**Carril paralelo abierto el 27-08-2026**: `T-016` a `T-020` en `PLAN.md` §Carril paralelo.
+Cinco tickets `sonnet` que **no tocan `supabase/`, ni RLS, ni pantalla**, pensados para
+ejecutarse fuera de la fábrica y a la vez que la fase 0. **`T-016` está hecho e integrado
+en `main`** (27-08-2026): ya hay corredor de pruebas, que era justo lo que T-007 y T-009
+daban por hecho. Siguen `T-017`, `T-018` y `T-019` en cualquier orden, y `T-020`
+detrás de `T-018`. Ninguno pasa
+por diseño ni por revisión con Opus. Las reglas del carril —rama por ticket, zona
+prohibida, dependencias ancladas— están en esa misma sección de `PLAN.md`.
 
 ## Hallazgos anotados
 
 Detectados fuera del alcance de su ticket (constitución, regla 2). Se anotan aquí y se
 recogen cuando llegue la fase que los toca.
+
+### Lo que T-002 dejó anotado y no tocó
+
+- **`enable_signup = true` en `supabase/config.toml`** debe pasar a `false` en el ticket de
+  usuarios (T-006). Hoy no es un agujero porque el disparador de alta de perfil es **fallo
+  cerrado** —sin `rol` válido en `raw_user_meta_data` el alta de `auth.users` falla—, pero
+  depender de eso es depender de una sola línea.
+- **El acceso del representante legal (ADR-028) sale de T-002 por decisión del
+  propietario.** No es implementable en RLS: un representante no es un `auth.users` ni
+  tiene perfil, y el portal del paciente es v2 (decisión 13). No hay sujeto al que aplicar
+  una política. **Se traslada al ticket que cree la salida dirigida al paciente** (derecho
+  de acceso / exportación), que es donde tendrá sujeto y prueba.
+- **El acceso de emergencia del administrador sale de T-002**, confirmado por el
+  propietario. Cuando entre, entra por **función `security definer`** con justificación y
+  aviso al titular, **jamás por política**: `authenticated` tiene `insert` sobre
+  `accesos_historia`, así que una política del tipo «lee si hay emergencia vigente» sería
+  auto-servicio de privilegios — cualquiera se escribiría su propia fila.
+- **No existe tabla `notificaciones`.** El ADR-026 pide, además de la entrada en
+  `auditoria`, **notificación al titular** cuando su PIN se bloquea por intentos. T-002
+  escribe la auditoría y deja la notificación pendiente de que exista la tabla.
+- **`pacientes.centro_id` nulo es fallo cerrado**, enmendando lo que este fichero proponía
+  («resolver el nulo como toda la organización»). La organización puede ser multicentro, y
+  ahí un paciente sin centro se filtraría a **todos** los técnicos, que es justo el rol que
+  esa columna gobierna. La política del técnico es una igualdad simple; con nulo da `null`,
+  o sea, no visible. Como el relleno asigna centro a todos cuando solo hay uno, el caso
+  solo puede darse en una instancia multicentro — donde debe darse. Coste: un paciente sin
+  centro es invisible para recepción hasta que el administrador se lo asigne.
+- **`organizacion` no tiene `grant insert` para `authenticated`**, así que la fila única la
+  crea la instalación y no una pantalla. Si el ticket de ajustes quiere crearla desde la
+  aplicación, necesita el grant además de la política.
+- **`accesos_historia`, `accesos_historia_vistas` y `preferencias_usuario` conceden por
+  `<columna> = auth.uid()` sin candado y sin `rol_actual()`**, así que un perfil de baja
+  sigue viendo sus propios registros de acceso y sus preferencias. No es dato clínico y
+  ningún criterio lo pide, pero si se quiere el corte «entero» del ADR-032 hasta el último
+  rincón, ese es el sitio.
 
 ### Umbral de volumen de `wa.me` — muerde a partir de ~7 profesionales
 
@@ -257,7 +492,36 @@ ADR cada vez:
 - **Coste**: 0 €/mes de infraestructura y 1-2 h de configuración. No se cobra cuota por
   centro — duplicaría el cobro del crecimiento que ya captura el tramo por usuario.
 
+### Lo que T-016 dejó anotado y no tocó
+
+- **Aviso de Vite en cada pasada de Vitest** (`vitest.config.ts`): «ESM syntax in a file
+  loaded as CommonJS», porque `configLoader: 'native'` será el valor por defecto en una
+  major futura de Vite. No es un fallo —los 15 tests van en verde—, pero su arreglo pide
+  `"type": "module"` en `package.json` o renombrar la config, y eso toca a Next y al
+  resto de herramientas. Se decide cuando el aviso se vuelva error.
+- **`npm run lint` avisa dentro de `coverage/`**: `eslint.config.mjs` no excluye la
+  carpeta de cobertura, así que en cuanto alguien corre `npm run test:cobertura` aparece
+  un warning sobre `coverage/block-navigation.js`, que es código generado por v8. Sale
+  con exit 0, pero es ruido: añadir `coverage/**` a los `ignores` del linter cuando se
+  toque ese fichero.
+- **`vite-tsconfig-paths` sobra a medio plazo**: Vitest avisa de que Vite ya resuelve los
+  alias de `tsconfig` con `resolve.tsconfigPaths: true`. Una dependencia menos, cuando
+  toque revisar la configuración.
+
 ## Aprendizajes
+
+### Pruebas unitarias — dónde viven y cómo se corren
+
+- **El fichero de prueba vive junto al módulo que prueba**: `app/login/esquemas.ts` →
+  `app/login/esquemas.test.ts`. No hay carpeta `__tests__` paralela y no se creará.
+- `npm test` es una sola pasada y sale (`vitest run`); `npm run test:watch` para
+  desarrollar y `npm run test:cobertura` para el informe v8. **La cobertura se mide y no
+  se exige**: no hay umbral configurado en ningún sitio, y es a propósito.
+- Entorno `jsdom`, `globals: true`, alias `@/…` vía `vite-tsconfig-paths`. Las
+  exclusiones salen de `eslint.config.mjs`; no se duplican en dos sitios.
+- `components/ui/teclado.test.tsx` es la **plantilla de teclado de T-007**: tabular al
+  disparador, abrir, cerrar con Escape, comprobar que el foco vuelve. Se copia por
+  primitiva; no se generaliza en un helper.
 
 ### Invariante de solo adición — tres capas obligatorias
 
@@ -313,6 +577,36 @@ ADR cada vez:
 - `cookies()` es async.
 - `revalidateTag` exige segundo argumento; `revalidatePath` más seguro.
 - `next lint` desapareció; `npm run lint` independiente de `npm run build`.
+
+### Postgres — trampas pagadas en T-002
+
+- **Dos políticas que se consultan mutuamente son recursión, y Postgres lo detecta en
+  ejecución**: `infinite recursion detected in policy for relation "…"`. Pasa en cuanto la
+  política de A hace `exists (select … from B)` y la de B hace `exists (select … from A)`.
+  La salida es una función `security definer` en uno de los dos lados. Un `exists` sobre
+  otra tabla dentro de una política **corre bajo la RLS de esa tabla**, y eso a veces es lo
+  que se quiere (`accesos_historia_vistas`) y a veces es el bug.
+- **Un `out` parameter con el mismo nombre que una columna es ambiguo en plpgsql, y falla
+  en EJECUCIÓN, no al crear la función.** `desbloquear_historia()` devuelve `caduca_en` y
+  `bloqueado_hasta`, que son columnas de `desbloqueos_historia` y de `pines_historia`.
+  Regla: en una función que devuelve `table (…)`, **toda tabla del cuerpo lleva alias**.
+- **No existe el agregado `min(uuid)`.** Para «el único centro activo» hay que contar
+  primero y leer después, no `select count(*), min(id)`.
+- **Un disparador que consulta `rol_actual()` bloquea a la propia migración**, porque la
+  migración corre sin JWT y `auth.uid()` es nulo. Por eso el relleno de
+  `pacientes.centro_id` va **antes** de crear el disparador de columnas reservadas. Alternativa
+  descartada: exonerar «sin sesión», que es un agujero para cualquier rol no autenticado.
+- **Un `update … set col = <valor ajeno>` que devuelve `UPDATE 0` no prueba nada**: puede
+  ser la RLS ocultando la fila y no la guarda que se quería probar. Toda guarda de columna
+  necesita su prueba **sobre una fila que el usuario SÍ puede actualizar** — es el patrón
+  de error de T-001 otra vez, y volvió a aparecer aquí.
+- **`set local role authenticated` no cambia `auth.uid()`**: eso sale de
+  `request.jwt.claims`. Se necesitan las dos cosas, y en los guiones conviene `reset role`
+  + `reset request.jwt.claims` entre bloques o el siguiente hereda la sesión del anterior.
+  Un bloque «sin desbloqueo» que hereda la ventana abierta del bloque anterior es
+  exactamente una prueba verde por el motivo equivocado.
+- **Las sentencias que deben fallar dentro de una transacción larga se envuelven en
+  `savepoint` / `rollback to savepoint`**, o el primer error aborta el resto del guion.
 
 ### Postgres — trampas pagadas en T-001 (léelas antes de tocar RLS o cerrojos)
 

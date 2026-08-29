@@ -1,0 +1,124 @@
+{
+  "_comentario": [
+    "Alcance de escritura de cada entrega del carril MiniMax. Lo lee minimax/verificar.mjs.",
+    "'escritura' son patrones glob: todo fichero tocado debe casar con al menos uno.",
+    "'dependencias' son los paquetes nuevos que esa entrega puede anadir, y ninguno mas.",
+    "'excepciones' levanta la zona prohibida para rutas concretas y solo en esa entrega.",
+    "Las claves con letra (T-007a) son cortes de un mismo ticket: ver minimax/cortes/.",
+    "Este fichero lo mantiene el arquitecto. Un agente que lo edita esta haciendo trampa."
+  ],
+
+  "prohibido": [
+    "supabase/**",
+    "docs/**",
+    "lib/supabase/**",
+    "lib/identidad/**",
+    "lib/fechas/**",
+    "lib/agenda/**",
+    "scripts/**",
+    "app/prototipo/**",
+    "diseño/**",
+    ".claude/**",
+    "kimi/**",
+    "tickets/**",
+    "PLAN.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+    "KIMI.md",
+    "MINIMAX.md",
+    "CARRILES.md",
+    "minimax/alcance.json",
+    "minimax/verificar.mjs",
+    "minimax/LEEME.md",
+    "minimax/proyecto.md",
+    "minimax/guion.md",
+    "minimax/cortes/**"
+  ],
+
+  "comun": [
+    "minimax/informes/T-*.md",
+    "minimax/hallazgos/T-*.md"
+  ],
+
+  "tickets": {
+    "T-007a": {
+      "titulo": "Seis primitivas accesibles de components/ui",
+      "escritura": [
+        "components/ui/**",
+        "app/globals.css"
+      ],
+      "dependencias": []
+    },
+
+    "T-007b": {
+      "titulo": "Piezas de pintura y estados de carga, vacio y error",
+      "escritura": [
+        "components/ui/**",
+        "app/globals.css"
+      ],
+      "dependencias": []
+    },
+
+    "T-007c": {
+      "titulo": "cacheComponents, react-hook-form y los cuatro modulos",
+      "escritura": [
+        "next.config.ts",
+        "app/**",
+        "components/armazon/**",
+        "components/ui/**",
+        "lib/formularios.ts"
+      ],
+      "dependencias": []
+    },
+
+    "T-007d": {
+      "titulo": "Armazon con datos reales: selector de centro y rotulo de rol",
+      "escritura": [
+        "components/armazon/**",
+        "components/ui/**",
+        "app/(app)/**"
+      ],
+      "dependencias": []
+    },
+
+    "T-009a": {
+      "titulo": "Andamiaje de i18n y validador de contraste",
+      "escritura": [
+        "lib/i18n/**",
+        "lib/contraste/**",
+        "app/**",
+        "components/**"
+      ],
+      "dependencias": []
+    },
+
+    "T-009b": {
+      "titulo": "Flujo de CI y verificador de accesibilidad",
+      "escritura": [
+        ".github/**",
+        "lib/contraste/**",
+        "package.json",
+        "package-lock.json"
+      ],
+      "dependencias": [
+        "@axe-core/cli",
+        "@axe-core/playwright",
+        "axe-core",
+        "playwright",
+        "@playwright/test",
+        "pa11y",
+        "pa11y-ci"
+      ]
+    },
+
+    "T-013": {
+      "titulo": "Ficha del paciente, pestanas y pantalla de bloqueo",
+      "escritura": [
+        "app/(app)/pacientes/**",
+        "components/ui/**",
+        "lib/i18n/**"
+      ],
+      "dependencias": []
+    }
+  }
+}

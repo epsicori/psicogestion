@@ -47,6 +47,24 @@ si has tocado algo de esa lista. Ejecútalo antes de dar nada por terminado.
 `eslint.config.mjs`, `next.config.ts` y **tu** ticket. Con eso y `kimi/proyecto.md` tienes
 todo lo que tu trabajo necesita.
 
+## Hay otros dos carriles trabajando a la vez
+
+Desde el 29-08 no eres el único: hay otro carril llevando la base de datos y otro llevando
+la interfaz. **El reparto es por fichero y el tuyo no cambia** —`lib/identidad/`,
+`lib/fechas/`, `lib/agenda/` y `scripts/lint-migraciones.ts` no los quiere nadie más—, pero
+sí cambian dos cosas de tu día a día:
+
+- **`main` se mueve mientras trabajas.** Si tu rama se queda atrás, se rebasa **sobre
+  `main` y solo sobre `main`**, nunca sobre la rama de otro carril. Después de rebasar,
+  `npm install` otra vez.
+- **Un conflicto en `package-lock.json` no se resuelve a mano**: te quedas con el de
+  `main`, reaplicas tu `package.json` y corres `npm install`. Editar un lock a mano produce
+  árboles de dependencias que no existen.
+
+Y una que no cambia pero ahora tiene un motivo más: **`components/ui/` ya no es tuyo**. La
+excepción que tenías era de T-016 y está gastada. Ahora hay alguien dentro escribiendo las
+primitivas; un cambio tuyo ahí choca de verdad, no en teoría.
+
 ## El orden de los tickets
 
 **`T-016` va primero y bloquea a los otros cuatro**: instala el corredor de pruebas, y los

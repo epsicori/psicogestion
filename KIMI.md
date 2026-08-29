@@ -14,9 +14,11 @@ Trabajas en **Psicogestión**, una aplicación de gestión clínica española. S
 cinco tickets —**T-016 a T-020**— de código puro: funciones, utilidades y herramientas. Sin
 base de datos, sin pantallas, sin un solo dato de paciente.
 
-**No escribas en**: `supabase/`, `docs/`, `app/`, `diseño/`, `tickets/`, `PLAN.md`,
-`CLAUDE.md`, `AGENTS.md`, `KIMI.md`, ni en `kimi/alcance.json` o `kimi/verificar.mjs`.
-Hay trabajo de otros en curso ahí y un cambio tuyo lo rompe.
+**No escribas en**: `supabase/`, `docs/`, `app/`, `components/`, `lib/supabase/`,
+`diseño/`, `tickets/`, `minimax/`, `fabrica/`, `PLAN.md`, `CLAUDE.md`, `AGENTS.md`,
+`KIMI.md`, `CARRILES.md`, ni en `kimi/alcance.json` o `kimi/verificar.mjs`.
+Hay trabajo de otros en curso ahí y un cambio tuyo lo rompe — **desde el 29-08 hay otros
+dos carriles trabajando a la vez**, así que ya no es un «por si acaso».
 
 **No inventes.** Ni APIs, ni columnas, ni tipos, ni funciones de librería: se verifica
 abriendo el fichero antes de afirmar. Si no lo has leído, no existe.

@@ -15,6 +15,28 @@ Ejecución: `/fabrica T-XXX` por ticket, `/fabrica fase N` para encadenar.
 
 ---
 
+## Tres carriles · quién ejecuta qué
+
+Desde el **29-08-2026** el plan lo ejecutan **tres modelos a la vez**, y el reparto **no es
+por dificultad: es por fichero**. El mapa completo —territorios, colas, protocolo de
+integración— está en **`CARRILES.md`**. En una línea cada uno:
+
+| Carril | Territorio | Qué lleva |
+|---|---|---|
+| **Claude** · la fábrica | `supabase/`, `lib/supabase/`, `scripts/*.sql`, `docs/` | T-002, T-004, T-003, T-005, T-006, T-008 — y **la revisión de los otros dos** |
+| **MiniMax** · la interfaz | `components/`, `app/`, `lib/i18n/`, `lib/contraste/`, `.github/` | T-007 (en cuatro cortes), T-009 (en dos), T-013 |
+| **Kimi** · funciones puras | `lib/identidad/`, `lib/fechas/`, `lib/agenda/` | T-017 **entregado**, luego T-018 a T-020 |
+
+**La base de datos tiene un solo dueño**, y por eso **T-006 y T-008 caen en el carril de
+Claude aunque sean `sonnet`**: dos carriles escribiendo migraciones las ordenan mal entre
+sí. El modelo del ticket no cambia —siguen saltándose el diseño—; cambia quién lo ejecuta.
+
+**T-007 y T-009 se parten en entregas** (`minimax/cortes/`) para que la parte que no toca la
+base de datos no espere a T-002 ni a T-003. Los tickets **no** cambian y se cierran cuando
+entran todos sus cortes.
+
+---
+
 ## Paseo vertical
 
 | ID | Título | Modelo | Depende | Estado |
@@ -86,30 +108,135 @@ y el calendario semanal, en fase 1, **se diseñan dos veces** por el mismo motiv
 **El ADR-034 vence en fase 1, no en fase 0**: lo que entra en T-001 es la columna de zona
 en organización y centro. El resto —`hora_local` en la serie, instantánea de zona en la
 cita, anomalías de marzo y octubre marcadas como desviación, y la tarea de citas afectadas
-cuando cambia la zona— es el ticket **«Series de citas con desviaciones»** (`opus`), y hay
-que leerlo **antes** del de «Calendario: vista semanal», que es donde se formatean las
+cuando cambia la zona— es el ticket **T-011 · Series de citas con desviaciones** (`opus`), y hay
+que leerlo **antes** de **T-014 · Calendario**, que es donde se formatean las
 horas con `@date-fns/tz`.
 
 ## Fase 1 · Núcleo clínico
 
-Títulos y modelo previstos. **Se redactan al llegar, no ahora**: los últimos se
-escribirían sin saber lo aprendido en los primeros.
+El objetivo de la fase, entero, es **un recorrido**: llega la hora de la cita, el aviso
+lleva a la sesión, se escribe la nota durante la sesión y se firma sellada. Todo lo que no
+sirva a ese recorrido espera.
 
-| Título | Modelo |
-|---|---|
-| Importador de Excel y CSV | `opus` |
-| Pacientes: lista, filtros y previsualización | `sonnet` |
-| Ficha del paciente y bloques reordenables | `sonnet` |
-| Episodios asistenciales y valoraciones de riesgo | `sonnet` |
-| Calendario: vista semanal | `opus` |
-| Calendario: vistas mensual y anual | `sonnet` |
-| Series de citas con desviaciones | `opus` |
-| Disponibilidad, ausencias y festivos | `sonnet` |
-| Notas clínicas versionadas y selladas | `opus` |
-| Avisos de documentación escalados | `sonnet` |
-| Registro de accesos a historia | `opus` |
+```
+llega la hora de la cita
+   └─ aviso «Sesión en curso · [paciente] · Notas»   (no modal, no roba el foco)
+        └─ ficha de la cita  ─── botón Notas ───┐
+   calendario: punto verde latente en curso     │
+        └─ clic en la cita ──────────────────────┤
+   ficha del paciente › Historia clínica         │
+        └─ PIN ─────────────────────────────────┤
+                                                 ▼
+                                   editor de nota (borrador)
+                                                 │  firmar
+                                                 ▼
+                              versión 1 sellada · entra en la cadena de huellas
+                                     (guarda si se escribió DENTRO de la sesión)
+                                                 │  si pasa la hora sin firmar
+                                                 ▼
+                                   alerta escalada  0 h · 24 h · 72 h → administrador
+```
+
+| ID | Título | Modelo | Depende | Estado |
+|---|---|---|---|---|
+| T-010 | Dominio Agenda: esquema, auditoría y RLS | `opus` | T-004 | pendiente |
+| T-011 | Series de citas con desviaciones | `opus` | T-010 | pendiente |
+| T-012 | Nota clínica: borrador, firma y versión sellada | `opus` | T-005, T-007, T-013 | pendiente |
+| T-013 | Ficha del paciente, pestañas y pantalla de bloqueo | `sonnet` | T-006, T-007 | pendiente |
+| T-014 | Calendario: vista semanal y ficha de cita | `opus` | T-011, T-007 | pendiente |
+| T-015 | Avisos: sesión en curso, notificaciones y escalado | `sonnet` | T-010, T-014 | pendiente |
+
+```
+T-010 ─── T-011 ─── T-014 ─┐
+   │                        ├─ T-015
+   └──────── T-013 ─── T-012
+```
+
+**Revisión con Opus en los seis, sin excepción**: los seis tocan RLS, datos clínicos o
+las dos cosas. T-013 y T-010 son independientes entre sí y se pueden llevar en paralelo.
+
+**Los ADR-045 a 048 se cierran antes de empezar**, y uno de ellos vence antes incluso de
+que termine la fase 0: el ADR-046 mete cuatro campos en el sobre canónico, así que **T-005
+no se puede escribir sin haberlo leído**. Los otros tres —estados de cita, aviso no modal
+y consentimientos fuera del candado— cuestan una migración o un rediseño si se dejan para
+después.
+
+### Se redactan al llegar, no ahora
+
+Siguen en el plan de la fase y **no** se especifican todavía: importador de Excel y CSV,
+pacientes con filtros y previsualización guardable, episodios y valoraciones de riesgo,
+calendario mensual y anual, disponibilidad y festivos, y el registro de accesos a historia
+como pantalla consultable. Los últimos se escribirían sin saber lo aprendido en los
+primeros.
+
+## Carril paralelo · trabajo sin base de datos (T-016 a T-020)
+
+> **Desde el 29-08 este carril es uno de tres**, y es el que lleva **Kimi**. Lo que sigue
+> describiéndolo entero vale igual; lo único nuevo es que ya no está solo y que su
+> territorio quedó fijado por escrito en `CARRILES.md`.
+
+
+Cinco tickets que **no tocan `supabase/`, ni RLS, ni ninguna pantalla**, y por eso pueden
+llevarse **fuera de la fábrica y en paralelo** con la fase 0 sin colisionar con T-002,
+T-003 ni T-004. Todos son `sonnet` sobre-especificado: no pasan por la etapa de diseño y
+**no necesitan revisión con Opus**, porque ninguno toca RLS, dinero ni datos clínicos.
+
+| ID | Título | Depende | Desbloquea | Estado |
+|---|---|---|---|---|
+| T-016 | Banco de pruebas unitarias (Vitest) | — | T-007, T-009, y los cuatro de aquí | **hecho** |
+| T-017 | Identificadores y contacto españoles | T-016 | T-006, T-013, facturación | pendiente |
+| T-018 | Fechas, zona horaria y semana | T-016 | T-011, T-014 | pendiente |
+| T-019 | Linter de migraciones (regla 6) | T-016 | T-009 | pendiente |
+| T-020 | Estados de la cita, puros | T-016, T-018 | T-010, T-014 | pendiente |
+
+**Por qué estos cinco y no otros.** Cada uno es una pieza que **dos tickets caros harían
+por duplicado**, y ninguno contiene una decisión que cueste una migración si sale mal:
+
+- **T-016 tapa un agujero que ya existe**: T-007 exige «prueba de teclado por primitiva,
+  automatizada» y T-009 exige «su prueba» del validador de contraste, y **no hay corredor
+  de pruebas en el proyecto**. Los dos se estrellarían contra lo mismo. Va primero: los
+  otros cuatro entregan pruebas y necesitan dónde ponerlas.
+- **T-017** existe por el ADR-029: si dos pantallas normalizan el DNI distinto, el índice
+  único deja de detectar el alta doble. La normalización tiene que ser **una**.
+- **T-018** le quita a T-011 y a T-014 —los dos `opus`— la aritmética de calendario, para
+  que gasten su diseño en el modelo de la serie y en la pantalla, no en el cambio de hora
+  de marzo. `@date-fns/tz` no está ni instalado.
+- **T-019** convierte la regla 6 de la constitución en un comando. Lee texto, no levanta
+  Docker, y por eso corre mientras T-002 sigue abierto sobre esos mismos ficheros.
+- **T-020** escribe la tabla de transiciones del ADR-045 una vez, en vez de tres —Server
+  Action, botón y disparador— que se desincronizan.
+
+**Reglas del carril**, y las cinco valen para cualquiera que lo ejecute:
+
+1. **Una rama por ticket**, `T-0XX-<slug>`, y un PR contra `main`. Nada se integra sin que
+   `npm test`, `npm run lint` y `npm run build` estén verdes en el PR.
+2. **Zona prohibida**: `supabase/`, `app/` (salvo lo que el ticket nombre), `app/prototipo/`,
+   `docs/architecture.md`, `docs/decisions.md` y `diseño/`. Quien necesite tocar algo de
+   ahí, **para y escala**: es señal de que el ticket estaba mal cortado.
+3. **Dependencias nuevas solo las que el ticket nombra**, y ancladas de versión. El ADR-040
+   prohíbe librerías de componentes; el resto se justifica o no entra.
+4. **Nada de decisiones de dominio.** Lo que no esté cerrado en un ADR se anota en
+   `docs/state.md` §Hallazgos anotados y se sigue (constitución, regla 2).
+5. **Nada está hecho sin evidencia** (regla 3): cada criterio se cierra con la salida real
+   del comando, pegada en el PR.
+
+Si un ticket `opus` posterior decide otra cosa —T-010 sobre los estados, T-011 sobre las
+desviaciones—, **manda el `opus`** y el módulo de aquí se reescribe. Eso cuesta un fichero,
+que es justo el criterio por el que estos cinco son `sonnet`.
 
 ## Fuera de alcance ahora
 
 Facturación y Verifactu, firmas, informes, recordatorios `wa.me`, plano de control
 multi-instancia y despliegue a Vercel. Vuelven cuando la fase 1 esté en uso real.
+
+## Aviso para fase 2 · la corrección de pruebas cruza una frontera
+
+La fase 2 incluye «Evaluaciones con arrastrar y soltar» y «Validación y análisis de
+archivos», e `interfaz.md` describe la sub-pestaña como «pruebas, **corrección** y
+adjuntos». **Almacenar una puntuación es historia clínica; calcularla e interpretarla es
+software como producto sanitario** (ADR-049).
+
+Quien redacte ese ticket **se para y escala**. No es un «no»: es que la decisión tiene un
+coste regulatorio —clasificación, documentación técnica, registro en AEMPS— que hay que
+poner sobre la mesa antes de escribir la primera línea, no después de tener la pantalla
+hecha.

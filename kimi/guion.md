@@ -48,6 +48,11 @@ Ahora mira la rama:
 - **Estás en `main`** — `git pull` y luego el paso 3 crea tu rama.
 - **Estás en otra rama cualquiera** — para y avisa.
 
+**Hay otros dos carriles moviendo `main` a la vez que tú.** Si tu rama se queda atrás, se
+rebasa **sobre `main` y solo sobre `main`**, nunca sobre la rama de otro carril. Después,
+`npm install` otra vez. Un conflicto en `package-lock.json` **no se resuelve a mano**: te
+quedas con el de `main`, reaplicas tu `package.json` y corres `npm install`.
+
 ## 2 · Lee, y solo esto
 
 - `kimi/LEEME.md`
