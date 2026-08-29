@@ -5,7 +5,7 @@ modelo: opus
 fase: 0
 prioridad: alta
 depende_de: [T-002]
-estado: pendiente
+estado: hecho
 ---
 
 # Contexto
@@ -172,3 +172,39 @@ declarado sigue nombrándola: **la comparación falla en el sentido contrario, c
 `pines_historia` y `desbloqueos_historia` no tienen políticas propias —RLS activo y cero
 políticas, correcto—: se prueban por comportamiento de sus funciones, no por política.
 `preferencias_usuario` no guarda dato clínico: una fila por rol basta.
+
+## Cierre · dos pasadas de revisión con Opus
+
+La primera pasada (obligatoria: el ticket es `opus` y toca RLS) encontró tres hallazgos
+ALTA reales — 22 políticas que `11-cobertura.sql` daba por cubiertas solo porque su
+nombre estaba en el array, sin ninguna aserción que las ejerciera; ninguna prueba de que
+el administrador NO lee contenido clínico ajeno; la nota individual del episodio conjunto
+(control del criterio 9 de T-002) sin su gemela positiva. Corregidos añadiendo
+`scripts/rls/12-resto-de-tablas.sql` y los bloques que faltaban en `02-matriz-roles.sql`
+y `03-candado.sql`.
+
+La reverificación de esa corrección —con mutaciones reales sobre la base viva, no
+lectura de código— encontró que **dos de las propias correcciones eran solo aparentes**:
+
+- La negativa de `preferencias_usuario_alta_propia` usaba el `perfil_id` de un perfil que
+  ya tenía fila: el rechazo real era la clave primaria duplicada (23505), no el `with
+  check` (42501). Con la política abierta del todo (`with check (true)`), el banco seguía
+  en verde.
+- La prueba de «el administrador no tiene rama en `notas_clinicas_lectura`» contaba con
+  el candado cerrado, así que no distinguía esa causa de la que de verdad quería probar.
+  `fijar_pin_historia()` no tiene guarda de rol, así que el administrador SÍ puede
+  desbloquear su propia historia — y con el candado abierto de verdad, el hallazgo se
+  hace visible.
+
+Ambas, más cuatro hallazgos MEDIA/BAJA (políticas de modificación sin ejercer en
+`evaluaciones`, `informes`, `consentimiento_firmantes` y `preferencias_usuario`; dos
+negativas de alta que un futuro índice único podría enmascarar; y dos ramas de un `OR`
+—`informes_lectura`, `consentimiento_firmantes_lectura`— nunca aisladas la una de la
+otra— se corrigieron y **cada corrección se verificó reproduciendo la fuga exacta que el
+revisor había demostrado**: mutar la política real en la migración, ver el banco ponerse
+rojo con el mensaje que la nombra, restaurar y ver verde de nuevo. Cuatro de esas
+reproducciones (las dos ALTA y dos de las de aislamiento de rama) las repitió también
+quien implementó, de forma independiente a la reverificación.
+
+**T-003 queda cerrado.** `npm run test:rls` verde con base recién reseteada (13 módulos,
+~140 aserciones, código de salida 0); `npm run lint` y `npm run build` limpios.
