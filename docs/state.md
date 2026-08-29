@@ -181,6 +181,36 @@ Fase 0. Primer stack completo armado:
 
 ## Últimos cambios
 
+- **Revisión con Opus de T-002, 29-08-2026 — un hallazgo ALTO.** Pendiente desde el 22-08.
+  **El corte por baja del ADR-032 tenía dos puertas abiertas**, y las dos daban a datos de
+  paciente:
+  - **`auditoria_lectura_propia`** — `estado_anterior`/`estado_posterior` traen el nombre del
+    paciente de cada fila que ese profesional tocó.
+  - **`accesos_historia_lectura`** — la rama `perfil_id = auth.uid()` no mira el estado, y
+    delata **a qué historias entró y cuándo**. La política sí menciona `rol_actual()`, pero
+    **en la otra rama**: por eso una búsqueda por política, y no por rama, no lo ve.
+
+  Reproducido: un profesional en `baja` veía **cero pacientes** —el corte funciona donde se
+  aplicó— y a la vez su fila de auditoría **con el nombre del paciente dentro**. Se cierra
+  anteponiendo `rol_actual() is not null` a las dos, en
+  `20260829180000_revision_corte_por_baja.sql`, con nueve aserciones verdes en
+  `scripts/t002-revision-corte-por-baja.sql`.
+
+  **T-004 agrandó la primera puerta sin querer**: colgar la auditoría de las veinticinco
+  tablas convirtió el rastro de una tabla en el de todas. El hallazgo es anterior; su alcance
+  lo multiplicó ese ticket. **Lección que queda: al ampliar la cobertura de algo, hay que
+  revisar quién lee lo ampliado.**
+
+  **La regla, afinada**: no basta con que una política mencione `rol_actual()`. Hay que
+  mirarla **rama por rama**: toda rama que conceda por `<columna> = auth.uid()` y no pase por
+  el candado necesita el `is not null` delante.
+
+  Lo demás salió limpio, y se comprobó **por catálogo** en vez de leyendo 1431 líneas:
+  ninguna tabla sin RLS, ninguna política `UPDATE` con `USING` y sin `WITH CHECK`, ninguna
+  `FOR ALL`, ninguna a `public`/`anon`, ninguna función `definer` sin `search_path`. Cuatro
+  disparadores `definer` quedan ejecutables por `PUBLIC` y **no es un agujero**: Postgres
+  rechaza invocarlos directamente, y se comprobó en vez de suponerlo.
+
 - **Integración de los tres carriles a la vez, 29-08-2026.** Entran en `main` **seis ramas**
   sin un solo conflicto, en el orden del protocolo —base de datos, `lib/`, interfaz—:
 
@@ -460,10 +490,15 @@ Ninguno. Verificación manual pendiente.
 > T-004, T-016 a T-019 y los cortes A y B de T-007. **Lo que falta de fase 0 es T-003, T-005,
 > T-006, T-008 y T-009**, más los cortes C y D de T-007.
 >
-> **Lo primero, y sigue pendiente desde el 22-08: la revisión con Opus de T-002.** Es el
-> ticket más grande y el único que ha crecido dos veces sin pasar por revisión. Después, el
-> punto 3 del guion manual en navegador —un perfil `suspendido` deja de ver `/pacientes`—,
-> que sigue sin ejecutarse.
+> **La revisión con Opus de T-002 está hecha (29-08)** y cerró un hallazgo alto. Lo que
+> queda de ese ticket es **el punto 3 del guion manual en navegador** —un perfil
+> `suspendido` deja de ver `/pacientes`—, que **no se ha ejecutado nunca** contra la
+> aplicación de verdad. Es la única comprobación de fase 0 que sigue viviendo solo sobre el
+> papel.
+>
+> **Después: T-003** (banco de pruebas de RLS), que ahora tiene un caso obligatorio más — el
+> corte por baja sobre `auditoria` y `accesos_historia`—, y **T-005**, que no se puede
+> escribir sin haber leído el ADR-046.
 >
 > **Y una deuda de verificación que arrastran los dos cortes de T-007**: 360 px y
 > `prefers-reduced-motion` **no se han comprobado en navegador**. jsdom no tiene disposición
