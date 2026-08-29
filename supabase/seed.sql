@@ -48,7 +48,7 @@ insert into auth.users (
     now(),
     now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
-    '{}'::jsonb,
+    '{"rol":"profesional_sanitario","nombre_completo":"Ana"}'::jsonb,
     '',
     '',
     '',
@@ -65,7 +65,7 @@ insert into auth.users (
     now(),
     now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
-    '{}'::jsonb,
+    '{"rol":"profesional_sanitario","nombre_completo":"Bruno"}'::jsonb,
     '',
     '',
     '',
@@ -114,9 +114,18 @@ insert into auth.identities (
 -- public.perfiles
 -- =========================================================================
 
+-- Desde T-002 el disparador `crear_perfil_de_usuario` sobre auth.users YA ha creado
+-- estas dos filas, a partir de `raw_user_meta_data ->> 'rol'` (fallo cerrado: sin rol
+-- válido en los metadatos, el alta del usuario de arriba habría fallado). El insert se
+-- conserva como declaración explícita de lo que la siembra espera encontrar, y por eso
+-- lleva `on conflict do update`: si el disparador desapareciera, la siembra seguiría
+-- funcionando; y con él puesto, no choca la clave primaria.
 insert into public.perfiles (id, nombre_completo, rol) values
   ('11111111-1111-4111-8111-111111111111', 'Ana', 'profesional_sanitario'),
-  ('22222222-2222-4222-8222-222222222222', 'Bruno', 'profesional_sanitario');
+  ('22222222-2222-4222-8222-222222222222', 'Bruno', 'profesional_sanitario')
+on conflict (id) do update
+  set nombre_completo = excluded.nombre_completo,
+      rol             = excluded.rol;
 
 -- =========================================================================
 -- public.pacientes

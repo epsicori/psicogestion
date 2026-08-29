@@ -90,6 +90,13 @@ export type Database = {
             foreignKeyName: "accesos_historia_perfil_id_fkey"
             columns: ["perfil_id"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accesos_historia_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -166,6 +173,13 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_documentacion_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
             referencedColumns: ["id"]
           },
           {
@@ -352,6 +366,13 @@ export type Database = {
             foreignKeyName: "consentimientos_creado_por_fkey"
             columns: ["creado_por"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consentimientos_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -394,6 +415,13 @@ export type Database = {
           revocado_en?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "desbloqueos_historia_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "desbloqueos_historia_perfil_id_fkey"
             columns: ["perfil_id"]
@@ -444,6 +472,13 @@ export type Database = {
           retirado_en?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "diagnosticos_diagnosticado_por_fkey"
+            columns: ["diagnosticado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "diagnosticos_diagnosticado_por_fkey"
             columns: ["diagnosticado_por"]
@@ -565,6 +600,13 @@ export type Database = {
             foreignKeyName: "episodios_asistenciales_profesional_id_fkey"
             columns: ["profesional_id"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "episodios_asistenciales_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -613,6 +655,13 @@ export type Database = {
             foreignKeyName: "evaluacion_archivos_subido_por_fkey"
             columns: ["subido_por"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluacion_archivos_subido_por_fkey"
+            columns: ["subido_por"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -653,6 +702,13 @@ export type Database = {
           puntuaciones?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "evaluaciones_aplicado_por_fkey"
+            columns: ["aplicado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "evaluaciones_aplicado_por_fkey"
             columns: ["aplicado_por"]
@@ -724,6 +780,13 @@ export type Database = {
             foreignKeyName: "informes_autor_id_fkey"
             columns: ["autor_id"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "informes_autor_id_fkey"
+            columns: ["autor_id"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -782,7 +845,21 @@ export type Database = {
             foreignKeyName: "notas_clinicas_autor_id_fkey"
             columns: ["autor_id"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_clinicas_autor_id_fkey"
+            columns: ["autor_id"]
+            isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_clinicas_borrador_autor_id_fkey"
+            columns: ["borrador_autor_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
             referencedColumns: ["id"]
           },
           {
@@ -858,6 +935,13 @@ export type Database = {
           numero_version?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "notas_clinicas_versiones_autor_id_fkey"
+            columns: ["autor_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notas_clinicas_versiones_autor_id_fkey"
             columns: ["autor_id"]
@@ -987,6 +1071,13 @@ export type Database = {
             foreignKeyName: "pacientes_fusionado_por_fkey"
             columns: ["fusionado_por"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_fusionado_por_fkey"
+            columns: ["fusionado_por"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -994,7 +1085,21 @@ export type Database = {
             foreignKeyName: "pacientes_profesional_id_fkey"
             columns: ["profesional_id"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_traspasado_a_fkey"
+            columns: ["traspasado_a"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
             referencedColumns: ["id"]
           },
           {
@@ -1136,6 +1241,13 @@ export type Database = {
             foreignKeyName: "pines_historia_perfil_id_fkey"
             columns: ["perfil_id"]
             isOneToOne: true
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pines_historia_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: true
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -1170,6 +1282,13 @@ export type Database = {
           id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "politicas_retencion_actualizado_por_fkey"
+            columns: ["actualizado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "politicas_retencion_actualizado_por_fkey"
             columns: ["actualizado_por"]
@@ -1209,6 +1328,13 @@ export type Database = {
           perfil_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "preferencias_usuario_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: true
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "preferencias_usuario_perfil_id_fkey"
             columns: ["perfil_id"]
@@ -1281,6 +1407,13 @@ export type Database = {
             foreignKeyName: "representantes_paciente_creado_por_fkey"
             columns: ["creado_por"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "representantes_paciente_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -1346,6 +1479,13 @@ export type Database = {
             foreignKeyName: "valoraciones_riesgo_valorado_por_fkey"
             columns: ["valorado_por"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "valoraciones_riesgo_valorado_por_fkey"
+            columns: ["valorado_por"]
+            isOneToOne: false
             referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
@@ -1387,13 +1527,69 @@ export type Database = {
             foreignKeyName: "accesos_historia_perfil_id_fkey"
             columns: ["perfil_id"]
             isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accesos_historia_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      directorio_perfiles: {
+        Row: {
+          centro_id: string | null
+          estado: Database["public"]["Enums"]["estado_perfil"] | null
+          id: string | null
+          nombre_completo: string | null
+          rol: Database["public"]["Enums"]["rol_usuario"] | null
+        }
+        Insert: {
+          centro_id?: string | null
+          estado?: Database["public"]["Enums"]["estado_perfil"] | null
+          id?: string | null
+          nombre_completo?: string | null
+          rol?: Database["public"]["Enums"]["rol_usuario"] | null
+        }
+        Update: {
+          centro_id?: string | null
+          estado?: Database["public"]["Enums"]["estado_perfil"] | null
+          id?: string | null
+          nombre_completo?: string | null
+          rol?: Database["public"]["Enums"]["rol_usuario"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "perfiles_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pacientes_indicador_riesgo: {
+        Row: {
+          indicador: boolean | null
+          paciente_id: string | null
+          valorado_en: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valoraciones_riesgo_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
             referencedColumns: ["id"]
           },
         ]
       }
     }
     Functions: {
+      bloquear_historia: { Args: never; Returns: number }
       capacidad_consentimiento: {
         Args: { p_fecha?: string; p_paciente_id: string }
         Returns: {
@@ -1403,7 +1599,37 @@ export type Database = {
           requiere_audiencia_menor: boolean
         }[]
       }
+      centro_actual: { Args: never; Returns: string }
+      desbloquear_historia: {
+        Args: { p_pin: string }
+        Returns: {
+          bloqueado_hasta: string
+          caduca_en: string
+          desbloqueado: boolean
+          motivo: string
+        }[]
+      }
+      desbloqueo_propio_vigente: {
+        Args: { p_desbloqueo_id: string }
+        Returns: boolean
+      }
+      desbloqueo_vigente: { Args: never; Returns: string }
+      es_profesional_asignado: {
+        Args: { p_paciente_id: string }
+        Returns: boolean
+      }
+      es_profesional_del_episodio: {
+        Args: { p_episodio_id: string }
+        Returns: boolean
+      }
       es_zona_iana: { Args: { p_zona: string }; Returns: boolean }
+      fijar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
+      historia_desbloqueada: { Args: never; Returns: boolean }
+      nota_tiene_version_conjunta: {
+        Args: { p_nota_id: string }
+        Returns: boolean
+      }
+      prolongar_desbloqueo: { Args: never; Returns: string }
       retencion_efectiva: {
         Args: { p_centro_id: string }
         Returns: {

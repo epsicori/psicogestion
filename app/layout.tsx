@@ -31,10 +31,13 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
+  // Las extensiones del navegador (LanguageTool y compañía) escriben atributos en <html>
+  // antes de que React hidrate. Silencia este elemento, no sus hijos.
   return (
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} ${dmSerif.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="bg-background text-foreground flex min-h-full flex-col">{children}</body>
     </html>

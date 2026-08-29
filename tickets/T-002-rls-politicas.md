@@ -5,7 +5,7 @@ modelo: opus
 fase: 0
 prioridad: alta
 depende_de: [T-001]
-estado: pendiente
+estado: en_curso
 ---
 
 # Contexto
@@ -27,7 +27,7 @@ representante), **030** (participación en episodio), **031** (resolver por el v
 
 ## Tareas
 
-- [ ] **Funciones auxiliares**, todas `stable security definer set search_path = ''`, con
+- [x] **Funciones auxiliares**, todas `stable security definer set search_path = ''`, con
       `revoke execute from public` y `grant` solo a `authenticated`:
       - `rol_actual()` — ya existe de T-000; revisar, no reescribir.
       - `es_profesional_asignado(paciente_id)` — **resuelve el vínculo de fusión en un
@@ -36,70 +36,77 @@ representante), **030** (participación en episodio), **031** (resolver por el v
       - `historia_desbloqueada()` — desbloqueo vigente y no revocado (ADR-026). Invoca
         `extensions.crypt`, no `crypt`, porque el `search_path` está vacío.
       - `centro_actual()` — el centro del perfil, para acotar al técnico (ADR-033).
-- [ ] **Disparador de alta de perfil**: al crearse un `auth.users` se crea su fila en
+- [x] **Disparador de alta de perfil**: al crearse un `auth.users` se crea su fila en
       `perfiles`. Es la deuda que T-000 dejó anotada («un usuario creado a mano en Studio
       no tendrá perfil»).
-- [ ] **Políticas del dominio Organización**: `organizacion` y `centros` legibles por los
+- [x] **Políticas del dominio Organización**: `organizacion` y `centros` legibles por los
       tres roles; escritura solo administrador. `perfiles`: lectura propia siempre, y
       lectura del directorio según la matriz. **Ninguna política sobre `perfiles` invoca
       `rol_actual()`** — regla permanente.
-- [ ] **Políticas de `pacientes`**: administrador total; profesional los suyos vía
+- [x] **Políticas de `pacientes`**: administrador total; profesional los suyos vía
       `es_profesional_asignado()`; técnico administrativo **el subconjunto de lectura**
       acotado a su centro.
-- [ ] **Políticas de `pacientes_identificacion`**: administrador total, profesional los
+- [x] **Políticas de `pacientes_identificacion`**: administrador total, profesional los
       suyos, **técnico sin acceso** (ni una fila).
-- [ ] **Políticas del contenido clínico** —`episodios_asistenciales`, `diagnosticos`,
+- [x] **Políticas del contenido clínico** —`episodios_asistenciales`, `diagnosticos`,
       `valoraciones_riesgo`, `notas_clinicas`, `notas_clinicas_versiones`, `evaluaciones`,
       `evaluacion_archivos`, `informes`— **exigiendo `historia_desbloqueada()` además del
       resto** (ADR-026). El administrador **no ve notas ajenas** (decisión 5); el
       profesional, como autor o asignado.
-- [ ] **Riesgo para el técnico**: nunca la fila de `valoraciones_riesgo`. El indicador
+- [x] **Riesgo para el técnico**: nunca la fila de `valoraciones_riesgo`. El indicador
       binario sale de columna o vista derivada, no de un `select` filtrado en la
       aplicación (decisión 6, invariante 3).
-- [ ] **Nota conjunta** (ADR-030): visible para el profesional de **cualquier**
+- [x] **Nota conjunta** (ADR-030): visible para el profesional de **cualquier**
       participante del episodio, por participación y no por copia.
-- [ ] **Acceso del representante legal** (ADR-028) y su restricción por defecto a partir
-      de los 16 años, levantable por el profesional dejando constancia.
-- [ ] **`alertas_documentacion` queda fuera del candado**: se lee sin desbloqueo, porque
+- [ ] ~~**Acceso del representante legal** (ADR-028) y su restricción por defecto a partir
+      de los 16 años, levantable por el profesional dejando constancia.~~
+      **FUERA DE ALCANCE** por decisión del propietario (§0 del diseño, punto 1): un
+      representante no es un `auth.users` ni tiene perfil, así que no hay sujeto al que
+      aplicar una política. Se traslada al ticket de la salida dirigida al paciente.
+      Anotado en `docs/state.md` §Hallazgos anotados.
+- [x] **`alertas_documentacion` queda fuera del candado**: se lee sin desbloqueo, porque
       son recuentos y estados, no contenido (ADR-026, choque 11).
-- [ ] **`pines_historia` y `desbloqueos_historia`**: sin `select` para nadie; se tocan solo
+- [x] **`pines_historia` y `desbloqueos_historia`**: sin `select` para nadie; se tocan solo
       por funciones `security definer` (fijar PIN, verificar PIN, desbloquear, bloquear,
       prolongar). **Ninguna de sus políticas invoca `historia_desbloqueada()`** — sin
       recursión por construcción.
-- [ ] **Bloqueo por intentos** dentro de la función de verificación: cinco fallos, quince
+- [x] **Bloqueo por intentos** dentro de la función de verificación: cinco fallos, quince
       minutos, entrada en `auditoria` y notificación al titular. El contador vive en la
       base, no en la sesión. El PIN viaja **como parámetro ligado**, jamás interpolado.
+      *La **notificación al titular** queda pendiente: no existe tabla `notificaciones` en
+      el esquema (T-001 no la creó). Se escribe la auditoría, que es lo que exige el
+      criterio 10, y la deuda queda anotada en `docs/state.md`.*
 
 ## Criterios de aceptación (verificables)
 
 Todos con sesión simulada (`set local role authenticated` + `request.jwt.claims`), en el
 guion SQL de este ticket. La batería completa por rol es T-003.
 
-- [ ] **Automático** — `npx supabase db reset`, `npm run lint` y `npm run build` limpios.
-- [ ] **Automático** — el `tecnico_administrativo` obtiene **cero filas** de
+- [x] **Automático** — `npx supabase db reset`, `npm run lint` y `npm run build` limpios.
+- [x] **Automático** — el `tecnico_administrativo` obtiene **cero filas** de
       `pacientes_identificacion`, `notas_clinicas`, `notas_clinicas_versiones`,
       `episodios_asistenciales`, `diagnosticos`, `valoraciones_riesgo`, `evaluaciones`,
       `evaluacion_archivos` e `informes`.
-- [ ] **Automático** — el técnico de un centro **no ve** los pacientes de otro centro; el
+- [x] **Automático** — el técnico de un centro **no ve** los pacientes de otro centro; el
       profesional **sí** ve a los suyos aunque estén en otro centro (ADR-033).
-- [ ] **Automático** — el `administrador` obtiene **cero filas** de `notas_clinicas` de
+- [x] **Automático** — el `administrador` obtiene **cero filas** de `notas_clinicas` de
       otro profesional, incluso con desbloqueo vigente.
-- [ ] **Automático** — el profesional asignado **sin desbloqueo vigente** obtiene **cero
+- [x] **Automático** — el profesional asignado **sin desbloqueo vigente** obtiene **cero
       filas** de `notas_clinicas`; tras desbloquear, las suyas; tras `bloquear`, cero otra
       vez (prueba negativa del ADR-026).
-- [ ] **Automático** — el mismo profesional **sí** lee `alertas_documentacion` sin
+- [x] **Automático** — el mismo profesional **sí** lee `alertas_documentacion` sin
       desbloqueo alguno.
-- [ ] **Automático** — un paciente `fusionado_en` otro es legible por el profesional del
+- [x] **Automático** — un paciente `fusionado_en` otro es legible por el profesional del
       **superviviente**, en un solo salto, y crear una cadena de dos saltos es imposible.
-- [ ] **Automático** — un profesional con `estado = 'baja'` obtiene **cero filas** de sus
+- [x] **Automático** — un profesional con `estado = 'baja'` obtiene **cero filas** de sus
       propios pacientes y de sus propias notas.
-- [ ] **Automático** — el profesional de **cualquier** participante de un episodio conjunto
+- [x] **Automático** — el profesional de **cualquier** participante de un episodio conjunto
       lee la nota conjunta; un profesional ajeno al episodio, cero filas.
-- [ ] **Automático** — cinco verificaciones fallidas de PIN dejan el PIN bloqueado, generan
+- [x] **Automático** — cinco verificaciones fallidas de PIN dejan el PIN bloqueado, generan
       su entrada en `auditoria`, y la sexta **no** desbloquea aunque el PIN sea correcto.
-- [ ] **Automático** — `select` directo sobre `pines_historia` como `authenticated` falla
+- [x] **Automático** — `select` directo sobre `pines_historia` como `authenticated` falla
       con permiso denegado, con y sin desbloqueo vigente.
-- [ ] **Automático** — ninguna política sobre `perfiles`, `pines_historia` ni
+- [x] **Automático** — ninguna política sobre `perfiles`, `pines_historia` ni
       `desbloqueos_historia` menciona `rol_actual()` ni `historia_desbloqueada()`
       (comprobable con `select ... from pg_policies`).
 
@@ -400,3 +407,67 @@ Guion `scripts/t002-rls.sql` con **fijación propia**: un administrador, dos pro
 8. **`revoke select on desbloqueos_historia` rompiendo la FK de `accesos_historia`.** No debería, pero es la clase de trampa que T-001 pagó dos veces. Prueba explícita.
 9. **Coste de la subconsulta de `alcance = 'conjunta'`**: revisar con `explain` sobre la lista de notas de un paciente.
 10. **`search_path = ''` y los enums**: todo cualificado dentro de los cuerpos. Un `crypt` sin cualificar muere en ejecución, no al crear la función.
+
+---
+
+# Enmienda del 26-08-2026 · Un profesional puede estar en varios centros
+
+**Estado del ticket: vuelve a `en_curso`.** El ADR-051 cierra que la pertenencia a centro es
+una relación con vigencia y no una columna. Entra **antes** de la revisión con Opus: revisar
+un juego de políticas que vamos a cambiar es trabajo tirado, y hacerlo ahora es gratis
+porque no hay una sola fila real dentro.
+
+## Tareas de la enmienda
+
+- [ ] **`perfiles_centros`**: `perfil_id`, `centro_id`, `principal bool`, `desde date`,
+      `hasta date`. Índice único parcial de **un solo principal vigente por perfil** y una
+      sola fila vigente por par. Auditoría con `fn_auditar()`.
+- [ ] **`perfiles.centro_id` no se borra**: pasa a ser **espejo del principal**, mantenido
+      por disparador desde `perfiles_centros`. Migración hacia delante, no destructiva; el
+      `check perfiles_tecnico_exige_centro` y todo lo que ya lee esa columna siguen
+      funcionando el primer día.
+- [ ] **`centros_actuales()` → `setof uuid`**, `stable security definer set search_path = ''`.
+      **`centro_actual()` se conserva** devolviendo el principal.
+- [ ] **Reescribir con `centros_actuales()`** las cuatro cosas que hoy usan
+      `centro_actual()`: la rama del técnico en `pacientes_lectura`, la de
+      `alertas_documentacion`, la vista `pacientes_indicador_riesgo` y el disparador
+      `fn_rellenar_centro_paciente` —que **usa el principal**, porque el centro del paciente
+      decide su retención durante veinticinco años (ADR-033)—. Patrón:
+      `centro_id in (select public.centros_actuales())`.
+- [ ] **El técnico administrativo exige al menos una pertenencia vigente**. Sin centro no
+      hay recorte, y sin recorte ve la organización entera.
+- [ ] **Políticas de `perfiles_centros`**: lectura para los tres roles (es directorio);
+      escritura **solo administrador**. Un profesional **no se asigna centros a sí mismo**.
+- [ ] **Cerrar, no borrar**: se pone `hasta`, nunca se hace `delete`.
+
+## Lo que esta enmienda NO cambia, y conviene decirlo alto
+
+**El centro no decide qué pacientes lee un profesional, y nunca lo ha decidido.** El
+profesional lee **los suyos** —asignados o dados de alta por él— vía
+`es_profesional_asignado()`, que mira `pacientes.profesional_id` y **no consulta el centro**.
+`centros_actuales()` **acota al técnico administrativo y a nadie más**.
+
+Por tanto: cerrar la pertenencia de un profesional a un centro **no le quita ni un
+paciente**. Lo que le retira el acceso es la baja del perfil (ADR-032) o que el
+administrador desasigne. Y ampliarle el alcance tampoco es cosa de centros: es que **el
+administrador le asigne el paciente** o lo dé de alta en el episodio (ADR-030). Ese es el
+único mecanismo que existe, y debe seguir siéndolo.
+
+## Criterios de aceptación de la enmienda
+
+- [ ] **Automático** — un técnico con dos pertenencias vigentes lee pacientes de **los dos**
+      centros; al cerrar una con `hasta`, deja de leer los de ese centro **en la misma
+      sesión**.
+- [ ] **Automático** — un profesional con dos pertenencias, o con ninguna, lee **exactamente
+      el mismo conjunto** de pacientes: los suyos. Cerrar o abrir pertenencias **no cambia
+      ni una fila**. Es la prueba que demuestra que el corte es solo del técnico.
+- [ ] **Automático** — insertar una segunda fila `principal = true` vigente para el mismo
+      perfil **falla** por el índice único parcial.
+- [ ] **Automático** — `perfiles.centro_id` coincide siempre con el principal vigente
+      después de insertar, cambiar de principal y cerrar pertenencias.
+- [ ] **Automático** — un profesional intentando insertar en `perfiles_centros` obtiene
+      violación de política; el administrador, no.
+- [ ] **Automático** — alta de paciente por un profesional con tres centros: el paciente
+      recibe el **principal**, no el primero ni uno al azar.
+- [ ] **Automático** — `delete` sobre `perfiles_centros` no ocurre en ningún camino de la
+      aplicación; el cierre es siempre `hasta`.
