@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -238,14 +239,14 @@ export function EstadoVacio({
  */
 export function Cargando({ filas = 3 }: { filas?: number }) {
   return (
-    <div className="flex flex-col gap-3" role="status" aria-label="Cargando">
+    <div className="flex flex-col gap-3" role="status" aria-label={t('interfaz.cargando')}>
       {Array.from({ length: filas }).map((_, i) => (
         <div
           key={i}
           className="h-4 w-full animate-pulse rounded bg-muted motion-reduce:animate-none"
         />
       ))}
-      <span className="sr-only">Cargando contenido</span>
+      <span className="sr-only">{t('interfaz.cargandoContenido')}</span>
     </div>
   );
 }

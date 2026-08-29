@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
+import { t } from '@/lib/i18n';
+
 import { cerrarSesion } from '@/app/(app)/acciones';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +29,7 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
       {menuAbierto && (
         <button
           type="button"
-          aria-label="Cerrar menú"
+          aria-label={t('armazon.cerrarMenu')}
           onClick={() => setMenuAbierto(false)}
           className="fixed inset-0 z-30 bg-black/30 lg:hidden"
         />
@@ -45,14 +47,14 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
             <Activity className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-serif text-lg font-semibold tracking-tight">Psicogestión</p>
+            <p className="font-serif text-lg font-semibold tracking-tight">{t('marca')}</p>
             <p className="text-muted-foreground text-[11px] tracking-[0.18em] uppercase">
-              Tu práctica, en calma
+              {t('lema')}
             </p>
           </div>
           <button
             type="button"
-            aria-label="Cerrar menú"
+            aria-label={t('armazon.cerrarMenu')}
             onClick={() => setMenuAbierto(false)}
             className="hover:bg-muted rounded-lg p-2 lg:hidden"
           >
@@ -62,9 +64,9 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
 
         <div className="flex flex-1 flex-col px-3 py-6">
           <p className="text-muted-foreground px-3 pb-3 text-[11px] font-semibold tracking-[0.16em] uppercase">
-            Espacio de trabajo
+            {t('armazon.espacioDeTrabajo')}
           </p>
-          <nav className="flex flex-col gap-1" aria-label="Navegación principal">
+          <nav className="flex flex-col gap-1" aria-label={t('armazon.navegacionPrincipal')}>
             {MODULOS.map((modulo) => (
               <EnlaceModulo
                 key={modulo.href}
@@ -87,8 +89,8 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
             <form action={cerrarSesion}>
               <button
                 type="submit"
-                aria-label="Cerrar sesión"
-                title="Cerrar sesión"
+                aria-label={t('armazon.cerrarSesion')}
+                title={t('armazon.cerrarSesion')}
                 className="text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg p-2"
               >
                 <LogOut className="size-4" />
@@ -105,7 +107,7 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
               type="button"
               onClick={() => setMenuAbierto(true)}
               className="hover:bg-muted rounded-lg p-2 lg:hidden"
-              aria-label="Abrir menú"
+              aria-label={t('armazon.abrirMenu')}
             >
               <Menu className="size-5" />
             </button>
@@ -144,7 +146,7 @@ function EnlaceModulo({
         <Icono className="size-4" />
         {etiqueta}
         <span className="bg-muted text-muted-foreground ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold">
-          pronto
+          {t('armazon.proximamente')}
         </span>
       </span>
     );

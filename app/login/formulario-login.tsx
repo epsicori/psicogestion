@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
+import { t } from '@/lib/i18n';
 import { ESTADO_INICIAL } from '@/lib/formularios';
 
 import { iniciarSesion } from './acciones';
@@ -19,7 +20,7 @@ export function FormularioLogin() {
         type="email"
         required
         autoComplete="email"
-        etiqueta="Correo"
+        etiqueta={t('acceso.correo')}
         errores={estado.errores?.correo}
       />
 
@@ -29,7 +30,7 @@ export function FormularioLogin() {
         type="password"
         required
         autoComplete="current-password"
-        etiqueta="Contraseña"
+        etiqueta={t('acceso.contrasena')}
         errores={estado.errores?.contrasena}
       />
 
@@ -38,7 +39,7 @@ export function FormularioLogin() {
       </p>
 
       <Button type="submit" disabled={enviando} className="w-full">
-        {enviando ? 'Entrando…' : 'Entrar'}
+        {enviando ? t('acceso.entrando') : t('acceso.entrar')}
       </Button>
     </form>
   );

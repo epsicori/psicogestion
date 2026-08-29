@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
+import { t } from '@/lib/i18n';
 import { ESTADO_INICIAL, type EstadoFormulario } from '@/lib/formularios';
 import { crearClienteServidor } from '@/lib/supabase/servidor';
 
@@ -32,7 +33,7 @@ export async function iniciarSesion(
 
   if (error) {
     // Mensaje genérico: no revelar si el correo existe.
-    return { ...ESTADO_INICIAL, mensaje: 'Credenciales no válidas' };
+    return { ...ESTADO_INICIAL, mensaje: t('acceso.credencialesNoValidas') };
   }
 
   redirect('/pacientes');

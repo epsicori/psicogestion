@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
+import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { enfocables, useCierreExterior, useDevolucionDeFoco, useFocoAtrapado } from './foco';
 
@@ -51,7 +52,7 @@ export function Dialogo({ abierto, alCerrar, titulo, children }: Props) {
         <button
           type="button"
           onClick={alCerrar}
-          aria-label="Cerrar"
+          aria-label={t('interfaz.cerrar')}
           className={cn(
             'absolute top-3 right-3 inline-flex min-h-11 min-w-11 items-center justify-center',
             'rounded-lg text-muted-foreground transition-colors',
