@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Informe HTML que genera `npm run test:cobertura` (Vitest/v8). Es salida
+    // generada, como `.next`: está en .gitignore y no es código del proyecto.
+    "coverage/**",
     // Generado localmente por la CLI de Supabase, no es código del proyecto.
     "supabase/.temp/**",
     "supabase/.branches/**",
