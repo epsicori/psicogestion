@@ -181,6 +181,41 @@ Fase 0. Primer stack completo armado:
 
 ## Últimos cambios
 
+- **Integración de los tres carriles a la vez, 29-08-2026.** Entran en `main` **seis ramas**
+  sin un solo conflicto, en el orden del protocolo —base de datos, `lib/`, interfaz—:
+
+  | Rama | Carril | Qué entra |
+  |---|---|---|
+  | T-004 | fábrica | Auditoría en 25 tablas, tres capas, catálogo y comprobador de cobertura |
+  | T-017 | Kimi | `lib/identidad/` — NIF, CIF, IBAN, teléfono, código postal, colegiado |
+  | T-018 | Kimi | `lib/fechas/` — zona, semana, intervalos, anomalías, formato. `@date-fns/tz` anclado |
+  | T-019 | Kimi | `scripts/lint-migraciones.ts` y `npm run lint:migraciones` |
+  | T-007a | MiniMax | Seis primitivas accesibles de `components/ui/` y la base de foco |
+  | T-007b | MiniMax | Once piezas de pintura en `components/ui/piezas.tsx` |
+
+  **Estado del conjunto**: `npm test` **188 pruebas en 22 ficheros**, `lint` y `build`
+  limpios, `db reset` aplica las **cinco** migraciones, **sin deriva de tipos**, y los dos
+  guiones SQL —enmienda de T-002 y T-004— **sin ninguna aserción en falso**.
+
+  **El linter de migraciones de Kimi valida la migración de la fábrica**: `lint:migraciones`
+  da limpias las cinco, incluida la de T-004. Es la primera vez que el trabajo de un carril
+  comprueba el de otro, y es exactamente para lo que se cortó T-019.
+
+- **Quién escribió qué en T-007, y por qué importa.** El corte **A** —las seis primitivas con
+  trampa de foco— lo escribió la fábrica **después de tres vueltas fallidas con MiniMax por
+  API**: entregó un diálogo que fallaba 2 de sus propias 4 pruebas, con moldes para callar al
+  compilador y animaciones inexistentes; en la segunda vuelta borró la prueba de la trampa de
+  foco; en la tercera metió un color literal y movió `role="dialog"` al velo. El corte **B**
+  —las piezas de pintura, `div` con texto— lo escribió MiniMax **a la primera y bien**.
+  **Regla que queda para repartir interfaz**: donde no hay comportamiento, MiniMax rinde;
+  donde hay foco, ARIA y pruebas que no deben pasar por el motivo equivocado, lo escribe la
+  fábrica.
+
+- **Aviso de coordinación pagado una vez**: un renombrado de rama —`T-007a-primitivas` a
+  `main`— pisó el `main` local y lo dejó dos commits atrás. No se perdió nada porque estaba
+  empujado. **`git branch -m` sobre una rama que se llama `main` no avisa**; con tres
+  carriles, el `main` de verdad es el de `origin`.
+
 - **El plan pasa a tres carriles, 29-08-2026.** Lo ejecutan **Claude, MiniMax y Kimi** a la
   vez, y **el reparto es por fichero, no por dificultad**. El mapa entero está en
   `CARRILES.md`; cada carril tiene su punto de entrada (`CLAUDE.md` + `fabrica/ORDEN.md`,
@@ -421,7 +456,21 @@ Ninguno. Verificación manual pendiente.
 
 ## Siguiente paso
 
-> **Paso 0, antes que nada: comitear y empujar `main`.** Hoy el árbol de trabajo tiene sin
+> **Fase 0, al día.** Integrado en `main` (29-08-2026): T-000, T-001, T-002 con su enmienda,
+> T-004, T-016 a T-019 y los cortes A y B de T-007. **Lo que falta de fase 0 es T-003, T-005,
+> T-006, T-008 y T-009**, más los cortes C y D de T-007.
+>
+> **Lo primero, y sigue pendiente desde el 22-08: la revisión con Opus de T-002.** Es el
+> ticket más grande y el único que ha crecido dos veces sin pasar por revisión. Después, el
+> punto 3 del guion manual en navegador —un perfil `suspendido` deja de ver `/pacientes`—,
+> que sigue sin ejecutarse.
+>
+> **Y una deuda de verificación que arrastran los dos cortes de T-007**: 360 px y
+> `prefers-reduced-motion` **no se han comprobado en navegador**. jsdom no tiene disposición
+> ni consulta de medios. Consta en los dos informes; lo cierra T-009·B con el verificador de
+> accesibilidad, o antes una comprobación manual.
+
+> **Paso 0 (superado el 29-08): comitear y empujar `main`.** Hoy el árbol de trabajo tiene sin
 > comitear los ADR-045 a 053, los cuatro módulos del ADR-050, los tickets T-010 a T-015, la
 > migración de T-002 y `scripts/t002-rls.sql`. **Dos de los tres carriles ramifican de
 > `main`** y construirían contra decisiones derogadas: MiniMax leería un `interfaz.md` con
