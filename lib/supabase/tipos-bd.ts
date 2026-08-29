@@ -1478,6 +1478,21 @@ export type Database = {
           },
         ]
       }
+      tablas_solo_adicion: {
+        Row: {
+          motivo: string
+          tabla: string
+        }
+        Insert: {
+          motivo: string
+          tabla: string
+        }
+        Update: {
+          motivo?: string
+          tabla?: string
+        }
+        Relationships: []
+      }
       valoraciones_riesgo: {
         Row: {
           descripcion: string | null
@@ -1654,6 +1669,16 @@ export type Database = {
       centro_actual: { Args: never; Returns: string }
       centro_principal: { Args: { p_perfil_id: string }; Returns: string }
       centros_actuales: { Args: never; Returns: string[] }
+      cobertura_solo_adicion: {
+        Args: never
+        Returns: {
+          capa1_revoke: boolean
+          capa2_fila: boolean
+          capa3_sentencia: boolean
+          existe: boolean
+          tabla: string
+        }[]
+      }
       desbloquear_historia: {
         Args: { p_pin: string }
         Returns: {
@@ -1684,6 +1709,15 @@ export type Database = {
         Returns: boolean
       }
       prolongar_desbloqueo: { Args: never; Returns: string }
+      registrar_evento_auditable: {
+        Args: {
+          p_detalle?: Json
+          p_operacion: string
+          p_registro_id: string
+          p_tabla: string
+        }
+        Returns: undefined
+      }
       retencion_efectiva: {
         Args: { p_centro_id: string }
         Returns: {

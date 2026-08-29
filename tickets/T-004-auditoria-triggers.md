@@ -5,7 +5,7 @@ modelo: opus
 fase: 0
 prioridad: alta
 depende_de: [T-001]
-estado: pendiente
+estado: hecho
 ---
 
 # Contexto
@@ -27,48 +27,48 @@ paralelizar con él.
 
 ## Tareas
 
-- [ ] Revisar `fn_auditar()` y colgarla de **todas** las tablas del esquema de T-001, con
+- [x] Revisar `fn_auditar()` y colgarla de **todas** las tablas del esquema de T-001, con
       la convención de nombre `auditar_<tabla>`. Las tablas de solo adición **también**
       se auditan: auditar un `insert` es correcto.
-- [ ] Registrar en `auditoria` lo que no es un cambio de fila pero sí un hecho auditable:
+- [x] Registrar en `auditoria` lo que no es un cambio de fila pero sí un hecho auditable:
       **inicio de sesión, búsqueda que devuelve pacientes** (choque 8 de `interfaz.md`),
       **fallo y bloqueo de PIN** (ADR-026) y **cambio de titularidad o de asignación de
       paciente** (ADR-032).
-- [ ] **Capa 1 · Revoke** sobre `notas_clinicas_versiones`, `facturas` *(cuando exista)*,
+- [x] **Capa 1 · Revoke** sobre `notas_clinicas_versiones`, `facturas` *(cuando exista)*,
       `auditoria` y `accesos_historia`: `revoke update, delete on table ... from` todos los
       roles, `postgres` incluido.
-- [ ] **Capa 2 · Disparador `FOR EACH ROW`**: `fn_impedir_modificacion()` genérica vía
+- [x] **Capa 2 · Disparador `FOR EACH ROW`**: `fn_impedir_modificacion()` genérica vía
       `TG_TABLE_NAME`, `before update or delete`, `raise exception` con `errcode = '42501'`
       y mensaje que nombre la tabla.
-- [ ] **Capa 3 · Disparador `FOR EACH STATEMENT`**: `before truncate` en las mismas
+- [x] **Capa 3 · Disparador `FOR EACH STATEMENT`**: `before truncate` en las mismas
       tablas, misma excepción. **Es la capa que tapa el agujero real.**
-- [ ] `alter default privileges in schema public revoke all on tables from anon,
+- [x] `alter default privileges in schema public revoke all on tables from anon,
       authenticated, service_role` — Supabase concede TRUNCATE, TRIGGER y REFERENCES a
       tablas nuevas sin pedirlo.
-- [ ] **Comprobador de cobertura**: consulta que, dada la lista de tablas de solo adición,
+- [x] **Comprobador de cobertura**: consulta que, dada la lista de tablas de solo adición,
       devuelve las que **no** tienen las tres capas. Se ejecuta en el banco de T-003 y en
       CI (T-009), de modo que una tabla nueva sin proteger **rompe el build**.
-- [ ] Índices de consulta de `auditoria` pensados para la pantalla de auditoría de fase 1:
+- [x] Índices de consulta de `auditoria` pensados para la pantalla de auditoría de fase 1:
       por actor y fecha, por tabla y registro.
 
 ## Criterios de aceptación (verificables)
 
-- [ ] **Automático** — `npx supabase db reset`, `npm run lint` y `npm run build` limpios.
-- [ ] **Automático** — un `insert`, un `update` y un `delete` en una tabla mutable
+- [x] **Automático** — `npx supabase db reset`, `npm run lint` y `npm run build` limpios.
+- [x] **Automático** — un `insert`, un `update` y un `delete` en una tabla mutable
       cualquiera dejan **exactamente una fila** en `auditoria` cada uno, con actor, tabla,
       operación, `registro_id` y los estados anterior y posterior correctos.
-- [ ] **Automático** — sobre **cada una** de las tablas de solo adición y como `postgres`:
+- [x] **Automático** — sobre **cada una** de las tablas de solo adición y como `postgres`:
       `update` → permiso denegado; tras conceder `update` a la fuerza → excepción 42501 del
       disparador; `truncate` → excepción 42501 del disparador de sentencia. Los tres, tabla
       por tabla, sin excepción.
-- [ ] **Automático** — el comprobador de cobertura devuelve **cero** tablas desprotegidas.
-- [ ] **Automático** — añadir una tabla de solo adición **sin** sus tres capas hace que el
+- [x] **Automático** — el comprobador de cobertura devuelve **cero** tablas desprotegidas.
+- [x] **Automático** — añadir una tabla de solo adición **sin** sus tres capas hace que el
       comprobador **falle**. Se demuestra ejecutándolo.
-- [ ] **Automático** — `\dp` sobre las tablas nuevas no muestra TRUNCATE para `anon`,
+- [x] **Automático** — `\dp` sobre las tablas nuevas no muestra TRUNCATE para `anon`,
       `authenticated` ni `service_role`.
-- [ ] **Automático** — un fallo de PIN y un bloqueo por intentos dejan su entrada en
+- [x] **Automático** — un fallo de PIN y un bloqueo por intentos dejan su entrada en
       `auditoria` (gemelo del criterio de T-002).
-- [ ] **Automático** — `auditoria` no es escribible directamente por `authenticated`: un
+- [x] **Automático** — `auditoria` no es escribible directamente por `authenticated`: un
       `insert` a mano **falla**; el disparador `security definer` sí escribe.
 
 ## Guion de comprobación manual
@@ -95,3 +95,42 @@ paralelizar con él.
   motivo escrito.
 - Lo que aquí no entra: la **pantalla** de auditoría y la de accesos, que son fase 1
   (`interfaz.md` §Lo que el prototipo no cubre).
+
+## Resultado · 29-08-2026
+
+Entra `supabase/migrations/20260829150000_auditoria_y_solo_adicion.sql`. Verificado con
+`scripts/t004-auditoria.sql`: **todas las aserciones en cierto**, y los errores de la
+salida son las negativas buscadas. `lint`, `test` y `build`, verdes. Tipos regenerados.
+
+**Lo que T-001 ya había dejado hecho y aquí no se repite**: las capas 2 y 3 ya colgaban de
+las cuatro tablas de solo adición. Se comprueban tabla por tabla, no se reescriben.
+
+**Tres cosas que este ticket descubrió:**
+
+1. **`fn_auditar()` habría reventado escrituras, no dado registros pobres.** Tres tablas no
+   tienen columna `id` —`pacientes_identificacion` (`paciente_id`), `pines_historia` y
+   `preferencias_usuario` (`perfil_id`)— y `auditoria.registro_id` es **NOT NULL**: colgar
+   la versión vieja de ellas habría hecho fallar el `insert` en la tabla auditada. La
+   clave pasa a ser argumento del disparador.
+
+2. **Auditar todo sin recortar mete secretos en `auditoria`, que NO está bajo el candado.**
+   `to_jsonb(new)` copiaba el **hash del PIN**, el **criptograma y el nonce del DNI** y el
+   **cuerpo de la nota clínica** a una tabla que el propio actor lee sin PIN. Regla que
+   queda: **`auditoria` registra qué pasó y quién, nunca qué decía.** Se recortan
+   credenciales, criptogramas con sus nonces e índices, y el contenido que el candado
+   protege; las columnas `*_clave_version` **se quedan**, porque saber con qué versión de
+   clave se escribió algo es justo para lo que sirve una auditoría. El recorte va como
+   argumento del disparador, así que **se ve en `pg_get_triggerdef` sin leer el código**.
+
+3. **El volumen del candado, decidido**: prolongar la ventana de desbloqueo es un `UPDATE`
+   cada pocos minutos y **no se audita** —quién abrió el candado y cuándo ya está en el
+   `INSERT`—; la **revocación sí**, que es un hecho de seguridad y ocurre una vez.
+
+**El catálogo de solo adición vive en una tabla**, `tablas_solo_adicion`, y no dentro de la
+función: CI (T-009) tiene que poder leerlo, y una lista escondida en el cuerpo de una
+función se desvía de la realidad sin que nadie lo note. `cobertura_solo_adicion()` devuelve
+una fila por tabla desprotegida, así que CI cuenta y rompe el build si no es cero.
+
+**Lo que queda para su ticket**: `registrar_evento_auditable()` existe y está probada, pero
+**quién la llama es de T-006** (inicio de sesión) y **T-013** (búsqueda que devuelve
+pacientes). T-004 es base de datos; la pantalla no entra.

@@ -7,6 +7,40 @@
 
 ## Ticket en curso
 
+**T-004 · Auditoría por triggers y solo adición en tres capas — hecho el 29-08-2026.**
+Entra `supabase/migrations/20260829150000_auditoria_y_solo_adicion.sql`. Verificado con
+`scripts/t004-auditoria.sql`: todas las aserciones en cierto. Las capas 2 y 3 ya las había
+dejado T-001 en las cuatro tablas; aquí se comprueban tabla por tabla y se añade lo que
+faltaba.
+
+**Lo que hay que saber antes de tocar la auditoría:**
+
+1. **`auditoria` registra qué pasó y quién, nunca qué decía.** Colgar la auditoría de todas
+   las tablas sin recortar copiaba el **hash del PIN**, el **criptograma y el nonce del
+   DNI** y el **cuerpo de la nota** a una tabla que **no está bajo el candado del ADR-026**
+   y que el propio actor lee. Se recortan credenciales, criptogramas con sus nonces e
+   índices, y el contenido que el candado protege. Las columnas `*_clave_version` **se
+   quedan**: saber con qué versión de clave se escribió algo es para lo que sirve una
+   auditoría. **El recorte va como argumento del disparador**, así que se ve en
+   `pg_get_triggerdef` sin abrir el código, y el bucle de la migración **falla** si se
+   nombra una columna que no existe.
+2. **`fn_auditar()` ya no da por hecho que la clave se llama `id`.** Tres tablas no la
+   tienen y `auditoria.registro_id` es NOT NULL: la versión vieja no habría dado un registro
+   pobre, habría **reventado el `insert`** en la tabla auditada.
+3. **Prolongar el desbloqueo no se audita; revocarlo sí.** Es la decisión de volumen que el
+   ticket mandaba tomar: quién abrió el candado y cuándo ya está en el `INSERT`, y prolongar
+   ocurre cada pocos minutos. La revocación es un hecho de seguridad y ocurre una vez.
+
+**`registrar_evento_auditable()`** existe, está probada y fuerza `actor_id = auth.uid()`,
+pero **quién la llama es de otros tickets**: T-006 el inicio de sesión, T-013 la búsqueda
+que devuelve pacientes. Aquí solo entra la base de datos.
+
+**El catálogo `tablas_solo_adicion` es una tabla, no una lista dentro de una función**,
+para que CI pueda leerlo. `cobertura_solo_adicion()` devuelve una fila por tabla
+desprotegida: **cero filas es el estado correcto**, y eso es lo que T-009 tiene que contar.
+
+---
+
 **T-002 · enmienda del ADR-051 (multi-centro) — implementada el 29-08-2026.** Entra
 `supabase/migrations/20260829120000_perfiles_centros_multicentro.sql`: `perfiles_centros`
 con dos índices únicos parciales, disparador de espejo, `centros_actuales()` y
