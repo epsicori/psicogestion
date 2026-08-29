@@ -51,7 +51,10 @@ select pg_temp.assert(
   'Sin política propia de centro, el origen declarado es organización o predeterminado, nunca "centro"'
 );
 
--- Con una política propia del centro A, el origen pasa a ser "centro" y el valor es el suyo.
+-- Con una política propia del centro A, el origen pasa a ser "centro" y el valor es el
+-- suyo. Este insert es COMO POSTGRES a propósito: aquí se prueba retencion_efectiva()
+-- —que es security definer y no pasa por RLS—, no la política de alta. Esa cobertura,
+-- en sesión real de administrador, está en 12-resto-de-tablas.sql.
 insert into public.politicas_retencion (centro_id, anios_historia_clinica, anios_minimo_legal, actualizado_por) values
   (:CA, 30, 5, :ADM);
 

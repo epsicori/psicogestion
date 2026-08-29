@@ -35,9 +35,14 @@ select pg_temp.assert(pg_temp.contar('select * from public.pacientes where id = 
 call pg_temp.reset_sesion();
 
 -- Un ciclo (P2 -> P2, indirectamente vía PFUS) debe rechazarse, no colgarse en un bucle.
-select pg_temp.assert_lanza(
+-- Se hace COMO POSTGRES y con el código exacto (23514, el que usa
+-- fn_normalizar_fusion_paciente para "Ciclo de fusión detectado"): la fila de P2 tiene
+-- también el disparador de columnas reservadas, que lanza 42501 para quien no es
+-- administrador y podría dar un falso verde si solo se comprobara "lanzó algo".
+select pg_temp.assert_lanza_codigo(
   format('update public.pacientes set fusionado_en = %L, fusionado_el = now() where id = %L', :PFUS, :P2),
-  'Fusionar P2 en su propio absorbido (PFUS, que apunta a P2) debe detectarse como ciclo y lanzar'
+  '23514',
+  'Fusionar P2 en su propio absorbido (PFUS, que apunta a P2) debe detectarse como CICLO (23514), no rechazarse por otro motivo'
 );
 
 \echo '05-vinculo: completa.'

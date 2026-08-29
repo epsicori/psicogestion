@@ -55,14 +55,18 @@ call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
 -- diagnosticos: BAJO EL CANDADO (historia_desbloqueada() AND es_profesional_asignado()).
--- No está en la lista de ocho tablas de architecture.md §Candado —esa lista queda
--- desactualizada, se anota como hallazgo—, pero su política lo confirma: sin desbloqueo,
--- cero para todos salvo el administrador (que no pasa por es_profesional_asignado()). La
+-- La política NO tiene rama de administrador: sin desbloqueo, cero para TODOS, ADM
+-- incluido — «ser administrador no da acceso a notas ajenas», architecture.md §RLS. La
 -- batería con desbloqueo abierto va en 03-candado.sql; aquí solo el corte SIN desbloqueo.
 -- ---------------------------------------------------------------------------------------
 call pg_temp.como(:PRO1);
 select pg_temp.assert(pg_temp.contar(format('select * from public.diagnosticos where paciente_id = %L', :P1)) = 0,
   'PRO1 sin desbloqueo NO ve el diagnóstico de su propio paciente: está bajo candado');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.contar('select * from public.diagnosticos') = 0,
+  'ADM sin desbloqueo tampoco ve ningún diagnóstico: el candado no tiene rama de administrador');
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:TEC1);
@@ -101,6 +105,22 @@ call pg_temp.reset_sesion();
 call pg_temp.como(:PRO2);
 select pg_temp.assert(pg_temp.contar(format('select * from public.notas_clinicas where id = %L', :NCONJ)) = 0,
   'PRO2 no es autor ni asignado de NCONJ: cero, incluso antes de mirar el candado');
+call pg_temp.reset_sesion();
+
+-- El administrador NO tiene rama propia en notas_clinicas_lectura: «ser administrador no
+-- da acceso a notas ajenas» (architecture.md §RLS, en negrita). Sin desbloqueo, cero; y
+-- el desbloqueo en sí exige un PIN de PROFESIONAL —ADM no puede tenerlo—, así que el
+-- administrador no tiene ningún camino hacia el contenido clínico salvo el acceso de
+-- emergencia, que es de otro ticket.
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.contar('select * from public.notas_clinicas') = 0,
+  'ADM no lee NINGUNA nota clínica: el secreto profesional es del profesional, no del cargo');
+select pg_temp.assert(pg_temp.contar('select * from public.notas_clinicas_versiones') = 0,
+  'ADM no lee ninguna versión de nota clínica');
+select pg_temp.assert(pg_temp.contar('select * from public.episodios_asistenciales') = 0,
+  'ADM no lee ningún episodio asistencial');
+select pg_temp.assert(pg_temp.contar('select * from public.valoraciones_riesgo') = 0,
+  'ADM no lee ninguna valoración de riesgo completa (sí el indicador binario, por la vista, que no es de este bloque)');
 call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------

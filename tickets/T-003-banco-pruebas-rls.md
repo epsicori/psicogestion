@@ -134,6 +134,7 @@ proyecto cambia de nombre) y propaga el código de salida de `psql`.
 | `09-accesos.sql` | ADR-037 |
 | `10-solo-adicion.sql` | Invariante 2, las cuatro tablas |
 | `11-cobertura.sql` | El comprobador de políticas sin prueba |
+| `12-resto-de-tablas.sql` | Tablas que la matriz no ejercía bajo ningún rol (hallazgo de la revisión con Opus del 29-08) |
 | `README.md` | Cómo se añade una prueba |
 
 `npm run test:rls` → `node scripts/test-rls.mjs`.

@@ -20,10 +20,14 @@ begin
     where table_schema = 'public' and table_name = r.tabla and is_identity = 'NO'
     limit 1;
 
-    -- UPDATE: la capa 1 (revoke) ya lo impide para todos, postgres incluido.
+    -- UPDATE sin privilegio: lanza, pero esto NO aísla la capa 1 de la capa 2 —con el
+    -- disparador de fila también activo, no se puede saber cuál de las dos lo bloqueó—.
+    -- La capa 1 en sí misma se verifica de forma aislada más abajo, por catálogo
+    -- (`cobertura_solo_adicion()`, que mira `information_schema.table_privileges`
+    -- directamente y no depende de que el disparador exista).
     perform pg_temp.assert_lanza(
       format('update public.%I set %I = %I', r.tabla, v_columna, v_columna),
-      format('UPDATE en %s debe fallar por privilegio (capa 1)', r.tabla)
+      format('UPDATE en %s debe fallar (capa 1 y/o capa 2, sin distinguir todavía cuál)', r.tabla)
     );
 
     -- Con el privilegio RECUPERADO, la capa 2 (disparador) sigue bloqueando.

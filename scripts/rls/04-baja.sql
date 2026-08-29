@@ -5,13 +5,14 @@
 \echo ''
 \echo '=== 04-baja ==='
 
--- La nota y el acceso se insertan COMO POSTGRES: es a fn_auditar() a quien le corresponde
--- fijar actor_id, y para eso hace falta sesión (auth.uid() nulo si no hay `set local`
--- request.jwt.claims). Se hace dentro de la sesión de PROBAJA para que su auditoría exista
--- de verdad, no adivinada.
+-- La nota y el acceso se insertan DENTRO DE LA SESIÓN DE PROBAJA, no como postgres: es a
+-- fn_auditar() a quien le corresponde fijar actor_id, y para eso hace falta auth.uid() no
+-- nulo (`set local request.jwt.claims`), así que su auditoría existe de verdad, no
+-- adivinada.
 call pg_temp.como(:PROBAJA);
 select public.fijar_pin_historia('333333');
-select public.desbloquear_historia('333333');
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
+  'El PIN de PROBAJA debe desbloquear la historia mientras sigue activo');
 
 insert into public.notas_clinicas (id, paciente_id, autor_id) values
   ('f0030001-0000-4000-8000-000000000004', :PBAJA, :PROBAJA);
@@ -56,7 +57,8 @@ update public.pacientes set profesional_id = :PRO1 where id = :PBAJA;
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:PRO1);
-select public.desbloquear_historia('111111');
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  'El PIN de PRO1 debe desbloquear la historia');
 select pg_temp.assert(pg_temp.contar(format(
     'select * from public.notas_clinicas_versiones where nota_id = %L and autor_id = %L',
     'f0030001-0000-4000-8000-000000000004', :PROBAJA)) = 1,

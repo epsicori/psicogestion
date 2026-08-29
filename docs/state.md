@@ -944,3 +944,27 @@ evaluacion_archivos, informes*:
 No se toca el esquema ni la política: es una discrepancia de documentación. Queda para
 quien actualice `docs/architecture.md` §Candado (o el próximo ticket que la toque) añadir
 `episodio_participantes` a la lista y anotar la vía de la vista.
+
+### T-003 · Revisión con Opus: tres hallazgos aceptados sin cambio, con su porqué
+
+De los seis hallazgos de severidad media/baja de la revisión del 29-08 (los tres de
+severidad alta y tres de media se corrigieron en el propio ticket), quedan tres de
+severidad baja, aceptados a propósito:
+
+- **La matriz cuenta filas exactas** (`centros = 2`, `alertas_documentacion = 4`) sobre una
+  fijación que hoy es la única fuente de datos. Cuando **T-008** (seed determinista) exista,
+  esas cuentas exactas pueden romperse si el seed también inserta centros o alertas. La
+  salida será clara —un `ASERCIÓN FALLIDA` con el número real— así que no hace falta
+  blindarlo ahora; queda anotado para quien escriba T-008: si el banco de RLS rompe al
+  correr después del seed, es esto.
+- **`11-cobertura.sql` filtra `schemaname = 'public'`**: una política sobre
+  `storage.objects` (el bucket de documentos, cuando exista) quedaría fuera del
+  comprobador. No entra en T-003 porque **T-001 no crea ningún bucket de Storage
+  todavía** (ver más arriba, «Fuera del alcance de T-001»); el ticket que cree el primer
+  bucket con políticas debe ampliar el filtro de `11-cobertura.sql` a los esquemas que
+  correspondan.
+- **La fecha de nacimiento del menor de la fijación** (`current_date - interval '15
+  years'`) es relativa a hoy, no un literal. Correcto la inmensa mayoría de los días; el
+  caso límite es ejecutar el banco un 29 de febrero, donde el aniversario se desplaza. Se
+  deja así porque fijarlo como literal congelaría la edad del menor y el banco dejaría de
+  representar "hoy" — el problema que se quería evitar en primer lugar.

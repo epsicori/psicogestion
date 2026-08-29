@@ -23,6 +23,8 @@
 \set NIND  '\'f0030001-0000-4000-8000-000000000002\''
 \set NCORR '\'f0030001-0000-4000-8000-000000000003\''
 
+\set REPMENOR '\'a0030002-0000-4000-8000-000000000001\''
+
 \echo '=== 01-fijación ==='
 
 insert into public.organizacion (razon_social, nif) values ('Banco RLS SL', 'B00300001');
@@ -74,8 +76,8 @@ insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id, 
 -- Vigente DESDE EL NACIMIENTO del menor: la batería de capacidad (07) evalúa
 -- capacidad_consentimiento() a los 11, 15 y 16 años, y las tres fechas caen en el pasado
 -- respecto a hoy — el representante tiene que estar vigente en las tres.
-insert into public.representantes_paciente (paciente_id, nombre, apellidos, tipo, alcance, vigente_desde) values
-  (:PMENOR, 'Dora', 'Representante', 'progenitor', 'patria_potestad', current_date - interval '15 years' - interval '1 month');
+insert into public.representantes_paciente (id, paciente_id, nombre, apellidos, tipo, alcance, vigente_desde) values
+  (:REPMENOR, :PMENOR, 'Dora', 'Representante', 'progenitor', 'patria_potestad', current_date - interval '15 years' - interval '1 month');
 
 -- PFUS: paciente de PRO1 fusionado en P2 (cuyo profesional es PRO2). Se fija en el propio
 -- insert porque el disparador de columnas reservadas prohíbe el cambio a quien no es admin.

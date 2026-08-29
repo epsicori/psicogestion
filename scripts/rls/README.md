@@ -35,6 +35,7 @@ para saber si el banco pasó.
 | `09-accesos.sql` | ADR-037 — listar no es acceso, abrir sí, dos aperturas cuentan una |
 | `10-solo-adicion.sql` | Invariante 2 — `update`/`delete`/`truncate` fallan en las tres capas |
 | `11-cobertura.sql` | Toda política de `pg_policies` tiene una entrada declarada, y viceversa |
+| `12-resto-de-tablas.sql` | `evaluaciones`, `evaluacion_archivos`, `informes`, `consentimiento_firmantes`, `preferencias_usuario`, `perfiles`, `perfiles_centros`, `politicas_retencion` — las tablas que la matriz y las baterías no ejercían bajo ningún rol |
 
 ## Cómo se añade una prueba
 
@@ -64,3 +65,19 @@ guion suelto:
 6. **Si al probar aparece una política que falta o está mal**, no se arregla aquí: se
    anota en `docs/state.md` y el arreglo va al ticket que la creó. Este banco prueba, no
    parchea.
+7. **El estado se filtra entre módulos, a propósito y en orden alfabético de fichero.**
+   Todo el banco corre en UNA transacción (`scripts/test-rls.mjs` envuelve la
+   concatenación en `begin … rollback`), así que lo que un módulo cambia —`04-baja.sql`
+   pone a `PROBAJA` en baja y reasigna `PBAJA` a `PRO1`; `06-centro.sql` añade centros a
+   `TEC1` y `PRO1`— sigue así para los módulos que corren después, y nada lo deshace.
+   Un módulo nuevo que se inserte ALFABÉTICAMENTE ANTES de uno existente (por ejemplo
+   `05a-…`) puede heredar un estado que el diseño original no prevé. Si eso pasa, la
+   salida por defecto es añadir el módulo AL FINAL (el siguiente número, `13-…`), no
+   intercalarlo; si de verdad tiene que ir en medio, hay que releer los módulos
+   posteriores para confirmar que ninguno asume el estado anterior.
+8. **Da de alta el dato bajo la sesión del rol que corresponde (`pg_temp.como(...)`), no
+   como `postgres`.** Un insert como superusuario no ejerce la política `_alta` de esa
+   tabla —ni su `with check`— aunque el dato quede fijado igual de bien; si además la
+   comprobación es negativa, usa `pg_temp.assert_lanza` (o `assert_lanza_codigo` si el
+   rechazo tiene que venir de una comprobación concreta, no de cualquier disparador que
+   se dispare antes en la misma fila) EN SESIÓN, nunca fuera de ella.
