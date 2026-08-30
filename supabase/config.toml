@@ -173,7 +173,10 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# T-006 (deuda anotada desde T-002, docs/state.md): el alta de cuenta es SIEMPRE una
+# invitación del administrador (preparar_invitacion/registrar_invitacion +
+# auth.admin.inviteUserByEmail), nunca un autorregistro público.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -196,7 +199,9 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+# T-006: subido de 2 a 30 para que el guion manual de invitación (y las pruebas que
+# invitan a varios perfiles seguidos) no choquen con el límite en desarrollo local.
+email_sent = 30
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -218,7 +223,8 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
-enable_signup = true
+# T-006: mismo motivo que [auth] enable_signup arriba — solo invitación del administrador.
+enable_signup = false
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
@@ -299,9 +305,11 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
+# T-006 (ADR-039): TOTP para los tres roles. Se activa aquí porque desbloquea al carril
+# de MiniMax (T-006b) — sin esto no hay factor que enrolar ni que verificar.
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

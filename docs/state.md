@@ -3,9 +3,84 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 29-08-2026
+**Actualizado**: 30-08-2026
 
 ## Ticket en curso
+
+**T-006 · Autenticación completa — MITAD DE BASE DE DATOS hecha el 30-08-2026, en la
+rama `T-006a-cuentas-base`. La mitad de pantallas (`T-006b-acceso-pantallas`) sigue
+bloqueada y su corte está en `minimax/cortes/T-006.md`. El ticket NO se marca hecho
+hasta que las dos ramas entren.**
+
+Entra `supabase/migrations/20260830090000_cuentas_invitacion_baja_totp.sql`:
+`estado_de_cuenta()`, `preparar_invitacion()`/`registrar_invitacion()`,
+`dar_de_baja_perfil()`, `registrar_reposicion_totp()`, `generar_codigos_recuperacion()`/
+`canjear_codigo_recuperacion()`, las tablas `notificaciones` y
+`codigos_recuperacion_totp`, y una nueva versión de `desbloquear_historia()` (mismo
+cuerpo que T-004, más el aviso al titular al bloquear). También
+`lib/supabase/administracion.ts`, `lib/cuentas/**` (esquemas, invitar, baja, totp,
+candado), `scripts/rls/13-cuentas.sql`, `scripts/vault-smtp.sql` y tres cambios en
+`supabase/config.toml` (TOTP activado, `enable_signup = false`, `email_sent` a 30).
+Verificado con `npm run test:rls`: **192 aserciones, todas en cierto, cero fallos**
+(salida completa en el informe del ticket). `lint`, `lint:migraciones`, `build` y `test`
+(229 pruebas) limpios.
+
+**Una decisión de alcance que hay que conocer antes de tocar esta rama**: para poder
+ejecutar `npm run test:rls` (el corte lo exige), esta rama **fusiona
+`T-003-banco-pruebas-rls`**, que en el momento de empezar T-006a todavía no estaba en
+`main` pese a que la cola de `fabrica/ORDEN.md` la da por delante. La fusión trae
+`scripts/rls/*.sql`, `scripts/test-rls.mjs` y el `npm run test:rls` del `package.json`;
+no se ha tocado ni una línea de esos ficheros salvo `scripts/rls/11-cobertura.sql`, al
+que se le añaden las dos políticas nuevas de `notificaciones` en su catálogo declarado
+(criterio propio de ese comprobador: toda política de `pg_policies` necesita una entrada
+ahí). Quien integre T-006a en `main` debe saber que trae T-003 dentro; si T-003 ya
+estuviera integrada por separado, la fusión será un no-op.
+
+**Tres decisiones de dominio que cierra el propietario y no se reabren:**
+
+1. **Tabla `notificaciones`, creada ahora** (no queda pendiente como anotó T-002). Aviso
+   in-app, mecanismo propio, nunca correo: `perfil_id`, `tipo`, `detalle`, `creado_en`,
+   `leida_en` nullable. RLS: el titular lee solo las suyas; **nadie tiene `insert`
+   directo**, solo las funciones `security definer` (mismo patrón que `auditoria`); el
+   titular puede hacer `update` de **solo** `leida_en`, forzado por un disparador
+   (`fn_proteger_notificacion()`), no por una política más fina. Enganchada en dos
+   sitios: `desbloquear_historia()` al bloquear por intentos (ADR-026) y
+   `registrar_reposicion_totp()`/`canjear_codigo_recuperacion()` al reponer TOTP
+   (ADR-039).
+2. **Canjear un código de recuperación de TOTP borra el factor entero y obliga a
+   reenrolar.** No concede acceso por sí solo —desde SQL no se puede emitir `aal2`—:
+   `canjear_codigo_recuperacion()` devuelve `motivo = 'ok'` y es la aplicación
+   (`lib/cuentas/totp.ts`) quien, con la Admin API, borra el factor DESPUÉS. Los diez
+   códigos comparten un contador de intentos fallidos —lo lleva la fila más reciente sin
+   usar, el «centinela»— para no escribir las diez filas en cada fallo; cinco fallos
+   bloquean quince minutos, igual que el PIN, y el sexto intento con el código correcto
+   también falla mientras el bloqueo esté vigente (verificado en
+   `scripts/rls/13-cuentas.sql`).
+3. **La autobaja de administrador está permitida sin restricción especial.**
+   `dar_de_baja_perfil()` no repite ninguna comprobación: la base ya impide quedarse sin
+   ningún administrador activo con `fn_impedir_baja_ultimo_administrador()` (T-001,
+   constraint trigger `AFTER UPDATE OR DELETE`), y si el llamante es el último
+   administrador activo, el `UPDATE` de la función falla desde dentro de ese disparador.
+   Verificado: dar de baja al único administrador de la fijación lanza `23514`.
+
+**Lo que queda pendiente, todo para T-006b (`minimax/cortes/T-006.md`, bloqueado hasta
+que esta rama esté en `main`):** las pantallas de invitación, primer acceso
+(contraseña → TOTP → PIN), candado y PIN bloqueado, ajustes de reposición de TOTP y baja,
+y canje de código de recuperación. Ninguna pantalla existe todavía; `lib/cuentas/**` es
+lo único que hay para llamar.
+
+**Hallazgo de infraestructura, no de este ticket**: el Supabase local
+(`project_id = "Psicogestion"`) es **un único contenedor Docker compartido por todos los
+worktrees/carriles del sistema de fábrica**, no uno por rama. Un `npx supabase db reset`
+disparado por otro agente en paralelo puede sustituir el esquema a mitad de una
+verificación propia — se reprodujo varias veces mientras se verificaba este ticket
+(`relation "public.organizacion" does not exist`, tipos generados sin las funciones
+nuevas). No hay arreglo de código: se resuelve encadenando `db reset` + el comando de
+verificación **en la misma llamada**, sin hueco entre medias, y repitiendo si el hueco lo
+pierde. Vale la pena que lo sepa el próximo ticket que verifique contra la base local
+mientras haya varios carriles activos a la vez.
+
+---
 
 **T-004 · Auditoría por triggers y solo adición en tres capas — hecho el 29-08-2026.**
 Entra `supabase/migrations/20260829150000_auditoria_y_solo_adicion.sql`. Verificado con
@@ -566,10 +641,8 @@ recogen cuando llegue la fase que los toca.
 
 ### Lo que T-002 dejó anotado y no tocó
 
-- **`enable_signup = true` en `supabase/config.toml`** debe pasar a `false` en el ticket de
-  usuarios (T-006). Hoy no es un agujero porque el disparador de alta de perfil es **fallo
-  cerrado** —sin `rol` válido en `raw_user_meta_data` el alta de `auth.users` falla—, pero
-  depender de eso es depender de una sola línea.
+- ~~**`enable_signup = true` en `supabase/config.toml`**~~ — **cerrado en T-006a
+  (30-08-2026)**: `[auth]` y `[auth.email]` pasan a `false`.
 - **El acceso del representante legal (ADR-028) sale de T-002 por decisión del
   propietario.** No es implementable en RLS: un representante no es un `auth.users` ni
   tiene perfil, y el portal del paciente es v2 (decisión 13). No hay sujeto al que aplicar
@@ -580,9 +653,8 @@ recogen cuando llegue la fase que los toca.
   aviso al titular, **jamás por política**: `authenticated` tiene `insert` sobre
   `accesos_historia`, así que una política del tipo «lee si hay emergencia vigente» sería
   auto-servicio de privilegios — cualquiera se escribiría su propia fila.
-- **No existe tabla `notificaciones`.** El ADR-026 pide, además de la entrada en
-  `auditoria`, **notificación al titular** cuando su PIN se bloquea por intentos. T-002
-  escribe la auditoría y deja la notificación pendiente de que exista la tabla.
+- ~~**No existe tabla `notificaciones`.**~~ — **cerrado en T-006a (30-08-2026)**: ver
+  «Ticket en curso» arriba.
 - **`pacientes.centro_id` nulo es fallo cerrado**, enmendando lo que este fichero proponía
   («resolver el nulo como toda la organización»). La organización puede ser multicentro, y
   ahí un paciente sin centro se filtraría a **todos** los técnicos, que es justo el rol que

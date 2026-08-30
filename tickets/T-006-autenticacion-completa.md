@@ -112,3 +112,29 @@ armazón de T-007; si T-007 aún no está integrado, se usan las primitivas que 
   vez de fiarte del que aparece arriba.
 - Nada de SMS ni de correo como segundo factor (ADR-039), y nada de contratar un proveedor
   de correo (ADR-038).
+
+## Estado de entrega (30-08-2026) — SOLO la mitad de base de datos
+
+**`estado` sigue en `pendiente` a propósito: este ticket se entrega en dos ramas y no se
+cierra hasta que las dos hayan entrado en `main`.**
+
+- **`T-006a-cuentas-base` (esta entrega, hecha)**: el corte de base de datos completo —
+  migración `20260830090000_cuentas_invitacion_baja_totp.sql`, `lib/supabase/administracion.ts`,
+  `lib/cuentas/**`, `scripts/rls/13-cuentas.sql`, `scripts/vault-smtp.sql`, y los tres
+  cambios de `supabase/config.toml` (TOTP activado, `enable_signup = false`,
+  `email_sent = 30`). Evidencia:
+  - `npx supabase db reset`: limpio, siete migraciones aplicadas.
+  - `npm run test:rls`: **192 aserciones, todas en cierto, cero fallos** (14 módulos,
+    incluido el nuevo `13-cuentas.sql`).
+  - `npm run lint`: limpio. `npm run lint:migraciones`: `7 migración(es) limpias`.
+  - `npm run build`: limpio (TypeScript, generación de páginas, sin avisos).
+  - `npm test`: **229 pruebas, 25 ficheros, todas en verde**.
+- **`T-006b-acceso-pantallas` (pendiente, bloqueada)**: todas las pantallas —invitación,
+  primer acceso, candado y PIN bloqueado, ajustes de reposición y baja, canje de código
+  de recuperación—. Corte completo, criterios de aceptación y bloqueo explicado en
+  `minimax/cortes/T-006.md`.
+
+**Nota de alcance**: `T-006a-cuentas-base` fusiona `T-003-banco-pruebas-rls` (no
+integrada en `main` en el momento de empezar esta rama) para poder ejecutar
+`npm run test:rls`, que el propio ticket exige como criterio automático. Detalle en
+`docs/state.md` § T-006.
