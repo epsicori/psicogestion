@@ -59,7 +59,18 @@ export function normalizarNfc<T extends ValorJson>(valor: T, ruta = '$'): T {
       );
     }
     const original = valor as Record<string, ValorJson>;
-    const resultado: Record<string, ValorJson> = {};
+    // `Object.create(null)`, NUNCA `{}` (hallazgo MEDIA-4 de la segunda
+    // revisión con Opus del 30-08-2026): sobre un objeto literal normal,
+    // `resultado['__proto__'] = valor` con un valor primitivo NO crea una
+    // propiedad propia — reasigna el prototipo (o, si el valor no es un
+    // objeto, es un no-op silencioso) — y la clave `__proto__` del sobre
+    // original desaparecía de `Object.keys()` sin ningún error. Es
+    // exactamente el modo de fallo que este ticket existe para evitar:
+    // contenido borrado sin rastro. Un objeto sin prototipo no tiene el
+    // `setter` de `__proto__` heredado de `Object.prototype`, así que la
+    // asignación es una propiedad propia normal, igual que cualquier otra
+    // clave.
+    const resultado: Record<string, ValorJson> = Object.create(null) as Record<string, ValorJson>;
     const clavesNfcVistas = new Map<string, string>();
 
     for (const claveOriginal of Object.keys(original)) {

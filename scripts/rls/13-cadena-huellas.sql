@@ -15,6 +15,22 @@
 
 \set NCADC '\'f0050001-0000-4000-8000-000000000003\''
 
+-- Paciente y nota DESECHABLES, solo para la demostración de «con el disparador
+-- desactivado, el fallo cambia de motivo» (§C, segunda revisión con Opus). Aparte de
+-- PCAD/NCADX a propósito: la demostración inserta un génesis real, y si compartiera la
+-- cadena de PCAD chocaría con el génesis legítimo que la sección D crea más abajo.
+\set PDEMO '\'d0050001-0000-4000-8000-000000000009\''
+\set NDEMO '\'f0050001-0000-4000-8000-000000000009\''
+
+-- Paciente y nota para el hallazgo BAJA 9 de la segunda revisión: insertar un sobre REAL
+-- de lib/huella/vectores-congelados.json (no uno construido a mano con
+-- pg_temp.sobre_prueba()) a través del disparador de verdad. Su autor_id es
+-- 11111111-1111-4111-8111-111111111111 (Ana, de supabase/seed.sql): el propio vector lo
+-- trae fijo, así que la nota tiene que ser suya para que la comprobación 6.2 coincida.
+\set PVEC '\'d0050001-0000-4000-8000-000000000008\''
+\set NVEC '\'f0050001-0000-4000-8000-000000000008\''
+\set ANA  '\'11111111-1111-4111-8111-111111111111\''
+
 \echo ''
 
 \echo '=== 13-cadena-huellas ==='
@@ -23,7 +39,9 @@ call pg_temp.reset_sesion();
 
 insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values
 
-  (:PCAD, 'Carla', 'Cadena', :PRO1, :CA);
+  (:PCAD, 'Carla', 'Cadena', :PRO1, :CA),
+  (:PDEMO, 'Dora', 'Demostración', :PRO1, :CA),
+  (:PVEC, 'Vera', 'Vector', :ANA, :CA);
 
 insert into public.notas_clinicas (id, paciente_id, autor_id) values
 
@@ -33,7 +51,11 @@ insert into public.notas_clinicas (id, paciente_id, autor_id) values
 
   (:NCADB, :PCAD, :PRO1),
 
-  (:NCADC, :PCAD, :PRO1);
+  (:NCADC, :PCAD, :PRO1),
+
+  (:NDEMO, :PDEMO, :PRO1),
+
+  (:NVEC, :PVEC, :ANA);
 
 -- =========================================================================
 -- A · Las fijaciones de 01-fijacion.sql ya forman cadenas de verdad
@@ -100,45 +122,92 @@ select pg_temp.assert(
   'Vector congelado "control-y-exponente": pgcrypto reproduce la huella de TypeScript'
 );
 
--- =========================================================================
--- C · Negativas con su gemela positiva, todas con pg_temp.assert_lanza.
---     Contra NCADX, que nunca llega a tener versión: todas fallan.
--- =========================================================================
+-- Hallazgo BAJA 9 de la segunda revisión con Opus del 30-08-2026: hasta aquí, TODAS las
+-- inserciones de esta batería usan pg_temp.sobre_prueba(), deliberadamente NO canónico
+-- (§8 del diseño: `::text` de un jsonb mete un espacio tras los dos puntos). Ninguna
+-- prueba metía un sobre REAL de TypeScript (canonizar()/construirSobre()) por el
+-- disparador. Esta sí: el vector "genesis-minimo" de vectores-congelados.json, con su
+-- texto EXACTO (el mismo que reproduce pgcrypto arriba), insertado tal cual como
+-- contenido_canonico — y se comprueba que fn_sellar_version_nota() lo acepta y que la
+-- huella resultante es la MISMA que el vector congelado ya declara (génesis: huella
+-- sobre 32 ceros).
+\set VECGENESIS '\'{"abierta_en":"2026-08-29T09:12:03.123Z","anotaciones_reservadas":null,"autor_id":"11111111-1111-4111-8111-111111111111","cita_id":null,"creada_en":"2026-08-29T09:20:00.000Z","cuerpo":{"texto":"Nota"},"esquema_version":2,"firmada_en":"2026-08-29T09:20:00.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}\''
 
-select pg_temp.assert_lanza(
-  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, huella, autor_id, creada_en)
-         values (%L, '{"t":"neg"}', %L, decode(repeat('00', 64), 'hex'), %L, timestamptz '2026-08-29 09:30:00+00')$sql$,
-    :NCADX, pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:00+00', '{"t":"neg"}'::jsonb), :PRO1),
-  'Mandar huella a mano en el INSERT lanza (fn_sellar_version_nota la calcula)'
+insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
+  (:NVEC, '{"texto":"Nota"}',
+   :VECGENESIS,
+   :ANA, timestamptz '2026-08-29T09:20:00.000Z');
+
+select pg_temp.assert(
+  (select huella from public.notas_clinicas_versiones where nota_id = :NVEC)
+    = decode('86480db9f7e4230896f9fdf2e78fa14ea4fdc9fd56d2b4f51bdce83985ca1dc3', 'hex'),
+  'Un sobre REAL del vector congelado "genesis-minimo", insertado tal cual, se sella con EXACTAMENTE la huella que TypeScript y pgcrypto ya predicen'
+);
+select pg_temp.assert(
+  (select contenido_canonico from public.notas_clinicas_versiones where nota_id = :NVEC) = :VECGENESIS,
+  'contenido_canonico se guarda byte a byte igual al vector congelado (sin recanonizar ni reformatear nada)'
 );
 
-select pg_temp.assert_lanza(
+-- =========================================================================
+-- C · Negativas con su gemela positiva, todas con pg_temp.assert_lanza_codigo
+--     (nunca assert_lanza a secas: hallazgo MEDIA-1 de la segunda revisión con
+--     Opus del 30-08-2026 — con assert_lanza a secas, una negativa que en
+--     realidad chocaba con una restricción AJENA a este disparador (o que ni
+--     siquiera pasaba por él) seguía dando «OK» sin que nadie se enterase).
+--     Contra NCADX, que nunca llega a tener versión: todas fallan.
+--
+--     Los códigos exigidos son los que de verdad lanza fn_sellar_version_nota():
+--     42501 para la guarda 1 (huella/huella_anterior/paciente_id/
+--     posicion_cadena/numero_version a mano); 23514 para las nueve
+--     comprobaciones de coherencia 6.1-6.9; 22P05 para el caso especial de
+--     U+0000 (§ más abajo), que ni siquiera llega a la guarda 1 porque
+--     revienta en el propio `::jsonb` de la comprobación 6.
+-- =========================================================================
+
+-- b0030001-0000-4000-8000-000000000002 es el UUID literal de :PRO1
+-- (scripts/rls/01-fijacion.sql). Se escribe a mano en los sobres de esta
+-- sección porque son literales de texto construidos aparte de
+-- pg_temp.sobre_prueba(), para poder meter un `null` JSON, una clave
+-- duplicada o U+0000 donde el generador no lo permitiría.
+
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, huella, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, decode(repeat('00', 32), 'hex'), %L, timestamptz '2026-08-29 09:30:00+00')$sql$,
+    :NCADX, pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:00+00', '{"t":"neg"}'::jsonb), :PRO1),
+  '42501',
+  'Mandar huella a mano en el INSERT lanza 42501 (guarda 1; fn_sellar_version_nota la calcula)'
+);
+
+select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, posicion_cadena, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, 1, %L, timestamptz '2026-08-29 09:30:01+00')$sql$,
     :NCADX, pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:01+00', '{"t":"neg"}'::jsonb), :PRO1),
-  'Mandar posicion_cadena a mano en el INSERT lanza (fn_sellar_version_nota la calcula)'
+  '42501',
+  'Mandar posicion_cadena a mano en el INSERT lanza 42501 (guarda 1; fn_sellar_version_nota la calcula)'
 );
 
-select pg_temp.assert_lanza(
+select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29 09:30:02+00')$sql$,
     :NCADX,
     left(pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:02+00', '{"t":"neg"}'::jsonb), -1) || ',"extra":1}',
     :PRO1),
-  'Un sobre con una clave de más lanza (comprobación 6.1: claves exactas)'
+  '23514',
+  'Un sobre con una clave de más lanza 23514 (comprobación 6.1: claves exactas)'
 );
 
-select pg_temp.assert_lanza(
+select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29 09:30:03+00')$sql$,
     :NCADX,
     -- Sobre construido para PRO2, insertado con autor_id = PRO1: no coinciden.
     pg_temp.sobre_prueba(:PRO2, timestamptz '2026-08-29 09:30:03+00', '{"t":"neg"}'::jsonb),
     :PRO1),
-  'Un sobre con autor_id distinto del de la fila lanza (comprobación 6.2)'
+  '23514',
+  'Un sobre con autor_id distinto del de la fila lanza 23514 (comprobación 6.2)'
 );
 
-select pg_temp.assert_lanza(
+select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, %L)$sql$,
     :NCADX,
@@ -146,10 +215,11 @@ select pg_temp.assert_lanza(
     pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:04+00', '{"t":"neg"}'::jsonb),
     :PRO1,
     timestamptz '2026-08-29 09:30:05+00'),
-  'Un sobre con creada_en distinto de la columna creada_en lanza (comprobación 6.7)'
+  '23514',
+  'Un sobre con creada_en distinto de la columna creada_en lanza 23514 (comprobación 6.7)'
 );
 
-select pg_temp.assert_lanza(
+select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29 09:30:06+00')$sql$,
     :NCADX,
@@ -157,12 +227,11 @@ select pg_temp.assert_lanza(
     pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:06+00', '{"t":"neg"}'::jsonb,
                           null, null, null, null, true),
     :PRO1),
-  'cita_id null con redactada_en_sesion=true lanza (comprobación 6.9, ADR-046)'
+  '23514',
+  'cita_id null con redactada_en_sesion=true lanza 23514 (comprobación 6.9, ADR-046)'
 );
 
--- Faltaban estas dos (hallazgo MEDIA de la revisión con Opus del 30-08-2026: el ticket
--- decía que existían y no era cierto — «evidencia declarada que no existe en el banco»).
-select pg_temp.assert_lanza(
+select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, anotaciones_reservadas, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, %L, timestamptz '2026-08-29 09:30:07+00')$sql$,
     :NCADX,
@@ -170,10 +239,11 @@ select pg_temp.assert_lanza(
     pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:07+00', '{"t":"neg"}'::jsonb, 'reservado-sobre'),
     'reservado-fila',
     :PRO1),
-  'Un sobre con anotaciones_reservadas distinto de la columna lanza (comprobación 6.4, ADR-027)'
+  '23514',
+  'Un sobre con anotaciones_reservadas distinto de la columna lanza 23514 (comprobación 6.4, ADR-027)'
 );
 
-select pg_temp.assert_lanza(
+select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, motivo_cambio, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, %L, timestamptz '2026-08-29 09:30:08+00')$sql$,
     :NCADX,
@@ -181,15 +251,162 @@ select pg_temp.assert_lanza(
     pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:08+00', '{"t":"neg"}'::jsonb, null, 'motivo-sobre'),
     'motivo-fila',
     :PRO1),
-  'Un sobre con motivo_cambio distinto de la columna lanza (comprobación 6.6)'
+  '23514',
+  'Un sobre con motivo_cambio distinto de la columna lanza 23514 (comprobación 6.6)'
 );
 
--- Gemela positiva de las ocho anteriores: NCADX sigue sin ninguna versión —
+-- Hallazgo MEDIA-2 de la segunda revisión con Opus: regresión EXPLÍCITA del hallazgo
+-- ALTA de la primera. Ninguna prueba cubría un `null` JSON real en autor_id,
+-- esquema_version o creada_en/firmada_en — el error se descubrió a mano, no con una
+-- prueba. Estas cinco lo dejan sujeto: cada sobre es correcto en todo salvo el campo
+-- nulado (o, en el quinto caso, mal tipado), y se comprueba también CON EL ARREGLO
+-- DESHECHO (más abajo) que sin él estas cinco NO lanzaban.
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:09.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"2026-08-29T09:30:09.000Z","anotaciones_reservadas":null,"autor_id":null,"cita_id":null,"creada_en":"2026-08-29T09:30:09.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:09.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'REGRESIÓN — autor_id JSON null lanza 23514 (comprobación 6.2; era el hueco del hallazgo ALTA)'
+);
+
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:10.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"2026-08-29T09:30:10.000Z","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:10.000Z","cuerpo":{"t":"neg"},"esquema_version":null,"firmada_en":"2026-08-29T09:30:10.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'REGRESIÓN — esquema_version JSON null lanza 23514 (comprobación 6.5; era el hueco del hallazgo ALTA)'
+);
+
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:11.000Z')$sql$,
+    :NCADX,
+    -- esquema_version como CADENA "2", no número: el hallazgo BAJA 10 (subsumido en el
+    -- arreglo ALTA) — un cast a smallint la habría colado igual que el número 2.
+    '{"abierta_en":"2026-08-29T09:30:11.000Z","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:11.000Z","cuerpo":{"t":"neg"},"esquema_version":"2","firmada_en":"2026-08-29T09:30:11.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'REGRESIÓN — esquema_version como cadena "2" (no número) lanza 23514 (comprobación 6.5)'
+);
+
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:12.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"2026-08-29T09:30:12.000Z","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":null,"cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:12.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'REGRESIÓN — creada_en JSON null lanza 23514 (comprobación 6.7; era el hueco del hallazgo ALTA)'
+);
+
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:13.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"2026-08-29T09:30:13.000Z","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:13.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":null,"margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'REGRESIÓN — firmada_en JSON null lanza 23514 (comprobación 6.7; era el hueco del hallazgo ALTA)'
+);
+
+-- Hallazgo MEDIA-3 (el más serio) de la segunda revisión: `autor_id` repetido en el
+-- propio texto del sobre (uno falso, uno real más adelante). Con `jsonb_object_keys()`
+-- esto pasaba desapercibido (jsonb deduplica); con `json_object_keys()` (el arreglo) el
+-- array de claves tiene doce elementos en vez de once y no coincide con v_esperadas.
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:14.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"2026-08-29T09:30:14.000Z","anotaciones_reservadas":null,"autor_id":"22222222-2222-4222-8222-222222222222","autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:14.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:14.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'REGRESIÓN — sobre con autor_id DUPLICADO (uno falso, uno real) lanza 23514 (comprobación 6.1)'
+);
+
+-- Hallazgo MEDIA-5 de la segunda revisión: la «prueba explícita» de U+0000 que el
+-- ticket decía tener no existía en ningún fichero, solo en prosa. Esta la sujeta de
+-- verdad: un sobre con el escape de U+0000 dentro de `cuerpo` falla al castear a jsonb
+-- (`contenido_canonico::jsonb`, dentro del propio disparador) con 22P05, no con 23514 —
+-- ni siquiera llega a la guarda 1 ni a la comprobación 6.1, porque el cast revienta antes.
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:15.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"2026-08-29T09:30:15.000Z","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:15.000Z","cuerpo":{"control":"\u0000"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:15.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '22P05',
+  'Un sobre con U+0000 en el cuerpo lanza 22P05 al castear contenido_canonico a jsonb (Postgres no admite ese escape ni siquiera dentro de un jsonb)'
+);
+
+-- Hallazgo BAJA 8 de la segunda revisión: `abierta_en` con texto que no es un instante
+-- válido daba el error crudo de Postgres (22007) en vez de un mensaje de dominio como
+-- las otras ocho comprobaciones de 6.8. Arreglado con un `begin/exception` alrededor del
+-- cast; esta negativa lo deja sujeto con el código correcto (23514, no 22007).
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:16.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"esto-no-es-una-fecha","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:16.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:16.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'Un sobre con abierta_en que no es un instante ISO-8601 válido lanza 23514, no el 22007 crudo de Postgres (comprobación 6.8)'
+);
+
+-- Gemela positiva de las quince anteriores: NCADX sigue sin ninguna versión —
 -- ninguna de las negativas coló nada.
 select pg_temp.assert(
   pg_temp.contar(format('select * from public.notas_clinicas_versiones where nota_id = %L', :NCADX)) = 0,
-  'GEMELA POSITIVA: NCADX sigue sin versiones tras las ocho negativas'
+  'GEMELA POSITIVA: NCADX sigue sin versiones tras las quince negativas'
 );
+
+-- Hallazgo MEDIA-1 (segunda mitad): demostrar que estas comprobaciones dependen DE
+-- VERDAD del disparador, no de una coincidencia con otra restricción. Con
+-- `sellar_version_nota` desactivado, la misma clase de fallo dejaría de ocurrir por el
+-- motivo que la prueba dice, o dejaría de ocurrir del todo:
+alter table public.notas_clinicas_versiones disable trigger sellar_version_nota;
+
+-- D1: sin el disparador, mandar `huella` a mano (sin paciente_id/posicion_cadena/
+-- numero_version, que el disparador rellenaría) revienta por un motivo TOTALMENTE
+-- distinto (NOT NULL de numero_version), nunca por la guarda 1 — prueba de que la
+-- guarda 1 es del disparador, no de una restricción de columna que estuviera ahí de
+-- todos modos.
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, huella, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', '{"a":1}', decode(repeat('00', 32), 'hex'), %L, now())$sql$,
+    :NDEMO, :PRO1),
+  '23502',
+  'Con el disparador DESACTIVADO, mandar huella a mano ya NO lanza 42501: lanza 23502 (NOT NULL de numero_version) — la guarda 1 es del disparador'
+);
+
+-- D2: sin el disparador, un INSERT con autor_id mal formado (mismatch con el sobre)
+-- pero con TODAS las columnas rellenadas a mano (como haría un atacante que conociera
+-- el esquema) ENTRA SIN LANZAR NADA — prueba de que la coherencia 6.2 vive solo en el
+-- disparador, y sin él el mismatch pasa desapercibido.
+do $$
+declare
+  v_id uuid;
+begin
+  insert into public.notas_clinicas_versiones
+    (nota_id, cuerpo, contenido_canonico, autor_id, creada_en,
+     paciente_id, posicion_cadena, numero_version, huella, huella_anterior)
+  values
+    ('f0050001-0000-4000-8000-000000000009', '{"t":"neg"}',
+     '{"abierta_en":"2026-08-29T09:30:16.000Z","anotaciones_reservadas":null,"autor_id":"22222222-2222-4222-8222-222222222222","cita_id":null,"creada_en":"2026-08-29T09:30:16.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:16.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+     'b0030001-0000-4000-8000-000000000002', timestamptz '2026-08-29T09:30:16.000Z',
+     'd0050001-0000-4000-8000-000000000009', 1, 1,
+     decode(repeat('11', 32), 'hex'), decode(repeat('00', 32), 'hex'))
+  returning id into v_id;
+  perform pg_temp.assert(true, format('Con el disparador DESACTIVADO, un sobre con autor_id mismatch ENTRA sin lanzar nada (id=%s) — la comprobación 6.2 vive solo en fn_sellar_version_nota()', v_id));
+exception when others then
+  raise exception 'FALLO: con el disparador desactivado, este INSERT (deliberadamente incoherente) debía entrar sin lanzar nada, y lanzó % — %', sqlstate, sqlerrm;
+end;
+$$;
+
+alter table public.notas_clinicas_versiones enable trigger sellar_version_nota;
 
 -- =========================================================================
 -- D · La cadena real de PCAD (tres versiones, posiciones 1-2-3), y sobre

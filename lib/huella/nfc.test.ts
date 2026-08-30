@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canonizar } from './jcs';
+import { canonizar, type ValorJson } from './jcs';
 import { ErrorNormalizacionNfc, normalizarNfc } from './nfc';
 
 describe('normalizarNfc', () => {
@@ -69,5 +69,31 @@ describe('normalizarNfc', () => {
     expect(() => normalizarNfc(new Set() as unknown as ReturnType<typeof normalizarNfc>)).toThrow(
       ErrorNormalizacionNfc,
     );
+  });
+
+  // Hallazgo MEDIA-4 de la SEGUNDA revisión con Opus del 30-08-2026: sobre un objeto
+  // literal normal (`{}`), `resultado['__proto__'] = valor` con un valor primitivo es un
+  // NO-OP silencioso (no crea una propiedad propia: intenta reasignar el prototipo), así
+  // que la clave `__proto__` del sobre original desaparecía de Object.keys() sin ningún
+  // error — contenido borrado sin rastro, justo lo que este ticket existe para evitar.
+  it('conserva la clave "__proto__" con un valor primitivo (no la vacía en silencio)', () => {
+    const entrada = JSON.parse('{"__proto__":"secreto","a":1}') as Record<string, ValorJson>;
+    expect(Object.keys(entrada)).toEqual(['__proto__', 'a']);
+
+    const normalizado = normalizarNfc<Record<string, ValorJson>>(entrada);
+
+    expect(Object.keys(normalizado)).toEqual(['__proto__', 'a']);
+    expect(normalizado.__proto__).toBe('secreto');
+    expect(canonizar(normalizado)).toBe('{"__proto__":"secreto","a":1}');
+  });
+
+  it('conserva la clave "__proto__" con un valor objeto (no la vacía en silencio)', () => {
+    const entrada = JSON.parse('{"__proto__":{"x":1},"a":1}') as Record<string, ValorJson>;
+    expect(Object.keys(entrada)).toEqual(['__proto__', 'a']);
+
+    const normalizado = normalizarNfc<Record<string, ValorJson>>(entrada);
+
+    expect(Object.keys(normalizado)).toEqual(['__proto__', 'a']);
+    expect(canonizar(normalizado)).toBe('{"__proto__":{"x":1},"a":1}');
   });
 });

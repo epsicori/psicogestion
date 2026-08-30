@@ -224,17 +224,54 @@ begin
   -- 6 · Las nueve comprobaciones de coherencia sobre–fila. El sobre nace
   -- completo o se paga una era nueva de algoritmo (nada de esto se recalcula
   -- jamás): esta es la guarda que impide sellar un sobre con otra forma.
+  --
+  -- LIMITACIÓN CONOCIDA (hallazgo BAJA 6 de la segunda revisión con Opus del
+  -- 30-08-2026, documentada a propósito y no dejada implícita): estas nueve
+  -- comprobaciones validan que las CLAVES sean las once exactas y que los
+  -- VALORES coincidan semánticamente con las columnas — NO validan que
+  -- `contenido_canonico` sea JCS (RFC 8785) de verdad byte a byte. Un texto
+  -- con espacios de más o las claves en otro orden pasa estas nueve
+  -- comprobaciones igual, porque comparan valores JSON (vía `->`/`->>`), no
+  -- la forma exacta del texto. Hoy la única garantía de canonicidad real es
+  -- `lib/huella/jcs.ts`, en TypeScript — y `authenticated` tiene `grant
+  -- insert` directo sobre esta tabla (`notas_clinicas_versiones_alta`), así
+  -- que un `insert` a mano (o un cliente que no pase por `firmar.ts`) puede
+  -- sellar un sobre válido en contenido pero NO canónico byte a byte. La
+  -- cadena sigue siendo internamente consistente (la huella coincide con
+  -- ESOS bytes, encadena bien, el verificador la da por sana) pero esos
+  -- bytes podrían no ser los que JCS habría producido para el mismo
+  -- contenido. Se acepta tal cual: exigir JCS de verdad en SQL significaría
+  -- reimplementar el canonicalizador en PL/pgSQL, que es precisamente lo que
+  -- el ADR-035 quiere evitar (dos implementaciones del mismo algoritmo que
+  -- pueden desincronizarse). El verificador nocturno (`verificar_cadena_huellas`)
+  -- seguiría sin detectarlo, porque por diseño LEE LOS BYTES GUARDADOS y
+  -- nunca los deriva — es la garantía que sí importa (ADR-035) y esta no la
+  -- rompe.
   v_contenido := new.contenido_canonico::jsonb;
 
-  -- 6.1 · Objeto con EXACTAMENTE las once claves vigentes. Se comprueba el
-  -- tipo ANTES de listar claves: jsonb_object_keys() lanza su propio error si
-  -- se le pasa algo que no sea un objeto, y aquí se quiere el mensaje propio.
+  -- 6.1 · Objeto con EXACTAMENTE las once claves vigentes, SIN NINGUNA
+  -- REPETIDA. Se comprueba el tipo ANTES de listar claves: jsonb_object_keys()
+  -- lanza su propio error si se le pasa algo que no sea un objeto, y aquí se
+  -- quiere el mensaje propio.
+  --
+  -- `json_object_keys(...::json)`, NUNCA `jsonb_object_keys(...::jsonb)`
+  -- (hallazgo MEDIA-3, el más serio, de la segunda revisión con Opus del
+  -- 30-08-2026): `jsonb` DEDUPLICA claves repetidas al parsear —se queda con
+  -- la última—, así que un sobre con `"autor_id"` dos veces (una falsa, una
+  -- real más adelante) pasaba esta comprobación con jsonb_object_keys()
+  -- devolviendo solo las once claves esperadas, aunque el texto tuviera doce
+  -- pares. RFC 8785 (JCS) prohíbe claves duplicadas, y esta columna «ES el
+  -- JSON canónico»: sellar un documento con una clave repetida es sellar
+  -- bytes que la base nunca validó de verdad. `json_object_keys()` sobre
+  -- `::json` SÍ conserva los duplicados al enumerar, así que una clave
+  -- repetida hace que el array tenga doce elementos en vez de once y
+  -- `is distinct from v_esperadas` lo atrapa sin comprobación aparte.
   if jsonb_typeof(v_contenido) <> 'object' then
     raise exception 'contenido_canonico debe ser un objeto JSON (el sobre), no un %',
       jsonb_typeof(v_contenido)
       using errcode = '23514';
   end if;
-  select array_agg(k order by k) into v_claves from jsonb_object_keys(v_contenido) as k;
+  select array_agg(k order by k) into v_claves from json_object_keys(new.contenido_canonico::json) as k;
   if v_claves is distinct from v_esperadas then
     raise exception
       'contenido_canonico debe ser un sobre con exactamente las claves %, ni una más ni una '
@@ -352,13 +389,23 @@ begin
     raise exception 'margen_sesion_minutos del sobre debe ser un número o null (ADR-046)'
       using errcode = '23514';
   end if;
-  -- Los dos tipos ya están garantizados 'string' arriba, así que el cast a
-  -- timestamptz es seguro; no hace falta (ni tendría sentido) un `is
-  -- distinct from` aquí: esto es una comparación de orden, no de igualdad.
-  if (v_contenido ->> 'abierta_en')::timestamptz > (v_contenido ->> 'firmada_en')::timestamptz then
-    raise exception 'abierta_en no puede ser posterior a firmada_en (ADR-046)'
-      using errcode = '23514';
-  end if;
+  -- Los dos tipos ya están garantizados 'string' arriba (JSON), pero eso no
+  -- garantiza que el TEXTO sea un instante válido — hallazgo BAJA 8 de la
+  -- segunda revisión con Opus del 30-08-2026: sin este `begin/exception`, un
+  -- `abierta_en` como `"basura-no-es-fecha"` reventaba el `::timestamptz` con
+  -- el error crudo de Postgres (`22007 invalid input syntax for type
+  -- timestamp with time zone`), sin errcode `23514` ni mensaje de dominio,
+  -- rompiendo la regla que las otras ocho comprobaciones sí siguen.
+  begin
+    if (v_contenido ->> 'abierta_en')::timestamptz > (v_contenido ->> 'firmada_en')::timestamptz then
+      raise exception 'abierta_en no puede ser posterior a firmada_en (ADR-046)'
+        using errcode = '23514';
+    end if;
+  exception
+    when invalid_datetime_format then
+      raise exception 'abierta_en o firmada_en del sobre no son un instante ISO-8601 válido (ADR-046)'
+        using errcode = '23514';
+  end;
 
   -- 6.9 · Sin cita, ni margen ni «en sesión»: una nota sin cita jamás puede
   -- decir que se escribió en sesión.

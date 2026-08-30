@@ -8,21 +8,51 @@
 ## Ticket en curso
 
 **T-005 · Cadena de huellas SHA-256, canonicalización y verificador — implementado el
-30-08-2026, primera revisión con Opus NO pasó el gate (un hallazgo ALTA), arreglado el
-mismo día, pendiente de una segunda pasada de revisión.** (Ticket `opus` que toca RLS y
+30-08-2026. Dos pasadas de revisión con Opus, ninguna pasó el gate a la primera; la
+segunda confirmó cerrado el hallazgo ALTA original y encontró 5 MEDIA + 4 BAJA nuevos
+(el más serio, MEDIA-3, dejaba colar sobres con una clave JSON duplicada). Todo arreglado
+el mismo día. Pendiente de una TERCERA pasada de revisión.** (Ticket `opus` que toca RLS y
 datos clínicos: revisión obligatoria antes de cerrar.) Sigue al pie de la letra el «Diseño
 aprobado» del propio ticket. **`estado: en_curso` a propósito**: no se cierra a `hecho`
-hasta que la segunda revisión lo confirme.
+hasta que una revisión lo confirme sin hallazgos.
 
 Entra `supabase/migrations/20260829210000_cadena_de_huellas.sql` (amplía
 `notas_clinicas_versiones` con `paciente_id`/`posicion_cadena`, el disparador
 `fn_sellar_version_nota()` que sella y encadena, `fn_vaciar_borrador_al_firmar()` y
 `verificar_cadena_huellas(uuid)`) y `lib/huella/` (canonicalizador JCS+NFC propio, sobre
 Zod, `firmar.ts`). Verificado con `npm run test:rls` (módulo nuevo
-`scripts/rls/13-cadena-huellas.sql`, 178 aserciones en verde), `npm run test:huellas`
+`scripts/rls/13-cadena-huellas.sql`, **190 aserciones en verde**), `npm run test:huellas`
 (`scripts/t005-concurrencia.sql`, dos conexiones reales) y a mano contra la base local con
 `npm run verificar:huellas`. `npx supabase db reset`, `npm run lint`, `npm run
-lint:migraciones` y `npm run build` limpios; `npx vitest run`: 295 pruebas, 31 ficheros.
+lint:migraciones` y `npm run build` limpios; `npx vitest run`: **297 pruebas**, 31 ficheros.
+
+**Los nueve hallazgos de la SEGUNDA revisión con Opus (30-08-2026) — detalle completo con
+evidencia de antes/después en la sección «Revisión con Opus · segunda pasada» del propio
+ticket, no repetido aquí para no desincronizar dos copias**: el más serio,
+`jsonb_object_keys()` deduplicaba claves repetidas y dejaba sellar un sobre con `autor_id`
+dos veces — arreglado con `json_object_keys(...::json)`, que sí conserva duplicados. Las
+15 negativas de `13-cadena-huellas.sql` §C pasaron a `assert_lanza_codigo` con el código
+exacto (antes daban «OK» aunque fallaran por un motivo ajeno al disparador, o aunque se
+vaciara el disparador entero — dos demostraciones nuevas lo prueban). Cinco negativas
+nuevas cubren el `null` JSON real que el hallazgo ALTA de la primera vuelta dejó sin
+prueba de regresión. `normalizarNfc()` perdía la clave `__proto__` en silencio
+(`Object.create(null)` en vez de `{}` lo arregla). La prueba de U+0000 que el ticket decía
+tener no existía; ahora existe. Más tres BAJA: `abierta_en` con basura ya no da el 22007
+crudo de Postgres; el diseño y la migración ya no se contradicen sobre el límite de
+interbloqueo; hay una prueba de integración con un vector REAL de TypeScript por el
+disparador, no solo con `pg_temp.sobre_prueba()`.
+
+**Nota operativa, sin relación con el código**: durante la segunda revisión el Docker
+local de esta sesión se puso inestable (`supabase_vector_Psicogestion` en bucle de
+reinicio; un `db reset` llegó a fallar con `LegacyDbSetupError: error running container:
+exit 1`; dos veces el CLI dio «Finished… Reset local database» con el disparador
+`sellar_version_nota` todavía sin crear, porque «Restarting containers…» tarda más que el
+mensaje). Se resolvió con `npx supabase stop` + `npx supabase start` y comprobando
+`select tgname from pg_trigger where tgrelid =
+'public.notas_clinicas_versiones'::regclass` antes de fiarse de un `db reset`. Si un
+`test:rls`/`test:huellas` falla con «null value in column numero_version» justo después
+de un reset, es esto, no una regresión — repite el reset y comprueba el disparador antes
+de investigar el código.
 
 **Los catorce hallazgos de la primera revisión con Opus (30-08-2026), y cómo se cerraron
 — todos con reproducción del fallo antes y prueba de que ya no ocurre:**
