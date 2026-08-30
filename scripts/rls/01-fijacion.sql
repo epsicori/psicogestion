@@ -96,21 +96,44 @@ insert into public.episodio_participantes (episodio_id, paciente_id, papel) valu
   (:EPI, :P2, 'miembro');
 
 -- Dos notas en el mismo episodio: conjunta e individual (control del criterio 9 de T-002).
+-- T-005: notas_clinicas_versiones ya no acepta numero_version/huella/huella_anterior a
+-- mano — los calcula fn_sellar_version_nota() — así que se inserta solo lo que la versión
+-- de verdad decide, con un sobre canónico construido por pg_temp.sobre_prueba() (00). Las
+-- dos notas son del mismo paciente (P1), así que quedan en la MISMA cadena: NCONJ ocupa la
+-- posición 1 y NIND la 2. `creada_en` varía entre filas a propósito (§8 del diseño
+-- aprobado de T-005): dos sobres idénticos byte a byte chocarían en el índice único global
+-- sobre `huella` (T-001) aunque fueran de pacientes distintos.
 insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) values
   (:NCONJ, :P1, :EPI, :PRO1),
   (:NIND,  :P1, :EPI, :PRO1);
+-- Sentencias SEPARADAS, no un solo INSERT con varias filas: el orden de fila importa
+-- (posición 1 antes que 2 en la MISMA cadena) y una sentencia por fila es la única forma
+-- de que ese orden esté garantizado, no solo observado.
 insert into public.notas_clinicas_versiones
-  (nota_id, numero_version, cuerpo, contenido_canonico, huella, huella_anterior, alcance, autor_id) values
-  (:NCONJ, 1, '{"t":"conjunta"}',   '{"t":"conjunta"}',   sha256('nconj'::bytea), sha256(''::bytea), 'conjunta',   :PRO1),
-  (:NIND,  1, '{"t":"individual"}', '{"t":"individual"}', sha256('nind'::bytea),  sha256(''::bytea), 'individual', :PRO1);
+  (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
+  (:NCONJ, '{"t":"conjunta"}',
+   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:00+00', '{"t":"conjunta"}'::jsonb),
+   'conjunta', :PRO1, timestamptz '2026-08-29 09:20:00+00');
+insert into public.notas_clinicas_versiones
+  (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
+  (:NIND, '{"t":"individual"}',
+   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:01+00', '{"t":"individual"}'::jsonb),
+   'individual', :PRO1, timestamptz '2026-08-29 09:20:01+00');
 
 -- Nota con dos versiones encadenadas (corrección) — para la batería de identificación NO,
 -- pero sirve de fijación positiva de "notas con historial" si algún ticket futuro la usa.
+-- Paciente P2: cadena propia, independiente de la de P1 de arriba.
 insert into public.notas_clinicas (id, paciente_id, autor_id) values (:NCORR, :P2, :PRO2);
 insert into public.notas_clinicas_versiones
-  (nota_id, numero_version, cuerpo, contenido_canonico, huella, huella_anterior, motivo_cambio, autor_id) values
-  (:NCORR, 1, '{"t":"v1"}', '{"t":"v1"}', sha256('ncorr1'::bytea), sha256(''::bytea), null, :PRO2),
-  (:NCORR, 2, '{"t":"v2"}', '{"t":"v2"}', sha256('ncorr2'::bytea), sha256('ncorr1'::bytea), 'Corrección de fecha', :PRO2);
+  (nota_id, cuerpo, contenido_canonico, motivo_cambio, autor_id, creada_en) values
+  (:NCORR, '{"t":"v1"}',
+   pg_temp.sobre_prueba(:PRO2, timestamptz '2026-08-29 09:21:00+00', '{"t":"v1"}'::jsonb),
+   null, :PRO2, timestamptz '2026-08-29 09:21:00+00');
+insert into public.notas_clinicas_versiones
+  (nota_id, cuerpo, contenido_canonico, motivo_cambio, autor_id, creada_en) values
+  (:NCORR, '{"t":"v2"}',
+   pg_temp.sobre_prueba(:PRO2, timestamptz '2026-08-29 09:21:01+00', '{"t":"v2"}'::jsonb, null, 'Corrección de fecha'),
+   'Corrección de fecha', :PRO2, timestamptz '2026-08-29 09:21:01+00');
 
 -- Un borrador sin firmar, sobre P2.
 update public.notas_clinicas set borrador_contenido = '{"t":"Apunte sin firmar"}', borrador_autor_id = :PRO2, borrador_actualizado_en = now()

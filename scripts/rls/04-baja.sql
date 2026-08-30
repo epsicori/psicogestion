@@ -16,10 +16,14 @@ select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333
 
 insert into public.notas_clinicas (id, paciente_id, autor_id) values
   ('f0030001-0000-4000-8000-000000000004', :PBAJA, :PROBAJA);
+-- T-005: numero_version/huella/huella_anterior ya no se pueden mandar a mano; los calcula
+-- fn_sellar_version_nota(). Se inserta bajo la sesión de PROBAJA (arriba) para que la
+-- política notas_clinicas_versiones_alta se ejerza de verdad.
 insert into public.notas_clinicas_versiones
-  (nota_id, numero_version, cuerpo, contenido_canonico, huella, huella_anterior, autor_id) values
-  ('f0030001-0000-4000-8000-000000000004', 1, '{"t":"baja"}', '{"t":"baja"}',
-   sha256('nbaja'::bytea), sha256(''::bytea), :PROBAJA);
+  (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
+  ('f0030001-0000-4000-8000-000000000004', '{"t":"baja"}',
+   pg_temp.sobre_prueba(:PROBAJA, timestamptz '2026-08-29 09:22:00+00', '{"t":"baja"}'::jsonb),
+   :PROBAJA, timestamptz '2026-08-29 09:22:00+00');
 insert into public.accesos_historia (perfil_id, paciente_id, tipo, pestana) values
   (:PROBAJA, :PBAJA, 'apertura', 'notas_clinicas');
 

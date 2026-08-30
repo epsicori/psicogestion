@@ -5,30 +5,18 @@
 // cualquier aserción rota (`raise exception`) haga que psql salga con código distinto de
 // cero. El contenedor se localiza con `docker ps`, nunca de memoria: si el proyecto cambia
 // de nombre, el nombre fijo dejaría de encontrarlo sin avisar.
+//
+// T-005: `localizarContenedor()` y `ejecutarSql()` se extrajeron a scripts/psql.mjs, sin
+// cambio de comportamiento, porque un segundo guion (verificar-huellas.mjs) los necesita.
 
-import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { ejecutarSql, localizarContenedor } from "./psql.mjs";
+
 const raiz = path.dirname(fileURLToPath(import.meta.url));
 const dirRls = path.join(raiz, "rls");
-
-function localizarContenedor() {
-  const salida = execFileSync("docker", ["ps", "--format", "{{.Names}}"], {
-    encoding: "utf8",
-  });
-  const candidato = salida
-    .split(/\r?\n/)
-    .find((nombre) => /^supabase_db_/.test(nombre.trim()));
-  if (!candidato) {
-    throw new Error(
-      "No se encuentra ningún contenedor supabase_db_* en ejecución. " +
-        "¿Está la base local levantada (`npx supabase start`)?",
-    );
-  }
-  return candidato.trim();
-}
 
 function ficherosSql() {
   return readdirSync(dirRls)
@@ -57,28 +45,4 @@ const guion =
   ficheros.map((f) => readFileSync(f, "utf8")).join("\n\n") +
   "\nrollback;\n";
 
-const resultado = spawnSync(
-  "docker",
-  [
-    "exec",
-    "-i",
-    contenedor,
-    "psql",
-    "-U",
-    "postgres",
-    "-d",
-    "postgres",
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-f",
-    "-",
-  ],
-  { input: guion, stdio: ["pipe", "inherit", "inherit"], encoding: "utf8" },
-);
-
-if (resultado.error) {
-  console.error(resultado.error);
-  process.exit(1);
-}
-
-process.exit(resultado.status ?? 1);
+process.exit(ejecutarSql(contenedor, guion));

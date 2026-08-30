@@ -901,6 +901,8 @@ export type Database = {
           motivo_cambio: string | null
           nota_id: string
           numero_version: number
+          paciente_id: string
+          posicion_cadena: number
         }
         Insert: {
           alcance?: Database["public"]["Enums"]["alcance_nota"]
@@ -917,6 +919,8 @@ export type Database = {
           motivo_cambio?: string | null
           nota_id: string
           numero_version: number
+          paciente_id: string
+          posicion_cadena: number
         }
         Update: {
           alcance?: Database["public"]["Enums"]["alcance_nota"]
@@ -933,6 +937,8 @@ export type Database = {
           motivo_cambio?: string | null
           nota_id?: string
           numero_version?: number
+          paciente_id?: string
+          posicion_cadena?: number
         }
         Relationships: [
           {
@@ -1729,6 +1735,17 @@ export type Database = {
       rol_actual: {
         Args: never
         Returns: Database["public"]["Enums"]["rol_usuario"]
+      }
+      verificar_cadena_huellas: {
+        Args: { p_paciente_id?: string }
+        Returns: {
+          creada_en: string
+          motivo: string
+          nota_id: string
+          paciente_id: string
+          posicion_cadena: number
+          version_id: string
+        }[]
       }
       zona_horaria_centro: { Args: { p_centro_id: string }; Returns: string }
     }

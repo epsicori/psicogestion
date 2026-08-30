@@ -3,9 +3,165 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 29-08-2026
+**Actualizado**: 30-08-2026
 
 ## Ticket en curso
+
+**T-005 · Cadena de huellas SHA-256, canonicalización y verificador — implementado el
+30-08-2026, primera revisión con Opus NO pasó el gate (un hallazgo ALTA), arreglado el
+mismo día, pendiente de una segunda pasada de revisión.** (Ticket `opus` que toca RLS y
+datos clínicos: revisión obligatoria antes de cerrar.) Sigue al pie de la letra el «Diseño
+aprobado» del propio ticket. **`estado: en_curso` a propósito**: no se cierra a `hecho`
+hasta que la segunda revisión lo confirme.
+
+Entra `supabase/migrations/20260829210000_cadena_de_huellas.sql` (amplía
+`notas_clinicas_versiones` con `paciente_id`/`posicion_cadena`, el disparador
+`fn_sellar_version_nota()` que sella y encadena, `fn_vaciar_borrador_al_firmar()` y
+`verificar_cadena_huellas(uuid)`) y `lib/huella/` (canonicalizador JCS+NFC propio, sobre
+Zod, `firmar.ts`). Verificado con `npm run test:rls` (módulo nuevo
+`scripts/rls/13-cadena-huellas.sql`, 178 aserciones en verde), `npm run test:huellas`
+(`scripts/t005-concurrencia.sql`, dos conexiones reales) y a mano contra la base local con
+`npm run verificar:huellas`. `npx supabase db reset`, `npm run lint`, `npm run
+lint:migraciones` y `npm run build` limpios; `npx vitest run`: 295 pruebas, 31 ficheros.
+
+**Los catorce hallazgos de la primera revisión con Opus (30-08-2026), y cómo se cerraron
+— todos con reproducción del fallo antes y prueba de que ya no ocurre:**
+
+- **ALTA · Tres de las nueve comprobaciones del disparador se saltaban con `null` JSON**
+  (6.2 autor_id, 6.5 esquema_version, 6.7 creada_en/firmada_en; también el
+  `abierta_en<=firmada_en` de 6.8). Causa: `->>` da SQL `NULL` ante un valor JSON `null`, y
+  `NULL <> x` es `NULL`, que en un `if` es falso — la comprobación no saltaba nunca.
+  Reproducido insertando un sobre con `"autor_id":null` y viendo que se sellaba igual
+  (`huella is not null` → `t`). Arreglado cambiando a `(v_contenido -> 'campo') is distinct
+  from to_jsonb(new.columna)`, que compara el valor JSONB completo y no colapsa a `NULL`.
+  Reproducido de nuevo: las cuatro variantes (autor_id, esquema_version, creada_en,
+  firmada_en nulos) lanzan ahora con su mensaje propio; un sobre bien formado sigue
+  sellándose sin falsos positivos.
+- **MEDIA · `normalizarNfc()` vaciaba un `Date`/`Map` en `{}` en silencio** antes de que
+  `jcs.ts` pudiera rechazarlo (`typeof new Date() === 'object'` y `Object.keys(...) ===
+  []`). Reproducido: `construirSobre({ cuerpo: { fecha: new Date(...) } })` no lanzaba.
+  Arreglado añadiendo el mismo guarda de objeto plano (`esObjetoPlano()`) DENTRO de
+  `nfc.ts`, antes de recorrer. Reproducido de nuevo: ahora lanza `ErrorNormalizacionNfc`
+  con la ruta del culpable (`$.cuerpo.fecha`). Tres pruebas nuevas en `nfc.test.ts`.
+- **MEDIA · U+0000 no se puede insertar de verdad**: `contenido_canonico::jsonb` (el
+  `check` de la columna y el propio disparador) rechaza la secuencia de escape con
+  `22P05` (`unsupported Unicode escape sequence`) — Postgres no admite ese carácter ni
+  escapado dentro de un jsonb. El diseño decía «no es un problema»; es más exacto decir
+  que falla alto y con un código concreto, no que «no pasa nada». Documentado en el
+  comentario de la columna `contenido_canonico` y en el propio ticket (nota de corrección
+  bajo el párrafo original). No se corrige el tipo de columna (fuera de alcance).
+- **MEDIA · `t005-concurrencia.sql` no podía fallar nunca**: sus cuatro comprobaciones
+  eran `select case … 'OK'/'FALLO'`, sin `raise`. Reproducido con una condición inyectada a
+  propósito (`if true then` en la tercera aserción): el guion completo igual, exit 0.
+  Arreglado con `do $$ … raise exception … $$` en las cuatro, más una tabla real
+  `public.t005_resultado` que captura éxito/SQLSTATE de la segunda conexión (el `\!` no
+  interpola `:VAR`, y tampoco dentro de un bloque `$$ … $$` — verificado con
+  `do $$ begin raise notice ':X'; end $$;`, que imprime literalmente «:X»). Reproducido de
+  nuevo con la misma condición inyectada: `npm run test:huellas` sale con **código 3** y
+  señala la aserción exacta; revertida la condición, vuelve a salir con 0.
+- **MEDIA · `fn_vaciar_borrador_al_firmar()` generaba auditoría de UPDATE espuria** en
+  cada firma aunque no hubiera borrador. Arreglado con
+  `and borrador_contenido is not null` en el `where` del `update`.
+- **MEDIA · `--paciente` de `verificar-huellas.mjs` sin validar, interpolado en SQL de
+  superusuario.** Reproducido: `--paciente "x' union select version() -- "` llega intacto
+  al parser SQL (error de sintaxis visible en el mensaje, que ya revela la interpolación
+  cruda); `--paciente` sin valor detrás verificaba TODAS las cadenas en silencio.
+  Arreglado con el mismo patrón UUID que `lib/huella/sobre.ts`, validado antes de
+  interpolar, y detección explícita de valor ausente/otra bandera. Reproducido de nuevo:
+  los dos casos salen con código 2 y un mensaje de uso, sin tocar la base.
+- **MEDIA · Evidencia declarada en el ticket que no existía**: decía que había negativas de
+  `anotaciones_reservadas` y `motivo_cambio` (6.4/6.6) en el banco, y no las había.
+  Añadidas las dos en `scripts/rls/13-cadena-huellas.sql` §C.
+- **MEDIA · `posicion_cadena` filtra cuántas versiones de otros profesionales hay en la
+  cadena de un paciente**, a quien solo tiene una versión propia visible. Es consecuencia
+  del `security definer` y de numerar por paciente, no un bug de código; se acepta y se
+  documenta en `docs/architecture.md` §Roles («Fuga documentada»).
+- **BAJA 10 (subsumido en el ALTA) · `esquema_version` no tipada**: `"2"` (cadena) pasaba
+  el cast a `smallint` igual que el número 2. Se cerró con el mismo `to_jsonb(...) is
+  distinct from` de la comprobación 6.5.
+- **BAJA 11 · Documentado, no corregido**: `to_char('MS')` trunca a milisegundos, que es
+  EXACTAMENTE la precisión de `toISOString()` — sin pérdida frente al sobre real siempre
+  que `creada_en` se pase explícito (que es lo que hace `firmar.ts` siempre). Comentario
+  añadido junto al cálculo en la migración.
+- **BAJA 12 · Negativas con `assert_lanza` en vez de `assert_lanza_codigo`**: cambiada la
+  del criterio 9 (huella_anterior repetida) a exigir `23505` en concreto.
+- **BAJA 13 · La comprobación ADR-031 comparaba dos conjuntos vacíos**, no las huellas
+  reales. Añadida una comparación byte a byte (`string_agg(encode(huella,'hex'),...)`)
+  antes y después de fusionar, capturada con `\gset`. Probado que SÍ puede fallar:
+  sustituyendo el valor «después» por uno deliberadamente distinto, la aserción falla con
+  el mensaje exacto (exit 3); revertido, vuelve a pasar.
+- **BAJA 14 · Blancos duplicados en `13-cadena-huellas.sql`** (519 líneas para el contenido
+  real): colapsados los saltos de línea sobrantes y fusionados los párrafos de comentario
+  que quedaron partidos línea a línea por el generador original. 519 → 413 líneas, mismo
+  contenido, mismas 178 aserciones en verde.
+
+**Landmine nuevo, pagado dos veces en esta sesión**: escribir la secuencia de seis
+caracteres `\u0000` dentro de una cadena de un fichero (comentario SQL o literal de
+prueba TypeScript) a través de las herramientas de edición de este entorno puede acabar
+grabando un **byte NUL crudo** en el fichero en vez de los seis caracteres ASCII. Un NUL
+crudo en un `comment on column …` rompe `db reset` con `invalid message format (SQLSTATE
+08P01)`; en un `.ts` no rompe nada en tiempo de ejecución pero dice mal lo que dice. Pasó
+en el propio `tickets/T-005-cadena-huellas.md` (ya existía en el diseño aprobado, sin
+relación con esta sesión), en la migración (al documentar el hallazgo MEDIA de U+0000, con
+ironía) y en `lib/huella/jcs.ts`/`jcs.test.ts`. **Comprobación que hay que repetir tras
+cualquier sesión que teclee `\u0000` literal**: `node -e "const b=require('fs').readFileSync(RUTA); let n=0; for(const x of b) if(x===0) n++; console.log(n)"` sobre cada fichero tocado — cero es lo correcto.
+
+**Lo que hay que saber antes de tocar la cadena de huellas:**
+
+1. **El sobre canónico tiene once claves exactas, `esquema_version = 2` desde el ADR-046**
+   (la versión 1, sin el bloque de sesión, no existe en ninguna fila de ninguna base). El
+   disparador `fn_sellar_version_nota()` las exige TODAS y RECHAZA cualquier clave de más
+   o de menos — el día que el sobre crezca de verdad, sube `esquema_version` y el
+   disparador tiene que aceptar las dos formas, cada una con la suya. No se toca a la
+   ligera.
+2. **`huella`, `huella_anterior`, `paciente_id`, `posicion_cadena` y `numero_version` los
+   calcula el disparador; un `INSERT` que los traiga no nulos lanza.** Esto rompió
+   `scripts/rls/01-fijacion.sql` y `scripts/rls/04-baja.sql` (insertaban estos valores a
+   mano desde T-001/T-003) y se han reescrito para usar
+   `pg_temp.sobre_prueba(...)` (nuevo en `00-ayudantes.sql`), que construye el sobre a
+   mano con las once claves. **Trampa real y ya pagada**: `pg_temp.sobre_prueba()` usa
+   `p_cuerpo::text`, y el `::text` de un `jsonb` en Postgres imprime **un espacio tras los
+   dos puntos** (`{"t": "cad-b"}`), a diferencia del canónico JCS real, que no lleva
+   ninguno — si algo compara contra el texto sin ese espacio, no encuentra nada.
+3. **`\!` de psql NO interpola variables `:VAR`** (a diferencia de una sentencia SQL
+   normal): en `scripts/t005-concurrencia.sql`, la segunda conexión lleva los UUID
+   literales escritos a mano, no `:NOTA2`/`:ANA`. Se descubrió porque la primera versión
+   fallaba con «syntax error at or near ":"» — un fallo que además dejaba pasar la
+   aserción siguiente por el motivo equivocado (NOTA2 «seguía sin versión», pero porque el
+   INSERT ni siquiera había llegado a ejecutarse, no porque el cerrojo lo hubiera
+   bloqueado). **Lección**: toda prueba negativa hay que preguntarse si seguiría en verde
+   con el arreglo quitado — aquí no se preguntó a la primera y coló.
+4. **El índice único GLOBAL sobre `huella` (T-001) sigue vivo** y hace que dos sobres
+   idénticos byte a byte —mismo cuerpo, mismo autor, mismo instante— choquen en el génesis
+   aunque sean de pacientes distintos. Toda fijación nueva que comparta cuerpo/autor entre
+   pacientes tiene que variar `creada_en` (basta un segundo).
+5. **`scripts/t001-esquema.sql`, `scripts/t002-rls.sql` y `scripts/t004-auditoria.sql`
+   (guiones ad hoc, no en ningún `npm run`) han quedado rotos**: insertan
+   `notas_clinicas_versiones` con `huella`/`huella_anterior`/`numero_version` a mano, y el
+   disparador nuevo los rechaza. **No se han tocado, a propósito**: son evidencia congelada
+   de tickets ya cerrados (T-001/T-002/T-004), no pruebas vivas, y arreglarlos es trabajo
+   fuera del alcance de este ticket (constitución, regla 2). Si algún ticket futuro
+   necesita volver a ejecutarlos, hay que reescribir esos `insert` igual que se hizo en
+   `01-fijacion.sql`.
+6. **`lib/supabase/tipos-bd.ts` se editó a mano** (Docker no estaba arrancado cuando se
+   escribió el código) y luego se regeneró de verdad con `npm run tipos` una vez arrancado:
+   el diff fue de **cero líneas de más** frente al parcheo manual — la única adición real
+   fue la firma de `verificar_cadena_huellas` en `Functions`. Si un ticket futuro toca esta
+   tabla, regenerar los tipos sigue siendo lo correcto; el parcheo a mano fue la excepción
+   de esta sesión, no el patrón a seguir.
+7. **La línea exacta que T-009 tiene que enganchar a la ejecución nocturna** (no se ha
+   creado ni tocado nada en `.github/`, territorio de MiniMax): `npm run verificar:huellas
+   -- --json`, código de salida **distinto de cero si hay una sola anomalía**, salida JSON
+   con un objeto por anomalía (`paciente_id`, `posicion_cadena`, `version_id`, `nota_id`,
+   `creada_en`, `motivo`).
+8. **El SHA-256 vive solo en pgcrypto** (`extensions.digest`, nunca `digest` a secas —
+   `search_path = ''`). `lib/huella/**` no importa `node:crypto` en ningún fichero de
+   producción; solo `vectores.test.ts` lo usa, y es una prueba. Es lo que cierra el
+   criterio de `blocking-prerender-*` (ADR-043) por construcción, no por vigilancia.
+9. **El editor TipTap, la pantalla de notas y la Server Action con `"use server"` son fase
+   1**, territorio de MiniMax (`app/**`). Este ticket entrega el mecanismo
+   (`lib/huella/firmar.ts`, sin la directiva, fuera de `app/`) y su prueba por guion, tal
+   como pedía el propio ticket.
 
 **T-004 · Auditoría por triggers y solo adición en tres capas — hecho el 29-08-2026.**
 Entra `supabase/migrations/20260829150000_auditoria_y_solo_adicion.sql`. Verificado con

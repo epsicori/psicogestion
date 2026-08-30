@@ -36,6 +36,7 @@ para saber si el banco pasó.
 | `10-solo-adicion.sql` | Invariante 2 — `update`/`delete`/`truncate` fallan en las tres capas |
 | `11-cobertura.sql` | Toda política de `pg_policies` tiene una entrada declarada, y viceversa |
 | `12-resto-de-tablas.sql` | `evaluaciones`, `evaluacion_archivos`, `informes`, `consentimiento_firmantes`, `preferencias_usuario`, `perfiles`, `perfiles_centros`, `politicas_retencion` — las tablas que la matriz y las baterías no ejercían bajo ningún rol |
+| `13-cadena-huellas.sql` | T-005 — sellado, encadenado, los tres pares del vector congelado con pgcrypto, las negativas de `fn_sellar_version_nota()`, la manipulación con los cerrojos levantados (una intermedia, y el criterio «no reserializa» en sus dos sentidos) y ADR-031 (fusionar no altera ninguna huella) |
 
 ## Cómo se añade una prueba
 
@@ -81,3 +82,12 @@ guion suelto:
    comprobación es negativa, usa `pg_temp.assert_lanza` (o `assert_lanza_codigo` si el
    rechazo tiene que venir de una comprobación concreta, no de cualquier disparador que
    se dispare antes en la misma fila) EN SESIÓN, nunca fuera de ella.
+9. **Si el dato nuevo incluye una versión de `notas_clinicas_versiones` (T-005),
+   `huella`, `huella_anterior`, `paciente_id`, `posicion_cadena` y `numero_version` no se
+   insertan a mano: los calcula el disparador `fn_sellar_version_nota()`.** Se inserta
+   `contenido_canonico` con `pg_temp.sobre_prueba(...)` (00-ayudantes.sql), que construye
+   el sobre canónico de once claves. **Cuidado con una trampa real**: el índice único
+   *global* sobre `huella` (T-001) hace que dos sobres idénticos byte a byte —mismo
+   cuerpo, mismo autor, mismo instante— choquen en el génesis aunque sean de pacientes
+   distintos. Cuando dos fixtures comparten cuerpo y autor, varía `creada_en` entre ellas
+   (basta un segundo de diferencia).

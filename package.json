@@ -12,6 +12,8 @@
     "test:cobertura": "vitest run --coverage",
     "lint:migraciones": "tsx scripts/lint-migraciones.ts",
     "test:rls": "node scripts/test-rls.mjs",
+    "verificar:huellas": "node scripts/verificar-huellas.mjs",
+    "test:huellas": "node scripts/test-huellas.mjs",
     "tipos": "supabase gen types typescript --local > lib/supabase/tipos-bd.ts"
   },
   "dependencies": {

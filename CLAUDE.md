@@ -32,6 +32,8 @@ TanStack Table · date-fns.
 | Pruebas unitarias | `npm test` · `npm run test:watch` · `npm run test:cobertura` |
 | Sembrar datos | `npm run seed` *(desde T-008)* |
 | Pruebas de RLS | `npm run test:rls` *(desde T-003)* |
+| Verificar la cadena de huellas | `npm run verificar:huellas` *(desde T-005; `--json`, `--paciente <uuid>`)* |
+| Prueba de concurrencia de la cadena | `npm run test:huellas` *(desde T-005; confirma filas, no idempotente)* |
 
 ## Convenciones
 
