@@ -23,7 +23,10 @@ sobre-especificado.
 Sección: `docs/interfaz.md` §Armazón («todavía no está: la campana de notificaciones») y
 §Lo que el prototipo no cubre. ADR **047** (el aviso no interrumpe), **045** («en curso»
 calculado), **038** (las notificaciones internas viven en la aplicación, **nunca** en el
-correo, y jamás llevan contenido clínico), **024** (outbox), **041** (WCAG).
+correo, y jamás llevan contenido clínico), **024** (outbox), **041** (WCAG), **054**
+(lenguaje claro: el `titulo` y el `cuerpo` de cada notificación se redactan sin jerga,
+frase corta y verbo activo — «Falta firmar la nota de ayer», no «Documentación pendiente de
+cumplimentación»).
 
 ## Tareas
 
