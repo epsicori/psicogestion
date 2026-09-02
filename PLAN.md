@@ -145,15 +145,22 @@ llega la hora de la cita
 | T-013 | Ficha del paciente, pestañas y pantalla de bloqueo | `sonnet` | T-006, T-007 | pendiente |
 | T-014 | Calendario: vista semanal y ficha de cita | `opus` | T-011, T-007 | pendiente |
 | T-015 | Avisos: sesión en curso, notificaciones y escalado | `sonnet` | T-010, T-014 | pendiente |
+| T-028 | Alta de cita: sugerencias, serie y conflicto | `sonnet` | T-011, T-013, T-014 | pendiente |
 
 ```
-T-010 ─── T-011 ─── T-014 ─┐
-   │                        ├─ T-015
+T-010 ─── T-011 ─── T-014 ─┬─ T-015
+   │                        └─ T-028
    └──────── T-013 ─── T-012
 ```
 
-**Revisión con Opus en los seis, sin excepción**: los seis tocan RLS, datos clínicos o
-las dos cosas. T-013 y T-010 son independientes entre sí y se pueden llevar en paralelo.
+**T-028 se añadió el 02-09-2026**, al descubrir que **el formulario que crea una cita no
+tenía ticket**: T-011 escribe las Server Actions, T-014 dibuja el calendario y el panel de
+la cita que ya existe, y nadie dibujaba el alta. Es también el único sitio donde se decide
+una serie completa.
+
+**Revisión con Opus en los seis primeros, sin excepción**: tocan RLS, datos clínicos o las
+dos cosas. **T-028 solo la necesita si acaba escribiendo una consulta propia sobre `citas`**
+en vez de leer la vista de agenda de T-010. T-013 y T-010 son independientes entre sí y se pueden llevar en paralelo.
 
 **Los ADR-045 a 048 se cierran antes de empezar**, y uno de ellos vence antes incluso de
 que termine la fase 0: el ADR-046 mete cuatro campos en el sobre canónico, así que **T-005

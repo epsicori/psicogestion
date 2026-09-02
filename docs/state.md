@@ -3,7 +3,7 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 29-08-2026
+**Actualizado**: 02-09-2026
 
 ## Ticket en curso
 
@@ -476,6 +476,74 @@ Las rutas con sesión viven en el grupo `app/(app)/`, que **no añade segmento a
 `/pacientes` sigue siendo `/pacientes`. `cerrarSesion` pasó de
 `app/pacientes/acciones.ts` a `app/(app)/acciones.ts` y ahora vive en la barra lateral.
 
+### Agenda · la vista mensual y el panel con pico
+
+**Decidido el 02-09-2026 mirando un prototipo externo de calendario** (Kimi, «calendario con
+diálogo emergente»). **De ese prototipo no entra código** —Vite, React Router y cincuenta
+componentes shadcn, o sea el ADR-040 al revés—, pero sí entran dos formas que T-014 ya no
+tiene que decidir:
+
+1. **Rejilla mensual**: 6×7, lunes primero, celdas de mes vecino atenuadas pero navegables,
+   hasta tres citas por celda con `hora + nombre corto` y `+N más` para el resto, y a
+   360 px las citas colapsan a puntos de estado con el recuento del día.
+2. **Panel anclado con pico**, que es el «panel lateral» del vocabulario de
+   `docs/interfaz.md`: mide su alto, elige arriba o abajo según el hueco, se recorta a los
+   límites del calendario y el pico sigue apuntando al elemento que lo abrió. El fallo
+   típico de este patrón es el panel que se sale por el borde en la última fila del mes.
+
+**Y una consecuencia estructural que no es de estilo: la celda del calendario no puede ser
+un `<button>`.** El día y la cita son dos objetivos distintos —clic en la cita abre el
+panel de la cita, clic en el hueco abre el panel del día— y no se anida botón en botón. La
+celda va como `div role="gridcell"` con foco propio para el número del día y para cada
+cita. Está escrito como tarea y como criterio en **T-014**.
+
+Lo que el prototipo hacía y **no** vale, por si vuelve a aparecer la tentación: tres
+estados en vez de los cinco del ADR-045, el estado codificado **solo** con color (ADR-047),
+notas de cita con contenido clínico (choque 3), la especialidad visible siempre (choque 4),
+reprogramar mutando estado en cliente sin confirmación ni auditoría (T-011), datos y
+`new Date()` en cliente (ADR-034), y cifras de cabecera sin recorte por rol (choque 6).
+
+### Agenda · la propuesta de motor de sugerencias, contrastada el 02-09-2026
+
+Llegó una propuesta externa (Kimi) de sistema de agendación: motor de sugerencias con cinco
+factores ponderados, histograma de preferencias del paciente con decaimiento exponencial,
+tabla de eventos de comportamiento, soft-holds y API propia. **Contrastada contra
+`docs/decisions.md`, T-010 y T-011 antes de valorarla**, como manda la regla que dejó la
+ronda anterior. Resultado, para no repetir el contraste:
+
+- **El algoritmo de sugerencia ya está decidido y no se reabre.** El **ADR-049(c)** no dice
+  solo «determinista y explicable»: dice **cuál** —«la moda del intervalo de las seis últimas
+  citas, cruzada con día y franja habituales»—. Un motor de cinco factores con pesos
+  configurables es una reapertura del ADR, no un hueco. Coincidimos en el fondo (sin IA en
+  v1, y de paso el AI Act fuera entero); discrepamos en la complejidad.
+- **No se crea tabla de eventos de comportamiento del paciente.** Un histograma con
+  `rejected_suggestion` y decaimiento exponencial es perfilado, con su RLS, su auditoría y
+  su entrada en el registro de actividades — y es innecesario: la moda se calcula de
+  `citas`, que ya existen y ya están auditadas. **Cero tablas nuevas, una función `stable`.**
+  Además, media vida de 90 días no se puede explicar en pantalla, y la explicabilidad era el
+  argumento entero.
+- **Lo que sí entró, a T-010**: el descanso dentro del `rango_bloqueante` y del índice de
+  exclusión (antes quedaba validado solo en la aplicación, o sea, no validado), la
+  convención `isodow` de `dia_semana` escrita en su comentario, el nombre estable de la
+  restricción para que la pantalla pueda responder al conflicto, y `descanso_activo` /
+  `descanso_minutos` en `perfiles`. **El descanso aquí no es descanso: es el tiempo de
+  escribir la nota clínica**, y por eso viene activo por defecto.
+- **Lo que se descartó**: soft-holds con TTL (una tabla y un job de limpieza para una
+  consulta con una recepcionista), la optimización anti-huecos como factor de puntuación
+  (con sesiones homogéneas de 50 minutos el «hueco inútil» casi no se da; es un problema de
+  clínica multiprofesional) y la API REST propia, que aquí son Server Actions.
+- **Errores del SQL propuesto**, por si vuelve: `CREATE EXCLUDE CONSTRAINT ... ON tabla` no
+  existe en Postgres; `tstzrange` para una franja horaria semanal es el tipo equivocado;
+  `weekday 0 = lunes` choca con `extract(dow)`; el predicado de un índice parcial no puede
+  consultar otra tabla, así que el overbooking «por profesional» no se puede hacer así; y
+  reprogramar borrando e insertando rompe la auditoría de T-004 y la marca `desviada` de
+  T-011 — aquí es `update`.
+
+**La pantalla que faltaba**: al revisar el wireframe de agendación se vio que **el alta de
+cita no tiene ticket**. `docs/interfaz.md` la nombra una vez («acción primaria: Nueva
+cita»), T-011 escribe las Server Actions y T-014 dibuja el calendario y el panel de la cita
+que ya existe — nadie dibujaba el formulario. Es **T-028**, escrito el 02-09-2026.
+
 ## Repositorio
 
 `https://github.com/epsicori/psicogestion` — privado, rama `main` sincronizada.
@@ -663,6 +731,76 @@ ADR cada vez:
 - **`vite-tsconfig-paths` sobra a medio plazo**: Vitest avisa de que Vite ya resuelve los
   alias de `tsconfig` con `resolve.tsconfigPaths: true`. Una dependencia menos, cuando
   toque revisar la configuración.
+
+### Propuestas de producto para fase 2, revisadas el 01-09-2026
+
+Dos análisis externos (ninguno es un ticket) señalaron en dos rondas nueve posibles añadidos
+al plan. Se contrastó cada uno contra `docs/decisions.md` entero y contra `tickets/` —leyendo
+el contenido, no solo el nombre del fichero— antes de anotar nada, y el resultado no es
+uniforme: tres eran huecos reales y ya están cerrados (**T-021** ampliado + **T-027** nuevo
+para bonos, **T-013** ampliado para el bloqueo automático, **ADR-054** + **T-013**/**T-015**
+para lenguaje claro), dos chocan con una decisión ya cerrada en sentido contrario
+(justificantes/CSV con el ADR-053, alto contraste con el ADR-042), y el resto ya estaba
+cubierto o expresamente vetado. Se deja anotado para no repetir el contraste la próxima vez
+que alguien traiga una lista parecida — y ya ha llegado dos veces.
+
+- **Bonos/paquetes de sesiones — corregido: no era un hueco de esquema, solo de pantalla.**
+  Primera pasada por este fichero decía «no aparece en T-021 a T-026», y era un falso
+  negativo: la búsqueda por «bono» devolvió 20 ficheros por coincidencias sueltas
+  (`abono`, etc.) y nadie leyó el contenido. **`T-021` ya modela `bonos`** —`sesiones_totales`,
+  `sesiones_consumidas` derivada, `importe`, `caducidad`— desde el principio. Lo que de
+  verdad faltaba era la columna que hace derivable el consumo (`citas.bono_id`, no estaba en
+  ningún ticket) y la pantalla. Las dos, cerradas el 01-09-2026: **`T-021` ampliado** con la
+  columna y la RLS de `bonos` que tampoco estaba explícita, y **`T-027` nuevo** para el alta,
+  el saldo y el listado. Lección: `files_with_matches` sin leer el contenido no basta para
+  decir «no existe» — hay que abrir el fichero.
+- **Bloqueo de pantalla por inactividad — corregido: ya estaba cubierto en un 90 % por T-013,
+  no era un ticket nuevo.** `T-013` ya especifica la pantalla de bloqueo colgada de
+  `desbloqueo_vigente()`, el botón de bloquear y el aviso de caducidad. Lo único que faltaba
+  —y que sí se ha añadido a `T-013` el 01-09-2026— es que el paso a bloqueado sea
+  **automático** al agotarse la ventana y no dependa de que el usuario pulse algo o de que la
+  siguiente Server Action falle: una historia olvidada abierta no debe seguir legible más
+  allá de los 15 minutos del ADR-026 aunque nadie la toque.
+- **Modo de alto contraste — evaluado y descartado, no es un hueco.** Un segundo análisis
+  externo (Kimi) lo propuso como prioridad de accesibilidad. Choca con una decisión ya
+  cerrada en sentido contrario: **ADR-042** prohíbe explícitamente «dibujar un conmutador de
+  tema» y un modo de alto contraste conmutable es exactamente eso. La vía correcta ya está
+  cubierta por el ADR-041 y su validador (`lib/contraste/`, integrado en `main` con T-009a):
+  subir el contraste del **único** tema hasta AA o más si sale barato, no añadir un segundo
+  modo. No se reabre el ADR-042 sin decisión expresa del propietario.
+- **Lenguaje claro en texto dirigido al paciente — hueco real, cerrado con ADR-054.** No
+  chocaba con nada (la Ley 11/2023, vigente desde el 28-06-2025, no estaba contemplada en
+  ningún ADR) y encaja con la propia razón de ser del producto: la población de pacientes
+  concentra ansiedad, TDAH y discapacidad cognitiva. Cerrado el 01-09-2026 sin tocar la
+  decisión 10 —el texto legal del consentimiento se sigue conservando verbatim, la regla
+  afecta a lo que lo rodea—, y ya referenciado en `T-013` (consentimientos) y `T-015`
+  (notificaciones). **Pendiente**: el ticket de recordatorios `wa.me` no existe todavía
+  (`PLAN.md` lo deja «fuera de alcance ahora»); cuando se escriba, hereda el ADR-054.
+- **Justificantes no fiscales + exportación CSV para Holded — NO es un hueco, es una
+  decisión ya tomada en sentido contrario.** `T-024-resumen-trimestre-y-exportacion.md` está
+  **retirado por el ADR-053(g)**: reconstruir cualquier resumen contable fuera de la
+  instancia, aunque sea parcial y solo para volcar en el proveedor, se descartó a propósito
+  («una contabilidad parcial es peor que ninguna»). Lo que sí cubre el hueco razonable es que
+  **T-023 ya admite un cobro sin factura** (`factura_espejo_id` nulo, «el caso normal»).
+  Cualquier CSV de exportación es una reapertura consciente del ADR-053, no un ticket suelto:
+  no se toca sin decisión expresa del propietario.
+- **Consentimientos informados firmables y versionados — ya cerrado, no es un añadido.** Es
+  la **decisión 10** de las catorce fundacionales (ADR-048, §6.7): asistencia por cita +
+  consentimientos versionados, con la versión exacta del texto firmado. Esquema
+  (`consentimientos`, `consentimiento_firmantes`) y pestaña (T-013) ya existen. Lo único que
+  puede faltar cuando llegue T-013 es el ticket del **flujo de firma** en sí, no la decisión.
+- **Escalas psicométricas (PHQ-9, GAD-7...) — sin cambios, sigue vetado.** El ADR-049 y el
+  aviso de fase 2 de `PLAN.md` ya paran esto: corregir o interpretar una prueba cruza a
+  producto sanitario. Quien redacte ese ticket se para y escala; no se reabre aquí.
+- **Estadísticas simples (ocupación, ausentismo, ingresos del mes) — baja prioridad, sin
+  riesgo.** Nada lo bloquea ni lo exige; azúcar sobre datos que ya van a existir con la
+  agenda y los cobros. Se retoma si sobra tiempo de fase 2, no antes que los dos primeros
+  puntos.
+
+**Regla que queda para la próxima propuesta externa que llegue**: contrastarla contra
+`docs/decisions.md` entero —no solo contra la memoria de quien la trae— antes de valorarla.
+La de justificantes habría entrado como «hueco» si no se hubiera comprobado que ya se cerró
+en contra.
 
 ## Aprendizajes
 

@@ -35,7 +35,10 @@ en la cita), **045** (los cinco estados y «en curso» calculado), **024** (outb
       de la agenda identifica al profesional y sale de `perfiles`.
 - [ ] **`series_cita`** (ADR-034, la intención): `paciente_id`, `profesional_id`,
       `centro_id`, `tipo_terapia_id`, `periodicidad` (`semanal` | `quincenal` | `mensual`
-      — **nada de reglas de recurrencia arbitrarias**), `dia_semana`, **`hora_local time`**
+      — **nada de reglas de recurrencia arbitrarias**), `dia_semana` **con la convención
+      escrita en su `comment on column`: `isodow`, 1 = lunes** —Postgres tiene dos, y
+      `extract(dow)` empieza en domingo; equivocarla es un bug que aparece un domingo seis
+      meses después—, **`hora_local time`**
       y **`zona_horaria`** validada con `es_zona_iana()` (existe de T-001),
       `sesiones_totales` o `fin_el`, `creada_por`, `cancelada_en`. **Un `timestamptz` en
       la serie es el bug**: la serie creada en enero se corre una hora en julio.
@@ -48,8 +51,31 @@ en la cita), **045** (los cinco estados y «en curso» calculado), **024** (outb
       - `check (fin > inicio)`.
       - Índice por `(profesional_id, inicio)` y por `(centro_id, inicio)`: son las dos
         consultas del calendario.
-      - **Índice de exclusión** que impida solapar dos citas no canceladas del mismo
-        profesional (`btree_gist` sobre `profesional_id` + `tstzrange(inicio, fin)`).
+      - **`rango_bloqueante tstzrange`**, que es `[inicio, fin + descanso)`: el descanso
+        entre sesiones **es una extensión invisible de la cita**, y meterlo en el rango es lo
+        que hace que la restricción lo garantice. Validarlo solo en la aplicación es no
+        validarlo. Se calcula con un **disparador** `before insert or update of
+        profesional_id, inicio, fin`, y **queda congelado**: cambiar el descanso mueve las
+        reservas nuevas, jamás las ya acordadas con un paciente.
+      - **El descanso se aplica solo por detrás**, no por los dos lados. Con 50 minutos de
+        sesión y 10 de descanso, 10:00–10:50 y 11:00–11:50 son válidas; por los dos lados
+        exigirías veinte minutos entre sesiones. La simetría sale gratis porque toda cita
+        lleva el suyo.
+      - **Índice de exclusión** sobre `rango_bloqueante`, que impida solapar dos citas no
+        canceladas del mismo profesional (`btree_gist` sobre `profesional_id` +
+        `rango_bloqueante`, con `where estado in ('programada','confirmada','realizada')`).
+        **Con nombre explícito y estable** —`citas_sin_solape_profesional`—, porque la
+        aplicación lo captura por nombre para responder «ese hueco acaba de ocuparse» con
+        sugerencias nuevas, en vez de un error muerto (T-028).
+      - **Agujero conocido y aceptado**: al congelar el rango, activar el descanso hoy no
+        protege el hueco anterior a una cita ya reservada sin él. Es el precio de no tocar
+        lo acordado, y se nota el primer día. **No se arregla recalculando en cascada.**
+- [ ] **Descanso entre sesiones, en `perfiles`**: `descanso_activo bool` por defecto
+      **cierto** y `descanso_minutos smallint` con `check between 5 and 20`, por defecto
+      **10**. Su `comment on column` dice para qué es de verdad: **no es descanso, es el
+      tiempo de escribir la nota clínica**, que T-012 hace obligatoria y cuya ausencia
+      dispara `alertas_documentacion` (T-015). Encadenar seis sesiones sin hueco es cómo se
+      acumula la deuda documental que el producto persigue; por eso viene activo.
 - [ ] **`nota_operativa` es logística**, y así lo dice su `comment on column`: sala,
       material, aviso de acceso. **Jamás contenido clínico** (choque 3): lo clínico se lee
       del episodio, con su política y su registro en `accesos_historia`.
@@ -90,6 +116,13 @@ en la cita), **045** (los cinco estados y «en curso» calculado), **024** (outb
 - [ ] **Automático** — insertar dos citas solapadas del mismo profesional, ambas
       `programada`, **falla** por el índice de exclusión. Con una de las dos `cancelada`,
       **entra**.
+- [ ] **Automático** — con `descanso_activo` y 10 minutos: una cita 10:00–10:50 y otra
+      10:55–11:45 del mismo profesional **fallan**; 11:00–11:50 **entra**. El error nombra
+      `citas_sin_solape_profesional`.
+- [ ] **Automático** — cambiar `perfiles.descanso_minutos` **no modifica ni una fila** de
+      `citas`: `rango_bloqueante` sigue byte a byte igual en las citas ya creadas.
+- [ ] **Automático** — `select obj_description` / `col_description` sobre
+      `series_cita.dia_semana` devuelve un comentario que nombra `isodow`.
 - [ ] **Automático** — `insert into series_cita` con `zona_horaria = 'CEST'` o `'+02'`
       **falla**; con `'Europe/Madrid'` entra.
 - [ ] **Automático** — como `tecnico_administrativo`: `select` sobre la vista de agenda
