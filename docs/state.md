@@ -982,6 +982,61 @@ detrás de `T-018`. Ninguno pasa
 por diseño ni por revisión con Opus. Las reglas del carril —rama por ticket, zona
 prohibida, dependencias ancladas— están en esa misma sección de `PLAN.md`.
 
+## T-007 CERRADO · el corte D, y un control que todavía no puede verse
+
+Integrado el 06-09-2026. Con D entran **los cuatro cortes**, así que T-007 pasa a `hecho`.
+
+**Selector de centro, no de organización** (choque 1). Se alimenta de `perfiles_centros`
+filtrando por vigencia y **con menos de dos centros no se pinta**. `elegirCentro()` valida
+que el centro es suyo y está vigente antes de guardarlo — no porque hoy dependa de ello
+ningún permiso, sino porque una preferencia que acepta cualquier identificador miente en
+cuanto alguien la edita a mano.
+
+**La navegación depende del rol.** `modulosDe()` es función pura con seis pruebas, y la
+regla que la matriz recorta hoy sin ambigüedad es una: **«Usuarios y ajustes de empresa:
+Total / Sin acceso / Sin acceso»**, así que Ajustes es del administrador. Sin rol legible no
+se enseña **ningún** módulo: fallo cerrado.
+
+### Lo que hay que arreglar para poder probarlo: nadie tiene dos centros
+
+El disparador del ADR-051 crea **una** fila en `perfiles_centros` por perfil, espejo de
+`perfiles.centro_id`. Con la siembra actual los cuatro perfiles tienen un centro cada uno,
+así que **el selector no se puede ver nunca** y su criterio manual no se puede comprobar.
+
+**Son tres líneas en `supabase/seed-completo.sql` y es de T-008**, no del corte D, cuyo
+alcance no incluye `supabase/`. Hasta entonces, el selector es código sin camino de prueba.
+
+### El selector guarda algo que todavía no lee nadie
+
+Roza la regla de «nada de controles sin una acción real detrás», así que conviene decirlo:
+el dato es real y la acción persiste y valida, **pero ninguna pantalla consume la
+preferencia**. No puede: RLS acota con `centros_actuales()` —el conjunto entero de centros
+vigentes— y **cambiar de centro no cambia qué pacientes ve un profesional**, que es el error
+que ya se corrigió una vez. Quien lo consumirá es la Agenda (T-014) y el acotado por centro
+del técnico. Si se prefiere no tenerlo hasta entonces, quitarlo es borrar dos ficheros.
+
+Vive en **cookie** y no en `preferencias_usuario`, que no tiene columna de centro: añadirla
+es una migración y no era de esa entrega.
+
+### Dos reglas del framework que cuestan un build cada una
+
+- **Un fichero con `'use server'` solo puede exportar funciones asíncronas.** Exportar de él
+  una constante no da error de tipos: deja el módulo **sin exportaciones** —«The module has
+  no exports at all»— y el import revienta en otro sitio.
+- **Una función no cruza la frontera servidor → cliente.** Al pasar la navegación a bloque
+  de servidor, el `onClick` que cerraba el cajón dejó de poder bajar como prop: se resuelve
+  con **contexto**, que viaja por posición en el árbol y no por importación. Cerrarlo con
+  `useEffect` al cambiar de ruta lo rechaza ESLint (`react-hooks/set-state-in-effect`).
+
+### Y una del pack, corregida
+
+El alcance de T-007·D **prometía algo imposible**: pedía un control nuevo y no incluía
+`lib/i18n/**`, donde viven las etiquetas desde T-009a. Cualquier etiqueta literal la rechaza
+`sin-literales.test.ts`. Se amplió el alcance en `main` —no en la rama de entrega, porque
+`verificar.mjs` diffea contra `merge-base` y ahí sale como salida de alcance; de hecho salió,
+y así se detectó—. **Regla que queda: todo alcance escrito antes de T-009a que dibuje
+interfaz necesita revisión.**
+
 ## T-007·C · Cache Components entra, y la trampa que trae debajo
 
 Integrado el 06-09-2026. **Lo escribió la fábrica**, no MiniMax (el porqué, más abajo).
