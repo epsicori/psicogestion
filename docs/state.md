@@ -761,7 +761,20 @@ Ninguno. Verificación manual pendiente.
 > | Rama | Ticket | Estado | A quién desbloquea |
 > |---|---|---|---|
 > | `T-005-cadena-huellas` | **T-003** (arrastrado en esta línea) y **T-005** | hechos, tres revisiones con Opus, evidencia en los tickets | **T-009·B** de MiniMax (necesita `npm run test:rls`) |
-> | `T-006a-cuentas-base` | **T-006a** (corte DB) | implementado; **la revisión encontró 2 ALTA + varios MEDIA y los arreglos están SIN COMITEAR en su worktree** | **T-006·b** de MiniMax (necesita `lib/cuentas/` y el `[auth.mfa.totp]` de `config.toml`) |
+> | `T-006a-cuentas-base` | **T-006a** (corte DB) | implementado y revisado (2 ALTA + 4 MEDIA/BAJA, arreglados en `71eaccc`); **NO cierra: el banco de pruebas no se adaptó al arreglo y `npm run test:rls` sale en rojo** | **T-006·b** de MiniMax (necesita `lib/cuentas/` y el `[auth.mfa.totp]` de `config.toml`) |
+>
+> **T-006a en una línea**: los dos ALTA eran reales y gordos —una sesión con solo
+> contraseña podía generar los códigos de recuperación y tumbar el TOTP entero; y el
+> bloqueo de cinco intentos del PIN se reseteaba solo con volver a fijar un PIN—. Los dos
+> se cierran con `segundo_factor_verificado_recientemente()` (aal2 actual **más** un reto
+> TOTP de menos de cinco minutos). **Lo que falta es el banco**: el arreglo cambia el
+> contrato de `fijar_pin_historia()`, y `scripts/rls/01-fijacion.sql` la llama en su
+> fijación con una sesión simulada que no tiene ni el claim `aal2` ni fila en
+> `auth.mfa_factors` — `test:rls` muere ahí, en la línea 251. Hay que **(a)** hacer que la
+> fijación simule un segundo factor recién verificado y **(b)** escribir las negativas de
+> los dos ALTA, que hoy **no tienen ni una prueba**: `13-cuentas.sql` no nombra
+> `segundo_factor_verificado_recientemente()` ni una vez. Un arreglo de seguridad sin
+> prueba es el patrón que ya costó dos revisiones en T-001.
 >
 > **Integrar es tuyo** (`CARRILES.md` §Integración) y el orden es el del protocolo: primero
 > este carril, después Kimi, después MiniMax.
