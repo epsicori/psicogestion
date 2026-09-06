@@ -1718,6 +1718,44 @@ k) **Dos preguntas quedan abiertas y bloquean la implementación del adaptador**
 
 ---
 
+## ADR-054 · Lenguaje claro en todo texto dirigido al paciente
+
+**01-09-2026** · **Estado**: aceptada
+
+**Contexto**: desde el 28-06-2025 está en vigor la **Ley 11/2023** (transposición de la
+Directiva (UE) 2019/882, *European Accessibility Act*), que alcanza a servicios electrónicos
+de relación con el consumidor. El ADR-041 ya cierra la accesibilidad **perceptible y
+operable** (contraste, teclado, 44 px); no cierra la **comprensible** — el tercer principio
+de WCAG, que el propio 2.2 AA exige en parte (SC 3.1.5) y que aquí importa más que en la
+mayoría de software: la población de pacientes de psicología concentra desproporcionadamente
+ansiedad, TDAH y discapacidad cognitiva, y un consentimiento o un aviso en jerga legal o
+clínica es una barrera real para quien ya está en la consulta por eso.
+
+**Decisión**: todo texto de interfaz **dirigido al paciente** —notificaciones, avisos,
+justificantes internos, y cuando exista, recordatorios— se redacta en **lenguaje claro**:
+frases cortas, verbo en activo, sin jerga legal ni clínica, un único mensaje por frase.
+
+**Esto no toca la decisión 10.** El texto **legal** del consentimiento —el que se firma y se
+versiona con su huella exacta— lo redacta quien corresponda y se conserva **verbatim**: el
+lenguaje claro no lo reescribe. Se aplica al **entorno** de ese texto: el título de la
+pantalla, el botón, la frase que explica qué se está firmando y por qué, y cualquier resumen
+que se muestre antes o junto al texto legal. La misma frontera vale para las notificaciones
+del ADR-038: el cuerpo es claro, y sigue **sin contenido clínico**, que es una regla distinta
+y ya cerrada.
+
+**Consecuencias**:
+
+- Se gana: cumplimiento de la Ley 11/2023 en la parte que el ADR-041 no cubría, y un
+  argumento de venta que ningún competidor español usa hoy.
+- Se pierde: una revisión editorial más en cada ticket que redacte texto de paciente — barata,
+  pero real, y no se salta.
+- Queda bloqueado: ningún ticket que muestre texto al paciente cierra sin que ese texto pase
+  por esta regla. Se recoge en **T-013** (la pestaña de consentimientos y su explicación) y
+  **T-015** (cuerpo de las notificaciones); el ticket de recordatorios `wa.me`, que todavía no
+  existe, la hereda cuando se escriba.
+
+---
+
 ## Plantilla para decisiones nuevas
 
 ```markdown

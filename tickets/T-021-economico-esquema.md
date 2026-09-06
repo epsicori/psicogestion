@@ -74,6 +74,17 @@ sitio es un incumplimiento, no una comodidad.
 - [ ] **`bonos`**: `paciente_id`, `sesiones_totales`, `sesiones_consumidas` derivadas de las
       citas realizadas que lo referencian, `importe`, `caducidad`, `factura_espejo_id` nulo. El
       consumo se deriva; **un contador que se incrementa es un `UPDATE`**.
+      - **`citas.bono_id`** — columna nueva en `citas` (T-010), nula, `references bonos(id)`.
+        Se añade **en la migración de este ticket**, no en T-010, porque `bonos` no existe
+        todavía cuando corre T-010: el orden de dependencia va al revés. Es el enlace que hace
+        derivable `sesiones_consumidas` — una vista cuenta `citas` con ese `bono_id` y
+        `estado = 'realizada'`. Sin esta columna, «derivada de las citas que lo referencian»
+        no tiene de qué colgar.
+      - **RLS de `bonos`**, que la matriz de roles no cerraba explícito para esta tabla:
+        `administrador` todos; `profesional_sanitario` los suyos, vía
+        `es_profesional_asignado()` sobre `paciente_id`, igual que sus citas; `tecnico_administrativo`
+        los ve —**no es dato clínico**, mismo criterio que `cobros`— acotado por centro
+        (ADR-033) a través del paciente.
 - [ ] **No se crean**, y que conste en la migración con un comentario que cite el ADR-053:
       `facturas`, `factura_lineas`, `series_facturacion`, `gastos`, `registro_eventos_sif`.
       Retirarlas de `architecture.md` §Dominios lo hace el documentalista al integrar, no este
@@ -105,6 +116,11 @@ sitio es un incumplimiento, no una comodidad.
       función `security definer` del sincronizador **entra**.
 - [ ] **Automático** — un `cobro` sin `factura_espejo_id` **entra**: cobrar antes de facturar es
       el caso normal.
+- [ ] **Automático** — marcar tres citas con el mismo `bono_id` como `realizada` deja
+      `sesiones_consumidas` (vista) en 3, sin ningún `UPDATE` sobre `bonos`. Cancelar una de
+      las tres la baja a 2.
+- [ ] **Automático** — como `tecnico_administrativo`: filas en `bonos` de su centro (no es
+      dato clínico); como `profesional_sanitario`: solo los bonos de sus pacientes.
 - [ ] **Automático** — como `tecnico_administrativo`: filas en `cobros`, **cero** en
       `tarifas_paciente`, y la consulta a las líneas del borrador no devuelve `cita_id`.
 - [ ] **Automático** — como `profesional_sanitario`: cero borradores de otro profesional, y

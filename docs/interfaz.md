@@ -417,6 +417,11 @@ prototipo» si toca algo de esta lista:
   firmados.
 - **Verifactu de verdad**: huella encadenada, anulación y reemisión, registro de eventos.
   El prototipo solo enseña la píldora «En cola AEAT».
+- **El alta de cita**: el prototipo enseña la agenda llena, pero no el formulario que la
+  llena. Ni las sugerencias de hora (ADR-049c), ni la elección de periodicidad, ni la
+  previsualización de la serie, ni qué pasa cuando el hueco se ocupa mientras rellenas.
+  Se dibuja en **T-028**, con dos entradas —Agenda y la pestaña Resumen de la ficha— y una
+  sola pantalla.
 - **Series de citas**: el prototipo pinta citas sueltas y no dice nada de la regla de
   repetición ni de la desviación de una cita concreta (invariante 4).
 - **Mensajería y recordatorios** por `wa.me`, con su cola del día (ADR-023, ADR-024).

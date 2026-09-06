@@ -3,9 +3,207 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 29-08-2026
+**Actualizado**: 06-09-2026
 
 ## Ticket en curso
+
+**T-005 · Cadena de huellas SHA-256, canonicalización y verificador — HECHO el 06-09-2026,
+tras TRES pasadas de revisión con Opus.** Ninguna de las dos primeras pasó el gate; la
+tercera arregló **un MEDIA** y **anotó uno** que no le toca decidir a un agente. La rama
+`T-005-cadena-huellas` queda lista con su evidencia: **la integra una persona**
+(`CARRILES.md` §Integración). Sigue al pie de la letra el «Diseño aprobado» del ticket.
+
+**La tercera pasada (06-09-2026) miró lo que las dos anteriores no**: no el sobre, sino
+**qué columnas de la fila puede elegir el llamante y qué efecto tienen sobre la
+verificación**. De ahí salen las dos cosas:
+
+- **MEDIA, arreglado — `algoritmo_version` la elegía quien firma.** El `grant` de
+  `notas_clinicas_versiones` es de **tabla entera**, así que cualquier profesional podía
+  mandar `algoritmo_version = 2` en el `INSERT`; y `verificar_cadena_huellas()` clasifica
+  toda fila con `algoritmo_version <> 1` como `era_desconocida` y **no le comprueba ni el
+  digest, ni el génesis, ni el hueco, ni el encadenado**. Un punto ciego del verificador
+  elegido por quien firma. Lo cierra la **guarda 1.bis** (42501), con su negativa, su
+  gemela positiva y la reproducción del fallo con la guarda quitada —sin ella, el `INSERT`
+  entra sin lanzar nada—. **La lección que queda: revisar el sobre no es revisar la fila.**
+- **Anotado, no arreglado — `alcance` no entra en el sobre.** Ver §Hallazgos anotados. Es
+  decisión de una persona y **tiene reloj**: hoy es gratis porque la tabla está vacía.
+
+Entra `supabase/migrations/20260829210000_cadena_de_huellas.sql` (amplía
+`notas_clinicas_versiones` con `paciente_id`/`posicion_cadena`, el disparador
+`fn_sellar_version_nota()` que sella y encadena, `fn_vaciar_borrador_al_firmar()` y
+`verificar_cadena_huellas(uuid)`) y `lib/huella/` (canonicalizador JCS+NFC propio, sobre
+Zod, `firmar.ts`). Verificado con `npm run test:rls` (módulo nuevo
+`scripts/rls/13-cadena-huellas.sql`, **192 aserciones en verde**), `npm run test:huellas`
+(`scripts/t005-concurrencia.sql`, dos conexiones reales) y a mano contra la base local con
+`npm run verificar:huellas`. `npx supabase db reset`, `npm run lint`, `npm run
+lint:migraciones` y `npm run build` limpios; `npx vitest run`: **297 pruebas**, 31 ficheros.
+
+**Los nueve hallazgos de la SEGUNDA revisión con Opus (30-08-2026) — detalle completo con
+evidencia de antes/después en la sección «Revisión con Opus · segunda pasada» del propio
+ticket, no repetido aquí para no desincronizar dos copias**: el más serio,
+`jsonb_object_keys()` deduplicaba claves repetidas y dejaba sellar un sobre con `autor_id`
+dos veces — arreglado con `json_object_keys(...::json)`, que sí conserva duplicados. Las
+15 negativas de `13-cadena-huellas.sql` §C pasaron a `assert_lanza_codigo` con el código
+exacto (antes daban «OK» aunque fallaran por un motivo ajeno al disparador, o aunque se
+vaciara el disparador entero — dos demostraciones nuevas lo prueban). Cinco negativas
+nuevas cubren el `null` JSON real que el hallazgo ALTA de la primera vuelta dejó sin
+prueba de regresión. `normalizarNfc()` perdía la clave `__proto__` en silencio
+(`Object.create(null)` en vez de `{}` lo arregla). La prueba de U+0000 que el ticket decía
+tener no existía; ahora existe. Más tres BAJA: `abierta_en` con basura ya no da el 22007
+crudo de Postgres; el diseño y la migración ya no se contradicen sobre el límite de
+interbloqueo; hay una prueba de integración con un vector REAL de TypeScript por el
+disparador, no solo con `pg_temp.sobre_prueba()`.
+
+**Nota operativa, sin relación con el código**: durante la segunda revisión el Docker
+local de esta sesión se puso inestable (`supabase_vector_Psicogestion` en bucle de
+reinicio; un `db reset` llegó a fallar con `LegacyDbSetupError: error running container:
+exit 1`; dos veces el CLI dio «Finished… Reset local database» con el disparador
+`sellar_version_nota` todavía sin crear, porque «Restarting containers…» tarda más que el
+mensaje). Se resolvió con `npx supabase stop` + `npx supabase start` y comprobando
+`select tgname from pg_trigger where tgrelid =
+'public.notas_clinicas_versiones'::regclass` antes de fiarse de un `db reset`. Si un
+`test:rls`/`test:huellas` falla con «null value in column numero_version» justo después
+de un reset, es esto, no una regresión — repite el reset y comprueba el disparador antes
+de investigar el código.
+
+**Los catorce hallazgos de la primera revisión con Opus (30-08-2026), y cómo se cerraron
+— todos con reproducción del fallo antes y prueba de que ya no ocurre:**
+
+- **ALTA · Tres de las nueve comprobaciones del disparador se saltaban con `null` JSON**
+  (6.2 autor_id, 6.5 esquema_version, 6.7 creada_en/firmada_en; también el
+  `abierta_en<=firmada_en` de 6.8). Causa: `->>` da SQL `NULL` ante un valor JSON `null`, y
+  `NULL <> x` es `NULL`, que en un `if` es falso — la comprobación no saltaba nunca.
+  Reproducido insertando un sobre con `"autor_id":null` y viendo que se sellaba igual
+  (`huella is not null` → `t`). Arreglado cambiando a `(v_contenido -> 'campo') is distinct
+  from to_jsonb(new.columna)`, que compara el valor JSONB completo y no colapsa a `NULL`.
+  Reproducido de nuevo: las cuatro variantes (autor_id, esquema_version, creada_en,
+  firmada_en nulos) lanzan ahora con su mensaje propio; un sobre bien formado sigue
+  sellándose sin falsos positivos.
+- **MEDIA · `normalizarNfc()` vaciaba un `Date`/`Map` en `{}` en silencio** antes de que
+  `jcs.ts` pudiera rechazarlo (`typeof new Date() === 'object'` y `Object.keys(...) ===
+  []`). Reproducido: `construirSobre({ cuerpo: { fecha: new Date(...) } })` no lanzaba.
+  Arreglado añadiendo el mismo guarda de objeto plano (`esObjetoPlano()`) DENTRO de
+  `nfc.ts`, antes de recorrer. Reproducido de nuevo: ahora lanza `ErrorNormalizacionNfc`
+  con la ruta del culpable (`$.cuerpo.fecha`). Tres pruebas nuevas en `nfc.test.ts`.
+- **MEDIA · U+0000 no se puede insertar de verdad**: `contenido_canonico::jsonb` (el
+  `check` de la columna y el propio disparador) rechaza la secuencia de escape con
+  `22P05` (`unsupported Unicode escape sequence`) — Postgres no admite ese carácter ni
+  escapado dentro de un jsonb. El diseño decía «no es un problema»; es más exacto decir
+  que falla alto y con un código concreto, no que «no pasa nada». Documentado en el
+  comentario de la columna `contenido_canonico` y en el propio ticket (nota de corrección
+  bajo el párrafo original). No se corrige el tipo de columna (fuera de alcance).
+- **MEDIA · `t005-concurrencia.sql` no podía fallar nunca**: sus cuatro comprobaciones
+  eran `select case … 'OK'/'FALLO'`, sin `raise`. Reproducido con una condición inyectada a
+  propósito (`if true then` en la tercera aserción): el guion completo igual, exit 0.
+  Arreglado con `do $$ … raise exception … $$` en las cuatro, más una tabla real
+  `public.t005_resultado` que captura éxito/SQLSTATE de la segunda conexión (el `\!` no
+  interpola `:VAR`, y tampoco dentro de un bloque `$$ … $$` — verificado con
+  `do $$ begin raise notice ':X'; end $$;`, que imprime literalmente «:X»). Reproducido de
+  nuevo con la misma condición inyectada: `npm run test:huellas` sale con **código 3** y
+  señala la aserción exacta; revertida la condición, vuelve a salir con 0.
+- **MEDIA · `fn_vaciar_borrador_al_firmar()` generaba auditoría de UPDATE espuria** en
+  cada firma aunque no hubiera borrador. Arreglado con
+  `and borrador_contenido is not null` en el `where` del `update`.
+- **MEDIA · `--paciente` de `verificar-huellas.mjs` sin validar, interpolado en SQL de
+  superusuario.** Reproducido: `--paciente "x' union select version() -- "` llega intacto
+  al parser SQL (error de sintaxis visible en el mensaje, que ya revela la interpolación
+  cruda); `--paciente` sin valor detrás verificaba TODAS las cadenas en silencio.
+  Arreglado con el mismo patrón UUID que `lib/huella/sobre.ts`, validado antes de
+  interpolar, y detección explícita de valor ausente/otra bandera. Reproducido de nuevo:
+  los dos casos salen con código 2 y un mensaje de uso, sin tocar la base.
+- **MEDIA · Evidencia declarada en el ticket que no existía**: decía que había negativas de
+  `anotaciones_reservadas` y `motivo_cambio` (6.4/6.6) en el banco, y no las había.
+  Añadidas las dos en `scripts/rls/13-cadena-huellas.sql` §C.
+- **MEDIA · `posicion_cadena` filtra cuántas versiones de otros profesionales hay en la
+  cadena de un paciente**, a quien solo tiene una versión propia visible. Es consecuencia
+  del `security definer` y de numerar por paciente, no un bug de código; se acepta y se
+  documenta en `docs/architecture.md` §Roles («Fuga documentada»).
+- **BAJA 10 (subsumido en el ALTA) · `esquema_version` no tipada**: `"2"` (cadena) pasaba
+  el cast a `smallint` igual que el número 2. Se cerró con el mismo `to_jsonb(...) is
+  distinct from` de la comprobación 6.5.
+- **BAJA 11 · Documentado, no corregido**: `to_char('MS')` trunca a milisegundos, que es
+  EXACTAMENTE la precisión de `toISOString()` — sin pérdida frente al sobre real siempre
+  que `creada_en` se pase explícito (que es lo que hace `firmar.ts` siempre). Comentario
+  añadido junto al cálculo en la migración.
+- **BAJA 12 · Negativas con `assert_lanza` en vez de `assert_lanza_codigo`**: cambiada la
+  del criterio 9 (huella_anterior repetida) a exigir `23505` en concreto.
+- **BAJA 13 · La comprobación ADR-031 comparaba dos conjuntos vacíos**, no las huellas
+  reales. Añadida una comparación byte a byte (`string_agg(encode(huella,'hex'),...)`)
+  antes y después de fusionar, capturada con `\gset`. Probado que SÍ puede fallar:
+  sustituyendo el valor «después» por uno deliberadamente distinto, la aserción falla con
+  el mensaje exacto (exit 3); revertido, vuelve a pasar.
+- **BAJA 14 · Blancos duplicados en `13-cadena-huellas.sql`** (519 líneas para el contenido
+  real): colapsados los saltos de línea sobrantes y fusionados los párrafos de comentario
+  que quedaron partidos línea a línea por el generador original. 519 → 413 líneas, mismo
+  contenido, mismas 178 aserciones en verde.
+
+**Landmine nuevo, pagado dos veces en esta sesión**: escribir la secuencia de seis
+caracteres `\u0000` dentro de una cadena de un fichero (comentario SQL o literal de
+prueba TypeScript) a través de las herramientas de edición de este entorno puede acabar
+grabando un **byte NUL crudo** en el fichero en vez de los seis caracteres ASCII. Un NUL
+crudo en un `comment on column …` rompe `db reset` con `invalid message format (SQLSTATE
+08P01)`; en un `.ts` no rompe nada en tiempo de ejecución pero dice mal lo que dice. Pasó
+en el propio `tickets/T-005-cadena-huellas.md` (ya existía en el diseño aprobado, sin
+relación con esta sesión), en la migración (al documentar el hallazgo MEDIA de U+0000, con
+ironía) y en `lib/huella/jcs.ts`/`jcs.test.ts`. **Comprobación que hay que repetir tras
+cualquier sesión que teclee `\u0000` literal**: `node -e "const b=require('fs').readFileSync(RUTA); let n=0; for(const x of b) if(x===0) n++; console.log(n)"` sobre cada fichero tocado — cero es lo correcto.
+
+**Lo que hay que saber antes de tocar la cadena de huellas:**
+
+1. **El sobre canónico tiene once claves exactas, `esquema_version = 2` desde el ADR-046**
+   (la versión 1, sin el bloque de sesión, no existe en ninguna fila de ninguna base). El
+   disparador `fn_sellar_version_nota()` las exige TODAS y RECHAZA cualquier clave de más
+   o de menos — el día que el sobre crezca de verdad, sube `esquema_version` y el
+   disparador tiene que aceptar las dos formas, cada una con la suya. No se toca a la
+   ligera.
+2. **`huella`, `huella_anterior`, `paciente_id`, `posicion_cadena` y `numero_version` los
+   calcula el disparador; un `INSERT` que los traiga no nulos lanza.** Esto rompió
+   `scripts/rls/01-fijacion.sql` y `scripts/rls/04-baja.sql` (insertaban estos valores a
+   mano desde T-001/T-003) y se han reescrito para usar
+   `pg_temp.sobre_prueba(...)` (nuevo en `00-ayudantes.sql`), que construye el sobre a
+   mano con las once claves. **Trampa real y ya pagada**: `pg_temp.sobre_prueba()` usa
+   `p_cuerpo::text`, y el `::text` de un `jsonb` en Postgres imprime **un espacio tras los
+   dos puntos** (`{"t": "cad-b"}`), a diferencia del canónico JCS real, que no lleva
+   ninguno — si algo compara contra el texto sin ese espacio, no encuentra nada.
+3. **`\!` de psql NO interpola variables `:VAR`** (a diferencia de una sentencia SQL
+   normal): en `scripts/t005-concurrencia.sql`, la segunda conexión lleva los UUID
+   literales escritos a mano, no `:NOTA2`/`:ANA`. Se descubrió porque la primera versión
+   fallaba con «syntax error at or near ":"» — un fallo que además dejaba pasar la
+   aserción siguiente por el motivo equivocado (NOTA2 «seguía sin versión», pero porque el
+   INSERT ni siquiera había llegado a ejecutarse, no porque el cerrojo lo hubiera
+   bloqueado). **Lección**: toda prueba negativa hay que preguntarse si seguiría en verde
+   con el arreglo quitado — aquí no se preguntó a la primera y coló.
+4. **El índice único GLOBAL sobre `huella` (T-001) sigue vivo** y hace que dos sobres
+   idénticos byte a byte —mismo cuerpo, mismo autor, mismo instante— choquen en el génesis
+   aunque sean de pacientes distintos. Toda fijación nueva que comparta cuerpo/autor entre
+   pacientes tiene que variar `creada_en` (basta un segundo).
+5. **`scripts/t001-esquema.sql`, `scripts/t002-rls.sql` y `scripts/t004-auditoria.sql`
+   (guiones ad hoc, no en ningún `npm run`) han quedado rotos**: insertan
+   `notas_clinicas_versiones` con `huella`/`huella_anterior`/`numero_version` a mano, y el
+   disparador nuevo los rechaza. **No se han tocado, a propósito**: son evidencia congelada
+   de tickets ya cerrados (T-001/T-002/T-004), no pruebas vivas, y arreglarlos es trabajo
+   fuera del alcance de este ticket (constitución, regla 2). Si algún ticket futuro
+   necesita volver a ejecutarlos, hay que reescribir esos `insert` igual que se hizo en
+   `01-fijacion.sql`.
+6. **`lib/supabase/tipos-bd.ts` se editó a mano** (Docker no estaba arrancado cuando se
+   escribió el código) y luego se regeneró de verdad con `npm run tipos` una vez arrancado:
+   el diff fue de **cero líneas de más** frente al parcheo manual — la única adición real
+   fue la firma de `verificar_cadena_huellas` en `Functions`. Si un ticket futuro toca esta
+   tabla, regenerar los tipos sigue siendo lo correcto; el parcheo a mano fue la excepción
+   de esta sesión, no el patrón a seguir.
+7. **La línea exacta que T-009 tiene que enganchar a la ejecución nocturna** (no se ha
+   creado ni tocado nada en `.github/`, territorio de MiniMax): `npm run verificar:huellas
+   -- --json`, código de salida **distinto de cero si hay una sola anomalía**, salida JSON
+   con un objeto por anomalía (`paciente_id`, `posicion_cadena`, `version_id`, `nota_id`,
+   `creada_en`, `motivo`).
+8. **El SHA-256 vive solo en pgcrypto** (`extensions.digest`, nunca `digest` a secas —
+   `search_path = ''`). `lib/huella/**` no importa `node:crypto` en ningún fichero de
+   producción; solo `vectores.test.ts` lo usa, y es una prueba. Es lo que cierra el
+   criterio de `blocking-prerender-*` (ADR-043) por construcción, no por vigilancia.
+9. **El editor TipTap, la pantalla de notas y la Server Action con `"use server"` son fase
+   1**, territorio de MiniMax (`app/**`). Este ticket entrega el mecanismo
+   (`lib/huella/firmar.ts`, sin la directiva, fuera de `app/`) y su prueba por guion, tal
+   como pedía el propio ticket.
 
 **T-004 · Auditoría por triggers y solo adición en tres capas — hecho el 29-08-2026.**
 Entra `supabase/migrations/20260829150000_auditoria_y_solo_adicion.sql`. Verificado con
@@ -476,6 +674,74 @@ Las rutas con sesión viven en el grupo `app/(app)/`, que **no añade segmento a
 `/pacientes` sigue siendo `/pacientes`. `cerrarSesion` pasó de
 `app/pacientes/acciones.ts` a `app/(app)/acciones.ts` y ahora vive en la barra lateral.
 
+### Agenda · la vista mensual y el panel con pico
+
+**Decidido el 02-09-2026 mirando un prototipo externo de calendario** (Kimi, «calendario con
+diálogo emergente»). **De ese prototipo no entra código** —Vite, React Router y cincuenta
+componentes shadcn, o sea el ADR-040 al revés—, pero sí entran dos formas que T-014 ya no
+tiene que decidir:
+
+1. **Rejilla mensual**: 6×7, lunes primero, celdas de mes vecino atenuadas pero navegables,
+   hasta tres citas por celda con `hora + nombre corto` y `+N más` para el resto, y a
+   360 px las citas colapsan a puntos de estado con el recuento del día.
+2. **Panel anclado con pico**, que es el «panel lateral» del vocabulario de
+   `docs/interfaz.md`: mide su alto, elige arriba o abajo según el hueco, se recorta a los
+   límites del calendario y el pico sigue apuntando al elemento que lo abrió. El fallo
+   típico de este patrón es el panel que se sale por el borde en la última fila del mes.
+
+**Y una consecuencia estructural que no es de estilo: la celda del calendario no puede ser
+un `<button>`.** El día y la cita son dos objetivos distintos —clic en la cita abre el
+panel de la cita, clic en el hueco abre el panel del día— y no se anida botón en botón. La
+celda va como `div role="gridcell"` con foco propio para el número del día y para cada
+cita. Está escrito como tarea y como criterio en **T-014**.
+
+Lo que el prototipo hacía y **no** vale, por si vuelve a aparecer la tentación: tres
+estados en vez de los cinco del ADR-045, el estado codificado **solo** con color (ADR-047),
+notas de cita con contenido clínico (choque 3), la especialidad visible siempre (choque 4),
+reprogramar mutando estado en cliente sin confirmación ni auditoría (T-011), datos y
+`new Date()` en cliente (ADR-034), y cifras de cabecera sin recorte por rol (choque 6).
+
+### Agenda · la propuesta de motor de sugerencias, contrastada el 02-09-2026
+
+Llegó una propuesta externa (Kimi) de sistema de agendación: motor de sugerencias con cinco
+factores ponderados, histograma de preferencias del paciente con decaimiento exponencial,
+tabla de eventos de comportamiento, soft-holds y API propia. **Contrastada contra
+`docs/decisions.md`, T-010 y T-011 antes de valorarla**, como manda la regla que dejó la
+ronda anterior. Resultado, para no repetir el contraste:
+
+- **El algoritmo de sugerencia ya está decidido y no se reabre.** El **ADR-049(c)** no dice
+  solo «determinista y explicable»: dice **cuál** —«la moda del intervalo de las seis últimas
+  citas, cruzada con día y franja habituales»—. Un motor de cinco factores con pesos
+  configurables es una reapertura del ADR, no un hueco. Coincidimos en el fondo (sin IA en
+  v1, y de paso el AI Act fuera entero); discrepamos en la complejidad.
+- **No se crea tabla de eventos de comportamiento del paciente.** Un histograma con
+  `rejected_suggestion` y decaimiento exponencial es perfilado, con su RLS, su auditoría y
+  su entrada en el registro de actividades — y es innecesario: la moda se calcula de
+  `citas`, que ya existen y ya están auditadas. **Cero tablas nuevas, una función `stable`.**
+  Además, media vida de 90 días no se puede explicar en pantalla, y la explicabilidad era el
+  argumento entero.
+- **Lo que sí entró, a T-010**: el descanso dentro del `rango_bloqueante` y del índice de
+  exclusión (antes quedaba validado solo en la aplicación, o sea, no validado), la
+  convención `isodow` de `dia_semana` escrita en su comentario, el nombre estable de la
+  restricción para que la pantalla pueda responder al conflicto, y `descanso_activo` /
+  `descanso_minutos` en `perfiles`. **El descanso aquí no es descanso: es el tiempo de
+  escribir la nota clínica**, y por eso viene activo por defecto.
+- **Lo que se descartó**: soft-holds con TTL (una tabla y un job de limpieza para una
+  consulta con una recepcionista), la optimización anti-huecos como factor de puntuación
+  (con sesiones homogéneas de 50 minutos el «hueco inútil» casi no se da; es un problema de
+  clínica multiprofesional) y la API REST propia, que aquí son Server Actions.
+- **Errores del SQL propuesto**, por si vuelve: `CREATE EXCLUDE CONSTRAINT ... ON tabla` no
+  existe en Postgres; `tstzrange` para una franja horaria semanal es el tipo equivocado;
+  `weekday 0 = lunes` choca con `extract(dow)`; el predicado de un índice parcial no puede
+  consultar otra tabla, así que el overbooking «por profesional» no se puede hacer así; y
+  reprogramar borrando e insertando rompe la auditoría de T-004 y la marca `desviada` de
+  T-011 — aquí es `update`.
+
+**La pantalla que faltaba**: al revisar el wireframe de agendación se vio que **el alta de
+cita no tiene ticket**. `docs/interfaz.md` la nombra una vez («acción primaria: Nueva
+cita»), T-011 escribe las Server Actions y T-014 dibuja el calendario y el panel de la cita
+que ya existe — nadie dibujaba el formulario. Es **T-028**, escrito el 02-09-2026.
+
 ## Repositorio
 
 `https://github.com/epsicori/psicogestion` — privado, rama `main` sincronizada.
@@ -486,9 +752,91 @@ Ninguno. Verificación manual pendiente.
 
 ## Siguiente paso
 
+> ## Al 06-09-2026 · lo que hay hecho y sin integrar es más que lo que hay por hacer
+>
+> **`main` está en `b9d5f66` y se ha quedado atrás.** Tres tickets terminados y verificados
+> viven fuera de él, y **eso es lo que bloquea a los otros dos carriles**, no la dificultad
+> de lo que queda:
+>
+> | Rama | Ticket | Estado | A quién desbloquea |
+> |---|---|---|---|
+> | `T-005-cadena-huellas` | **T-003** (arrastrado en esta línea) y **T-005** | hechos, tres revisiones con Opus, evidencia en los tickets | **T-009·B** de MiniMax (necesita `npm run test:rls`) |
+> | `T-006a-cuentas-base` | **T-006a** (corte DB) | implementado, revisado (2 ALTA + 4 MEDIA/BAJA) y **con el banco verde: 197 aserciones, cero fallidas** (`71eaccc` + `5fb5024`) | **T-006·b** de MiniMax (necesita `lib/cuentas/` y el `[auth.mfa.totp]` de `config.toml`) |
+>
+> **T-006a en una línea**: los dos ALTA eran reales y gordos —una sesión con solo
+> contraseña podía generar los códigos de recuperación, canjear uno y tumbar el TOTP
+> entero por PostgREST directo; y el bloqueo de cinco intentos del PIN se reseteaba con
+> solo volver a fijar un PIN, dejando decorativa la única defensa de un código de seis
+> dígitos—. Los dos se cierran con `segundo_factor_verificado_recientemente()`: `aal2`
+> actual **más** un reto TOTP de menos de cinco minutos.
+>
+> **Lo que costó una vuelta entera, y es la lección**: el arreglo cambiaba el contrato de
+> `fijar_pin_historia()` y **el banco no se adaptó**, así que `test:rls` moría en la
+> fijación y los 222 hallazgos arreglados se quedaron sin comitear. Al adaptarlo apareció
+> lo de verdad grave: `13-cuentas.sql` **no nombraba
+> `segundo_factor_verificado_recientemente()` ni una vez** — los dos arreglos de seguridad
+> estaban **sin una sola negativa**, y las llamadas del banco habrían seguido verdes con la
+> guarda quitada. Es el patrón que ya costó dos revisiones en T-001, ahora en un arreglo de
+> seguridad. **Un arreglo ALTA sin su negativa no está hecho, está escrito.**
+>
+> Ahora hay tres negativas con su gemela positiva sobre el mismo perfil, y la que
+> discrimina de verdad es la tercera: **`aal2` pero con el reto TOTP de hace diez minutos
+> también se rechaza**. Sin ella, una guarda que mirase solo el claim `aal` del JWT —que no
+> dice nada sobre cuándo se tecleó el último código— pondría verde las otras dos.
+>
+> **Trampa nueva pagada, para quien vuelva a tocar el banco**: `auth.mfa_factors` lleva un
+> índice **único global** sobre `last_challenged_at`, y `now()` no avanza dentro de una
+> transacción. Dar el segundo factor a dos usuarios con el valor por defecto choca con
+> `23505`. Por eso `pg_temp.dar_segundo_factor(uid, hace)` toma un desfase y cada llamada
+> pasa uno distinto. Y la gemela positiva del PIN comprueba el hash **fuera de la sesión,
+> como `postgres`**: dentro da `permission denied for table pines_historia`, que es el
+> comportamiento correcto —el hash no se lee, se compara dentro de una función `definer`—.
+>
+> **Integrar es tuyo** (`CARRILES.md` §Integración) y el orden es el del protocolo: primero
+> este carril, después Kimi, después MiniMax.
+>
+> ### Al juntar T-005 y T-006a hay UNA cosa que decidir: las dos reclaman el módulo 13
+>
+> Ensayado con un `merge --no-commit` el 06-09-2026: **la unión sale limpia salvo
+> `docs/state.md`**, que es prosa y se resuelve leyendo. Lo que no se ve en el conflicto es
+> lo que importa:
+>
+> **T-005 aporta `scripts/rls/13-cadena-huellas.sql` y T-006a aporta
+> `scripts/rls/13-cuentas.sql`.** `scripts/test-rls.mjs` los corre **en orden alfabético**,
+> así que tras la unión `13-cadena-huellas` correría ANTES que `13-cuentas` — y el README
+> de T-005 dice que el suyo va **el último a propósito**: manipula filas de
+> `notas_clinicas_versiones` con los cerrojos levantados, y nada debe correr después dentro
+> del mismo `begin … rollback`.
+>
+> **Al integrar hay que renumerar uno de los dos**: `13-cuentas.sql` → `14-cuentas.sql` es
+> la salida natural (T-005 se queda el último, que es donde tiene que estar), y hay que
+> tocar también la lista de módulos del README. Es un `git mv` y dos líneas, pero **si nadie
+> lo hace, el banco no falla: pasa a probar en un orden que su propio README prohíbe**, que
+> es peor.
+>
+> **Lo primero que hay que decidir, y no lo decide un agente**: si `alcance` entra en el
+> sobre canónico (§Hallazgos anotados). Mientras `notas_clinicas_versiones` esté vacía
+> cuesta media tarde; con la primera firma real dentro, cuesta una era de esquema para
+> siempre. **Es la única decisión de este bloque con fecha de caducidad.**
+>
+> **Lo que sigue en el carril de la fábrica**: cerrar T-006a —comitear los arreglos de su
+> revisión, que están escritos y sin verificar— y después **T-008**, que ya tiene sus tres
+> dependencias (T-002, T-004, T-005) terminadas.
+>
+> **Lo que sigue en el carril de MiniMax, y se puede lanzar ya**: **T-007·C**
+> (`cacheComponents`, `react-hook-form` y los cuatro módulos). No depende de la base de
+> datos, su corte está escrito en `minimax/cortes/T-007.md`, `react-hook-form` y
+> `@hookform/resolvers` **ya están en `package.json`** y el *worktree*
+> `../Psicogestion-minimax` está limpio y ya en la rama `T-007c-cache-y-formularios`.
+> Detrás va T-007·D. Aviso del reparto anterior que vale aquí: **T-007·C tiene
+> comportamiento** —`<Suspense>` por bloque, hidratación, formularios— y la regla aprendida
+> en T-007 es que MiniMax rinde donde no hay comportamiento. Si vuelve con pruebas
+> borradas o moldes para callar al compilador, no se itera: se trae a la fábrica.
+>
 > **Fase 0, al día.** Integrado en `main` (29-08-2026): T-000, T-001, T-002 con su enmienda,
-> T-004, T-016 a T-019 y los cortes A y B de T-007. **Lo que falta de fase 0 es T-003, T-005,
-> T-006, T-008 y T-009**, más los cortes C y D de T-007.
+> T-004, T-016 a T-019 y los cortes A y B de T-007, más T-009·A. **Lo que falta de fase 0 es
+> integrar T-003 y T-005, terminar T-006 y hacer T-008 y T-009·B**, más los cortes C y D de
+> T-007.
 >
 > **La revisión con Opus de T-002 está hecha (29-08)** y cerró un hallazgo alto. Lo que
 > queda de ese ticket es **el punto 3 del guion manual en navegador** —un perfil
@@ -559,10 +907,120 @@ detrás de `T-018`. Ninguno pasa
 por diseño ni por revisión con Opus. Las reglas del carril —rama por ticket, zona
 prohibida, dependencias ancladas— están en esa misma sección de `PLAN.md`.
 
+## Siembra de desarrollo (T-008)
+
+**Nada de esto llega a producción.** Contraseñas en claro, correos `@psicogestion.test`,
+PIN conocidos y sal de bcrypt fija. Está así a propósito: la siembra tiene que ser
+**determinista**, y un `gen_salt()` aleatorio haría que dos ejecuciones desde cero no
+dieran el mismo resultado.
+
+```
+npx supabase db reset      # siembra MÍNIMA (supabase/seed.sql), automática
+npm run seed               # siembra COMPLETA (supabase/seed-completo.sql), opt-in
+```
+
+**El reparto entre las dos, que es la decisión que el ticket pedía dejar escrita:**
+`seed.sql` corre en **cada** `db reset`, incluido el que precede a `npm run test:rls`, así
+que lleva **solo** lo mínimo —organización, un centro, un administrador y los dos
+profesionales históricos con un paciente cada uno—. Todo lo demás vive detrás de
+`npm run seed`, que es voluntario. Cuanto menos haya en `seed.sql`, menos superficie tiene
+que tolerar el banco de pruebas.
+
+**Ana y Bruno no se pueden mover de `seed.sql`.** El vector congelado de T-005 trae el
+autor `11111111-…` **dentro del sobre firmado**, y `13-cadena-huellas.sql` lo inserta tal
+cual por el disparador real. El sobre no se recalcula jamás (ADR-035): si Ana desaparece de
+la siembra mínima, esa prueba deja de poder correr.
+
+### Credenciales
+
+Contraseña **`psico1234`** para todos. TOTP sembrado y verificado para los cinco.
+
+| Correo | Rol | Centro | PIN | Para qué está |
+|---|---|---|---|---|
+| `admin@psicogestion.test` | administrador | — | `456789` | Ve a todos; sin nota ajena |
+| `ana@psicogestion.test` | profesional_sanitario | Madrid | `123456` | La que firma casi todo |
+| `bruno@psicogestion.test` | profesional_sanitario | Madrid | `234567` | El aislamiento entre profesionales |
+| `tecnico@psicogestion.test` | tecnico_administrativo | Madrid | **ninguno** | Acotado por centro; **no tiene PIN y no es un olvido**: no tiene historia que abrir |
+| `baja@psicogestion.test` | profesional_sanitario | Las Palmas | `345678` | **En `estado = 'baja'`**: entra en Auth y no ve nada, pero su nota firmada sigue siendo suya |
+
+El administrador **sí** lleva PIN: el candado del ADR-026 no tiene guarda de rol, y sin PIN
+no podría abrir ninguna historia.
+
+### Qué casos raros trae, y por qué esos
+
+Son los que rompen pantallas y nadie recuerda crear a mano:
+
+- **Dos zonas horarias**: Centro Madrid (`Europe/Madrid`) y Centro Las Palmas
+  (`Atlantic/Canary`). Una hora de diferencia todo el año: cualquier pantalla que calcule
+  «hoy» con la zona equivocada se ve mal **desde el primer día**, no en el primer cliente
+  canario.
+- **Las dos titularidades** (`organizacion` y `profesional`), que es lo que decide de quién
+  es la historia cuando el profesional se va (ADR-032).
+- **Menor con DOS representantes** y consentimiento con **dos firmas** (ADR-028), más
+  `menor_oido_en`. Es el caso que rompe toda pantalla que dé por hecho un firmante.
+- **Episodio de pareja** con **nota conjunta** (ADR-030): sin él no hay forma de ejercer con
+  datos reales la rama de participación de `notas_clinicas_versiones_lectura`.
+- **Duplicado vinculado** por `fusionado_en` (ADR-031). No se borra nada.
+- **Notas en los tres estados**: una con borrador vivo, una firmada, y una **corregida con
+  dos versiones encadenadas** y su `motivo_cambio`. La de borrador está **sin firmar a
+  propósito**: `fn_vaciar_borrador_al_firmar()` vacía el borrador en cuanto entra la primera
+  versión, así que firmada-y-con-borrador es un estado que no existe.
+- **Cuatro alertas escalonadas** a 2, 10, 20 (resuelta) y 35 días.
+
+### Dos cosas que costaron una vuelta cada una
+
+- **El seed de `supabase/config.toml` NO lo ejecuta psql**, lo ejecuta el CLI por su propio
+  canal, y **los metacomandos de psql no existen ahí**: un `\set` muere con
+  `syntax error at or near "\"` (SQLSTATE 42601). Por eso `seed.sql` usa un bloque
+  `do $$ declare … $$` con constantes en vez de variables de psql.
+- **`alertas_documentacion.origen_tabla` no es texto libre**: un `check` solo admite
+  `notas_clinicas`, `consentimientos`, `informes` y `evaluaciones`. Sembrar `'pacientes'`
+  muere con 23514.
+
+### Lo que T-008 tuvo que tocar del banco de RLS, y por qué
+
+Es el hallazgo que **T-003 dejó anotado para este ticket**, cobrado:
+
+- `01-fijacion.sql` inserta la organización con **`on conflict (fila_unica) do nothing`**:
+  `organizacion` es una tabla de fila única y la siembra mínima ya crea la suya. Sin esto,
+  el banco moría con `duplicate key value violates unique constraint
+  "organizacion_fila_unica_key"`.
+- `02-matriz-roles.sql` contaba **`centros = 2`** y **`alertas = 4`** sobre la tabla
+  entera. Eso valía mientras la fijación era la única fuente de datos; con la siembra, la
+  cuenta global pasó a 3 y el banco se puso rojo por una razón que **no era la que estaba
+  probando**. Ahora las dos cuentas están **acotadas a las filas de la fijación**. Lo que
+  ese módulo quiere demostrar es que el rol LEE el directorio, no cuántas filas tiene.
+
 ## Hallazgos anotados
 
 Detectados fuera del alcance de su ticket (constitución, regla 2). Se anotan aquí y se
 recogen cuando llegue la fase que los toca.
+
+### T-005 · `alcance` decide quién lee una versión y NO entra en el sobre — decide una persona, y hoy es gratis
+
+Hallazgo de la **tercera revisión con Opus** (06-09-2026). No se toca porque **la forma del
+sobre la fija un ADR, no un agente** (constitución, regla 2 y CARRILES §«las cuatro maneras
+de romper esto»). Pero tiene reloj, y por eso se anota arriba del todo:
+
+`notas_clinicas_versiones.alcance` (`individual` | `conjunta`) **es el campo que decide
+quién puede leer esa versión**: la política `notas_clinicas_versiones_lectura` abre la
+versión a los profesionales del episodio cuando `alcance = 'conjunta'`. Y `alcance` **no
+está entre las once claves del sobre** (ADR-035 + ADR-046): no se sella, así que
+**cambiarlo no rompe la cadena y el verificador da la cadena por sana**.
+
+- Cambiarlo exige saltarse el solo-adición de las tres capas, es decir `postgres` — pero
+  **ese es exactamente el adversario para el que existe una cadena de huellas**. Sellar
+  `autor_id` y no sellar `alcance` es raro: el primero dice quién la escribió, el segundo,
+  quién puede leerla.
+- **Hoy cuesta cero**: `notas_clinicas_versiones` está vacía en todas las bases (la propia
+  migración de T-005 se detiene si encuentra una fila). Después de la primera firma real
+  cuesta un `esquema_version = 3` y **dos formas de sobre para siempre**, porque lo viejo
+  jamás se recalcula. Es literalmente el aviso que el ticket T-005 se escribió a sí mismo
+  —«el sobre nace completo o se paga una era nueva»— aplicado a un campo que se le escapó.
+- **La decisión es tuya**: si el sobre pasa a doce claves, se toca `lib/huella/sobre.ts`
+  (esquema Zod y `ESQUEMA_VERSION`), la lista `v_esperadas` y una comprobación 6.10 en
+  `fn_sellar_version_nota()`, y los vectores congelados se regeneran. Es media tarde
+  mientras la tabla esté vacía.
 
 ### Lo que T-002 dejó anotado y no tocó
 
@@ -663,6 +1121,76 @@ ADR cada vez:
 - **`vite-tsconfig-paths` sobra a medio plazo**: Vitest avisa de que Vite ya resuelve los
   alias de `tsconfig` con `resolve.tsconfigPaths: true`. Una dependencia menos, cuando
   toque revisar la configuración.
+
+### Propuestas de producto para fase 2, revisadas el 01-09-2026
+
+Dos análisis externos (ninguno es un ticket) señalaron en dos rondas nueve posibles añadidos
+al plan. Se contrastó cada uno contra `docs/decisions.md` entero y contra `tickets/` —leyendo
+el contenido, no solo el nombre del fichero— antes de anotar nada, y el resultado no es
+uniforme: tres eran huecos reales y ya están cerrados (**T-021** ampliado + **T-027** nuevo
+para bonos, **T-013** ampliado para el bloqueo automático, **ADR-054** + **T-013**/**T-015**
+para lenguaje claro), dos chocan con una decisión ya cerrada en sentido contrario
+(justificantes/CSV con el ADR-053, alto contraste con el ADR-042), y el resto ya estaba
+cubierto o expresamente vetado. Se deja anotado para no repetir el contraste la próxima vez
+que alguien traiga una lista parecida — y ya ha llegado dos veces.
+
+- **Bonos/paquetes de sesiones — corregido: no era un hueco de esquema, solo de pantalla.**
+  Primera pasada por este fichero decía «no aparece en T-021 a T-026», y era un falso
+  negativo: la búsqueda por «bono» devolvió 20 ficheros por coincidencias sueltas
+  (`abono`, etc.) y nadie leyó el contenido. **`T-021` ya modela `bonos`** —`sesiones_totales`,
+  `sesiones_consumidas` derivada, `importe`, `caducidad`— desde el principio. Lo que de
+  verdad faltaba era la columna que hace derivable el consumo (`citas.bono_id`, no estaba en
+  ningún ticket) y la pantalla. Las dos, cerradas el 01-09-2026: **`T-021` ampliado** con la
+  columna y la RLS de `bonos` que tampoco estaba explícita, y **`T-027` nuevo** para el alta,
+  el saldo y el listado. Lección: `files_with_matches` sin leer el contenido no basta para
+  decir «no existe» — hay que abrir el fichero.
+- **Bloqueo de pantalla por inactividad — corregido: ya estaba cubierto en un 90 % por T-013,
+  no era un ticket nuevo.** `T-013` ya especifica la pantalla de bloqueo colgada de
+  `desbloqueo_vigente()`, el botón de bloquear y el aviso de caducidad. Lo único que faltaba
+  —y que sí se ha añadido a `T-013` el 01-09-2026— es que el paso a bloqueado sea
+  **automático** al agotarse la ventana y no dependa de que el usuario pulse algo o de que la
+  siguiente Server Action falle: una historia olvidada abierta no debe seguir legible más
+  allá de los 15 minutos del ADR-026 aunque nadie la toque.
+- **Modo de alto contraste — evaluado y descartado, no es un hueco.** Un segundo análisis
+  externo (Kimi) lo propuso como prioridad de accesibilidad. Choca con una decisión ya
+  cerrada en sentido contrario: **ADR-042** prohíbe explícitamente «dibujar un conmutador de
+  tema» y un modo de alto contraste conmutable es exactamente eso. La vía correcta ya está
+  cubierta por el ADR-041 y su validador (`lib/contraste/`, integrado en `main` con T-009a):
+  subir el contraste del **único** tema hasta AA o más si sale barato, no añadir un segundo
+  modo. No se reabre el ADR-042 sin decisión expresa del propietario.
+- **Lenguaje claro en texto dirigido al paciente — hueco real, cerrado con ADR-054.** No
+  chocaba con nada (la Ley 11/2023, vigente desde el 28-06-2025, no estaba contemplada en
+  ningún ADR) y encaja con la propia razón de ser del producto: la población de pacientes
+  concentra ansiedad, TDAH y discapacidad cognitiva. Cerrado el 01-09-2026 sin tocar la
+  decisión 10 —el texto legal del consentimiento se sigue conservando verbatim, la regla
+  afecta a lo que lo rodea—, y ya referenciado en `T-013` (consentimientos) y `T-015`
+  (notificaciones). **Pendiente**: el ticket de recordatorios `wa.me` no existe todavía
+  (`PLAN.md` lo deja «fuera de alcance ahora»); cuando se escriba, hereda el ADR-054.
+- **Justificantes no fiscales + exportación CSV para Holded — NO es un hueco, es una
+  decisión ya tomada en sentido contrario.** `T-024-resumen-trimestre-y-exportacion.md` está
+  **retirado por el ADR-053(g)**: reconstruir cualquier resumen contable fuera de la
+  instancia, aunque sea parcial y solo para volcar en el proveedor, se descartó a propósito
+  («una contabilidad parcial es peor que ninguna»). Lo que sí cubre el hueco razonable es que
+  **T-023 ya admite un cobro sin factura** (`factura_espejo_id` nulo, «el caso normal»).
+  Cualquier CSV de exportación es una reapertura consciente del ADR-053, no un ticket suelto:
+  no se toca sin decisión expresa del propietario.
+- **Consentimientos informados firmables y versionados — ya cerrado, no es un añadido.** Es
+  la **decisión 10** de las catorce fundacionales (ADR-048, §6.7): asistencia por cita +
+  consentimientos versionados, con la versión exacta del texto firmado. Esquema
+  (`consentimientos`, `consentimiento_firmantes`) y pestaña (T-013) ya existen. Lo único que
+  puede faltar cuando llegue T-013 es el ticket del **flujo de firma** en sí, no la decisión.
+- **Escalas psicométricas (PHQ-9, GAD-7...) — sin cambios, sigue vetado.** El ADR-049 y el
+  aviso de fase 2 de `PLAN.md` ya paran esto: corregir o interpretar una prueba cruza a
+  producto sanitario. Quien redacte ese ticket se para y escala; no se reabre aquí.
+- **Estadísticas simples (ocupación, ausentismo, ingresos del mes) — baja prioridad, sin
+  riesgo.** Nada lo bloquea ni lo exige; azúcar sobre datos que ya van a existir con la
+  agenda y los cobros. Se retoma si sobra tiempo de fase 2, no antes que los dos primeros
+  puntos.
+
+**Regla que queda para la próxima propuesta externa que llegue**: contrastarla contra
+`docs/decisions.md` entero —no solo contra la memoria de quien la trae— antes de valorarla.
+La de justificantes habría entrado como «hueco» si no se hubiera comprobado que ya se cerró
+en contra.
 
 ## Aprendizajes
 
@@ -924,3 +1452,65 @@ volver obligatoria para las altas nuevas si el ticket lo pide.
 - **Punto abierto (d) del diseño de T-001**: `consentimiento_firmantes` y
   `accesos_historia_vistas` están aprobadas y **hay que subirlas a `docs/architecture.md`
   §Dominios de datos** al cerrar el ticket.
+
+### T-003 · `architecture.md` §Candado enumera ocho tablas; el catálogo dice nueve (o siete)
+
+Al escribir la matriz del banco de RLS (`scripts/rls/02-matriz-roles.sql`,
+`03-candado.sql`) contra las políticas reales de T-002, aparecen dos discrepancias con la
+lista de `docs/architecture.md` §Candado, que hoy enumera *episodios_asistenciales,
+diagnosticos, valoraciones_riesgo, notas_clinicas, notas_clinicas_versiones, evaluaciones,
+evaluacion_archivos, informes*:
+
+- **`episodio_participantes` TAMBIÉN pasa por `historia_desbloqueada()`** (verificado en
+  `pg_policies`: sin desbloqueo, PRO2 no lee la participación de su propio paciente P2 en
+  el episodio de PRO1 — el control está en `03-candado.sql`), y la lista no lo nombra.
+- `diagnosticos` y `valoraciones_riesgo` sí están en la lista, pero conviene anotar que
+  `valoraciones_riesgo` tiene ADEMÁS una vía fuera del candado —la vista
+  `pacientes_indicador_riesgo`, que expone solo el indicador binario al técnico— que la
+  lista tampoco menciona.
+
+No se toca el esquema ni la política: es una discrepancia de documentación. Queda para
+quien actualice `docs/architecture.md` §Candado (o el próximo ticket que la toque) añadir
+`episodio_participantes` a la lista y anotar la vía de la vista.
+
+### T-003 · Revisión con Opus: tres hallazgos aceptados sin cambio, con su porqué
+
+De los seis hallazgos de severidad media/baja de la revisión del 29-08 (los tres de
+severidad alta y tres de media se corrigieron en el propio ticket), quedan tres de
+severidad baja, aceptados a propósito:
+
+- **La matriz cuenta filas exactas** (`centros = 2`, `alertas_documentacion = 4`) sobre una
+  fijación que hoy es la única fuente de datos. Cuando **T-008** (seed determinista) exista,
+  esas cuentas exactas pueden romperse si el seed también inserta centros o alertas. La
+  salida será clara —un `ASERCIÓN FALLIDA` con el número real— así que no hace falta
+  blindarlo ahora; queda anotado para quien escriba T-008: si el banco de RLS rompe al
+  correr después del seed, es esto.
+- **`11-cobertura.sql` filtra `schemaname = 'public'`**: una política sobre
+  `storage.objects` (el bucket de documentos, cuando exista) quedaría fuera del
+  comprobador. No entra en T-003 porque **T-001 no crea ningún bucket de Storage
+  todavía** (ver más arriba, «Fuera del alcance de T-001»); el ticket que cree el primer
+  bucket con políticas debe ampliar el filtro de `11-cobertura.sql` a los esquemas que
+  correspondan.
+- **La fecha de nacimiento del menor de la fijación** (`current_date - interval '15
+  years'`) es relativa a hoy, no un literal. Correcto la inmensa mayoría de los días; el
+  caso límite es ejecutar el banco un 29 de febrero, donde el aniversario se desplaza. Se
+  deja así porque fijarlo como literal congelaría la edad del menor y el banco dejaría de
+  representar "hoy" — el problema que se quería evitar en primer lugar.
+
+### T-003 · Cerrado tras dos pasadas de revisión con Opus
+
+La primera pasada encontró 3 hallazgos ALTA (política "cubierta" solo por nombre en 22
+casos; administrador sin prueba negativa en el contenido clínico; una nota individual sin
+gemela positiva) y varios MEDIA/BAJA — todos reales, corregidos en `c27905a`.
+
+La reverificación de esa corrección encontró que dos de las propias correcciones eran
+solo aparentes (H1: una colisión de clave primaria enmascaraba el rechazo real de RLS en
+`preferencias_usuario`; H2: la prueba del administrador contaba con el candado cerrado, sin
+distinguir esa causa de "no hay rama de administrador") más cuatro MEDIA/BAJA (políticas de
+modificación sin ejercer; dos negativas de alta que un futuro índice único podría
+enmascarar; dos ramas de un `OR` sin aislar). Corregidas en `621e4f8`.
+
+Cada corrección de la segunda pasada se verificó reproduciendo la fuga exacta que el
+revisor había demostrado —mutando la política en la migración, viendo el banco ponerse
+rojo con el mensaje correcto, y restaurando— antes de darla por cerrada. `npm run
+test:rls` verde (13 módulos, ~140 aserciones), `npm run lint` y `npm run build` limpios.

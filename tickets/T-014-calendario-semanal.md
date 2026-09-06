@@ -50,6 +50,17 @@ Módulo del prototipo: **Agenda**. Sección: `docs/interfaz.md` §Agenda. Choque
 - [ ] **Clic en una cita → panel lateral** sobre `bg-secondary` con pico, con: horario y
       duración, tipo, profesional, centro y sala, **nota operativa** (logística, choque 3) y
       el estado con su etiqueta.
+- [ ] **Dos niveles de clic, y la celda no es un botón.** El día y la cita son dos objetivos
+      distintos, así que la celda del calendario va como `div` con `role="gridcell"` y
+      dentro llevan foco propio **el número del día** y **cada cita**. Una celda-botón con
+      las citas pintadas encima no admite el segundo nivel: no se anida botón en botón.
+      - **Clic en una cita** (en cualquier vista) → panel de la cita, directo.
+      - **Clic en el día** o en el hueco de la celda → panel del día con su lista ordenada
+        por hora; **cada fila de esa lista es a su vez un botón** que abre el panel de la
+        cita. La lista del día **no adelanta** nada que el panel de la cita no pueda
+        enseñar: mismo recorte por rol, misma omisión del tipo de terapia (choque 4) y
+        ninguna nota clínica (choque 3).
+      - El `+N más` de una celda llena abre el panel del día, no otro menú.
 - [ ] **Botón «Notas»** en el panel, que lleva a
       `/pacientes/<uuid>/historia/notas?cita=<uuid>` (la ruta de T-012, la misma que desde
       la ficha).
@@ -65,12 +76,27 @@ Módulo del prototipo: **Agenda**. Sección: `docs/interfaz.md` §Agenda. Choque
       (T-011). La cita queda **marcada como desviada**.
 - [ ] **El calendario distingue la cita de serie de la suelta y marca la desviada.** Sin
       eso, mover una cita da miedo.
+- [ ] **La vista mensual tiene forma acordada** (`docs/state.md` § Sistema de diseño ·
+      Agenda): rejilla 6×7 con **lunes primero**, celdas de mes vecino atenuadas pero
+      navegables, hasta tres
+      citas por celda con `hora + nombre corto` y `+N más` para el resto, y a 360 px las
+      citas colapsan a puntos de estado con el recuento del día. Cambiar de vista
+      **conserva la fecha enfocada**.
+- [ ] **El panel se ancla al elemento y se recoloca solo**: mide su alto, elige arriba o
+      abajo según el hueco disponible, se recorta a los límites del calendario y el pico
+      sigue apuntando al día o a la cita que lo abrió. Un panel que se sale por el borde en
+      la última fila del mes es el fallo típico de este patrón.
 - [ ] **A 360 px no es una semana estrechada** (ADR-044): día con desplazamiento lateral o
       lista por franjas, **conservando la misma información y las mismas acciones**. La
       forma se decide en este ticket, **mirándola en un teléfono real**, y se anota la
       elección con su motivo.
 - [ ] **Teclado completo y ARIA propia**: mover el foco por días y por citas, abrir el panel
       con Intro, cerrarlo con Escape, y devolver el foco a la cita al cerrar.
+      - La rejilla se recorre con las flechas **entre días**; **Tab** entra a las citas del
+        día enfocado y sale de ellas. Un solo día en el orden de tabulación (`tabindex`
+        `0`/`-1` rodante), no cuarenta y dos.
+      - Del panel del día se llega a la cita con Intro sobre su fila, y **Escape devuelve el
+        foco al escalón anterior**: de la cita al día, del día a la celda.
 - [ ] **Agenda absorbe Inicio y Clínica** (ADR-050): panel derecho con citas próximas,
       pendientes y **documentación pendiente** con su nivel de escalado, y cuadro inferior
       con adherencia, abandono, ingresos y trazabilidad documental. **El técnico
@@ -90,6 +116,11 @@ Módulo del prototipo: **Agenda**. Sección: `docs/interfaz.md` §Agenda. Choque
       siguen distinguiéndose.
 - [ ] **Manual** — clic en la cita en curso abre el panel; «Notas» lleva al editor y pide
       PIN.
+- [ ] **Manual** — en la vista mensual, clic en una cita abre **el panel de la cita**, y
+      clic en el hueco del mismo día abre **el panel del día**; desde una fila de ese panel
+      se llega a la misma cita.
+- [ ] **Manual** — el panel abierto desde una cita de la **última fila** del mes y desde la
+      **última columna** queda entero dentro de la pantalla, con el pico apuntando a ella.
 - [ ] **Manual** — una cita de ayer, `realizada` y sin nota firmada, muestra el aviso de
       nota obligatoria en su panel, con los días que lleva pendiente.
 - [ ] **Manual** — como `tecnico_administrativo`, ninguna fila muestra tipo de terapia y el

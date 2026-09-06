@@ -57,6 +57,12 @@ consentimientos, fuera del candado). ADR **026** (candado), **037** (unidad de a
       ventana a punto de caducar**. El reloj sale de `desbloqueo_vigente()`; **la tabla
       `desbloqueos_historia` no se consulta** —a `authenticated` se le retiró el `select`
       a propósito—: la interfaz necesita el reloj, no la tabla.
+      - **El paso a pantalla de bloqueo es automático al agotarse la ventana, no solo por el
+        botón.** El mismo reloj que avisa de la caducidad dispara el estado bloqueado en
+        cuanto llega a cero, sin esperar a que el usuario pulse algo ni a que la siguiente
+        Server Action falle contra RLS. Una historia abierta y olvidada en una mesa
+        compartida no debe seguir legible en pantalla ni un minuto más allá de los 15 del
+        ADR-026, aunque nadie la toque.
 - [ ] **Registro de acceso** (ADR-037), en la **Server Action de apertura**, nunca en el
       render:
       - Una fila en `accesos_historia` por apertura, con `pestana`.
@@ -66,6 +72,10 @@ consentimientos, fuera del candado). ADR **026** (candado), **037** (unidad de a
 - [ ] **Las píldoras describen documentación, no al paciente** (choque 7): «Al día»,
       «Nuevo», «Revisar». El nivel de riesgo es otro campo con otra política y **no se
       mezcla en la misma píldora**.
+- [ ] **Lenguaje claro (ADR-054)** en la pestaña Documentos y consentimientos: el título del
+      consentimiento, el botón de firmar y la frase que explica qué se firma van sin jerga
+      legal. **El texto legal del propio consentimiento no se toca** — se conserva y se firma
+      tal cual, verbatim; lo que se simplifica es lo que lo rodea.
 - [ ] Un **`<Suspense>` con esqueleto por bloque de datos**, no uno por página, y un límite
       de error por bloque (ADR-043). **Nada de un paciente entra en `use cache`, ni
       siquiera `use cache: private`.**
@@ -91,6 +101,9 @@ consentimientos, fuera del candado). ADR **026** (candado), **037** (unidad de a
       **sí** se abre, y **sin pedir PIN**.
 - [ ] **Manual** — bloquear con el botón y comprobar que la sub-pestaña vuelve a la
       pantalla de bloqueo sin recargar a mano.
+- [ ] **Manual** — dejar Historia clínica abierta sin interactuar hasta que caduque la
+      ventana de desbloqueo: la sub-pestaña pasa sola a la pantalla de bloqueo, sin pulsar
+      nada ni recargar.
 - [ ] **Manual** — `/pacientes/<uuid>` al lado de `/prototipo`: mismo vocabulario visual,
       sin controles de adorno (nada sin dato ni acción real detrás).
 - [ ] **Manual** — la misma ruta con cada rol que la pueda abrir enseña exactamente lo que

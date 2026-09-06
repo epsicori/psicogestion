@@ -75,6 +75,25 @@ y ahí vive el borrador con su autoguardado; `notas_clinicas_versiones` solo rec
 **al firmar**. La frontera es de una frase: *a la cadena se entra firmando*. El borrador es
 dato clínico igualmente — mismo RLS, mismo candado, mismo registro de acceso.
 
+**Implementación (T-005)**: el canonicalizador JCS + NFC es propio, en `lib/huella/`
+(sin dependencia nueva — el ADR-035 existe justamente para que un `npm update` no pueda
+mover una huella). El sello lo hace un disparador `before insert` sobre
+`notas_clinicas_versiones` —`fn_sellar_version_nota()`, `security definer`—, no una
+función de aplicación: la tabla ya concede `insert` directo a `authenticated`, así que una
+función aparte sería una puerta y no la única. Calcula `huella`, `huella_anterior`,
+`paciente_id` (denormalizado desde `notas_clinicas`, sin clave ajena a propósito) y
+`posicion_cadena` (el orden de la cadena, ámbito **el paciente**, no la nota ni el
+episodio), y comprueba que el sobre recibido coincide campo a campo con la fila. El SHA-256
+lo calcula `extensions.digest()` (pgcrypto): la aplicación nunca calcula huellas, lo que
+cierra por construcción el criterio de `blocking-prerender-*` (ADR-043). La serialización
+por paciente es un cerrojo consultivo (`pg_advisory_xact_lock`), no un `for no key update`
+sobre `pacientes` — esa fila ya la usa la fusión de pacientes (ADR-031) y compartir el
+mismo juego de cerrojos abriría interbloqueos nuevos. `esquema_version = 2` desde el
+ADR-046 (versión 1 nunca existió). El verificador, `verificar_cadena_huellas(uuid)`, vive
+en SQL y no en Node —para que reserializar el objeto sea imposible por construcción, no
+solo por disciplina— y no se concede a `authenticated`. Ejecutable a mano con
+`npm run verificar:huellas`.
+
 ### 2 · Solo adición
 
 `notas_clinicas_versiones`, `facturas`, `auditoria` y `accesos_historia` **revocan
@@ -141,6 +160,19 @@ es el bug: la serie creada en enero se corre una hora en julio.
 **El secreto profesional es del profesional, no del cargo.** Ser administrador no da
 acceso a notas ajenas: existe un **acceso de emergencia** que exige justificación
 escrita, caduca solo, se audita de forma destacada y notifica al titular.
+
+**Fuga documentada (hallazgo MEDIA de la revisión con Opus del 30-08-2026, T-005)**: la
+política de lectura `notas_clinicas_versiones_lectura` filtra por autor/asignado/episodio
+conjunto, pero deja pasar la columna **`posicion_cadena`** entera de cada fila visible. Un
+profesional con una sola versión suya en la cadena de un paciente puede ver, en esa misma
+fila, que `posicion_cadena` vale por ejemplo 7 — es decir, que **hay otras seis versiones
+en la cadena de ese paciente**, aunque no pueda leer su contenido ni saber de quién son.
+No es un fallo de código: es una consecuencia del diseño (`security definer` en
+`fn_sellar_version_nota()`, cadena a nivel de paciente para que la propiedad de «cadena
+íntegra» signifique algo) que no se documentó al decidirlo. Se acepta tal cual — cambiar
+el ámbito de numeración a por-nota rompería la propiedad de integridad que la cadena
+existe para dar — y queda escrito aquí para que ningún ticket futuro lo redescubra como
+sorpresa.
 
 **La matriz es también el guion de la interfaz.** El prototipo está dibujado desde un
 único punto de vista y no sabe de roles: cada pantalla se filtra por esta tabla antes de
