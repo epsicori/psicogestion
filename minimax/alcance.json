@@ -72,11 +72,19 @@
     },
 
     "T-007d": {
+      "_nota": [
+        "lib/i18n/** se anade el 06-09-2026: este alcance se escribio ANTES de que",
+        "existiera T-009a, y desde que las cadenas viven en el catalogo NINGUNA entrega",
+        "que dibuje un control nuevo puede evitar tocarlo. El selector de centro necesita",
+        "etiqueta, y una etiqueta literal la rechaza lib/i18n/sin-literales.test.ts.",
+        "Lo corrige el arquitecto, que es quien mantiene este fichero."
+      ],
       "titulo": "Armazon con datos reales: selector de centro y rotulo de rol",
       "escritura": [
         "components/armazon/**",
         "components/ui/**",
-        "app/(app)/**"
+        "app/(app)/**",
+        "lib/i18n/**"
       ],
       "dependencias": []
     },
