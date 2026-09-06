@@ -761,20 +761,36 @@ Ninguno. Verificación manual pendiente.
 > | Rama | Ticket | Estado | A quién desbloquea |
 > |---|---|---|---|
 > | `T-005-cadena-huellas` | **T-003** (arrastrado en esta línea) y **T-005** | hechos, tres revisiones con Opus, evidencia en los tickets | **T-009·B** de MiniMax (necesita `npm run test:rls`) |
-> | `T-006a-cuentas-base` | **T-006a** (corte DB) | implementado y revisado (2 ALTA + 4 MEDIA/BAJA, arreglados en `71eaccc`); **NO cierra: el banco de pruebas no se adaptó al arreglo y `npm run test:rls` sale en rojo** | **T-006·b** de MiniMax (necesita `lib/cuentas/` y el `[auth.mfa.totp]` de `config.toml`) |
+> | `T-006a-cuentas-base` | **T-006a** (corte DB) | implementado, revisado (2 ALTA + 4 MEDIA/BAJA) y **con el banco verde: 197 aserciones, cero fallidas** (`71eaccc` + `5fb5024`) | **T-006·b** de MiniMax (necesita `lib/cuentas/` y el `[auth.mfa.totp]` de `config.toml`) |
 >
 > **T-006a en una línea**: los dos ALTA eran reales y gordos —una sesión con solo
-> contraseña podía generar los códigos de recuperación y tumbar el TOTP entero; y el
-> bloqueo de cinco intentos del PIN se reseteaba solo con volver a fijar un PIN—. Los dos
-> se cierran con `segundo_factor_verificado_recientemente()` (aal2 actual **más** un reto
-> TOTP de menos de cinco minutos). **Lo que falta es el banco**: el arreglo cambia el
-> contrato de `fijar_pin_historia()`, y `scripts/rls/01-fijacion.sql` la llama en su
-> fijación con una sesión simulada que no tiene ni el claim `aal2` ni fila en
-> `auth.mfa_factors` — `test:rls` muere ahí, en la línea 251. Hay que **(a)** hacer que la
-> fijación simule un segundo factor recién verificado y **(b)** escribir las negativas de
-> los dos ALTA, que hoy **no tienen ni una prueba**: `13-cuentas.sql` no nombra
-> `segundo_factor_verificado_recientemente()` ni una vez. Un arreglo de seguridad sin
-> prueba es el patrón que ya costó dos revisiones en T-001.
+> contraseña podía generar los códigos de recuperación, canjear uno y tumbar el TOTP
+> entero por PostgREST directo; y el bloqueo de cinco intentos del PIN se reseteaba con
+> solo volver a fijar un PIN, dejando decorativa la única defensa de un código de seis
+> dígitos—. Los dos se cierran con `segundo_factor_verificado_recientemente()`: `aal2`
+> actual **más** un reto TOTP de menos de cinco minutos.
+>
+> **Lo que costó una vuelta entera, y es la lección**: el arreglo cambiaba el contrato de
+> `fijar_pin_historia()` y **el banco no se adaptó**, así que `test:rls` moría en la
+> fijación y los 222 hallazgos arreglados se quedaron sin comitear. Al adaptarlo apareció
+> lo de verdad grave: `13-cuentas.sql` **no nombraba
+> `segundo_factor_verificado_recientemente()` ni una vez** — los dos arreglos de seguridad
+> estaban **sin una sola negativa**, y las llamadas del banco habrían seguido verdes con la
+> guarda quitada. Es el patrón que ya costó dos revisiones en T-001, ahora en un arreglo de
+> seguridad. **Un arreglo ALTA sin su negativa no está hecho, está escrito.**
+>
+> Ahora hay tres negativas con su gemela positiva sobre el mismo perfil, y la que
+> discrimina de verdad es la tercera: **`aal2` pero con el reto TOTP de hace diez minutos
+> también se rechaza**. Sin ella, una guarda que mirase solo el claim `aal` del JWT —que no
+> dice nada sobre cuándo se tecleó el último código— pondría verde las otras dos.
+>
+> **Trampa nueva pagada, para quien vuelva a tocar el banco**: `auth.mfa_factors` lleva un
+> índice **único global** sobre `last_challenged_at`, y `now()` no avanza dentro de una
+> transacción. Dar el segundo factor a dos usuarios con el valor por defecto choca con
+> `23505`. Por eso `pg_temp.dar_segundo_factor(uid, hace)` toma un desfase y cada llamada
+> pasa uno distinto. Y la gemela positiva del PIN comprueba el hash **fuera de la sesión,
+> como `postgres`**: dentro da `permission denied for table pines_historia`, que es el
+> comportamiento correcto —el hash no se lee, se compara dentro de una función `definer`—.
 >
 > **Integrar es tuyo** (`CARRILES.md` §Integración) y el orden es el del protocolo: primero
 > este carril, después Kimi, después MiniMax.
