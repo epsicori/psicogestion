@@ -111,6 +111,16 @@
       ]
     },
 
+    "T-006b": {
+      "titulo": "Acceso y pantallas de invitacion, primer acceso, MFA y PIN",
+      "escritura": [
+        "app/**",
+        "components/ui/**",
+        "lib/i18n/**"
+      ],
+      "dependencias": []
+    },
+
     "T-013": {
       "titulo": "Ficha del paciente, pestanas y pantalla de bloqueo",
       "escritura": [

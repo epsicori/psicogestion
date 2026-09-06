@@ -76,18 +76,29 @@ del alcance de tu entrega**, que es más estrecho: lo fija `minimax/alcance.json
 
 ## El orden de las entregas
 
+Al día a **06-09-2026**. Lo tachado ya está entregado e integrado en `main`: no se vuelve
+a hacer, se usa.
+
 ```
-T-007·A  seis primitivas accesibles          ← empieza aquí
-T-007·B  piezas de pintura y estados          (necesita A: reutiliza sus tokens)
-T-007·C  cacheComponents, formularios y los cuatro módulos
-T-007·D  armazón con datos reales             (bloqueada: espera a T-002)
-T-009·A  andamiaje de i18n y validador de contraste
-T-009·B  flujo de CI y verificador de accesibilidad   (bloqueada: espera a T-003)
-T-013    ficha del paciente                   (bloqueada: espera a T-007·D y T-006)
+T-007·A  seis primitivas accesibles                    ENTREGADA e integrada
+T-007·B  piezas de pintura y estados                   ENTREGADA e integrada
+T-009·A  andamiaje de i18n y validador de contraste    ENTREGADA e integrada
+T-007·C  cacheComponents, formularios y los 4 módulos  ← empieza aquí
+T-007·D  armazón con datos reales                      (necesita C; T-002 ya está en main)
+T-009·B  flujo de CI y verificador de accesibilidad    (bloqueada: T-003 aún no está en main)
+T-006·b  acceso y pantallas de invitación, MFA y PIN   (bloqueada: T-006a aún no está en main)
+T-013    ficha del paciente                            (bloqueada: espera a T-007·D y T-006)
 ```
 
-**A va primero y no se discute**: B, C y D pintan con las primitivas que A escribe, y
-T-012, T-013 y T-014 —de otros carriles y fases— esperan a lo mismo. Si A sale mal, sale
-mal siete veces.
+**A iba primero y no se discutía**: B, C y D pintan con las primitivas que A escribe, y
+T-012, T-013 y T-014 —de otros carriles y fases— esperan a lo mismo. Ya está hecho, así
+que las primitivas de `components/ui/` **existen y se usan**; escribir una segunda versión
+de algo que ya está ahí es el error que este orden existe para evitar.
+
+**Las tres bloqueadas lo están por `main`, no por ti.** T-009·B necesita `npm run test:rls`
+(T-003) y T-006·b necesita `lib/cuentas/` y el `[auth.mfa.totp]` de `supabase/config.toml`
+(T-006a): las dos cosas están escritas y verificadas en otro carril, pero todavía en su
+rama. Si te asignan una de ellas y `main` no las trae, **para y avisa**: es un error de
+reparto, no algo que se resuelva escribiendo el hueco a mano.
 
 Una entrega cada vez. Una rama cada vez. **No abras dos.**
