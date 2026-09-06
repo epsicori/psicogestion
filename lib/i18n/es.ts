@@ -18,6 +18,8 @@ export const es = {
     sinPerfil: 'Sin perfil',
     proximamente: 'pronto',
     espacioDeTrabajo: 'Espacio de trabajo',
+    centroActivo: 'Centro activo',
+    cambiarCentro: 'Cambiar de centro',
     buenosDias: 'Buenos días',
     buenasTardes: 'Buenas tardes',
     buenasNoches: 'Buenas noches',

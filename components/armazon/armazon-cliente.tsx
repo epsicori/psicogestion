@@ -1,15 +1,13 @@
 'use client';
 
 import { Activity, Menu, X } from 'lucide-react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import { t } from '@/lib/i18n';
 
 import { cn } from '@/lib/utils';
 
-import { MODULOS } from './modulos';
+import { CajonContext } from './cajon';
 
 type Props = {
   /**
@@ -18,13 +16,25 @@ type Props = {
    * esperar a que la sesión estuviera resuelta para poder pintar el marco, y el
    * marco no depende de la sesión.
    */
+  selectorCentro: ReactNode;
+  navegacion: ReactNode;
   identidad: ReactNode;
   saludo: ReactNode;
   children: ReactNode;
 };
 
-export function ArmazonCliente({ identidad, saludo, children }: Props) {
+export function ArmazonCliente({
+  selectorCentro,
+  navegacion,
+  identidad,
+  saludo,
+  children,
+}: Props) {
   const [menuAbierto, setMenuAbierto] = useState(false);
+
+  // Se pasa por contexto a la navegación, que ya no es hija directa: la resuelve un
+  // bloque de servidor porque depende del rol, y una función no cruza esa frontera.
+  const cerrarCajon = useCallback(() => setMenuAbierto(false), []);
 
   return (
     <div className="flex min-h-screen">
@@ -65,19 +75,15 @@ export function ArmazonCliente({ identidad, saludo, children }: Props) {
           </button>
         </div>
 
-        <div className="flex flex-1 flex-col px-3 py-6">
-          <p className="text-muted-foreground px-3 pb-3 text-[11px] font-semibold tracking-[0.16em] uppercase">
-            {t('armazon.espacioDeTrabajo')}
-          </p>
-          <nav className="flex flex-col gap-1" aria-label={t('armazon.navegacionPrincipal')}>
-            {MODULOS.map((modulo) => (
-              <EnlaceModulo
-                key={modulo.href}
-                {...modulo}
-                onNavegar={() => setMenuAbierto(false)}
-              />
-            ))}
-          </nav>
+        <div className="flex flex-1 flex-col overflow-y-auto py-6">
+          {selectorCentro}
+
+          <div className="flex flex-col px-3">
+            <p className="text-muted-foreground px-3 pb-3 text-[11px] font-semibold tracking-[0.16em] uppercase">
+              {t('armazon.espacioDeTrabajo')}
+            </p>
+            <CajonContext.Provider value={cerrarCajon}>{navegacion}</CajonContext.Provider>
+          </div>
         </div>
 
         <div className="border-border border-t p-4">{identidad}</div>
@@ -101,49 +107,5 @@ export function ArmazonCliente({ identidad, saludo, children }: Props) {
         <div className="mx-auto max-w-[1480px] px-5 py-6 md:px-8 md:py-8">{children}</div>
       </section>
     </div>
-  );
-}
-
-function EnlaceModulo({
-  etiqueta,
-  href,
-  icono: Icono,
-  disponible,
-  onNavegar,
-}: (typeof MODULOS)[number] & { onNavegar: () => void }) {
-  const ruta = usePathname();
-  const activo = ruta === href || ruta.startsWith(`${href}/`);
-  const clases = 'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition';
-
-  if (!disponible) {
-    return (
-      <span
-        aria-disabled="true"
-        className={cn(clases, 'text-muted-foreground/50 cursor-not-allowed')}
-      >
-        <Icono className="size-4" />
-        {etiqueta}
-        <span className="bg-muted text-muted-foreground ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold">
-          {t('armazon.proximamente')}
-        </span>
-      </span>
-    );
-  }
-
-  return (
-    <Link
-      href={href}
-      onClick={onNavegar}
-      aria-current={activo ? 'page' : undefined}
-      className={cn(
-        clases,
-        activo
-          ? 'bg-secondary text-secondary-foreground'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-      )}
-    >
-      <Icono className="size-4" />
-      {etiqueta}
-    </Link>
   );
 }
