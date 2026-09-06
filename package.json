@@ -15,7 +15,8 @@
     "seed": "node scripts/seed.mjs",
     "verificar:huellas": "node scripts/verificar-huellas.mjs",
     "test:huellas": "node scripts/test-huellas.mjs",
-    "tipos": "supabase gen types typescript --local > lib/supabase/tipos-bd.ts"
+    "tipos": "supabase gen types typescript --local > lib/supabase/tipos-bd.ts",
+    "test:a11y": "playwright test"
   },
   "dependencies": {
     "@date-fns/tz": "1.5.0",
@@ -35,6 +36,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",

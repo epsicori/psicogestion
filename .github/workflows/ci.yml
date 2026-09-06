@@ -1,0 +1,141 @@
+# T-009·B · El flujo que comprueba lo que las revisiones han ido descubriendo.
+#
+# Un solo trabajo y no cinco a propósito: cada uno tendría que levantar Supabase, aplicar
+# nueve migraciones y sembrar, que es lo que más tarda. Repartirlo multiplicaría el tiempo
+# total para paralelizar comprobaciones que tardan segundos.
+#
+# El orden NO es arbitrario y cada paso explica por qué está donde está.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# Un empujón nuevo sobre la misma rama cancela el anterior: nadie mira el resultado de un
+# commit que ya han reemplazado, y la cola de Docker es lenta.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # `npm ci` y no `npm install`: instala EXACTAMENTE el árbol del lock. Con `install`,
+      # una dependencia con rango podría subir de versión sola y el flujo se pondría rojo
+      # un martes sin que nadie hubiera tocado nada.
+      - name: Instalar dependencias
+        run: npm ci
+
+      # El CLI de Supabase está en devDependencies y Docker viene en ubuntu-latest.
+      - name: Levantar Supabase
+        run: npx supabase start
+
+      # ---------------------------------------------------------------------------
+      # Migraciones: las dos direcciones que el ticket exige
+      # ---------------------------------------------------------------------------
+
+      # 1 · Desde cero. Es lo que hace cualquiera que clone el repositorio.
+      - name: Migraciones desde cero
+        run: npx supabase db reset
+
+      # 2 · Incremental SOBRE la base ya migrada. Una migración destructiva en un solo
+      #     paso —tirar una columna y recrearla, cambiar un tipo sin `using`— pasa el
+      #     reset y muere aquí, que es el caso que de verdad ocurre en producción.
+      - name: Migraciones incrementales sobre la base ya migrada
+        run: npx supabase migration up
+
+      - name: Linter de migraciones (regla 6 de la constitución)
+        run: npm run lint:migraciones
+
+      # ---------------------------------------------------------------------------
+      # Deriva de tipos
+      #
+      # Se REGENERA y se compara con lo comiteado. NO se mira si el commit tocó el
+      # fichero: eso haría fallar a quien lo regenera bien y pasar a quien lo edita a mano
+      # sin regenerar, que es justo al revés de lo que hace falta.
+      # ---------------------------------------------------------------------------
+      - name: Regenerar tipos
+        run: npm run tipos
+
+      - name: Los tipos generados no se editan a mano
+        run: |
+          if ! git diff --exit-code --stat -- lib/supabase/tipos-bd.ts; then
+            echo "::error::lib/supabase/tipos-bd.ts no coincide con lo que genera 'npm run tipos'."
+            echo "::error::Los tipos se GENERAN. Corre 'npx supabase db reset && npm run tipos' y comitea el resultado."
+            git diff -- lib/supabase/tipos-bd.ts | head -60
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------------------
+      # Código
+      # ---------------------------------------------------------------------------
+
+      - name: Lint
+        run: npm run lint
+
+      # Antes del build: si algo está roto, el mensaje de una prueba dice qué, y el de un
+      # build dice dónde.
+      - name: Pruebas unitarias (incluye el contraste de los tokens)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # ---------------------------------------------------------------------------
+      # Base de datos: RLS, solo adición y la cadena de huellas
+      # ---------------------------------------------------------------------------
+
+      # La siembra va antes del banco porque el banco corre TAMBIÉN sobre una base
+      # sembrada: es lo que descubrió T-008 —dos cuentas globales del banco medían la
+      # siembra en vez de la política— y no se vuelve a comprobar solo en vacío.
+      - name: Sembrar
+        run: npm run seed
+
+      # Aquí caen: una política de RLS rota, una tabla de solo adición sin sus tres capas
+      # (módulo 11-cobertura), y una política nueva sin declarar.
+      - name: Banco de pruebas de RLS
+        run: npm run test:rls
+
+      - name: Verificador de la cadena de huellas
+        run: npm run verificar:huellas
+
+      - name: Concurrencia de la cadena de huellas
+        run: npm run test:huellas
+
+      # ---------------------------------------------------------------------------
+      # Accesibilidad en navegador de verdad
+      #
+      # Va al final porque necesita el build Y la siembra. Aquí se cierra la deuda que
+      # arrastraban los tres cortes entregados de T-007: 360 px y prefers-reduced-motion
+      # NUNCA se habían comprobado, porque jsdom no tiene disposición ni consulta de
+      # medios.
+      # ---------------------------------------------------------------------------
+
+      # Solo chromium: lo que se comprueba —tamaño, foco, teclado, nombres accesibles— no
+      # depende del motor. La versión del navegador la fija @playwright/test, anclada en
+      # package.json con versión exacta.
+      - name: Instalar el navegador
+        run: npx playwright install --with-deps chromium
+
+      - name: Verificador de accesibilidad
+        run: npm run test:a11y
+
+      - name: Guardar el rastro de las pruebas que fallen
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

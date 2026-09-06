@@ -47,3 +47,9 @@ next-env.d.ts
 
 # Worktrees de los agentes de la fábrica de tickets
 .claude/worktrees/
+
+# Artefactos del verificador de accesibilidad (T-009b)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
