@@ -5,7 +5,8 @@ modelo: sonnet
 fase: 0
 prioridad: alta
 depende_de: [T-002]
-estado: pendiente
+estado: en_curso
+notas: Corte a (base de datos, lib/cuentas/, dos hallazgos ALTA cerrados con prueba) INTEGRADO en main. Falta el corte b -pantallas de invitacion, primer acceso, MFA y PIN-, cuyo corte esta en minimax/cortes/T-006.md y ya NO esta bloqueado.
 ---
 
 # Contexto

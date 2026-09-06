@@ -5,7 +5,8 @@ modelo: sonnet
 fase: 0
 prioridad: media
 depende_de: [T-003]
-estado: pendiente
+estado: en_curso
+notas: Corte A (i18n y validador de contraste) INTEGRADO en main. Falta el corte B -flujo de CI y verificador de accesibilidad-, que ya NO esta bloqueado: T-003 esta en main.
 ---
 
 # Contexto

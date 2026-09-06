@@ -5,7 +5,8 @@ modelo: sonnet
 fase: 0
 prioridad: alta
 depende_de: [T-002]
-estado: pendiente
+estado: en_curso
+notas: Cortes A (primitivas), B (piezas) y C (cacheComponents, formularios y los cuatro modulos) INTEGRADOS en main. Falta el corte D -armazon con datos reales-, en minimax/cortes/T-007.md.
 ---
 
 # Contexto
