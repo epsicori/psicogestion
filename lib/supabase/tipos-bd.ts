@@ -263,6 +263,149 @@ export type Database = {
         }
         Relationships: []
       }
+      citas: {
+        Row: {
+          centro_id: string | null
+          creada_en: string
+          creada_por: string | null
+          desviada: boolean
+          estado: Database["public"]["Enums"]["estado_cita"]
+          fin: string
+          id: string
+          inicio: string
+          marcada_realizada_en: string | null
+          marcada_realizada_por: string | null
+          motivo_desviacion:
+            | Database["public"]["Enums"]["motivo_desviacion_cita"]
+            | null
+          nota_operativa: string | null
+          paciente_id: string
+          profesional_id: string
+          rango_bloqueante: unknown
+          sala: string | null
+          serie_id: string | null
+          tipo_terapia_id: string | null
+          zona_horaria: string
+        }
+        Insert: {
+          centro_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          desviada?: boolean
+          estado?: Database["public"]["Enums"]["estado_cita"]
+          fin: string
+          id?: string
+          inicio: string
+          marcada_realizada_en?: string | null
+          marcada_realizada_por?: string | null
+          motivo_desviacion?:
+            | Database["public"]["Enums"]["motivo_desviacion_cita"]
+            | null
+          nota_operativa?: string | null
+          paciente_id: string
+          profesional_id: string
+          rango_bloqueante: unknown
+          sala?: string | null
+          serie_id?: string | null
+          tipo_terapia_id?: string | null
+          zona_horaria: string
+        }
+        Update: {
+          centro_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          desviada?: boolean
+          estado?: Database["public"]["Enums"]["estado_cita"]
+          fin?: string
+          id?: string
+          inicio?: string
+          marcada_realizada_en?: string | null
+          marcada_realizada_por?: string | null
+          motivo_desviacion?:
+            | Database["public"]["Enums"]["motivo_desviacion_cita"]
+            | null
+          nota_operativa?: string | null
+          paciente_id?: string
+          profesional_id?: string
+          rango_bloqueante?: unknown
+          sala?: string | null
+          serie_id?: string | null
+          tipo_terapia_id?: string | null
+          zona_horaria?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "citas_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_marcada_realizada_por_fkey"
+            columns: ["marcada_realizada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_marcada_realizada_por_fkey"
+            columns: ["marcada_realizada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_serie_id_fkey"
+            columns: ["serie_id"]
+            isOneToOne: false
+            referencedRelation: "series_cita"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_tipo_terapia_id_fkey"
+            columns: ["tipo_terapia_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_terapia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       codigos_recuperacion_totp: {
         Row: {
           bloqueado_hasta: string | null
@@ -543,6 +686,90 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      disponibilidad: {
+        Row: {
+          centro_id: string | null
+          creado_en: string
+          creado_por: string | null
+          desde: string | null
+          dia_semana: number | null
+          hasta: string | null
+          hora_fin: string | null
+          hora_inicio: string | null
+          id: string
+          motivo: string | null
+          perfil_id: string
+          tipo: Database["public"]["Enums"]["tipo_disponibilidad"]
+          zona_horaria: string
+        }
+        Insert: {
+          centro_id?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          desde?: string | null
+          dia_semana?: number | null
+          hasta?: string | null
+          hora_fin?: string | null
+          hora_inicio?: string | null
+          id?: string
+          motivo?: string | null
+          perfil_id: string
+          tipo: Database["public"]["Enums"]["tipo_disponibilidad"]
+          zona_horaria: string
+        }
+        Update: {
+          centro_id?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          desde?: string | null
+          dia_semana?: number | null
+          hasta?: string | null
+          hora_fin?: string | null
+          hora_inicio?: string | null
+          id?: string
+          motivo?: string | null
+          perfil_id?: string
+          tipo?: Database["public"]["Enums"]["tipo_disponibilidad"]
+          zona_horaria?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disponibilidad_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disponibilidad_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disponibilidad_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disponibilidad_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disponibilidad_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
         ]
@@ -857,6 +1084,7 @@ export type Database = {
           borrador_actualizado_en: string | null
           borrador_autor_id: string | null
           borrador_contenido: Json | null
+          cita_id: string | null
           creada_en: string
           episodio_id: string | null
           fecha_sesion: string
@@ -868,6 +1096,7 @@ export type Database = {
           borrador_actualizado_en?: string | null
           borrador_autor_id?: string | null
           borrador_contenido?: Json | null
+          cita_id?: string | null
           creada_en?: string
           episodio_id?: string | null
           fecha_sesion?: string
@@ -879,6 +1108,7 @@ export type Database = {
           borrador_actualizado_en?: string | null
           borrador_autor_id?: string | null
           borrador_contenido?: Json | null
+          cita_id?: string | null
           creada_en?: string
           episodio_id?: string | null
           fecha_sesion?: string
@@ -912,6 +1142,20 @@ export type Database = {
             columns: ["borrador_autor_id"]
             isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_clinicas_cita_id_fkey"
+            columns: ["cita_id"]
+            isOneToOne: false
+            referencedRelation: "citas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_clinicas_cita_id_fkey"
+            columns: ["cita_id"]
+            isOneToOne: false
+            referencedRelation: "citas_agenda"
             referencedColumns: ["id"]
           },
           {
@@ -1267,6 +1511,8 @@ export type Database = {
         Row: {
           centro_id: string | null
           creado_en: string
+          descanso_activo: boolean
+          descanso_minutos: number
           estado: Database["public"]["Enums"]["estado_perfil"]
           estado_desde: string
           id: string
@@ -1277,6 +1523,8 @@ export type Database = {
         Insert: {
           centro_id?: string | null
           creado_en?: string
+          descanso_activo?: boolean
+          descanso_minutos?: number
           estado?: Database["public"]["Enums"]["estado_perfil"]
           estado_desde?: string
           id: string
@@ -1287,6 +1535,8 @@ export type Database = {
         Update: {
           centro_id?: string | null
           creado_en?: string
+          descanso_activo?: boolean
+          descanso_minutos?: number
           estado?: Database["public"]["Enums"]["estado_perfil"]
           estado_desde?: string
           id?: string
@@ -1571,6 +1821,113 @@ export type Database = {
           },
         ]
       }
+      series_cita: {
+        Row: {
+          cancelada_en: string | null
+          centro_id: string | null
+          creada_en: string
+          creada_por: string | null
+          dia_semana: number
+          duracion_minutos: number
+          fin_el: string | null
+          hora_local: string
+          id: string
+          motivo_cancelacion: string | null
+          paciente_id: string
+          periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
+          profesional_id: string
+          sesiones_totales: number | null
+          tipo_terapia_id: string | null
+          zona_horaria: string
+        }
+        Insert: {
+          cancelada_en?: string | null
+          centro_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          dia_semana: number
+          duracion_minutos?: number
+          fin_el?: string | null
+          hora_local: string
+          id?: string
+          motivo_cancelacion?: string | null
+          paciente_id: string
+          periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
+          profesional_id: string
+          sesiones_totales?: number | null
+          tipo_terapia_id?: string | null
+          zona_horaria: string
+        }
+        Update: {
+          cancelada_en?: string | null
+          centro_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          dia_semana?: number
+          duracion_minutos?: number
+          fin_el?: string | null
+          hora_local?: string
+          id?: string
+          motivo_cancelacion?: string | null
+          paciente_id?: string
+          periodicidad?: Database["public"]["Enums"]["periodicidad_serie"]
+          profesional_id?: string
+          sesiones_totales?: number | null
+          tipo_terapia_id?: string | null
+          zona_horaria?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "series_cita_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_cita_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_cita_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_cita_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_cita_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_cita_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_cita_tipo_terapia_id_fkey"
+            columns: ["tipo_terapia_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_terapia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tablas_solo_adicion: {
         Row: {
           motivo: string
@@ -1585,6 +1942,57 @@ export type Database = {
           tabla?: string
         }
         Relationships: []
+      }
+      tipos_terapia: {
+        Row: {
+          activo: boolean
+          color: string | null
+          creado_en: string
+          creado_por: string | null
+          duracion_minutos: number
+          id: string
+          nombre: string
+          regimen: Database["public"]["Enums"]["regimen_iva"]
+          tarifa_base: number | null
+        }
+        Insert: {
+          activo?: boolean
+          color?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          duracion_minutos?: number
+          id?: string
+          nombre: string
+          regimen?: Database["public"]["Enums"]["regimen_iva"]
+          tarifa_base?: number | null
+        }
+        Update: {
+          activo?: boolean
+          color?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          duracion_minutos?: number
+          id?: string
+          nombre?: string
+          regimen?: Database["public"]["Enums"]["regimen_iva"]
+          tarifa_base?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tipos_terapia_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tipos_terapia_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       valoraciones_riesgo: {
         Row: {
@@ -1695,6 +2103,93 @@ export type Database = {
             columns: ["perfil_id"]
             isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      citas_agenda: {
+        Row: {
+          centro_id: string | null
+          desviada: boolean | null
+          estado: Database["public"]["Enums"]["estado_cita"] | null
+          fin: string | null
+          id: string | null
+          inicio: string | null
+          motivo_desviacion:
+            | Database["public"]["Enums"]["motivo_desviacion_cita"]
+            | null
+          paciente_id: string | null
+          profesional_id: string | null
+          sala: string | null
+          serie_id: string | null
+          zona_horaria: string | null
+        }
+        Insert: {
+          centro_id?: string | null
+          desviada?: boolean | null
+          estado?: Database["public"]["Enums"]["estado_cita"] | null
+          fin?: string | null
+          id?: string | null
+          inicio?: string | null
+          motivo_desviacion?:
+            | Database["public"]["Enums"]["motivo_desviacion_cita"]
+            | null
+          paciente_id?: string | null
+          profesional_id?: string | null
+          sala?: string | null
+          serie_id?: string | null
+          zona_horaria?: string | null
+        }
+        Update: {
+          centro_id?: string | null
+          desviada?: boolean | null
+          estado?: Database["public"]["Enums"]["estado_cita"] | null
+          fin?: string | null
+          id?: string | null
+          inicio?: string | null
+          motivo_desviacion?:
+            | Database["public"]["Enums"]["motivo_desviacion_cita"]
+            | null
+          paciente_id?: string | null
+          profesional_id?: string | null
+          sala?: string | null
+          serie_id?: string | null
+          zona_horaria?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "citas_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_serie_id_fkey"
+            columns: ["serie_id"]
+            isOneToOne: false
+            referencedRelation: "series_cita"
             referencedColumns: ["id"]
           },
         ]
@@ -1810,6 +2305,7 @@ export type Database = {
         Returns: boolean
       }
       es_zona_iana: { Args: { p_zona: string }; Returns: boolean }
+      esta_en_curso: { Args: { p_cita_id: string }; Returns: boolean }
       estado_de_cuenta: {
         Args: never
         Returns: {
@@ -1884,15 +2380,28 @@ export type Database = {
     Enums: {
       alcance_nota: "individual" | "conjunta"
       alcance_representacion: "patria_potestad" | "custodia" | "solo_contacto"
+      estado_cita:
+        | "programada"
+        | "confirmada"
+        | "realizada"
+        | "cancelada"
+        | "no_asistida"
       estado_perfil: "activo" | "suspendido" | "baja"
       modalidad_relacional: "individual" | "pareja" | "familiar" | "grupo"
+      motivo_desviacion_cita:
+        | "reprogramada"
+        | "anomalia_horaria"
+        | "festivo"
+        | "ausencia"
       nivel_riesgo: "bajo" | "moderado" | "alto"
+      periodicidad_serie: "semanal" | "quincenal" | "mensual"
       pestana_historia:
         | "historial_clinico"
         | "notas_clinicas"
         | "evaluaciones"
         | "informes"
         | "documentos"
+      regimen_iva: "exento_sanitario" | "general"
       rol_usuario:
         | "administrador"
         | "profesional_sanitario"
@@ -1915,6 +2424,7 @@ export type Database = {
         | "cesion_informacion"
         | "grabacion"
         | "otro"
+      tipo_disponibilidad: "franja" | "ausencia" | "festivo"
       tipo_informe:
         | "alta"
         | "seguimiento"
@@ -2061,9 +2571,23 @@ export const Constants = {
     Enums: {
       alcance_nota: ["individual", "conjunta"],
       alcance_representacion: ["patria_potestad", "custodia", "solo_contacto"],
+      estado_cita: [
+        "programada",
+        "confirmada",
+        "realizada",
+        "cancelada",
+        "no_asistida",
+      ],
       estado_perfil: ["activo", "suspendido", "baja"],
       modalidad_relacional: ["individual", "pareja", "familiar", "grupo"],
+      motivo_desviacion_cita: [
+        "reprogramada",
+        "anomalia_horaria",
+        "festivo",
+        "ausencia",
+      ],
       nivel_riesgo: ["bajo", "moderado", "alto"],
+      periodicidad_serie: ["semanal", "quincenal", "mensual"],
       pestana_historia: [
         "historial_clinico",
         "notas_clinicas",
@@ -2071,6 +2595,7 @@ export const Constants = {
         "informes",
         "documentos",
       ],
+      regimen_iva: ["exento_sanitario", "general"],
       rol_usuario: [
         "administrador",
         "profesional_sanitario",
@@ -2097,6 +2622,7 @@ export const Constants = {
         "grabacion",
         "otro",
       ],
+      tipo_disponibilidad: ["franja", "ausencia", "festivo"],
       tipo_informe: [
         "alta",
         "seguimiento",

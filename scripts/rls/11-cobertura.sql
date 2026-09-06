@@ -17,8 +17,14 @@ declare
   v_declaradas text[] := array[
     'accesos_historia_alta', 'accesos_historia_lectura',
     'accesos_historia_vistas_alta', 'accesos_historia_vistas_lectura',
-    'alertas_documentacion_lectura', 'alertas_documentacion_modificacion',
+    'alertas_documentacion_alta', 'alertas_documentacion_lectura', 'alertas_documentacion_modificacion',
     'auditoria_lectura_propia',
+    -- T-010 · dominio Agenda. El tecnico administrativo NO tiene politica de select
+    -- sobre citas a proposito: lee por la vista citas_agenda (choque 4, invariante 3).
+    'citas_alta', 'citas_lectura', 'citas_modificacion',
+    'disponibilidad_alta', 'disponibilidad_lectura', 'disponibilidad_modificacion',
+    'series_cita_alta', 'series_cita_lectura', 'series_cita_modificacion',
+    'tipos_terapia_alta', 'tipos_terapia_lectura', 'tipos_terapia_modificacion',
     'centros_alta_administrador', 'centros_lectura', 'centros_modificacion_administrador',
     'consentimiento_firmantes_alta', 'consentimiento_firmantes_lectura', 'consentimiento_firmantes_modificacion',
     'consentimientos_alta', 'consentimientos_lectura', 'consentimientos_modificacion',

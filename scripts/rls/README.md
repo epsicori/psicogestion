@@ -38,6 +38,7 @@ para saber si el banco pasó.
 | `12-resto-de-tablas.sql` | `evaluaciones`, `evaluacion_archivos`, `informes`, `consentimiento_firmantes`, `preferencias_usuario`, `perfiles`, `perfiles_centros`, `politicas_retencion` — las tablas que la matriz y las baterías no ejercían bajo ningún rol |
 | `13-cuentas.sql` | T-006a — invitación, baja, TOTP y códigos de recuperación; las dos guardas ALTA del segundo factor reciente |
 | `14-cadena-huellas.sql` | T-005 — sellado, encadenado, los tres pares del vector congelado con pgcrypto, las negativas de `fn_sellar_version_nota()`, la manipulación con los cerrojos levantados (una intermedia, y el criterio «no reserializa» en sus dos sentidos) y ADR-031 (fusionar no altera ninguna huella) |
+| `15-agenda.sql` | T-010 — los cinco estados y su orden (contrato con T-020), ISODOW documentado, la zona de la serie, el rango bloqueante con su descanso y su restricción de exclusión por nombre, el congelado frente al cambio de ajuste, esta_en_curso(), el recorte de nota_operativa en la auditoría, la alerta de nota sin firmar y la vista del técnico |
 
 ## Cómo se añade una prueba
 
@@ -74,7 +75,7 @@ guion suelto:
    `TEC1` y `PRO1`— sigue así para los módulos que corren después, y nada lo deshace.
    Un módulo nuevo que se inserte ALFABÉTICAMENTE ANTES de uno existente (por ejemplo
    `05a-…`) puede heredar un estado que el diseño original no prevé. Si eso pasa, la
-   salida por defecto es añadir el módulo AL FINAL (el siguiente número, `15-…`), no
+   salida por defecto es añadir el módulo AL FINAL (el siguiente número, `16-…`), no
    intercalarlo; si de verdad tiene que ir en medio, hay que releer los módulos
    posteriores para confirmar que ninguno asume el estado anterior.
 8. **Da de alta el dato bajo la sesión del rol que corresponde (`pg_temp.como(...)`), no
