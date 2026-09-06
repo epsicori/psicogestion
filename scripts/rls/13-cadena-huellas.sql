@@ -356,11 +356,26 @@ select pg_temp.assert_lanza_codigo(
   'Un sobre con abierta_en que no es un instante ISO-8601 válido lanza 23514, no el 22007 crudo de Postgres (comprobación 6.8)'
 );
 
--- Gemela positiva de las quince anteriores: NCADX sigue sin ninguna versión —
+-- Hallazgo MEDIA de la TERCERA revisión con Opus (06-09-2026): `algoritmo_version` es
+-- `not null default 1` y el grant de la tabla es de tabla entera, así que hasta la
+-- guarda 1.bis cualquier profesional podía marcar su versión como de otra era en el
+-- propio INSERT — y toda fila con `algoritmo_version <> 1` la clasifica
+-- `verificar_cadena_huellas()` como `era_desconocida`, SIN comprobarle el digest, el
+-- génesis, el hueco de posición ni el encadenado. Un punto ciego del verificador
+-- elegido por quien firma.
+select pg_temp.assert_lanza_codigo(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, algoritmo_version, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, 2, %L, timestamptz '2026-08-29 09:30:17+00')$sql$,
+    :NCADX, pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:17+00', '{"t":"neg"}'::jsonb), :PRO1),
+  '42501',
+  'Mandar algoritmo_version = 2 en el INSERT lanza 42501 (guarda 1.bis: la era la abre una migración, no quien firma)'
+);
+
+-- Gemela positiva de las dieciséis anteriores: NCADX sigue sin ninguna versión —
 -- ninguna de las negativas coló nada.
 select pg_temp.assert(
   pg_temp.contar(format('select * from public.notas_clinicas_versiones where nota_id = %L', :NCADX)) = 0,
-  'GEMELA POSITIVA: NCADX sigue sin versiones tras las quince negativas'
+  'GEMELA POSITIVA: NCADX sigue sin versiones tras las dieciséis negativas'
 );
 
 -- Hallazgo MEDIA-1 (segunda mitad): demostrar que estas comprobaciones dependen DE
@@ -444,10 +459,21 @@ select pg_temp.assert_lanza_codigo(
 
 alter table public.notas_clinicas_versiones enable trigger sellar_version_nota;
 
-insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
+-- GEMELA POSITIVA de la guarda 1.bis (tercera revisión con Opus): esta versión SÍ manda
+-- `algoritmo_version` en el INSERT, con el valor de la era vigente, y entra. Prueba que
+-- la guarda rechaza el VALOR ajeno a la era, no la presencia de la columna — sin esta
+-- gemela, la negativa de arriba seguiría verde con una guarda que prohibiera mandarla
+-- siempre, que es otra cosa.
+insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, algoritmo_version, autor_id, creada_en) values
   (:NCADB, '{"t":"cad-b"}',
    pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:31:02+00', '{"t":"cad-b"}'::jsonb),
-   :PRO1, timestamptz '2026-08-29 09:31:02+00');
+   1, :PRO1, timestamptz '2026-08-29 09:31:02+00');
+
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.notas_clinicas_versiones where nota_id = %L and algoritmo_version = 1', :NCADB)) = 1,
+  'GEMELA POSITIVA: un INSERT con algoritmo_version = 1 explícito entra y queda en la era vigente'
+);
 
 insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
   (:NCADC, '{"t":"cad-c"}',

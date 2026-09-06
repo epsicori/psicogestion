@@ -170,6 +170,32 @@ begin
       using errcode = '42501';
   end if;
 
+  -- 1.bis · La era del algoritmo la abre una MIGRACIÓN, no un INSERT
+  -- (hallazgo MEDIA de la TERCERA revisión con Opus del 06-09-2026).
+  -- `algoritmo_version` es `not null default 1` desde T-001 y el `grant` de
+  -- esta tabla es de tabla entera —`grant select, insert on table
+  -- public.notas_clinicas_versiones to authenticated`—, así que hasta aquí
+  -- cualquier profesional podía elegir su valor en el propio INSERT. La fila
+  -- se sellaba bien (la huella la calcula el punto 7 de esta función pase lo
+  -- que pase), pero `verificar_cadena_huellas()` clasifica toda fila con
+  -- `algoritmo_version <> 1` como `era_desconocida` y NO le comprueba ni el
+  -- digest, ni el génesis, ni el hueco de posición, ni el encadenado: una
+  -- versión marcada como de otra era es un punto ciego permanente del
+  -- verificador, elegido por quien firma. No era silencioso —el verificador
+  -- emite su fila `era_desconocida`, así que «cadena sana = cero filas»
+  -- sigue fallando— pero el ticket dice que cambiar de algoritmo abre una
+  -- era nueva, y eso es una decisión de operación, no un campo de
+  -- formulario. No se puede cerrar con un `check`: cuando llegue la era 2,
+  -- la migración que la abra tendrá que subir esta constante, y un `check`
+  -- sobre las filas viejas lo impediría.
+  if new.algoritmo_version is distinct from 1 then
+    raise exception
+      'algoritmo_version la fija la era vigente de la cadena (hoy 1) y la abre una '
+      'migración, no un INSERT: una versión marcada con otra era queda fuera de las '
+      'comprobaciones de verificar_cadena_huellas() (T-005)'
+      using errcode = '42501';
+  end if;
+
   -- 2 · El paciente lo dice notas_clinicas, congelado tras la primera firma.
   select n.paciente_id into strict v_paciente_id
     from public.notas_clinicas n
@@ -517,7 +543,10 @@ as $$
     where p_paciente_id is null or v.paciente_id = p_paciente_id
   )
   -- era_desconocida: no se verifica, se declara — verificar una era ajena
-  -- con el algoritmo de esta sería inventar.
+  -- con el algoritmo de esta sería inventar. Es un punto ciego por diseño, y
+  -- por eso la guarda 1.bis de fn_sellar_version_nota() impide que lo elija
+  -- quien firma: a la era 2 solo se llega por una migración que suba esa
+  -- constante (hallazgo MEDIA de la tercera revisión con Opus del 06-09-2026).
   select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
          'era_desconocida'::text as motivo
     from c

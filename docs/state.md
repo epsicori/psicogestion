@@ -3,25 +3,37 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 02-09-2026
+**Actualizado**: 06-09-2026
 
 ## Ticket en curso
 
-**T-005 · Cadena de huellas SHA-256, canonicalización y verificador — implementado el
-30-08-2026. Dos pasadas de revisión con Opus, ninguna pasó el gate a la primera; la
-segunda confirmó cerrado el hallazgo ALTA original y encontró 5 MEDIA + 4 BAJA nuevos
-(el más serio, MEDIA-3, dejaba colar sobres con una clave JSON duplicada). Todo arreglado
-el mismo día. Pendiente de una TERCERA pasada de revisión.** (Ticket `opus` que toca RLS y
-datos clínicos: revisión obligatoria antes de cerrar.) Sigue al pie de la letra el «Diseño
-aprobado» del propio ticket. **`estado: en_curso` a propósito**: no se cierra a `hecho`
-hasta que una revisión lo confirme sin hallazgos.
+**T-005 · Cadena de huellas SHA-256, canonicalización y verificador — HECHO el 06-09-2026,
+tras TRES pasadas de revisión con Opus.** Ninguna de las dos primeras pasó el gate; la
+tercera arregló **un MEDIA** y **anotó uno** que no le toca decidir a un agente. La rama
+`T-005-cadena-huellas` queda lista con su evidencia: **la integra una persona**
+(`CARRILES.md` §Integración). Sigue al pie de la letra el «Diseño aprobado» del ticket.
+
+**La tercera pasada (06-09-2026) miró lo que las dos anteriores no**: no el sobre, sino
+**qué columnas de la fila puede elegir el llamante y qué efecto tienen sobre la
+verificación**. De ahí salen las dos cosas:
+
+- **MEDIA, arreglado — `algoritmo_version` la elegía quien firma.** El `grant` de
+  `notas_clinicas_versiones` es de **tabla entera**, así que cualquier profesional podía
+  mandar `algoritmo_version = 2` en el `INSERT`; y `verificar_cadena_huellas()` clasifica
+  toda fila con `algoritmo_version <> 1` como `era_desconocida` y **no le comprueba ni el
+  digest, ni el génesis, ni el hueco, ni el encadenado**. Un punto ciego del verificador
+  elegido por quien firma. Lo cierra la **guarda 1.bis** (42501), con su negativa, su
+  gemela positiva y la reproducción del fallo con la guarda quitada —sin ella, el `INSERT`
+  entra sin lanzar nada—. **La lección que queda: revisar el sobre no es revisar la fila.**
+- **Anotado, no arreglado — `alcance` no entra en el sobre.** Ver §Hallazgos anotados. Es
+  decisión de una persona y **tiene reloj**: hoy es gratis porque la tabla está vacía.
 
 Entra `supabase/migrations/20260829210000_cadena_de_huellas.sql` (amplía
 `notas_clinicas_versiones` con `paciente_id`/`posicion_cadena`, el disparador
 `fn_sellar_version_nota()` que sella y encadena, `fn_vaciar_borrador_al_firmar()` y
 `verificar_cadena_huellas(uuid)`) y `lib/huella/` (canonicalizador JCS+NFC propio, sobre
 Zod, `firmar.ts`). Verificado con `npm run test:rls` (módulo nuevo
-`scripts/rls/13-cadena-huellas.sql`, **190 aserciones en verde**), `npm run test:huellas`
+`scripts/rls/13-cadena-huellas.sql`, **192 aserciones en verde**), `npm run test:huellas`
 (`scripts/t005-concurrencia.sql`, dos conexiones reales) y a mano contra la base local con
 `npm run verificar:huellas`. `npx supabase db reset`, `npm run lint`, `npm run
 lint:migraciones` y `npm run build` limpios; `npx vitest run`: **297 pruebas**, 31 ficheros.
@@ -740,9 +752,43 @@ Ninguno. Verificación manual pendiente.
 
 ## Siguiente paso
 
+> ## Al 06-09-2026 · lo que hay hecho y sin integrar es más que lo que hay por hacer
+>
+> **`main` está en `b9d5f66` y se ha quedado atrás.** Tres tickets terminados y verificados
+> viven fuera de él, y **eso es lo que bloquea a los otros dos carriles**, no la dificultad
+> de lo que queda:
+>
+> | Rama | Ticket | Estado | A quién desbloquea |
+> |---|---|---|---|
+> | `T-005-cadena-huellas` | **T-003** (arrastrado en esta línea) y **T-005** | hechos, tres revisiones con Opus, evidencia en los tickets | **T-009·B** de MiniMax (necesita `npm run test:rls`) |
+> | `T-006a-cuentas-base` | **T-006a** (corte DB) | implementado; **la revisión encontró 2 ALTA + varios MEDIA y los arreglos están SIN COMITEAR en su worktree** | **T-006·b** de MiniMax (necesita `lib/cuentas/` y el `[auth.mfa.totp]` de `config.toml`) |
+>
+> **Integrar es tuyo** (`CARRILES.md` §Integración) y el orden es el del protocolo: primero
+> este carril, después Kimi, después MiniMax.
+>
+> **Lo primero que hay que decidir, y no lo decide un agente**: si `alcance` entra en el
+> sobre canónico (§Hallazgos anotados). Mientras `notas_clinicas_versiones` esté vacía
+> cuesta media tarde; con la primera firma real dentro, cuesta una era de esquema para
+> siempre. **Es la única decisión de este bloque con fecha de caducidad.**
+>
+> **Lo que sigue en el carril de la fábrica**: cerrar T-006a —comitear los arreglos de su
+> revisión, que están escritos y sin verificar— y después **T-008**, que ya tiene sus tres
+> dependencias (T-002, T-004, T-005) terminadas.
+>
+> **Lo que sigue en el carril de MiniMax, y se puede lanzar ya**: **T-007·C**
+> (`cacheComponents`, `react-hook-form` y los cuatro módulos). No depende de la base de
+> datos, su corte está escrito en `minimax/cortes/T-007.md`, `react-hook-form` y
+> `@hookform/resolvers` **ya están en `package.json`** y el *worktree*
+> `../Psicogestion-minimax` está limpio y ya en la rama `T-007c-cache-y-formularios`.
+> Detrás va T-007·D. Aviso del reparto anterior que vale aquí: **T-007·C tiene
+> comportamiento** —`<Suspense>` por bloque, hidratación, formularios— y la regla aprendida
+> en T-007 es que MiniMax rinde donde no hay comportamiento. Si vuelve con pruebas
+> borradas o moldes para callar al compilador, no se itera: se trae a la fábrica.
+>
 > **Fase 0, al día.** Integrado en `main` (29-08-2026): T-000, T-001, T-002 con su enmienda,
-> T-004, T-016 a T-019 y los cortes A y B de T-007. **Lo que falta de fase 0 es T-003, T-005,
-> T-006, T-008 y T-009**, más los cortes C y D de T-007.
+> T-004, T-016 a T-019 y los cortes A y B de T-007, más T-009·A. **Lo que falta de fase 0 es
+> integrar T-003 y T-005, terminar T-006 y hacer T-008 y T-009·B**, más los cortes C y D de
+> T-007.
 >
 > **La revisión con Opus de T-002 está hecha (29-08)** y cerró un hallazgo alto. Lo que
 > queda de ese ticket es **el punto 3 del guion manual en navegador** —un perfil
@@ -817,6 +863,32 @@ prohibida, dependencias ancladas— están en esa misma sección de `PLAN.md`.
 
 Detectados fuera del alcance de su ticket (constitución, regla 2). Se anotan aquí y se
 recogen cuando llegue la fase que los toca.
+
+### T-005 · `alcance` decide quién lee una versión y NO entra en el sobre — decide una persona, y hoy es gratis
+
+Hallazgo de la **tercera revisión con Opus** (06-09-2026). No se toca porque **la forma del
+sobre la fija un ADR, no un agente** (constitución, regla 2 y CARRILES §«las cuatro maneras
+de romper esto»). Pero tiene reloj, y por eso se anota arriba del todo:
+
+`notas_clinicas_versiones.alcance` (`individual` | `conjunta`) **es el campo que decide
+quién puede leer esa versión**: la política `notas_clinicas_versiones_lectura` abre la
+versión a los profesionales del episodio cuando `alcance = 'conjunta'`. Y `alcance` **no
+está entre las once claves del sobre** (ADR-035 + ADR-046): no se sella, así que
+**cambiarlo no rompe la cadena y el verificador da la cadena por sana**.
+
+- Cambiarlo exige saltarse el solo-adición de las tres capas, es decir `postgres` — pero
+  **ese es exactamente el adversario para el que existe una cadena de huellas**. Sellar
+  `autor_id` y no sellar `alcance` es raro: el primero dice quién la escribió, el segundo,
+  quién puede leerla.
+- **Hoy cuesta cero**: `notas_clinicas_versiones` está vacía en todas las bases (la propia
+  migración de T-005 se detiene si encuentra una fila). Después de la primera firma real
+  cuesta un `esquema_version = 3` y **dos formas de sobre para siempre**, porque lo viejo
+  jamás se recalcula. Es literalmente el aviso que el ticket T-005 se escribió a sí mismo
+  —«el sobre nace completo o se paga una era nueva»— aplicado a un campo que se le escapó.
+- **La decisión es tuya**: si el sobre pasa a doce claves, se toca `lib/huella/sobre.ts`
+  (esquema Zod y `ESQUEMA_VERSION`), la lista `v_esperadas` y una comprobación 6.10 en
+  `fn_sellar_version_nota()`, y los vectores congelados se regeneran. Es media tarde
+  mientras la tabla esté vacía.
 
 ### Lo que T-002 dejó anotado y no tocó
 

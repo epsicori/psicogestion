@@ -5,7 +5,8 @@ modelo: opus
 fase: 0
 prioridad: alta
 depende_de: [T-004]
-estado: en_curso
+estado: hecho
+completado: 2026-09-06
 ---
 
 # Contexto
@@ -820,4 +821,94 @@ crear, porque «Restarting containers…» tarda más de lo que el mensaje sugie
 arreglo de código causó esto; queda anotado para que el próximo agente no lo confunda con
 una regresión.
 
-`estado` se queda en `en_curso`: pendiente de una tercera pasada de revisión con Opus.
+## Revisión con Opus · tercera pasada, 06-09-2026 — 1 MEDIA arreglado, 1 anotado para una persona, y pasa el gate
+
+Se revisó el mecanismo entero de nuevo —migración, `lib/huella/`, el verificador y el
+banco de pruebas— buscando lo que las dos vueltas anteriores no habían mirado: **qué
+columnas de la fila puede elegir el llamante y qué efecto tienen sobre la verificación.**
+Las dos vueltas anteriores habían mirado el sobre; esta ha mirado las columnas de
+alrededor.
+
+### MEDIA · `algoritmo_version` la elegía quien firma, y saca la fila del verificador
+
+`algoritmo_version` es `not null default 1` desde T-001, y el privilegio de esta tabla es
+de **tabla entera** —`grant select, insert on table public.notas_clinicas_versiones to
+authenticated`, sin lista de columnas—, así que **cualquier profesional podía mandar
+`algoritmo_version = 2` en el propio `INSERT`**. La guarda 1 rechaza `huella`,
+`huella_anterior`, `paciente_id`, `posicion_cadena` y `numero_version`, pero no esta.
+
+Y esta importa, porque `verificar_cadena_huellas()` clasifica **toda** fila con
+`algoritmo_version <> 1` como `era_desconocida` y **no le comprueba nada**: ni el digest
+(`huella_no_coincide`), ni el génesis, ni el hueco de posición, ni el encadenado — las
+cinco ramas del verificador salvo la primera filtran por `algoritmo_version = 1`. Una
+versión marcada como de otra era es un **punto ciego permanente del verificador, elegido
+por quien firma**.
+
+No era silencioso —el verificador emite su fila `era_desconocida`, así que «cadena sana =
+cero filas» seguía fallando y un operador lo vería—, y por eso es MEDIA y no ALTA. Pero el
+propio ticket dice que **cambiar de algoritmo abre una era nueva**, y eso es una decisión
+de operación que toma una migración, no un campo que el cliente rellena.
+
+**Arreglo**: guarda **1.bis** en `fn_sellar_version_nota()` —`if new.algoritmo_version is
+distinct from 1 then raise ... errcode 42501`—. No es un `check` de tabla a propósito:
+cuando llegue la era 2, la migración que la abra sube esa constante, y un `check` sobre
+las filas viejas lo impediría.
+
+**Reproducción del fallo, arreglo y reproducción de que ya no ocurre** (misma disciplina
+que las dos vueltas anteriores):
+
+```
+# 1 · Con la guarda 1.bis DESACTIVADA (`if false then`), db reset + npm run test:rls:
+psql:<stdin>:1759: ERROR:  ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada):
+  Mandar algoritmo_version = 2 en el INSERT lanza 42501 (guarda 1.bis: la era la abre
+  una migración, no quien firma)
+EXIT_TEST=3
+
+# 2 · Con la guarda restaurada, db reset + npm run test:rls:
+psql:<stdin>:1759: NOTICE:  OK (lanzó 42501 como se esperaba): Mandar algoritmo_version = 2
+  en el INSERT lanza 42501 (guarda 1.bis: la era la abre una migración, no quien firma)
+psql:<stdin>:1766: NOTICE:  OK: GEMELA POSITIVA: NCADX sigue sin versiones tras las
+  dieciséis negativas
+psql:<stdin>:1863: NOTICE:  OK: GEMELA POSITIVA: un INSERT con algoritmo_version = 1
+  explícito entra y queda en la era vigente
+```
+
+La primera salida es la prueba de que **el fallo era real** —sin la guarda, el `INSERT`
+con `algoritmo_version = 2` entra sin lanzar nada— y de que **la prueba nueva no estaría
+verde por el motivo equivocado**. La gemela positiva de la línea 1863 es la que impide el
+otro error posible: una guarda que prohibiera mandar la columna *siempre* también pondría
+verde la negativa, y sería otra cosa.
+
+### Anotado, no arreglado · `alcance` decide quién lee una versión y no entra en el sobre
+
+`notas_clinicas_versiones.alcance` es el campo del que cuelga la rama de participación de
+`notas_clinicas_versiones_lectura` (`alcance = 'conjunta'` abre la versión a los
+profesionales del episodio) y **no está entre las once claves del sobre**: cambiarlo no
+rompe la cadena y el verificador da la cadena por sana. Sellar `autor_id` —quién la
+escribió— y no sellar `alcance` —quién puede leerla— es una asimetría que conviene mirar.
+
+**No se toca aquí**: la forma del sobre la fija el ADR-035/046 y eso es decisión de una
+persona, no de un agente (constitución, regla 2). Queda en `docs/state.md` §Hallazgos
+anotados con su porqué y su reloj: **hoy cuesta media tarde porque la tabla está vacía en
+todas las bases; después de la primera firma real cuesta `esquema_version = 3` y dos
+formas de sobre para siempre.**
+
+### Evidencia de esta vuelta
+
+```
+npx supabase db reset      → aplica las 7 migraciones, limpio
+npm run test:rls           → exit 0, 192 aserciones OK, cero ASERCIÓN FALLIDA (13 módulos)
+npm run test:huellas       → exit 0 — «dos firmas concurrentes NO comparten huella_anterior
+                             (posiciones 1 y 2, cerrojo real)» y «verificar_cadena_huellas()
+                             sobre la cadena concurrente da cero roturas»
+npm run verificar:huellas  → «cadena íntegra: cero anomalías»
+npm run lint:migraciones   → «7 migración(es) limpias»
+npm test                   → exit 0
+npm run lint               → sin una sola línea de salida
+npm run build              → «✓ Compiled successfully in 3.5s», sin avisos
+                             blocking-prerender-* (ADR-043)
+```
+
+**El ticket pasa el gate.** `estado: hecho`. Lo que queda no es del ticket: la rama la
+integra una persona (`CARRILES.md` §Integración), y la decisión sobre `alcance` en el sobre
+está anotada para ti, no pendiente para un agente.
