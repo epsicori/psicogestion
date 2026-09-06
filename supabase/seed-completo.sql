@@ -192,6 +192,28 @@ begin
   on conflict (perfil_id) do nothing;
 
   -- -----------------------------------------------------------------------
+  -- 3.bis · Ana pasa consulta en LOS DOS centros (ADR-051)
+  --
+  -- Sin esto, el selector de centro del armazón (T-007·D) no se puede ver nunca:
+  -- el disparador de la enmienda del ADR-051 crea UNA pertenencia por perfil
+  -- —espejo de `perfiles.centro_id`—, así que todos los sembrados tenían un solo
+  -- centro y el selector, que con menos de dos no se pinta, nunca aparecía. Un
+  -- control sin datos con los que existir es código sin camino de prueba.
+  --
+  -- `principal = false`: el principal sigue siendo Madrid, y eso importa más de lo
+  -- que parece — `fn_rellenar_centro_paciente` usa el PRINCIPAL, y el centro del
+  -- paciente decide su retención durante veinticinco años. Una segunda pertenencia
+  -- no cambia de quién es la retención de nadie.
+  --
+  -- Y no cambia tampoco qué pacientes ve Ana: un profesional lee los suyos vía
+  -- `es_profesional_asignado()`, que no consulta el centro. El acotado por centro
+  -- es del técnico administrativo. Esto ya se redactó mal una vez.
+  insert into public.perfiles_centros (id, perfil_id, centro_id, principal, desde, creado_en)
+  values ('a0080008-0000-4000-8000-000000000001', k_ana, k_c_canarias, false,
+          k_fecha_base::date, k_fecha_base)
+  on conflict (id) do nothing;
+
+  -- -----------------------------------------------------------------------
   -- 4 · Pacientes: las dos titularidades, los dos centros
   --
   -- `titularidad` decide de quién es la historia cuando el profesional se va
