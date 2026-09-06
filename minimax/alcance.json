@@ -101,9 +101,18 @@
     },
 
     "T-009b": {
+      "_nota": [
+        "playwright.config.ts, accesibilidad/** y .gitignore se anaden el 06-09-2026: el corte",
+        "pide ELEGIR la herramienta de accesibilidad, asi que su configuracion y sus pruebas no",
+        "se podian nombrar por adelantado. Un alcance que pide elegir y no deja sitio donde",
+        "poner lo elegido promete algo imposible. Lo corrige el arquitecto."
+      ],
       "titulo": "Flujo de CI y verificador de accesibilidad",
       "escritura": [
         ".github/**",
+        "accesibilidad/**",
+        "playwright.config.ts",
+        ".gitignore",
         "lib/contraste/**",
         "package.json",
         "package-lock.json"
