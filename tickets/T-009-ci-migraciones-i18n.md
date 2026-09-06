@@ -5,8 +5,9 @@ modelo: sonnet
 fase: 0
 prioridad: media
 depende_de: [T-003]
-estado: en_curso
-notas: Corte A (i18n y validador de contraste) INTEGRADO en main. Falta el corte B -flujo de CI y verificador de accesibilidad-, que ya NO esta bloqueado: T-003 esta en main.
+estado: hecho
+completado: 2026-09-06
+notas: Cortes A (i18n y validador de contraste) y B (flujo de CI y verificador de accesibilidad, con Playwright anclado) INTEGRADOS en main. Cierra la deuda de 360 px y prefers-reduced-motion que arrastraban los cortes de T-007. Falta ver el flujo corriendo en GitHub Actions: en local se ha ejecutado paso a paso.
 ---
 
 # Contexto
