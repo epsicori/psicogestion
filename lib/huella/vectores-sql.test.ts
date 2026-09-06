@@ -1,5 +1,5 @@
 // T-005 · Cierra el lazo entre el vector congelado (TypeScript) y su copia literal en
-// SQL (scripts/rls/13-cadena-huellas.sql, §11.4 del diseño aprobado): sin esta prueba, la
+// SQL (scripts/rls/14-cadena-huellas.sql, §11.4 del diseño aprobado): sin esta prueba, la
 // copia manual entre los dos ficheros se desincroniza el primer día y nadie se entera
 // hasta que el banco de RLS falle por un motivo que no tiene nada que ver.
 import { readFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ interface VectorCongelado {
   huella_hex: string;
 }
 
-const RUTA_SQL = path.join(process.cwd(), 'scripts', 'rls', '13-cadena-huellas.sql');
+const RUTA_SQL = path.join(process.cwd(), 'scripts', 'rls', '14-cadena-huellas.sql');
 
 function extraerParesLiterales(sql: string): Array<{ canonico: string; hex: string }> {
   const patron = /\$vec\$([\s\S]*?)\$vec\$[\s\S]*?decode\('([0-9a-f]{64})',\s*'hex'\)/g;
@@ -27,7 +27,7 @@ function extraerParesLiterales(sql: string): Array<{ canonico: string; hex: stri
   return pares;
 }
 
-describe('scripts/rls/13-cadena-huellas.sql · pares literales del vector congelado', () => {
+describe('scripts/rls/14-cadena-huellas.sql · pares literales del vector congelado', () => {
   const sql = readFileSync(RUTA_SQL, 'utf8');
   const pares = extraerParesLiterales(sql);
 
