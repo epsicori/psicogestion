@@ -542,6 +542,102 @@ grant select on public.citas_agenda to authenticated;
 
 
 -- =========================================================================
+-- 12.bis · Cómo agenda el técnico administrativo si no puede leer `citas`
+--
+-- HALLAZGO ALTA DE LA REVISIÓN CON OPUS (06-09-2026), sobre el diseño de este
+-- mismo ticket. Reproducido antes de arreglarlo:
+--
+--     -- como técnico administrativo, sobre una cita de SU centro:
+--     update public.citas set sala = 'Sala 2' where id = …;   →  UPDATE 0
+--     insert into public.citas …                              →  INSERT 0 1
+--
+-- Es decir: podía crear citas y **no podía reprogramar ni cancelar ninguna**, que
+-- es la mitad de gestionar una agenda. Y fallaba EN SILENCIO —`UPDATE 0`, no un
+-- error—, que es la peor forma: la pantalla creería haber guardado.
+--
+-- La causa es que en Postgres un `UPDATE … WHERE` LEE la fila, así que además de
+-- la política de UPDATE se aplica la de SELECT. Y el técnico no tiene política de
+-- SELECT sobre `citas` a propósito (choque 4 + invariante 3): la fila se omite, no
+-- se tacha.
+--
+-- Por qué NO se arregla dándole una política de SELECT: los tres roles del dominio
+-- comparten el MISMO rol de base de datos, `authenticated` —el rol vive en
+-- `perfiles.rol`—, así que un `grant select (columnas)` o se lo da a los tres o a
+-- ninguno. Es la trampa que T-001 ya dejó escrita, y es la que obliga a la vista.
+--
+-- La salida es que el técnico escriba por una función `security definer`, que es
+-- el mismo patrón con el que se resuelve la recursión de políticas: la
+-- autorización se comprueba dentro, con el rol del dominio, y lo único que sale es
+-- el identificador de la cita.
+-- =========================================================================
+
+create function public.agenda_actualizar_cita(
+  p_cita_id uuid,
+  p_estado  public.estado_cita default null,
+  p_sala    text               default null,
+  p_inicio  timestamptz        default null,
+  p_fin     timestamptz        default null
+)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_rol    public.rol_usuario := (select public.rol_actual());
+  v_cita   public.citas;
+begin
+  if v_rol is null then
+    raise exception 'No hay sesión activa con perfil.' using errcode = '42501';
+  end if;
+
+  select * into v_cita from public.citas where id = p_cita_id;
+  if not found then
+    -- Mismo mensaje que si no fuera suya: no se confirma la existencia de una cita
+    -- que el llamante no puede tocar.
+    raise exception 'La cita no existe o no es tuya.' using errcode = '42501';
+  end if;
+
+  if not (
+    v_rol = 'administrador'::public.rol_usuario
+    or v_cita.profesional_id = (select auth.uid())
+    or (v_rol = 'tecnico_administrativo'::public.rol_usuario
+        and v_cita.centro_id in (select public.centros_actuales()))
+  ) then
+    raise exception 'La cita no existe o no es tuya.' using errcode = '42501';
+  end if;
+
+  -- `coalesce` sobre cada parámetro: lo que no se manda no se toca. Y NO se admite
+  -- ni tipo_terapia_id ni nota_operativa: son exactamente las dos columnas que el
+  -- técnico no debe ver, y una función que las escribiera a ciegas sería una puerta
+  -- de vuelta al choque 4.
+  update public.citas
+     set estado = coalesce(p_estado, estado),
+         sala   = coalesce(p_sala, sala),
+         inicio = coalesce(p_inicio, inicio),
+         fin    = coalesce(p_fin, fin)
+   where id = p_cita_id;
+
+  return p_cita_id;
+end;
+$$;
+
+comment on function public.agenda_actualizar_cita(uuid, public.estado_cita, text, timestamptz, timestamptz) is
+  'Reprograma o cambia el estado de una cita. Existe porque el técnico '
+  'administrativo NO tiene política de SELECT sobre citas (choque 4) y en Postgres '
+  'un UPDATE con WHERE lee la fila, así que sin ella su UPDATE devolvía cero filas '
+  'EN SILENCIO. La autorización se comprueba aquí dentro con rol_actual(); lo único '
+  'que sale es el id. No admite tipo_terapia_id ni nota_operativa: son las dos '
+  'columnas que el técnico no debe ver, y aceptarlas sería una puerta de vuelta al '
+  'mismo choque. El rango bloqueante y la restricción de exclusión siguen '
+  'aplicándose: esta función no los esquiva, los atraviesa.';
+
+revoke execute on function public.agenda_actualizar_cita(uuid, public.estado_cita, text, timestamptz, timestamptz) from public;
+grant  execute on function public.agenda_actualizar_cita(uuid, public.estado_cita, text, timestamptz, timestamptz) to authenticated;
+
+
+-- =========================================================================
 -- 13 · Auditoría (§6)
 --
 -- Patrón exacto de T-004: fn_auditar('<clave>', '<columnas recortadas>…').

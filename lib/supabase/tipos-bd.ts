@@ -2244,6 +2244,16 @@ export type Database = {
       }
     }
     Functions: {
+      agenda_actualizar_cita: {
+        Args: {
+          p_cita_id: string
+          p_estado?: Database["public"]["Enums"]["estado_cita"]
+          p_fin?: string
+          p_inicio?: string
+          p_sala?: string
+        }
+        Returns: string
+      }
       bloquear_historia: { Args: never; Returns: number }
       canjear_codigo_recuperacion: {
         Args: { p_codigo: string }

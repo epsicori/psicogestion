@@ -394,4 +394,58 @@ select pg_temp.assert(
 );
 call pg_temp.reset_sesion();
 
+-- =========================================================================
+-- J · El tecnico agenda de verdad (hallazgo ALTA de la revision con Opus)
+--
+-- Sin agenda_actualizar_cita(), el tecnico podia CREAR citas y no podia reprogramar
+-- ni cancelar ninguna: su UPDATE devolvia cero filas EN SILENCIO, porque en Postgres
+-- un UPDATE con WHERE lee la fila y se le aplica tambien la politica de SELECT, que
+-- el no tiene a proposito (choque 4). Media agenda rota y sin un solo error.
+-- =========================================================================
+
+-- NEGATIVA: el UPDATE directo sigue sin tocar nada. No es un fallo, es el diseno:
+-- la fila se omite. Por eso existe la funcion.
+call pg_temp.como(:TEC1);
+do $$
+declare v_n integer;
+begin
+  update public.citas set sala = 'Directo' where id = 'a0100002-0000-4000-8000-000000000001';
+  get diagnostics v_n = row_count;
+  if v_n <> 0 then
+    raise exception 'FALLO: el tecnico no debe poder tocar citas por UPDATE directo, y toco % filas', v_n;
+  end if;
+  raise notice 'OK: el UPDATE directo del tecnico sobre citas no toca ninguna fila (la politica de SELECT la esconde)';
+end;
+$$;
+call pg_temp.reset_sesion();
+
+-- GEMELA POSITIVA: por la funcion SI, y la cita queda cambiada de verdad.
+call pg_temp.como(:TEC1);
+select public.agenda_actualizar_cita('a0100002-0000-4000-8000-000000000001'::uuid, p_sala => 'Sala del tecnico');
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select sala from public.citas where id = :CITA1) = 'Sala del tecnico',
+  'GEMELA POSITIVA: el tecnico SI reprograma por agenda_actualizar_cita() — media agenda deja de estar rota'
+);
+
+-- Y no puede tocar una cita de un centro que no es suyo.
+call pg_temp.como(:TEC1);
+select pg_temp.assert_lanza_codigo(
+  format('select public.agenda_actualizar_cita(%L::uuid, p_sala => %L)', :CITAX, 'Ajena'),
+  '42501',
+  'El tecnico NO puede tocar por la funcion una cita de otro centro: la autorizacion vive dentro'
+);
+call pg_temp.reset_sesion();
+
+-- La funcion no esquiva la restriccion de exclusion: la atraviesa.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo(
+  format('select public.agenda_actualizar_cita(%L::uuid, p_inicio => timestamptz %L, p_fin => timestamptz %L)',
+         :CITA1, '2026-10-06 11:15:00+02', '2026-10-06 12:05:00+02'),
+  '23P01',
+  'Mover una cita encima de otra por la funcion CHOCA igual: security definer no es una puerta trasera al solape'
+);
+call pg_temp.reset_sesion();
 \echo '15-agenda: completa.'
+

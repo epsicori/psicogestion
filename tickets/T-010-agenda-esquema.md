@@ -5,7 +5,9 @@ modelo: opus
 fase: 1
 prioridad: alta
 depende_de: [T-004]
-estado: en_curso
+estado: hecho
+completado: 2026-09-06
+notas: Revisado con Opus. Un hallazgo ALTA sobre el propio diseno: el tecnico administrativo podia CREAR citas y no podia reprogramar ninguna -UPDATE 0, en silencio- porque un UPDATE con WHERE lee la fila y se le aplica tambien la politica de SELECT, que no tiene a proposito. Cerrado con agenda_actualizar_cita(), security definer, con sus cuatro aserciones.
 ---
 
 # Contexto
