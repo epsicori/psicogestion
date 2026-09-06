@@ -219,13 +219,91 @@ as $$
         and d.caduca_en > now()
     ) as desbloqueo_caduca_en
   from public.perfiles p
-  where p.id = (select auth.uid());
+  where p.id = (select auth.uid())
+    -- Hallazgo MEDIA 5 de la revisión (30-08-2026): exige perfil ACTIVO explícitamente,
+    -- no solo auth.uid() no nulo. `ban_duration` deja el access token ya emitido vivo
+    -- hasta una hora tras la baja (ventana de auth.admin.updateUserById): sin este
+    -- filtro, un perfil recién dado de baja seguiría viendo su propio estado_de_cuenta()
+    -- durante esa ventana. Devuelve CERO FILAS para un perfil no activo, mismo patrón
+    -- que rol_actual() (T-002): «de baja» significa no ver nada, no lanzar una excepción.
+    and p.estado = 'activo'::public.estado_perfil;
 $$;
 
 comment on function public.estado_de_cuenta() is
   'Estado de la cuenta del usuario actual para decidir el paso pendiente del primer '
   'acceso (contraseña → TOTP → PIN) y para la pantalla de PIN. El técnico '
-  'administrativo no requiere PIN (ADR-026).';
+  'administrativo no requiere PIN (ADR-026). Cero filas si el perfil no está activo '
+  '(hallazgo MEDIA 5 de la revisión del 30-08-2026).';
+
+
+-- =========================================================================
+-- 6 bis · segundo_factor_verificado_recientemente() (ALTA 1 y ALTA 2 de la revisión)
+-- =========================================================================
+--
+-- ALTA 1 (30-08-2026): `generar_codigos_recuperacion()` solo comprobaba
+-- `auth.uid() is not null` — es decir, CUALQUIER sesión con solo contraseña (aal1,
+-- TOTP todavía pendiente) podía generar los diez códigos de recuperación, canjear uno
+-- y borrar el factor TOTP real del titular por la Admin API. El segundo factor entero
+-- caía con solo la contraseña, por PostgREST directo, sin pasar por ninguna pantalla.
+--
+-- ALTA 2 (30-08-2026): el bloqueo de cinco intentos —tanto el de los códigos de
+-- recuperación como el del PIN, heredado de T-002— es reseteable sin límite por el
+-- propio llamante: bastaba con volver a generar un lote (los códigos) o volver a fijar
+-- un PIN (`fijar_pin_historia()`, sección 13 más abajo) para poner el contador a cero,
+-- sin volver a demostrar nada. Contra el PIN eso deja el candado del ADR-026 sin la
+-- única defensa que tiene un código de seis dígitos.
+--
+-- Las dos se cierran con la MISMA comprobación: exigir un segundo factor verificado
+-- HACE POCO, no solo en algún momento de la sesión.
+--   · `aal2` ACTUAL — `auth.jwt() ->> 'aal'`, exactamente el patrón documentado de
+--     Supabase para RLS con MFA (auth.jwt() ya existe en este proyecto, lee la misma
+--     GUC `request.jwt.claims` que auth.uid()/auth.role() — comprobado con
+--     `pg_get_functiondef('auth.jwt()'::regprocedure)` contra la base local).
+--   · Y `auth.mfa_factors.last_challenged_at` de un factor VERIFICADO del propio
+--     usuario, dentro de la ventana `p_minutos`. GoTrue actualiza esa columna en cada
+--     `mfa.challenge()`/`mfa.verify()` — es decir, cada vez que el usuario vuelve a
+--     teclear un código TOTP, no solo al iniciar sesión. Es la única señal de
+--     "acabas de volver a demostrar el segundo factor" que se puede LEER desde SQL.
+--
+-- LO QUE ESTO NO CUBRE, y se documenta en vez de fingir que sí: el contrato del
+-- ticket pide "reautenticándose con CONTRASEÑA Y segundo factor" (línea 44-46). Desde
+-- una función SQL no hay forma de comprobar que alguien acaba de teclear su contraseña
+-- —Supabase no deja ningún rastro consultable de un `reauthenticate()`/`updateUser()`
+-- con contraseña—, así que esta función solo hace cumplir la mitad TOTP del contrato.
+-- La mitad de la contraseña queda en manos de la aplicación (T-006b): antes de llamar
+-- a `fijarPinHistoria()` o a `generarCodigosRecuperacion()`, la pantalla debe pedir la
+-- contraseña (con `supabase.auth.reauthenticate()` o equivalente) Y forzar un reto TOTP
+-- nuevo (`supabase.auth.mfa.challengeAndVerify()`) antes de llamar al RPC. Esta función
+-- solo puede comprobar que el segundo paso ocurrió; el primero se anota como hallazgo
+-- para T-006b en minimax/cortes/T-006.md y en docs/state.md, no se inventa una
+-- comprobación que parezca cubrirlo y no lo haga.
+create or replace function public.segundo_factor_verificado_recientemente(p_minutos integer default 5)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce((select auth.jwt() ->> 'aal'), 'aal1') = 'aal2'
+     and exists (
+       select 1
+       from auth.mfa_factors f
+       where f.user_id = (select auth.uid())
+         and f.status = 'verified'
+         and f.last_challenged_at is not null
+         and f.last_challenged_at > now() - make_interval(mins => greatest(p_minutos, 1))
+     );
+$$;
+
+comment on function public.segundo_factor_verificado_recientemente(integer) is
+  'Cierto si la sesión actual tiene aal2 Y un factor TOTP verificado retado en los '
+  'últimos p_minutos (por defecto 5). Cierra ALTA 1 (generar_codigos_recuperacion sin '
+  'segundo factor) y la mitad TOTP de ALTA 2 (bloqueos reseteables) de la revisión del '
+  '30-08-2026. NO comprueba contraseña: eso es responsabilidad de la aplicación, ver '
+  'el comentario largo encima de esta función.';
+
+revoke execute on function public.segundo_factor_verificado_recientemente(integer) from public;
+grant  execute on function public.segundo_factor_verificado_recientemente(integer) to authenticated;
 
 
 -- =========================================================================
@@ -250,20 +328,26 @@ begin
     raise exception 'Solo un administrador puede invitar cuentas nuevas.' using errcode = '42501';
   end if;
 
-  if p_rol = 'tecnico_administrativo'::public.rol_usuario then
-    if p_centro_id is null then
-      raise exception 'El técnico administrativo exige un centro (ADR-033).' using errcode = '23514';
-    end if;
-    if not exists (select 1 from public.centros c where c.id = p_centro_id) then
-      raise exception 'El centro % no existe.', p_centro_id using errcode = '23503';
-    end if;
+  if p_rol = 'tecnico_administrativo'::public.rol_usuario and p_centro_id is null then
+    raise exception 'El técnico administrativo exige un centro (ADR-033).' using errcode = '23514';
+  end if;
+
+  -- BAJA 11 de la revisión (30-08-2026): antes solo se comprobaba que el centro
+  -- existiera cuando el rol era técnico. Un profesional_sanitario invitado con un
+  -- centro_id inexistente pasaba esta validación y solo reventaba DESPUÉS, en la FK de
+  -- perfiles_centros/perfiles al insertar el usuario ya invitado por correo — un
+  -- auth.users huérfano sin perfil. Se valida siempre que venga informado, sea cual sea
+  -- el rol.
+  if p_centro_id is not null and not exists (select 1 from public.centros c where c.id = p_centro_id) then
+    raise exception 'El centro % no existe.', p_centro_id using errcode = '23503';
   end if;
 end;
 $$;
 
 comment on function public.preparar_invitacion(public.rol_usuario, uuid) is
-  'Validación previa a auth.admin.inviteUserByEmail(): solo administrador, y técnico '
-  'administrativo exige centro existente (ADR-033). No escribe nada.';
+  'Validación previa a auth.admin.inviteUserByEmail(): solo administrador; técnico '
+  'administrativo exige centro; y el centro, SI VIENE INFORMADO, debe existir sea cual '
+  'sea el rol (ADR-033, hallazgo BAJA 11 de la revisión del 30-08-2026). No escribe nada.';
 
 create or replace function public.registrar_invitacion(p_perfil_id uuid)
 returns void
@@ -371,6 +455,17 @@ begin
     v_pin_borrado := true;
   end if;
 
+  -- MEDIA 4 de la revisión (30-08-2026): sin esto, un lote de códigos de recuperación
+  -- sin usar sobrevivía a la baja. Con la Admin API borrando el factor TOTP por otro
+  -- lado (lib/cuentas/baja.ts), esos códigos ya no servirían para nada real, pero
+  -- seguirían existiendo como filas "vigentes" — caducarlos aquí es lo mismo que se
+  -- hace con el PIN: nada de la baja se queda a medio inutilizar. Idempotente: 0 filas
+  -- si no había ningún código sin usar.
+  update public.codigos_recuperacion_totp
+     set usado_en = now()
+   where perfil_id = p_perfil_id
+     and usado_en is null;
+
   if not v_ya_de_baja then
     insert into public.auditoria (actor_id, tabla, operacion, registro_id, estado_posterior)
     values (v_actor, 'perfiles', 'CUENTA_BAJA', p_perfil_id::text,
@@ -384,12 +479,14 @@ end;
 $$;
 
 comment on function public.dar_de_baja_perfil(uuid, text) is
-  'Baja de un perfil (ADR-032). Revoca desbloqueos vigentes y borra el PIN; el borrado '
-  'de las sesiones y del factor TOTP los hace lib/cuentas/baja.ts con la Admin API '
-  'DESPUÉS de que esta función tenga éxito — nunca antes: si Auth fallara primero, '
-  'quedaría sesión viva con perfil todavía activo. Idempotente. La autobaja del último '
-  'administrador activo la rechaza fn_impedir_baja_ultimo_administrador(), no esta '
-  'función (decisión de dominio 3: sin restricción especial aquí).';
+  'Baja de un perfil (ADR-032). Revoca desbloqueos vigentes, borra el PIN y caduca los '
+  'códigos de recuperación de TOTP sin usar (hallazgo MEDIA 4 de la revisión del '
+  '30-08-2026); el borrado de las sesiones y del factor TOTP los hace lib/cuentas/baja.ts '
+  'con la Admin API DESPUÉS de que esta función tenga éxito — nunca antes: si Auth '
+  'fallara primero, quedaría sesión viva con perfil todavía activo. Idempotente. La '
+  'autobaja del último administrador activo la rechaza '
+  'fn_impedir_baja_ultimo_administrador(), no esta función (decisión de dominio 3: sin '
+  'restricción especial aquí).';
 
 
 -- =========================================================================
@@ -439,6 +536,15 @@ comment on function public.registrar_reposicion_totp(uuid) is
 
 -- Diez códigos EN CLARO, una sola vez: la aplicación los muestra y los descarta, no
 -- vuelven a estar disponibles. Caduca el lote anterior sin usar del propio llamante.
+--
+-- ALTA 1 y ALTA 2 de la revisión (30-08-2026): esta función generaba códigos con solo
+-- `auth.uid() is not null` — una sesión aal1 (contraseña sin TOTP) podía generarlos,
+-- canjear uno y borrar el TOTP real por la Admin API, saltándose el segundo factor
+-- entero. Y sin más comprobación, volver a llamarla reseteaba cualquier bloqueo previo
+-- sin límite. Ahora exige `segundo_factor_verificado_recientemente()` — aal2 actual MÁS
+-- un reto TOTP de verdad en los últimos 5 minutos —, que es justo lo que ya se cumple
+-- al terminar de enrolar TOTP (mfa.verify() promueve a aal2 y deja last_challenged_at
+-- recién puesto) y lo que exige volver a pedir en cualquier regeneración posterior.
 create or replace function public.generar_codigos_recuperacion()
 returns setof text
 language plpgsql
@@ -453,6 +559,17 @@ declare
 begin
   if v_uid is null then
     raise exception 'No hay sesión.' using errcode = '42501';
+  end if;
+
+  -- MEDIA 5: exige perfil activo explícitamente (ver estado_de_cuenta() más arriba).
+  if (select public.rol_actual()) is null then
+    raise exception 'El perfil no está activo.' using errcode = '42501';
+  end if;
+
+  if not (select public.segundo_factor_verificado_recientemente()) then
+    raise exception
+      'Se exige el segundo factor (TOTP) verificado hace menos de cinco minutos para generar códigos de recuperación.'
+      using errcode = '42501';
   end if;
 
   -- El lote anterior sin usar queda caducado: solo la última tanda es válida.
@@ -478,7 +595,9 @@ $$;
 
 comment on function public.generar_codigos_recuperacion() is
   'Diez códigos de recuperación de TOTP en claro, mostrados una sola vez (ADR-039). '
-  'Caduca el lote sin usar del propio llamante antes de generar el nuevo.';
+  'Caduca el lote sin usar del propio llamante antes de generar el nuevo. Exige perfil '
+  'activo y segundo_factor_verificado_recientemente() (ALTA 1 y ALTA 2 de la revisión '
+  'del 30-08-2026).';
 
 -- No lanza excepción al fallar: un `raise` desharía el contador de intentos, igual que
 -- en desbloquear_historia() (mismo motivo, mismo patrón). Cinco fallos bloquean quince
@@ -502,13 +621,31 @@ begin
     raise exception 'No hay sesión.' using errcode = '42501';
   end if;
 
+  -- MEDIA 5: exige perfil activo explícitamente (ver estado_de_cuenta() más arriba). A
+  -- diferencia de generar_codigos_recuperacion(), esta función NO exige
+  -- segundo_factor_verificado_recientemente(): es precisamente la vía para quien NO
+  -- tiene su segundo factor a mano. Exigirlo aquí anularía el propio propósito de la
+  -- recuperación.
+  if (select public.rol_actual()) is null then
+    raise exception 'El perfil no está activo.' using errcode = '42501';
+  end if;
+
   -- El lote entero comparte el contador de intentos: lo lleva la fila más reciente sin
   -- usar (el "centinela"). Bloquea la fila para serializar intentos concurrentes, igual
   -- que desbloquear_historia() bloquea la fila del PIN.
+  --
+  -- MEDIA 7 de la revisión (30-08-2026): `order by creado_en desc` a secas no
+  -- desempata de forma determinista entre las diez filas del lote, insertadas en la
+  -- misma transacción — `now()` es constante dentro de ella y `clock_timestamp()` no es
+  -- lo que puebla `creado_en` (su default es `now()`). Un desempate no determinista aquí
+  -- significa que qué fila lleva el contador podría cambiar de una llamada a otra. Se
+  -- añade `id desc` como segundo criterio: no resuelve cuál de las diez es "la última"
+  -- en un sentido temporal real —da igual cuál sea, todas nacen juntas—, pero sí
+  -- garantiza que sea SIEMPRE LA MISMA fila mientras el lote no cambie.
   select * into v_centinela
   from public.codigos_recuperacion_totp
   where perfil_id = v_uid and usado_en is null
-  order by creado_en desc
+  order by creado_en desc, id desc
   limit 1
   for update;
 
@@ -696,7 +833,72 @@ $$;
 
 
 -- =========================================================================
--- 12 · Grants de las funciones nuevas
+-- 12 · fijar_pin_historia() — se re-crea para exigir segundo factor reciente (ALTA 2)
+-- =========================================================================
+--
+-- Cuerpo de T-002 (20260822160000), con UNA comprobación añadida al principio. Nada más
+-- cambia: sigue sin admitir perfil ajeno (ADR-026, ningún parámetro de perfil), sigue
+-- validando la forma del PIN, y sigue siendo el único camino para fijarlo.
+--
+-- ALTA 2 de la revisión (30-08-2026): `on conflict (perfil_id) do update ... set
+-- intentos_fallidos = 0, bloqueado_hasta = null` no pedía nada más que una sesión
+-- abierta. Alguien delante del teclado con la sesión abierta —el único atacante contra
+-- el que el candado del ADR-026 defiende— podía: intentar el PIN cinco veces, quedar
+-- bloqueado, y llamar aquí para fijar un PIN NUEVO Y CONOCIDO, sin volver a demostrar
+-- nada. El bloqueo de quince minutos, que es la única defensa real de un PIN de seis
+-- dígitos, quedaba decorativo.
+--
+-- Se cierra exigiendo `segundo_factor_verificado_recientemente()`: aal2 actual MÁS un
+-- reto TOTP de verdad en los últimos cinco minutos. Es justo lo que ya se cumple al
+-- fijar el PIN por primera vez en el primer acceso (justo después de enrolar TOTP) y lo
+-- que el contrato del propio ticket exige para CUALQUIER cambio posterior
+-- ("reautenticándose con contraseña y segundo factor", línea 44-46). La mitad de
+-- contraseña de ese contrato NO se puede comprobar desde SQL — mismo límite documentado
+-- en segundo_factor_verificado_recientemente() — y queda anotada como responsabilidad
+-- de la pantalla en minimax/cortes/T-006.md.
+create or replace function public.fijar_pin_historia(p_pin text)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+begin
+  if v_uid is null then
+    raise exception 'No hay sesión.' using errcode = '42501';
+  end if;
+
+  if not (select public.segundo_factor_verificado_recientemente()) then
+    raise exception
+      'Se exige el segundo factor (TOTP) verificado hace menos de cinco minutos para fijar el PIN.'
+      using errcode = '42501';
+  end if;
+
+  if p_pin !~ '^[0-9]{6}$' then
+    raise exception 'El PIN debe ser exactamente seis dígitos.' using errcode = '22023';
+  end if;
+
+  insert into public.pines_historia (perfil_id, hash)
+  values (v_uid, extensions.crypt(p_pin, extensions.gen_salt('bf', 12)))
+  on conflict (perfil_id) do update
+    set hash             = excluded.hash,
+        intentos_fallidos = 0,
+        bloqueado_hasta   = null,
+        actualizado_en    = now();
+end;
+$$;
+
+comment on function public.fijar_pin_historia(text) is
+  'Fija el PIN de historia del usuario actual. Sin parámetro de perfil: nadie establece '
+  'el PIN de otro (ADR-026). Exige segundo_factor_verificado_recientemente() (ALTA 2 de '
+  'la revisión del 30-08-2026): sin eso, el bloqueo de cinco intentos era reseteable sin '
+  'límite por el propio llamante.';
+
+
+-- =========================================================================
+-- 13 · Grants de las funciones nuevas
 -- =========================================================================
 revoke execute on function public.estado_de_cuenta()                              from public;
 revoke execute on function public.preparar_invitacion(public.rol_usuario, uuid)   from public;
