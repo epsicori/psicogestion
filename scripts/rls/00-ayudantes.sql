@@ -96,4 +96,40 @@ begin
 end;
 $$;
 
-\echo '00-ayudantes: assert, assert_lanza, contar y como() definidos.'
+-- T-005 · Construye a mano el sobre canónico (JCS + NFC, ADR-035/046) de una versión de
+-- prueba. NO es un canonicalizador general —los valores del banco son ASCII simple, sin
+-- ninguno de los casos feos que prueba lib/huella/jcs.test.ts—, es la forma más corta de
+-- dar de alta versiones que el disparador fn_sellar_version_nota() (T-005) acepte, con las
+-- once claves exactas y en el orden alfabético que exige la comprobación 6.1. `p_cuerpo`
+-- ya viene como jsonb de una sola clave en todos los usos del banco, así que su orden
+-- interno no importa.
+create or replace function pg_temp.sobre_prueba(
+  p_autor_id                 uuid,
+  p_creada_en                timestamptz,
+  p_cuerpo                   jsonb,
+  p_anotaciones_reservadas   text default null,
+  p_motivo_cambio            text default null,
+  p_cita_id                  uuid default null,
+  p_margen_sesion_minutos    integer default null,
+  p_redactada_en_sesion      boolean default false,
+  p_abierta_en               timestamptz default null
+) returns text
+language sql
+as $$
+  select
+    '{' ||
+    '"abierta_en":' || to_json(to_char(coalesce(p_abierta_en, p_creada_en) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"anotaciones_reservadas":' || coalesce(to_json(p_anotaciones_reservadas)::text, 'null') || ',' ||
+    '"autor_id":"' || lower(p_autor_id::text) || '",' ||
+    '"cita_id":' || coalesce(to_json(p_cita_id::text)::text, 'null') || ',' ||
+    '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"cuerpo":' || p_cuerpo::text || ',' ||
+    '"esquema_version":2,' ||
+    '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"margen_sesion_minutos":' || coalesce(p_margen_sesion_minutos::text, 'null') || ',' ||
+    '"motivo_cambio":' || coalesce(to_json(p_motivo_cambio)::text, 'null') || ',' ||
+    '"redactada_en_sesion":' || p_redactada_en_sesion::text ||
+    '}';
+$$;
+
+\echo '00-ayudantes: assert, assert_lanza, contar, como() y sobre_prueba() definidos.'
