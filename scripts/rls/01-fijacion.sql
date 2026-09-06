@@ -146,7 +146,21 @@ insert into public.consentimientos (id, paciente_id, tipo, texto_firmado, texto_
 values ('a0030001-0000-4000-8000-000000000001', :PMENOR, 'asistencial', 'Texto firmado', 'v1', now(), :PRO1);
 
 -- PIN de historia (ADR-026): PRO1 y PRO2 sí; el técnico NO puede tenerlo.
-call pg_temp.como(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
-call pg_temp.como(:PRO2); select public.fijar_pin_historia('222222'); call pg_temp.reset_sesion();
+--
+-- Desde el arreglo del hallazgo ALTA 2 de la revisión de T-006a (30-08-2026),
+-- `fijar_pin_historia()` exige `segundo_factor_verificado_recientemente()`: no basta con
+-- tener sesión. Así que la fijación tiene que dar a los dos profesionales un factor TOTP
+-- verificado y entrar con `aal2`, igual que hará la pantalla del primer acceso justo
+-- después de enrolar TOTP.
+--
+-- Los dos desfases distintos NO son decorativos: `auth.mfa_factors` lleva un único global
+-- sobre `last_challenged_at` y `now()` no avanza dentro de la transacción — con el mismo
+-- valor, el segundo insert muere con 23505. Los dos siguen muy dentro de la ventana de
+-- cinco minutos.
+call pg_temp.dar_segundo_factor(:PRO1, interval '1 second');
+call pg_temp.dar_segundo_factor(:PRO2, interval '2 seconds');
+
+call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
+call pg_temp.como_con_2fa(:PRO2); select public.fijar_pin_historia('222222'); call pg_temp.reset_sesion();
 
 \echo '01-fijación: completa.'

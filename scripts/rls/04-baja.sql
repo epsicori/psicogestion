@@ -9,7 +9,10 @@
 -- fn_auditar() a quien le corresponde fijar actor_id, y para eso hace falta auth.uid() no
 -- nulo (`set local request.jwt.claims`), así que su auditoría existe de verdad, no
 -- adivinada.
-call pg_temp.como(:PROBAJA);
+-- `como_con_2fa` y no `como`: fijar_pin_historia() exige segundo factor reciente desde el
+-- arreglo del hallazgo ALTA 2 de T-006a.
+call pg_temp.dar_segundo_factor(:PROBAJA, interval '4 seconds');
+call pg_temp.como_con_2fa(:PROBAJA);
 select public.fijar_pin_historia('333333');
 select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
   'El PIN de PROBAJA debe desbloquear la historia mientras sigue activo');

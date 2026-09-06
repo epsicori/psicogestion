@@ -108,7 +108,8 @@ select pg_temp.assert_lanza_codigo(
 call pg_temp.reset_sesion();
 
 -- Fija PIN y abre desbloqueo de PROT6 ANTES de la baja, para comprobar el cierre después.
-call pg_temp.como(:PROT6);
+call pg_temp.dar_segundo_factor(:PROT6, interval '5 seconds');
+call pg_temp.como_con_2fa(:PROT6);
 select public.fijar_pin_historia('555555');
 select pg_temp.assert((select desbloqueado from public.desbloquear_historia('555555')),
   'PROT6 desbloquea su historia con su PIN, antes de la baja');
@@ -170,11 +171,11 @@ select pg_temp.assert(
 -- Ninguna función permite fijar el PIN de un perfil ajeno: fijar_pin_historia() no
 -- acepta parámetro de perfil y solo toca la fila de quien la invoca.
 -- ---------------------------------------------------------------------------------------
-call pg_temp.como(:PRO1);
+call pg_temp.como_con_2fa(:PRO1);
 select public.fijar_pin_historia('111111');
 call pg_temp.reset_sesion();
 
-call pg_temp.como(:PRO2);
+call pg_temp.como_con_2fa(:PRO2);
 select public.fijar_pin_historia('999999');
 call pg_temp.reset_sesion();
 
@@ -262,7 +263,7 @@ select pg_temp.assert(:'t6sc_motivo' = 'sin_codigos',
   'canjear_codigo_recuperacion() sin lote generado: motivo = sin_codigos');
 call pg_temp.reset_sesion();
 
-call pg_temp.como(:PRO2);
+call pg_temp.como_con_2fa(:PRO2);
 create temp table t6_codigos_pro2 as
   select codigo from public.generar_codigos_recuperacion() as codigo;
 
@@ -291,7 +292,7 @@ call pg_temp.reset_sesion();
 
 -- Lote limpio de PRO1 (el único que no ha entrado en el bloqueo) para probar el canje
 -- que sí tiene éxito.
-call pg_temp.como(:PRO1);
+call pg_temp.como_con_2fa(:PRO1);
 create temp table t6_codigos_pro1 as
   select codigo from public.generar_codigos_recuperacion() as codigo;
 
@@ -317,5 +318,85 @@ select pg_temp.assert(
             and estado_posterior ->> 'via' = 'codigo_recuperacion'),
   'el canje válido deja su propia auditoría TOTP_REPUESTO (via = codigo_recuperacion)'
 );
+
+-- ---------------------------------------------------------------------------------------
+-- Los dos hallazgos ALTA de la revisión del 30-08-2026, con prueba propia.
+--
+-- Hasta aquí, el arreglo de los dos ALTA no tenía NI UNA prueba: este fichero no nombraba
+-- `segundo_factor_verificado_recientemente()` ni una vez, y las llamadas de arriba pasaron
+-- a `como_con_2fa` sin que nada demostrara que la guarda existe. Un arreglo de seguridad
+-- sin negativa es el patrón que ya costó dos revisiones en T-001: las llamadas de arriba
+-- seguirían verdes con la guarda quitada.
+--
+-- Las tres negativas van con su gemela positiva SOBRE EL MISMO PERFIL, y la tercera es la
+-- que de verdad discrimina: mismo perfil, misma sesión aal2, solo cambia si el reto TOTP
+-- es reciente. Sin ella, una guarda que mirase únicamente el claim `aal` del JWT —que el
+-- cliente no elige, pero que no dice NADA sobre cuándo se tecleó el último código— pondría
+-- verde las dos primeras.
+-- ---------------------------------------------------------------------------------------
+
+-- ALTA 1 · con solo contraseña (aal1) no se generan códigos de recuperación. Era la fuga:
+-- generarlos, canjear uno y tumbar el TOTP real por la Admin API, saltándose el segundo
+-- factor entero por PostgREST directo.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo(
+  'select * from public.generar_codigos_recuperacion()',
+  '42501',
+  'ALTA 1 — generar_codigos_recuperacion() con sesión aal1 (solo contraseña) lanza 42501'
+);
+call pg_temp.reset_sesion();
+
+-- ALTA 2 · con solo contraseña no se re-fija el PIN. Era la fuga: fallar el PIN cinco
+-- veces, quedar bloqueado, y fijar uno nuevo y conocido sin volver a demostrar nada —el
+-- `on conflict do update` ponía intentos_fallidos a cero—, dejando decorativo el bloqueo
+-- de quince minutos que es la única defensa de un PIN de seis dígitos.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo(
+  $$select public.fijar_pin_historia('424242')$$,
+  '42501',
+  'ALTA 2 — fijar_pin_historia() con sesión aal1 (solo contraseña) lanza 42501'
+);
+call pg_temp.reset_sesion();
+
+-- GEMELA POSITIVA de las dos anteriores, sobre EL MISMO PERFIL: con el segundo factor
+-- reciente, las dos entran. Sin esto, una guarda que rechazara SIEMPRE pondría verde las
+-- dos negativas de arriba.
+call pg_temp.como_con_2fa(:PRO1);
+select public.fijar_pin_historia('424242');
+call pg_temp.reset_sesion();
+
+-- La comprobación va FUERA de la sesión, como postgres: `pines_historia` no es legible
+-- por `authenticated` ni siquiera para su propio dueño (el hash del PIN no se lee, se
+-- compara dentro de una función `definer`). Dentro de la sesión esto daba
+-- «permission denied for table pines_historia», que es el comportamiento correcto.
+select pg_temp.assert(
+  (select extensions.crypt('424242', hash) = hash from public.pines_historia where perfil_id = :PRO1),
+  'GEMELA POSITIVA: con el segundo factor reciente, PRO1 SÍ re-fija su PIN'
+);
+
+-- El claim `aal2` por sí solo NO basta: el reto TOTP tiene que ser reciente. TEC1 recibe
+-- un factor verificado pero retado hace diez minutos, fuera de la ventana de cinco.
+call pg_temp.dar_segundo_factor(:TEC1, interval '10 minutes');
+call pg_temp.como_con_2fa(:TEC1);
+select pg_temp.assert_lanza_codigo(
+  'select * from public.generar_codigos_recuperacion()',
+  '42501',
+  'Con aal2 pero el reto TOTP de hace diez minutos, generar_codigos_recuperacion() lanza 42501: la ventana se comprueba de verdad'
+);
+call pg_temp.reset_sesion();
+
+-- GEMELA POSITIVA: el MISMO perfil, la MISMA sesión aal2, y lo único que cambia es que el
+-- reto vuelve a estar dentro de la ventana.
+update auth.mfa_factors set last_challenged_at = now() - interval '6 seconds'
+ where user_id = :TEC1;
+
+call pg_temp.como_con_2fa(:TEC1);
+create temp table t7_codigos_tec1 as
+  select codigo from public.generar_codigos_recuperacion() as codigo;
+select pg_temp.assert(
+  (select count(*) from t7_codigos_tec1) = 10,
+  'GEMELA POSITIVA: con el reto TOTP dentro de la ventana, el MISMO perfil SÍ genera sus diez códigos'
+);
+call pg_temp.reset_sesion();
 
 \echo '13-cuentas: completa.'
