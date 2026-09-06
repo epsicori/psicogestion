@@ -27,6 +27,13 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: 'light',
+  /**
+   * ÚNICO color literal del proyecto fuera de `app/globals.css`, y es una
+   * excepción obligada, no deuda: `themeColor` sale como `<meta>` y lo lee el
+   * navegador para pintar SU propia barra ANTES de aplicar ninguna hoja de
+   * estilo. Una variable CSS aquí no existiría todavía. Es el mismo valor que
+   * `--background`; si ese token cambia, este literal cambia con él.
+   */
   themeColor: '#f7f5ef',
 };
 

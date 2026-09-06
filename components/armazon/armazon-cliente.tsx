@@ -1,26 +1,29 @@
 'use client';
 
-import { Activity, LogOut, Menu, X } from 'lucide-react';
+import { Activity, Menu, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
 import { t } from '@/lib/i18n';
 
-import { cerrarSesion } from '@/app/(app)/acciones';
 import { cn } from '@/lib/utils';
 
-import { MODULOS, iniciales } from './modulos';
+import { MODULOS } from './modulos';
 
 type Props = {
-  nombreCompleto: string;
-  rol: string;
-  saludo: string;
-  fecha: string;
+  /**
+   * Bloques que RESUELVE EL SERVIDOR y llegan ya envueltos en su `<Suspense>`.
+   * Son ranuras, no cadenas: si fueran cadenas, este componente tendría que
+   * esperar a que la sesión estuviera resuelta para poder pintar el marco, y el
+   * marco no depende de la sesión.
+   */
+  identidad: ReactNode;
+  saludo: ReactNode;
   children: ReactNode;
 };
 
-export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }: Props) {
+export function ArmazonCliente({ identidad, saludo, children }: Props) {
   const [menuAbierto, setMenuAbierto] = useState(false);
 
   return (
@@ -31,7 +34,7 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
           type="button"
           aria-label={t('armazon.cerrarMenu')}
           onClick={() => setMenuAbierto(false)}
-          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
+          className="bg-foreground/30 fixed inset-0 z-30 lg:hidden"
         />
       )}
 
@@ -77,27 +80,7 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
           </nav>
         </div>
 
-        <div className="border-border border-t p-4">
-          <div className="flex items-center gap-3 rounded-lg p-2">
-            <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-full font-serif text-xs font-bold">
-              {iniciales(nombreCompleto)}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold">{nombreCompleto}</span>
-              <span className="text-muted-foreground block truncate text-xs">{rol}</span>
-            </span>
-            <form action={cerrarSesion}>
-              <button
-                type="submit"
-                aria-label={t('armazon.cerrarSesion')}
-                title={t('armazon.cerrarSesion')}
-                className="text-muted-foreground hover:bg-muted hover:text-foreground rounded-lg p-2"
-              >
-                <LogOut className="size-4" />
-              </button>
-            </form>
-          </div>
-        </div>
+        <div className="border-border border-t p-4">{identidad}</div>
       </aside>
 
       <section className="min-w-0 flex-1">
@@ -111,12 +94,7 @@ export function ArmazonCliente({ nombreCompleto, rol, saludo, fecha, children }:
             >
               <Menu className="size-5" />
             </button>
-            <div>
-              <p className="text-muted-foreground text-sm">{fecha}</p>
-              <h1 className="font-serif text-xl font-semibold tracking-tight md:text-2xl">
-                {saludo}
-              </h1>
-            </div>
+            <div className="min-w-0">{saludo}</div>
           </div>
         </header>
 

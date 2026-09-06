@@ -9,18 +9,17 @@ import { exigirSesion } from '@/lib/supabase/sesion';
 
 import { esquemaNuevoPaciente } from './esquemas';
 
-export async function crearPaciente(
-  _estadoPrevio: EstadoFormulario,
-  datosFormulario: FormData,
-): Promise<EstadoFormulario> {
+/**
+ * `datos` es `unknown` a propósito: una Server Action es un punto de entrada
+ * público y el formulario de cliente no es la única forma de llamarla. El esquema
+ * que valida aquí es EL MISMO que usa el formulario con `zodResolver`.
+ */
+export async function crearPaciente(datos: unknown): Promise<EstadoFormulario> {
   // 1. La autorización se comprueba dentro de la acción, no se hereda del Proxy.
   const { supabase, usuario } = await exigirSesion();
 
   // 2. Validación.
-  const resultado = esquemaNuevoPaciente.safeParse({
-    nombre: datosFormulario.get('nombre'),
-    apellidos: datosFormulario.get('apellidos'),
-  });
+  const resultado = esquemaNuevoPaciente.safeParse(datos);
 
   if (!resultado.success) {
     return {

@@ -9,14 +9,14 @@ import { crearClienteServidor } from '@/lib/supabase/servidor';
 
 import { esquemaInicioSesion } from './esquemas';
 
-export async function iniciarSesion(
-  _estadoPrevio: EstadoFormulario,
-  datosFormulario: FormData,
-): Promise<EstadoFormulario> {
-  const resultado = esquemaInicioSesion.safeParse({
-    correo: datosFormulario.get('correo'),
-    contrasena: datosFormulario.get('contrasena'),
-  });
+/**
+ * El parámetro es `unknown` A PROPÓSITO, aunque el formulario mande un objeto ya
+ * validado por el mismo esquema en cliente: una Server Action es un punto de
+ * entrada público y lo que llega por ahí no está validado por definición. La
+ * validación de cliente es comodidad; ESTA es la que manda.
+ */
+export async function iniciarSesion(datos: unknown): Promise<EstadoFormulario> {
+  const resultado = esquemaInicioSesion.safeParse(datos);
 
   if (!resultado.success) {
     return {
