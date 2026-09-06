@@ -795,6 +795,25 @@ Ninguno. Verificación manual pendiente.
 > **Integrar es tuyo** (`CARRILES.md` §Integración) y el orden es el del protocolo: primero
 > este carril, después Kimi, después MiniMax.
 >
+> ### Al juntar T-005 y T-006a hay UNA cosa que decidir: las dos reclaman el módulo 13
+>
+> Ensayado con un `merge --no-commit` el 06-09-2026: **la unión sale limpia salvo
+> `docs/state.md`**, que es prosa y se resuelve leyendo. Lo que no se ve en el conflicto es
+> lo que importa:
+>
+> **T-005 aporta `scripts/rls/13-cadena-huellas.sql` y T-006a aporta
+> `scripts/rls/13-cuentas.sql`.** `scripts/test-rls.mjs` los corre **en orden alfabético**,
+> así que tras la unión `13-cadena-huellas` correría ANTES que `13-cuentas` — y el README
+> de T-005 dice que el suyo va **el último a propósito**: manipula filas de
+> `notas_clinicas_versiones` con los cerrojos levantados, y nada debe correr después dentro
+> del mismo `begin … rollback`.
+>
+> **Al integrar hay que renumerar uno de los dos**: `13-cuentas.sql` → `14-cuentas.sql` es
+> la salida natural (T-005 se queda el último, que es donde tiene que estar), y hay que
+> tocar también la lista de módulos del README. Es un `git mv` y dos líneas, pero **si nadie
+> lo hace, el banco no falla: pasa a probar en un orden que su propio README prohíbe**, que
+> es peor.
+>
 > **Lo primero que hay que decidir, y no lo decide un agente**: si `alcance` entra en el
 > sobre canónico (§Hallazgos anotados). Mientras `notas_clinicas_versiones` esté vacía
 > cuesta media tarde; con la primera firma real dentro, cuesta una era de esquema para
