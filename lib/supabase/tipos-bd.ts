@@ -263,6 +263,51 @@ export type Database = {
         }
         Relationships: []
       }
+      codigos_recuperacion_totp: {
+        Row: {
+          bloqueado_hasta: string | null
+          codigo_hash: string
+          creado_en: string
+          id: string
+          intentos_fallidos: number
+          perfil_id: string
+          usado_en: string | null
+        }
+        Insert: {
+          bloqueado_hasta?: string | null
+          codigo_hash: string
+          creado_en?: string
+          id?: string
+          intentos_fallidos?: number
+          perfil_id: string
+          usado_en?: string | null
+        }
+        Update: {
+          bloqueado_hasta?: string | null
+          codigo_hash?: string
+          creado_en?: string
+          id?: string
+          intentos_fallidos?: number
+          perfil_id?: string
+          usado_en?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "codigos_recuperacion_totp_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "codigos_recuperacion_totp_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consentimiento_firmantes: {
         Row: {
           consentimiento_id: string
@@ -960,6 +1005,48 @@ export type Database = {
             columns: ["nota_id"]
             isOneToOne: false
             referencedRelation: "notas_clinicas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificaciones: {
+        Row: {
+          creado_en: string
+          detalle: string
+          id: string
+          leida_en: string | null
+          perfil_id: string
+          tipo: string
+        }
+        Insert: {
+          creado_en?: string
+          detalle: string
+          id?: string
+          leida_en?: string | null
+          perfil_id: string
+          tipo: string
+        }
+        Update: {
+          creado_en?: string
+          detalle?: string
+          id?: string
+          leida_en?: string | null
+          perfil_id?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificaciones_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificaciones_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1663,6 +1750,14 @@ export type Database = {
     }
     Functions: {
       bloquear_historia: { Args: never; Returns: number }
+      canjear_codigo_recuperacion: {
+        Args: { p_codigo: string }
+        Returns: {
+          bloqueado_hasta: string
+          canjeado: boolean
+          motivo: string
+        }[]
+      }
       capacidad_consentimiento: {
         Args: { p_fecha?: string; p_paciente_id: string }
         Returns: {
@@ -1683,6 +1778,13 @@ export type Database = {
           capa3_sentencia: boolean
           existe: boolean
           tabla: string
+        }[]
+      }
+      dar_de_baja_perfil: {
+        Args: { p_motivo?: string; p_perfil_id: string }
+        Returns: {
+          desbloqueos_revocados: number
+          pin_borrado: boolean
         }[]
       }
       desbloquear_historia: {
@@ -1708,11 +1810,29 @@ export type Database = {
         Returns: boolean
       }
       es_zona_iana: { Args: { p_zona: string }; Returns: boolean }
+      estado_de_cuenta: {
+        Args: never
+        Returns: {
+          desbloqueo_caduca_en: string
+          estado: Database["public"]["Enums"]["estado_perfil"]
+          requiere_pin: boolean
+          rol: Database["public"]["Enums"]["rol_usuario"]
+          tiene_pin: boolean
+        }[]
+      }
       fijar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
+      generar_codigos_recuperacion: { Args: never; Returns: string[] }
       historia_desbloqueada: { Args: never; Returns: boolean }
       nota_tiene_version_conjunta: {
         Args: { p_nota_id: string }
         Returns: boolean
+      }
+      preparar_invitacion: {
+        Args: {
+          p_centro_id: string
+          p_rol: Database["public"]["Enums"]["rol_usuario"]
+        }
+        Returns: undefined
       }
       prolongar_desbloqueo: { Args: never; Returns: string }
       registrar_evento_auditable: {
@@ -1722,6 +1842,14 @@ export type Database = {
           p_registro_id: string
           p_tabla: string
         }
+        Returns: undefined
+      }
+      registrar_invitacion: {
+        Args: { p_perfil_id: string }
+        Returns: undefined
+      }
+      registrar_reposicion_totp: {
+        Args: { p_perfil_id: string }
         Returns: undefined
       }
       retencion_efectiva: {
@@ -1735,6 +1863,10 @@ export type Database = {
       rol_actual: {
         Args: never
         Returns: Database["public"]["Enums"]["rol_usuario"]
+      }
+      segundo_factor_verificado_recientemente: {
+        Args: { p_minutos?: number }
+        Returns: boolean
       }
       verificar_cadena_huellas: {
         Args: { p_paciente_id?: string }

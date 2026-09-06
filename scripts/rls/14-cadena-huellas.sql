@@ -1,6 +1,6 @@
 -- T-005 · Cadena de huellas: sellado, encadenado y verificador.
 --
--- Se añade AL FINAL (13), no intercalado, siguiendo la regla del README: este módulo
+-- Se añade AL FINAL (14), no intercalado, siguiendo la regla del README: este módulo
 -- manipula filas de notas_clinicas_versiones con los cerrojos levantados, y hacerlo antes
 -- de que otros módulos las lean rompería sus supuestos. Al ser el último, nada corre
 -- después dentro del mismo `begin … rollback` de test-rls.mjs.
@@ -33,7 +33,7 @@
 
 \echo ''
 
-\echo '=== 13-cadena-huellas ==='
+\echo '=== 14-cadena-huellas ==='
 
 call pg_temp.reset_sesion();
 
@@ -651,5 +651,5 @@ select pg_temp.assert(
 
 drop table t005_antes_de_fusion;
 
-\echo '13-cadena-huellas: completa.'
+\echo '14-cadena-huellas: completa.'
 

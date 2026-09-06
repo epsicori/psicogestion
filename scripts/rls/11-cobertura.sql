@@ -30,6 +30,7 @@ declare
     'informes_alta', 'informes_lectura', 'informes_modificacion',
     'notas_clinicas_alta', 'notas_clinicas_lectura', 'notas_clinicas_modificacion',
     'notas_clinicas_versiones_alta', 'notas_clinicas_versiones_lectura',
+    'notificaciones_lectura_propia', 'notificaciones_marcar_leida_propia',
     'organizacion_lectura', 'organizacion_modificacion_administrador',
     'pacientes_alta_administrador', 'pacientes_alta_profesional',
     'pacientes_lectura_administrador', 'pacientes_lectura_profesional_asignado',

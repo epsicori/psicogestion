@@ -124,7 +124,11 @@ select pg_temp.assert(pg_temp.contar('select * from public.notas_clinicas') = 0,
   'ADM SIN desbloqueo: cero (podría ser por el candado o por falta de rama — ambiguo todavía)');
 call pg_temp.reset_sesion();
 
-call pg_temp.como(:ADM);
+-- `como_con_2fa` y no `como`: desde el arreglo del hallazgo ALTA 2 de T-006a,
+-- fijar_pin_historia() exige un segundo factor verificado hace menos de cinco minutos.
+-- El desfase es distinto del de los demás por el único global sobre last_challenged_at.
+call pg_temp.dar_segundo_factor(:ADM, interval '3 seconds');
+call pg_temp.como_con_2fa(:ADM);
 select pg_temp.assert((select desbloqueado from public.desbloquear_historia('999999')) is not true,
   'ADM sin PIN fijado: desbloquear_historia() no puede dar true (control antes de fijarlo)');
 select public.fijar_pin_historia('999999');

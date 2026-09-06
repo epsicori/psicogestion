@@ -64,6 +64,46 @@ begin
 end;
 $$;
 
+-- Como `como()`, pero además simula un SEGUNDO FACTOR RECIÉN VERIFICADO: el claim `aal`
+-- del JWT en `aal2` y una fila de `auth.mfa_factors` verificada con `last_challenged_at`
+-- fresco. Es lo que exige `segundo_factor_verificado_recientemente()` (arreglo de los dos
+-- hallazgos ALTA de la revisión de T-006a del 30-08-2026), del que ahora cuelgan
+-- `fijar_pin_historia()` y `generar_codigos_recuperacion()`.
+--
+-- El factor lo crea `pg_temp.dar_segundo_factor()` y NO se inserta aquí: esta
+-- procedimiento solo cambia la sesión, y hacerlo escribir en `auth` dejaría una escritura
+-- escondida detrás de un `call` que en todos los demás sitios no escribe nada.
+create or replace procedure pg_temp.como_con_2fa(p_uid uuid)
+language plpgsql
+as $$
+begin
+  execute 'set local role authenticated';
+  execute format('set local request.jwt.claims = %L',
+    jsonb_build_object('sub', p_uid, 'role', 'authenticated', 'aal', 'aal2')::text);
+end;
+$$;
+
+-- Da a `p_uid` un factor TOTP verificado y retado hace `p_hace` (por defecto, ahora
+-- mismo). Se llama como `postgres`, antes de cambiar de sesión.
+--
+-- TRAMPA PAGADA: `auth.mfa_factors` tiene un índice ÚNICO GLOBAL sobre
+-- `last_challenged_at` (`mfa_factors_last_challenged_at_key`, comprobado con
+-- `\d auth.mfa_factors` contra la base local, no de memoria). `now()` es constante dentro
+-- de una transacción, así que dar el factor a dos usuarios con el valor por defecto
+-- chocaría con un 23505. Por eso `p_hace` existe y por eso cada llamada de la fijación
+-- pasa un desfase distinto.
+create or replace procedure pg_temp.dar_segundo_factor(p_uid uuid, p_hace interval default interval '0 seconds')
+language plpgsql
+as $$
+begin
+  insert into auth.mfa_factors
+    (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret, last_challenged_at)
+  values
+    (gen_random_uuid(), p_uid, 'totp-banco-' || p_uid::text, 'totp', 'verified',
+     now(), now(), 'SECRETODEPRUEBA', now() - p_hace);
+end;
+$$;
+
 -- Como assert_lanza, pero exige que lance CON UN SQLSTATE CONCRETO. `assert_lanza` a
 -- secas basta cuando cualquier rechazo es correcto (RLS deniega con 42501 sin más), pero
 -- cuando el rechazo tiene que venir de una comprobación concreta —no de cualquier otra
