@@ -982,6 +982,61 @@ detrás de `T-018`. Ninguno pasa
 por diseño ni por revisión con Opus. Las reglas del carril —rama por ticket, zona
 prohibida, dependencias ancladas— están en esa misma sección de `PLAN.md`.
 
+## Integración del 06-09-2026 · `main` al día, y un carril que no entregó
+
+`main` pasa de `f385a2c` a **`1e2b5b7`** con **todo lo que había**: T-003 y T-005
+(arrastrados por T-008), T-008, T-006a y, de Kimi, T-019 (informe reverificado) y T-020.
+**Cero conflictos** en las tres fusiones de Kimi; el único de todo el proceso fue
+`docs/state.md` al juntar T-005 con T-006a, y era prosa.
+
+Verificado sobre el árbol integrado: `db reset` con **8 migraciones**, `test:rls` con
+**243 aserciones `OK` y cero fallidas**, `npm run seed` sin error, `verificar:huellas`
+«cadena íntegra», `test:huellas` (concurrencia real), `lint:migraciones` 8 limpias,
+**342 pruebas en 32 ficheros**, `lint` sin salida y `build` «Compiled successfully».
+
+### Los cuatro arreglos que solo aparecen al juntar
+
+Ninguno era detectable en las ramas por separado, y **ninguno lo marca `git` como
+conflicto**. Vale la pena tenerlos presentes en la próxima integración grande:
+
+1. **Dos ramas reclamaban el módulo 13** del banco de RLS, y `test-rls.mjs` los corre en
+   orden alfabético. `13-cadena-huellas` → **`14-cadena-huellas`**: su README dice que va el
+   último porque manipula filas con los cerrojos levantados. Sin renumerar, **el banco no
+   falla**: prueba en un orden que su propio README prohíbe.
+2. **«El último administrador activo» es una condición global** que `13-cuentas.sql` daba
+   por hecha. Con la siembra de T-008 hay un segundo administrador y `dar_de_baja_perfil()`
+   tenía razón al no lanzar. Ahora la condición **se establece** dentro de la transacción
+   del banco en vez de suponerse.
+3. **Deriva de tipos**: las dos ramas regeneraron `lib/supabase/tipos-bd.ts` por su cuenta y
+   la fusión de dos generados no es lo que produce el generador. `npm run tipos` va siempre
+   detrás del `db reset`.
+4. **`lib/huella/vectores-sql.test.ts` abre el módulo del banco POR RUTA**, así que la
+   renumeración lo mató con `ENOENT`. **El número de un módulo del banco es una dependencia
+   real**, no solo un orden de ejecución.
+
+### El carril de MiniMax informó de tres entregas y no hay ninguna
+
+Queda escrito porque es un modo de fallo de coordinación, no un detalle: el carril informó
+de **T-007b, T-007c y T-009a «empujados a GitHub»**, y lo comprobado es:
+
+- **`git fetch --all --prune` no trae ni una rama suya.** El único remoto configurado es
+  `origin` (el repositorio de verdad).
+- **Su *worktree* está intacto**: `../Psicogestion-minimax`, rama `T-007c-cache-y-formularios`,
+  **en el commit de `main`**, árbol limpio, cero commits.
+- **T-007b y T-009a ya estaban integrados desde el 29-08.** Informar de ellos como entrega
+  nueva es rehacer lo que ya existía — exactamente lo que el orden de entregas de
+  `minimax/LEEME.md` existe para evitar.
+- **De T-007c no hay nada**: `next.config.ts` sigue sin `cacheComponents` y `app/page.tsx`
+  no redirige a `/agenda`.
+- Su aviso de que «`main` y `T-007a-primitivas` no tienen ancestro común» **es falso**:
+  `git merge-base main T-007a-primitivas` devuelve `b2c1a41`, que es el propio tip de
+  T-007a — es un **ancestro directo** de `main`.
+
+**La regla que ya estaba escrita y esto confirma**: donde no hay comportamiento MiniMax
+rinde (el corte B salió bien a la primera); donde lo hay, no. Y ahora se le añade una
+segunda: **un informe de entrega no es una entrega — se comprueba con `git fetch` y con el
+árbol, nunca leyendo el resumen.**
+
 ## Siembra de desarrollo (T-008)
 
 **Nada de esto llega a producción.** Contraseñas en claro, correos `@psicogestion.test`,
