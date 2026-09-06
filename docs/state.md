@@ -982,6 +982,74 @@ detrás de `T-018`. Ninguno pasa
 por diseño ni por revisión con Opus. Las reglas del carril —rama por ticket, zona
 prohibida, dependencias ancladas— están en esa misma sección de `PLAN.md`.
 
+## T-007·C · Cache Components entra, y la trampa que trae debajo
+
+Integrado el 06-09-2026. **Lo escribió la fábrica**, no MiniMax (el porqué, más abajo).
+`cacheComponents: true` va en la **raíz** de `next.config.ts`, no bajo `experimental`.
+
+### `<Suspense>` por bloque de datos, y qué se gana
+
+Ni `Armazon` ni `PaginaPacientes` son `async` ya. El marco —marca, navegación, encabezado,
+formulario de alta— no depende de ningún dato y se prerenderiza entero; lo que depende de la
+petición son **cuatro bloques**, cada uno con su frontera: identidad y saludo en el armazón,
+recuento y lista en Pacientes.
+
+La prueba de que funciona no es que compile: es que el build marca `/pacientes` como
+**`◐ Partial Prerender`**. Con una sola frontera envolviendo la página, la ruta entera sería
+dinámica y el formulario de alta estaría en blanco hasta que la consulta terminara.
+
+### La trampa: `cache()` de React NO es `use cache`
+
+Es la confusión que Cache Components pone al alcance de la mano y **la que hay que tener
+delante en toda pantalla futura**:
+
+- **`use cache`** guarda el resultado **entre peticiones**. Sobre datos de sesión, perfil,
+  rol o pacientes, eso es **servirle a un usuario los datos de otro**. No hay ni una sola
+  directiva `use cache` en el repositorio, y `use cache: private` tampoco se usa.
+- **`cache()` de React** memoiza **dentro de una misma petición**. Es lo que evita que el
+  recuento y la lista de pacientes —o la identidad y el saludo— consulten dos veces.
+
+### `new Date()` en el prerenderizado es un aviso, no un detalle
+
+El saludo necesita el reloj, y con Cache Components un `new Date()` durante el
+prerenderizado da `blocking-prerender-current-time`: la hora del build se quedaría congelada
+en el shell estático. Se resuelve con **`await connection()`** (de `next/server`) antes de
+leer el reloj, dentro de su propio `<Suspense>`.
+
+### Los formularios: un solo esquema, validado dos veces
+
+`react-hook-form` + `zodResolver` sobre **el mismo objeto Zod** que valida dentro de la
+Server Action. Las acciones pasan a recibir `unknown` y revalidar: **una Server Action es un
+punto de entrada público**, y la validación de cliente es comodidad, no autoridad.
+`aplicarErroresDelServidor()` (en `lib/formularios.ts`) ata los errores por campo que
+devuelve el servidor a su control, con `aria-invalid` y `aria-describedby`.
+
+**Se pierde una capacidad, y conviene que esté escrito**: antes los dos formularios usaban
+`action={accion}` y **funcionaban sin JavaScript**. Con react-hook-form eso ya no es
+posible. Es inherente a lo que el corte pedía, no un efecto secundario evitable.
+
+### Anotado
+
+- **`/agenda` no existe hasta T-014**, así que entrar por `/` da 404. Es el ADR-050
+  aplicado: una redirección provisional a `/pacientes` se habría quedado para siempre. El
+  recorrido normal no pasa por ahí —el acceso lleva directo a `/pacientes`—.
+- **Tres claves de i18n muertas** (`modulos.inicio`, `.clinica`, `.usuarios`). `lib/i18n/**`
+  no está en el alcance de T-007·C; es limpieza de una línea para quien tenga ese territorio.
+- **Los tres criterios manuales siguen sin ejecutar** (navegador, 360 px, comparación con
+  `/prototipo`), misma deuda que los cortes A y B.
+
+### Por qué lo escribió la fábrica: tercer intento fallido de MiniMax
+
+Empujó cuatro ramas a **`ernespellus/psicogestion`**, un repositorio **distinto**, como una
+cadena huérfana de tres commits hecha con `git init` sobre una copia. Se inspeccionó entero:
+el parche de T-007·C estaba bien acotado, pero **su árbol no tiene `lib/i18n`**, así que su
+versión de esos mismos ficheros habría revertido T-009a y roto
+`lib/i18n/sin-literales.test.ts`. Su T-007·A además borra `components/ui/piezas.tsx` entero.
+
+**Tercera confirmación de la regla**: donde no hay comportamiento MiniMax rinde; donde lo hay
+—foco, ARIA, `<Suspense>`, hidratación, validación en dos lados—, lo escribe la fábrica.
+**Lo que falta de T-007 es el corte D**, y también tiene comportamiento.
+
 ## Integración del 06-09-2026 · `main` al día, y un carril que no entregó
 
 `main` pasa de `f385a2c` a **`1e2b5b7`** con **todo lo que había**: T-003 y T-005
