@@ -907,6 +907,90 @@ detrás de `T-018`. Ninguno pasa
 por diseño ni por revisión con Opus. Las reglas del carril —rama por ticket, zona
 prohibida, dependencias ancladas— están en esa misma sección de `PLAN.md`.
 
+## Siembra de desarrollo (T-008)
+
+**Nada de esto llega a producción.** Contraseñas en claro, correos `@psicogestion.test`,
+PIN conocidos y sal de bcrypt fija. Está así a propósito: la siembra tiene que ser
+**determinista**, y un `gen_salt()` aleatorio haría que dos ejecuciones desde cero no
+dieran el mismo resultado.
+
+```
+npx supabase db reset      # siembra MÍNIMA (supabase/seed.sql), automática
+npm run seed               # siembra COMPLETA (supabase/seed-completo.sql), opt-in
+```
+
+**El reparto entre las dos, que es la decisión que el ticket pedía dejar escrita:**
+`seed.sql` corre en **cada** `db reset`, incluido el que precede a `npm run test:rls`, así
+que lleva **solo** lo mínimo —organización, un centro, un administrador y los dos
+profesionales históricos con un paciente cada uno—. Todo lo demás vive detrás de
+`npm run seed`, que es voluntario. Cuanto menos haya en `seed.sql`, menos superficie tiene
+que tolerar el banco de pruebas.
+
+**Ana y Bruno no se pueden mover de `seed.sql`.** El vector congelado de T-005 trae el
+autor `11111111-…` **dentro del sobre firmado**, y `13-cadena-huellas.sql` lo inserta tal
+cual por el disparador real. El sobre no se recalcula jamás (ADR-035): si Ana desaparece de
+la siembra mínima, esa prueba deja de poder correr.
+
+### Credenciales
+
+Contraseña **`psico1234`** para todos. TOTP sembrado y verificado para los cinco.
+
+| Correo | Rol | Centro | PIN | Para qué está |
+|---|---|---|---|---|
+| `admin@psicogestion.test` | administrador | — | `456789` | Ve a todos; sin nota ajena |
+| `ana@psicogestion.test` | profesional_sanitario | Madrid | `123456` | La que firma casi todo |
+| `bruno@psicogestion.test` | profesional_sanitario | Madrid | `234567` | El aislamiento entre profesionales |
+| `tecnico@psicogestion.test` | tecnico_administrativo | Madrid | **ninguno** | Acotado por centro; **no tiene PIN y no es un olvido**: no tiene historia que abrir |
+| `baja@psicogestion.test` | profesional_sanitario | Las Palmas | `345678` | **En `estado = 'baja'`**: entra en Auth y no ve nada, pero su nota firmada sigue siendo suya |
+
+El administrador **sí** lleva PIN: el candado del ADR-026 no tiene guarda de rol, y sin PIN
+no podría abrir ninguna historia.
+
+### Qué casos raros trae, y por qué esos
+
+Son los que rompen pantallas y nadie recuerda crear a mano:
+
+- **Dos zonas horarias**: Centro Madrid (`Europe/Madrid`) y Centro Las Palmas
+  (`Atlantic/Canary`). Una hora de diferencia todo el año: cualquier pantalla que calcule
+  «hoy» con la zona equivocada se ve mal **desde el primer día**, no en el primer cliente
+  canario.
+- **Las dos titularidades** (`organizacion` y `profesional`), que es lo que decide de quién
+  es la historia cuando el profesional se va (ADR-032).
+- **Menor con DOS representantes** y consentimiento con **dos firmas** (ADR-028), más
+  `menor_oido_en`. Es el caso que rompe toda pantalla que dé por hecho un firmante.
+- **Episodio de pareja** con **nota conjunta** (ADR-030): sin él no hay forma de ejercer con
+  datos reales la rama de participación de `notas_clinicas_versiones_lectura`.
+- **Duplicado vinculado** por `fusionado_en` (ADR-031). No se borra nada.
+- **Notas en los tres estados**: una con borrador vivo, una firmada, y una **corregida con
+  dos versiones encadenadas** y su `motivo_cambio`. La de borrador está **sin firmar a
+  propósito**: `fn_vaciar_borrador_al_firmar()` vacía el borrador en cuanto entra la primera
+  versión, así que firmada-y-con-borrador es un estado que no existe.
+- **Cuatro alertas escalonadas** a 2, 10, 20 (resuelta) y 35 días.
+
+### Dos cosas que costaron una vuelta cada una
+
+- **El seed de `supabase/config.toml` NO lo ejecuta psql**, lo ejecuta el CLI por su propio
+  canal, y **los metacomandos de psql no existen ahí**: un `\set` muere con
+  `syntax error at or near "\"` (SQLSTATE 42601). Por eso `seed.sql` usa un bloque
+  `do $$ declare … $$` con constantes en vez de variables de psql.
+- **`alertas_documentacion.origen_tabla` no es texto libre**: un `check` solo admite
+  `notas_clinicas`, `consentimientos`, `informes` y `evaluaciones`. Sembrar `'pacientes'`
+  muere con 23514.
+
+### Lo que T-008 tuvo que tocar del banco de RLS, y por qué
+
+Es el hallazgo que **T-003 dejó anotado para este ticket**, cobrado:
+
+- `01-fijacion.sql` inserta la organización con **`on conflict (fila_unica) do nothing`**:
+  `organizacion` es una tabla de fila única y la siembra mínima ya crea la suya. Sin esto,
+  el banco moría con `duplicate key value violates unique constraint
+  "organizacion_fila_unica_key"`.
+- `02-matriz-roles.sql` contaba **`centros = 2`** y **`alertas = 4`** sobre la tabla
+  entera. Eso valía mientras la fijación era la única fuente de datos; con la siembra, la
+  cuenta global pasó a 3 y el banco se puso rojo por una razón que **no era la que estaba
+  probando**. Ahora las dos cuentas están **acotadas a las filas de la fijación**. Lo que
+  ese módulo quiere demostrar es que el rol LEE el directorio, no cuántas filas tiene.
+
 ## Hallazgos anotados
 
 Detectados fuera del alcance de su ticket (constitución, regla 2). Se anotan aquí y se

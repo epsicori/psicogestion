@@ -5,7 +5,8 @@ modelo: sonnet
 fase: 0
 prioridad: media
 depende_de: [T-002]
-estado: pendiente
+estado: hecho
+completado: 2026-09-06
 ---
 
 # Contexto
@@ -94,3 +95,101 @@ a propósito, para que una prueba no dependa de una siembra que alguien retoca.
   como ya hace la siembra de T-000. **Nada de esto llega a producción**: déjalo dicho en el
   encabezado del fichero.
 - `db reset` y `npm run tipos` van siempre juntos.
+
+## Cierre · 06-09-2026
+
+### El reparto entre las dos siembras, que era la decisión a tomar
+
+| Fichero | Cuándo corre | Qué lleva |
+|---|---|---|
+| `supabase/seed.sql` | **cada `npx supabase db reset`** | Organización, Centro Madrid, administrador, Ana y Bruno con un paciente cada uno |
+| `supabase/seed-completo.sql` | **`npm run seed`**, voluntario | Centro Las Palmas (`Atlantic/Canary`), técnico, profesional de baja, casos raros, notas encadenadas y alertas |
+
+**El porqué**: `seed.sql` corre también antes de `npm run test:rls`, y el banco cuenta
+filas. Todo lo que se añada ahí lo tiene que tolerar el banco, así que lo pesado vive
+detrás de `npm run seed`, que es opt-in.
+
+**Ana y Bruno no se pueden mover.** El vector congelado de T-005 trae el autor
+`11111111-…` dentro del sobre firmado y `13-cadena-huellas.sql` lo inserta tal cual por el
+disparador real. El sobre no se recalcula jamás (ADR-035).
+
+### Criterios de aceptación, con la salida real
+
+**`npx supabase db reset && npm run seed` sin error, y dos `npm run seed` seguidos no
+duplican nada:**
+
+```
+alertas=4  auth.identities=5  auth.users=5  centros=2  consentimientos=1
+episodios=1  firmantes=2  mfa_factors=5  notas=5  organizacion=1
+pacientes=8  pacientes_identificacion=1  participantes=2  perfiles=5
+pines_historia=4  representantes=2  versiones=5
+
+$ diff <recuento tras 1 siembra> <recuento tras 2 siembras>
+(sin diferencia)
+```
+
+**Dos ejecuciones completas desde cero producen los mismos UUID** — y, de regalo, las
+mismas huellas SHA-256 y los mismos hashes de PIN, que es la prueba fuerte de que ni un
+instante quedó sin anclar:
+
+```
+$ diff ids-ejecucion-1.txt ids-ejecucion-2.txt   # 50 líneas: perfiles, centros,
+(sin diferencia)                                  # identidades, factores, pacientes,
+                                                  # representantes, consentimientos,
+                                                  # firmantes, episodios, notas, alertas,
+                                                  # huellas y hashes de PIN
+```
+
+**Los tres roles entran de verdad, con `curl` al endpoint de token de GoTrue** (no con un
+`db reset` verde):
+
+```
+OK  admin@psicogestion.test    -> access_token emitido
+OK  ana@psicogestion.test      -> access_token emitido
+OK  bruno@psicogestion.test    -> access_token emitido
+OK  tecnico@psicogestion.test  -> access_token emitido
+OK  baja@psicogestion.test     -> access_token emitido
+```
+
+La de baja **entra en Auth y no ve nada**: es el corte del ADR-032, que vive en
+`rol_actual()` y no en el login.
+
+**`npm run test:rls` verde con la base sembrada**: exit 0, **192 aserciones `OK`**, cero
+`ASERCIÓN FALLIDA`.
+
+**El verificador de huellas recorre lo sembrado**:
+
+```
+verificar:huellas — cadena íntegra: cero anomalías.
+```
+
+Las cinco versiones sembradas —incluida la nota corregida con **dos versiones
+encadenadas**— pasan por `fn_sellar_version_nota()` de verdad: la siembra no calcula ni una
+huella y no manda `huella`, `huella_anterior`, `paciente_id`, `posicion_cadena` ni
+`numero_version`.
+
+**Sin `random()`, `gen_random_uuid()` ni `now()` sin anclar**: las únicas coincidencias del
+`grep` en los dos ficheros están **dentro de comentarios** que explican por qué no se usan.
+
+**Lo demás**: `npm test` → 297 pruebas; `npm run lint` sin salida; `npm run build` →
+«Compiled successfully».
+
+### Lo que hubo que tocar del banco de RLS
+
+El hallazgo que T-003 dejó anotado para este ticket, cobrado: `01-fijacion.sql` inserta la
+organización con `on conflict (fila_unica) do nothing` (es tabla de fila única y la siembra
+ya crea la suya), y las dos cuentas globales de `02-matriz-roles.sql` —`centros = 2` y
+`alertas = 4`— pasan a estar **acotadas a las filas de la fijación**. Con la siembra, la
+cuenta global pasó a 3 y el banco se puso rojo por una razón que no era la que probaba.
+
+### Dos trampas nuevas pagadas
+
+- **El seed de `config.toml` no lo ejecuta psql**: los metacomandos no existen ahí y `\set`
+  muere con `syntax error at or near "\"` (42601). De ahí el bloque `do $$ declare`.
+- **`alertas_documentacion.origen_tabla` tiene un `check`** que solo admite
+  `notas_clinicas`, `consentimientos`, `informes` y `evaluaciones`.
+
+### Pendiente, y no es del ticket
+
+El **guion de comprobación manual** (entrar con cada rol en el navegador) sigue sin
+ejecutarse. Es la misma deuda que arrastra el punto 3 del guion de T-002.

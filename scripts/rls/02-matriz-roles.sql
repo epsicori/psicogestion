@@ -186,9 +186,21 @@ call pg_temp.reset_sesion();
 -- ---------------------------------------------------------------------------------------
 -- centros, organizacion, politicas_retencion: directorio, los tres roles leen.
 -- ---------------------------------------------------------------------------------------
+-- CUENTAS RELATIVAS A LA FIJACIÓN, no globales (T-008 cobra el hallazgo que T-003 dejó
+-- anotado para él). Estas dos aserciones contaban `= 2` centros y `= 4` alertas sobre toda
+-- la tabla, y eso valía mientras la fijación era la ÚNICA fuente de datos. Desde T-008,
+-- `supabase/seed.sql` corre en cada `db reset` y siembra su propio centro: la cuenta global
+-- pasó a 3 y el banco murió con «ASERCIÓN FALLIDA: El directorio de centros lo lee
+-- cualquier rol autenticado» — verde o rojo por una razón que no era la que se estaba
+-- probando.
+--
+-- Lo que este módulo quiere demostrar es que el rol LEE el directorio, no cuántas filas
+-- tiene el directorio. Se acota a los centros de la fijación, que es lo único que este
+-- banco controla, y así deja de depender de lo que siembre otro.
 call pg_temp.como(:TEC1);
-select pg_temp.assert(pg_temp.contar('select * from public.centros') = 2,
-  'El directorio de centros lo lee cualquier rol autenticado');
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.centros where id in (%L, %L)', :CA, :CB)) = 2,
+  'El directorio de centros lo lee cualquier rol autenticado (los dos de la fijación)');
 select pg_temp.assert(pg_temp.contar('select * from public.organizacion') = 1,
   'La organización la lee cualquier rol autenticado');
 call pg_temp.reset_sesion();
@@ -197,8 +209,12 @@ call pg_temp.reset_sesion();
 -- alertas_documentacion: fuera del candado. Admin todo; profesional lo suyo (autor o
 -- asignado); técnico su centro.
 -- ---------------------------------------------------------------------------------------
+-- Relativa a la fijación por el mismo motivo que los centros de arriba: `npm run seed`
+-- (T-008) siembra alertas propias, y una cuenta global volvería a medir la siembra en vez
+-- de la política.
 call pg_temp.como(:ADM);
-select pg_temp.assert(pg_temp.contar('select * from public.alertas_documentacion') = 4,
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.alertas_documentacion where centro_id in (%L, %L)', :CA, :CB)) = 4,
   'ADM ve las cuatro alertas fijadas');
 call pg_temp.reset_sesion();
 

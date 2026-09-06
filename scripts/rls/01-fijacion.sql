@@ -27,7 +27,16 @@
 
 \echo '=== 01-fijación ==='
 
-insert into public.organizacion (razon_social, nif) values ('Banco RLS SL', 'B00300001');
+-- `on conflict (fila_unica) do nothing` desde T-008: `organizacion` es una tabla de FILA
+-- ÚNICA y la siembra mínima (`supabase/seed.sql`, que corre en cada `db reset`) ya crea la
+-- suya. Sin esto, el banco muere aquí con
+-- `duplicate key value violates unique constraint "organizacion_fila_unica_key"`.
+--
+-- El banco sigue sin DEPENDER de la siembra: si la organización ya está, se queda la
+-- sembrada y da igual cuál sea, porque ninguna aserción mira su razón social ni su NIF —
+-- solo que exista exactamente una, que es lo que la tabla garantiza por construcción.
+insert into public.organizacion (razon_social, nif) values ('Banco RLS SL', 'B00300001')
+on conflict (fila_unica) do nothing;
 
 insert into public.centros (id, nombre) values
   (:CA, 'Centro A'),
