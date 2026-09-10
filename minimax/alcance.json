@@ -15,6 +15,9 @@
     "lib/identidad/**",
     "lib/fechas/**",
     "lib/agenda/**",
+    "lib/huella/**",
+    "lib/cuentas/**",
+    "lib/citas/**",
     "scripts/**",
     "app/prototipo/**",
     "diseño/**",
@@ -142,6 +145,20 @@
       "titulo": "Ficha del paciente, pestanas y pantalla de bloqueo",
       "escritura": [
         "app/(app)/pacientes/**",
+        "components/ui/**",
+        "lib/i18n/**"
+      ],
+      "dependencias": []
+    },
+
+    "T-011b": {
+      "_nota": [
+        "Bloqueado hasta que T-011a (fabrica) este integrado en main: sin lib/citas/ no hay",
+        "ninguna funcion que llamar. Corte completo en minimax/cortes/T-011.md."
+      ],
+      "titulo": "Acciones de serie y dialogo de alcance",
+      "escritura": [
+        "app/**",
         "components/ui/**",
         "lib/i18n/**"
       ],

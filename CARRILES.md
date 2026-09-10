@@ -55,7 +55,7 @@ la asignación:
 
 | Ruta | Dueño |
 |---|---|
-| `supabase/**`, `scripts/*.sql`, `lib/supabase/**` | **Claude** |
+| `supabase/**`, `scripts/*.sql`, `lib/supabase/**`, `lib/huella/**`, `lib/cuentas/**`, `lib/citas/**` | **Claude** |
 | `components/**`, `app/**`, `next.config.ts`, `proxy.ts`, `lib/i18n/**`, `lib/contraste/**`, `.github/**` | **MiniMax** |
 | `lib/identidad/**`, `lib/fechas/**`, `lib/agenda/**`, `scripts/lint-migraciones.ts` | **Kimi** |
 | `docs/**`, `PLAN.md`, `CLAUDE.md`, `tickets/**`, `CARRILES.md`, los `alcance.json` | **Nadie automático.** Tú y el arquitecto |
