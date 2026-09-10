@@ -47,6 +47,10 @@ declare
     'perfiles_centros_alta_administrador', 'perfiles_centros_cierre_administrador', 'perfiles_centros_lectura',
     'politicas_retencion_alta_administrador', 'politicas_retencion_lectura', 'politicas_retencion_modificacion_administrador',
     'preferencias_usuario_alta_propia', 'preferencias_usuario_lectura_propia', 'preferencias_usuario_modificacion_propia',
+    -- T-011a · dominio Series de citas. eventos_salientes NO tiene ninguna
+    -- política a propósito (RLS activada, cero políticas): solo escriben los
+    -- disparadores security definer.
+    'propuestas_cita_lectura',
     'representantes_paciente_alta', 'representantes_paciente_lectura', 'representantes_paciente_modificacion',
     'tablas_solo_adicion_lectura',
     'valoraciones_riesgo_alta', 'valoraciones_riesgo_lectura'

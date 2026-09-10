@@ -1004,6 +1004,63 @@ export type Database = {
           },
         ]
       }
+      eventos_salientes: {
+        Row: {
+          actualizado_en: string
+          carga: Json
+          clave_idempotencia: string | null
+          creado_en: string
+          creado_por: string | null
+          estado: Database["public"]["Enums"]["estado_evento_saliente"]
+          id: string
+          intentos: number
+          proximo_intento: string | null
+          tipo: string
+          ultimo_error: string | null
+        }
+        Insert: {
+          actualizado_en?: string
+          carga: Json
+          clave_idempotencia?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          estado?: Database["public"]["Enums"]["estado_evento_saliente"]
+          id?: string
+          intentos?: number
+          proximo_intento?: string | null
+          tipo: string
+          ultimo_error?: string | null
+        }
+        Update: {
+          actualizado_en?: string
+          carga?: Json
+          clave_idempotencia?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          estado?: Database["public"]["Enums"]["estado_evento_saliente"]
+          id?: string
+          intentos?: number
+          proximo_intento?: string | null
+          tipo?: string
+          ultimo_error?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eventos_salientes_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "eventos_salientes_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       informes: {
         Row: {
           autor_id: string
@@ -1739,6 +1796,171 @@ export type Database = {
           },
         ]
       }
+      propuestas_cita: {
+        Row: {
+          centro_id: string | null
+          cita_id: string | null
+          cita_resultante_id: string | null
+          creada_en: string
+          creada_por: string | null
+          estado: Database["public"]["Enums"]["estado_propuesta_cita"]
+          evento_id: string | null
+          fecha_prevista: string
+          fin_propuesto: string | null
+          hora_local_prevista: string
+          id: string
+          inicio_propuesto: string | null
+          motivo: Database["public"]["Enums"]["motivo_propuesta_cita"]
+          paciente_id: string
+          profesional_id: string
+          resuelta_en: string | null
+          resuelta_por: string | null
+          serie_id: string | null
+          zona_horaria: string
+        }
+        Insert: {
+          centro_id?: string | null
+          cita_id?: string | null
+          cita_resultante_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          estado?: Database["public"]["Enums"]["estado_propuesta_cita"]
+          evento_id?: string | null
+          fecha_prevista: string
+          fin_propuesto?: string | null
+          hora_local_prevista: string
+          id?: string
+          inicio_propuesto?: string | null
+          motivo: Database["public"]["Enums"]["motivo_propuesta_cita"]
+          paciente_id: string
+          profesional_id: string
+          resuelta_en?: string | null
+          resuelta_por?: string | null
+          serie_id?: string | null
+          zona_horaria: string
+        }
+        Update: {
+          centro_id?: string | null
+          cita_id?: string | null
+          cita_resultante_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          estado?: Database["public"]["Enums"]["estado_propuesta_cita"]
+          evento_id?: string | null
+          fecha_prevista?: string
+          fin_propuesto?: string | null
+          hora_local_prevista?: string
+          id?: string
+          inicio_propuesto?: string | null
+          motivo?: Database["public"]["Enums"]["motivo_propuesta_cita"]
+          paciente_id?: string
+          profesional_id?: string
+          resuelta_en?: string | null
+          resuelta_por?: string | null
+          serie_id?: string | null
+          zona_horaria?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "propuestas_cita_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_cita_id_fkey"
+            columns: ["cita_id"]
+            isOneToOne: false
+            referencedRelation: "citas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_cita_id_fkey"
+            columns: ["cita_id"]
+            isOneToOne: false
+            referencedRelation: "citas_agenda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_cita_resultante_id_fkey"
+            columns: ["cita_resultante_id"]
+            isOneToOne: false
+            referencedRelation: "citas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_cita_resultante_id_fkey"
+            columns: ["cita_resultante_id"]
+            isOneToOne: false
+            referencedRelation: "citas_agenda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_evento_id_fkey"
+            columns: ["evento_id"]
+            isOneToOne: false
+            referencedRelation: "eventos_salientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_resuelta_por_fkey"
+            columns: ["resuelta_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_resuelta_por_fkey"
+            columns: ["resuelta_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "propuestas_cita_serie_id_fkey"
+            columns: ["serie_id"]
+            isOneToOne: false
+            referencedRelation: "series_cita"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       representantes_paciente: {
         Row: {
           alcance: Database["public"]["Enums"]["alcance_representacion"]
@@ -2254,6 +2476,57 @@ export type Database = {
         }
         Returns: string
       }
+      agenda_cancelar_cita: {
+        Args: {
+          p_alcance: Database["public"]["Enums"]["alcance_cambio_serie"]
+          p_cita_id: string
+          p_motivo?: string
+        }
+        Returns: Json
+      }
+      agenda_confirmar_propuesta: {
+        Args: { p_propuesta_id: string }
+        Returns: string
+      }
+      agenda_crear_serie: {
+        Args: {
+          p_centro_id: string
+          p_desde: string
+          p_dia_semana: number
+          p_duracion_minutos: number
+          p_fin_el?: string
+          p_hora_local: string
+          p_paciente_id: string
+          p_periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
+          p_profesional_id: string
+          p_sesiones_totales?: number
+          p_tipo_terapia_id: string
+        }
+        Returns: Json
+      }
+      agenda_descartar_propuesta: {
+        Args: { p_propuesta_id: string }
+        Returns: undefined
+      }
+      agenda_editar_serie: {
+        Args: {
+          p_alcance: Database["public"]["Enums"]["alcance_cambio_serie"]
+          p_cita_id: string
+          p_dia_semana?: number
+          p_duracion_minutos?: number
+          p_estado?: Database["public"]["Enums"]["estado_cita"]
+          p_fin?: string
+          p_hora_local?: string
+          p_inicio?: string
+          p_sala?: string
+          p_zona_horaria?: string
+        }
+        Returns: Json
+      }
+      agenda_propuestas_de_evento: {
+        Args: { p_evento_id: string }
+        Returns: Json
+      }
       bloquear_historia: { Args: never; Returns: number }
       canjear_codigo_recuperacion: {
         Args: { p_codigo: string }
@@ -2333,6 +2606,16 @@ export type Database = {
         Args: { p_nota_id: string }
         Returns: boolean
       }
+      ocurrencias_serie: {
+        Args: {
+          p_desde: string
+          p_dia_semana: number
+          p_fin_el: string
+          p_periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
+          p_sesiones: number
+        }
+        Returns: string[]
+      }
       preparar_invitacion: {
         Args: {
           p_centro_id: string
@@ -2357,6 +2640,13 @@ export type Database = {
       registrar_reposicion_totp: {
         Args: { p_perfil_id: string }
         Returns: undefined
+      }
+      resolver_hora_local: {
+        Args: { p_local: string; p_zona: string }
+        Returns: {
+          clasificacion: string
+          instante: string
+        }[]
       }
       retencion_efectiva: {
         Args: { p_centro_id: string }
@@ -2388,6 +2678,7 @@ export type Database = {
       zona_horaria_centro: { Args: { p_centro_id: string }; Returns: string }
     }
     Enums: {
+      alcance_cambio_serie: "esta" | "esta_y_siguientes"
       alcance_nota: "individual" | "conjunta"
       alcance_representacion: "patria_potestad" | "custodia" | "solo_contacto"
       estado_cita:
@@ -2396,13 +2687,21 @@ export type Database = {
         | "realizada"
         | "cancelada"
         | "no_asistida"
+      estado_evento_saliente: "pendiente" | "entregado" | "fallido"
       estado_perfil: "activo" | "suspendido" | "baja"
+      estado_propuesta_cita: "pendiente" | "confirmada" | "descartada"
       modalidad_relacional: "individual" | "pareja" | "familiar" | "grupo"
       motivo_desviacion_cita:
         | "reprogramada"
         | "anomalia_horaria"
         | "festivo"
         | "ausencia"
+      motivo_propuesta_cita:
+        | "festivo"
+        | "ausencia"
+        | "ocupada"
+        | "zona_cambiada"
+        | "regla_cambiada"
       nivel_riesgo: "bajo" | "moderado" | "alto"
       periodicidad_serie: "semanal" | "quincenal" | "mensual"
       pestana_historia:
@@ -2579,6 +2878,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      alcance_cambio_serie: ["esta", "esta_y_siguientes"],
       alcance_nota: ["individual", "conjunta"],
       alcance_representacion: ["patria_potestad", "custodia", "solo_contacto"],
       estado_cita: [
@@ -2588,13 +2888,22 @@ export const Constants = {
         "cancelada",
         "no_asistida",
       ],
+      estado_evento_saliente: ["pendiente", "entregado", "fallido"],
       estado_perfil: ["activo", "suspendido", "baja"],
+      estado_propuesta_cita: ["pendiente", "confirmada", "descartada"],
       modalidad_relacional: ["individual", "pareja", "familiar", "grupo"],
       motivo_desviacion_cita: [
         "reprogramada",
         "anomalia_horaria",
         "festivo",
         "ausencia",
+      ],
+      motivo_propuesta_cita: [
+        "festivo",
+        "ausencia",
+        "ocupada",
+        "zona_cambiada",
+        "regla_cambiada",
       ],
       nivel_riesgo: ["bajo", "moderado", "alto"],
       periodicidad_serie: ["semanal", "quincenal", "mensual"],

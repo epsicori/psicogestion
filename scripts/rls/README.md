@@ -39,6 +39,7 @@ para saber si el banco pasó.
 | `13-cuentas.sql` | T-006a — invitación, baja, TOTP y códigos de recuperación; las dos guardas ALTA del segundo factor reciente |
 | `14-cadena-huellas.sql` | T-005 — sellado, encadenado, los tres pares del vector congelado con pgcrypto, las negativas de `fn_sellar_version_nota()`, la manipulación con los cerrojos levantados (una intermedia, y el criterio «no reserializa» en sus dos sentidos) y ADR-031 (fusionar no altera ninguna huella) |
 | `15-agenda.sql` | T-010 — los cinco estados y su orden (contrato con T-020), ISODOW documentado, la zona de la serie, el rango bloqueante con su descanso y su restricción de exclusión por nombre, el congelado frente al cambio de ajuste, esta_en_curso(), el recorte de nota_operativa en la auditoría, la alerta de nota sin firmar y la vista del técnico |
+| `16-series.sql` | T-011a — materialización de series (misma hora local, dos `inicio` UTC a los dos lados del cambio de marzo), las dos anomalías horarias deterministas (hueco de marzo, solape de octubre, ancladas a `now()`), festivos y choques de horario propuestos en vez de materializados encima, el disparador de cita pasada (`fn_proteger_cita_pasada`, byte a byte), la marca de origen (una cita desviada no la sobrescribe la serie), el outbox de `centros.zona_horaria` sin mover ninguna cita, y la RLS de `propuestas_cita`/`eventos_salientes` (esta última sin ninguna política) |
 
 ## Cómo se añade una prueba
 

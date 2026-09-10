@@ -1,11 +1,22 @@
 // Convención de pruebas del proyecto: el fichero de prueba vive JUNTO al módulo
 // que prueba (`app/login/esquemas.ts` → `app/login/esquemas.test.ts`).
 // No existe carpeta `__tests__` paralela ni se creará.
+import path from 'node:path';
+
 import { configDefaults, defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
+  resolve: {
+    alias: {
+      // T-011: lib/citas/ importa 'server-only' de verdad (protege el build de
+      // producción). Vitest corre en jsdom, donde ese paquete lanza al
+      // importarse: se sustituye SOLO en pruebas por un módulo vacío, sin
+      // tocar la guarda real. Ver vitest.server-only-stub.ts.
+      'server-only': path.resolve(__dirname, 'vitest.server-only-stub.ts'),
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
