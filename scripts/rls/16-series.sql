@@ -550,4 +550,111 @@ select pg_temp.assert(
   'GEMELA POSITIVA: PRO1 SÍ puede crear una serie propia'
 );
 
+-- =========================================================================
+-- L · Los dos hallazgos de la REVISIÓN CON OPUS (11-09-2026)
+--
+-- Los dos se reprodujeron antes de arreglarlos, contra la base de verdad, y
+-- las dos aserciones de aquí se ponen ROJAS si se quita el arreglo.
+-- =========================================================================
+
+\set TT3   '\'a1100005-0000-4000-8000-000000000001\''
+\set DISP2 '\'a1100005-0000-4000-8000-000000000002\''
+
+insert into public.tipos_terapia (id, nombre, duracion_minutos, tarifa_base, regimen)
+values (:TT3, 'Terapia revisión T-011', 50, 60.00, 'exento_sanitario');
+
+-- --- L.1 · La cita que nace de una propuesta conserva el tipo de terapia ---
+-- Sin el arreglo, agenda_confirmar_propuesta() creaba la cita SIN
+-- tipo_terapia_id (propuestas_cita no lo lleva): la sesión desplazada por un
+-- festivo perdía tarifa_base y régimen de IVA. Y como fn_proteger_cita_pasada()
+-- prohíbe cambiar tipo_terapia_id en una cita pasada, la pérdida era definitiva
+-- en cuanto la sesión ocurría.
+
+select (:'domingo_marzo'::date + 200) as fecha_festivo_l \gset
+
+insert into public.disponibilidad (id, perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo)
+values (:DISP2, :PRO1, :CA, 'festivo', :'fecha_festivo_l'::date, :'fecha_festivo_l'::date,
+        'Europe/Madrid', 'Festivo de la revisión T-011');
+
+call pg_temp.como(:PRO1);
+select (public.agenda_crear_serie(
+  :P1, :PRO1, :CA, :TT3, 'semanal',
+  (extract(isodow from :'fecha_festivo_l'::date))::smallint,
+  time '09:00', 50::smallint, :'fecha_festivo_l'::date, 1::smallint, null
+) ->> 'serie_id')::uuid as serie_id \gset l1_
+call pg_temp.reset_sesion();
+
+select id from public.propuestas_cita
+  where serie_id = (:'l1_serie_id')::uuid and motivo = 'festivo' \gset l2_
+
+call pg_temp.como(:PRO1);
+select public.agenda_confirmar_propuesta((:'l2_id')::uuid) as cita_id \gset l3_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select tipo_terapia_id from public.citas where id = (:'l3_cita_id')::uuid) = (:TT3)::uuid,
+  'REVISIÓN: la cita creada al confirmar una propuesta CONSERVA el tipo_terapia_id de su serie (sin el arreglo quedaba NULL, y con él se iban tarifa_base y régimen de IVA)'
+);
+
+select pg_temp.assert(
+  (select tipo_terapia_id from public.series_cita where id = (:'l1_serie_id')::uuid) = (:TT3)::uuid
+  and (select tarifa_base from public.tipos_terapia where id = :TT3) is not null,
+  'GEMELA: el valor comprobado es el de la SERIE, y ese tipo de terapia tiene tarifa — lo que se perdía tenía consecuencia económica'
+);
+
+-- --- L.2 · Cada edición resuelve contra SU evento, no contra el último ---
+-- Sin el arreglo, agenda_editar_serie() buscaba su evento con «el más reciente
+-- de esta serie», y creado_en es now(), que NO avanza dentro de una
+-- transacción: la segunda edición resolvía contra el evento de la primera, no
+-- proponía nada (idempotencia por evento_id + cita_id) y dejaba la regla
+-- cambiada sin una sola propuesta que la reconciliara. En silencio.
+
+select (:'domingo_marzo'::date + 230) as desde_l2 \gset
+
+call pg_temp.como(:PRO1);
+select (public.agenda_crear_serie(
+  :P1, :PRO1, :CA, :TT3, 'semanal',
+  (extract(isodow from :'desde_l2'::date))::smallint,
+  time '11:00', 50::smallint, :'desde_l2'::date, 3::smallint, null
+) ->> 'serie_id')::uuid as serie_id \gset l4_
+call pg_temp.reset_sesion();
+
+select id from public.citas where serie_id = (:'l4_serie_id')::uuid order by inicio limit 1 \gset l5_
+
+call pg_temp.como(:PRO1);
+select public.agenda_editar_serie((:'l5_id')::uuid, 'esta_y_siguientes', p_hora_local => time '16:00') as r \gset l6_
+select public.agenda_editar_serie((:'l5_id')::uuid, 'esta_y_siguientes', p_hora_local => time '17:00') as r \gset l7_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  ((:'l6_r')::jsonb ->> 'evento_id') is distinct from ((:'l7_r')::jsonb ->> 'evento_id'),
+  'REVISIÓN: dos ediciones en la MISMA transacción resuelven contra eventos DISTINTOS'
+);
+
+select pg_temp.assert(
+  exists (
+    select 1 from public.propuestas_cita p
+      join public.citas c on c.id = p.cita_id
+     where c.serie_id = (:'l4_serie_id')::uuid and p.hora_local_prevista = time '17:00'
+  ),
+  'REVISIÓN: la SEGUNDA edición deja propuestas a las 17:00 — sin el arreglo la serie quedaba a las 17:00 y no se proponía ni una'
+);
+
+select pg_temp.assert(
+  (select hora_local from public.series_cita where id = (:'l4_serie_id')::uuid) = time '17:00',
+  'GEMELA: la regla de la serie sí quedó a las 17:00 — el fallo era que nadie lo proponía, no que no se guardara'
+);
+
+-- GEMELA: una edición que NO cambia la regla no resuelve ningún evento (antes
+-- reprocesaba el último de la serie).
+call pg_temp.como(:PRO1);
+select public.agenda_editar_serie((:'l5_id')::uuid, 'esta_y_siguientes', p_hora_local => time '17:00') as r \gset l8_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  ((:'l8_r')::jsonb -> 'evento_id') is null
+  and ((:'l8_r')::jsonb -> 'propuestas') = '[]'::jsonb,
+  'GEMELA: una edición que no cambia la regla no resuelve NINGÚN evento ni crea propuestas'
+);
+
 \echo '16-series: completa.'

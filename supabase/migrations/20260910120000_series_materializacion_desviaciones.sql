@@ -490,6 +490,7 @@ set search_path = ''
 as $$
 declare
   v_citas jsonb;
+  v_evento_id uuid;
 begin
   if new.dia_semana       is not distinct from old.dia_semana
      and new.hora_local       is not distinct from old.hora_local
@@ -519,7 +520,17 @@ begin
       'citas_afectadas', v_citas
     ),
     auth.uid()
-  );
+  )
+  returning id into v_evento_id;
+
+  -- HALLAZGO MEDIA DE LA REVISIÓN CON OPUS (11-09-2026): agenda_editar_serie()
+  -- buscaba su evento con «el más reciente de esta serie». creado_en es now(),
+  -- que NO avanza dentro de una transacción: dos ediciones seguidas en la misma
+  -- transacción empatan y el desempate cogía la vieja. Aquí se publica la
+  -- IDENTIDAD del evento recién creado, local a la transacción, y la función la
+  -- lee. Con dos ediciones concurrentes pasaba lo mismo por otro camino: las
+  -- dos resolvían contra la misma fila.
+  perform set_config('app.agenda_evento_regla', v_evento_id::text, true);
 
   return new;
 end;
@@ -914,6 +925,10 @@ begin
 
   v_serie_id := v_cita.serie_id;
 
+  -- Se limpia ANTES de tocar la regla: lo que quede después es exactamente el
+  -- evento que produjo ESTA llamada, o nada si la regla no cambió de verdad.
+  perform set_config('app.agenda_evento_regla', '', true);
+
   -- esta_y_siguientes NO mueve nada: actualiza la regla (dispara
   -- evento_regla_serie) y deja que agenda_propuestas_de_evento() proponga,
   -- cita a cita.
@@ -924,12 +939,7 @@ begin
          zona_horaria     = coalesce(p_zona_horaria, zona_horaria)
    where id = v_serie_id;
 
-  select e.id into v_evento_id
-    from public.eventos_salientes e
-   where e.tipo = 'agenda.regla_serie_cambiada'
-     and e.carga ->> 'serie_id' = v_serie_id::text
-   order by e.creado_en desc
-   limit 1;
+  v_evento_id := nullif(current_setting('app.agenda_evento_regla', true), '')::uuid;
 
   if v_evento_id is null then
     -- La regla no cambió de verdad (todos los parámetros coincidían con los
@@ -1076,6 +1086,7 @@ declare
   v_rol       public.rol_usuario := (select public.rol_actual());
   v_propuesta public.propuestas_cita;
   v_cita_id   uuid;
+  v_tipo_terapia_id uuid;
 begin
   if v_rol is null then
     raise exception 'No hay sesión activa con perfil.' using errcode = '42501';
@@ -1119,11 +1130,25 @@ begin
   else
     -- Crea la cita desde la propuesta: SÍ queda desviada, con el motivo
     -- mapeado (el 23P01, si lo hay, se propaga tal cual).
+    --
+    -- HALLAZGO MEDIA DE LA REVISIÓN CON OPUS (11-09-2026): esta rama creaba la
+    -- cita SIN tipo_terapia_id, porque propuestas_cita no lo lleva. La sesión
+    -- desplazada por un festivo perdía su tipo de terapia y, con él,
+    -- tarifa_base y régimen de IVA (tipos_terapia, T-010) — y una vez pasada,
+    -- fn_proteger_cita_pasada() prohíbe cambiar tipo_terapia_id, así que la
+    -- pérdida era definitiva. Se recupera de la serie, que es de donde nació
+    -- la propuesta. Si la propuesta no cuelga de una serie queda null, como
+    -- antes: no hay de dónde sacarlo y no se inventa.
+    select s.tipo_terapia_id into v_tipo_terapia_id
+      from public.series_cita s
+     where s.id = v_propuesta.serie_id;
+
     insert into public.citas
-      (paciente_id, profesional_id, centro_id, serie_id, inicio, fin, zona_horaria,
+      (paciente_id, profesional_id, centro_id, serie_id, tipo_terapia_id, inicio, fin, zona_horaria,
        desviada, motivo_desviacion, creada_por)
     values
       (v_propuesta.paciente_id, v_propuesta.profesional_id, v_propuesta.centro_id, v_propuesta.serie_id,
+       v_tipo_terapia_id,
        v_propuesta.inicio_propuesto, v_propuesta.fin_propuesto, v_propuesta.zona_horaria,
        true,
        case v_propuesta.motivo

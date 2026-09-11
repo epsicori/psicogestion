@@ -333,3 +333,150 @@ su gemela positiva.
 3. **La base no impone la tabla de transiciones de estado del ADR-045** (nada impide volver de
    `realizada` a `programada` por SQL directo). No es de este ticket — anotado en `docs/state.md`
    para quien lo recoja, candidato natural: un disparador `before update of estado`.
+
+## Verificación · 11-09-2026
+
+Ejecutada contra la base local de verdad, sobre `T-011a-series-materializacion`
+(`efc3ad6`), antes de tocar una línea. **Los siete criterios automáticos pasan**, dentro de
+`npm run test:rls`: **325 aserciones, cero fallidas, 17 módulos**.
+
+**La prueba que decide, y que no es volver a correr el banco.** El criterio 3 —el solape de
+octubre— tiene tres aserciones, y dos de ellas siguen verdes con la respuesta equivocada:
+una cita a las 02:30 lee «02:30 local» tanto si se eligió la primera ocurrencia como la
+segunda. Se mutó `resolver_hora_local()` cambiando `least()` por `greatest()` en la rama
+`ambigua` —es decir, eligiendo la SEGUNDA de las dos—, `db reset` y banco:
+
+    NOTICE:  OK: Criterio 3: la cita del solape de octubre existe y queda marcada anomalia_horaria
+    NOTICE:  OK: Criterio 3: el instante elegido lee 02:30:00 en hora local
+    ERROR:   ASERCIÓN FALLIDA: GEMELA (discrimina de verdad): una hora UTC más tarde
+             TAMBIÉN lee 02:30:00 — confirma que la hora era ambigua de verdad y no una
+             elección arbitraria
+    npm run test:rls → código 3
+
+Las dos primeras siguen en verde; **solo cae la gemela**. Revertida la mutación, el banco
+vuelve a 0. La gemela del §10 del diseño era necesaria y está bien puesta: sin ella, este
+ticket habría entrado eligiendo la ocurrencia equivocada de octubre sin que nada avisara.
+
+**Las demás puertas**, todas limpias: `npx supabase db reset`, `npm run lint`,
+`npm run lint:migraciones` (10 migraciones), `npx vitest run` (**382 pruebas, 38 ficheros**)
+y `npm run build`. Comprobado además que el disparador `sellar_version_nota` y los seis de
+`citas` existen DESPUÉS del reset, que es la trampa de Docker ya pagada en T-005.
+
+**Dos comprobaciones vivas que el banco no hace**, contra la base y con `rollback`:
+
+| Qué | Resultado |
+|---|---|
+| `update centros set zona_horaria = zona_horaria` (no-op) | **cero** filas de outbox: la guarda `is not distinct from` está puesta. Es el patrón del UPDATE espurio que mordió en T-005 |
+| Privilegios de `anon`/`authenticated` sobre las dos tablas nuevas | `eventos_salientes`: **ninguno**, ni select. `propuestas_cita`: **solo `select`**. RLS activada en las dos. **Sin `TRUNCATE`** — la concesión por defecto que T-004 obliga a revocar |
+
+## Revisión con Opus · 11-09-2026 — dos hallazgos MEDIA, los dos arreglados
+
+Los dos se reprodujeron contra la base antes de arreglarlos, y los dos tienen ahora su
+aserción en `scripts/rls/16-series.sql` §L, **demostrada roja con el arreglo quitado**.
+
+### MEDIA · La cita que nace de una propuesta perdía el tipo de terapia
+
+`agenda_confirmar_propuesta()`, en la rama sin `cita_id` —la que crea una cita nueva desde
+una propuesta de festivo, ausencia u ocupada—, **no escribía `tipo_terapia_id`**, porque
+`propuestas_cita` no lleva esa columna. Reproducido: serie con tarifa, festivo dentro,
+confirmar la propuesta.
+
+    serie.tipo_terapia_id = a1900001-0000-4000-8000-000000000001
+    cita confirmada.tipo_terapia_id = NULL
+
+No es cosmético: `tipos_terapia` es donde viven **`tarifa_base` y `regimen`** (el régimen de
+IVA). Una sesión desplazada por un festivo nacía sin precio y sin régimen. Y **la pérdida
+era definitiva**: en cuanto la sesión pasa, `fn_proteger_cita_pasada()` prohíbe cambiar
+`tipo_terapia_id`, así que ya no hay forma de corregirla — ni por la aplicación ni por SQL.
+El banco no lo veía porque sus aserciones del criterio 7 comprueban `desviada` y
+`motivo_desviacion`, no el tipo.
+
+**Arreglado** recuperándolo de `series_cita`, que es de donde nació la propuesta. Si la
+propuesta no cuelga de una serie queda `null` como antes: no hay de dónde sacarlo y no se
+inventa. Las propuestas nacidas de un evento siempre traen `cita_id`, así que van por la
+otra rama —mover una cita existente— y nunca perdieron nada.
+
+**Negativa**: §L.1 del banco. Con el arreglo quitado (`v_tipo_terapia_id` → `null`):
+
+    ERROR:  ASERCIÓN FALLIDA: REVISIÓN: la cita creada al confirmar una propuesta
+            CONSERVA el tipo_terapia_id de su serie
+    npm run test:rls → código 3
+
+### MEDIA · «Esta y las siguientes» resolvía contra el evento equivocado, y en silencio
+
+`agenda_editar_serie()` buscaba el evento que acababa de provocar con **«el más reciente de
+esta serie»**:
+
+    select e.id into v_evento_id from public.eventos_salientes e
+     where e.tipo = 'agenda.regla_serie_cambiada'
+       and e.carga ->> 'serie_id' = v_serie_id::text
+     order by e.creado_en desc limit 1;
+
+`creado_en` es `now()`, que **no avanza dentro de una transacción**: dos ediciones seguidas
+en la misma transacción empatan y el desempate cogía la vieja. Reproducido —serie a las
+11:00, editar a 16:00, editar a 17:00, misma transacción—:
+
+    r1: {"alcance":"esta_y_siguientes", "evento_id":"c6d2b030-…", "propuestas":[3 ids]}
+    r2: {"alcance":"esta_y_siguientes", "evento_id":"c6d2b030-…", "propuestas":[]}
+    propuestas por hora: 16:00:00 x3
+    regla vigente de la serie: 17:00:00
+
+El **mismo `evento_id`** en las dos llamadas. La segunda edición reprocesa el evento de la
+primera, la idempotencia por `(evento_id, cita_id)` hace lo correcto y no crea nada, y el
+resultado es el peor posible: **la regla queda a las 17:00, las citas siguen a las 11:00 y
+no hay ni una propuesta pendiente que lo reconcilie**. Sin error y sin aviso.
+
+PostgREST da una transacción por llamada, así que desde la pantalla dos ediciones seguidas
+no empatan por `now()`. Pero la consulta es **por contenido, no por identidad**: dos
+ediciones concurrentes de la misma serie resuelven las dos contra la misma fila y reproducen
+el fallo por otro camino. Y el banco entero corre en UNA transacción, que es donde apareció.
+
+**Arreglado** publicando la identidad: `fn_evento_regla_serie()` hace
+`set_config('app.agenda_evento_regla', <id>, true)` con el evento que acaba de insertar, y
+`agenda_editar_serie()` limpia el ajuste **antes** de tocar la regla y lee después lo que
+haya quedado. Si la regla no cambió de verdad no queda nada, y se devuelve la rama de «sin
+evento que resolver» — que antes reprocesaba el último de la serie.
+
+**Negativas**: §L.2 del banco, tres aserciones más la gemela de la edición que no cambia
+nada. Con el arreglo quitado (vuelta al `order by creado_en desc`):
+
+    ERROR:  ASERCIÓN FALLIDA: REVISIÓN: dos ediciones en la MISMA transacción
+            resuelven contra eventos DISTINTOS
+    npm run test:rls → código 3
+
+### Después de los dos arreglos
+
+`npm run test:rls`: **331 aserciones, cero fallidas** (325 + las 6 de §L). `npm run lint`,
+`npm run lint:migraciones`, `npx vitest run` (382 pruebas) y `npm run build`, limpios.
+`npm run tipos` **sin deriva**: ninguno de los dos arreglos cambia una firma.
+
+### Anotado, no arreglado — no es de este ticket
+
+1. **`scripts/rls/14-cadena-huellas.sql` miente en su cabecera**: dice «Al ser el último,
+   nada corre después», y desde T-010 corren `15-agenda` y `16-series` detrás. Hoy es
+   inofensivo —el módulo restaura el `grant` y el disparador que levanta (líneas 579-581) y
+   ni 15 ni 16 tocan `notas_clinicas_versiones`—, pero es una afirmación falsa justo en el
+   sitio donde el próximo módulo irá a buscar la regla.
+2. **La aserción byte a byte del criterio 6 compara en un solo sentido**
+   (`después EXCEPT antes`, sin contar filas), así que **no vería un borrado**. La del
+   criterio 5 sí lo ve, porque añade `count(*) = 3`.
+3. **`agenda_propuestas_de_evento()` marca el evento `entregado` aunque solo haya procesado
+   una parte**: con un evento de centro que afecta a varios profesionales, quien llame
+   primero omite las citas que no le tocan —correcto— y deja el evento marcado como
+   resuelto. Nada se pierde hoy (la función no mira el estado, y el siguiente llamante
+   todavía crea las suyas), pero el consumidor de T-015 no volverá a barrerlo.
+4. **Las propuestas nacidas de un evento no guardan `serie_id`** aunque la cita pertenezca a
+   una serie. `listarPropuestasPendientes()` no filtra por serie, así que hoy no se nota;
+   quien quiera «las propuestas de esta serie» no las encontrará.
+5. **`listarPropuestasPendientes()` devuelve `[]` cuando la consulta falla** (registra en
+   `console.error` y sigue). En una pantalla de propuestas pendientes, un fallo de lectura
+   se ve igual que «no hay nada que decidir». El resto del módulo devuelve `ResultadoCitas`.
+6. **`resumirPropuesta()` devuelve `fechaPrevistaCorta` sin formatear**: es la cadena ISO
+   cruda (`2027-04-15`), no la fecha corta en castellano que da `formatearFechaCorta()` para
+   las citas. Lo verá el corte de MiniMax (T-011b).
+7. **Ni las políticas de T-010 ni las funciones de dominio exigen
+   `es_profesional_asignado(paciente_id)`**: un profesional puede crear una serie o una cita
+   para un `paciente_id` que no tiene asignado. No filtra nombres —`citas_agenda` solo
+   expone ids y `pacientes` sigue cerrada por RLS— y **viene de T-010**, no de aquí: la
+   función de dominio replica el predicado de `citas_alta` tal cual, como mandaba el diseño.
+   Va al ticket que lo creó.
