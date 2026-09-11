@@ -83,4 +83,109 @@ export const es = {
     noSePudoCrearElPaciente: 'No se pudo crear el paciente',
     noSePudoCargarLaListaDePacientes: 'No se pudo cargar la lista de pacientes',
   },
+  // --- T-006b1 · ajustes del administrador -------------------------------
+
+  // Ajustes
+  ajustes: {
+    titulo: 'Ajustes',
+    subtitulo: 'Gestión de la cuenta y del sistema',
+    secciones: {
+      perfil: 'Mi perfil',
+      seguridad: 'Seguridad',
+      administracion: 'Administración',
+    },
+    acciones: {
+      cambiarPin: 'Cambiar mi PIN',
+      cambiarContrasena: 'Cambiar contraseña',
+      totp: 'Verificar TOTP',
+      invitaciones: 'Invitar usuarios',
+      reponerTotp: 'Reponer TOTP',
+      darDeBaja: 'Dar de baja',
+    },
+    permisos: {
+      soloAdministrador: 'Solo disponible para administradores',
+    },
+    confirmacion: {
+      titulo: 'Confirmar acción',
+      reponerTotp: '¿Reponer el TOTP de {nombre}? Su dispositivo actual dejará de funcionar.',
+      darDeBaja: '¿Dar de baja a {nombre}? Esta acción no se puede deshacer.',
+      cancelar: 'Cancelar',
+      confirmar: 'Confirmar',
+    },
+    resultados: {
+      invitacionEnviada: 'Invitación enviada correctamente',
+      totpRepuesto: 'TOTP repuesto correctamente',
+      bajaCompletada: 'Usuario dado de baja',
+      error: 'Error al realizar la acción',
+    },
+  },
+
+  // Invitaciones
+  invitar: {
+    titulo: 'Invitar usuario',
+    descripcion: 'Añadir un nuevo usuario al sistema',
+    formulario: {
+      nombre: 'Nombre completo',
+      correo: 'Correo electrónico',
+      rol: 'Rol',
+      centro: 'Centro',
+      centroAyuda: 'Obligatorio para técnicos administrativos',
+      enviar: 'Enviar invitación',
+      cancelar: 'Cancelar',
+    },
+    errores: {
+      centroRequerido: 'Debe seleccionar un centro para técnicos administrativos',
+      invalidEmail: 'Correo electrónico no válido',
+    },
+    resultados: {
+      exito: 'Invitación enviada a {correo}',
+      error: 'No se pudo enviar la invitación: {motivo}',
+    },
+  },
+
+  // TOTP
+  totp: {
+    titulo: 'Reponer TOTP',
+    descripcion: 'Restablecer la autenticación de doble factor de un usuario',
+    formulario: {
+      usuario: 'Usuario',
+      seleccionarUsuario: 'Seleccionar usuario',
+      reponer: 'Reponer TOTP',
+      cancelar: 'Cancelar',
+    },
+    resultados: {
+      exito: 'TOTP repuesto para {nombre}',
+      error: 'Error al reponer TOTP: {motivo}',
+    },
+  },
+
+  // Baja
+  baja: {
+    titulo: 'Dar de baja',
+    descripcion: 'Desactivar un usuario del sistema',
+    formulario: {
+      usuario: 'Usuario',
+      motivo: 'Motivo de la baja',
+      motivoPlaceholder: 'Motivo opcional...',
+      confirmar: 'Dar de baja',
+      cancelar: 'Cancelar',
+    },
+    resultados: {
+      exito: 'Usuario dado de baja',
+      error: 'No se pudo dar de baja: {mensaje}',
+    },
+  },
+
+  // Common
+  comunes: {
+    cargando: 'Cargando...',
+    error: 'Error',
+    exito: 'Éxito',
+    cerrar: 'Cerrar',
+    guardar: 'Guardar',
+    cancelar: 'Cancelar',
+    aceptar: 'Aceptar',
+    si: 'Sí',
+    no: 'No',
+  },
 } as const;
