@@ -1,9 +1,15 @@
 -- T-005 · Cadena de huellas: sellado, encadenado y verificador.
 --
--- Se añade AL FINAL (14), no intercalado, siguiendo la regla del README: este módulo
+-- Se añadió AL FINAL (14), no intercalado, siguiendo la regla del README: este módulo
 -- manipula filas de notas_clinicas_versiones con los cerrojos levantados, y hacerlo antes
--- de que otros módulos las lean rompería sus supuestos. Al ser el último, nada corre
--- después dentro del mismo `begin … rollback` de test-rls.mjs.
+-- de que otros módulos las lean rompería sus supuestos.
+--
+-- CORRECCIÓN (11-09-2026): ya NO es el último. Desde T-010 corren detrás 15-agenda.sql y
+-- 16-series.sql, y la cabecera seguía diciendo «nada corre después». Sigue siendo seguro
+-- por dos motivos, y conviene comprobar los dos antes de añadir un módulo 17: este fichero
+-- DEVUELVE los cerrojos antes de acabar (el `enable trigger` y el `revoke update` del
+-- final de la sección D), y ni 15 ni 16 tocan notas_clinicas_versiones. Un módulo nuevo que
+-- sí la toque hereda filas manipuladas y restauradas a mano: léase antes la sección D.
 
 \set PCAD  '\'d0050001-0000-4000-8000-000000000001\''
 

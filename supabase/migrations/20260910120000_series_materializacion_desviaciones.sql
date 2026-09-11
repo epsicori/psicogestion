@@ -1045,12 +1045,16 @@ begin
       from public.resolver_hora_local(v_zona_nueva, v_local) r;
     v_fin := v_instante + (v_cita.fin - v_cita.inicio);
 
+    -- HALLAZGO BAJA DE LA REVISIÓN CON OPUS (11-09-2026): la propuesta guardaba la cita y
+    -- el evento, pero no la serie, aunque la cita perteneciera a una. «Las propuestas de
+    -- esta serie» no las encontraba sin pasar por la cita. Se copia de la cita; es null
+    -- cuando la cita es suelta, que es lo correcto.
     insert into public.propuestas_cita
-      (evento_id, cita_id, paciente_id, profesional_id, centro_id, motivo,
+      (evento_id, cita_id, serie_id, paciente_id, profesional_id, centro_id, motivo,
        fecha_prevista, hora_local_prevista, inicio_propuesto, fin_propuesto,
        zona_horaria, creada_por)
     values
-      (p_evento_id, v_cita_id, v_cita.paciente_id, v_cita.profesional_id, v_cita.centro_id, v_motivo,
+      (p_evento_id, v_cita_id, v_cita.serie_id, v_cita.paciente_id, v_cita.profesional_id, v_cita.centro_id, v_motivo,
        v_local::date, v_local::time, v_instante, v_fin, v_zona_nueva, (select auth.uid()))
     returning id into v_propuesta_id;
 

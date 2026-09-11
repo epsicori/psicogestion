@@ -480,3 +480,88 @@ nada. Con el arreglo quitado (vuelta al `order by creado_en desc`):
    expone ids y `pacientes` sigue cerrada por RLS— y **viene de T-010**, no de aquí: la
    función de dominio replica el predicado de `citas_alta` tal cual, como mandaba el diseño.
    Va al ticket que lo creó.
+
+## Los siete anotados, decididos · 11-09-2026
+
+Decisión del propietario sobre cada uno de los hallazgos de §«Anotado, no arreglado».
+Cuatro se arreglan aquí, uno pasa a T-015 y uno abre ticket propio.
+
+| # | Decisión | Dónde queda |
+|---|---|---|
+| 1 · cabecera de `14-cadena-huellas.sql` | Corregir el comentario ahora | este ticket |
+| 2 · el byte a byte del criterio 6 | Añadir el recuento ahora | este ticket |
+| 3 · evento «entregado» a medias | Pasar a T-015 con nota | `tickets/T-015-…` §Heredado de T-011a |
+| 4 · propuestas sin `serie_id` | Rellenarlo desde la cita | este ticket |
+| 5 · `listarPropuestasPendientes()` devolvía `[]` | Devolver `ResultadoCitas` | este ticket |
+| 6 · fecha prevista sin formatear | Formatear en servidor | este ticket |
+| 7 · vínculo con el paciente en el alta | Ticket de corrección sobre T-010 | `tickets/T-029-vinculo-en-el-alta-de-agenda.md` |
+
+### 1 · La cabecera ya no miente, y dice qué comprobar
+
+`scripts/rls/14-cadena-huellas.sql` decía «Al ser el último, nada corre después». Ahora
+dice que **ya no es el último**, nombra a los dos que corren detrás y deja escrito por qué
+sigue siendo seguro —devuelve los cerrojos al final de su sección D, y ni 15 ni 16 tocan
+`notas_clinicas_versiones`—, que es lo que tendrá que volver a comprobar quien añada un
+módulo 17.
+
+### 2 · El criterio 6 ya vería un borrado, y está demostrado que antes no
+
+Se añade el recuento que ya tenía el criterio 5. **Las dos mitades de la demostración**,
+inyectando un `delete` de la cita futura del centro B justo después del cambio de zona:
+
+    con el recuento puesto   → ASERCIÓN FALLIDA: Criterio 6: … ni se lleva ninguna por
+                               delante                              (test:rls → código 3)
+    con el recuento quitado  → el banco entero pasa EN VERDE        (test:rls → código 0)
+
+Verde con una cita borrada delante. Eso era exactamente el hueco.
+
+### 4 · La propuesta guarda su serie
+
+`agenda_propuestas_de_evento()` copia `serie_id` de la cita (null si la cita es suelta, que
+es lo correcto). Dos aserciones nuevas en §L.2, y la que discrimina **no fija un número**:
+compara los dos caminos —buscar por serie contra buscar por cita— y exige que no sea cero.
+La primera versión de esta aserción sí fijaba un número, tres, y se puso roja: la segunda
+edición de la serie crea su propio evento y por tanto tres propuestas más. Se cambió la
+aserción, no el número.
+
+**Negativa**: con `serie_id` puesto a `null` en el insert, `test:rls` sale con código 3 en
+«buscar las propuestas del cambio de regla POR SERIE da lo mismo que buscarlas por cita».
+
+### 5 · Un fallo de lectura ya no se disfraza de «no hay nada pendiente»
+
+`listarPropuestasPendientes()` devuelve `ResultadoCitas<{ propuestas }>` como el resto del
+módulo. Nace `lib/citas/propuestas.test.ts` con tres pruebas y un doble mínimo del cliente
+de Supabase: el camino bueno, **la lista vacía de verdad** (`ok` con cero propuestas) y el
+fallo (`ok: false`, `motivo: 'no_autorizado'`). Las dos primeras son las que separan
+«vacío» de «roto», que era justo lo que la firma anterior no dejaba distinguir.
+
+**Esto cambia el contrato que consume T-011b**: `minimax/cortes/T-011.md` describe la firma
+vieja y **hay que actualizarlo antes de despachar ese corte** — no lo toco desde aquí
+porque el pack es de otro carril (`fabrica/ORDEN.md` §Lo que este carril no toca).
+
+### 6 · La fecha prevista baja formateada
+
+`resumirPropuesta()` devuelve `fechaPrevistaCorta` como `01/05/2026`, con el mismo
+`formatearFechaCorta()` que las citas. `fecha_prevista` es un `date` sin zona, así que se
+ancla **al mediodía** del día en la zona de la propuesta: los saltos de horario caen de
+madrugada, y a las 12:00 no hay hora inexistente ni ambigua en ninguna zona. Dos pruebas
+nuevas, y una de ellas usa **el 29 de marzo** —el domingo del salto— en dos zonas
+distintas, que es donde un anclaje a medianoche se habría llevado el día por delante.
+
+### 3 y 7 · Lo que sale de este ticket
+
+- **T-015** gana la sección «Heredado de T-011a», con el código que lo provoca, por qué hoy
+  no se pierde nada y las dos salidas posibles para el significado de `entregado`. No es
+  una tarea pendiente: es una pregunta que ese ticket tiene que contestar al escribir el
+  consumidor, y lleva exigida su negativa.
+- **T-029 · El vínculo con el paciente, exigido también al crear agenda** queda escrito,
+  `opus`, con la pregunta de dominio delante de todo lo demás: el técnico administrativo
+  seguramente sí debe poder citar a cualquier paciente de su centro, y el profesional
+  probablemente no — salvo que citar sea justamente cómo se crea el vínculo. Esa respuesta
+  se escribe como ADR antes de tocar una política.
+
+### Después de las seis intervenciones
+
+`npm run test:rls`: **333 aserciones, cero fallidas**. `npx vitest run`: **387 pruebas**, 39
+ficheros. `npm run lint`, `npm run lint:migraciones`, `npm run build` y `npm run tipos`
+—sin deriva—, limpios.

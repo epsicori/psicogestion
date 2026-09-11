@@ -60,6 +60,27 @@ describe('resumirPropuesta', () => {
     expect(resumen.horaLocalPrevista).toBe('09:00');
   });
 
+  it('formatea la fecha prevista en servidor, no la baja en ISO (hallazgo 6 de la revisión)', () => {
+    const resumen = resumirPropuesta(base);
+    expect(resumen.fechaPrevistaCorta).toBe('01/05/2026');
+    expect(resumen.fechaPrevistaCorta).not.toBe(base.fechaPrevista);
+  });
+
+  it('el día de calendario no se mueve ni en el cambio de horario ni en otra zona', () => {
+    // 29-03-2026 es el domingo del salto en Europa: a las 02:00 no existen las
+    // 02:30. El anclaje al mediodía tiene que devolver el mismo día igualmente.
+    expect(resumirPropuesta({ ...base, fechaPrevista: '2026-03-29' }).fechaPrevistaCorta).toBe(
+      '29/03/2026',
+    );
+    expect(
+      resumirPropuesta({
+        ...base,
+        fechaPrevista: '2026-03-29',
+        zonaHoraria: 'Atlantic/Canary',
+      }).fechaPrevistaCorta,
+    ).toBe('29/03/2026');
+  });
+
   it('rangoPropuesto es null cuando la propuesta no trae horario (§7 del diseño)', () => {
     const resumen = resumirPropuesta({
       ...base,

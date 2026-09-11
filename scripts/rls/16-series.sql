@@ -438,8 +438,13 @@ select pg_temp.assert(
     select id, inicio, fin from public.citas where centro_id = :CB
     except
     select * from t16_cb_antes
-  ),
-  'Criterio 6: cambiar centros.zona_horaria NO cambia NI UNA fila de citas de ese centro'
+  )
+  -- El EXCEPT en un solo sentido vería un cambio, pero NO un borrado: el conjunto de
+  -- después sería un subconjunto del de antes y saldría verde igual. El recuento cierra
+  -- ese lado, como ya hacía el criterio 5 (hallazgo 2 de la revisión con Opus).
+  and (select count(*) from public.citas where centro_id = :CB)
+      = (select count(*) from t16_cb_antes),
+  'Criterio 6: cambiar centros.zona_horaria NO cambia NI UNA fila de citas de ese centro, ni se lleva ninguna por delante'
 );
 
 select pg_temp.assert(
@@ -643,6 +648,28 @@ select pg_temp.assert(
 select pg_temp.assert(
   (select hora_local from public.series_cita where id = (:'l4_serie_id')::uuid) = time '17:00',
   'GEMELA: la regla de la serie sí quedó a las 17:00 — el fallo era que nadie lo proponía, no que no se guardara'
+);
+
+-- Hallazgo 4 de la revisión: la propuesta nacida de un evento guarda también la SERIE,
+-- no solo la cita y el evento. Sin esto, «las propuestas de esta serie» daba cero.
+select pg_temp.assert(
+  (select count(*) from public.propuestas_cita
+    where serie_id = (:'l4_serie_id')::uuid and motivo = 'regla_cambiada')
+  = (select count(*) from public.propuestas_cita p
+       join public.citas c on c.id = p.cita_id
+      where c.serie_id = (:'l4_serie_id')::uuid and p.motivo = 'regla_cambiada')
+  and (select count(*) from public.propuestas_cita
+        where serie_id = (:'l4_serie_id')::uuid and motivo = 'regla_cambiada') > 0,
+  'REVISIÓN: buscar las propuestas del cambio de regla POR SERIE da lo mismo que buscarlas por cita, y no es cero'
+);
+
+select pg_temp.assert(
+  not exists (
+    select 1 from public.propuestas_cita p
+      join public.citas c on c.id = p.cita_id
+     where p.motivo = 'regla_cambiada' and p.serie_id is distinct from c.serie_id
+  ),
+  'GEMELA: el serie_id de la propuesta es EL DE SU CITA, no uno inventado ni el de otra serie'
 );
 
 -- GEMELA: una edición que NO cambia la regla no resuelve ningún evento (antes

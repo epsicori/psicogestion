@@ -23,8 +23,16 @@ export type PropuestaPendiente = {
  * Propuestas pendientes que el usuario actual puede ver, según
  * `propuestas_cita_lectura` (administrador; el profesional dueño; el técnico
  * de su centro). Nunca formatea horas: eso es `presentacion.ts`.
+ *
+ * Devuelve `ResultadoCitas` como el resto del módulo, y NO una lista vacía
+ * ante un error (hallazgo 5 de la revisión con Opus del 11-09-2026): lo que
+ * hay pendiente son sesiones de pacientes sin colocar, y una pantalla que no
+ * distinga «no hay nada que decidir» de «no se pudo leer» las esconde sin
+ * decirlo. Quien llama muestra `mensaje` y no una lista vacía.
  */
-export async function listarPropuestasPendientes(sesion: Sesion): Promise<PropuestaPendiente[]> {
+export async function listarPropuestasPendientes(
+  sesion: Sesion,
+): Promise<ResultadoCitas<{ propuestas: PropuestaPendiente[] }>> {
   const { data, error } = await sesion.supabase
     .from('propuestas_cita')
     .select(
@@ -35,32 +43,37 @@ export async function listarPropuestasPendientes(sesion: Sesion): Promise<Propue
 
   if (error) {
     console.error('listarPropuestasPendientes: fallo al leer propuestas_cita', error);
-    return [];
+    const motivo = mapearErrorCitas(error);
+    return { ok: false, motivo, mensaje: mensajeParaMotivo(motivo) };
   }
 
-  return (data ?? []).map((fila) => ({
-    id: fila.id,
-    serieId: fila.serie_id,
-    citaId: fila.cita_id,
-    pacienteId: fila.paciente_id,
-    profesionalId: fila.profesional_id,
-    centroId: fila.centro_id,
-    motivo: fila.motivo,
-    fechaPrevista: fila.fecha_prevista,
-    horaLocalPrevista: fila.hora_local_prevista,
-    inicioPropuesto: fila.inicio_propuesto,
-    finPropuesto: fila.fin_propuesto,
-    zonaHoraria: fila.zona_horaria,
-  }));
+  return {
+    ok: true,
+    propuestas: (data ?? []).map((fila) => ({
+      id: fila.id,
+      serieId: fila.serie_id,
+      citaId: fila.cita_id,
+      pacienteId: fila.paciente_id,
+      profesionalId: fila.profesional_id,
+      centroId: fila.centro_id,
+      motivo: fila.motivo,
+      fechaPrevista: fila.fecha_prevista,
+      horaLocalPrevista: fila.hora_local_prevista,
+      inicioPropuesto: fila.inicio_propuesto,
+      finPropuesto: fila.fin_propuesto,
+      zonaHoraria: fila.zona_horaria,
+    })),
+  };
 }
 
 /**
  * Confirma una propuesta pendiente. Con `cita_id`: mueve la cita existente
  * (la base pone la marca de origen, no queda desviada). Sin `cita_id`: crea
- * la cita desde la propuesta (sí queda desviada). Falla con
- * `parametro_invalido` si la propuesta no tiene horario (§7: «si ninguno
- * vale, propuesta sin hora, la decide una persona» — aquí no hay nada que
- * confirmar, solo descartar o resolver a mano en otra pantalla).
+ * la cita desde la propuesta (sí queda desviada, y conserva el tipo de
+ * terapia de su serie). Falla con `parametro_invalido` si la propuesta no
+ * tiene horario (§7: «si ninguno vale, propuesta sin hora, la decide una
+ * persona» — aquí no hay nada que confirmar, solo descartar o resolver a mano
+ * en otra pantalla).
  */
 export async function confirmarPropuesta(
   sesion: Sesion,

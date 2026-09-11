@@ -119,3 +119,43 @@ cumplimentación»).
 - Quien calcula el escalado —una función de Postgres sobre `alertas_documentacion` o el
   consumidor del outbox— lo decide el diseño. Lo que no vale es que esté en los dos sitios.
 - No toques `notas_clinicas` desde aquí. Ni para leer.
+
+## Heredado de T-011a · qué significa que un evento esté «entregado»
+
+**Añadido el 11-09-2026, decisión del propietario sobre el hallazgo 3 de la revisión con
+Opus de T-011a.** No es un arreglo pendiente: es una pregunta que este ticket tiene que
+contestar cuando escriba el consumidor del outbox.
+
+`agenda_propuestas_de_evento()` (T-011a) marca el evento **`entregado`** al terminar,
+aunque solo haya procesado una parte de sus citas. Es deliberado y correcto por dentro: un
+evento de `agenda.zona_centro_cambiada` afecta a citas de varios profesionales, y el
+llamante omite las que no le tocan en vez de abortar el lote — omitir es lo que evita que
+un profesional falle por culpa de la agenda de otro.
+
+    for v_cita_id in select ... citas_afectadas loop
+      ...
+      if not (autorizado) then
+        continue;          -- se omite la que no le toca
+      end if;
+      ...
+    end loop;
+
+    update public.eventos_salientes
+       set estado = 'entregado', actualizado_en = now()
+     where id = p_evento_id;
+
+Hoy no se pierde nada, porque la función **no mira el estado**: el siguiente profesional
+que la llame todavía crea sus propuestas. El problema aparece **cuando este ticket escriba
+el consumidor**: un barrido que salte los `entregado` no volverá a mirar un evento
+procesado a medias, y las citas de los demás profesionales se quedarán sin proponer, en
+silencio.
+
+**Lo que hay que decidir aquí, y dejar escrito en el comentario de la función**: o
+`entregado` significa «se procesó entero» —y entonces la marca se pone solo si no quedan
+citas del evento sin propuesta, con un estado intermedio para lo demás—, o significa
+«alguien lo procesó» —y entonces el barrido no puede usar el estado como filtro—. Lo que
+no vale es que el comentario diga una cosa y el consumidor suponga la otra.
+
+**Cuando se toque, hace falta una negativa**: un evento con citas de dos profesionales,
+procesado por uno, y la comprobación de que las del otro **siguen alcanzables** por el
+camino que este ticket elija. Sin esa prueba el arreglo está escrito, no hecho.
