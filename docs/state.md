@@ -1002,15 +1002,15 @@ Ninguno. Verificación manual pendiente.
 > integrados en `main` y su cola está vacía. Si se le quiere dar trabajo, hay que escribirle
 > un ticket de función pura primero; hoy no existe.
 >
-> **Lo que sigue en el carril de MiniMax**: **revisar el fondo de  y , que ya
-> están entregadas y pasan la puerta** — enrola el TOTP y enseña los códigos; 
-> fija el PIN y pone la guardia de ruta—. Al aplicar , **mirar con lupa el
->  que reescribe sin haberlo visto**: ahí vive el armazón con la
+> **Lo que sigue en el carril de MiniMax**: **revisar el fondo de `b2a` y `b2b`, que ya
+> están entregadas y pasan la puerta** —`b2a` enrola el TOTP y enseña los códigos; `b2b`
+> fija el PIN y pone la guardia de ruta—. Al aplicar `b2b`, **mirar con lupa el
+> `app/(app)/layout.tsx` que reescribe sin haberlo visto**: ahí vive el armazón con la
 > navegación y el selector de centro, y su propia FALTA lo avisa.
 >
-> ** (candado y recuperación) se ha devuelto dos veces** y la segunda ya no por tamaño:
-> siete ficheros, tres fuera de alcance,  por cuarta vez y sin FALTA. O
-> se parte otra vez —candado por un lado,  por otro— o se escribe aquí.
+> **`b3` (candado y recuperación) se ha devuelto dos veces** y la segunda ya no por tamaño:
+> siete ficheros, tres fuera de alcance, `lib/i18n/index.ts` por cuarta vez y sin FALTA. O
+> se parte otra vez —candado por un lado, `/recuperar` por otro— o se escribe aquí.
 >
 > Detrás, T-011·b y T-013. La sección §El carril de MiniMax tiene la plantilla de encargo y
 > las seis cosas que hay que meterle porque no puede comprobarlas.
