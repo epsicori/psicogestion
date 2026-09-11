@@ -1765,3 +1765,53 @@ y ya cerrada.
 **Decisión**: qué se hace.
 **Consecuencias**: qué se gana, qué se pierde, qué queda bloqueado.
 ```
+
+## ADR-055 · Citar no crea el vínculo: el profesional agenda solo para sus pacientes
+
+**11-09-2026** · **Estado**: aceptada
+
+**Contexto**: la revisión con Opus de T-011a (hallazgo 7) encontró que las políticas de
+alta de `citas` y `series_cita` —y las funciones de dominio `agenda_*` que replicaban su
+predicado— miraban el rol, el profesional y el centro, y **nunca si el paciente era del
+profesional**. Un `profesional_sanitario` podía crear una cita, o una serie entera, sobre
+el paciente de otro.
+
+No era una fuga: `citas_agenda` solo expone identificadores, `pacientes` sigue cerrada por
+RLS y el nombre no salía por ningún lado. Lo que permitía era **escribir** agenda sobre el
+paciente de otro, firmada con el nombre de quien la escribe en `auditoria`. Con la consulta
+vacía costaba una fila; con consulta en marcha, cada fila mal atribuida es una cita en la
+agenda de alguien y un cobro colgando de ella.
+
+Debajo había una pregunta que no era técnica, y por eso no la decidió un agente: **¿citar
+es un acto reservado a quien ya tiene el vínculo, o citar es justamente como se crea?**
+
+**Decisión**, en tres líneas:
+
+1. **El técnico administrativo sí puede citar a cualquier paciente de su centro.** Es su
+   trabajo —coge el teléfono y da hora—, y no ve la historia clínica: el candado del PIN y
+   la matriz de roles ya le cierran el contenido. Acotarlo aquí no protegería nada y le
+   impediría hacer lo único que hace.
+2. **El profesional sanitario solo agenda para los pacientes que tiene asignados.**
+3. **Citar NO crea el vínculo.** El paciente se asigna donde se asigna —en su alta y en su
+   ficha—, con su auditoría propia. Se consideró la alternativa («la primera cita de quien
+   llega hoy te lo asigna») y se descarta: convierte un gesto de agenda, que hace también
+   quien no debería poder asignar, en un cambio de titularidad clínica; y deja el alta del
+   vínculo sin un sitio único donde mirarla.
+
+**Cómo se hace cumplir, y por qué en dos capas** (T-029):
+
+- Las políticas `citas_alta` y `series_cita_alta` ganan `es_profesional_asignado(paciente_id)`
+  en su rama de profesional. Es el contrato declarativo: quien lea `pg_policies` ve la regla.
+- Un disparador `before insert` en las dos tablas la vuelve a exigir. **Esta es la capa que
+  cierra el agujero**: las funciones `agenda_*` son `security definer` y **RLS no las cubre**,
+  que es exactamente por donde entró el hallazgo. Sin el disparador, cada función nueva
+  tendría que acordarse de repetir el predicado; con él, no hay que acordarse.
+
+Las dos capas son independientes y está demostrado: neutralizando el disparador, el `INSERT`
+directo sigue rechazado por la política y **la función `definer` deja pasar al paciente
+ajeno**.
+
+**Lo que esta decisión no toca**: el administrador sigue agendando para cualquiera, el
+técnico sigue acotado por centro y no por vínculo, y `postgres` —siembras, migraciones,
+banco de pruebas— no pasa por la comprobación, porque `rol_actual()` es nulo fuera de una
+sesión de usuario.
