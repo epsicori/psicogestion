@@ -3,9 +3,163 @@
 > Memoria viva del proyecto. **Léelo antes de tocar código; actualízalo al terminar.**
 > Es el bus entre agentes: lo que aprendas aquí se escribe, no se re-explica.
 
-**Actualizado**: 06-09-2026
+**Actualizado**: 11-09-2026
 
 ## Ticket en curso
+
+**Al 11-09-2026, lo hecho y sin integrar vuelve a ser más que lo que hay por hacer**, y
+esta vez `main` no está tan atrás: **solo le falta lo de esta sesión**. Cuatro ramas
+esperan, y el orden importa porque dos se encadenan:
+
+| Orden | Rama | Qué lleva | De dónde sale |
+|---|---|---|---|
+| 1 | `T-011a-series-materializacion` | T-011·a completo: materialización, anomalías horarias, outbox, propuestas, `lib/citas/`, `scripts/rls/16-series.sql` | `main` |
+| 2 | `T-029-vinculo-agenda` | T-029: el vínculo con el paciente exigido al crear agenda, ADR-055, `scripts/rls/17-vinculo-agenda.sql` | **sobre T-011a** |
+| 3 | `T-006b1-ajustes-admin` | Las tres pantallas de ajustes del administrador, y toda la vuelta con el carril de MiniMax | `main`, independiente |
+
+**T-011·b sigue bloqueado y no por falta de trabajo**: su propio corte dice que no empieza
+hasta que `a` esté en `main`. Integrar es de una persona (`CARRILES.md` §Integración).
+
+### T-011·a · hecho, verificado y revisado con Opus
+
+Tres commits. **El banco acabó en 344 aserciones, cero fallidas, 18 módulos.**
+
+**La verificación encontró lo que la implementación no podía ver**: el criterio del solape
+de octubre tiene tres aserciones y **dos de ellas están verdes con la respuesta
+equivocada** —una cita a las 02:30 lee «02:30 local» tanto si se eligió la primera
+ocurrencia como la segunda—. Mutando `resolver_hora_local()` de `least()` a `greatest()`,
+solo cae la tercera, la gemela. Sin esa gemela, el ticket habría entrado eligiendo la
+ocurrencia equivocada y nada habría avisado.
+
+**La revisión con Opus cerró dos MEDIA, las dos con reproducción y negativa:**
+
+- **`agenda_confirmar_propuesta()` creaba la cita sin `tipo_terapia_id`.** La sesión
+  desplazada por un festivo nacía **sin tarifa y sin régimen de IVA**, y la pérdida era
+  **definitiva**: en cuanto la cita pasa, `fn_proteger_cita_pasada()` prohíbe cambiar esa
+  columna. Se recupera de `series_cita`.
+- **`agenda_editar_serie()` resolvía contra el evento equivocado, en silencio.** Buscaba su
+  evento con «el más reciente de esta serie» y **`creado_en` es `now()`, que no avanza
+  dentro de una transacción**: la segunda edición resolvía contra el evento de la primera,
+  no proponía nada y dejaba la regla cambiada **sin una sola propuesta que la reconciliara**.
+  Ahora el disparador publica la identidad del evento en un ajuste local a la transacción.
+
+**Los siete hallazgos anotados de esa revisión los decidió el propietario el mismo día**:
+cuatro se arreglaron en el ticket (la cabecera mentirosa de `14-cadena-huellas.sql`, el
+recuento que le faltaba al criterio 6, el `serie_id` de las propuestas de evento, y
+`listarPropuestasPendientes()`, que devolvía `[]` ante un fallo de lectura y ahora devuelve
+`ResultadoCitas`); uno pasó a T-015 con su nota; y el último abrió T-029.
+
+**Aviso para quien escriba la pantalla (T-011·b)**: `listarPropuestasPendientes()` **cambió
+de firma**. `minimax/cortes/T-011.md` todavía describe la vieja y hay que corregirlo antes
+de despachar ese corte.
+
+### T-029 · hecho, con ADR-055
+
+**Citar no crea el vínculo.** El técnico administrativo sí puede citar a cualquier paciente
+de su centro —es su trabajo y no ve la historia—; el profesional, solo a los suyos.
+
+Se hace cumplir en **dos capas, y solo una cierra el agujero**: la política es el contrato
+declarativo que se lee en `pg_policies`, y **el disparador es lo que cubre las funciones
+`agenda_*`**, que son `security definer` y **RLS no las mira** — que es exactamente por
+donde entró el hallazgo. Demostrado: neutralizando el disparador, el `INSERT` directo sigue
+rechazado por la política y `agenda_crear_serie()` deja pasar al paciente ajeno.
+
+### T-006·b1 · las tres pantallas de ajustes del administrador, aplicadas
+
+`/ajustes`, `/ajustes/invitar`, `/ajustes/reponer-totp` y `/ajustes/dar-de-baja`, con lint,
+build y **373 pruebas** limpios, y las tres rutas en prerenderizado parcial como
+`/pacientes`. Salió del carril de MiniMax y **se reescribió aquí casi entera** — el detalle
+de por qué está en §El carril de MiniMax, y es la sección que hay que leer antes de
+encargarle nada.
+
+
+
+## El carril de MiniMax · lo que costó cuatro encargos averiguar
+
+**Léase antes de encargarle nada.** El 11-09-2026 se le encargó T-006·b cuatro veces, y de
+ahí sale todo lo de abajo. La conclusión corta: **el carril funciona con entregas pequeñas
+y sin estado; con una entrega grande no falla por calidad, falla por formato.**
+
+### Cómo se despacha, y dónde queda cada cosa
+
+`node minimax/encargar.mjs T-0XX` con la clave en `.env.local` **del checkout principal**
+—los *worktrees* no comparten ficheros sin seguir, así que el guion se lanza desde ahí—.
+La respuesta se guarda en `minimax/respuestas/` y **no escribe en el repositorio**: la
+aplica una persona o este carril. Las revisiones van a `minimax/revisiones/`.
+
+### La puerta: tres preguntas antes de leer una línea de lógica
+
+Se contestan con tres `grep` y ahorran leer sesenta mil caracteres:
+
+1. **¿Hay algún fichero fuera de su alcance?**
+2. **¿Hay alguna ruta repetida en la respuesta?**
+3. **¿Llegó entera, con su sección FALTA al final?**
+
+Si no son «no, no y sí», la entrega **se devuelve sin leer**.
+
+### La curva de las cuatro vueltas
+
+| | b (1ª) | b (2ª) | b1 | b2 | b3 |
+|---|---|---|---|---|---|
+| `redirect` con el grupo de ruta en la URL | **30** | 0 | 0 | 1 | 0 |
+| API de Zod 3 | 1 | 0 | 0 | 0 | 0 |
+| ficheros fuera de alcance | 1 | 4 | **0** | 0 | 1 |
+| rutas repetidas | 0 | 4 | **0** | 7 | 1 |
+| llegó entera | sí | **no** | sí | **no** | sí |
+| ¿se integró? | no | no | **sí, reescrita** | no | no |
+
+**Lo sistemático se corrige con contrato.** Las treinta redirecciones rotas —los grupos de
+ruta **no van en la URL**, y lo dice la documentación de la versión instalada en
+`node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route-groups.md`—
+desaparecieron en cuanto el encargo lo dijo con su cita.
+
+**Lo de formato, no.** Sigue mandando el mismo fichero dos y tres veces con contenidos
+distintos, y volviendo sobre `lib/i18n/index.ts` después de que se le diga tres veces.
+
+**Y el techo es real**: 16 384 *tokens* de salida. Una entrega de siete pantallas se corta
+**dentro de un `import`**, sin avisar y sin su FALTA. Por eso T-006·b se partió en tres
+—`minimax/cortes/T-006.md`— y por eso T-009·B entró a la primera: era pequeño.
+
+### Lo que hay que darle en el encargo, porque no lo puede comprobar
+
+No tiene acceso al repositorio. Todo lo que no esté en el encargo, se lo inventa o lo pide
+en FALTA. Estas seis cosas están ya escritas en `minimax/encargos/T-006b1.md`, que es **la
+plantilla**:
+
+1. **Una página que lee la sesión NO es `async`.** Con Cache Components activo, eso rompe
+   el build al prerenderizar. El patrón real está en `app/(app)/pacientes/page.tsx`: la
+   página no es `async`, y lo que depende de la sesión va en un componente `async` detrás
+   de su `<Suspense fallback={<Cargando filas={n} />}>`.
+2. **Un componente de cliente no consulta la base.** Los datos se leen en la página, en
+   servidor, y bajan como propiedad. El cliente de navegador es `crearClienteNavegador()`
+   de `lib/supabase/navegador` — **`@/lib/supabase/client` no existe**.
+3. **El formulario tiene patrón**: `react-hook-form` + `zodResolver` con **el mismo esquema
+   que valida la acción**, `ESTADO_INICIAL`/`aplicarErroresDelServidor` de
+   `lib/formularios`, la acción recibe `unknown` y devuelve `EstadoFormulario`, y los
+   errores se reparten con `z.flattenError(...).fieldErrors` — **nunca escogiendo campos a
+   mano de una lista**: así fue como b1 dejó sin mensaje al técnico sin centro, que era su
+   criterio de aceptación.
+4. **Las primitivas tienen su API**: `<Button variante="contorno">`, no `variant="outline"`.
+   `Desplegable` es un `role="combobox"` escrito a mano, no un `<select>`, y **ya existe**.
+5. **`lib/i18n/es.ts` entero o solo las secciones nuevas marcadas.** Un
+   `// ...existing keys...` aplicado tal cual se lleva por delante el catálogo entero, y
+   las claves las comprueba el tipo: deja de compilar la aplicación.
+6. **Un fichero por ruta.** b1 mandó dos juegos de acciones para las mismas tres
+   operaciones; uno era código muerto.
+
+### El dato que decide qué se le encarga
+
+**b1 se integró, sí — reescribiendo casi todo su código.** Lo que de verdad se aprovechó
+fueron **el mapa de pantallas y las claves de i18n**. Eso, a cambio de cuatro encargos y
+cuatro revisiones, sale más caro que escribirlo aquí. **Lo que sí le sienta bien**: una
+entrega pequeña, sin comportamiento con estado y con el contrato bien escrito.
+
+
+## Lo anterior · T-005 y el estado del 06-09-2026
+
+> Se conserva porque su detalle sigue valiendo —las trampas de Docker, el orden del
+> banco, las tres revisiones—; lo que ha cambiado es lo de arriba.
+
 
 **T-005 · Cadena de huellas SHA-256, canonicalización y verificador — HECHO el 06-09-2026,
 tras TRES pasadas de revisión con Opus.** Ninguna de las dos primeras pasó el gate; la
@@ -827,6 +981,45 @@ Ninguno. Verificación manual pendiente.
 
 ## Siguiente paso
 
+> ## Al 11-09-2026 · integrar cuatro ramas, y una decisión sobre el carril de MiniMax
+>
+> **Lo primero, y es de una persona: integrar.** En este orden, porque dos se encadenan:
+> `T-011a-series-materializacion` → `T-029-vinculo-agenda` → `T-006b1-ajustes-admin` (esta
+> sale de `main` y es independiente). Hasta que T-011·a esté dentro, **T-011·b está
+> bloqueado por su propio corte** y el carril de la interfaz no puede avanzar por ahí.
+>
+> **Al integrar T-011·a hay que tocar una cosa fuera de su rama**: `minimax/cortes/T-011.md`
+> describe la firma vieja de `listarPropuestasPendientes()`, que ahora devuelve
+> `ResultadoCitas` y no una lista. Si nadie lo corrige, T-011·b se escribe contra un
+> contrato que ya no existe.
+>
+> **Lo que sigue en este carril**: **T-021 · Dominio Económico** (esquema, auditoría y
+> políticas). Es `opus`, pasa por diseño, abre la fase 2 y sus dos dependencias —T-004 y
+> T-010— están hechas e integradas. Detrás van T-026 (proveedor de facturación) y T-025
+> (expediente de no-SIF).
+>
+> **Lo que sigue en el carril de Kimi**: nada. Sus cuatro tickets (T-017 a T-020) están
+> integrados en `main` y su cola está vacía. Si se le quiere dar trabajo, hay que escribirle
+> un ticket de función pura primero; hoy no existe.
+>
+> **Lo que sigue en el carril de MiniMax**: **revisar el fondo de  y , que ya
+> están entregadas y pasan la puerta** — enrola el TOTP y enseña los códigos; 
+> fija el PIN y pone la guardia de ruta—. Al aplicar , **mirar con lupa el
+>  que reescribe sin haberlo visto**: ahí vive el armazón con la
+> navegación y el selector de centro, y su propia FALTA lo avisa.
+>
+> ** (candado y recuperación) se ha devuelto dos veces** y la segunda ya no por tamaño:
+> siete ficheros, tres fuera de alcance,  por cuarta vez y sin FALTA. O
+> se parte otra vez —candado por un lado,  por otro— o se escribe aquí.
+>
+> Detrás, T-011·b y T-013. La sección §El carril de MiniMax tiene la plantilla de encargo y
+> las seis cosas que hay que meterle porque no puede comprobarlas.
+>
+> **Fase 1, dónde está de verdad**: T-010 y T-011·a hechos; T-011·b, T-012, T-013, T-014 y
+> T-015 pendientes, y **todos ellos son pantalla**. El cuello de botella de la fase 1 ya no
+> es la base de datos: es la interfaz.
+
+
 > ## Al 06-09-2026 · lo que hay hecho y sin integrar es más que lo que hay por hacer
 >
 > **`main` está en `b9d5f66` y se ha quedado atrás.** Tres tickets terminados y verificados
@@ -1248,6 +1441,39 @@ Es el hallazgo que **T-003 dejó anotado para este ticket**, cobrado:
 
 Detectados fuera del alcance de su ticket (constitución, regla 2). Se anotan aquí y se
 recogen cuando llegue la fase que los toca.
+
+
+### T-011·a · seis anotados de la revisión con Opus, decididos el 11-09-2026
+
+Los siete hallazgos que la revisión dejó anotados los decidió el propietario el mismo día.
+**Cuatro se arreglaron dentro del ticket** y no se repiten aquí (están en
+`tickets/T-011-series-citas-desviaciones.md` §Los siete anotados, decididos). Los dos que
+salieron del ticket:
+
+- **A T-015** · «entregado» a medias: `agenda_propuestas_de_evento()` marca el evento como
+  entregado aunque solo haya procesado una parte de sus citas —omite, correctamente, las de
+  los profesionales que no le tocan al llamante—. Hoy no se pierde nada porque la función no
+  mira el estado. **Cuando T-015 escriba el consumidor del outbox, un barrido que salte los
+  `entregado` dejará esas citas sin proponer, en silencio.** La nota completa, con el código
+  y las dos salidas posibles, está en el propio `tickets/T-015-…` §Heredado de T-011·a.
+- **A T-029** · el vínculo con el paciente. **Hecho**, con ADR-055.
+
+### T-029 · el `UPDATE` de `citas` no lleva la exigencia de vínculo
+
+La migración de T-029 exige `es_profesional_asignado(paciente_id)` en el **alta**. Cambiar
+el paciente de una cita futura por `UPDATE` no está permitido hoy por otra vía —
+`agenda_actualizar_cita()` no admite ese parámetro y `fn_proteger_cita_pasada()` lo prohíbe
+en las pasadas—, pero **no hay una negativa que lo demuestre**. Para quien toque
+`citas_modificacion`.
+
+### `14-cadena-huellas.sql` ya no es el último módulo del banco
+
+Arreglado el 11-09-2026 (su cabecera lo decía y era falso desde T-010). Queda como aviso:
+ese módulo **levanta los cerrojos de `notas_clinicas_versiones`** —un `grant` de UPDATE y el
+disparador de inmutabilidad— y los devuelve al final de su sección D. Hoy es inofensivo
+porque ni `15-agenda` ni `16-series` ni `17-vinculo-agenda` tocan esa tabla. **Un módulo
+nuevo que sí la toque hereda filas manipuladas y restauradas a mano: léase antes su sección
+D.**
 
 ### T-005 · `alcance` decide quién lee una versión y NO entra en el sobre — decide una persona, y hoy es gratis
 
