@@ -1,12 +1,20 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { primerAccesoPendiente } from '@/lib/cuentas/primer-acceso';
 import { claveAnonSupabase, urlSupabase } from '@/lib/supabase/config';
 
 // '/prototipo' es la maqueta visual congelada: datos inventados, cero acceso a la
 // base de datos. Pública para poder mirarla sin sesión. Antes de producción, o se
 // protege o se borra (ver app/prototipo/README.md).
 const RUTAS_PUBLICAS = ['/login', '/prototipo'];
+
+/**
+ * Rutas que exigen sesión pero **no** exigen el primer acceso completo: son
+ * justamente donde se completa (T-006·b2). Sin esta excepción, la guardia de abajo
+ * redigiría a `/primera-vez` desde `/primera-vez` — un bucle.
+ */
+const RUTAS_DE_PRIMER_ACCESO = ['/primera-vez'];
 
 export async function proxy(request: NextRequest) {
   let respuesta = NextResponse.next({ request: { headers: request.headers } });
@@ -62,6 +70,40 @@ export async function proxy(request: NextRequest) {
       redireccion.headers.set(clave, valor);
     });
     return redireccion;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Guardia del primer acceso (T-006·b2): quien no ha completado los pasos no
+  // alcanza ninguna ruta con sesión.
+  //
+  // Vive AQUÍ y no en `app/(app)/layout.tsx` por dos motivos, y el primero es el
+  // que hundió la primera propuesta de esta pantalla: un layout **no recibe el
+  // pathname**, así que no puede eximirse a sí mismo, y `/primera-vez` colgando
+  // del mismo grupo se redirige a sí misma en bucle. El segundo es que aquí ya
+  // hay un cliente con las cookies de la petición, y la guardia optimista que ya
+  // existía es exactamente esto.
+  //
+  // Mira LAS DOS COSAS, y ninguna sobra: el nivel de la sesión sabe si ESTA
+  // sesión pasó el segundo factor —eso vive en el token, no en la tabla— y
+  // `estado_de_cuenta()` sabe si al perfil le falta el PIN —eso vive en la tabla
+  // y no en el token—. Con una sola, la guardia deja pasar a quien le falta un
+  // paso.
+  // ---------------------------------------------------------------------------
+  const esRutaDePrimerAcceso = RUTAS_DE_PRIMER_ACCESO.some(
+    (ruta) => request.nextUrl.pathname === ruta || request.nextUrl.pathname.startsWith(`${ruta}/`),
+  );
+
+  if (user && !esRutaPublica && !esRutaDePrimerAcceso) {
+    const pasoPendiente = await primerAccesoPendiente(supabase);
+
+    if (pasoPendiente) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/primera-vez';
+      const redireccion = NextResponse.redirect(url);
+      respuesta.cookies.getAll().forEach((cookie) => redireccion.cookies.set(cookie));
+      respuesta.headers.forEach((valor, clave) => redireccion.headers.set(clave, valor));
+      return redireccion;
+    }
   }
 
   // Entre getUser() y este return no puede haber ningún NextResponse.next() nuevo,

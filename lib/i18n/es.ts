@@ -188,4 +188,41 @@ export const es = {
     si: 'Sí',
     no: 'No',
   },
+  // --- T-006b2 · primer acceso ---------------------------------------------
+
+  primeraVez: {
+    eyebrow: 'Primer acceso',
+
+    totp: {
+      titulo: 'Verificación en dos pasos',
+      escanea:
+        'Escanea el código con tu aplicación de autenticación y escribe el número de seis dígitos que te dé.',
+      yaEnrolado: 'Escribe el número de seis dígitos que te dé tu aplicación de autenticación.',
+      alt: 'Código QR para configurar la verificación en dos pasos',
+      secreto: 'Clave, por si no puedes escanear',
+      codigo: 'Código de seis dígitos',
+      verificar: 'Verificar',
+      codigoNoValido: 'Ese código no es válido. Prueba con el siguiente que te dé la aplicación.',
+      noSePudoEnrolar: 'No se pudo preparar la verificación en dos pasos. Vuelve a intentarlo.',
+    },
+
+    codigos: {
+      titulo: 'Tus códigos de recuperación',
+      unaSolaVez:
+        'Guárdalos ahora en un sitio seguro: son la única forma de entrar si pierdes el teléfono, y no se pueden volver a consultar.',
+      guardados: 'Ya los he guardado',
+    },
+
+    pin: {
+      titulo: 'Tu PIN de historia',
+      explicacion:
+        'Con este PIN abres las historias clínicas. Es tuyo y no lo puede reponer nadie, así que elige uno que recuerdes.',
+      etiqueta: 'PIN de seis dígitos',
+      confirmacion: 'Repite el PIN',
+      fijar: 'Guardar el PIN',
+      noCoinciden: 'Los dos PIN no coinciden.',
+      fijado: 'PIN guardado.',
+    },
+  },
+
 } as const;
