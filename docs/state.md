@@ -1670,6 +1670,42 @@ en contra.
 
 ## Aprendizajes
 
+
+### «Armazon: fallo al cargar el perfil {}» en el navegador — es el reloj, no el código
+
+**12-09-2026.** El navegador enseña `Armazon: fallo al cargar el perfil {}` con un objeto
+vacío, y la pantalla se pinta igual pero con el correo en vez del nombre. El `{}` es lo que
+despista: ese `console.error` corre **en servidor**, y el objeto llega al navegador
+serializado a nada. **El motivo entero está en la salida del servidor**, no en el overlay:
+
+    Armazon: fallo al cargar el perfil {
+      code: 'PGRST303', details: null, hint: null, message: 'JWT issued at future'
+    }
+
+`PGRST303` es PostgREST rechazando un token cuyo `iat` está **en el futuro según el reloj
+del contenedor**. Es desfase entre el reloj de Windows y el de la máquina de Docker/WSL, y
+aparece después de una suspensión o de un cambio de día. **Afecta a todas las consultas de
+esa petición**, no solo al armazón.
+
+**Cómo distinguirlo de un fallo de código, en dos comprobaciones:**
+
+    docker exec supabase_db_Psicogestion date -u    # ¿coincide con el reloj del host?
+    # y pedir un token nuevo y mirar su iat:
+    curl -s -X POST "http://127.0.0.1:54321/auth/v1/token?grant_type=password" \
+      -H "apikey: <ANON_KEY>" -H "Content-Type: application/json" \
+      -d '{"email":"admin@psicogestion.test","password":"psico1234"}'
+
+Si el token nuevo sale con `iat` igual a «ahora» y la consulta a `perfiles` responde 200, el
+entorno está sano y **lo que falla es la cookie del navegador**, emitida mientras los
+relojes no coincidían.
+
+**Arreglo**: cerrar sesión y volver a entrar. Si reaparece, resincronizar el reloj de la VM
+—reiniciar Docker Desktop, o `wsl --shutdown` antes de arrancarlo—.
+
+**La trampa de diagnóstico**: con una sesión recién hecha **no se reproduce**, así que es
+fácil darlo por transitorio y seguir. No lo es; vuelve en cuanto se use una sesión anterior
+al desfase.
+
 ### Pruebas unitarias — dónde viven y cómo se corren
 
 - **El fichero de prueba vive junto al módulo que prueba**: `app/login/esquemas.ts` →
