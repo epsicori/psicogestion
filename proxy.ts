@@ -11,10 +11,19 @@ const RUTAS_PUBLICAS = ['/login', '/prototipo'];
 
 /**
  * Rutas que exigen sesión pero **no** exigen el primer acceso completo: son
- * justamente donde se completa (T-006·b2). Sin esta excepción, la guardia de abajo
- * redigiría a `/primera-vez` desde `/primera-vez` — un bucle.
+ * justamente donde se completa (T-006·b2) o donde se recupera cuando no se puede
+ * completar (T-006·b3).
+ *
+ * `/primera-vez` está aquí porque si no, la guardia de abajo redirigiría a
+ * `/primera-vez` desde `/primera-vez` — un bucle.
+ *
+ * **`/recuperar` está aquí por un motivo menos evidente y más importante**: quien ha
+ * perdido su segundo factor entra con contraseña, se queda en `aal1` y la guardia lo
+ * manda a `/primera-vez`, donde no puede hacer nada —su factor sigue existiendo y no
+ * tiene cómo superarlo—. Sin esta exención, la pantalla de recuperación existiría y
+ * **nadie podría llegar a ella**.
  */
-const RUTAS_DE_PRIMER_ACCESO = ['/primera-vez'];
+const RUTAS_DE_ACCESO = ['/primera-vez', '/recuperar'];
 
 export async function proxy(request: NextRequest) {
   let respuesta = NextResponse.next({ request: { headers: request.headers } });
@@ -89,11 +98,11 @@ export async function proxy(request: NextRequest) {
   // y no en el token—. Con una sola, la guardia deja pasar a quien le falta un
   // paso.
   // ---------------------------------------------------------------------------
-  const esRutaDePrimerAcceso = RUTAS_DE_PRIMER_ACCESO.some(
+  const esRutaDeAcceso = RUTAS_DE_ACCESO.some(
     (ruta) => request.nextUrl.pathname === ruta || request.nextUrl.pathname.startsWith(`${ruta}/`),
   );
 
-  if (user && !esRutaPublica && !esRutaDePrimerAcceso) {
+  if (user && !esRutaPublica && !esRutaDeAcceso) {
     const pasoPendiente = await primerAccesoPendiente(supabase);
 
     if (pasoPendiente) {

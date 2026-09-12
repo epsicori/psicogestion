@@ -225,4 +225,35 @@ export const es = {
     },
   },
 
+  // --- T-006b3 · candado de la historia y recuperación -----------------------
+
+  candado: {
+    titulo: 'Historia clínica',
+    subtitulo: 'Para abrir una historia hace falta tu PIN.',
+    explicacion: 'Escribe tu PIN para abrir las historias durante un rato.',
+    etiquetaPin: 'PIN',
+    abrir: 'Abrir',
+    abierta: 'Historias abiertas.',
+    abiertaMinutos: 'Historias abiertas. Se cierran solas en {minutos} min.',
+    porCaducar: 'Se van a cerrar en breve. Si sigues trabajando, amplía el tiempo.',
+    prolongar: 'Ampliar el tiempo',
+    cerrar: 'Cerrar ahora',
+    cerrada: 'Historias cerradas.',
+    pinIncorrecto: 'El PIN no es correcto.',
+    pinNoValido: 'El PIN son seis dígitos.',
+    bloqueado: 'Demasiados intentos. Prueba de nuevo más tarde.',
+    bloqueadoMinutos: 'Demasiados intentos. Prueba de nuevo en {minutos} min.',
+  },
+
+  recuperar: {
+    eyebrow: 'Recuperar el acceso',
+    titulo: '¿Has perdido tu teléfono?',
+    explicacion:
+      'Escribe uno de los códigos de recuperación que guardaste. Cada código sirve una sola vez, y al usarlo tendrás que volver a configurar la verificación en dos pasos.',
+    etiqueta: 'Código de recuperación',
+    canjear: 'Usar el código',
+    codigoNoValido: 'Ese código no es válido.',
+    bloqueado: 'Demasiados intentos. Prueba de nuevo más tarde.',
+  },
+
 } as const;
