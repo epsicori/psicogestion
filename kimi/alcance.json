@@ -6,7 +6,6 @@
     "'excepciones' levanta la zona prohibida para rutas concretas y solo en ese ticket.",
     "Este fichero lo mantiene el arquitecto. Un agente que lo edita esta haciendo trampa."
   ],
-
   "prohibido": [
     "supabase/**",
     "docs/**",
@@ -35,12 +34,10 @@
     "kimi/proyecto.md",
     "kimi/guion.md"
   ],
-
   "comun": [
     "kimi/informes/T-*.md",
     "kimi/hallazgos/T-*.md"
   ],
-
   "tickets": {
     "T-016": {
       "titulo": "Banco de pruebas unitarias",
@@ -69,7 +66,6 @@
         "vite-tsconfig-paths"
       ]
     },
-
     "T-017": {
       "titulo": "Identificadores y contacto espanoles",
       "escritura": [
@@ -77,7 +73,6 @@
       ],
       "dependencias": []
     },
-
     "T-018": {
       "titulo": "Fechas, zona horaria y semana",
       "escritura": [
@@ -89,7 +84,6 @@
         "@date-fns/tz"
       ]
     },
-
     "T-019": {
       "titulo": "Linter de migraciones",
       "escritura": [
@@ -100,11 +94,25 @@
       ],
       "dependencias": []
     },
-
     "T-020": {
       "titulo": "Estados de la cita, puros",
       "escritura": [
         "lib/agenda/**"
+      ],
+      "dependencias": []
+    },
+    "T-030": {
+      "titulo": "La rejilla de la semana, pura",
+      "escritura": [
+        "lib/agenda/**",
+        "lib/fechas/**"
+      ],
+      "dependencias": []
+    },
+    "T-031": {
+      "titulo": "Dinero: importes en centimos, IVA y redondeo",
+      "escritura": [
+        "lib/dinero/**"
       ],
       "dependencias": []
     }

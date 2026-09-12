@@ -998,9 +998,16 @@ Ninguno. Verificación manual pendiente.
 > T-010— están hechas e integradas. Detrás van T-026 (proveedor de facturación) y T-025
 > (expediente de no-SIF).
 >
-> **Lo que sigue en el carril de Kimi**: nada. Sus cuatro tickets (T-017 a T-020) están
-> integrados en `main` y su cola está vacía. Si se le quiere dar trabajo, hay que escribirle
-> un ticket de función pura primero; hoy no existe.
+> **Lo que sigue en el carril de Kimi**: **T-030** (la rejilla de la semana) y **T-031**
+> (dinero: importes en céntimos, IVA y redondeo), escritos el 12-09-2026 porque su cola
+> estaba vacía —sus cinco primeros tickets están integrados—. Los dos son puros, con su
+> entrada en `kimi/alcance.json`, y cada uno desbloquea algo real: la rejilla es la mitad
+> difícil de T-014, y el dinero lo van a necesitar T-021, T-023 y T-027 a la vez. **Si se
+> escribe suelto dentro de cada pantalla, se redondea distinto en cada una.**
+>
+> **La lección del carril**: se quedó parado sin que nadie lo notara, no por dificultad
+> sino porque **nadie le escribía tickets**. Cuando termine estos dos volverá a pasar: el
+> carril de funciones puras solo tiene trabajo si alguien se lo corta.
 >
 > **Lo que sigue en el carril de MiniMax**: **revisar el fondo de `b2a` y `b2b`, que ya
 > están entregadas y pasan la puerta** —`b2a` enrola el TOTP y enseña los códigos; `b2b`
