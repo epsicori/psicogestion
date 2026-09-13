@@ -1,0 +1,53 @@
+{
+  "_uso": "Reglas de invariantes comprobables por regex sobre la ruta relativa (barras /). Las corre .claude/guard.mjs como hook tras cada edición y se pueden correr a mano: node .claude/guard.mjs [ficheros]. Nivel error bloquea; aviso informa. La regla 6 de la constitución la comprueba de verdad npm run lint:migraciones; aquí solo hay un aviso temprano.",
+  "reglas": [
+    {
+      "id": "AUTH-01", "nivel": "error", "regla": 1,
+      "donde": "^(app|components|lib)/.*\\.(ts|tsx)$",
+      "busca": "\\.getSession\\(",
+      "msg": "getUser() para autorizar, nunca getSession(): la sesión no se valida contra el servidor (patrón de T-000)."
+    },
+    {
+      "id": "SRV-01", "nivel": "aviso", "regla": 1,
+      "donde": "^(app|components)/.*\\.(ts|tsx)$",
+      "busca": "SUPABASE_SERVICE_ROLE|service_role",
+      "msg": "La clave de servicio nunca cerca del navegador: el cliente usa la clave anónima y depende de RLS. Si esto es un Server Action, justifícalo en el ticket."
+    },
+    {
+      "id": "FECHAS-01", "nivel": "error",
+      "donde": "\\.(ts|tsx)$",
+      "busca": "from ['\"]date-fns-tz['\"]",
+      "msg": "date-fns 4 lleva las zonas en @date-fns/tz (TZDate, tz); date-fns-tz es el paquete de date-fns 2 y 3 (T-018)."
+    },
+    {
+      "id": "CACHE-01", "nivel": "aviso",
+      "donde": "^app/.*\\.(ts|tsx)$",
+      "busca": "use cache: private",
+      "msg": "use cache: private guarda en memoria del navegador: prohibido para datos clínicos (ADR-043)."
+    },
+    {
+      "id": "NEXT-01", "nivel": "error",
+      "donde": "^middleware\\.ts$",
+      "busca": "[\\s\\S]",
+      "msg": "En Next.js 16 el middleware es proxy.ts, no middleware.ts."
+    },
+    {
+      "id": "MIG-01", "nivel": "aviso",
+      "donde": "^supabase/migrations/.*\\.sql$",
+      "busca": "\\bdrop\\s+(table|column)\\b", "flags": "i",
+      "msg": "Migración destructiva en un solo paso: las migraciones van siempre hacia delante (convención). Si es intencionado, dos migraciones y el porqué en el ticket."
+    },
+    {
+      "id": "MIG-02", "nivel": "aviso", "regla": 6,
+      "donde": "^supabase/migrations/.*\\.sql$",
+      "busca": "\\b(update|delete\\s+from)\\s+(public\\.)?(notas_clinicas_versiones|facturas|auditoria|accesos_historia)\\b", "flags": "i",
+      "msg": "Regla 6: nada clínico ni económico se modifica ni se borra. Solo se añade. (npm run lint:migraciones lo comprueba de verdad.)"
+    },
+    {
+      "id": "LOG-01", "nivel": "aviso",
+      "donde": "^(app|lib|components)/.*\\.(ts|tsx)$",
+      "busca": "console\\.log\\(",
+      "msg": "Sin console.log en código de aplicación: los logs van a Vercel y se conservan; un dato clínico en un log es una fuga."
+    }
+  ]
+}

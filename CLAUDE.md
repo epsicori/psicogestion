@@ -63,7 +63,11 @@ TanStack Table · date-fns.
    y se sigue.
 3. **Nada está «hecho» sin evidencia.** Cada criterio de aceptación se cierra con la
    salida real del comando o la comprobación que lo demuestra.
-4. **Lee `docs/state.md` antes de tocar código** y deja la memoria actualizada al acabar.
+4. **Lee las primeras 80 líneas de `docs/state.md` antes de tocar código** y deja la memoria
+   al día al acabar: la bitácora del ticket en `docs/bitacora/`, y `state.md` reescrito, no
+   ampliado (un hook lo limita a 80 líneas). Las trampas de cada zona están en `.claude/rules/`
+   y se cargan solas al tocar sus ficheros; la historia anterior al 13-09-2026, en
+   `docs/bitacora/estado-hasta-2026-09-13.md`.
 5. **Contexto mínimo.** A un subagente se le pasa el id del ticket y punteros, nunca la
    conversación ni el historial de otros tickets.
 6. **Nada clínico ni económico se modifica ni se borra. Solo se añade.**
@@ -72,26 +76,21 @@ TanStack Table · date-fns.
    `auditoria` o `accesos_historia` **es un bug, no una optimización** — y la base de
    datos debe impedirlo, no solo la aplicación.
 
-## Enrutado de modelos
+## Enrutado por riesgo (pipeline v3; `modelo: opus` equivale a `riesgo: alto`, `sonnet` a `medio`)
 
-- Ticket **`opus`**: equivocarse obligaría a migrar datos o podría exponer información.
+- **`riesgo: alto`**: equivocarse obligaría a migrar datos o podría exponer información.
   Esquema, RLS, auditoría, cadena de huellas, series de citas, facturación y Verifactu,
-  cifrado, importador, acceso de emergencia. Pasa por la etapa de diseño.
-- Ticket **`sonnet`**: equivocarse es reescribir un componente. Pantallas, formularios,
-  tablas, filtros, ajustes, seed. **Va sobre-especificado y salta el diseño.**
-- **Revisión con Opus** solo en tickets `opus` y en cualquiera que toque RLS, dinero o
-  datos clínicos. Un ticket de interfaz pura cierra con verificador, lint y build.
+  cifrado, importador, acceso de emergencia. Diseño con el arquitecto (`tickets/T-XXX/diseno.md`),
+  implementación con Opus, verificación y **dos revisores** en paralelo.
+- **`riesgo: medio`**: equivocarse es reescribir un módulo. Diseño corto, Sonnet, un revisor.
+- **`riesgo: bajo`**: pantallas de pintura, textos, seed. Sin diseño; cierra con verificador,
+  lint y build. Solo lo que no tiene comportamiento es `delegable: volumen`.
+- El ticket lleva `territorio:` (qué puede escribir) y el gate de merge exige
+  `tickets/T-XXX/evidencia.json` y `revision.json` sellados por los hooks.
 
-## Tres carriles
+## Carriles
 
-Desde el 29-08-2026 el plan lo ejecutan tres modelos a la vez y **el reparto es por
-fichero**: `CARRILES.md`. Tu carril —el de la fábrica— es el de la base de datos, y su cola,
-sus trampas conocidas y su deber de revisión están en **`fabrica/ORDEN.md`**. Léelo antes de
-coger un ticket.
-
-Dos consecuencias que no se deducen del enrutado de modelos:
-
-- **T-006 y T-008 los ejecutas tú aunque sean `sonnet`.** Escriben en `supabase/`, y
-  `supabase/` tiene un solo dueño o las migraciones de dos carriles se ordenan mal.
-- **`components/**`, `app/**` y `lib/{identidad,fechas,agenda}/**` tienen a alguien dentro.**
-  Si un ticket tuyo los necesita, se corta el ticket o se espera; no se toca «un momento».
+El reparto por fichero (quién escribe dónde, qué se delega y cómo se integra) está en
+`.claude/rules/pipeline.md`, que se carga siempre. `CARRILES.md` y `fabrica/ORDEN.md` quedan
+como historia del reparto a tres del 29-08-2026; el carril de interfaz lo lleva la fábrica desde
+el 06-09-2026 y el de funciones puras sigue siendo de Kimi.
