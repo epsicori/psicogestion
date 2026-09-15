@@ -9,9 +9,9 @@ import { exigirSesion } from '@/lib/supabase/sesion';
 import { FormularioCandado } from './formulario-candado';
 
 /**
- * El candado de la historia clínica (ADR-026). Hoy es una pantalla propia porque
- * todavía no hay ficha de paciente que abrir —eso es T-013—; cuando la haya, será
- * ella quien mande aquí y vuelva.
+ * El candado de la historia clínica (ADR-026). Es una pantalla propia, para fijar o
+ * reabrir la ventana sin tener un paciente delante; desde T-013 la ficha lleva su
+ * propia petición de PIN dentro de la pestaña, así que ya no manda aquí para volver.
  *
  * El técnico administrativo **no tiene historia que abrir** y por tanto no tiene
  * PIN: `requiere_pin` es falso para él en la base, y aquí no pinta nada.

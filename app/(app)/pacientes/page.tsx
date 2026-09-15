@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { UserRound } from 'lucide-react';
+import Link from 'next/link';
 import { Suspense, cache } from 'react';
 
 import { iniciales } from '@/components/armazon/modulos';
@@ -70,7 +71,10 @@ async function ListaDePacientes() {
         const nombreCompleto = `${paciente.nombre} ${paciente.apellidos}`;
         return (
           <li key={paciente.id}>
-            <div className="hover:bg-muted flex items-center gap-3 px-4 py-3 transition">
+            <Link
+              href={`/pacientes/${paciente.id}`}
+              className="hover:bg-muted focus-visible:ring-ring/50 flex min-h-11 items-center gap-3 px-4 py-3 outline-none transition focus-visible:ring-2"
+            >
               <span className="bg-secondary text-secondary-foreground flex size-9 shrink-0 items-center justify-center rounded-full font-serif text-xs font-semibold">
                 {iniciales(nombreCompleto)}
               </span>
@@ -84,7 +88,7 @@ async function ListaDePacientes() {
                   })}
                 </span>
               </span>
-            </div>
+            </Link>
           </li>
         );
       })}

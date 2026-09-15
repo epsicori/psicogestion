@@ -255,5 +255,93 @@ export const es = {
     codigoNoValido: 'Ese código no es válido.',
     bloqueado: 'Demasiados intentos. Prueba de nuevo más tarde.',
   },
+
+  ficha: {
+    // Cabecera
+    volverALaLista: 'Volver a la lista',
+    noSePudoCargarLaFicha: 'No se pudo cargar la ficha de este paciente.',
+    centro: 'Centro',
+    sinCentro: 'Sin centro asignado',
+    alta: 'Alta',
+    edad: 'Edad',
+    anios: '{n} años',
+    sinFechaDeNacimiento: 'Sin fecha de nacimiento',
+    motivoDeConsulta: 'Motivo de consulta',
+    sinMotivoRegistrado: 'Sin motivo registrado',
+    nivelDeRiesgo: 'Nivel de riesgo',
+    riesgoBajo: 'Bajo',
+    riesgoModerado: 'Moderado',
+    riesgoAlto: 'Alto',
+    valoradoEl: 'Valorado el {fecha}',
+    valoracionAntigua: 'Valorado el {fecha}. Conviene revisarlo.',
+    sinValoracion: 'Sin valorar',
+    indicadorDeRiesgo: 'Indicador de riesgo',
+    conIndicador: 'Activo',
+    sinIndicador: 'Sin indicador',
+    contactoDeEmergencia: 'Contacto de emergencia',
+
+    // Pestañas de la ficha
+    secciones: 'Secciones de la ficha',
+    resumen: 'Resumen',
+    fichaDelPaciente: 'Ficha del paciente',
+    historiaClinica: 'Historia clínica',
+    documentos: 'Documentos y consentimientos',
+    facturacion: 'Facturación',
+
+    // Sub-pestañas de la historia
+    seccionesDeLaHistoria: 'Secciones de la historia clínica',
+    historial: 'Historial clínico',
+    notas: 'Notas clínicas',
+    evaluaciones: 'Evaluaciones',
+    informes: 'Informes',
+
+    // Candado
+    historiaBloqueada: 'Esta historia está cerrada',
+    historiaBloqueadaExplicacion:
+      'El contenido clínico se abre con tu PIN y se cierra solo al cabo de un rato. Escríbelo para verlo.',
+    cerrarHistoria: 'Cerrar la historia',
+    historiaAbiertaMinutos: 'Historia abierta. Se cierra sola en {minutos} min.',
+    historiaPorCerrarse: 'Se va a cerrar en breve. Si sigues trabajando, amplía el tiempo.',
+    ampliarElTiempo: 'Ampliar el tiempo',
+    seCerroSola: 'La historia se ha cerrado sola. Vuelve a escribir tu PIN para seguir.',
+    noSePudoAbrir: 'No se pudo abrir esta historia.',
+    vecesEnEstaVentana: 'Es la vez {n} que la abres desde que escribiste el PIN.',
+
+    // Historial clínico
+    episodios: 'Episodios',
+    episodioAbierto: 'Abierto el {fecha}',
+    episodioCerrado: 'Del {inicio} al {fin}',
+    sinEpisodios: 'Todavía no hay episodios',
+    sinEpisodiosExplicacion:
+      'Un episodio agrupa el motivo por el que alguien viene y todo lo que se hace mientras dura.',
+    modalidadIndividual: 'Individual',
+    modalidadPareja: 'Pareja',
+    modalidadFamiliar: 'Familiar',
+    modalidadGrupo: 'Grupo',
+    diagnosticos: 'Diagnósticos',
+    diagnosticoPrincipal: 'Principal',
+    diagnosticoRetirado: 'Retirado el {fecha}',
+    sinDiagnosticos: 'Sin diagnósticos registrados',
+    valoracionesDeRiesgo: 'Valoraciones de riesgo',
+    planDeSeguridad: 'Plan de seguridad',
+
+    // Lo que todavía no está
+    enPreparacion: 'Esta sección todavía no está',
+    notasEnPreparacion:
+      'Aquí irán las notas de cada sesión, con sus versiones. Se escriben en su propio ticket.',
+    evaluacionesEnPreparacion:
+      'Aquí irán las pruebas pasadas, su corrección y los archivos adjuntos.',
+    informesEnPreparacion:
+      'Aquí irán los informes de alta, seguimiento y derivación, con su firma.',
+    resumenEnPreparacion:
+      'Aquí irán la última sesión, la próxima cita y el recuento de actividad.',
+    datosEnPreparacion: 'Aquí irán el contacto y la gestión asistencial de este paciente.',
+    documentosEnPreparacion:
+      'Aquí irán los consentimientos firmados, la protección de datos y los adjuntos administrativos.',
+    facturacionVacia: 'Aquí no hay nada todavía',
+    facturacionVaciaExplicacion:
+      'La facturación de este paciente se construye en su propio ticket. Preferimos dejarlo vacío y decirlo a enseñar cifras que no son.',
+  },
+
 
 } as const;

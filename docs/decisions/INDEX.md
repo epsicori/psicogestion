@@ -37,3 +37,4 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-053](ADR-053.md) | Psicogestión no expide facturas: las expide el proveedor del cliente, y nosotros solo dejamos el borrador | aceptada | 28-08-2026 |
 | [ADR-054](ADR-054.md) | Lenguaje claro en todo texto dirigido al paciente | aceptada | 01-09-2026 |
 | [ADR-055](ADR-055.md) | Citar no crea el vínculo: el profesional agenda solo para sus pacientes | aceptada | 11-09-2026 |
+| [ADR-056](ADR-056.md) | El contenido clínico llega por la acción de apertura, nunca por el renderizado de la ruta | aceptada | 15-09-2026 |
