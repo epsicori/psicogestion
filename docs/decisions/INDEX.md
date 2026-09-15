@@ -40,3 +40,4 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-056](ADR-056.md) | El contenido clínico llega por la acción de apertura, nunca por el renderizado de la ruta | aceptada | 15-09-2026 |
 | [ADR-057](ADR-057.md) | `alcance` entra en el sobre: quién puede leer una versión se sella igual que quién la escribió | aceptada | 15-09-2026 |
 | [ADR-058](ADR-058.md) | La nota de sesión tiene ruta propia, y esa ruta no abre nada al cargarse (enmienda al 056) | aceptada | 15-09-2026 |
+| [ADR-059](ADR-059.md) | Una nota clínica la corrige quien la escribió; quien no estuvo en la sala añade la suya | aceptada | 15-09-2026 |

@@ -11,12 +11,13 @@ export type ModalidadRelacional = Database['public']['Enums']['modalidad_relacio
 /**
  * Cuánto vale una valoración de riesgo antes de que enseñarla sin más induzca a error.
  *
- * **Seis meses es provisional y lo decide una persona con formación clínica, no un
- * agente.** Está aquí en una constante con nombre, y no repartido por la pantalla, para que
- * cambiarlo sea una línea. Mientras tanto la interfaz no oculta la valoración vieja ni la
- * llama caducada: sigue enseñando el nivel y la fecha, y añade que conviene revisarlo.
+ * **Tres meses, criterio del propietario del producto el 15-09-2026**: la valoración de riesgo
+ * se usa como seguimiento activo, no como una foto de la primera consulta, así que se revisa
+ * cada trimestre. Está en una constante con nombre, y no repartido por la pantalla, para que
+ * cambiarlo vuelva a ser una línea. La interfaz no oculta la valoración vieja ni la llama
+ * caducada: sigue enseñando el nivel y la fecha, y añade que conviene revisarlo.
  */
-export const MESES_VALORACION_VIGENTE = 6;
+export const MESES_VALORACION_VIGENTE = 3;
 
 /** Años cumplidos, o `null` si no consta la fecha de nacimiento. */
 export function edadEnAnios(fechaNacimiento: string | null, ahora: Date = new Date()): number | null {

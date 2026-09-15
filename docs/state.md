@@ -3,7 +3,7 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño (ADR, trampas, circuito)
 > en tickets y bitácora; las reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 15-09-2026 · `main` al día · tickets: 17 hechos · 3 en curso · 13 pendientes
+**Actualizado**: 15-09-2026 · `main` al día · tickets: 17 hechos · 4 en curso · 13 pendientes
 
 ## Dónde estamos
 
@@ -24,14 +24,11 @@
   navegador (`docs/bitacora/T-006.md`).
 - T-013 · Ficha del paciente: **todo lo automático cerrado** (tabla en el ticket §Estado de entrega).
   Quedan los de navegador: matriz de roles con las tres sesiones, cotejo con `/prototipo`, 44 px.
+- T-012 · Nota clínica: diseño hecho, cuatro cortes. En vuelo el previo (sobre de doce claves), que
+  tiene que estar en `main` **antes de que nadie firme**: después cuesta una era de esquema.
 
 ## Bloqueos y decisiones que no toma un agente
 
-- **`alcance` no entra en el sobre canónico de la versión** (T-005). Decisión de una persona y **con
-  reloj**: gratis mientras `notas_clinicas_versiones` esté vacía; con la primera firma real dentro,
-  una era de esquema para siempre.
-- **Cada cuánto caduca una valoración de riesgo.** `MESES_VALORACION_VIGENTE = 6` es un marcador
-  puesto por falta de criterio clínico, y decide cuándo la ficha marca un «riesgo alto» como viejo.
 - Económico: diseño comiteado (`79e039f`) y una **implementación sin comitear** en el worktree
   `agent-a3e72807070793a0e` (`…/20260913120000_economico_esquema.sql`, 1413 líneas). Decidir si se
   retoma o se rehace: no pasó por verificación ni revisión.
@@ -72,8 +69,6 @@
 - **El técnico administrativo no puede leer `consentimientos`** pese al choque 12; llega a la
   respuesta por `alertas_documentacion`, que no lleva palabra clínica. Abrirle la tabla sería una
   decisión de arquitectura, no un arreglo de pantalla.
-- El `Button` compartido mide **40 px** contra el criterio de 44 px; en la ficha se sortea con
-  `min-h-11` local. Arreglarlo es tocar la primitiva de T-007, no la pantalla.
 - T-011 · «entregado» a medias con varios profesionales → T-015. · `minimax/cortes/T-011.md` trae la
   firma vieja de `listarPropuestasPendientes()`. · La base no impone las transiciones del ADR-045. ·
   `periodicidad = 'mensual'` sin definir.

@@ -154,22 +154,12 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
               </p>
 
               {porCaducar && (
-                <Button
-                  variante="contorno"
-                  className="min-h-11"
-                  onClick={ampliar}
-                  disabled={trabajando}
-                >
+                <Button variante="contorno" onClick={ampliar} disabled={trabajando}>
                   {t('ficha.ampliarElTiempo')}
                 </Button>
               )}
 
-              <Button
-                variante="contorno"
-                className="min-h-11"
-                onClick={cerrar}
-                disabled={trabajando}
-              >
+              <Button variante="contorno" onClick={cerrar} disabled={trabajando}>
                 {t('ficha.cerrarHistoria')}
               </Button>
             </div>

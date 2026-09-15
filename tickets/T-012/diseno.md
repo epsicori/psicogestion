@@ -245,6 +245,11 @@ orden (el orden es el diseño; ver §4):
    privilegio extra, y si algún día la política cambiara, esto **debe** fallar en voz alta en vez
    de saltársela.
 6. **`organizacion.margen_sesion_minutos smallint not null default 15 check (between 0 and 120)`**
+   — los **15 minutos por defecto los confirma el propietario el 15-09-2026**: «escrita en sesión»
+   significa durante la cita o en el hueco hasta el paciente siguiente, y es el mismo número que la
+   ventana del candado del ADR-026, de modo que la aplicación no maneja dos relojes distintos con
+   el mismo aspecto. Quien escriba al final de la mañana verá `false`, y eso es lo que el sello
+   tiene que decir.
    y **`centros.margen_sesion_minutos smallint check (between 0 and 120)`** (nulable = hereda,
    igual que `zona_horaria`). Con sus `comment on column` citando el ADR-046.
 7. **`public.margen_sesion_de_cita(p_cita_id uuid) returns smallint`**, `stable`, `security
@@ -669,11 +674,12 @@ claves crea filas que la migración del 057 hará abortar (y con razón).
   aceptación que lo pida.
 - **Recuperar el borrador tras un conflicto** más allá de enseñar lo guardado. El ADR-036 dice
   explícitamente que el borrador no es recuperable versión a versión.
-- **Que un colega que hereda el caso pueda corregir una nota ajena.** Hoy
-  `notas_clinicas_versiones_alta` exige `n.autor_id = auth.uid()`: **solo el autor de la cabecera
-  puede añadir versiones**, incluso en una nota conjunta que otro profesional del episodio sí
-  puede leer. Cambiarlo es una decisión de arquitectura (toca al ADR-032), no un arreglo de
-  pantalla. **Hallazgo para `state.md`.**
+- **Que un colega que hereda el caso pueda corregir una nota ajena.** Decidido por el propietario
+  el 15-09-2026 y escrito en el [ADR-059](../../docs/decisions/ADR-059.md): **se queda como está**.
+  `notas_clinicas_versiones_alta` exige `n.autor_id = auth.uid()` a propósito, y quien hereda el
+  caso escribe nota nueva en vez de reescribir el relato de otro. Ya no es un hallazgo abierto: es
+  una restricción que nadie debe «arreglar». La pantalla lo dice con palabras cuando el que mira no
+  es el autor, en vez de esconder el botón.
 - **La proyección para el derecho de acceso del paciente** (sin anotaciones reservadas, con la
   valoración del profesional sobre la nota conjunta). Es su propio ticket; aquí solo se deja dicho
   en la cabecera de la descarga que esta **no** es esa salida.

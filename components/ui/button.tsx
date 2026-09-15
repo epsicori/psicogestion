@@ -9,9 +9,15 @@ const VARIANTES = {
   fantasma: 'text-muted-foreground hover:bg-muted hover:text-foreground',
 } as const;
 
+/**
+ * Los dos tamaños comparten **el mismo objetivo táctil de 44 px** (ADR-044) y se diferencian
+ * en el texto y el aire de los lados, no en lo que hay que acertar con el dedo. `min-h` y no
+ * `h` porque una etiqueta larga a 360 px parte en dos líneas, y un botón de altura fija la
+ * recortaría. Es la misma medida que usan `Casilla` y `Desplegable`.
+ */
 const TAMANOS = {
-  sm: 'h-8 gap-1.5 px-3 text-xs',
-  md: 'h-10 gap-2 px-4 text-sm',
+  sm: 'min-h-11 gap-1.5 px-3 text-xs',
+  md: 'min-h-11 gap-2 px-4 text-sm',
 } as const;
 
 type Props = ComponentProps<'button'> & {
