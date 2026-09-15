@@ -36,3 +36,4 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-051](decisions/ADR-051.md) | Un profesional puede pasar consulta en varios centros; uno es el principal | aceptada | 26-08-2026 |
 | [ADR-053](decisions/ADR-053.md) | Psicogestión no expide facturas: las expide el proveedor del cliente, y nosotros solo dejamos el borrador | aceptada | 28-08-2026 |
 | [ADR-054](decisions/ADR-054.md) | Lenguaje claro en todo texto dirigido al paciente | aceptada | 01-09-2026 |
+| [ADR-055](decisions/ADR-055.md) | Citar no crea el vínculo: el profesional agenda solo para sus pacientes | aceptada | 11-09-2026 |
