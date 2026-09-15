@@ -29,3 +29,4 @@ buena, pregúntate si seguiría verde con la guarda quitada. (T-001, T-003, T-00
 - El banco corre también sobre la base **sembrada**, no solo vacía; cuentas exactas de filas pueden romperse con el seed. (T-003, T-008)
 - Una política "cubierta" solo por nombre no está cubierta: el módulo de cobertura exige ejercerla. (T-003)
 - `auth.mfa_factors` tiene sus propias trampas de siembra; consulta la bitácora de T-006a antes de tocar el banco de cuentas.
+- Aserción que fija un **número específico** se rompe cuando el escenario crece (más eventos, más propuestas); aserción que **compara dos caminos** sin fijar cantidad es más robusta (T-011).
