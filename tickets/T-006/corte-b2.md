@@ -4,7 +4,8 @@ titulo: Candado del PIN, PIN bloqueado por intentos, ajustes de reposición y ba
 riesgo: medio
 territorio: app/**, components/**
 depende_de: [T-006b1]
-estado: pendiente
+estado: hecho
+notas: Integrado en main en 6301729 (15-09-2026). Criterio 5 probado en app/(app)/candado/formulario-candado.test.tsx; la sesion de 30 minutos son los dos ajustes del commit de cierre.
 ---
 
 # Qué es esto

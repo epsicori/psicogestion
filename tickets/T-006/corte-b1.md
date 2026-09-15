@@ -4,7 +4,8 @@ titulo: Invitación, primer acceso (contraseña → TOTP → PIN) y guardia del 
 riesgo: medio
 territorio: app/**, components/**
 depende_de: [T-006a]
-estado: en_curso
+estado: hecho
+notas: Integrado en main en 6301729 (15-09-2026). Las diez tareas del ticket padre quedan marcadas; lo unico sin ejecutar son los guiones de navegador.
 ---
 
 # Qué es esto
