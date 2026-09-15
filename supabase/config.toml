@@ -222,9 +222,15 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
-# T-006: mismo motivo que [auth] enable_signup arriba — solo invitación del administrador.
-enable_signup = false
+# CUIDADO CON ESTE NOMBRE: bajo [auth.email] no significa "permitir auto-registro", sino
+# "proveedor de correo activado" — el CLI lo traduce a GOTRUE_EXTERNAL_EMAIL_ENABLED. En
+# false, GoTrue responde 422 email_provider_disabled a CUALQUIER inicio de sesion, y el
+# correo es la unica forma de entrar que tiene esta aplicacion.
+#
+# Quien bloquea el auto-registro es [auth] enable_signup = false, arriba, que se traduce a
+# GOTRUE_DISABLE_SIGNUP=true. Esa sigue en false y la invitacion del administrador sigue
+# funcionando: invitar no es registrarse.
+enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true

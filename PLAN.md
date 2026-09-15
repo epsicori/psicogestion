@@ -191,10 +191,12 @@ T-003 ni T-004. Todos son `sonnet` sobre-especificado: no pasan por la etapa de 
 | ID | Título | Depende | Desbloquea | Estado |
 |---|---|---|---|---|
 | T-016 | Banco de pruebas unitarias (Vitest) | — | T-007, T-009, y los cuatro de aquí | **hecho** |
-| T-017 | Identificadores y contacto españoles | T-016 | T-006, T-013, facturación | pendiente |
-| T-018 | Fechas, zona horaria y semana | T-016 | T-011, T-014 | pendiente |
-| T-019 | Linter de migraciones (regla 6) | T-016 | T-009 | pendiente |
-| T-020 | Estados de la cita, puros | T-016, T-018 | T-010, T-014 | pendiente |
+| T-017 | Identificadores y contacto españoles | T-016 | T-006, T-013, facturación | **hecho** |
+| T-018 | Fechas, zona horaria y semana | T-016 | T-011, T-014 | **hecho** |
+| T-019 | Linter de migraciones (regla 6) | T-016 | T-009 | **hecho** |
+| T-020 | Estados de la cita, puros | T-016, T-018 | T-010, T-014 | **hecho** |
+| T-030 | La rejilla de la semana, pura | T-016, T-018, T-020 | T-014 | pendiente |
+| T-031 | Dinero: importes en céntimos, IVA y redondeo | T-016 | T-021, T-023, T-027 | pendiente |
 
 **Por qué estos cinco y no otros.** Cada uno es una pieza que **dos tickets caros harían
 por duplicado**, y ninguno contiene una decisión que cueste una migración si sale mal:

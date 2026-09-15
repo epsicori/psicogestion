@@ -70,7 +70,10 @@ export const MODULOS: Modulo[] = [
     etiqueta: t('modulos.ajustes'),
     href: '/ajustes',
     icono: Settings2,
-    disponible: false,
+    // Encendido en T-006·b1: `/ajustes` existe y lleva a invitar, reponer TOTP y dar
+    // de baja. Un módulo apagado con la pantalla hecha es una pantalla a la que solo
+    // se llega tecleando la URL.
+    disponible: true,
     roles: ['administrador'],
   },
 ];

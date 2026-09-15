@@ -10,7 +10,9 @@ que puedas trabajar sin conocer el dominio.
 1. **Este fichero**, entero.
 2. **`kimi/proyecto.md`** — el contexto mínimo: stack, comandos, convenciones.
 3. **`kimi/guion.md`** — los pasos, en orden, sin saltarte ninguno.
-4. **Tu ticket**, uno solo: `tickets/T-016-…`, `T-017-…`, `T-018-…`, `T-019-…` o `T-020-…`.
+4. **Tu ticket, UNO SOLO.** Los cinco primeros (`T-016` a `T-020`) están hechos e
+   integrados; **no los vuelvas a abrir**. Los que quedan son `tickets/T-030-…` (la
+   rejilla de la semana) y `tickets/T-031-…` (dinero: importes, IVA y redondeo).
 
 **Nada más.** No abras `docs/`, ni `CLAUDE.md`, ni `PLAN.md`, ni los otros tickets. No los
 necesitas y contienen decisiones que no te corresponden.
