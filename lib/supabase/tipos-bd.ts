@@ -2624,6 +2624,19 @@ export type Database = {
         Returns: undefined
       }
       prolongar_desbloqueo: { Args: never; Returns: string }
+      registrar_acceso_historia: {
+        Args: {
+          p_agente?: string
+          p_ip?: unknown
+          p_paciente_id: string
+          p_pestana: Database["public"]["Enums"]["pestana_historia"]
+        }
+        Returns: {
+          acceso_id: number
+          apertura: boolean
+          vistas: number
+        }[]
+      }
       registrar_evento_auditable: {
         Args: {
           p_detalle?: Json
