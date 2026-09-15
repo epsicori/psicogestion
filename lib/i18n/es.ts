@@ -255,7 +255,7 @@ export const es = {
     codigoNoValido: 'Ese código no es válido.',
     bloqueado: 'Demasiados intentos. Prueba de nuevo más tarde.',
   },
-
+
   ficha: {
     // Cabecera
     volverALaLista: 'Volver a la lista',
@@ -342,6 +342,4 @@ export const es = {
     facturacionVaciaExplicacion:
       'La facturación de este paciente se construye en su propio ticket. Preferimos dejarlo vacío y decirlo a enseñar cifras que no son.',
   },
-
-
 } as const;
