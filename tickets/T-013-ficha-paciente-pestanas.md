@@ -5,7 +5,7 @@ modelo: sonnet
 fase: 1
 prioridad: alta
 depende_de: [T-006, T-007]
-estado: pendiente
+estado: en_curso
 ---
 
 # Contexto
@@ -117,7 +117,9 @@ consentimientos, fuera del candado). ADR **026** (candado), **037** (unidad de a
 1. `npm run dev`, entrar como profesional y abrir un paciente del seed desde la lista.
 2. Recorrer las cinco pestañas. Historia clínica pide PIN; Documentos, no.
 3. Meter el PIN, abrir Notas clínicas, salir a Resumen y volver: comprobar en Studio que
-   `accesos_historia` tiene una fila y `accesos_historia_vistas`, dos.
+   `accesos_historia` tiene **una** fila y `accesos_historia_vistas`, **una**; el contador de
+   `accesos_historia_resumen` vale **2** porque suma la apertura. (Corregido: el guion pedía
+   dos vistas tras una sola reentrada, y una reentrada deja una.)
 4. Pulsar bloquear y comprobar que la historia se cierra.
 5. Repetir el paso 2 como técnico administrativo.
 
@@ -131,3 +133,42 @@ consentimientos, fuera del candado). ADR **026** (candado), **037** (unidad de a
 - La pestaña Facturación se queda vacía **con texto honesto**, no con datos falsos ni con
   un esqueleto permanente.
 - Este ticket **no** escribe el editor de notas. Es T-012.
+
+## Estado de entrega
+
+Integrado en `main` en dos cortes (`tickets/T-013/diseno.md` §4): el corte A trae el mecanismo
+—ruta, cabecera, pestañas, candado, caducidad, registro de acceso e Historial clínico—, y el
+corte B el contenido de Resumen, Ficha del paciente y Documentos y consentimientos. El corte B
+no toca el candado ni una vez.
+
+Sigue en `en_curso` **solo** por los criterios de navegador. Nada automático queda abierto.
+
+| # | Criterio | Estado | Evidencia |
+|---|---|---|---|
+| 1 | La URL no lleva nombre ni DNI | cerrado por construcción | La ruta es `[id]` y `cargarPaciente` valida el UUID contra `pacientes`; `ficha-cliente.test.tsx` comprueba además que la pestaña activa no viaja en la URL. Queda mirarlo en la barra de direcciones. |
+| 2 | Sin desbloqueo, el HTML no trae contenido clínico | **cerrado** | `panel-historia.test.tsx` · «sin ventana abierta pinta la petición de PIN y NO el contenido clínico». El contenido no se tapa: no se llega a leer, porque solo lo devuelve la Server Action de apertura (ADR-056). |
+| 3 | Una apertura = una fila; la reentrada, una vista | **cerrado** | `scripts/rls/09-accesos.sql` sobre `registrar_acceso_historia()` (T-013a), dentro de las 380 aserciones de `test:rls`. En la aplicación, `acciones.ts` §`abrirHistoria` no lee si el registro no salió bien. |
+| 4 | La lista no escribe en `accesos_historia` | **cerrado** | No hay una sola llamada: `grep -rn "accesos_historia\|registrarAcceso" app/` solo da `acciones.ts` y comentarios. Las búsquedas van a `auditoria`. |
+| 5 | El técnico no ve la pestaña de historia | parcial | `ficha-cliente.test.tsx` · «sin historia, la pestaña NO existe: ni en gris ni deshabilitada». La cabecera no pinta DNI ni domicilio porque están cifrados y sin camino de descifrado. Falta el repaso con sesión real. |
+| 6 | El técnico abre Documentos sin PIN | parcial | La pestaña está fuera del candado por construcción (ADR-048) y `panel-historia.test.tsx` fija que las sub-pestañas con candado son cuatro. Falta el repaso con sesión real. |
+| 7 | Bloquear devuelve a la pantalla de bloqueo | **cerrado** | `panel-historia.test.tsx` · «cerrar con el botón devuelve a la pantalla de bloqueo sin recargar». |
+| 8 | La ventana caduca sola | **cerrado** | `panel-historia.test.tsx` · «al agotarse la ventana pasa sola a la pantalla de bloqueo, sin tocar nada» y «el aviso de caducidad llega tarde y sin robar el foco» (ADR-047). |
+| 9 | Mismo vocabulario que `/prototipo` | pendiente (navegador) | — |
+| 10 | Cada rol ve lo que le concede la matriz | pendiente (navegador) | Por rol y antes de consultar, no mirando el resultado; lo que no se puede leer se dice con palabras, no con una lista vacía. |
+| 11 | A 360 px, objetivos táctiles de 44 px | pendiente (navegador) | Hallazgo abierto: el `Button` compartido mide 40 px; aquí se sortea con `min-h-11` local. |
+| 12 | `lint` y `build` limpios | **cerrado** | `lint` exit 0 (2 avisos ajenos en `lib/cuentas/accesos.test.ts`), `build` exit 0, **486 pruebas en 49 ficheros**. |
+
+### Lo que el contrato pedía y no se pinta, con su motivo
+
+- **Teléfono y teléfono de emergencia**: no existe columna de teléfono del paciente en ninguna
+  tabla. El único teléfono de una persona en todo el esquema es `representantes_paciente.telefono`,
+  y se enseña ahí, diciendo de quién es.
+- **DNI y residencia**: viven cifrados en `pacientes_identificacion` y hoy no hay camino de
+  descifrado escrito en la aplicación.
+- **Motivo de consulta y nivel de riesgo en la cabecera**: están detrás de `historia_desbloqueada()`,
+  así que aparecen dentro de Historia clínica, donde abrirlos registra el acceso. El técnico ve en
+  su lugar el indicador binario de `pacientes_indicador_riesgo`.
+- **Modalidad relacional en «Ficha del paciente»**: vive en `episodios_asistenciales`, que **sí**
+  está bajo el candado. Sacarla a una pestaña sin candado sería la segunda puerta del choque 11.
+- **Notas históricas importadas y adjuntos administrativos** (pestaña Documentos): no hay importador
+  ni tabla de adjuntos todavía.
