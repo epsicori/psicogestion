@@ -30,7 +30,7 @@ function huellaGenesis(canonico: string): string {
 }
 
 describe('vectores-congelados.json', () => {
-  it('tiene los ocho vectores del §12 del diseño aprobado', () => {
+  it('tiene los nueve vectores del §12 del diseño aprobado (T-012a añade alcance-conjunta)', () => {
     expect((vectores as unknown as VectorCongelado[]).map((v) => v.nombre).sort()).toEqual(
       [
         'genesis-minimo',
@@ -41,6 +41,7 @@ describe('vectores-congelados.json', () => {
         'reservadas-vacias',
         'en-sesion',
         'control-y-exponente',
+        'alcance-conjunta',
       ].sort(),
     );
   });
