@@ -140,9 +140,12 @@ $$;
 -- prueba. NO es un canonicalizador general —los valores del banco son ASCII simple, sin
 -- ninguno de los casos feos que prueba lib/huella/jcs.test.ts—, es la forma más corta de
 -- dar de alta versiones que el disparador fn_sellar_version_nota() (T-005) acepte, con las
--- once claves exactas y en el orden alfabético que exige la comprobación 6.1. `p_cuerpo`
+-- doce claves exactas y en el orden alfabético que exige la comprobación 6.1. `p_cuerpo`
 -- ya viene como jsonb de una sola clave en todos los usos del banco, así que su orden
 -- interno no importa.
+-- T-012a: p_alcance nuevo, al final para no romper las llamadas posicionales ya
+-- existentes en el banco; default 'individual' porque es el valor por defecto de la
+-- columna homónima (ADR-057).
 create or replace function pg_temp.sobre_prueba(
   p_autor_id                 uuid,
   p_creada_en                timestamptz,
@@ -152,19 +155,21 @@ create or replace function pg_temp.sobre_prueba(
   p_cita_id                  uuid default null,
   p_margen_sesion_minutos    integer default null,
   p_redactada_en_sesion      boolean default false,
-  p_abierta_en               timestamptz default null
+  p_abierta_en               timestamptz default null,
+  p_alcance                  text default 'individual'
 ) returns text
 language sql
 as $$
   select
     '{' ||
     '"abierta_en":' || to_json(to_char(coalesce(p_abierta_en, p_creada_en) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"alcance":"' || p_alcance || '",' ||
     '"anotaciones_reservadas":' || coalesce(to_json(p_anotaciones_reservadas)::text, 'null') || ',' ||
     '"autor_id":"' || lower(p_autor_id::text) || '",' ||
     '"cita_id":' || coalesce(to_json(p_cita_id::text)::text, 'null') || ',' ||
     '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"cuerpo":' || p_cuerpo::text || ',' ||
-    '"esquema_version":2,' ||
+    '"esquema_version":3,' ||
     '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"margen_sesion_minutos":' || coalesce(p_margen_sesion_minutos::text, 'null') || ',' ||
     '"motivo_cambio":' || coalesce(to_json(p_motivo_cambio)::text, 'null') || ',' ||
