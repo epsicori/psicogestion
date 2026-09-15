@@ -6,7 +6,7 @@ fase: 0
 prioridad: alta
 depende_de: [T-002]
 estado: en_curso
-notas: Corte a (base de datos, lib/cuentas/, dos hallazgos ALTA cerrados con prueba) INTEGRADO en main. Falta el corte b -pantallas de invitacion, primer acceso, MFA y PIN-, cuyo corte esta en minimax/cortes/T-006.md y ya NO esta bloqueado.
+notas: Los dos cortes INTEGRADOS en main (a el 06-09, b el 15-09). Codigo completo. Queda solo la verificacion que exige maquina - test:rls y el guion de navegador -, anotada en Estado de entrega.
 ---
 
 # Contexto
@@ -33,32 +33,32 @@ armazón de T-007; si T-007 aún no está integrado, se usan las primitivas que 
 
 ## Tareas
 
-- [ ] **Invitación**: el administrador da de alta un perfil (nombre, correo, rol y
+- [x] **Invitación**: el administrador da de alta un perfil (nombre, correo, rol y
       **`centro_id` obligatorio si el rol es `tecnico_administrativo`**) y Supabase Auth
       envía el enlace de un solo uso. En desarrollo se lee en **Mailpit**. Ningún
       proveedor de correo contratado (ADR-038).
-- [ ] **Primer acceso, en este orden exacto**: contraseña → **TOTP** → **PIN**. Sin
+- [x] **Primer acceso, en este orden exacto**: contraseña → **TOTP** → **PIN**. Sin
       atajos: no se llega a la aplicación con un paso a medias.
-- [ ] **TOTP** con `supabase.auth.mfa` (enroll → challenge → verify), código QR y
+- [x] **TOTP** con `supabase.auth.mfa` (enroll → challenge → verify), código QR y
       **códigos de recuperación de un solo uso mostrados una vez**. Para los tres roles.
-- [ ] **PIN de seis dígitos** (ADR-026): lo fija **su dueño** y solo él lo cambia,
+- [x] **PIN de seis dígitos** (ADR-026): lo fija **su dueño** y solo él lo cambia,
       reautenticándose con contraseña y segundo factor. El técnico administrativo **no
       tiene PIN** y no ve la pantalla. Se llama a las funciones `security definer` de
       T-002; **nunca se verifica el PIN en cliente** ni se interpola en SQL.
-- [ ] **Desbloqueo, prolongación y bloqueo**: Server Actions. La ventana se prolonga en
+- [x] **Desbloqueo, prolongación y bloqueo**: Server Actions. La ventana se prolonga en
       acciones —abrir paciente, guardar— **jamás en el renderizado**. Botón de **bloquear**
       siempre disponible. Aviso cuando la ventana está a punto de caducar.
-- [ ] **Pantalla de PIN bloqueado por intentos**, con el tiempo restante. Ni reintentos
+- [x] **Pantalla de PIN bloqueado por intentos**, con el tiempo restante. Ni reintentos
       silenciosos ni mensajes que revelen si el PIN era correcto.
-- [ ] **Sesión de 30 minutos de inactividad** (elecciones técnicas menores) y cierre de
+- [x] **Sesión de 30 minutos de inactividad** (elecciones técnicas menores) y cierre de
       sesión desde la barra lateral, que ya existe.
-- [ ] **Reponer TOTP**: lo puede hacer el administrador, **auditado y con aviso al
+- [x] **Reponer TOTP**: lo puede hacer el administrador, **auditado y con aviso al
       titular**. **Reponer un PIN, jamás** — ni el gesto existe en la interfaz.
-- [ ] **Baja de un profesional** (ADR-032): pasa `perfiles.estado` a `baja`, **revoca
+- [x] **Baja de un profesional** (ADR-032): pasa `perfiles.estado` a `baja`, **revoca
       sesiones, inutiliza TOTP y PIN**, y deja constancia. La restricción del último
       administrador activo ya la impone la base (T-001); la interfaz **explica** el error,
       no lo previene por su cuenta.
-- [ ] **Vault**: si se configura SMTP propio del cliente, las credenciales van al Vault de
+- [x] **Vault**: si se configura SMTP propio del cliente, las credenciales van al Vault de
       Supabase, **nunca a variables de entorno de Vercel**, y con clave distinta de las del
       PIN y del DNI (ADR-038, ADR-029).
 
@@ -114,28 +114,43 @@ armazón de T-007; si T-007 aún no está integrado, se usan las primitivas que 
 - Nada de SMS ni de correo como segundo factor (ADR-039), y nada de contratar un proveedor
   de correo (ADR-038).
 
-## Estado de entrega (30-08-2026) — SOLO la mitad de base de datos
+## Estado de entrega (15-09-2026) — los dos cortes dentro de `main`
 
-**`estado` sigue en `pendiente` a propósito: este ticket se entrega en dos ramas y no se
-cierra hasta que las dos hayan entrado en `main`.**
+- **`T-006a-cuentas-base`, integrada el 06-09**: el corte de base de datos completo —
+  migración `20260830090000_cuentas_invitacion_baja_totp.sql`,
+  `lib/supabase/administracion.ts`, `lib/cuentas/**`, `scripts/rls/13-cuentas.sql`,
+  `scripts/vault-smtp.sql` y los tres cambios de `supabase/config.toml`. Evidencia en su
+  día: `db reset` limpio con siete migraciones, `test:rls` 192 aserciones, `lint`,
+  `build` y 229 pruebas unitarias.
+- **`T-006b1-ajustes-admin`, integrada el 15-09** (commit `6301729`): todas las pantallas
+  —`/ajustes` con invitar, reponer TOTP y dar de baja; `/primera-vez` con TOTP y PIN;
+  `/candado`; `/recuperar`—, `lib/cuentas/primer-acceso.ts` y la guardia de rutas en
+  `proxy.ts`. Único choque al integrar, `docs/state.md`, resuelto hacia la memoria v3.
+- **Sesión de 30 minutos, escrita al integrar** (esta misma fecha): era lo único del
+  corte b que faltaba. Son **dos cambios**, y el segundo no es cosmético:
+  `supabase/config.toml` abre `[auth.sessions]` con `inactivity_timeout = "30m"` y
+  `timebox = "12h"`, y baja `jwt_expiry` de 3600 a 1800 para que el token de acceso no
+  pueda sobrevivir a la ventana; y `lib/supabase/navegador.ts` pasa a
+  `autoRefreshToken: false`, porque `createBrowserClient` lo pone a `true` por defecto
+  y auth-js arranca un tic de 30 s que renovaría el token solo — con ese tic vivo, una
+  pestaña abierta y quieta es «actividad» para GoTrue y el `inactivity_timeout` no
+  vencería jamás.
 
-- **`T-006a-cuentas-base` (esta entrega, hecha)**: el corte de base de datos completo —
-  migración `20260830090000_cuentas_invitacion_baja_totp.sql`, `lib/supabase/administracion.ts`,
-  `lib/cuentas/**`, `scripts/rls/13-cuentas.sql`, `scripts/vault-smtp.sql`, y los tres
-  cambios de `supabase/config.toml` (TOTP activado, `enable_signup = false`,
-  `email_sent = 30`). Evidencia:
-  - `npx supabase db reset`: limpio, siete migraciones aplicadas.
-  - `npm run test:rls`: **192 aserciones, todas en cierto, cero fallos** (14 módulos,
-    incluido el nuevo `13-cuentas.sql`).
-  - `npm run lint`: limpio. `npm run lint:migraciones`: `7 migración(es) limpias`.
-  - `npm run build`: limpio (TypeScript, generación de páginas, sin avisos).
-  - `npm test`: **229 pruebas, 25 ficheros, todas en verde**.
-- **`T-006b-acceso-pantallas` (pendiente, bloqueada)**: todas las pantallas —invitación,
-  primer acceso, candado y PIN bloqueado, ajustes de reposición y baja, canje de código
-  de recuperación—. Corte completo, criterios de aceptación y bloqueo explicado en
-  `minimax/cortes/T-006.md`.
+**Evidencia sobre el árbol ya integrado (15-09-2026)**: `npm run lint` limpio ·
+`npx vitest run` **415 pruebas, 43 ficheros, todas en verde** · `npm run build` limpio,
+doce rutas más el Proxy. Repetidos los tres después del cambio de sesión, con el mismo
+resultado.
+
+**Lo que NO se ha ejecutado, y por qué**: `npm run test:rls` y el guion manual de
+navegador exigen la pila local levantada (`npx supabase start`), y el demonio de Docker
+estaba parado. Son los criterios 1, 9 y 10. **El ticket no se marca `hecho` por eso.**
+
+**Trampa heredada del corte b, que cuesta una hora si se olvida**: `npx supabase db
+reset` **no vuelve a leer `config.toml`**. Un cambio ahí —el TOTP, y ahora
+`[auth.sessions]` y `jwt_expiry`— solo entra parando y levantando el contenedor
+(`npx supabase stop && npx supabase start`). Con `db reset` a secas, GoTrue sigue con la
+configuración vieja y devuelve errores que parecen de código.
 
 **Nota de alcance**: `T-006a-cuentas-base` fusiona `T-003-banco-pruebas-rls` (no
-integrada en `main` en el momento de empezar esta rama) para poder ejecutar
-`npm run test:rls`, que el propio ticket exige como criterio automático. Detalle en
-`docs/state.md` § T-006.
+integrada en `main` en el momento de empezar esa rama) para poder ejecutar
+`npm run test:rls`, que el propio ticket exige como criterio automático.

@@ -162,7 +162,7 @@ site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = ["https://127.0.0.1:3000"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
-jwt_expiry = 3600
+jwt_expiry = 1800
 # JWT issuer URL. If not set, defaults to auth.external_url.
 # jwt_issuer = ""
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
@@ -280,12 +280,15 @@ max_frequency = "5s"
 # [auth.sms.test_otp]
 # 4152127777 = "123456"
 
-# Configure logged in session timeouts.
-# [auth.sessions]
-# Force log out after the specified duration.
-# timebox = "24h"
-# Force log out if the user has been inactive longer than the specified duration.
-# inactivity_timeout = "8h"
+# Sesion de 30 minutos de inactividad (T-006, criterio "sesion de 30 minutos").
+# Ojo: esto configura SOLO la pila local. En el proyecto alojado son los mismos dos
+# ajustes, pero en el panel de Supabase (Authentication -> Sessions); si alli no se
+# ponen, en produccion no hay caducidad por inactividad.
+[auth.sessions]
+# Tope duro: pasada esta duracion se cierra sesion aunque se este trabajando.
+timebox = "12h"
+# Sin actividad durante este tiempo, GoTrue invalida la sesion y el refresco falla.
+inactivity_timeout = "30m"
 
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
 # [auth.hook.before_user_created]
