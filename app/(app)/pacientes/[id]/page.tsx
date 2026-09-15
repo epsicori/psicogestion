@@ -1,5 +1,3 @@
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -10,8 +8,10 @@ import { t, tCon } from '@/lib/i18n';
 
 import { cargarIndicadorDeRiesgo, cargarPaciente, cargarRol } from './datos';
 import { FichaCliente } from './ficha-cliente';
-import { EnPreparacion } from './panel-historia';
-import { edadEnAnios, valoracionEsAntigua } from './presentacion';
+import { PanelDatos } from './panel-datos';
+import { PanelDocumentos } from './panel-documentos';
+import { PanelResumen } from './panel-resumen';
+import { edadEnAnios, fechaLarga, valoracionEsAntigua } from './presentacion';
 
 /**
  * La ficha de un paciente: `/pacientes/<uuid>`.
@@ -36,10 +36,6 @@ import { edadEnAnios, valoracionEsAntigua } from './presentacion';
  *     indicador binario de `pacientes_indicador_riesgo`, que la arquitectura construyó
  *     exactamente para eso.
  */
-
-function fechaLarga(iso: string): string {
-  return format(new Date(iso), "d 'de' MMMM 'de' yyyy", { locale: es });
-}
 
 function Dato({ etiqueta, children }: { etiqueta: string; children: React.ReactNode }) {
   return (
@@ -115,9 +111,21 @@ async function Cuerpo({ params }: { params: Promise<{ id: string }> }) {
       // El técnico administrativo no ve la pestaña **en absoluto**: ni en gris ni
       // deshabilitada. Una pestaña deshabilitada dice que hay algo detrás.
       mostrarHistoria={rol === 'profesional_sanitario' || rol === 'administrador'}
-      resumen={<EnPreparacion explicacion={t('ficha.resumenEnPreparacion')} />}
-      datos={<EnPreparacion explicacion={t('ficha.datosEnPreparacion')} />}
-      documentos={<EnPreparacion explicacion={t('ficha.documentosEnPreparacion')} />}
+      resumen={
+        <Suspense fallback={<Cargando filas={4} />}>
+          <PanelResumen pacienteId={paciente.id} />
+        </Suspense>
+      }
+      datos={
+        <Suspense fallback={<Cargando filas={4} />}>
+          <PanelDatos pacienteId={paciente.id} />
+        </Suspense>
+      }
+      documentos={
+        <Suspense fallback={<Cargando filas={4} />}>
+          <PanelDocumentos pacienteId={paciente.id} />
+        </Suspense>
+      }
       facturacion={<Facturacion />}
     />
   );

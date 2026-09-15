@@ -1,5 +1,3 @@
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { Stethoscope } from 'lucide-react';
 
 import { Pildora } from '@/components/ui/piezas';
@@ -7,6 +5,7 @@ import { t, tCon } from '@/lib/i18n';
 
 import type { ContenidoDelHistorial, ValoracionDeVista } from './acciones';
 import {
+  fechaLarga,
   valoracionEsAntigua,
   type EpisodioDeVista,
   type ModalidadRelacional,
@@ -38,10 +37,6 @@ const ETIQUETA_MODALIDAD: Record<ModalidadRelacional, () => string> = {
   familiar: () => t('ficha.modalidadFamiliar'),
   grupo: () => t('ficha.modalidadGrupo'),
 };
-
-function fechaLarga(iso: string): string {
-  return format(new Date(iso), "d 'de' MMMM 'de' yyyy", { locale: es });
-}
 
 function Valoracion({ valoracion }: { valoracion: ValoracionDeVista }) {
   const antigua = valoracionEsAntigua(valoracion.valoradoEn);

@@ -1,6 +1,7 @@
 // Funciones puras de la ficha: nada de Supabase, nada de React. Se prueban solas y por eso
 // viven aparte de la pantalla.
-import { differenceInMonths, differenceInYears } from 'date-fns';
+import { differenceInMonths, differenceInYears, format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 import type { Database } from '@/lib/supabase/tipos-bd';
 
@@ -120,4 +121,123 @@ export function agruparPorEpisodio(
         Number(a.retiradoEn !== null) - Number(b.retiradoEn !== null),
     ),
   }));
+}
+
+/**
+ * «29 de marzo de 2026». Sin día de la semana y **sin zona**: se usa para fechas que en la
+ * base son un día, no un instante —el alta, la firma de un consentimiento, la vigencia de un
+ * representante—. Las horas de las citas NO pasan por aquí: esas llevan su `zona_horaria` y
+ * se formatean con `lib/fechas` (ADR-034).
+ */
+export function fechaLarga(iso: string): string {
+  return format(new Date(iso), "d 'de' MMMM 'de' yyyy", { locale: es });
+}
+
+export type EstadoCita = Database['public']['Enums']['estado_cita'];
+
+/** Lo que la ficha necesita de una cita, y nada más: ni tipo de terapia ni nota operativa. */
+export type CitaDeVista = {
+  id: string;
+  inicio: string;
+  fin: string;
+  estado: EstadoCita;
+  zonaHoraria: string;
+  sala: string | null;
+};
+
+export type ResumenDeActividad = {
+  ultimaSesion: CitaDeVista | null;
+  proximaCita: CitaDeVista | null;
+  realizadas: number;
+  noAsistidas: number;
+  canceladas: number;
+};
+
+const instante = (cita: CitaDeVista) => new Date(cita.inicio).getTime();
+
+/**
+ * La última sesión, la próxima cita y el recuento, a partir de las citas que RLS haya dejado
+ * llegar.
+ *
+ * «Última sesión» es la última **realizada**, no la última pasada: una cita a la que nadie
+ * acudió no es una sesión, y enseñarla como tal haría creer que hubo trabajo donde no lo hubo.
+ * «Próxima cita» excluye las canceladas por el mismo motivo.
+ *
+ * Las citas con fecha ilegible se descartan en silencio en vez de envenenar el orden: un
+ * `NaN` en una comparación deja el máximo indefinido y la pantalla mentiría entera por una
+ * fila mala.
+ */
+export function resumirCitas(citas: CitaDeVista[], ahora: Date = new Date()): ResumenDeActividad {
+  const sanas = citas.filter((c) => !Number.isNaN(instante(c)));
+  const corte = ahora.getTime();
+
+  const realizadas = sanas.filter((c) => c.estado === 'realizada');
+  const porDelante = sanas.filter(
+    (c) => instante(c) > corte && (c.estado === 'programada' || c.estado === 'confirmada'),
+  );
+
+  return {
+    ultimaSesion: realizadas.reduce<CitaDeVista | null>(
+      (mejor, c) => (mejor === null || instante(c) > instante(mejor) ? c : mejor),
+      null,
+    ),
+    proximaCita: porDelante.reduce<CitaDeVista | null>(
+      (mejor, c) => (mejor === null || instante(c) < instante(mejor) ? c : mejor),
+      null,
+    ),
+    realizadas: realizadas.length,
+    noAsistidas: sanas.filter((c) => c.estado === 'no_asistida').length,
+    canceladas: sanas.filter((c) => c.estado === 'cancelada').length,
+  };
+}
+
+export type EstadoDeConsentimiento = 'firmado' | 'retirado' | 'sin_firmar';
+
+/**
+ * Retirado gana a firmado: un consentimiento revocado se firmó en su día, y pintarlo como
+ * «Firmado» porque tiene fecha de otorgamiento sería decir que sigue valiendo.
+ */
+export function estadoDeConsentimiento(consentimiento: {
+  otorgadoEn: string | null;
+  revocadoEn: string | null;
+}): EstadoDeConsentimiento {
+  if (consentimiento.revocadoEn) return 'retirado';
+  return consentimiento.otorgadoEn ? 'firmado' : 'sin_firmar';
+}
+
+export type EstadoDocumental = 'al_dia' | 'nuevo' | 'revisar';
+
+/**
+ * La píldora del choque 7: describe **los papeles**, jamás al paciente. El nivel de riesgo es
+ * otro campo, con otra política y otro candado, y no se mezcla aquí.
+ *
+ * `consentimientos: null` significa «quien mira no puede leerlos», que no es lo mismo que
+ * «no hay ninguno». Sin ese dato solo se puede afirmar que algo está pendiente —las alertas
+ * sí las ve recepción—, y si no hay alertas no se afirma nada: devuelve `null` y el bloque
+ * desaparece entero (choque 5), en vez de decirle «Al día» a quien no ha podido comprobarlo.
+ */
+export function estadoDocumental(entrada: {
+  alertasAbiertas: number;
+  consentimientos: number | null;
+}): EstadoDocumental | null {
+  if (entrada.alertasAbiertas > 0) return 'revisar';
+  if (entrada.consentimientos === null) return null;
+  return entrada.consentimientos === 0 ? 'nuevo' : 'al_dia';
+}
+
+/**
+ * Si la representación está en vigor hoy. `vigente_hasta` nulo es «sin fecha de fin», que es
+ * el caso normal de una madre o un padre; una fecha pasada es un vínculo que ya no habilita a
+ * nadie y se sigue enseñando, pero dicho.
+ */
+export function representacionVigente(
+  representante: { vigenteDesde: string; vigenteHasta: string | null },
+  ahora: Date = new Date(),
+): boolean {
+  const desde = new Date(representante.vigenteDesde).getTime();
+  if (Number.isNaN(desde) || desde > ahora.getTime()) return false;
+  if (!representante.vigenteHasta) return true;
+
+  const hasta = new Date(representante.vigenteHasta).getTime();
+  return Number.isNaN(hasta) ? true : hasta > ahora.getTime();
 }

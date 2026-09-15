@@ -333,13 +333,116 @@ export const es = {
       'Aquí irán las pruebas pasadas, su corrección y los archivos adjuntos.',
     informesEnPreparacion:
       'Aquí irán los informes de alta, seguimiento y derivación, con su firma.',
-    resumenEnPreparacion:
-      'Aquí irán la última sesión, la próxima cita y el recuento de actividad.',
-    datosEnPreparacion: 'Aquí irán el contacto y la gestión asistencial de este paciente.',
-    documentosEnPreparacion:
-      'Aquí irán los consentimientos firmados, la protección de datos y los adjuntos administrativos.',
     facturacionVacia: 'Aquí no hay nada todavía',
     facturacionVaciaExplicacion:
       'La facturación de este paciente se construye en su propio ticket. Preferimos dejarlo vacío y decirlo a enseñar cifras que no son.',
+    // Resumen: la agenda de este paciente, que vive FUERA del candado
+    ultimaSesion: 'Última sesión',
+    sinSesionesRealizadas: 'Todavía no se ha dado ninguna sesión por realizada',
+    proximaCita: 'Próxima cita',
+    sinProximaCita: 'No hay ninguna cita por delante',
+    actividad: 'Actividad',
+    sesionesRealizadas: 'Sesiones realizadas',
+    citasNoAsistidas: 'Citas a las que no acudió',
+    citasCanceladas: 'Citas canceladas',
+    sinCitas: 'Todavía no hay citas de este paciente',
+    sinCitasExplicacion:
+      'En cuanto se agende la primera, aquí aparecerán la última sesión, la siguiente y el recuento.',
+    agendaNoVisible: 'No puedes ver la agenda de este paciente',
+    agendaNoVisibleExplicacion:
+      'Las citas las ve el profesional que las atiende y, en su centro, quien las gestiona.',
+    enLaSala: 'Sala {sala}',
+    estadoProgramada: 'Programada',
+    estadoConfirmada: 'Confirmada',
+    estadoRealizada: 'Realizada',
+    estadoCancelada: 'Cancelada',
+    estadoNoAsistida: 'No acudió',
+
+    // Estado documental (choque 7): describe los papeles, nunca al paciente
+    documentacion: 'Documentación',
+    documentacionAlDia: 'Al día',
+    documentacionNueva: 'Nuevo',
+    documentacionRevisar: 'Revisar',
+
+    // Ficha del paciente
+    gestionAsistencial: 'Gestión asistencial',
+    profesionalResponsable: 'Profesional responsable',
+    sinProfesional: 'Sin profesional asignado',
+    titularidad: 'A cargo de',
+    titularidadOrganizacion: 'El centro',
+    titularidadProfesional: 'El profesional',
+    contacto: 'Contacto',
+    contactoNoVisible: 'No puedes ver el contacto de este paciente',
+    contactoNoVisibleExplicacion:
+      'Los datos de contacto los ven el profesional asignado y el administrador.',
+    sinRepresentantes: 'No hay ninguna persona de contacto registrada',
+    sinRepresentantesExplicacion:
+      'Aquí aparecen quienes pueden actuar por el paciente —madre, padre, tutor— con su teléfono.',
+    sinTelefonoDelPaciente:
+      'El teléfono del propio paciente todavía no se guarda en ningún sitio. El que sale aquí es el de su persona de contacto.',
+    telefono: 'Teléfono',
+    correo: 'Correo',
+    sinTelefono: 'Sin teléfono',
+    sinCorreo: 'Sin correo',
+    representanteProgenitor: 'Madre o padre',
+    representanteTutor: 'Tutor legal',
+    representanteAcogedor: 'Persona acogedora',
+    representanteGuardadorDeHecho: 'Guardador de hecho',
+    representanteRepresentanteJudicial: 'Nombrado por un juzgado',
+    alcancePatriaPotestad: 'Patria potestad',
+    alcanceCustodia: 'Custodia',
+    alcanceSoloContacto: 'Solo contacto',
+    vigenteDesde: 'Desde el {fecha}',
+    yaNoVigente: 'Ya no está vigente',
+
+    // Documentos y consentimientos (ADR-048: fuera del candado; ADR-054: lenguaje claro)
+    consentimientos: 'Consentimientos',
+    sinConsentimientos: 'Todavía no hay ningún consentimiento',
+    sinConsentimientosExplicacion:
+      'Aquí aparecerá cada permiso que el paciente haya dado, con la fecha y el texto exacto que firmó.',
+    consentimientosNoVisibles: 'No puedes ver los consentimientos de este paciente',
+    consentimientosNoVisiblesExplicacion:
+      'El texto firmado lo ven el profesional asignado y el administrador. Lo que sí ves aquí abajo es si falta alguno por firmar.',
+    consentimientoAsistencial: 'Atención psicológica',
+    consentimientoAsistencialExplicacion:
+      'Permite atenderle y recoger lo que haga falta para el tratamiento.',
+    consentimientoTerapiaParejaFamiliar: 'Terapia de pareja o de familia',
+    consentimientoTerapiaParejaFamiliarExplicacion:
+      'Lo firman todas las personas que acuden, porque lo que se habla es de todas.',
+    consentimientoTratamientoDatos: 'Uso de sus datos',
+    consentimientoTratamientoDatosExplicacion:
+      'Explica qué datos se guardan, para qué y durante cuánto tiempo.',
+    consentimientoCesionInformacion: 'Enviar información a otra persona',
+    consentimientoCesionInformacionExplicacion:
+      'Permite compartir información con quien se indique: otro profesional, un centro o una aseguradora.',
+    consentimientoGrabacion: 'Grabar las sesiones',
+    consentimientoGrabacionExplicacion:
+      'Permite grabar en audio o en vídeo, y dice para qué se usará la grabación.',
+    consentimientoOtro: 'Otro permiso',
+    consentimientoOtroExplicacion: 'Un permiso que no encaja en los anteriores. Lo explica su texto.',
+    consentimientoFirmado: 'Firmado',
+    consentimientoRetirado: 'Retirado',
+    consentimientoSinFirmar: 'Sin firmar',
+    firmadoEl: 'Firmado el {fecha}',
+    retiradoEl: 'Retirado el {fecha}',
+    pendienteDeFirma: 'Todavía no está firmado',
+    firmadoPor: 'Lo firmó {nombre}',
+    firmantePendiente: '{nombre}, pendiente de firmar',
+    menorOido: 'Se escuchó al menor antes de firmar',
+    versionDelTexto: 'Versión {version} del texto',
+    verElTexto: 'Ver el texto tal y como se firmó',
+    textoNoGuardado: 'El texto firmado no está guardado en la aplicación.',
+    copiaArchivada: 'Hay una copia archivada',
+
+    // Lo que falta por hacer, que es lo que puede ver recepción
+    pendientes: 'Pendiente',
+    sinPendientes: 'No hay nada pendiente',
+    sinPendientesExplicacion: 'Cuando falte un papel por firmar o por corregir, aparecerá aquí.',
+    alertaNotaSinFirmar: 'Hay una nota de sesión sin firmar',
+    alertaBorradorAbandonado: 'Hay un borrador empezado y sin terminar',
+    alertaConsentimientoPendiente: 'Falta un consentimiento por firmar',
+    alertaInformePendiente: 'Hay un informe pendiente',
+    alertaEvaluacionSinCorregir: 'Hay una evaluación sin corregir',
+    desdeEl: 'Desde el {fecha}',
   },
 } as const;
