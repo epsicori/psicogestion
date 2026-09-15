@@ -135,4 +135,28 @@ select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111
 select public.bloquear_historia();
 call pg_temp.reset_sesion();
 
+-- --- T-006 criterio 3 · quien debe PIN y quien no lo decide la base -------------------
+-- De `estado_de_cuenta()` cuelga TODA la guardia del primer acceso —el Proxy no hace más
+-- que redirigir a `/primera-vez` cuando esta función dice que falta un paso—, y no se
+-- ejercitaba en ningún módulo. La decisión no puede vivir en un condicional sobre el rol
+-- en la pantalla: viene de `requiere_pin`, y aquí se fija que viene de aquí.
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select requiere_pin from public.estado_de_cuenta()),
+  'T-006: el profesional sanitario requiere PIN de historia');
+select pg_temp.assert((select tiene_pin from public.estado_de_cuenta()),
+  'T-006: PRO1 ya lo tiene fijado, así que no debe el paso');
+call pg_temp.reset_sesion();
+
+-- El técnico administrativo no tiene historia que abrir. Las dos mitades importan: si
+-- `requiere_pin` fuera cierto se le mandaría a fijar un PIN que no le sirve de nada, y si
+-- tuviera fila en `pines_historia` existiría un PIN suyo que nadie debería poder usar.
+call pg_temp.como(:TEC1);
+select pg_temp.assert(not (select requiere_pin from public.estado_de_cuenta()),
+  'T-006: el técnico administrativo NO requiere PIN');
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(pg_temp.contar(format(
+  $c$select * from public.pines_historia where perfil_id = %L$c$, :TEC1)) = 0,
+  'T-006: el técnico no tiene fila en pines_historia');
+
 \echo '03-candado: completa.'

@@ -6,7 +6,7 @@ fase: 0
 prioridad: alta
 depende_de: [T-002]
 estado: en_curso
-notas: Los dos cortes INTEGRADOS en main (a el 06-09, b el 15-09). Codigo completo. Queda solo la verificacion que exige maquina - test:rls y el guion de navegador -, anotada en Estado de entrega.
+notas: Los dos cortes INTEGRADOS en main (a el 06-09, b el 15-09). Codigo completo y los OCHO criterios automaticos cerrados con evidencia. Quedan solo los criterios 9 y 10, que son navegador; detalle en Estado de entrega.
 ---
 
 # Contexto
@@ -64,22 +64,22 @@ armazón de T-007; si T-007 aún no está integrado, se usan las primitivas que 
 
 ## Criterios de aceptación (verificables)
 
-- [ ] **Automático** — `npm run lint`, `npm run build` y `npm run test:rls` limpios.
-- [ ] **Automático** — un usuario invitado que **no** ha completado TOTP no puede alcanzar
+- [x] **Automático** — `npm run lint`, `npm run build` y `npm run test:rls` limpios.
+- [x] **Automático** — un usuario invitado que **no** ha completado TOTP no puede alcanzar
       ninguna ruta del grupo `app/(app)/`: redirige al paso pendiente.
-- [ ] **Automático** — un `profesional_sanitario` sin PIN fijado es redirigido al alta de
+- [x] **Automático** — un `profesional_sanitario` sin PIN fijado es redirigido al alta de
       PIN; un `tecnico_administrativo` **no**, y no tiene fila en `pines_historia`.
-- [ ] **Automático** — cinco PIN erróneos bloquean quince minutos, dejan entrada en
+- [x] **Automático** — cinco PIN erróneos bloquean quince minutos, dejan entrada en
       `auditoria` y el sexto intento **con el PIN correcto falla igual**.
-- [ ] **Automático** — invitar a un `tecnico_administrativo` **sin centro** falla, y el
+- [x] **Automático** — invitar a un `tecnico_administrativo` **sin centro** falla, y el
       formulario lo dice antes de llamar a la base.
-- [ ] **Automático** — tras la baja de un profesional: sus sesiones dejan de valer, su
+- [x] **Automático** — tras la baja de un profesional: sus sesiones dejan de valer, su
       factor TOTP desaparece, su PIN queda inutilizado y `es_profesional_asignado()`
       devuelve falso (gemelo del criterio de T-003).
-- [ ] **Automático** — no existe ninguna acción de servidor que permita a un administrador
+- [x] **Automático** — no existe ninguna acción de servidor que permita a un administrador
       **establecer** el PIN de otro (comprobable por lectura del código y por prueba: la
       llamada, forzada, es rechazada).
-- [ ] **Automático** — ninguna Server Action de renderizado prolonga la ventana: el
+- [x] **Automático** — ninguna Server Action de renderizado prolonga la ventana: el
       recuento de `desbloqueos_historia` **no cambia** al recargar una página cinco veces.
 - [ ] **Manual** — el guion de abajo se completa entero.
 - [ ] **Manual** — con cada rol, la interfaz enseña exactamente lo que le concede la matriz
@@ -136,14 +136,27 @@ armazón de T-007; si T-007 aún no está integrado, se usan las primitivas que 
   pestaña abierta y quieta es «actividad» para GoTrue y el `inactivity_timeout` no
   vencería jamás.
 
-**Evidencia sobre el árbol ya integrado (15-09-2026)**: `npm run lint` limpio ·
-`npx vitest run` **415 pruebas, 43 ficheros, todas en verde** · `npm run build` limpio,
-doce rutas más el Proxy. Repetidos los tres después del cambio de sesión, con el mismo
-resultado.
+**Los ocho criterios automáticos, cerrados (15-09-2026)**, con la pila levantada:
 
-**Lo que NO se ha ejecutado, y por qué**: `npm run test:rls` y el guion manual de
-navegador exigen la pila local levantada (`npx supabase start`), y el demonio de Docker
-estaba parado. Son los criterios 1, 9 y 10. **El ticket no se marca `hecho` por eso.**
+| # | Criterio | Dónde se demuestra |
+|---|---|---|
+| 1 | `lint`, `build` y `test:rls` limpios | los tres ejecutados hoy: `test:rls` **360 aserciones**, `build` doce rutas más el Proxy |
+| 2 | sin el primer acceso no se alcanza el espacio de trabajo | `proxy.test.ts` (ocho pruebas: cinco rutas cortadas, y las exenciones de `/primera-vez` y `/recuperar`) |
+| 3 | el profesional sin PIN va al alta, el técnico no | `lib/cuentas/primer-acceso.test.ts` y `scripts/rls/03-candado.sql` (`estado_de_cuenta()` para los dos roles, y el técnico sin fila en `pines_historia`) |
+| 4 | cinco PIN erróneos bloquean quince minutos | `scripts/rls/03-candado.sql`, con las tres entradas de auditoría y su gemela negativa |
+| 5 | invitar a un técnico sin centro falla antes de la base | `app/(app)/ajustes/invitar/formulario-invitar.test.tsx` |
+| 6 | la baja revoca sesión, TOTP, PIN y asignación | `scripts/rls/13-cuentas.sql` |
+| 7 | nadie puede fijar el PIN de otro | `scripts/rls/13-cuentas.sql` |
+| 8 | el renderizado no prolonga la ventana | `app/(app)/candado/formulario-candado.test.tsx` |
+
+Los criterios 2 y 3 no tenían automatización de ninguna clase: la decisión vive en
+`primerAccesoPendiente()` y la redirección en `proxy.ts`, y ninguno de los dos se
+probaba. El criterio 4 estaba implementado desde T-002 y tampoco se probaba, siendo lo
+único que hace seguro un PIN de seis dígitos.
+
+**Lo que NO se ha ejecutado**: los criterios 9 y 10, que son navegador —el guion de siete
+pasos de abajo y el repaso de la matriz de roles con cada uno de los tres—.
+**El ticket no se marca `hecho` por eso.**
 
 **Trampa heredada del corte b, que cuesta una hora si se olvida**: `npx supabase db
 reset` **no vuelve a leer `config.toml`**. Un cambio ahí —el TOTP, y ahora
