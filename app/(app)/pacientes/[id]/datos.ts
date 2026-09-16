@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
+import { descifrarIdentificacion, type FilaIdentificacion } from '@/lib/cifrado/identificacion';
 import { estadoDeCuenta } from '@/lib/cuentas/candado';
 import { exigirSesion } from '@/lib/supabase/sesion';
 import type { Database } from '@/lib/supabase/tipos-bd';
@@ -26,6 +27,11 @@ export type DatosDeCabecera = {
   apellidos: string;
   creadoEn: string;
   fechaNacimiento: string | null;
+  // T-032 · el teléfono y el sexo administrativo viven ya en `pacientes` (antes solo el de
+  // su representante existía en todo el esquema): se leen aquí, junto al resto de la
+  // cabecera, porque son la misma fila y la misma consulta.
+  telefono: string | null;
+  sexo: Database['public']['Enums']['sexo_administrativo'] | null;
   centro: string | null;
   profesionalId: string;
   titularidad: Database['public']['Enums']['titularidad_paciente'];
@@ -38,7 +44,7 @@ export const cargarPaciente = cache(async (id: string): Promise<DatosDeCabecera 
   const { data, error } = await supabase
     .from('pacientes')
     .select(
-      'id, nombre, apellidos, creado_en, fecha_nacimiento, profesional_id, titularidad, centros(nombre)',
+      'id, nombre, apellidos, creado_en, fecha_nacimiento, telefono, sexo, profesional_id, titularidad, centros(nombre)',
     )
     .eq('id', id)
     .maybeSingle();
@@ -55,6 +61,8 @@ export const cargarPaciente = cache(async (id: string): Promise<DatosDeCabecera 
     apellidos: data.apellidos,
     creadoEn: data.creado_en,
     fechaNacimiento: data.fecha_nacimiento,
+    telefono: data.telefono,
+    sexo: data.sexo,
     centro: data.centros?.nombre ?? null,
     profesionalId: data.profesional_id,
     titularidad: data.titularidad,
@@ -331,5 +339,79 @@ export const cargarAlertasDeDocumentacion = cache(
       fechaReferencia: a.fecha_referencia,
       creadaEn: a.creada_en,
     }));
+  },
+);
+
+export type Legible<T> =
+  | { estado: 'ok'; datos: T }
+  | { estado: 'sin-datos' }
+  | { estado: 'no-legible' };
+
+export type DatosDeIdentificacion = { documento: string | null; domicilio: string | null };
+
+/**
+ * Documento y domicilio del paciente, descifrados. **Solo por `leer_identificacion()`,
+ * nunca por un `select` a `pacientes_identificacion`** (ADR-060): el `select` directo
+ * funcionaría igual de bien y no dejaría rastro en `auditoria`, que es exactamente el
+ * fallo silencioso que esta función corrige. `null` es «no se pudo consultar»; los otros
+ * dos estados distinguen «no hay fila» de «la fila no descifra» — confundirlos afirmaría
+ * un hecho falso sobre el expediente, que es lo que el choque 5 prohíbe.
+ */
+export const cargarIdentificacion = cache(
+  async (id: string): Promise<Legible<DatosDeIdentificacion> | null> => {
+    const { supabase } = await exigirSesion();
+
+    const { data, error } = await supabase.rpc('leer_identificacion', { p_paciente_id: id });
+
+    if (error) {
+      console.error('cargarIdentificacion: fallo al leer la identificación', error);
+      return null;
+    }
+
+    const fila = data?.[0];
+    if (!fila) return { estado: 'sin-datos' };
+
+    try {
+      const claro = await descifrarIdentificacion(fila as FilaIdentificacion);
+      return {
+        estado: 'ok',
+        datos: { documento: claro.documento ?? null, domicilio: claro.domicilio ?? null },
+      };
+    } catch (errorDescifrado) {
+      console.error('cargarIdentificacion: fallo al descifrar la fila', errorDescifrado);
+      return { estado: 'no-legible' };
+    }
+  },
+);
+
+export type SaludBasicaDeVista = { alergias: string | null; medicacionActual: string | null };
+
+/**
+ * Alergias y medicación actual. Decide **por rol antes de consultar** (administrador o
+ * profesional sanitario), igual que `cargarRepresentantes`: el técnico administrativo no
+ * entra, y su `null` hace que el bloque de la ficha no se pinte en absoluto — ni en gris,
+ * ni «no tienes permiso», que ya diría que hay algo detrás.
+ */
+export const cargarSaludBasica = cache(
+  async (id: string): Promise<SaludBasicaDeVista | null> => {
+    const { supabase } = await exigirSesion();
+    const rol = await cargarRol();
+    if (rol !== 'administrador' && rol !== 'profesional_sanitario') return null;
+
+    const { data, error } = await supabase
+      .from('pacientes_salud_basica')
+      .select('alergias, medicacion_actual')
+      .eq('paciente_id', id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('cargarSaludBasica: fallo al leer la salud básica', error);
+      return null;
+    }
+
+    return {
+      alergias: data?.alergias ?? null,
+      medicacionActual: data?.medicacion_actual ?? null,
+    };
   },
 );

@@ -418,6 +418,31 @@ export const es = {
     vigenteDesde: 'Desde el {fecha}',
     yaNoVigente: 'Ya no está vigente',
 
+    // T-032 · Corte B: identificación (ADR-060), sexo administrativo (ADR-062) y salud
+    // básica (ADR-061) en la ficha.
+    identificacion: 'Identificación',
+    documento: 'Documento',
+    domicilio: 'Domicilio',
+    sinDocumento: 'Sin documento registrado',
+    sinDomicilio: 'Sin domicilio registrado',
+    identificacionNoLegible: 'No se puede mostrar',
+    identificacionNoLegibleExplicacion:
+      'Hay un documento o un domicilio guardados, pero no se han podido descifrar. Avisa a quien administra la cuenta.',
+    sexo: 'Sexo',
+    sinSexo: 'Sin especificar',
+    sexoHombre: 'Hombre',
+    sexoMujer: 'Mujer',
+    sexoOtro: 'Otro',
+    alergiasYMedicacion: 'Alergias y medicación',
+    alergias: 'Alergias',
+    medicacionActual: 'Medicación actual',
+    sinAlergias: 'Sin alergias registradas',
+    sinMedicacion: 'Sin medicación registrada',
+    representacionLegal: 'Representación legal',
+    sinRepresentacionLegal: 'No hay ninguna persona con representación legal registrada',
+    sinContactoDeEmergencia: 'No hay ningún contacto de emergencia registrado',
+    contactoDeEmergenciaExplicacion: 'No puede dar el consentimiento ni firmar por el paciente.',
+
     // Documentos y consentimientos (ADR-048: fuera del candado; ADR-054: lenguaje claro)
     consentimientos: 'Consentimientos',
     sinConsentimientos: 'Todavía no hay ningún consentimiento',
