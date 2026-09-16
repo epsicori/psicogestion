@@ -41,3 +41,6 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-057](decisions/ADR-057.md) | `alcance` entra en el sobre: quién puede leer una versión se sella igual que quién la escribió | aceptada | 15-09-2026 |
 | [ADR-058](decisions/ADR-058.md) | La nota de sesión tiene ruta propia, y esa ruta no abre nada al cargarse (enmienda al 056) | aceptada | 15-09-2026 |
 | [ADR-059](decisions/ADR-059.md) | Una nota clínica la corrige quien la escribió; quien no estuvo en la sala añade la suya | aceptada | 15-09-2026 |
+| [ADR-060](decisions/ADR-060.md) | El técnico administrativo lee DNI y domicilio de sus centros, y cada lectura deja rastro | aceptada | 16-09-2026 |
+| [ADR-061](decisions/ADR-061.md) | Alergias y medicación: tabla propia, en claro, fuera del candado, sin el técnico | aceptada | 16-09-2026 |
+| [ADR-062](decisions/ADR-062.md) | Un solo campo de sexo, administrativo | aceptada | 16-09-2026 |

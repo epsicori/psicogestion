@@ -301,9 +301,10 @@ es `tecnico_administrativo`; no lo tacha ni lo enseña en gris.
 
 Está bien planteado —dice «Solo datos demográficos» y separa lo clínico— pero teléfono,
 email y ciudad son datos de contacto, y el DNI y el domicilio viven en
-`pacientes_identificacion`, donde el técnico administrativo **no entra**. El panel se
-construye campo a campo desde lo que el rol puede leer, y desaparece entero si no queda
-ninguno.
+`pacientes_identificacion`. El técnico administrativo entra ahora a esos dos, acotado a los
+pacientes de sus centros y con cada lectura registrada en `auditoria` (ADR-060, T-032). El
+panel se construye campo a campo desde lo que el rol puede leer, y desaparece entero si no
+queda ninguno.
 
 ### 6 · Las métricas de Inicio dependen del rol
 

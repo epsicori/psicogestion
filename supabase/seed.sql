@@ -176,3 +176,22 @@ begin
 
 end;
 $seed$;
+
+-- -----------------------------------------------------------------------
+-- 6 · Vault · claves de cifrado de identificación (T-032, ADR-029)
+--
+-- Claves DE JUGUETE, solo desarrollo. En producción se crean a mano, una vez,
+-- con el patrón de scripts/vault-smtp.sql, y NO viven en el repositorio.
+-- LOS MISMOS VALORES LITERALES en supabase/seed.sql y supabase/seed-completo.sql:
+-- si los dos guiones sembraran valores distintos, lo cifrado por uno no lo
+-- descifraría el otro y el síntoma sería «etiqueta inválida» en una pantalla, a
+-- mil kilómetros de la causa. Idempotente: `where not exists` porque
+-- seed-completo.sql corre sobre una base que ya pasó por este fichero.
+-- -----------------------------------------------------------------------
+select vault.create_secret('CKKnf5zj9mjBlvO1nUbdgoerSA6Es4+iCLqNxV65MQc=', 'identificacion_cifrado_v1',
+  'T-032 · AES-256-GCM de pacientes_identificacion (ADR-029). CLAVE DE JUGUETE.')
+where not exists (select 1 from vault.secrets where name = 'identificacion_cifrado_v1');
+
+select vault.create_secret('2gysmbQSmS2xXSPmn6eqBXSlW2nV7kDghHmIK29N8H0=', 'identificacion_indice_v1',
+  'T-032 · HMAC-SHA-256 del índice ciego (ADR-029). OTRA clave, a propósito. DE JUGUETE.')
+where not exists (select 1 from vault.secrets where name = 'identificacion_indice_v1');

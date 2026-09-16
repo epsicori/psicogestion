@@ -461,3 +461,19 @@ begin
   raise notice 'seed-completo: sembrado.';
 end;
 $seed$;
+
+-- -----------------------------------------------------------------------
+-- 10 · Vault · claves de cifrado de identificación (T-032, ADR-029)
+--
+-- MISMOS VALORES LITERALES que supabase/seed.sql: si los dos guiones sembraran
+-- valores distintos, lo cifrado por uno no lo descifraría el otro. Idempotente
+-- (`where not exists`): este fichero corre sobre una base que ya pasó por
+-- `db reset`, que ya sembró estos dos secretos con seed.sql.
+-- -----------------------------------------------------------------------
+select vault.create_secret('CKKnf5zj9mjBlvO1nUbdgoerSA6Es4+iCLqNxV65MQc=', 'identificacion_cifrado_v1',
+  'T-032 · AES-256-GCM de pacientes_identificacion (ADR-029). CLAVE DE JUGUETE.')
+where not exists (select 1 from vault.secrets where name = 'identificacion_cifrado_v1');
+
+select vault.create_secret('2gysmbQSmS2xXSPmn6eqBXSlW2nV7kDghHmIK29N8H0=', 'identificacion_indice_v1',
+  'T-032 · HMAC-SHA-256 del índice ciego (ADR-029). OTRA clave, a propósito. DE JUGUETE.')
+where not exists (select 1 from vault.secrets where name = 'identificacion_indice_v1');
