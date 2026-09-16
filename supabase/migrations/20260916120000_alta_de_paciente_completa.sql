@@ -214,7 +214,17 @@ security invoker          -- NO definer: las políticas de las tres tablas deben
 set search_path = ''
 as $$
 declare
-  v_id uuid;
+  -- Generado ANTES del insert y pasado explícito (en vez de `returning id into v_id`)
+  -- a propósito: `pacientes_lectura_profesional_asignado` (T-002) llama a
+  -- `es_profesional_asignado()`, STABLE y security definer, que vuelve a consultar
+  -- `pacientes` por dentro. Una función STABLE fija su instantánea al EMPEZAR la
+  -- sentencia — no al insertar la fila —, así que dentro de un único `insert ...
+  -- returning` esa fila propia, recién insertada, todavía no es visible para ella: la
+  -- comprobación de RLS que exige poder verla de vuelta falla con 42501 aunque el
+  -- `with check` del insert sea cierto (comprobado en vivo, T-032, contra la base
+  -- local: sin `returning`, el mismo insert pasa). Un `insert ... values (...)` liso,
+  -- sin `returning`, no dispara esa comprobación.
+  v_id uuid := gen_random_uuid();
 begin
   if p_fecha_nacimiento is null then
     raise exception 'La fecha de nacimiento es obligatoria en el alta (T-032).'
@@ -224,9 +234,8 @@ begin
     raise exception 'Fecha de nacimiento fuera de rango.' using errcode = '23514';
   end if;
 
-  insert into public.pacientes (nombre, apellidos, fecha_nacimiento, sexo, telefono, profesional_id)
-  values (p_nombre, p_apellidos, p_fecha_nacimiento, p_sexo, p_telefono, (select auth.uid()))
-  returning id into v_id;
+  insert into public.pacientes (id, nombre, apellidos, fecha_nacimiento, sexo, telefono, profesional_id)
+  values (v_id, p_nombre, p_apellidos, p_fecha_nacimiento, p_sexo, p_telefono, (select auth.uid()));
 
   if p_dni_cifrado is not null or p_domicilio_cifrado is not null then
     insert into public.pacientes_identificacion (
