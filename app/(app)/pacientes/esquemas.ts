@@ -56,7 +56,13 @@ export const esquemaNuevoPaciente = z.object({
       },
       { error: t('pacientes.fechaDeNacimientoFueraDeRango') },
     ),
-  sexo: z.enum(['hombre', 'mujer', 'otro'], { error: t('pacientes.sexoNoValido') }).optional(),
+  // El `<select>` nativo manda «» cuando nadie ha tocado la opción vacía (§1.6): hay que
+  // convertirla en `undefined` igual que en los demás campos opcionales, o el `z.enum` la
+  // rechazaría por no estar en el catálogo.
+  sexo: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(['hombre', 'mujer', 'otro'], { error: t('pacientes.sexoNoValido') }).optional(),
+  ),
   // Se guarda normalizado en E.164 (`+34600000000`): `wa.me` no admite espacios y lo bonito
   // lo pone `formatearTelefono()` al pintar.
   telefono: opcional(
@@ -79,3 +85,7 @@ export const esquemaNuevoPaciente = z.object({
 });
 
 export type DatosNuevoPaciente = z.infer<typeof esquemaNuevoPaciente>;
+// El tipo de ENTRADA (antes del `preprocess`/`transform`), para el genérico de `useForm`:
+// `zodResolver` exige que `TFieldValues` case con lo que el formulario produce en crudo, y
+// eso difiere del de SALIDA en los campos con `preprocess` (`sexo`, `telefono`, `dni`).
+export type EntradaNuevoPaciente = z.input<typeof esquemaNuevoPaciente>;
