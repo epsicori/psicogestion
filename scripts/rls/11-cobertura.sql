@@ -43,6 +43,9 @@ declare
     'pacientes_lectura_tecnico_de_su_centro',
     'pacientes_modificacion_administrador', 'pacientes_modificacion_profesional_asignado',
     'pacientes_identificacion_alta', 'pacientes_identificacion_lectura', 'pacientes_identificacion_modificacion',
+    'pacientes_identificacion_lectura_tecnico',
+    -- T-032 · pacientes_salud_basica (ADR-061): sin política para el técnico, a propósito.
+    'pacientes_salud_basica_alta', 'pacientes_salud_basica_lectura', 'pacientes_salud_basica_modificacion',
     'perfiles_lectura_propia',
     'perfiles_centros_alta_administrador', 'perfiles_centros_cierre_administrador', 'perfiles_centros_lectura',
     'politicas_retencion_alta_administrador', 'politicas_retencion_lectura', 'politicas_retencion_modificacion_administrador',

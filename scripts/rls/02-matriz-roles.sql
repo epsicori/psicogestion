@@ -36,7 +36,9 @@ call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
 -- pacientes_identificacion: DNI cifrado. Total para admin y el profesional dueño; el
--- técnico SIN ACCESO (matriz de architecture.md §Roles).
+-- técnico de SU centro sí ve la fila desde T-032/ADR-060 (el candado ya no es la RLS de
+-- la tabla, es que no hay clave para descifrar sin pasar por leer_identificacion(), que
+-- deja rastro). La aserción de este bloque cambia de signo respecto a la de T-002.
 -- ---------------------------------------------------------------------------------------
 call pg_temp.como(:ADM);
 select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P1)) = 1,
@@ -49,8 +51,42 @@ select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_iden
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:TEC1);
-select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P1)) = 0,
-  'TEC1 NO debe ver identificación: sin acceso, aunque P1 sea de su centro');
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P1)) = 1,
+  'TEC1 (centro A) SÍ ve la fila de identificación de P1 (centro A) — ADR-060: la RLS ya no es el candado, lo es no tener la clave');
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P2)) = 0,
+  'TEC1 (centro A) NO ve la fila de identificación de P2: es de otro centro (PRO2/centro B)');
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------------------
+-- pacientes_salud_basica: alergias/medicación, sin cifrar, fuera del candado (ADR-061).
+-- Administrador y el profesional asignado, sí; el técnico, en ningún centro (T-032 §1.4).
+-- 01-fijacion.sql es territorio ajeno a T-032 (diseño §6): la fila de P1 se da de alta
+-- aquí mismo, dentro de este bloque, como PRO1 (su profesional asignado, con permiso de
+-- alta según pacientes_salud_basica_alta), para que el resto del bloque tenga algo que
+-- distinguir de «cero por falta de fila».
+call pg_temp.como(:PRO1);
+insert into public.pacientes_salud_basica (paciente_id, alergias, medicacion_actual, actualizado_por) values
+  (:P1, 'Penicilina', 'Sertralina 50mg/día', :PRO1);
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :P1)) = 1,
+  'ADM debe ver la salud básica de P1');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :P1)) = 1,
+  'PRO1 (asignado a P1) debe ver su salud básica');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:TEC1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :P1)) = 0,
+  'TEC1 NO debe ver salud básica de P1, aunque sea de su centro: no hay política de lectura para el técnico');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:TEC2);
+select pg_temp.assert(pg_temp.contar('select * from public.pacientes_salud_basica') = 0,
+  'TEC2 NO debe ver ninguna fila de salud básica: sin política de lectura para el técnico, sea cual sea el centro');
 call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
