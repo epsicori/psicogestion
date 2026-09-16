@@ -25,13 +25,13 @@ para saber si el banco pasó.
 |---|---|
 | `00-ayudantes.sql` | `assert`, `assert_lanza`, `contar()`, `como()` / `reset_sesion()` |
 | `01-fijacion.sql` | Los datos propios del banco (independientes del seed de T-008) |
-| `02-matriz-roles.sql` | Tabla × rol: la matriz de `docs/architecture.md` §Roles |
+| `02-matriz-roles.sql` | Tabla × rol: la matriz de `docs/architecture.md` §Roles. T-032/ADR-060: el técnico de su centro SÍ lee `pacientes_identificacion` (ya no es la RLS el candado, es no tener la clave); T-032/ADR-061: `pacientes_salud_basica` (ADM y profesional asignado sí, el técnico nunca, en ningún centro) |
 | `03-candado.sql` | ADR-026 — desbloqueo, `bloquear_historia`, ventana caducada |
 | `04-baja.sql` | ADR-032 — el profesional de baja no lee, su autoría sigue registrada |
 | `05-vinculo.sql` | ADR-031 — un solo salto de fusión, siempre |
 | `06-centro.sql` | ADR-033/051 — el técnico acotado, el profesional no, retención nunca nula |
-| `07-capacidad.sql` | ADR-028 — capacidad de consentimiento en tres fechas, sin bandera |
-| `08-identificacion.sql` | ADR-029 — el índice único rechaza el alta doble |
+| `07-capacidad.sql` | ADR-028 — capacidad de consentimiento en tres fechas, sin bandera. T-032: el contacto de emergencia (`alcance = 'solo_contacto'`) no sale de `capacidad_consentimiento()` aunque esté presente en la tabla, y no puede ser firmante de un consentimiento (23514, `fn_firmante_no_es_solo_contacto`), con su gemela de patria potestad |
+| `08-identificacion.sql` | ADR-029 — el índice único rechaza el alta doble. T-032/ADR-060: el técnico no da de alta ni modifica identificación (42501); `clave_de_cifrado()` rechaza a `authenticated` y la lee `service_role`; fila solo-domicilio, fila vacía (23514) y `fecha_nacimiento` nula en `alta_paciente()` (23514); y el rastro de `leer_identificacion()` en `auditoria` (`LECTURA_IDENTIFICACION`, deduplicado en la ventana de quince minutos) |
 | `09-accesos.sql` | ADR-037 — listar no es acceso, abrir sí, dos aperturas cuentan una |
 | `10-solo-adicion.sql` | Invariante 2 — `update`/`delete`/`truncate` fallan en las tres capas |
 | `11-cobertura.sql` | Toda política de `pg_policies` tiene una entrada declarada, y viceversa |
