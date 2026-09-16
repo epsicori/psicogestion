@@ -1408,6 +1408,8 @@ export type Database = {
           motivo_traspaso: string | null
           nombre: string
           profesional_id: string
+          sexo: Database["public"]["Enums"]["sexo_administrativo"] | null
+          telefono: string | null
           titularidad: Database["public"]["Enums"]["titularidad_paciente"]
           traspasado_a: string | null
           traspasado_en: string | null
@@ -1425,6 +1427,8 @@ export type Database = {
           motivo_traspaso?: string | null
           nombre: string
           profesional_id: string
+          sexo?: Database["public"]["Enums"]["sexo_administrativo"] | null
+          telefono?: string | null
           titularidad?: Database["public"]["Enums"]["titularidad_paciente"]
           traspasado_a?: string | null
           traspasado_en?: string | null
@@ -1442,6 +1446,8 @@ export type Database = {
           motivo_traspaso?: string | null
           nombre?: string
           profesional_id?: string
+          sexo?: Database["public"]["Enums"]["sexo_administrativo"] | null
+          telefono?: string | null
           titularidad?: Database["public"]["Enums"]["titularidad_paciente"]
           traspasado_a?: string | null
           traspasado_en?: string | null
@@ -1509,54 +1515,100 @@ export type Database = {
         Row: {
           actualizado_en: string
           creado_en: string
-          dni_cifrado: string
+          dni_cifrado: string | null
           dni_clave_version: number
-          dni_etiqueta: string
-          dni_indice: string
+          dni_etiqueta: string | null
+          dni_indice: string | null
           dni_indice_clave_version: number
-          dni_nonce: string
+          dni_nonce: string | null
           domicilio_cifrado: string | null
           domicilio_clave_version: number | null
           domicilio_etiqueta: string | null
           domicilio_nonce: string | null
           paciente_id: string
-          tipo_documento: string
+          tipo_documento: string | null
         }
         Insert: {
           actualizado_en?: string
           creado_en?: string
-          dni_cifrado: string
+          dni_cifrado?: string | null
           dni_clave_version?: number
-          dni_etiqueta: string
-          dni_indice: string
+          dni_etiqueta?: string | null
+          dni_indice?: string | null
           dni_indice_clave_version?: number
-          dni_nonce: string
+          dni_nonce?: string | null
           domicilio_cifrado?: string | null
           domicilio_clave_version?: number | null
           domicilio_etiqueta?: string | null
           domicilio_nonce?: string | null
           paciente_id: string
-          tipo_documento: string
+          tipo_documento?: string | null
         }
         Update: {
           actualizado_en?: string
           creado_en?: string
-          dni_cifrado?: string
+          dni_cifrado?: string | null
           dni_clave_version?: number
-          dni_etiqueta?: string
-          dni_indice?: string
+          dni_etiqueta?: string | null
+          dni_indice?: string | null
           dni_indice_clave_version?: number
-          dni_nonce?: string
+          dni_nonce?: string | null
           domicilio_cifrado?: string | null
           domicilio_clave_version?: number | null
           domicilio_etiqueta?: string | null
           domicilio_nonce?: string | null
           paciente_id?: string
-          tipo_documento?: string
+          tipo_documento?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "pacientes_identificacion_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: true
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pacientes_salud_basica: {
+        Row: {
+          actualizado_en: string
+          actualizado_por: string
+          alergias: string | null
+          medicacion_actual: string | null
+          paciente_id: string
+        }
+        Insert: {
+          actualizado_en?: string
+          actualizado_por: string
+          alergias?: string | null
+          medicacion_actual?: string | null
+          paciente_id: string
+        }
+        Update: {
+          actualizado_en?: string
+          actualizado_por?: string
+          alergias?: string | null
+          medicacion_actual?: string | null
+          paciente_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pacientes_salud_basica_actualizado_por_fkey"
+            columns: ["actualizado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_salud_basica_actualizado_por_fkey"
+            columns: ["actualizado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_salud_basica_paciente_id_fkey"
             columns: ["paciente_id"]
             isOneToOne: true
             referencedRelation: "pacientes"
@@ -2527,6 +2579,28 @@ export type Database = {
         Args: { p_evento_id: string }
         Returns: Json
       }
+      alta_paciente: {
+        Args: {
+          p_alergias?: string
+          p_apellidos: string
+          p_clave_version?: number
+          p_dni_cifrado?: string
+          p_dni_etiqueta?: string
+          p_dni_indice?: string
+          p_dni_nonce?: string
+          p_domicilio_cifrado?: string
+          p_domicilio_etiqueta?: string
+          p_domicilio_nonce?: string
+          p_fecha_nacimiento: string
+          p_indice_clave_version?: number
+          p_medicacion_actual?: string
+          p_nombre: string
+          p_sexo?: Database["public"]["Enums"]["sexo_administrativo"]
+          p_telefono?: string
+          p_tipo_documento?: string
+        }
+        Returns: string
+      }
       bloquear_historia: { Args: never; Returns: number }
       canjear_codigo_recuperacion: {
         Args: { p_codigo: string }
@@ -2548,6 +2622,7 @@ export type Database = {
       centro_actual: { Args: never; Returns: string }
       centro_principal: { Args: { p_perfil_id: string }; Returns: string }
       centros_actuales: { Args: never; Returns: string[] }
+      clave_de_cifrado: { Args: { p_nombre: string }; Returns: string }
       cobertura_solo_adicion: {
         Args: never
         Returns: {
@@ -2602,6 +2677,20 @@ export type Database = {
       fijar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
       generar_codigos_recuperacion: { Args: never; Returns: string[] }
       historia_desbloqueada: { Args: never; Returns: boolean }
+      leer_identificacion: {
+        Args: { p_paciente_id: string }
+        Returns: {
+          dni_cifrado: string
+          dni_clave_version: number
+          dni_etiqueta: string
+          dni_nonce: string
+          domicilio_cifrado: string
+          domicilio_clave_version: number
+          domicilio_etiqueta: string
+          domicilio_nonce: string
+          tipo_documento: string
+        }[]
+      }
       nota_tiene_version_conjunta: {
         Args: { p_nota_id: string }
         Returns: boolean
@@ -2728,6 +2817,7 @@ export type Database = {
         | "administrador"
         | "profesional_sanitario"
         | "tecnico_administrativo"
+      sexo_administrativo: "hombre" | "mujer" | "otro"
       tipo_acceso_historia:
         | "apertura"
         | "exportacion"
@@ -2933,6 +3023,7 @@ export const Constants = {
         "profesional_sanitario",
         "tecnico_administrativo",
       ],
+      sexo_administrativo: ["hombre", "mujer", "otro"],
       tipo_acceso_historia: [
         "apertura",
         "exportacion",
