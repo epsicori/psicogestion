@@ -10,6 +10,7 @@ estado: pendiente
 territorio:
   - lib/huella/sobre.ts
   - lib/huella/sobre.test.ts
+  - lib/huella/vectores.test.ts
   - lib/huella/vectores-congelados.json
   - supabase/migrations/**
   - supabase/seed-completo.sql

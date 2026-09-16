@@ -88,7 +88,30 @@ begin
 
   -- 3 · Serialización por paciente: un cerrojo consultivo, tomado ANTES de
   -- leer el eslabón anterior, así que dos firmas concurrentes sobre el mismo
-  -- paciente se ordenan aquí y no pueden leer el mismo último eslabón.
+  -- paciente se ordenan aquí y no pueden leer el mismo último eslabón. No se
+  -- usa `for no key update` sobre `pacientes`: esa fila ya la bloquea la
+  -- fusión de pacientes (ADR-031) con `for no key update`, y las
+  -- comprobaciones de clave ajena con `for key share`; compartir ese juego de
+  -- cerrojos abriría aristas nuevas de interbloqueo (firma↔fusión,
+  -- firma↔firma) en una operación que un profesional ejecuta con el paciente
+  -- delante. El cerrojo consultivo no toca ninguna fila: no puede formar
+  -- ciclo con esos otros dos, y se suelta solo, al commit o al rollback.
+  --
+  -- LIMITACIÓN OPERATIVA REAL (hallazgo MEDIA de la revisión con Opus del
+  -- 30-08-2026): el argumento de «sin interbloqueo» de arriba asume UN
+  -- cerrojo consultivo por transacción. Este disparador es `for each row`:
+  -- firmar N notas de N pacientes DISTINTOS dentro de la MISMA transacción
+  -- toma N cerrojos, uno por fila, en el orden en que las filas se procesan.
+  -- Eso reabre el interbloqueo clásico ABBA si dos transacciones concurrentes
+  -- firman los mismos dos pacientes en orden distinto (T1: paciente A luego
+  -- B; T2: paciente B luego A). No es un caso hipotético: el propio banco de
+  -- pruebas (`scripts/rls/01-fijacion.sql`) ya firma varios pacientes en una
+  -- sola transacción, aunque ahí no hay una segunda transacción concurrente
+  -- que dispute los mismos cerrojos, así que no lo sufre en la práctica.
+  -- REGLA para cualquier código futuro que firme varias notas de varios
+  -- pacientes en una misma transacción: ordenar las firmas por `paciente_id`
+  -- (orden total, estable) para que dos transacciones que compitan por los
+  -- mismos pacientes los tomen siempre en el mismo orden.
   perform pg_advisory_xact_lock(hashtextextended('cadena_huellas:' || v_paciente_id::text, 0));
 
   -- 4 · El último eslabón de ESTE paciente.
@@ -113,6 +136,31 @@ begin
   -- alcance). El sobre nace completo o se paga una era nueva de algoritmo
   -- (nada de esto se recalcula jamás): esta es la guarda que impide sellar un
   -- sobre con otra forma.
+  --
+  -- LIMITACIÓN CONOCIDA (hallazgo BAJA 6 de la segunda revisión con Opus del
+  -- 30-08-2026, documentada a propósito y no dejada implícita): estas diez
+  -- comprobaciones validan que las CLAVES sean las doce exactas y que los
+  -- VALORES coincidan semánticamente con las columnas — NO validan que
+  -- `contenido_canonico` sea JCS (RFC 8785) de verdad byte a byte. Un texto
+  -- con espacios de más o las claves en otro orden pasa estas diez
+  -- comprobaciones igual, porque comparan valores JSON (vía `->`/`->>`), no
+  -- la forma exacta del texto. Hoy la única garantía de canonicidad real es
+  -- `lib/huella/jcs.ts`, en TypeScript — y `authenticated` tiene `grant
+  -- insert` directo sobre esta tabla (`notas_clinicas_versiones_alta`), así
+  -- que un `insert` a mano (o un cliente que no pase por `firmar.ts`) puede
+  -- sellar un sobre válido en contenido pero NO canónico byte a byte. La
+  -- cadena sigue siendo internamente consistente (la huella coincide con
+  -- ESOS bytes, encadena bien, el verificador la da por sana) pero esos
+  -- bytes podrían no ser los que JCS habría producido para el mismo
+  -- contenido. Se acepta tal cual: exigir JCS de verdad en SQL significaría
+  -- reimplementar el canonicalizador en PL/pgSQL, que es precisamente lo que
+  -- el ADR-035 quiere evitar (dos implementaciones del mismo algoritmo que
+  -- pueden desincronizarse). El verificador nocturno (`verificar_cadena_huellas`)
+  -- seguiría sin detectarlo, porque por diseño LEE LOS BYTES GUARDADOS y
+  -- nunca los deriva — es la garantía que sí importa (ADR-035) y esta no la
+  -- rompe. (Mismo motivo por el que tampoco detecta un `alcance` de columna
+  -- alterado por debajo sin tocar el sobre: T-012a hallazgo MEDIA H4-TS,
+  -- anotado en docs/state.md §Hallazgos abiertos.)
   v_contenido := new.contenido_canonico::jsonb;
 
   -- 6.1 · Objeto con EXACTAMENTE las doce claves vigentes, SIN NINGUNA

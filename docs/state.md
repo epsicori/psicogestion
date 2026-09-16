@@ -27,23 +27,19 @@
 
 ## Bloqueos y decisiones que no toma un agente
 
-- **`alcance` no entra en el sobre canónico de la versión** (T-005). Decisión de una persona y **con
-  reloj**: gratis mientras `notas_clinicas_versiones` esté vacía; con la primera firma real dentro,
-  una era de esquema para siempre.
 - **Cada cuánto caduca una valoración de riesgo.** `MESES_VALORACION_VIGENTE = 6` es un marcador
   puesto por falta de criterio clínico, y decide cuándo la ficha marca un «riesgo alto» como viejo.
 - Económico: diseño comiteado (`79e039f`) y una **implementación sin comitear** en el worktree
   `agent-a3e72807070793a0e` (`…/20260913120000_economico_esquema.sql`, 1413 líneas). Decidir si se
   retoma o se rehace: no pasó por verificación ni revisión.
-- Obsoletos, a la espera de que alguien diga que se borran: la rama `verificacion-T-011a` y los
-  worktrees `agent-a0c13db09cb6a7b62`, `agent-a3133689fd69000ac`, `agent-a0cf274d698e0d85b`,
-  `agent-ac7b6a35059cc839d`, `agent-a0fd267d4973735c3` (con ficheros sin comitear; mirar antes).
+- Obsoletos, a la espera de que alguien diga que se borran: la rama `verificacion-T-011a` y cinco
+  worktrees con ficheros sin comitear (`git worktree list`; mirar antes de borrar).
 
 ## Trampas de la fábrica (v3.0 instalada, no la v3.1 del repo: faltan dos hooks)
 
-- **El `merge-gate` corre en toda llamada a Bash** (el `if:` de `settings.json` no se aplica): deniega
-  cualquier orden cuyo texto lleve un id de ticket. Se esquiva partiendo el id (`N=029`); un sufijo
-  de letra no dispara.
+- **El `merge-gate` corre en toda llamada a Bash** (el `if:` de `settings.json` no se aplica):
+  deniega cualquier orden cuyo texto lleve un id de ticket. Se esquiva partiendo el id (`N=029`);
+  un sufijo de letra no dispara — tampoco `ticket.mjs`/`fase.mjs`, cuyo regex es `T-\d{3}` exacto.
 - El agente `implementador` fuerza `isolation: worktree` y no sirve con un worktree ya preparado (el
   sandbox rechaza todo): se relanza como genérico con `sonnet` y sus reglas.
 - `npm run build 2>&1 | tail -n` **devuelve el estado de `tail`**: siempre `> log 2>&1; echo "exit=$?"`.
@@ -72,9 +68,12 @@
 - **El técnico administrativo no puede leer `consentimientos`** pese al choque 12; llega a la
   respuesta por `alertas_documentacion`, que no lleva palabra clínica. Abrirle la tabla sería una
   decisión de arquitectura, no un arreglo de pantalla.
-- El `Button` compartido mide **40 px** contra el criterio de 44 px; en la ficha se sortea con
-  `min-h-11` local. Arreglarlo es tocar la primitiva de T-007, no la pantalla.
-- T-011 · «entregado» a medias con varios profesionales → T-015. · `minimax/cortes/T-011.md` trae la
-  firma vieja de `listarPropuestasPendientes()`. · La base no impone las transiciones del ADR-045. ·
-  `periodicidad = 'mensual'` sin definir.
+- El `Button` compartido mide **40 px** contra 44 px, sorteado en la ficha con `min-h-11` local.
+- T-011 · «entregado» a medias con varios profesionales → T-015. · `minimax/cortes/T-011.md` trae
+  la firma vieja de `listarPropuestasPendientes()`. · Sin transiciones del ADR-045 en base ni
+  `periodicidad = 'mensual'` definida.
+- T-012a (revisión) · `docs/architecture.md:62-64,91` sigue en el sobre de once claves y
+  `esquema_version = 2`: actualizar aparte. · `verificar_cadena_huellas()` no coteja `alcance` de
+  la fila contra el del sobre (solo recalcula desde `contenido_canonico`): alterarlo por debajo sin
+  tocar el sobre no se detecta; decidirlo antes de la primera firma real (T-012).
 - Los anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md` §Hallazgos anotados.

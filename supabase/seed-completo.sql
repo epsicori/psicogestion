@@ -52,7 +52,7 @@ as $$
   select
     '{' ||
     '"abierta_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
-    '"alcance":"' || p_alcance || '",' ||
+    '"alcance":' || coalesce(to_json(p_alcance)::text, 'null') || ',' ||
     '"anotaciones_reservadas":' || coalesce(to_json(p_anotaciones)::text, 'null') || ',' ||
     '"autor_id":' || to_json(lower(p_autor_id::text))::text || ',' ||
     '"cita_id":null,' ||

@@ -163,7 +163,7 @@ as $$
   select
     '{' ||
     '"abierta_en":' || to_json(to_char(coalesce(p_abierta_en, p_creada_en) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
-    '"alcance":"' || p_alcance || '",' ||
+    '"alcance":' || coalesce(to_json(p_alcance)::text, 'null') || ',' ||
     '"anotaciones_reservadas":' || coalesce(to_json(p_anotaciones_reservadas)::text, 'null') || ',' ||
     '"autor_id":"' || lower(p_autor_id::text) || '",' ||
     '"cita_id":' || coalesce(to_json(p_cita_id::text)::text, 'null') || ',' ||

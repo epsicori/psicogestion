@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { canonizar, type ValorJson } from './jcs';
 import { normalizarNfc } from './nfc';
+import { ESQUEMA_VERSION } from './sobre';
 import vectores from './vectores-congelados.json';
 
 interface VectorCongelado {
@@ -50,6 +51,10 @@ describe('vectores-congelados.json', () => {
     const canonico = canonizar(normalizarNfc(vector.sobre));
     expect(canonico).toBe(vector.canonico);
     expect(huellaGenesis(canonico)).toBe(vector.huella_hex);
+    // El congelado describe la era VIGENTE: si sube ESQUEMA_VERSION sin regenerar
+    // el JSON, las dos suites de vectores siguen verdes por autoconsistencia y solo
+    // lo caza el banco de RLS (T-012a, hallazgo BAJA H8-TS).
+    expect((vector.sobre as { esquema_version: number }).esquema_version).toBe(ESQUEMA_VERSION);
   });
 
   it('acentos-nfd y acentos-nfc dan EXACTAMENTE la misma huella', () => {

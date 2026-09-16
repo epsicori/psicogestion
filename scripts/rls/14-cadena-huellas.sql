@@ -164,8 +164,9 @@ select pg_temp.assert(
 --
 --     Los códigos exigidos son los que de verdad lanza fn_sellar_version_nota():
 --     42501 para la guarda 1 (huella/huella_anterior/paciente_id/
---     posicion_cadena/numero_version a mano); 23514 para las nueve
---     comprobaciones de coherencia 6.1-6.9; 22P05 para el caso especial de
+--     posicion_cadena/numero_version a mano); 23514 para las diez
+--     comprobaciones de coherencia 6.1-6.10 (T-012a añade la 6.10, alcance
+--     del sobre = columna alcance, ADR-057); 22P05 para el caso especial de
 --     U+0000 (§ más abajo), que ni siquiera llega a la guarda 1 porque
 --     revienta en el propio `::jsonb` de la comprobación 6.
 -- =========================================================================
@@ -291,19 +292,21 @@ select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:11.000Z')$sql$,
     :NCADX,
-    -- esquema_version como CADENA "2", no número: el hallazgo BAJA 10 (subsumido en el
-    -- arreglo ALTA) — un cast a smallint la habría colado igual que el número 2.
-    '{"abierta_en":"2026-08-29T09:30:11.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:11.000Z","cuerpo":{"t":"neg"},"esquema_version":"2","firmada_en":"2026-08-29T09:30:11.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    -- esquema_version como CADENA "3", no número: el hallazgo BAJA 10 (subsumido en el
+    -- arreglo ALTA) — un cast a smallint la habría colado igual que el número 3. La cadena
+    -- lleva el valor VIGENTE (3, no 2): con el DEFAULT de la columna en 3 desde T-012a, una
+    -- cadena "2" fallaría igual por el VALOR y dejaría de demostrar la distinción de TIPO.
+    '{"abierta_en":"2026-08-29T09:30:11.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:11.000Z","cuerpo":{"t":"neg"},"esquema_version":"3","firmada_en":"2026-08-29T09:30:11.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
-  'REGRESIÓN — esquema_version como cadena "2" (no número) lanza 23514 (comprobación 6.5)'
+  'REGRESIÓN — esquema_version como cadena "3" (no número) lanza 23514 (comprobación 6.5)'
 );
 
 select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:12.000Z')$sql$,
     :NCADX,
-    '{"abierta_en":"2026-08-29T09:30:12.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":null,"cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:12.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    '{"abierta_en":"2026-08-29T09:30:12.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":null,"cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":"2026-08-29T09:30:12.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
   'REGRESIÓN — creada_en JSON null lanza 23514 (comprobación 6.7; era el hueco del hallazgo ALTA)'
@@ -313,7 +316,7 @@ select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:13.000Z')$sql$,
     :NCADX,
-    '{"abierta_en":"2026-08-29T09:30:13.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:13.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":null,"margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    '{"abierta_en":"2026-08-29T09:30:13.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:13.000Z","cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":null,"margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
   'REGRESIÓN — firmada_en JSON null lanza 23514 (comprobación 6.7; era el hueco del hallazgo ALTA)'
@@ -356,7 +359,7 @@ select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:16.000Z')$sql$,
     :NCADX,
-    '{"abierta_en":"esto-no-es-una-fecha","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:16.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:16.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    '{"abierta_en":"esto-no-es-una-fecha","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:16.000Z","cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":"2026-08-29T09:30:16.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
   'Un sobre con abierta_en que no es un instante ISO-8601 válido lanza 23514, no el 22007 crudo de Postgres (comprobación 6.8)'
@@ -391,7 +394,7 @@ select pg_temp.assert_lanza_codigo(
     -- Sobre construido con p_alcance='conjunta'; la columna alcance de la fila queda en
     -- su default 'individual' (no está en la lista de columnas del INSERT): no coinciden.
     pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:18+00', '{"t":"neg"}'::jsonb,
-                          null, null, null, null, false, null, 'conjunta'),
+                          p_alcance => 'conjunta'),
     :PRO1),
   '23514',
   'Un sobre con alcance distinto del de la columna alcance lanza 23514 (comprobación 6.10, ADR-057)'
@@ -402,11 +405,18 @@ select pg_temp.assert_lanza_codigo(
 -- igual que autor_id/esquema_version nulos (6.2/6.5) — nunca `->>` + `<>`, que con un
 -- JSON null da SQL NULL y `NULL <> x` es NULL (falso en un `if`, la comprobación no
 -- saltaría).
+-- Hallazgo ALTA de la revisión (dos revisores independientes, mismo hallazgo): con
+-- "esquema_version":2 en el literal y sin esa columna en la lista del INSERT, la fila
+-- tomaba el DEFAULT (3 desde esta misma migración) y la 6.5 ("esquema_version" 2 ≠ 3)
+-- lanzaba 23514 ANTES de llegar a la 6.10 — la prueba pasaba en verde por el motivo
+-- equivocado y no demostraba nada sobre "alcance":null. Arreglo de dos partes: el
+-- literal ya lleva "esquema_version":3, coherente con la columna, Y la columna
+-- esquema_version se fija explícita en el INSERT para no depender del DEFAULT.
 select pg_temp.assert_lanza_codigo(
-  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
-         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:19.000Z')$sql$,
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, esquema_version, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, 3, %L, timestamptz '2026-08-29T09:30:19.000Z')$sql$,
     :NCADX,
-    '{"abierta_en":"2026-08-29T09:30:19.000Z","alcance":null,"anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:19.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:19.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
+    '{"abierta_en":"2026-08-29T09:30:19.000Z","alcance":null,"anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:19.000Z","cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":"2026-08-29T09:30:19.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
   'Un sobre con "alcance":null (JSON null) lanza 23514 (comprobación 6.10, ADR-057)'
@@ -430,7 +440,7 @@ select pg_temp.assert(
 insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, alcance, motivo_cambio, autor_id, creada_en) values
   (:NCONJ, '{"t":"conjunta-otra-vez"}',
    pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:20+00', '{"t":"conjunta-otra-vez"}'::jsonb,
-                         null, 'Aclaración conjunta (T-012a)', null, null, false, null, 'conjunta'),
+                         null, 'Aclaración conjunta (T-012a)', p_alcance => 'conjunta'),
    'conjunta', 'Aclaración conjunta (T-012a)', :PRO1, timestamptz '2026-08-29 09:30:20+00');
 
 select pg_temp.assert(

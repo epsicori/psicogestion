@@ -125,6 +125,11 @@ describe('construirSobre', () => {
     expect(() => esquemaSobre.parse({ ...sobreBase(), cuerpo: [] })).toThrow();
     expect(() => esquemaSobre.parse({ ...sobreBase(), cuerpo: 'texto' })).toThrow();
   });
+
+  it('el alcance del sobre es el de la entrada, no un valor fijo (ADR-057)', () => {
+    expect(construirSobre(entradaBase({ alcance: 'conjunta' })).alcance).toBe('conjunta');
+    expect(construirSobre(entradaBase({ alcance: 'individual' })).alcance).toBe('individual');
+  });
 });
 
 describe('canonizarSobre · sensibilidad de la huella a cada campo del sobre', () => {
@@ -146,7 +151,7 @@ describe('canonizarSobre · sensibilidad de la huella a cada campo del sobre', (
     expect(a).not.toBe(b);
   });
 
-  it('cambiar alcance de individual a conjunta cambia el canónico y la huella (ADR-057)', () => {
+  it('cambiar alcance de individual a conjunta cambia el canónico (ADR-057)', () => {
     const a = canonizarSobre(sobreBase({ alcance: 'individual' }));
     const b = canonizarSobre(sobreBase({ alcance: 'conjunta' }));
     expect(a).not.toBe(b);

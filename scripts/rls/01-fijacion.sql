@@ -125,13 +125,13 @@ insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
   (:NCONJ, '{"t":"conjunta"}',
    pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:00+00', '{"t":"conjunta"}'::jsonb,
-                         null, null, null, null, false, null, 'conjunta'),
+                         p_alcance => 'conjunta'),
    'conjunta', :PRO1, timestamptz '2026-08-29 09:20:00+00');
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
   (:NIND, '{"t":"individual"}',
    pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:01+00', '{"t":"individual"}'::jsonb,
-                         null, null, null, null, false, null, 'individual'),
+                         p_alcance => 'individual'),
    'individual', :PRO1, timestamptz '2026-08-29 09:20:01+00');
 
 -- Nota con dos versiones encadenadas (corrección) — para la batería de identificación NO,
