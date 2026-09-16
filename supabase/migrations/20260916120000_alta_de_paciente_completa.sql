@@ -308,7 +308,12 @@ comment on policy pacientes_identificacion_lectura on public.pacientes_identific
 -- =========================================================================
 
 -- (a) El verbo. Se ensancha el check hacia delante, sin tocar una sola fila, como hizo
--- T-004 al añadir SESION, BUSQUEDA, PIN_*, TITULARIDAD.
+-- T-004 al añadir SESION, BUSQUEDA, PIN_*, TITULARIDAD y T-006 al añadir CUENTA_INVITADA,
+-- CUENTA_BAJA, TOTP_REPUESTO (20260830090000). La lista completa se copia entera: un
+-- `alter table ... add constraint` con `check` reemplaza el check anterior de golpe, no lo
+-- amplía — omitir un verbo aquí lo habría dejado rechazando filas que el producto ya
+-- escribe hoy (regla de supabase.md: «para saber qué hace hoy una función, la migración
+-- que la crea no basta»).
 alter table public.auditoria drop constraint if exists auditoria_operacion_check;
 alter table public.auditoria add constraint auditoria_operacion_check
   check (operacion in (
@@ -318,6 +323,9 @@ alter table public.auditoria add constraint auditoria_operacion_check
     'PIN_FALLIDO',     -- intento de PIN incorrecto (ADR-026)
     'PIN_BLOQUEADO',   -- bloqueo por intentos (ADR-026)
     'TITULARIDAD',     -- cambio de titularidad o de asignación (ADR-032)
+    'CUENTA_INVITADA', -- alta por invitación (T-006)
+    'CUENTA_BAJA',     -- baja de un perfil (ADR-032)
+    'TOTP_REPUESTO',   -- reposición de TOTP (ADR-039)
     'LECTURA_IDENTIFICACION'   -- T-032 · lectura de DNI/domicilio (ADR-060)
   ));
 
