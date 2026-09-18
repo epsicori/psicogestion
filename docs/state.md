@@ -36,11 +36,13 @@
   worktrees `agent-a0c13db09cb6a7b62`, `agent-a3133689fd69000ac`, `agent-a0cf274d698e0d85b`,
   `agent-ac7b6a35059cc839d`, `agent-a0fd267d4973735c3` (con ficheros sin comitear; mirar antes).
 
-## Trampas de la fábrica (v3.0 instalada, no la v3.1 del repo: faltan dos hooks)
+## Trampas de la fábrica (v3.1 instalada el 18-09-2026, con el `merge-gate` parcheado)
 
-- **El `merge-gate` corre en toda llamada a Bash** (el `if:` de `settings.json` no se aplica): deniega
-  cualquier orden cuyo texto lleve un id de ticket. Se esquiva partiendo el id (`N=029`); un sufijo
-  de letra no dispara.
+- **Resuelta**: el `merge-gate` ya no dispara con cualquier id de ticket en el texto; comprueba él
+  mismo que la orden sea `git merge` o `gh pr merge`. **Ya no hay que partir los ids** (`N=029`).
+  Parche y dos casos nuevos en el repo del pipeline (48/48 en verde).
+- El verificador ahora **exige navegador** en tickets de pantalla y el gate de selección avisa si el
+  contrato no trae criterio E2E. Solo hay un spec (`accesibilidad/acceso.spec.ts`).
 - El agente `implementador` fuerza `isolation: worktree` y no sirve con un worktree ya preparado (el
   sandbox rechaza todo): se relanza como genérico con `sonnet` y sus reglas.
 - `npm run build 2>&1 | tail -n` **devuelve el estado de `tail`**: siempre `> log 2>&1; echo "exit=$?"`.
