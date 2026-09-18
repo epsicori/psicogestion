@@ -169,6 +169,27 @@ select pg_temp.assert(
 --     del sobre = columna alcance, ADR-057); 22P05 para el caso especial de
 --     U+0000 (§ más abajo), que ni siquiera llega a la guarda 1 porque
 --     revienta en el propio `::jsonb` de la comprobación 6.
+--
+--     T-012a (hallazgo ALTA, encontrado por los DOS revisores por separado):
+--     el código exacto ya no basta dentro del bloque 6.x. Las DIEZ
+--     comprobaciones lanzan 23514, así que una fila incoherente en más de un
+--     campo muere en la PRIMERA que la pilla y la aserción da «OK» con el
+--     rótulo de otra — verde por el motivo equivocado, que es exactamente lo
+--     que `.claude/rules/pruebas.md` prohíbe. Por eso toda negativa cuyo sobre
+--     sea un LITERAL escrito a mano —las que fijan los doce campos uno a uno y
+--     por tanto pueden desalinearse de la fila en más de uno, como pasó aquí—
+--     usa `assert_lanza_codigo_msg`, que además del SQLSTATE exige un fragmento
+--     del MENSAJE de la comprobación que la prueba dice ejercer. Las que
+--     construyen el sobre con `pg_temp.sobre_prueba()` siguen con
+--     `assert_lanza_codigo`: ahí el sobre es coherente por construcción salvo
+--     en el único campo que la prueba altera, así que no hay dos candidatas.
+--     Las de fuera del bloque 6.x (42501 de la guarda 1, 22P05 del cast)
+--     también, porque su código ya identifica el sitio sin ambigüedad.
+--     Excepción deliberada: las DOS negativas de la 6.10 exigen el mensaje
+--     aunque una de ellas use `sobre_prueba()`. La 6.10 es la comprobación que
+--     este ticket existe para instalar y es la última de las diez: cualquier
+--     desajuste futuro en el generador de sobres la mataría antes, en silencio
+--     y en verde. Es la prueba que más tiene que demostrar por dónde falla.
 -- =========================================================================
 
 -- b0030001-0000-4000-8000-000000000002 es el UUID literal de :PRO1
@@ -268,27 +289,29 @@ select pg_temp.assert_lanza_codigo(
 -- prueba. Estas cinco lo dejan sujeto: cada sobre es correcto en todo salvo el campo
 -- nulado (o, en el quinto caso, mal tipado), y se comprueba también CON EL ARREGLO
 -- DESHECHO (más abajo) que sin él estas cinco NO lanzaban.
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:09.000Z')$sql$,
     :NCADX,
     '{"abierta_en":"2026-08-29T09:30:09.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":null,"cita_id":null,"creada_en":"2026-08-29T09:30:09.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:09.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
-  'REGRESIÓN — autor_id JSON null lanza 23514 (comprobación 6.2; era el hueco del hallazgo ALTA)'
+  'El autor_id del sobre no coincide',
+  'REGRESIÓN — autor_id JSON null lanza 23514 POR LA 6.2 (era el hueco del hallazgo ALTA)'
 );
 
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:10.000Z')$sql$,
     :NCADX,
     '{"abierta_en":"2026-08-29T09:30:10.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:10.000Z","cuerpo":{"t":"neg"},"esquema_version":null,"firmada_en":"2026-08-29T09:30:10.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
+  'esquema_version del sobre no coincide',
   'REGRESIÓN — esquema_version JSON null lanza 23514 (comprobación 6.5; era el hueco del hallazgo ALTA)'
 );
 
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:11.000Z')$sql$,
     :NCADX,
@@ -299,26 +322,29 @@ select pg_temp.assert_lanza_codigo(
     '{"abierta_en":"2026-08-29T09:30:11.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:11.000Z","cuerpo":{"t":"neg"},"esquema_version":"3","firmada_en":"2026-08-29T09:30:11.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
+  'esquema_version del sobre no coincide',
   'REGRESIÓN — esquema_version como cadena "3" (no número) lanza 23514 (comprobación 6.5)'
 );
 
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:12.000Z')$sql$,
     :NCADX,
     '{"abierta_en":"2026-08-29T09:30:12.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":null,"cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":"2026-08-29T09:30:12.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
+  'creada_en y firmada_en del sobre deben ser iguales',
   'REGRESIÓN — creada_en JSON null lanza 23514 (comprobación 6.7; era el hueco del hallazgo ALTA)'
 );
 
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:13.000Z')$sql$,
     :NCADX,
     '{"abierta_en":"2026-08-29T09:30:13.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:13.000Z","cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":null,"margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
+  'creada_en y firmada_en del sobre deben ser iguales',
   'REGRESIÓN — firmada_en JSON null lanza 23514 (comprobación 6.7; era el hueco del hallazgo ALTA)'
 );
 
@@ -326,13 +352,14 @@ select pg_temp.assert_lanza_codigo(
 -- propio texto del sobre (uno falso, uno real más adelante). Con `jsonb_object_keys()`
 -- esto pasaba desapercibido (jsonb deduplica); con `json_object_keys()` (el arreglo) el
 -- array de claves tiene doce elementos en vez de once y no coincide con v_esperadas.
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:14.000Z')$sql$,
     :NCADX,
     '{"abierta_en":"2026-08-29T09:30:14.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"22222222-2222-4222-8222-222222222222","autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:14.000Z","cuerpo":{"t":"neg"},"esquema_version":2,"firmada_en":"2026-08-29T09:30:14.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
+  'exactamente las claves',
   'REGRESIÓN — sobre con autor_id DUPLICADO (uno falso, uno real) lanza 23514 (comprobación 6.1)'
 );
 
@@ -355,13 +382,14 @@ select pg_temp.assert_lanza_codigo(
 -- válido daba el error crudo de Postgres (22007) en vez de un mensaje de dominio como
 -- las otras ocho comprobaciones de 6.8. Arreglado con un `begin/exception` alrededor del
 -- cast; esta negativa lo deja sujeto con el código correcto (23514, no 22007).
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:16.000Z')$sql$,
     :NCADX,
     '{"abierta_en":"esto-no-es-una-fecha","alcance":"individual","anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:16.000Z","cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":"2026-08-29T09:30:16.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
+  'no son un instante ISO-8601 válido',
   'Un sobre con abierta_en que no es un instante ISO-8601 válido lanza 23514, no el 22007 crudo de Postgres (comprobación 6.8)'
 );
 
@@ -387,7 +415,7 @@ select pg_temp.assert_lanza_codigo(
 -- exigir_episodio_en_nota_conjunta solo se dispara `when (new.alcance = 'conjunta')`, y
 -- la columna alcance de esta fila sigue siendo 'individual' (el default): el ÚNICO
 -- disparador que puede rechazar este INSERT es fn_sellar_version_nota, comprobación 6.10.
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29 09:30:18+00')$sql$,
     :NCADX,
@@ -397,7 +425,8 @@ select pg_temp.assert_lanza_codigo(
                           p_alcance => 'conjunta'),
     :PRO1),
   '23514',
-  'Un sobre con alcance distinto del de la columna alcance lanza 23514 (comprobación 6.10, ADR-057)'
+  'El alcance del sobre no coincide',
+  'Un sobre con alcance distinto del de la columna alcance lanza 23514 POR LA 6.10 (ADR-057)'
 );
 
 -- T-012a · "alcance":null (JSON null, no una cadena) frente a la columna alcance =
@@ -409,17 +438,23 @@ select pg_temp.assert_lanza_codigo(
 -- "esquema_version":2 en el literal y sin esa columna en la lista del INSERT, la fila
 -- tomaba el DEFAULT (3 desde esta misma migración) y la 6.5 ("esquema_version" 2 ≠ 3)
 -- lanzaba 23514 ANTES de llegar a la 6.10 — la prueba pasaba en verde por el motivo
--- equivocado y no demostraba nada sobre "alcance":null. Arreglo de dos partes: el
--- literal ya lleva "esquema_version":3, coherente con la columna, Y la columna
--- esquema_version se fija explícita en el INSERT para no depender del DEFAULT.
-select pg_temp.assert_lanza_codigo(
+-- equivocado y no demostraba nada sobre "alcance":null. Arreglo de TRES partes:
+--   1. el literal lleva "esquema_version":3, coherente con la columna;
+--   2. la columna esquema_version se fija explícita en el INSERT, sin depender del DEFAULT;
+--   3. la aserción exige el MENSAJE de la 6.10, no solo el 23514 — las diez
+--      comprobaciones lanzan todas 23514, así que el código por sí solo nunca puede
+--      distinguir «falló por donde digo» de «falló antes». Si mañana alguien reescribe
+--      la 6.10 como `->>` + `<>`, esta fila se sella y la aserción se pone ROJA por
+--      «debía lanzar y no lanzó nada», que es justo lo que el ticket existe para impedir.
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, esquema_version, autor_id, creada_en)
          values (%L, '{"t":"neg"}', %L, 3, %L, timestamptz '2026-08-29T09:30:19.000Z')$sql$,
     :NCADX,
     '{"abierta_en":"2026-08-29T09:30:19.000Z","alcance":null,"anotaciones_reservadas":null,"autor_id":"b0030001-0000-4000-8000-000000000002","cita_id":null,"creada_en":"2026-08-29T09:30:19.000Z","cuerpo":{"t":"neg"},"esquema_version":3,"firmada_en":"2026-08-29T09:30:19.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}',
     :PRO1),
   '23514',
-  'Un sobre con "alcance":null (JSON null) lanza 23514 (comprobación 6.10, ADR-057)'
+  'El alcance del sobre no coincide',
+  'Un sobre con "alcance":null (JSON null) lanza 23514 POR LA 6.10 (ADR-057)'
 );
 
 -- Gemela positiva de las dieciocho anteriores: NCADX sigue sin ninguna versión —

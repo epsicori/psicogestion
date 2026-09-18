@@ -127,6 +127,37 @@ begin
 end;
 $$;
 
+-- T-012a · Como assert_lanza_codigo, pero exige además que el MENSAJE del error
+-- contenga un fragmento literal. El SQLSTATE no basta cuando varias comprobaciones
+-- del mismo disparador lanzan TODAS con 23514: una fila mal armada puede morir en
+-- una comprobación anterior a la que la prueba dice ejercer y dar «OK» igual. Fue
+-- el hallazgo ALTA de las dos revisiones de T-012a (la negativa de `"alcance":null`
+-- moría en la 6.5, no en la 6.10, y con la 6.10 reescrita mal el banco seguía verde).
+-- Con el fragmento, la aserción DEMUESTRA por dónde falla, no solo que falla.
+create or replace function pg_temp.assert_lanza_codigo_msg(
+  consulta text, codigo text, fragmento text, mensaje text)
+returns void
+language plpgsql
+as $$
+begin
+  begin
+    execute consulta;
+  exception when others then
+    if sqlstate <> codigo then
+      raise exception 'ASERCIÓN FALLIDA (lanzó % en vez de %): % — %', sqlstate, codigo, mensaje, sqlerrm;
+    end if;
+    if position(fragmento in sqlerrm) = 0 then
+      raise exception
+        'ASERCIÓN FALLIDA (lanzó % con el código correcto pero desde OTRA comprobación; '
+        'el mensaje no contiene «%»): % — mensaje real: %', sqlstate, fragmento, mensaje, sqlerrm;
+    end if;
+    raise notice 'OK (lanzó % y el mensaje dice «%»): %', sqlstate, fragmento, mensaje;
+    return; -- lanzó con el código Y por la comprobación esperada: correcto
+  end;
+  raise exception 'ASERCIÓN FALLIDA (debía lanzar % y no lanzó nada): %', codigo, mensaje;
+end;
+$$;
+
 create or replace procedure pg_temp.reset_sesion()
 language plpgsql
 as $$
