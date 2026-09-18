@@ -3,3 +3,4 @@ export * from './formato';
 export * from './semana';
 export * from './anomalias';
 export * from './intervalos';
+export * from './relativo';
