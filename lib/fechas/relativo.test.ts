@@ -37,12 +37,31 @@ describe('formatearFechaSinZona', () => {
     // El anclaje al mediodía se justifica frente a medianoche, no frente a
     // Europe/Madrid (ahí el salto es 02:00 → 03:00 y medianoche existe:
     // .claude/rules/fechas.md). America/Santiago sí cambia la hora exactamente
-    // a las 00:00: el domingo 5 de abril de 2026 las 00:00 retroceden a las
-    // 23:00 del día anterior, así que esa hora se vive dos veces. Si el
-    // anclaje fuera a medianoche, ese instante sería ambiguo y podría
-    // resolverse en el día equivocado. Con el mediodía como ancla —estable,
-    // sin ambigüedad, a horas del salto— el día que entra es el que sale
-    // también en esta zona.
+    // a las 00:00, pero el domingo 5 de abril de 2026 la hora ambigua (vivida
+    // dos veces) es la 23:00-24:00 del día ANTERIOR (el 4), no la medianoche
+    // del 5: a las 00:00 del 5 el reloj ya retrocedió y esa medianoche existe
+    // una sola vez (H4, revisión de cierre). El caso sigue siendo el correcto
+    // para probar el mediodía como ancla: es la fecha real en la que esta
+    // zona mueve el reloj a las 00:00, y el mediodía —lejos de cualquier
+    // salto— da el mismo día que entra.
     expect(formatearFechaSinZona('2026-04-05', 'America/Santiago')).toBe('05/04/2026');
+  });
+
+  it('una medianoche que no existe también da el día correcto (H4)', () => {
+    // America/Santiago entra en horario de verano el domingo 6 de septiembre
+    // de 2026: las 00:00 saltan directas a la 01:00, así que la medianoche de
+    // ese día no existe como instante local. Es el caso que H4 pedía cerrar:
+    // ¿un ancla a medianoche fallaría aquí? Se comprobó con America/Havana
+    // (salto idéntico el 08-03-2026) y con esta misma fecha construyendo un
+    // `TZDate` directo a las 00:00 locales: en ambas, `@date-fns/tz` no
+    // lanza ni desliza al día siguiente — resuelve la hora inexistente hacia
+    // ADELANTE, a la 01:00 del MISMO día. Por eso ningún caso de salto de
+    // primavera (el hueco siempre avanza el reloj, nunca lo retrasa) permite
+    // hacer fallar un ancla a medianoche con esta librería: no hay hueco que
+    // cruce la frontera del día. La prueba documenta esto en vez de afirmar
+    // una falla que no ocurre; el mediodía sigue siendo el ancla elegida
+    // porque es la que no depende de este detalle de resolución de la
+    // librería (decisión de `.claude/rules/fechas.md`).
+    expect(formatearFechaSinZona('2026-09-06', 'America/Santiago')).toBe('06/09/2026');
   });
 });
