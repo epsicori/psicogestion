@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const CLAVE_CIFRADO = Buffer.alloc(32, 3);
 const CLAVE_INDICE = Buffer.alloc(32, 5);
@@ -10,6 +10,7 @@ vi.mock('./claves', () => ({
 }));
 
 import { indice } from './aes-gcm';
+import { claveDeCifrado, claveDeIndice } from './claves';
 import { aBase64 } from './bytea';
 import { cifrarIdentificacion, descifrarIdentificacion } from './identificacion';
 
@@ -90,5 +91,63 @@ describe('descifrarIdentificacion', () => {
     });
     expect(claro.documento).toBeUndefined();
     expect(claro.domicilio).toBeUndefined();
+  });
+
+  it('M2: lanza si la versión de clave del documento no es la que este módulo sabe descifrar', async () => {
+    const columnas = await cifrarIdentificacion({ documento: '12345678Z' });
+    const aBytea = (b64: string | null) =>
+      b64 === null ? null : '\\x' + Buffer.from(b64, 'base64').toString('hex');
+    await expect(
+      descifrarIdentificacion({
+        tipo_documento: columnas.p_tipo_documento,
+        dni_cifrado: aBytea(columnas.p_dni_cifrado),
+        dni_nonce: aBytea(columnas.p_dni_nonce),
+        dni_etiqueta: aBytea(columnas.p_dni_etiqueta),
+        dni_clave_version: 2,
+        domicilio_cifrado: null,
+        domicilio_nonce: null,
+        domicilio_etiqueta: null,
+        domicilio_clave_version: null,
+      }),
+    ).rejects.toThrow(/versión de clave 2/);
+  });
+
+  it('M2: lanza si la versión de clave del domicilio no es la que este módulo sabe descifrar', async () => {
+    const columnas = await cifrarIdentificacion({ domicilio: 'Calle Falsa 123' });
+    const aBytea = (b64: string | null) =>
+      b64 === null ? null : '\\x' + Buffer.from(b64, 'base64').toString('hex');
+    await expect(
+      descifrarIdentificacion({
+        tipo_documento: null,
+        dni_cifrado: null,
+        dni_nonce: null,
+        dni_etiqueta: null,
+        dni_clave_version: 1,
+        domicilio_cifrado: aBytea(columnas.p_domicilio_cifrado),
+        domicilio_nonce: aBytea(columnas.p_domicilio_nonce),
+        domicilio_etiqueta: aBytea(columnas.p_domicilio_etiqueta),
+        domicilio_clave_version: 7,
+      }),
+    ).rejects.toThrow(/versión de clave 7/);
+  });
+});
+
+describe('cifrarIdentificacion · M3: la clave solo se pide si hay algo que cifrar', () => {
+  beforeEach(() => {
+    vi.mocked(claveDeCifrado).mockClear();
+    vi.mocked(claveDeIndice).mockClear();
+  });
+
+  it('sin documento ni domicilio no pide ninguna clave al Vault', async () => {
+    await cifrarIdentificacion({});
+    await cifrarIdentificacion({ documento: '', domicilio: '' });
+    expect(claveDeCifrado).not.toHaveBeenCalled();
+    expect(claveDeIndice).not.toHaveBeenCalled();
+  });
+
+  it('solo con domicilio pide la clave de cifrado y no la de índice', async () => {
+    await cifrarIdentificacion({ domicilio: 'Calle Falsa 123' });
+    expect(claveDeCifrado).toHaveBeenCalled();
+    expect(claveDeIndice).not.toHaveBeenCalled();
   });
 });

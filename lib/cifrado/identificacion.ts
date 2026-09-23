@@ -37,6 +37,20 @@ export type FilaIdentificacion = {
   domicilio_clave_version: number | null;
 };
 
+/**
+ * Solo existe la clave v1 (la rotación está fuera de T-032, y la tabla lo fija con un
+ * `check (… = 1)`). Si una fila llegara con otra versión, descifrarla con la v1 daría un
+ * fallo de etiqueta indistinguible de una manipulación: se lanza antes, con el motivo.
+ */
+function exigirVersion(parte: 'documento' | 'domicilio', version: number | null): void {
+  if (version !== VERSION_CLAVE) {
+    throw new Error(
+      `El ${parte} está cifrado con la versión de clave ${version ?? '(nula)'} y este módulo ` +
+        `solo sabe descifrar la ${VERSION_CLAVE}.`,
+    );
+  }
+}
+
 function derivarTipoDocumento(normalizado: string): 'dni' | 'nie' {
   return /^[XYZ]/.test(normalizado) ? 'nie' : 'dni';
 }
@@ -50,7 +64,10 @@ function derivarTipoDocumento(normalizado: string): 'dni' | 'nie' {
 export async function cifrarIdentificacion(
   datos: IdentificacionEnClaro,
 ): Promise<ColumnasIdentificacion> {
-  const clave = await claveDeCifrado();
+  // La clave se pide solo si hay algo que cifrar (M3 de la revisión): el alta mínima no
+  // toca el Vault, así que una caída del Vault no impide dar de alta sin DNI ni domicilio.
+  let claveMemo: Buffer | null = null;
+  const clave = async () => (claveMemo ??= await claveDeCifrado());
 
   let tipoDocumento: 'dni' | 'nie' | null = null;
   let dniCifrado: string | null = null;
@@ -61,7 +78,7 @@ export async function cifrarIdentificacion(
   if (datos.documento !== undefined && datos.documento !== '') {
     const normalizado = normalizarNif(datos.documento);
     tipoDocumento = derivarTipoDocumento(normalizado);
-    const sobre = cifrar(clave, normalizado);
+    const sobre = cifrar(await clave(), normalizado);
     dniCifrado = aBase64(sobre.cifrado);
     dniNonce = aBase64(sobre.nonce);
     dniEtiqueta = aBase64(sobre.etiqueta);
@@ -75,7 +92,7 @@ export async function cifrarIdentificacion(
   let domicilioEtiqueta: string | null = null;
 
   if (datos.domicilio !== undefined && datos.domicilio !== '') {
-    const sobre = cifrar(clave, datos.domicilio);
+    const sobre = cifrar(await clave(), datos.domicilio);
     domicilioCifrado = aBase64(sobre.cifrado);
     domicilioNonce = aBase64(sobre.nonce);
     domicilioEtiqueta = aBase64(sobre.etiqueta);
@@ -104,14 +121,14 @@ export async function cifrarIdentificacion(
 export async function descifrarIdentificacion(
   fila: FilaIdentificacion,
 ): Promise<IdentificacionEnClaro> {
-  const clave = await claveDeCifrado();
   const resultado: IdentificacionEnClaro = {};
 
   const dniCifrado = desdeBytea(fila.dni_cifrado);
   const dniNonce = desdeBytea(fila.dni_nonce);
   const dniEtiqueta = desdeBytea(fila.dni_etiqueta);
   if (dniCifrado && dniNonce && dniEtiqueta) {
-    resultado.documento = descifrar(clave, {
+    exigirVersion('documento', fila.dni_clave_version);
+    resultado.documento = descifrar(await claveDeCifrado(), {
       cifrado: dniCifrado,
       nonce: dniNonce,
       etiqueta: dniEtiqueta,
@@ -122,7 +139,8 @@ export async function descifrarIdentificacion(
   const domicilioNonce = desdeBytea(fila.domicilio_nonce);
   const domicilioEtiqueta = desdeBytea(fila.domicilio_etiqueta);
   if (domicilioCifrado && domicilioNonce && domicilioEtiqueta) {
-    resultado.domicilio = descifrar(clave, {
+    exigirVersion('domicilio', fila.domicilio_clave_version);
+    resultado.domicilio = descifrar(await claveDeCifrado(), {
       cifrado: domicilioCifrado,
       nonce: domicilioNonce,
       etiqueta: domicilioEtiqueta,
