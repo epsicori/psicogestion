@@ -4,6 +4,7 @@
     "porque": "El sobre mas pequeno posible",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": null,
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": null,
@@ -11,20 +12,21 @@
       "cuerpo": {
         "texto": "Nota"
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": null,
       "motivo_cambio": null,
       "redactada_en_sesion": false
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
-    "huella_hex": "86480db9f7e4230896f9fdf2e78fa14ea4fdc9fd56d2b4f51bdce83985ca1dc3"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "f955c4984edc9facd3fa0b8ee662618de0aaaab26886ff953dee1374e7925e67"
   },
   {
     "nombre": "acentos-nfd",
     "porque": "Mismo texto visible que 'acentos-nfc'",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": null,
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": null,
@@ -32,20 +34,21 @@
       "cuerpo": {
         "texto": "café"
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": null,
       "motivo_cambio": null,
       "redactada_en_sesion": false
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"café\"},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
-    "huella_hex": "f7473e07ca29a6daf7ff899a06d4fc8b716e86ce2db2966dfe6043bc179ceb3f"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"café\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "183caf10deb5daad829bb6c397344ac9c3f0d6012bdbfc659a05c8534d7c6068"
   },
   {
     "nombre": "acentos-nfc",
     "porque": "Debe dar EXACTAMENTE la misma huella que el anterior",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": null,
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": null,
@@ -53,20 +56,21 @@
       "cuerpo": {
         "texto": "café"
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": null,
       "motivo_cambio": null,
       "redactada_en_sesion": false
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"café\"},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
-    "huella_hex": "f7473e07ca29a6daf7ff899a06d4fc8b716e86ce2db2966dfe6043bc179ceb3f"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"café\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "183caf10deb5daad829bb6c397344ac9c3f0d6012bdbfc659a05c8534d7c6068"
   },
   {
     "nombre": "emoji-y-tipograficas",
     "porque": "Fuera del BMP y comillas de Word",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": null,
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": null,
@@ -74,20 +78,21 @@
       "cuerpo": {
         "texto": "“Hola” — 😀"
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": null,
       "motivo_cambio": null,
       "redactada_en_sesion": false
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"“Hola” — 😀\"},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
-    "huella_hex": "c031f68759d53d1272b669094e5020242aea42ae5cd5cd1acc588d40d4ee9f16"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"“Hola” — 😀\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "122cdafa21adb359e1b0110acdb57cb5d98654b5349fcca6fb6402a503691e59"
   },
   {
     "nombre": "reservadas-nulas",
     "porque": "null",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": null,
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": null,
@@ -95,20 +100,21 @@
       "cuerpo": {
         "texto": "Nota"
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": null,
       "motivo_cambio": null,
       "redactada_en_sesion": false
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
-    "huella_hex": "86480db9f7e4230896f9fdf2e78fa14ea4fdc9fd56d2b4f51bdce83985ca1dc3"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "f955c4984edc9facd3fa0b8ee662618de0aaaab26886ff953dee1374e7925e67"
   },
   {
     "nombre": "reservadas-vacias",
     "porque": "Cadena vacia: huella DISTINTA de la anterior",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": "",
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": null,
@@ -116,20 +122,21 @@
       "cuerpo": {
         "texto": "Nota"
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": null,
       "motivo_cambio": null,
       "redactada_en_sesion": false
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":\"\",\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
-    "huella_hex": "4cf8d184069e1dfaa54a0603f2036aa50ffc166302da9e8877e740019a1707c3"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":\"\",\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "4967c085c08a6a81e512beee86456e139c0c57271aa31986610353cbe6c45b5f"
   },
   {
     "nombre": "en-sesion",
     "porque": "redactada_en_sesion=true con cita y margen",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": null,
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": "22222222-2222-4222-8222-222222222222",
@@ -137,20 +144,21 @@
       "cuerpo": {
         "texto": "Nota"
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": 10,
       "motivo_cambio": null,
       "redactada_en_sesion": true
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":\"22222222-2222-4222-8222-222222222222\",\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":10,\"motivo_cambio\":null,\"redactada_en_sesion\":true}",
-    "huella_hex": "7b0908f62d214df734a8d40334f81810937e9a774e761b73bd08fecdb51d413e"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":\"22222222-2222-4222-8222-222222222222\",\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":10,\"motivo_cambio\":null,\"redactada_en_sesion\":true}",
+    "huella_hex": "9c8a10cca37456a812393dc9dc5e1fc5db32c76a540008bb77925da7f847e8ba"
   },
   {
     "nombre": "control-y-exponente",
     "porque": "U+0000..U+001F y 1e2 -> 100",
     "sobre": {
       "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "individual",
       "anotaciones_reservadas": null,
       "autor_id": "11111111-1111-4111-8111-111111111111",
       "cita_id": null,
@@ -159,13 +167,35 @@
         "control": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f",
         "exponente": 100
       },
-      "esquema_version": 2,
+      "esquema_version": 3,
       "firmada_en": "2026-08-29T09:20:00.000Z",
       "margen_sesion_minutos": null,
       "motivo_cambio": null,
       "redactada_en_sesion": false
     },
-    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"control\":\"\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f\",\"exponente\":100},\"esquema_version\":2,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
-    "huella_hex": "a18b06cc7d0316debb3866c031e563f56f0c5e47ab2bf247080afdd542cf343f"
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"individual\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"control\":\"\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f\",\"exponente\":100},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "e97d557b6dde40ae975a282fee321fddbec987691cbbbedeeb9a1aab1eec353c"
+  },
+  {
+    "nombre": "alcance-conjunta",
+    "porque": "alcance=conjunta (ADR-057): mismo contenido que genesis-minimo salvo el alcance",
+    "sobre": {
+      "abierta_en": "2026-08-29T09:12:03.123Z",
+      "alcance": "conjunta",
+      "anotaciones_reservadas": null,
+      "autor_id": "11111111-1111-4111-8111-111111111111",
+      "cita_id": null,
+      "creada_en": "2026-08-29T09:20:00.000Z",
+      "cuerpo": {
+        "texto": "Nota"
+      },
+      "esquema_version": 3,
+      "firmada_en": "2026-08-29T09:20:00.000Z",
+      "margen_sesion_minutos": null,
+      "motivo_cambio": null,
+      "redactada_en_sesion": false
+    },
+    "canonico": "{\"abierta_en\":\"2026-08-29T09:12:03.123Z\",\"alcance\":\"conjunta\",\"anotaciones_reservadas\":null,\"autor_id\":\"11111111-1111-4111-8111-111111111111\",\"cita_id\":null,\"creada_en\":\"2026-08-29T09:20:00.000Z\",\"cuerpo\":{\"texto\":\"Nota\"},\"esquema_version\":3,\"firmada_en\":\"2026-08-29T09:20:00.000Z\",\"margen_sesion_minutos\":null,\"motivo_cambio\":null,\"redactada_en_sesion\":false}",
+    "huella_hex": "414a1fc56fc771ee6135eb0d7c8e24d0555771898241dad968af237860604c36"
   }
 ]

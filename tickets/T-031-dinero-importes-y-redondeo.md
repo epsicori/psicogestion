@@ -5,7 +5,12 @@ modelo: sonnet
 fase: 2
 prioridad: alta
 depende_de: [T-016]
-estado: pendiente
+estado: en_curso
+riesgo: medio
+delegable: no
+territorio:
+  - lib/dinero/**
+  - kimi/informes/T-031.md
 ---
 
 # Contexto

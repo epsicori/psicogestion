@@ -6,7 +6,7 @@ fase: 2
 prioridad: alta
 depende_de: [T-005]
 bloquea: [T-012]
-estado: pendiente
+estado: hecho
 territorio:
   - lib/huella/sobre.ts
   - lib/huella/sobre.test.ts
