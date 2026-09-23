@@ -151,4 +151,49 @@ describe('colocarEnRejilla · semana del cambio de hora', () => {
     expect(celdas[0].dia).toBe(6);
     expect(celdas[0].duracionMinutos).toBe(1380);
   });
+
+  // El salto de octubre de 2026 es el domingo 25: a las 03:00 CEST las agujas
+  // retroceden a las 02:00 CET. Ese domingo dura 25 horas reales y tiene una
+  // franja que NO existe ningún otro día de la semana: los minutos absolutos
+  // 1440-1500 (la vigésimoquinta hora, la repetición de las 02:00-03:00 en
+  // hora de invierno). Una semana de referencia distinta a la de marzo,
+  // porque marzo y octubre ejecutan el mismo código (decisión 1) y hay que
+  // demostrarlo en los dos sentidos, no solo en el que resta.
+  const SEMANA_SALTO_OCTUBRE = new Date('2026-10-21T10:00:00Z');
+
+  it('el domingo del salto de octubre mide 1500 minutos (25 h) y admite una cita en la franja repetida (1440-1500)', () => {
+    // Domingo 25-10: las 00:00 locales son 2026-10-25T22:00Z del sábado... en
+    // realidad 2026-10-24T22:00Z (aún CEST, UTC+2). Una cita de 22:10 a 22:30
+    // UTC del propio domingo 25 cae en los minutos 1450-1470 desde esas
+    // 00:00 locales: una franja que solo existe este domingo porque la hora
+    // 02:00-03:00 se vive dos veces (CEST y luego CET). Si la rejilla tratara
+    // el día como si tuviera 1440 minutos, esta cita se perdería o se
+    // desplazaría de día.
+    const citaEnLaHoraRepetida = {
+      inicio: new Date('2026-10-25T22:10:00Z'),
+      fin: new Date('2026-10-25T22:30:00Z'),
+    };
+
+    const [celda] = colocarEnRejilla([citaEnLaHoraRepetida], SEMANA_SALTO_OCTUBRE, ZONA);
+
+    expect(celda.dia).toBe(6);
+    expect(celda.inicioMinutos).toBe(1450);
+    expect(celda.duracionMinutos).toBe(20);
+  });
+
+  it('el domingo del salto de octubre mide 1500 minutos (25 h) y el lunes siguiente vuelve a 1440', () => {
+    // Guardia que cruza toda la noche del domingo al lunes: sus dos tramos
+    // delimitan el día exacto, igual que en marzo pero sumando en vez de
+    // restando una hora.
+    const todaLaNoche = {
+      inicio: new Date('2026-10-24T22:00:00Z'), // domingo 00:00 local (CEST, UTC+2)
+      fin: new Date('2026-10-25T23:00:00Z'), // lunes 00:00 local (CET, UTC+1)
+    };
+
+    const celdas = colocarEnRejilla([todaLaNoche], SEMANA_SALTO_OCTUBRE, ZONA);
+
+    expect(celdas).toHaveLength(1);
+    expect(celdas[0].dia).toBe(6);
+    expect(celdas[0].duracionMinutos).toBe(1500);
+  });
 });
