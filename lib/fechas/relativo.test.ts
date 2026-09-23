@@ -32,4 +32,17 @@ describe('formatearFechaSinZona', () => {
     // No hay mes 13: sin la comprobación, se desliza al año siguiente.
     expect(() => formatearFechaSinZona('2026-13-01', 'Europe/Madrid')).toThrow();
   });
+
+  it('el día del cambio de hora en Chile da el mismo día en una zona cuyo salto cae a medianoche', () => {
+    // El anclaje al mediodía se justifica frente a medianoche, no frente a
+    // Europe/Madrid (ahí el salto es 02:00 → 03:00 y medianoche existe:
+    // .claude/rules/fechas.md). America/Santiago sí cambia la hora exactamente
+    // a las 00:00: el domingo 5 de abril de 2026 las 00:00 retroceden a las
+    // 23:00 del día anterior, así que esa hora se vive dos veces. Si el
+    // anclaje fuera a medianoche, ese instante sería ambiguo y podría
+    // resolverse en el día equivocado. Con el mediodía como ancla —estable,
+    // sin ambigüedad, a horas del salto— el día que entra es el que sale
+    // también en esta zona.
+    expect(formatearFechaSinZona('2026-04-05', 'America/Santiago')).toBe('05/04/2026');
+  });
 });
