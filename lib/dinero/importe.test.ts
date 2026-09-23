@@ -32,6 +32,20 @@ describe('aCentimos', () => {
     expect(() => aCentimos('12,5,0')).toThrow(/No es un importe/);
     expect(() => aCentimos('€')).toThrow(/No es un importe/);
   });
+
+  it('rechaza millares mal agrupados junto a coma decimal: no es un céntimo silencioso, es un importe distinto', () => {
+    // '1.23,50' no es '1.234,50' con un dígito de menos: el grupo tras el
+    // punto no tiene tres dígitos, así que no es un millar, es un error.
+    expect(() => aCentimos('1.23,50')).toThrow(/No es un importe/);
+    expect(() => aCentimos('12.3456,00')).toThrow(/No es un importe/);
+    expect(() => aCentimos('.123,00')).toThrow(/No es un importe/);
+  });
+
+  it('sigue aceptando los millares bien formados junto a coma decimal', () => {
+    expect(aCentimos('1.234,50')).toBe(123450);
+    expect(aCentimos('123,50')).toBe(12350);
+    expect(aCentimos('1234,50')).toBe(123450);
+  });
 });
 
 describe('formatearImporte', () => {

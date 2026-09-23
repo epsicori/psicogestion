@@ -32,6 +32,12 @@ export function formatearImporte(centimos: Centimos): string {
 const PATRON_ENTEROS = /^(\d+)$/;
 const PATRON_DECIMALES = /^(\d+)[.,](\d{1,2})$/;
 const PATRON_MILLARES = /^\d{1,3}(\.\d{3})+$/;
+// Con coma decimal, si hay puntos han de agrupar de tres en tres desde el
+// principio ('1.234,50', '12.345.678,90'): un punto que no cierra un grupo
+// de tres ('1.23,50', '12.3456,00', '.123,00') no es un millar mal escrito,
+// es un importe distinto del que se tecleó, y se rechaza.
+const PATRON_MILLARES_CON_DECIMALES = /^\d{1,3}(\.\d{3})+,\d{1,2}$/;
+const PATRON_SIN_MILLARES_CON_DECIMALES = /^\d+,\d{1,2}$/;
 
 /**
  * Lo que un humano teclea → céntimos: `'12,50'`, `'12.50'`, `'12'`,
@@ -53,11 +59,18 @@ export function aCentimos(texto: string): Centimos {
   let centimos: number | null = null;
 
   if (sinSigno.includes(',')) {
-    // Formato español: puntos de millares fuera, coma decimal.
-    const sinMillares = sinSigno.replace(/\./g, '');
-    const m = PATRON_DECIMALES.exec(sinMillares);
-    if (m) {
-      centimos = Number(m[1]) * 100 + Number(m[2].padEnd(2, '0'));
+    // Formato español: puntos de millares fuera, coma decimal. Si hay
+    // puntos, tienen que agrupar de tres en tres o no es un millar, es un
+    // importe distinto (ver PATRON_MILLARES_CON_DECIMALES).
+    const millaresValidos = sinSigno.includes('.')
+      ? PATRON_MILLARES_CON_DECIMALES.test(sinSigno)
+      : PATRON_SIN_MILLARES_CON_DECIMALES.test(sinSigno);
+    if (millaresValidos) {
+      const sinMillares = sinSigno.replace(/\./g, '');
+      const m = PATRON_DECIMALES.exec(sinMillares);
+      if (m) {
+        centimos = Number(m[1]) * 100 + Number(m[2].padEnd(2, '0'));
+      }
     }
   } else if (PATRON_MILLARES.test(sinSigno)) {
     // '1.234' o '1.234.567': punto de millares, sin decimales.
