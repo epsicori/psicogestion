@@ -80,4 +80,12 @@ describe('redondearCentimos', () => {
     // ...y todo lo que no llega a la mitad BAJA. Las dos direcciones.
     expect(redondearCentimos(10.49)).toBe(10);
   });
+
+  it('media al alza también con importes negativos: sube hacia +Infinito en el filo', () => {
+    // -10,5 sube a -10 (más alto), no baja a -11: la misma regla "al alza",
+    // aplicada al signo negativo. Math.round de JS ya se comporta así.
+    expect(redondearCentimos(-10.5)).toBe(-10);
+    expect(redondearCentimos(-10.49)).toBe(-10);
+    expect(redondearCentimos(-10.51)).toBe(-11);
+  });
 });
