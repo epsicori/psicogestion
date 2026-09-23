@@ -24,4 +24,12 @@ describe('formatearFechaSinZona', () => {
     expect(() => formatearFechaSinZona('29/03/2026', 'Europe/Madrid')).toThrow();
     expect(() => formatearFechaSinZona('2026-3-9', 'Europe/Madrid')).toThrow();
   });
+
+  it('rechaza un día de calendario que no existe, aunque el formato sea correcto', () => {
+    // Febrero de 2026 tiene 28 días: sin esta comprobación, `new
+    // TZDate(2026, 1, 30, ...)` normaliza en silencio al 2 de marzo.
+    expect(() => formatearFechaSinZona('2026-02-30', 'Europe/Madrid')).toThrow();
+    // No hay mes 13: sin la comprobación, se desliza al año siguiente.
+    expect(() => formatearFechaSinZona('2026-13-01', 'Europe/Madrid')).toThrow();
+  });
 });

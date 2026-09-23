@@ -16,6 +16,22 @@ export function formatearFechaSinZona(fechaIso: string, zona: string): string {
     throw new Error(`Fecha sin zona mal formada: '${fechaIso}' (se espera 'AAAA-MM-DD').`);
   }
   const [, anio, mes, dia] = partes;
-  const mediodia = new TZDate(Number(anio), Number(mes) - 1, Number(dia), 12, 0, 0, zona);
+  const anioNum = Number(anio);
+  const mesNum = Number(mes);
+  const diaNum = Number(dia);
+  // `TZDate` (como `Date`) normaliza silenciosamente un mes o día fuera de
+  // rango en vez de lanzar: el 30 de febrero se convertiría en el 2 de marzo
+  // sin ningún aviso. Se comprueba el valor, no solo el formato, construyendo
+  // la fecha en UTC (sin zona de por medio) y confirmando que sus campos no
+  // se movieron.
+  const comprobacion = new Date(Date.UTC(anioNum, mesNum - 1, diaNum));
+  if (
+    comprobacion.getUTCFullYear() !== anioNum ||
+    comprobacion.getUTCMonth() !== mesNum - 1 ||
+    comprobacion.getUTCDate() !== diaNum
+  ) {
+    throw new Error(`Fecha sin zona inexistente: '${fechaIso}' no es un día de calendario.`);
+  }
+  const mediodia = new TZDate(anioNum, mesNum - 1, diaNum, 12, 0, 0, zona);
   return formatearFechaCorta(mediodia, zona);
 }
