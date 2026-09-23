@@ -5,7 +5,15 @@ modelo: sonnet
 fase: 1
 prioridad: alta
 depende_de: [T-016, T-018, T-020]
-estado: pendiente
+estado: en_curso
+territorio:
+  - lib/agenda/rejilla.ts
+  - lib/agenda/rejilla.test.ts
+  - lib/fechas/relativo.ts
+  - lib/fechas/relativo.test.ts
+  - lib/fechas/index.ts
+  - kimi/informes/T-030.md
+  - kimi/hallazgos/T-030.md
 ---
 
 # Contexto
