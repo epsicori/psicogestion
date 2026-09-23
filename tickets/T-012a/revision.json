@@ -1,0 +1,107 @@
+{
+  "ticket": "T-012a",
+  "revisor": "revisor-cierre",
+  "fecha": "2026-09-18",
+  "reemitido": "2026-09-18 tras el commit 53a4a91 (revert de la linea de territorio)",
+  "base": "main",
+  "rama": "worktree-agent-a171fd6674526760f",
+  "alta_previa_cerrada": true,
+  "altas": 0,
+  "medias": 4,
+  "bajas": 6,
+  "hallazgos": [
+    {
+      "id": "M1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20260829210000_cadena_de_huellas.sql",
+      "linea": 515,
+      "descripcion": "`verificar_cadena_huellas()` solo recalcula sha256 sobre los bytes guardados y nunca contrasta la columna `alcance` con la del sobre; el ADR-057 afirma que alterar `alcance` por debajo es detectable. Hallazgo H4 de revision-ts.md: sigue vivo (anotado en docs/state.md, fuera del contrato).",
+      "escenario": "Con `postgres`: `alter table public.notas_clinicas_versiones disable trigger impedir_modificacion_notas_clinicas_versiones;` y `update ... set alcance = 'conjunta' where id = <uuid>;`. `contenido_canonico` no se toca, la huella cuadra y `npm run verificar:huellas` dice cadena sana; la politica notas_clinicas_versiones_lectura lee la COLUMNA, asi que la nota individual queda abierta a todos los profesionales del episodio sin que nada lo senale."
+    },
+    {
+      "id": "M2",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 262,
+      "descripcion": "La exigencia de fragmento de mensaje se aplico a 9 de las 15 negativas del bloque 6.x; las seis construidas con `pg_temp.sobre_prueba()` siguen comparando solo el SQLSTATE, apoyadas en un argumento escrito en un comentario que nada comprueba.",
+      "escenario": "T-012 (corte A) anade a la 6.8 una comprobacion nueva del bloque de sesion (p. ej. exigir margen_sesion_minutos no nulo cuando redactada_en_sesion es true). La fila de la negativa de la 6.9 (sobre_prueba con p_redactada_en_sesion => true, cita_id y margen nulos) pasa a morir en esa comprobacion nueva con el mismo 23514; `npm run test:rls` sigue verde con el rotulo «comprobacion 6.9» y la 6.9 deja de estar probada en silencio."
+    },
+    {
+      "id": "M3",
+      "severidad": "MEDIA",
+      "archivo": "docs/bitacora/",
+      "linea": 0,
+      "descripcion": "La rama no anade `docs/bitacora/T-012a.md`; la regla 4 de CLAUDE.md exige la bitacora del ticket ademas de state.md reescrito, y tickets comparables (T-013a, T-029) si la tienen.",
+      "escenario": "Se mergea. `docs/state.md` esta capado a 80 lineas por un hook y ya solto la linea de T-012a de §Bloqueos. Semanas despues, quien implemente la exportacion busca en docs/bitacora/ por que esquema_version salto de 2 a 3, por que existe assert_lanza_codigo_msg y por que p_alcance va al final de la lista de parametros; no encuentra nada y rehace una de esas decisiones a ojo. El porque vive solo en dos mensajes de commit."
+    },
+    {
+      "id": "M4",
+      "severidad": "MEDIA",
+      "archivo": "tickets/T-012a-alcance-en-el-sobre.md",
+      "linea": 10,
+      "descripcion": "Resto de H1 tras el revert: el bloque `territorio:` declara `lib/huella/vectores-congelados.json` pero no `lib/huella/vectores.test.ts`, y esa prueba enumera los vectores por nombre, asi que el noveno vector no entra sin tocarla. El territorio declarado es inconsistente con el trabajo que el propio ticket encarga. Solo lo puede arreglar el propietario del contrato: si lo arregla la rama, se reabre H1.",
+      "escenario": "Se ejecuta `node ~/.claude/pipeline/territorio.mjs T-012a` en el gate de merge (ya arreglado: ya lee el id con letra y la lista de bloque) y sale en rojo senalando `lib/huella/vectores.test.ts` como escritura fuera de lo declarado. El merge queda bloqueado por un cambio correcto y necesario, y la rama no puede desbloquearse a si misma sin reincidir en H1. Si se mergea ignorando el rojo, el contrato deja de describir lo que la rama toco y la siguiente auditoria de quien escribe donde parte de una lista falsa."
+    },
+    {
+      "id": "B1",
+      "severidad": "BAJA",
+      "archivo": "docs/architecture.md",
+      "linea": 62,
+      "descripcion": "El destilado que manda sobre el modelo sigue describiendo el sobre de once claves y `esquema_version = 2` (:62-64 y :91). Hallazgo H5 de revision.md: vivo, pero ya anotado en docs/state.md §Hallazgos como manda la regla 2, asi que baja de MEDIA a BAJA.",
+      "escenario": "El siguiente ticket que necesite firmar algo lee el destilado como manda CLAUDE.md, construye un sobre de once claves y todo INSERT muere en la 6.1; o escribe un fixture asumiendo once claves y lo da por bueno porque el destilado lo respalda."
+    },
+    {
+      "id": "B2",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20260915130000_alcance_en_el_sobre.sql",
+      "linea": 26,
+      "descripcion": "La guarda de era es un `do $$ ... raise exception $$;` al principio del fichero, sin `begin;/commit;` que envuelva el resto. Hallazgo H9 de revision.md: vivo, sin cambios, mismo patron que T-005.",
+      "escenario": "Alguien aplica el fichero a mano con `psql -f` sin ON_ERROR_STOP=1 sobre una base con filas firmadas en era 2: psql informa del error de la guarda y sigue, y el `create or replace` de doce claves y el `alter column esquema_version set default 3` se aplican igual, dejando dos formas de sobre vivas sin recalcular (lo que el ADR-035 prohibe)."
+    },
+    {
+      "id": "B3",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20260915130000_alcance_en_el_sobre.sql",
+      "linea": 188,
+      "descripcion": "La 6.3 hace `new.cuerpo::jsonb` y el `check (jsonb_typeof(cuerpo::jsonb) = 'object')` de la columna se evalua despues de los disparadores BEFORE. Hallazgo H10 de revision.md: vivo, preexistente.",
+      "escenario": "`authenticated` inserta `cuerpo = 'esto-no-es-json'` con un sobre por lo demas coherente: el cast de la 6.3 revienta con 22P02 crudo en vez del 23514 de dominio. Se rechaza igual: es forma, no agujero."
+    },
+    {
+      "id": "B4",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/00-ayudantes.sql",
+      "linea": 150,
+      "descripcion": "`assert_lanza_codigo_msg` se degrada en silencio a comprobar solo el codigo si `fragmento` es NULL: `position(null in sqlerrm)` da NULL, `NULL = 0` es NULL y el `if` no dispara (lo mismo con `codigo` NULL en :147).",
+      "escenario": "Alguien anade la negativa numero diecinueve y pasa el fragmento desde una variable que resulta NULL (o deja un `null` de sitio mientras redacta): la asercion da OK comprobando unicamente el SQLSTATE, es decir vuelve a la cobertura que tenia antes de este ticket, en verde y sin aviso."
+    },
+    {
+      "id": "B5",
+      "severidad": "BAJA",
+      "archivo": "scripts/t005-concurrencia.sql",
+      "linea": 63,
+      "descripcion": "`t005_sobre_prueba` pasa de tres a cuatro parametros con `create or replace`: eso crea una sobrecarga, no reemplaza la vieja, y el `drop` del final (:184) solo borra la de cuatro argumentos.",
+      "escenario": "Una ejecucion anterior del guion viejo se corto antes de su `drop` y dejo la funcion de tres argumentos en `public`; se corre `npm run test:huellas` con el guion nuevo sin `db reset` de por medio (el guion no es idempotente). Las llamadas pasan tres argumentos, Postgres prefiere la coincidencia exacta y usa la funcion VIEJA, que emite un sobre de once claves con esquema_version 2: el INSERT muere en la 6.1 y la prueba de concurrencia falla con un error de claves ajeno a lo que mide."
+    },
+    {
+      "id": "B6",
+      "severidad": "BAJA",
+      "archivo": "supabase/seed-completo.sql",
+      "linea": 398,
+      "descripcion": "La llamada a `pg_temp.sobre()` de la nota conjunta pasa `alcance` por posicion (`null, null, 'conjunta'`), mientras que scripts/rls/01-fijacion.sql:126 y :133 ya usan notacion nombrada tras la revision anterior: el arreglo se aplico solo en uno de los dos ficheros.",
+      "escenario": "El siguiente cambio del sobre anade un parametro (p. ej. `p_cita_id`) antes de `p_alcance`; 'conjunta' cae en el parametro nuevo, la nota de pareja se siembra con un sobre que dice 'individual' contra una columna 'conjunta', la 6.10 la rechaza con 23514 y `npm run seed` se cae entero."
+    }
+  ],
+  "cerrados": [
+    {
+      "id": "H1",
+      "severidad_original": "ALTA",
+      "archivo": "tickets/T-012a-alcance-en-el-sobre.md",
+      "linea": 13,
+      "descripcion": "El commit de arreglo 29bec7e amplia el bloque `territorio:` de su propio ticket para legalizar `lib/huella/vectores.test.ts`, y `tickets/**` es de nadie automatico segun .claude/rules/pipeline.md.",
+      "escenario": "En el gate de merge se ejecuta `node ~/.claude/pipeline/territorio.mjs T-012a`: lee el `territorio:` que la propia rama amplio y da verde sobre un fichero escrito fuera del territorio declarado por el arquitecto. El gate que detecta escrituras fuera de carril queda neutralizado por el codigo que auditaba, y generaliza: cualquier agente puede autorizarse cualquier ruta anadiendo una linea a su ticket.",
+      "cierre": "Cerrada en el commit 53a4a91 de la rama: borra `- lib/huella/vectores.test.ts` del bloque `territorio:`. Verificado sobre el arbol, no sobre el informe: `git diff main worktree-agent-a171fd6674526760f -- tickets/T-012a-alcance-en-el-sobre.md` sale vacio y la rama no toca ya ningun fichero de gobierno (`tickets/**`, `.claude/**`, CLAUDE.md, AGENTS.md, docs/decisions*).",
+      "correccion_al_escenario": "El escenario original decia que `territorio.mjs` daba verde por una entrada reescrita. Era peor: la herramienta no reconocia el id `T-012a` (lo pasaba a `T-012A`) y su parser solo leia `territorio: [a, b]` en linea, no la lista de bloque de este proyecto, asi que la comprobacion de carril nunca llegaba a correr. Ya esta arreglada. Misma familia que la trampa anotada para ticket.mjs/fase.mjs: los gates no ven los tickets con sufijo de letra, y un gate que no corre es indistinguible de un gate en verde.",
+      "resto_abierto": "M4"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 ## Territorio: un fichero, un dueño
 | Ruta | Dueño |
 |---|---|
-| `supabase/**`, `scripts/*.sql`, `scripts/rls/**`, `lib/supabase/**`, `lib/huella/**`, `lib/cuentas/**`, `lib/citas/**`, `docs/**` | **Fábrica (Claude)** |
+| `supabase/**`, `scripts/*.sql`, `scripts/rls/**`, `lib/supabase/**`, `lib/huella/**`, `lib/cuentas/**`, `lib/citas/**`, `lib/dinero/**`, `docs/**` | **Fábrica (Claude)** |
 | `components/**`, `app/**`, `next.config.ts`, `proxy.ts`, `lib/i18n/**`, `lib/contraste/**`, `.github/**` | Interfaz: la fábrica desde el 06-09-2026 (un CLI de volumen solo para piezas de pintura) |
 | `lib/identidad/**`, `lib/fechas/**`, `lib/agenda/**`, `scripts/lint-migraciones.ts` | Funciones puras (carril de Kimi) |
 | `tickets/**`, `PLAN.md`, `CLAUDE.md`, `CARRILES.md`, `.claude/**` | Nadie automático: el usuario y el arquitecto |

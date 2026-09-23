@@ -1,11 +1,12 @@
 // T-005 · El sobre canónico (ADR-035 + ADR-046), congelado hoy en
-// `esquema_version = 2`. Once claves exactas, ni una más ni una menos.
+// `esquema_version = 3`. Doce claves exactas, ni una más ni una menos.
 // `algoritmo_version` NO entra en el sobre: es metadato de la era, no
 // contenido. `esquema_version` SÍ, como manda el ADR-035.
 //
 // Decisiones cerradas aquí (ver el «Diseño aprobado · §4» del ticket):
-//   1. `esquema_version = 2`, no 1: la versión 1 (sin el bloque de sesión del
-//      ADR-046) no existe en ninguna fila de ninguna base.
+//   1. `esquema_version = 3`: la versión 2 (sin `alcance`, ADR-057) no existe
+//      en ninguna fila de ninguna base — `notas_clinicas_versiones` estaba
+//      vacía cuando se escribió T-012a.
 //   2. Los instantes van como `Date.prototype.toISOString()`: UTC, ms, `Z`.
 //      Nunca la representación de sesión de Postgres.
 //   3. `firmada_en === creada_en`, siempre: son el mismo instante con dos
@@ -13,6 +14,8 @@
 //   4. El margen aplicado se guarda DENTRO del sobre, no por referencia al
 //      centro (el ADR-046 bloquea explícitamente lo segundo).
 //   5. `cuerpo` es siempre un objeto, nunca un array ni un escalar.
+//   6. `alcance` entra en el sobre (ADR-057): decide quién puede leer esa
+//      versión, así que forma parte de lo firmado, no solo de la columna.
 
 import { z } from 'zod';
 
@@ -20,7 +23,7 @@ import { canonizar, type ValorJson } from './jcs';
 import { normalizarNfc } from './nfc';
 import { calcularRedactadaEnSesion } from './sesion';
 
-export const ESQUEMA_VERSION = 2;
+export const ESQUEMA_VERSION = 3;
 export const ALGORITMO_VERSION = 1;
 
 const PATRON_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -38,10 +41,11 @@ const cuerpoObjeto = z.custom<Record<string, ValorJson>>(
   'cuerpo debe ser un objeto, nunca un array ni un escalar',
 );
 
-/** Zod 4, estricto: once claves exactas, ninguna más. */
+/** Zod 4, estricto: doce claves exactas, ninguna más. */
 export const esquemaSobre = z
   .object({
     abierta_en: instanteIso,
+    alcance: z.enum(['individual', 'conjunta']),
     anotaciones_reservadas: z.string().nullable(),
     autor_id: uuidMinusculas,
     cita_id: uuidMinusculas.nullable(),
@@ -93,6 +97,7 @@ export function construirSobre(entrada: EntradaFirma): Sobre {
 
   const sinNormalizar = {
     abierta_en: entrada.abiertaEn.toISOString(),
+    alcance: entrada.alcance,
     anotaciones_reservadas: entrada.anotacionesReservadas,
     autor_id: entrada.autorId.toLowerCase(),
     cita_id: citaId,

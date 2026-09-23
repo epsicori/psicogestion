@@ -118,15 +118,20 @@ insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) value
 -- Sentencias SEPARADAS, no un solo INSERT con varias filas: el orden de fila importa
 -- (posición 1 antes que 2 en la MISMA cadena) y una sentencia por fila es la única forma
 -- de que ese orden esté garantizado, no solo observado.
+-- T-012a: el sobre lleva `alcance` (comprobación 6.10) y debe coincidir con la columna
+-- homónima, o fn_sellar_version_nota() rechaza el INSERT con 23514 — y con él, TODA la
+-- siembra del banco que depende de este fichero.
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
   (:NCONJ, '{"t":"conjunta"}',
-   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:00+00', '{"t":"conjunta"}'::jsonb),
+   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:00+00', '{"t":"conjunta"}'::jsonb,
+                         p_alcance => 'conjunta'),
    'conjunta', :PRO1, timestamptz '2026-08-29 09:20:00+00');
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
   (:NIND, '{"t":"individual"}',
-   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:01+00', '{"t":"individual"}'::jsonb),
+   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:01+00', '{"t":"individual"}'::jsonb,
+                         p_alcance => 'individual'),
    'individual', :PRO1, timestamptz '2026-08-29 09:20:01+00');
 
 -- Nota con dos versiones encadenadas (corrección) — para la batería de identificación NO,

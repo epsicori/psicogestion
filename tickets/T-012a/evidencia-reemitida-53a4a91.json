@@ -1,0 +1,81 @@
+{
+  "ticket": "T-012a",
+  "resumen": "Verificación independiente contra el worktree agent-a171fd6674526760f, rama worktree-agent-a171fd6674526760f, HEAD 53a4a91 (árbol limpio). Los comandos se ejecutaron sobre 732a9e3 y siguen valiendo: `git show 53a4a91 --stat` demuestra que el único commit posterior toca 1 fichero, tickets/T-012a-alcance-en-el-sobre.md, con 1 línea borrada del bloque `territorio:` (lib/huella/vectores.test.ts) — metadato del contrato, ni código, ni pruebas, ni migraciones, ni criterios. Los diez criterios PASAN, todos ejercidos con comandos reales sobre la base local (supabase_db_Psicogestion, 127.0.0.1:54322): db reset con las 13 migraciones, banco de RLS completo (17/17 módulos), seed-completo con 5 versiones firmadas en esquema_version 3, verificar:huellas íntegra, 489 pruebas unitarias, lint/lint:migraciones/build limpios y guarda de era demostrada reaplicando la migración sobre la base ya firmada. El ticket no toca pantallas: no hay criterio de interfaz que exija navegador.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "npx supabase db reset aplica la migración limpia y el banco entero siembra.",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset  (exit=0)  +  npm run test:rls  (exit=0)",
+      "evidencia": "Applying migration 20260915120000_registrar_acceso_historia.sql... / Applying migration 20260915130000_alcance_en_el_sobre.sql... / Seeding data from supabase/seed.sql... / Finished supabase db reset on branch main. exit=0. Sobre esa base recién reseteada, npm run test:rls sale con exit=0 y 17 módulos rotulados 'completa.' (01-fijación … 17-vinculo-agenda), es decir el banco entero siembra y corre. Además npm run seed (seed-completo.sql) termina con 'seed-completo: sembrado.' y deja 5 filas en notas_clinicas_versiones, todas esquema_version 3 (4 individual + 1 conjunta)."
+    },
+    {
+      "id": 2,
+      "texto": "npm run test:rls pasa, con las tres aserciones nuevas de la sección C entre ellas.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls  (exit=0, dos veces: antes y después del db reset)",
+      "evidencia": "grep sobre la salida real:\nNOTICE:  OK (lanzó 23514 y el mensaje dice «El alcance del sobre no coincide»): Un sobre con alcance distinto del de la columna alcance lanza 23514 POR LA 6.10 (ADR-057)\nNOTICE:  OK (lanzó 23514 y el mensaje dice «El alcance del sobre no coincide»): Un sobre con \"alcance\":null (JSON null) lanza 23514 POR LA 6.10 (ADR-057)\nNOTICE:  OK: GEMELA POSITIVA: un sobre con alcance='conjunta' coherente con la columna SÍ se sella (comprobación 6.10, posición 3 de la cadena de P1)\nLas dos negativas usan pg_temp.assert_lanza_codigo_msg (SQLSTATE 23514 + fragmento del mensaje de la 6.10), no assert_lanza a secas. 17/17 módulos 'completa.', exit=0."
+    },
+    {
+      "id": 3,
+      "texto": "npm run verificar:huellas devuelve la cadena sana.",
+      "veredicto": "PASA",
+      "comando": "npm run seed && npm run verificar:huellas  (exit=0)",
+      "evidencia": "verificar:huellas — cadena íntegra: cero anomalías.  (exit=0). Ejecutado con la cadena POBLADA, no vacía: select sobre notas_clinicas_versiones devuelve 5 filas, esquema_version min=3 max=3, alcance individual=4 / conjunta=1, con contenido_canonico empezando por {\"abierta_en\":...,\"alcance\":\"individual\"/\"conjunta\",...}."
+    },
+    {
+      "id": 4,
+      "texto": "npm test pasa; sobre.test.ts enumera doce claves literales y afirma esquema_version === 3.",
+      "veredicto": "PASA",
+      "comando": "npm test  (exit=0)  +  npx vitest run lib/huella --reporter=verbose  (exit=0)",
+      "evidencia": "npm test: Test Files 49 passed (49) / Tests 489 passed (489). Verbose de lib/huella (6 ficheros, 71 pruebas, todas ✓), entre ellas:\n✓ lib/huella/sobre.test.ts > construirSobre > produce exactamente las doce claves del sobre\n✓ lib/huella/sobre.test.ts > construirSobre > esquema_version es 3 y algoritmo_version (constante) es 1\nEl cuerpo de la primera enumera los doce literales (abierta_en, alcance, anotaciones_reservadas, autor_id, cita_id, creada_en, cuerpo, esquema_version, firmada_en, margen_sesion_minutos, motivo_cambio, redactada_en_sesion) contra Object.keys(sobre).sort(). lib/huella/sobre.ts:26 ESQUEMA_VERSION = 3 y :27 ALGORITMO_VERSION = 1 (fuera de alcance respetado)."
+    },
+    {
+      "id": 5,
+      "texto": "Sensibilidad: cambiar alcance de individual a conjunta produce otro canónico y otra huella.",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/huella --reporter=verbose  +  guion de un solo uso (scratchpad, no comiteado) con tsx sobre lib/huella/sobre.ts",
+      "evidencia": "Prueba nueva presente y verde en el bloque de sensibilidad: ✓ canonizarSobre · sensibilidad de la huella a cada campo del sobre > cambiar alcance de individual a conjunta cambia el canónico (ADR-057). Comprobada además la huella, que la prueba no afirma (el bloque entero compara solo canónicos, igual que las de T-005): ejecutando construirSobre con la misma entrada salvo alcance,\nindividual 3fc1e7eda3facf799f261da701b63d9a4ce2a75be92b07b8513286c5bf94b779\nconjunta   ad0652fb18b475b529fde2c7768f02259a0123d11ea0035be8ffd25ea69defd2\ncon canónicos distintos solo en \"alcance\". Observación (no bloqueante): el literal del criterio dice «otro canónico y otra huella» y la prueba nueva solo asevera el canónico; la huella la demuestra esta evidencia y el vector congelado alcance-conjunta."
+    },
+    {
+      "id": 6,
+      "texto": "Acentos: los vectores acentos-nfd y acentos-nfc siguen dando la misma huella tras regenerar.",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/huella --reporter=verbose  +  node -e sobre lib/huella/vectores-congelados.json",
+      "evidencia": "✓ lib/huella/vectores.test.ts > vectores-congelados.json > acentos-nfd y acentos-nfc dan EXACTAMENTE la misma huella (y ✓ reservadas-nulas y reservadas-vacias dan huellas DISTINTAS). Lectura directa del JSON: 9 vectores, todos con esquema_version 3 y clave alcance en el canónico; acentos-nfd y acentos-nfc comparten huella 183caf10deb5daad829bb6c397344ac9c3f0d6012bdbfc659a05c8534d7c6068; el noveno vector alcance-conjunta lleva alcance=conjunta (huella 414a1fc56fc771ee...). Los ocho anteriores reproducen canónico y huella uno a uno (ocho pruebas ✓)."
+    },
+    {
+      "id": 7,
+      "texto": "vectores-sql.test.ts sigue verde: los $vec$ del banco son byte a byte los del JSON.",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/huella --reporter=verbose  (exit=0)",
+      "evidencia": "✓ lib/huella/vectores-sql.test.ts > el módulo SQL trae al menos tres pares literales (§11.4)\n✓ lib/huella/vectores-sql.test.ts > cada par literal del SQL está, idéntico, en vectores-congelados.json"
+    },
+    {
+      "id": 8,
+      "texto": "Insertar una versión cuyo sobre lleve \"alcance\":null falla con 23514.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls  (INSERT real en scripts/rls/14-cadena-huellas.sql, sección C)",
+      "evidencia": "El banco ejecuta el INSERT con el sobre literal que lleva \"alcance\":null contra notas_clinicas_versiones y la aserción exige código Y comprobación:\nNOTICE:  OK (lanzó 23514 y el mensaje dice «El alcance del sobre no coincide»): Un sobre con \"alcance\":null (JSON null) lanza 23514 POR LA 6.10 (ADR-057)\nLa 6.10 está escrita como la 6.2 —migración 20260915130000_alcance_en_el_sobre.sql:293: `if (v_contenido -> 'alcance') is distinct from to_jsonb(new.alcance::text) then`— y no con ->> y <>."
+    },
+    {
+      "id": 9,
+      "texto": "Aplicar la migración sobre una base con una fila firmada aborta con mensaje propio.",
+      "veredicto": "PASA",
+      "comando": "npm run seed  (5 firmas por el camino de la aplicación: INSERT sellado por fn_sellar_version_nota) ; luego  { echo begin; cat supabase/migrations/20260915130000_alcance_en_el_sobre.sql; echo rollback; } | docker exec -i supabase_db_Psicogestion psql -U postgres -d postgres -v ON_ERROR_STOP=1  → exit=3",
+      "evidencia": "BEGIN\nERROR:  T-012a (alcance en el sobre) se instala sobre una tabla notas_clinicas_versiones VACÍA. Hay filas existentes: subir esquema_version de 2 a 3 cambia las claves exigidas por la comprobación 6.1 del disparador, y una fila ya sellada con la forma vieja no se puede migrar sin romper su huella. Si esto ocurre de verdad, la decisión de cómo tratar los datos existentes la toma una persona, no esta migración.\nCONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE\n(exit=3; la reaplicación se hizo dentro de una transacción con rollback para no alterar la base, y aborta en el primer DO block, antes de cualquier DDL)."
+    },
+    {
+      "id": 10,
+      "texto": "npm run lint, npm run lint:migraciones y npm run build limpios.",
+      "veredicto": "PASA",
+      "comando": "npm run lint (exit=0) ; npm run lint:migraciones (exit=0) ; npm run build (exit=0)",
+      "evidencia": "lint: ✖ 2 problems (0 errors, 2 warnings) — las dos son 'SupabaseClient'/'Database' sin usar en lib/cuentas/accesos.test.ts, fichero que esta rama NO toca (último commit suyo ddc0b60, en main): preexistente, no regresión. lint:migraciones: '13 migración(es) limpias.' build: exit=0, 15/15 páginas generadas, rutas / , /ajustes*, /pacientes*, /primera-vez, /prototipo, /login, /recuperar + Proxy (Middleware)."
+    }
+  ],
+  "regresiones": [
+    "Ninguna detectada. Banco de RLS completo 17/17 módulos verde antes y después del db reset; 489 pruebas unitarias verdes; verificar:huellas íntegra con la cadena poblada por seed-completo; build verde. Las 2 advertencias de lint son previas a la rama (lib/cuentas/accesos.test.ts, no tocado).",
+    "Delta 732a9e3 → 53a4a91 comprobado con `git show 53a4a91 --stat` desde el worktree: 1 fichero, 1 borrado, solo tickets/T-012a-alcance-en-el-sobre.md (quita `- lib/huella/vectores.test.ts` del bloque `territorio:`). No toca lib/, scripts/, supabase/ ni los criterios de aceptación, así que ningún veredicto se reejecuta ni cambia. Árbol de trabajo limpio (`git status --porcelain` sin salida).",
+    "Observación de territorio (no criterio): con el contrato ya en su forma de 53a4a91, el diff main...HEAD toca tres ficheros fuera de la lista `territorio:` — lib/huella/vectores.test.ts, docs/state.md y el propio tickets/T-012a-alcance-en-el-sobre.md. Dentro de la lista quedan sobre.ts, sobre.test.ts, vectores-congelados.json, supabase/migrations/**, seed-completo.sql, scripts/rls/00,01,14 y t005-concurrencia.sql, y ahí cae el resto del diff. Lo decide el propietario del contrato, no el verificador."
+  ]
+}
