@@ -37,6 +37,17 @@ describe('desglosarDesdeBase', () => {
     // Base 0,45 € → 21 % = 9,45 céntimos: no llega a la mitad, BAJA a 9.
     expect(desglosarDesdeBase(45, 'general').cuota).toBe(9);
   });
+
+  it('un régimen desconocido lanza, no cae al 21 % general por defecto', () => {
+    // Dato corrupto o typo que TypeScript no pilla (viene de fetch/JSON):
+    // rechazar es obligatorio, facturar en silencio al general no lo es.
+    expect(() => desglosarDesdeBase(10000, '' as unknown as 'general')).toThrow(
+      /Régimen de IVA desconocido/,
+    );
+    expect(() => desglosarDesdeBase(10000, 'General' as unknown as 'general')).toThrow(
+      /Régimen de IVA desconocido/,
+    );
+  });
 });
 
 describe('desglosarDesdeTotal', () => {
@@ -75,5 +86,11 @@ describe('desglosarDesdeTotal', () => {
     const vuelta = desglosarDesdeTotal(ida.total, 'general');
     expect(vuelta.base).toBe(ida.base);
     expect(vuelta.cuota).toBe(ida.cuota);
+  });
+
+  it('un régimen desconocido lanza también desde el total', () => {
+    expect(() => desglosarDesdeTotal(10000, 'General' as unknown as 'general')).toThrow(
+      /Régimen de IVA desconocido/,
+    );
   });
 });

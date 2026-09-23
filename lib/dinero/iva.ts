@@ -47,8 +47,21 @@ function desgloseExento(importe: Centimos): DesgloseIva {
   };
 }
 
+/**
+ * Un régimen que no es ninguno de los dos valores del enum NO cae al 21 %
+ * general por defecto: es un error. Un dato corrupto, un typo en un `as
+ * RegimenIva` o un tercer valor que añada una migración futura tiene que
+ * lanzar, no facturar en silencio.
+ */
+function comprobarRegimenConocido(regimen: RegimenIva): void {
+  if (regimen !== 'exento_sanitario' && regimen !== 'general') {
+    throw new Error(`Régimen de IVA desconocido: '${regimen}'.`);
+  }
+}
+
 /** Desglose partiendo de la base (precio SIN IVA): cuota = base × tipo, redondeada una vez. */
 export function desglosarDesdeBase(base: Centimos, regimen: RegimenIva): DesgloseIva {
+  comprobarRegimenConocido(regimen);
   if (regimen === 'exento_sanitario') {
     return desgloseExento(base);
   }
@@ -68,6 +81,7 @@ export function desglosarDesdeBase(base: Centimos, regimen: RegimenIva): Desglos
  * exactamente el total.
  */
 export function desglosarDesdeTotal(total: Centimos, regimen: RegimenIva): DesgloseIva {
+  comprobarRegimenConocido(regimen);
   if (regimen === 'exento_sanitario') {
     return desgloseExento(total);
   }
