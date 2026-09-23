@@ -8,7 +8,7 @@ fase: 2
 prioridad: alta
 depende_de: [T-013, T-017]
 bloquea: []
-estado: pendiente
+estado: en_curso
 territorio:
   - docs/decisions/ADR-060.md
   - docs/decisions/ADR-061.md
@@ -42,6 +42,10 @@ territorio:
   - app/(app)/pacientes/[id]/datos.ts
   - app/(app)/pacientes/[id]/panel-datos.tsx
   - app/(app)/pacientes/[id]/page.tsx
+  - app/(app)/pacientes/acciones.test.ts
+  - app/(app)/pacientes/[id]/panel-datos.test.tsx
+  - app/(app)/pacientes/[id]/panel-diferido.tsx
+  - app/(app)/pacientes/[id]/panel-diferido.test.tsx
   - tickets/T-032/**
 ---
 
@@ -340,10 +344,15 @@ Un fichero, sello mayor que la última migración de `main` **en el momento de i
    positiva la obtiene. Sin gemela no prueba nada.
 5. **El técnico lee lo de sus centros y solo eso.** `npm run test:rls` verde con las aserciones
    de la tarea 5; el total sube respecto a las **380** de `main` y la bitácora anota el número.
-6. **El técnico no escribe identificación**: `insert` y `update` como TEC1 fallan con **42501**
-   sobre una fila que TEC1 **sí** puede leer (si no, el cero podría ser la RLS ocultándola).
-7. **El técnico no ve salud básica**: cero filas para TEC1 y TEC2, con la gemela del
-   profesional asignado y la del administrador, que sí las ven.
+6. **El técnico no escribe identificación**: el `insert` como TEC1 falla con **42501**; el
+   `update` como TEC1 afecta **cero filas** y la fila queda intacta, sobre una fila que TEC1
+   **sí** puede leer (si no, el cero podría ser la RLS ocultándola). *(Reformulado por el
+   propietario el 23-09-2026: un `update` sin política de modificación da cero filas, no 42501.)*
+7. **Salud básica solo para el profesional asignado**: cero filas para TEC1 y TEC2, y cero
+   para el administrador sobre un paciente que no tiene asignado; gemelas del profesional
+   asignado y del administrador sobre un paciente suyo, que sí las ven. *(Decisión del
+   propietario del 23-09-2026: alergias y medicación siguen la fila «Motivo de consulta y
+   diagnósticos» de la matriz de `docs/architecture.md` —administrador, solo los suyos—.)*
 8. **Un contacto de emergencia no consiente ni firma.** `capacidad_consentimiento()` sobre un
    menor cuyo único representante es `solo_contacto` devuelve `representante_id` nulo; e
    insertarlo en `consentimiento_firmantes` falla con **23514**. Las dos con su gemela
