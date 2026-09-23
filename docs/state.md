@@ -3,75 +3,77 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño (ADR, trampas, circuito)
 > en tickets y bitácora; las reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 15-09-2026 · `main` al día · tickets: 17 hechos · 4 en curso · 13 pendientes
+**Actualizado**: 23-09-2026 · `main` con T-012a integrado · tickets: 18 hechos · 6 en curso
 
 ## Dónde estamos
 
-- Integrado en `main`: T-000 a T-011, T-013 (dos cortes), T-013a, T-016 a T-020 y T-029. **No queda
-  ninguna rama de ticket terminada fuera de `main`.**
-- La autenticación está completa de punta a punta: invitación, primer acceso (TOTP → PIN), candado,
-  recuperación, ajustes de administrador, baja y sesión de 30 minutos.
-- **La ficha del paciente existe**: `/pacientes/<uuid>`, cinco pestañas, candado dentro de Historia
-  clínica, caducidad automática y registro de acceso en la acción de apertura. Las cuatro pestañas
-  sin candado leen datos reales; Facturación está vacía y lo dice.
-- Verificación sobre el árbol integrado (15-09): `lint` limpio, **486 pruebas en 49 ficheros**,
-  `build` limpio con doce rutas más el Proxy, `test:rls` **380 aserciones**, `lint:migraciones` 12.
+- Integrado en `main`: T-000 a T-011, **T-012a** (sobre de doce claves, `esquema_version = 3`),
+  T-013 (dos cortes), T-013a, T-016 a T-020 y T-029. La nota clínica (T-012) ya puede firmar.
+- La autenticación está completa de punta a punta; la ficha del paciente existe con cinco pestañas.
 
 ## En curso
 
-- T-002 · RLS: todo integrado; queda el punto 3 del guion manual, nunca ejecutado en navegador.
-- T-006 · Autenticación: ocho criterios automáticos cerrados; abierto solo por los 9 y 10, de
-  navegador (`docs/bitacora/T-006.md`).
-- T-013 · Ficha del paciente: **todo lo automático cerrado** (tabla en el ticket §Estado de entrega).
-  Quedan los de navegador: matriz de roles con las tres sesiones, cotejo con `/prototipo`, 44 px.
-- T-012 · Nota clínica: diseño hecho, cuatro cortes. En vuelo el previo (sobre de doce claves), que
-  tiene que estar en `main` **antes de que nadie firme**: después cuesta una era de esquema.
+- **T-032** · Alta de paciente completa (riesgo alto), en el worktree `agent-a2fbeaf1f1cdd100e`.
+  Verificado (23-09): 18 PASA, **15 FALLA** (no existe la prueba de componente del estado
+  `no-legible`), 17 NO_VERIFICABLE (navegador). Revisiones en `tickets/T-032/revision-{sql,ts}.md`:
+  1 ALTA (la bitácora cita pruebas que no existen) y medias por corregir antes del merge, entre
+  ellas: `PanelDatos` se pinta en servidor en toda visita (audita y manda el DNI descifrado sin abrir
+  la pestaña), autoría falsificable en `pacientes_salud_basica`, `clave_version` sin check, el alta
+  mínima depende de Vault, `solo_contacto` se cuela cambiando `alcance`, la fila sembrada de Carmen
+  no se puede descifrar.
+- **T-031** · Dinero. Por decisión del propietario (23-09) `lib/dinero/**` pasa a la fábrica; lo de
+  Kimi (`170afbf`) es punto de partida. Revisión: altas H1 (`'1.23,50'` se acepta como 123,50 €) y
+  H2 (gobierno, resuelta con la decisión); medias H3 y H4.
+- **T-030** · Rejilla de la semana (rama `T-030-rejilla-semana`, carril de Kimi). La corrige la
+  fábrica por esta vez (decisión del 23-09): falta la prueba del domingo de 25 h de octubre (ALTA) y
+  `formatearFechaSinZona` no valida el día del calendario.
+- T-002, T-006, T-013: solo les quedan los guiones de navegador (abajo).
 
 ## Bloqueos y decisiones que no toma un agente
 
-- Económico: diseño comiteado (`79e039f`) y una **implementación sin comitear** en el worktree
-  `agent-a3e72807070793a0e` (`…/20260913120000_economico_esquema.sql`, 1413 líneas). Decidir si se
-  retoma o se rehace: no pasó por verificación ni revisión.
+- **T-032**: `app/(app)/pacientes/acciones.test.ts` está fuera de `territorio:`; alergias y
+  medicación visibles para el administrador en todos los pacientes (no hay fila en la matriz); el
+  criterio 6 reformulado (el `update` da cero filas, no 42501).
+- **Cada cuánto caduca una valoración de riesgo**: `MESES_VALORACION_VIGENTE = 6` es un marcador.
+- **`verificar_cadena_huellas()` no coteja `alcance`** de la fila contra el del sobre: decidirlo
+  antes de la primera firma real (T-012).
+- Económico: implementación sin comitear en el worktree `agent-a3e72807070793a0e` (1413 líneas, sin
+  verificar ni revisar). Retomar o rehacer.
 - Obsoletos, a la espera de que alguien diga que se borran: la rama `verificacion-T-011a` y los
   worktrees `agent-a0c13db09cb6a7b62`, `agent-a3133689fd69000ac`, `agent-a0cf274d698e0d85b`,
   `agent-ac7b6a35059cc839d`, `agent-a0fd267d4973735c3` (con ficheros sin comitear; mirar antes).
+- **`stash@{0}` («verificador T-031 stash»)**: el verificador de T-031 guardó ahí todo lo no
+  comiteado. Los ficheros sin seguimiento ya están restaurados (evidencia y revisión selladas de
+  T-012a, contrato y diseño de T-032). Siguen dentro dos cambios de `main` sin comitear: el arreglo
+  del QR de `segundo-factor.tsx` (anotado como erróneo: `qr_code` llega como SVG crudo, no data URI)
+  y una nota de state.md. No borrar el stash sin decidir el QR.
 
-## Trampas de la fábrica (v3.1 instalada el 18-09-2026, con el `merge-gate` parcheado)
+## Trampas de la fábrica (v3.1)
 
-- **Resuelta**: el `merge-gate` ya no dispara con cualquier id de ticket en el texto; comprueba él
-  mismo que la orden sea `git merge` o `gh pr merge`. **Ya no hay que partir los ids** (`N=029`).
-  Parche y dos casos nuevos en el repo del pipeline (48/48 en verde).
-- El verificador ahora **exige navegador** en tickets de pantalla y el gate de selección avisa si el
-  contrato no trae criterio E2E. Solo hay un spec (`accesibilidad/acceso.spec.ts`).
-- El agente `implementador` fuerza `isolation: worktree` y no sirve con un worktree ya preparado (el
-  sandbox rechaza todo): se relanza como genérico con `sonnet` y sus reglas.
-- `npm run build 2>&1 | tail -n` **devuelve el estado de `tail`**: siempre `> log 2>&1; echo "exit=$?"`.
-- En rutas con espacio («01 Proyectos»), toda variable va entrecomillada o `grep` falla en silencio.
+- **Un verificador no hace `git stash`** en el repo principal: se llevó evidencia sellada ajena.
+- `git archive` con `core.autocrlf=true` convierte a CRLF: un JSON sellado se restaura con
+  `git show`, no con `git archive`, o su hash deja de coincidir.
+- `merge-gate` busca el id de ticket en el texto de la orden: una rama `worktree-agent-*` no lo
+  lleva; nómbralo en el `-m`.
+- `territorio.mjs` da EISDIR o salida según el directorio desde el que se ejecute.
+- `implementador` fuerza worktree propio · `build | tail` da el estado de `tail` · rutas con espacio.
 
 ## Siguiente paso
 
-1. T-012 · nota clínica con firma: la ficha ya tiene el hueco y el registro que la hace lícita.
-2. T-021 · económico, resolviendo antes qué se hace con la implementación sin comitear.
-3. Los cuatro guiones de navegador, de una sentada. Ojo: `db reset` **no relee `config.toml`**.
+1. T-032 · ronda de correcciones (ALTA, criterio 15 y medias), reverificar y revisor de cierre.
+2. T-031 y T-030 · correcciones por la fábrica, nueva revisión, verificación.
+3. T-012 · nota clínica con firma, ya desbloqueada por T-012a.
+4. Los guiones de navegador, de una sentada. `db reset` **no relee `config.toml`**.
 
 ## Verificación manual pendiente
 
-- T-000 criterio 8: login A → paciente → alta → lista → logout → login B.
-- T-002 punto 3: un perfil puesto en `suspendido` deja de ver `/pacientes`.
-- T-006 criterios 9 y 10: guion de siete pasos del ticket (Mailpit en `http://127.0.0.1:54324`).
-- T-013 criterios 1, 5, 6, 9, 10 y 11: el guion de cinco pasos del ticket, con las tres sesiones.
+- T-000 criterio 8 · T-002 punto 3 · T-006 criterios 9 y 10 (Mailpit `http://127.0.0.1:54324`) ·
+  T-013 criterios 1, 5, 6, 9, 10 y 11 · T-032 criterio 17 (tres sesiones sobre un paciente con DNI).
 
 ## Hallazgos anotados (abiertos)
 
-- **No existe teléfono del paciente**: el único de una persona en el esquema es
-  `representantes_paciente.telefono`, y la ficha enseña ese diciendo de quién es. **DNI y domicilio**
-  están cifrados en `pacientes_identificacion` sin camino de descifrado.
-- **`modalidad_relacional` vive en `episodios_asistenciales`, bajo el candado**, así que «Ficha del
-  paciente» no puede enseñar la modalidad que pedía el contrato sin abrir una segunda puerta (11).
-- **El técnico administrativo no puede leer `consentimientos`** pese al choque 12; llega a la
-  respuesta por `alertas_documentacion`, que no lleva palabra clínica. Abrirle la tabla sería una
-  decisión de arquitectura, no un arreglo de pantalla.
-- T-011 · «entregado» a medias con varios profesionales → T-015. · `minimax/cortes/T-011.md` trae la
-  firma vieja de `listarPropuestasPendientes()`. · La base no impone las transiciones del ADR-045. ·
-  `periodicidad = 'mensual'` sin definir.
+- `docs/architecture.md:62-64,91` sigue en el sobre de once claves y `esquema_version = 2`.
+- `modalidad_relacional` bajo el candado (choque 11); técnico sin `consentimientos` (choque 12).
+- El `Button` compartido mide 40 px contra 44 px.
+- T-011 · «entregado» a medias → T-015; sin transiciones del ADR-045 en base; `mensual` sin definir.
 - Los anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md` §Hallazgos anotados.

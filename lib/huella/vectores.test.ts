@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 
 import { canonizar, type ValorJson } from './jcs';
 import { normalizarNfc } from './nfc';
+import { ESQUEMA_VERSION } from './sobre';
 import vectores from './vectores-congelados.json';
 
 interface VectorCongelado {
@@ -30,7 +31,7 @@ function huellaGenesis(canonico: string): string {
 }
 
 describe('vectores-congelados.json', () => {
-  it('tiene los ocho vectores del §12 del diseño aprobado', () => {
+  it('tiene los nueve vectores del §12 del diseño aprobado (T-012a añade alcance-conjunta)', () => {
     expect((vectores as unknown as VectorCongelado[]).map((v) => v.nombre).sort()).toEqual(
       [
         'genesis-minimo',
@@ -41,6 +42,7 @@ describe('vectores-congelados.json', () => {
         'reservadas-vacias',
         'en-sesion',
         'control-y-exponente',
+        'alcance-conjunta',
       ].sort(),
     );
   });
@@ -49,6 +51,10 @@ describe('vectores-congelados.json', () => {
     const canonico = canonizar(normalizarNfc(vector.sobre));
     expect(canonico).toBe(vector.canonico);
     expect(huellaGenesis(canonico)).toBe(vector.huella_hex);
+    // El congelado describe la era VIGENTE: si sube ESQUEMA_VERSION sin regenerar
+    // el JSON, las dos suites de vectores siguen verdes por autoconsistencia y solo
+    // lo caza el banco de RLS (T-012a, hallazgo BAJA H8-TS).
+    expect((vector.sobre as { esquema_version: number }).esquema_version).toBe(ESQUEMA_VERSION);
   });
 
   it('acentos-nfd y acentos-nfc dan EXACTAMENTE la misma huella', () => {

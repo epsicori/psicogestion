@@ -127,6 +127,37 @@ begin
 end;
 $$;
 
+-- T-012a · Como assert_lanza_codigo, pero exige además que el MENSAJE del error
+-- contenga un fragmento literal. El SQLSTATE no basta cuando varias comprobaciones
+-- del mismo disparador lanzan TODAS con 23514: una fila mal armada puede morir en
+-- una comprobación anterior a la que la prueba dice ejercer y dar «OK» igual. Fue
+-- el hallazgo ALTA de las dos revisiones de T-012a (la negativa de `"alcance":null`
+-- moría en la 6.5, no en la 6.10, y con la 6.10 reescrita mal el banco seguía verde).
+-- Con el fragmento, la aserción DEMUESTRA por dónde falla, no solo que falla.
+create or replace function pg_temp.assert_lanza_codigo_msg(
+  consulta text, codigo text, fragmento text, mensaje text)
+returns void
+language plpgsql
+as $$
+begin
+  begin
+    execute consulta;
+  exception when others then
+    if sqlstate <> codigo then
+      raise exception 'ASERCIÓN FALLIDA (lanzó % en vez de %): % — %', sqlstate, codigo, mensaje, sqlerrm;
+    end if;
+    if position(fragmento in sqlerrm) = 0 then
+      raise exception
+        'ASERCIÓN FALLIDA (lanzó % con el código correcto pero desde OTRA comprobación; '
+        'el mensaje no contiene «%»): % — mensaje real: %', sqlstate, fragmento, mensaje, sqlerrm;
+    end if;
+    raise notice 'OK (lanzó % y el mensaje dice «%»): %', sqlstate, fragmento, mensaje;
+    return; -- lanzó con el código Y por la comprobación esperada: correcto
+  end;
+  raise exception 'ASERCIÓN FALLIDA (debía lanzar % y no lanzó nada): %', codigo, mensaje;
+end;
+$$;
+
 create or replace procedure pg_temp.reset_sesion()
 language plpgsql
 as $$
@@ -140,9 +171,12 @@ $$;
 -- prueba. NO es un canonicalizador general —los valores del banco son ASCII simple, sin
 -- ninguno de los casos feos que prueba lib/huella/jcs.test.ts—, es la forma más corta de
 -- dar de alta versiones que el disparador fn_sellar_version_nota() (T-005) acepte, con las
--- once claves exactas y en el orden alfabético que exige la comprobación 6.1. `p_cuerpo`
+-- doce claves exactas y en el orden alfabético que exige la comprobación 6.1. `p_cuerpo`
 -- ya viene como jsonb de una sola clave en todos los usos del banco, así que su orden
 -- interno no importa.
+-- T-012a: p_alcance nuevo, al final para no romper las llamadas posicionales ya
+-- existentes en el banco; default 'individual' porque es el valor por defecto de la
+-- columna homónima (ADR-057).
 create or replace function pg_temp.sobre_prueba(
   p_autor_id                 uuid,
   p_creada_en                timestamptz,
@@ -152,19 +186,21 @@ create or replace function pg_temp.sobre_prueba(
   p_cita_id                  uuid default null,
   p_margen_sesion_minutos    integer default null,
   p_redactada_en_sesion      boolean default false,
-  p_abierta_en               timestamptz default null
+  p_abierta_en               timestamptz default null,
+  p_alcance                  text default 'individual'
 ) returns text
 language sql
 as $$
   select
     '{' ||
     '"abierta_en":' || to_json(to_char(coalesce(p_abierta_en, p_creada_en) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"alcance":' || coalesce(to_json(p_alcance)::text, 'null') || ',' ||
     '"anotaciones_reservadas":' || coalesce(to_json(p_anotaciones_reservadas)::text, 'null') || ',' ||
     '"autor_id":"' || lower(p_autor_id::text) || '",' ||
     '"cita_id":' || coalesce(to_json(p_cita_id::text)::text, 'null') || ',' ||
     '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"cuerpo":' || p_cuerpo::text || ',' ||
-    '"esquema_version":2,' ||
+    '"esquema_version":3,' ||
     '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"margen_sesion_minutos":' || coalesce(p_margen_sesion_minutos::text, 'null') || ',' ||
     '"motivo_cambio":' || coalesce(to_json(p_motivo_cambio)::text, 'null') || ',' ||
