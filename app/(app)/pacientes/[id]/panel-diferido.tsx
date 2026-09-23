@@ -20,7 +20,11 @@ import { t } from '@/lib/i18n';
  * cuando, y solo cuando, alguien abre la pestaña. El HTML inicial lleva el esqueleto de
  * carga y nada más.
  */
-export function PanelDiferido({ cargar }: { cargar: () => Promise<ReactNode> }) {
+// Alias y no el tipo de promesa escrito en línea tras la flecha: `lib/i18n/sin-literales.test.ts`
+// tomaría la palabra entre la flecha y el genérico por texto de JSX.
+type PanelCargado = Promise<ReactNode>;
+
+export function PanelDiferido({ cargar }: { cargar: () => PanelCargado }) {
   const [contenido, setContenido] = useState<ReactNode>(null);
   const [fallo, setFallo] = useState(false);
   // Dedupe del doble montaje de StrictMode (el mismo patrón que `panel-historia.tsx`): en
