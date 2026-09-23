@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { esquemaNuevoPaciente } from './esquemas';
 
@@ -96,11 +96,43 @@ describe('esquemaNuevoPaciente', () => {
       expect(resultado.success).toBe(false);
     });
 
-    it('rechaza una fecha anterior a 1900', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Con «hoy» en 2000-01-01, 1899-12-31 son 100 años: solo puede caer por la guarda de 1900,
+    // no por la de 120 años (H10 de la revisión: con el reloj real caían las dos y la prueba
+    // no distinguía cuál). La gemela es el 1900-01-01, un día después, que sí entra.
+    it('rechaza una fecha anterior a 1900 por la guarda de 1900, no por la de 120 años', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2000-01-01T12:00:00Z'));
       const resultado = esquemaNuevoPaciente.safeParse(
         datosMinimos({ fechaNacimiento: '1899-12-31' }),
       );
       expect(resultado.success).toBe(false);
+      if (!resultado.success) {
+        expect(resultado.error.issues.map((i) => i.message)).toEqual(['Fecha de nacimiento fuera de rango']);
+      }
+      const gemela = esquemaNuevoPaciente.safeParse(datosMinimos({ fechaNacimiento: '1900-01-01' }));
+      expect(gemela.success).toBe(true);
+    });
+
+    // `new Date('2023-02-30')` no es NaN: el motor lo corre al 2 de marzo. La fecha de
+    // calendario se comprueba por ida y vuelta (H10 de la revisión).
+    it.each(['2023-02-30', '2023-02-29', '2023-04-31', '2023-13-01', '2023-00-10'])(
+      'rechaza la fecha inexistente %s',
+      (fecha) => {
+        const resultado = esquemaNuevoPaciente.safeParse(datosMinimos({ fechaNacimiento: fecha }));
+        expect(resultado.success).toBe(false);
+        if (!resultado.success) {
+          expect(resultado.error.issues[0].message).toBe('Esa fecha no es válida');
+        }
+      },
+    );
+
+    it('acepta el 29 de febrero de un año bisiesto', () => {
+      const resultado = esquemaNuevoPaciente.safeParse(datosMinimos({ fechaNacimiento: '2024-02-29' }));
+      expect(resultado.success).toBe(true);
     });
 
     it('rechaza una edad mayor de 120 años', () => {

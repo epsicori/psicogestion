@@ -37,8 +37,13 @@ export const esquemaNuevoPaciente = z.object({
   fechaNacimiento: z
     .string({ error: t('pacientes.introduceLaFechaDeNacimiento') })
     .regex(/^\d{4}-\d{2}-\d{2}$/, { error: t('pacientes.fechaDeNacimientoNoValida') })
+    // Ida y vuelta en UTC (H10 de la revisión): `new Date('2023-02-30')` no da NaN, el motor
+    // lo corre al 2 de marzo. Solo es una fecha de calendario si vuelve igual que entró.
     .refine(
-      (valor) => !Number.isNaN(new Date(`${valor}T00:00:00Z`).getTime()),
+      (valor) => {
+        const fecha = new Date(`${valor}T00:00:00Z`);
+        return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor;
+      },
       { error: t('pacientes.fechaDeNacimientoNoValida') },
     )
     .refine(
