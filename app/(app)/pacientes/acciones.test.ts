@@ -66,7 +66,14 @@ describe('crearPaciente', () => {
     expect(supabase.rpc).not.toHaveBeenCalled();
   });
 
-  it('con el alta mínima, llama al RPC con los seis opcionales en null', async () => {
+  // Criterio 12. El contrato de la acción es mandar AUSENTES (undefined) los opcionales
+  // vacíos, no `null`: el tipo generado de `alta_paciente` no admite `null` explícito, y
+  // `JSON.stringify` omite las claves `undefined`, así que Postgres aplica el `default null`
+  // de la firma. La aserción es estricta por clave (`toBeUndefined`, que un `null`
+  // no pasa) y sobre el cuerpo serializado: lo que de verdad viaja a PostgREST. Que no se
+  // cree fila en `pacientes_identificacion` ni en `pacientes_salud_basica` lo prueba contra
+  // la base real `scripts/t032-alta.ts` (paso 5).
+  it('con el alta mínima, los seis opcionales y las columnas cifradas viajan AUSENTES (undefined), no null', async () => {
     const supabase = crearSupabaseFalso();
     exigirSesion.mockResolvedValue({ supabase, usuario: { id: 'prof-1' } });
 
@@ -83,8 +90,46 @@ describe('crearPaciente', () => {
       p_alergias: undefined,
       p_medicacion_actual: undefined,
     });
+
+    const argumentos = supabase.rpc.mock.calls[0][1] as Record<string, unknown>;
+    for (const clave of [
+      'p_sexo',
+      'p_telefono',
+      'p_tipo_documento',
+      'p_dni_cifrado',
+      'p_dni_nonce',
+      'p_dni_etiqueta',
+      'p_dni_indice',
+      'p_domicilio_cifrado',
+      'p_domicilio_nonce',
+      'p_domicilio_etiqueta',
+      'p_alergias',
+      'p_medicacion_actual',
+    ]) {
+      expect(argumentos[clave], clave).toBeUndefined();
+    }
+    expect(Object.keys(JSON.parse(JSON.stringify(argumentos))).sort()).toEqual(
+      ['p_apellidos', 'p_clave_version', 'p_fecha_nacimiento', 'p_indice_clave_version', 'p_nombre'],
+    );
+
     expect(estado).toEqual({});
     expect(revalidatePath).toHaveBeenCalledWith('/pacientes');
+  });
+
+  it('si el cifrado falla (Vault caído, clave mal sembrada) devuelve el mensaje genérico y no llama al RPC', async () => {
+    const supabase = crearSupabaseFalso();
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: 'prof-1' } });
+    cifrarIdentificacion.mockRejectedValue(new Error('No se pudo leer el secreto del Vault: detalle interno'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const estado = await crearPaciente({ ...DATOS_MINIMOS, dni: '12345678Z' });
+
+    expect(estado.mensaje).toBe('No se pudo crear el paciente');
+    expect(estado.mensaje).not.toContain('Vault');
+    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('un 23505 del RPC se enseña como error del campo DNI, sin mensaje general', async () => {

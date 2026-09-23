@@ -45,10 +45,18 @@ export async function crearPaciente(datos: unknown): Promise<EstadoFormulario> {
 
   // 3. Cifrado en Node, nunca en la base: el documento y el domicilio se convierten
   // en criptograma aquí, con la clave del Vault, antes de que nada viaje a Postgres.
-  const columnas = await cifrarIdentificacion({
-    documento: resultado.data.dni,
-    domicilio: resultado.data.domicilio,
-  });
+  // Un fallo aquí (Vault caído, secreto sin sembrar) no escapa como excepción: el texto
+  // del error nombra el secreto, y al navegador solo llega el mensaje genérico (H3).
+  let columnas: Awaited<ReturnType<typeof cifrarIdentificacion>>;
+  try {
+    columnas = await cifrarIdentificacion({
+      documento: resultado.data.dni,
+      domicilio: resultado.data.domicilio,
+    });
+  } catch (fallo) {
+    console.error('crearPaciente: fallo al cifrar la identificación', fallo);
+    return { ...ESTADO_INICIAL, mensaje: t('pacientes.noSePudoCrearElPaciente') };
+  }
 
   // 4. Un único RPC transaccional (T-032, §1.2 §6): `pacientes`, `pacientes_identificacion`
   // y `pacientes_salud_basica` se escriben en la misma transacción, o ninguna. Dos `insert`
