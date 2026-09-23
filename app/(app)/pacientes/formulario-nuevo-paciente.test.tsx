@@ -84,12 +84,59 @@ describe('FormularioNuevoPaciente', () => {
 
   it('todos los campos opcionales están dentro, aunque el <details> esté cerrado', () => {
     render(<FormularioNuevoPaciente />);
-    expect(screen.getByLabelText('Teléfono')).toBeInTheDocument();
-    expect(screen.getByLabelText('Sexo')).toBeInTheDocument();
-    expect(screen.getByLabelText('DNI o NIE')).toBeInTheDocument();
-    expect(screen.getByLabelText('Domicilio')).toBeInTheDocument();
-    expect(screen.getByLabelText('Alergias')).toBeInTheDocument();
-    expect(screen.getByLabelText('Medicación actual')).toBeInTheDocument();
+    expect(screen.getByLabelText('Teléfono (opcional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sexo (opcional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('DNI o NIE (opcional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Domicilio (opcional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Alergias (opcional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Medicación actual (opcional)')).toBeInTheDocument();
+  });
+
+  it('las etiquetas obligatorias no dicen «(opcional)»: solo lo dicen las que lo son (H7)', () => {
+    render(<FormularioNuevoPaciente />);
+    expect(screen.getByLabelText('Nombre')).toBeRequired();
+    expect(screen.getByLabelText('Apellidos')).toBeRequired();
+    expect(screen.getByLabelText('Fecha de nacimiento')).toBeRequired();
+    expect(screen.queryByLabelText(/Nombre \(opcional\)/)).not.toBeInTheDocument();
+  });
+
+  it('el <summary> de «Más datos» mide al menos 44 px de alto (ADR-044, H8)', () => {
+    render(<FormularioNuevoPaciente />);
+    expect(screen.getByText('Más datos (opcional)')).toHaveClass('min-h-11');
+  });
+
+  it('si el usuario pliega «Más datos» con el error puesto, el siguiente envío lo vuelve a abrir (H9)', async () => {
+    const usuario = userEvent.setup();
+    render(<FormularioNuevoPaciente />);
+    const detalles = screen.getByText('Más datos (opcional)').closest('details') as HTMLDetailsElement;
+
+    // 1. DNI inválido: la validación de cliente lo rechaza y el panel se abre.
+    await usuario.type(screen.getByLabelText('DNI o NIE (opcional)'), '1234');
+    await rellenarYEnviar('Lucía', 'Márquez');
+    expect(await screen.findByText('Introduce un DNI o NIE válido')).toBeInTheDocument();
+    expect(detalles.open).toBe(true);
+
+    // 2. El usuario lo pliega con el error todavía puesto.
+    detalles.open = false;
+    expect(detalles.open).toBe(false);
+
+    // 3. Vuelve a enviar con el mismo DNI: el panel se reabre y el foco cae en un campo visible.
+    await usuario.click(screen.getByRole('button', { name: 'Crear paciente' }));
+    await waitFor(() => expect(detalles.open).toBe(true));
+    expect(crearPaciente).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText('DNI o NIE (opcional)')).toHaveFocus());
+  });
+
+  it('tras un alta correcta, «Más datos» se cierra para el paciente siguiente', async () => {
+    const usuario = userEvent.setup();
+    render(<FormularioNuevoPaciente />);
+    const detalles = screen.getByText('Más datos (opcional)').closest('details') as HTMLDetailsElement;
+    detalles.open = true;
+    await usuario.type(screen.getByLabelText('Teléfono (opcional)'), '600123456');
+    await rellenarYEnviar('Lucía', 'Márquez');
+
+    await waitFor(() => expect(crearPaciente).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(detalles.open).toBe(false));
   });
 
   it('un error del servidor en un campo de «Más datos» abre el <details> solo', async () => {
@@ -109,7 +156,7 @@ describe('FormularioNuevoPaciente', () => {
 
     const usuario = userEvent.setup();
     render(<FormularioNuevoPaciente />);
-    await usuario.type(screen.getByLabelText('DNI o NIE'), '12345678Z');
+    await usuario.type(screen.getByLabelText('DNI o NIE (opcional)'), '12345678Z');
     await rellenarYEnviar('Lucía', 'Márquez');
 
     expect(await screen.findByText('Ese documento ya está dado de alta')).toBeInTheDocument();

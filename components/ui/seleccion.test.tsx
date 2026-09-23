@@ -23,6 +23,19 @@ describe('Seleccion', () => {
     expect(control.value).toBe('');
   });
 
+  it('la opción vacía tiene texto: un lector no la anuncia como «en blanco» (H8)', () => {
+    render(<Seleccion id="sexo" etiqueta="Sexo" opciones={OPCIONES} />);
+    const control = screen.getByLabelText('Sexo') as HTMLSelectElement;
+    expect(control.options[0].textContent).toBe('Sin indicar');
+  });
+
+  it('el control mide al menos 44 px de alto, como Button y Desplegable (ADR-044, H8)', () => {
+    render(<Seleccion id="sexo" etiqueta="Sexo" opciones={OPCIONES} />);
+    const control = screen.getByLabelText('Sexo');
+    expect(control).toHaveClass('min-h-11');
+    expect(control).not.toHaveClass('h-10');
+  });
+
   it('se puede elegir una opción con el teclado', async () => {
     const usuario = userEvent.setup();
     render(<Seleccion id="sexo" etiqueta="Sexo" opciones={OPCIONES} />);

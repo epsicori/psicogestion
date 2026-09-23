@@ -2,7 +2,8 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus } from 'lucide-react';
-import { useRef, useState, useTransition } from 'react';
+import { useRef, useState, useTransition, type FormEvent } from 'react';
+import type { FieldErrors } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 
 import { AreaTexto } from '@/components/ui/area-texto';
@@ -18,14 +19,14 @@ import { esquemaNuevoPaciente, type DatosNuevoPaciente, type EntradaNuevoPacient
 // Los campos de «Más datos» son justo los que quedan fuera de la fila obligatoria: si alguno
 // trae un error tras el envío, el <details> se abre solo, porque un error invisible es un
 // formulario que no se envía y nadie sabe por qué.
-const CAMPOS_MAS_DATOS = [
+const CAMPOS_MAS_DATOS: readonly string[] = [
   'telefono',
   'sexo',
   'dni',
   'domicilio',
   'alergias',
   'medicacionActual',
-] as const;
+];
 
 const OPCIONES_SEXO = [
   { valor: 'hombre', texto: t('pacientes.sexoHombre') },
@@ -36,7 +37,6 @@ const OPCIONES_SEXO = [
 export function FormularioNuevoPaciente() {
   const [enviando, iniciarTransicion] = useTransition();
   const [mensaje, setMensaje] = useState('');
-  const [masDatosAbierto, setMasDatosAbierto] = useState(false);
   const detallesRef = useRef<HTMLDetailsElement>(null);
 
   const {
@@ -50,21 +50,28 @@ export function FormularioNuevoPaciente() {
     defaultValues: { nombre: '', apellidos: '', fechaNacimiento: '' },
   });
 
-  // Abre «Más datos» solo cuando algún campo de dentro trae un error, del cliente o del
-  // servidor: el `<details>` es HTML nativo y su `open` no participa en el estado de RHF.
-  // Se calcula en el render, no en un efecto: leer `errors[campo]` aquí suscribe a esa
-  // clave del Proxy perezoso de react-hook-form, así que se refleja tanto el error que
-  // pone `handleSubmit` en el momento (validación de cliente) como el que mete `setError()`
-  // dentro del `startTransition` de la respuesta del servidor.
-  const hayErrorEnMasDatos = CAMPOS_MAS_DATOS.some((campo) => errors[campo]);
+  // El `<details>` NO es controlado (H9 de la revisión): con `open={abierto || hayError}`,
+  // si el usuario lo plegaba con el error puesto y volvía a enviar, la prop pasaba de true a
+  // true, React no tocaba el DOM y el foco de RHF caía en un campo invisible. Aquí se abre
+  // por la ref en el momento en que hace falta, y el usuario lo pliega cuando quiera.
+  function abrirMasDatosSiHayError(campos: string[]) {
+    if (detallesRef.current && campos.some((campo) => CAMPOS_MAS_DATOS.includes(campo))) {
+      detallesRef.current.open = true;
+    }
+  }
 
-  const enviar = handleSubmit((datos) => {
+  function alSerValido(datos: DatosNuevoPaciente) {
     setMensaje('');
     iniciarTransicion(async () => {
       const estado = (await crearPaciente(datos)) ?? ESTADO_INICIAL;
 
       if (estado.errores || estado.mensaje) {
         aplicarErroresDelServidor(estado, setError);
+        abrirMasDatosSiHayError(
+          Object.entries(estado.errores ?? {})
+            .filter(([, mensajes]) => mensajes?.[0])
+            .map(([campo]) => campo),
+        );
         setMensaje(estado.mensaje ?? '');
         return;
       }
@@ -72,9 +79,23 @@ export function FormularioNuevoPaciente() {
       // El alta salió bien: se vacía el formulario para el siguiente. La lista se
       // refresca sola con el `revalidatePath` de la acción.
       reset();
-      setMasDatosAbierto(false);
+      if (detallesRef.current) detallesRef.current.open = false;
     });
-  });
+  }
+
+  // `onInvalid` corre ANTES de que react-hook-form mueva el foco al primer campo con error
+  // (handleSubmit: onInvalid, luego _focusError), así que el campo ya es visible cuando el
+  // foco llega.
+  function alSerInvalido(erroresDeCliente: FieldErrors<EntradaNuevoPaciente>) {
+    abrirMasDatosSiHayError(Object.keys(erroresDeCliente));
+  }
+
+  // `handleSubmit` se llama dentro del manejador y no en el render: los dos callbacks tocan
+  // la ref del <details>, y el compilador de React (react-hooks/refs) no admite pasar a una
+  // función, durante el render, algo que lee una ref.
+  function enviar(evento: FormEvent<HTMLFormElement>) {
+    return handleSubmit(alSerValido, alSerInvalido)(evento);
+  }
 
   return (
     <form onSubmit={enviar} noValidate className="border-border bg-card rounded-xl border p-5 shadow-sm">
@@ -122,13 +143,8 @@ export function FormularioNuevoPaciente() {
         </div>
       </div>
 
-      <details
-        ref={detallesRef}
-        open={masDatosAbierto || hayErrorEnMasDatos}
-        onToggle={(evento) => setMasDatosAbierto(evento.currentTarget.open)}
-        className="mt-4"
-      >
-        <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-sm font-medium">
+      <details ref={detallesRef} className="mt-4">
+        <summary className="text-muted-foreground hover:text-foreground min-h-11 cursor-pointer py-3 text-sm font-medium">
           {t('pacientes.masDatos')}
         </summary>
 

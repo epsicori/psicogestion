@@ -89,21 +89,21 @@ export const es = {
     fechaDeNacimientoNoValida: 'Esa fecha no es válida',
     fechaDeNacimientoFueraDeRango: 'Fecha de nacimiento fuera de rango',
     masDatos: 'Más datos (opcional)',
-    sexo: 'Sexo',
+    sexo: 'Sexo (opcional)',
     sexoNoValido: 'Elige una opción de la lista',
     sexoHombre: 'Hombre',
     sexoMujer: 'Mujer',
     sexoOtro: 'Otro',
-    telefono: 'Teléfono',
+    telefono: 'Teléfono (opcional)',
     telefonoNoValido: 'Introduce un teléfono válido',
-    dniONie: 'DNI o NIE',
+    dniONie: 'DNI o NIE (opcional)',
     dniNoValido: 'Introduce un DNI o NIE válido',
     eseDocumentoYaEstaDadoDeAlta: 'Ese documento ya está dado de alta',
-    domicilio: 'Domicilio',
+    domicilio: 'Domicilio (opcional)',
     elDomicilioEsDemasiadoLargo: 'El domicilio es demasiado largo',
-    alergias: 'Alergias',
+    alergias: 'Alergias (opcional)',
     lasAlergiasSonDemasiadoLargas: 'El texto de alergias es demasiado largo',
-    medicacionActual: 'Medicación actual',
+    medicacionActual: 'Medicación actual (opcional)',
     laMedicacionEsDemasiadoLarga: 'El texto de medicación es demasiado largo',
   },
   // --- T-006b1 · ajustes del administrador -------------------------------
@@ -210,6 +210,8 @@ export const es = {
     aceptar: 'Aceptar',
     si: 'Sí',
     no: 'No',
+    // T-032 · texto de la opción vacía de un <select> opcional (components/ui/seleccion.tsx)
+    sinIndicar: 'Sin indicar',
   },
   // --- T-006b2 · primer acceso ---------------------------------------------
 
@@ -401,8 +403,6 @@ export const es = {
     sinRepresentantes: 'No hay ninguna persona de contacto registrada',
     sinRepresentantesExplicacion:
       'Aquí aparecen quienes pueden actuar por el paciente —madre, padre, tutor— con su teléfono.',
-    sinTelefonoDelPaciente:
-      'El teléfono del propio paciente todavía no se guarda en ningún sitio. El que sale aquí es el de su persona de contacto.',
     telefono: 'Teléfono',
     correo: 'Correo',
     sinTelefono: 'Sin teléfono',
