@@ -53,8 +53,8 @@ call pg_temp.reset_sesion();
 call pg_temp.como(:TEC1);
 select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P1)) = 1,
   'TEC1 (centro A) SÍ ve la fila de identificación de P1 (centro A) — ADR-060: la RLS ya no es el candado, lo es no tener la clave');
-select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P2)) = 0,
-  'TEC1 (centro A) NO ve la fila de identificación de P2: es de otro centro (PRO2/centro B)');
+-- La negativa sobre P2 (otro centro) vive en 08-identificacion.sql: aquí P2 aún no tiene
+-- fila y el 0 sería por no haber nada que ver (B3 de la revisión).
 call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
@@ -67,6 +67,27 @@ call pg_temp.reset_sesion();
 call pg_temp.como(:PRO1);
 insert into public.pacientes_salud_basica (paciente_id, alergias, medicacion_actual, actualizado_por) values
   (:P1, 'Penicilina', 'Sertralina 50mg/día', :PRO1);
+
+-- M1 de la revisión: actualizado_por y actualizado_en los fija fn_salud_basica_autoria(),
+-- no el llamante. PRO1 intenta firmar su cambio como ADM y fecharlo en 2020.
+update public.pacientes_salud_basica
+   set medicacion_actual = 'Sertralina 100mg/día',
+       actualizado_por   = :ADM,
+       actualizado_en    = '2020-01-01'
+ where paciente_id = :P1;
+select pg_temp.assert(
+  (select medicacion_actual = 'Sertralina 100mg/día' and actualizado_por = :PRO1::uuid and actualizado_en > now() - interval '1 minute'
+     from public.pacientes_salud_basica where paciente_id = :P1),
+  'El cambio de PRO1 entra, pero firmado por PRO1 y fechado ahora: la autoría y la hora las pone el servidor, no el llamante'
+);
+-- Y la fila no se muda a otro paciente. PMENOR también es de PRO1 y no tiene fila: el 42501
+-- es del disparador, no de la RLS ni de la clave primaria. La gemela positiva es el UPDATE
+-- de arriba (misma sesión, misma fila, sin tocar paciente_id).
+select pg_temp.assert_lanza_codigo(
+  format('update public.pacientes_salud_basica set paciente_id = %L where paciente_id = %L', :PMENOR, :P1),
+  '42501',
+  'La salud básica de P1 no puede pasar a otro paciente (PMENOR, también de PRO1): paciente_id es inmutable'
+);
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:ADM);

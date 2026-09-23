@@ -70,7 +70,15 @@ alter table public.pacientes_identificacion
   add constraint pacientes_identificacion_fila_no_vacia
     check (num_nonnulls(dni_cifrado, domicilio_cifrado) >= 1),
   add constraint pacientes_identificacion_domicilio_acotado
-    check (domicilio_cifrado is null or octet_length(domicilio_cifrado) <= 2048);
+    check (domicilio_cifrado is null or octet_length(domicilio_cifrado) <= 2048),
+  -- Solo existe la clave v1 (la rotación queda fuera de T-032). Si algo escribiera otra
+  -- versión, lib/cifrado la descifraría con la v1 y el fallo parecería una manipulación:
+  -- la base lo impide aquí, y el módulo, por su parte, lanza si lee otra (M2 de la revisión).
+  -- Rotar es otro ticket, que relajará estos checks en la misma migración que añada la v2.
+  add constraint pacientes_identificacion_clave_version_1
+    check (dni_clave_version = 1
+           and dni_indice_clave_version = 1
+           and (domicilio_clave_version is null or domicilio_clave_version = 1));
 
 comment on table public.pacientes_identificacion is
   'DNI y domicilio cifrados (ADR-029). Desde T-032 una fila puede tener solo domicilio '
@@ -137,6 +145,43 @@ create policy pacientes_salud_basica_modificacion on public.pacientes_salud_basi
     (select public.rol_actual()) = 'administrador'::public.rol_usuario
     or public.es_profesional_asignado(paciente_id)
   );
+
+-- La autoría la fija la base, no quien escribe (M1 de la revisión): `actualizado_por` y
+-- `actualizado_en` se sobrescriben con la sesión y el reloj del servidor en cada
+-- escritura, y `paciente_id` no cambia nunca (mover unas alergias a otro paciente es
+-- escribirle a ese otro un dato clínico ajeno). Sin sesión de usuario —`postgres` o
+-- `service_role` sembrando— se respeta el `actualizado_por` recibido, que la columna
+-- sigue exigiendo NOT NULL y con FK a perfiles.
+create function public.fn_salud_basica_autoria()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_usuario uuid := (select auth.uid());
+begin
+  if tg_op = 'UPDATE' and new.paciente_id is distinct from old.paciente_id then
+    raise exception
+      'pacientes_salud_basica.paciente_id no se puede cambiar: la fila es de su paciente.'
+      using errcode = '42501';
+  end if;
+  new.actualizado_en := now();
+  if v_usuario is not null then
+    new.actualizado_por := v_usuario;
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.fn_salud_basica_autoria() is
+  'Fija actualizado_por = auth.uid() y actualizado_en = now() en cada escritura de '
+  'pacientes_salud_basica, y rechaza con 42501 un cambio de paciente_id (T-032, M1).';
+
+revoke execute on function public.fn_salud_basica_autoria() from public;
+
+create trigger salud_basica_autoria
+  before insert or update on public.pacientes_salud_basica
+  for each row execute function public.fn_salud_basica_autoria();
 
 -- Auditoría explícita: el bucle de instalación masiva de 2026-08-29 no vuelve a correr
 -- para tablas nuevas. Se recortan las dos columnas de contenido: se audita QUE alguien
@@ -495,3 +540,40 @@ revoke execute on function public.fn_firmante_no_es_solo_contacto() from public;
 create trigger firmante_no_es_solo_contacto
   before insert or update on public.consentimiento_firmantes
   for each row execute function public.fn_firmante_no_es_solo_contacto();
+
+-- La gemela del disparador de arriba (M4 de la revisión): sin ella, bastaba con dar de alta
+-- al representante como `custodia`, recoger su firma y bajarlo después a `solo_contacto`
+-- para tener un contacto de emergencia firmando. Si el representante ya firma algún
+-- consentimiento, no puede pasar a `solo_contacto`: primero se le retira la firma.
+create function public.fn_solo_contacto_sin_firmas()
+returns trigger
+language plpgsql
+security definer          -- a propósito: quien edita al representante puede no leer
+                           -- todas las filas de consentimiento_firmantes que lo citan
+set search_path = ''
+as $$
+begin
+  if new.alcance = 'solo_contacto'::public.alcance_representacion
+     and old.alcance is distinct from new.alcance
+     and exists (
+       select 1 from public.consentimiento_firmantes f
+       where f.representante_id = new.id
+     ) then
+    raise exception
+      'Un representante que ya firma un consentimiento no puede pasar a solo_contacto (ADR-028).'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.fn_solo_contacto_sin_firmas() is
+  'Impide pasar a alcance solo_contacto a un representante que ya figura como firmante '
+  'de algún consentimiento (ADR-028, T-032, M4). 23514, como su gemela sobre '
+  'consentimiento_firmantes.';
+
+revoke execute on function public.fn_solo_contacto_sin_firmas() from public;
+
+create trigger solo_contacto_sin_firmas
+  before update of alcance on public.representantes_paciente
+  for each row execute function public.fn_solo_contacto_sin_firmas();

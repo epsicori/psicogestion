@@ -91,4 +91,38 @@ select pg_temp.assert(
 );
 call pg_temp.reset_sesion();
 
+-- M4 de la revisión: la gemela del disparador anterior sobre representantes_paciente. Sin
+-- ella, bastaba con bajar a solo_contacto a quien ya firmó. REPMENOR acaba de firmar el
+-- consentimiento de arriba: pasarlo a solo_contacto debe rechazarse con 23514. PRO1 es el
+-- profesional asignado al menor y SÍ puede actualizar la fila (representantes_paciente_
+-- modificacion): el rechazo no puede ser un UPDATE 0 de la RLS (pruebas.md).
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo(
+  format(
+    'update public.representantes_paciente set alcance = %L where id = %L',
+    'solo_contacto', :REPMENOR
+  ),
+  '23514',
+  'Un representante que YA firma un consentimiento no puede pasar a solo_contacto: fn_solo_contacto_sin_firmas'
+);
+-- Gemela positiva, mismo perfil y misma sentencia salvo el representante: uno de custodia
+-- SIN ninguna firma sí puede pasar a solo_contacto. Si el disparador rechazara cualquier
+-- cambio a solo_contacto, esta caería.
+insert into public.representantes_paciente (id, paciente_id, nombre, apellidos, tipo, alcance, vigente_desde) values
+  ('a0030002-0000-4000-8000-000000000003', :PMENOR, 'Abuela', 'Sin Firmas', 'guardador_de_hecho', 'custodia', current_date - interval '1 year');
+update public.representantes_paciente set alcance = 'solo_contacto'
+  where id = 'a0030002-0000-4000-8000-000000000003';
+select pg_temp.assert(
+  (select alcance from public.representantes_paciente where id = 'a0030002-0000-4000-8000-000000000003')
+    = 'solo_contacto'::public.alcance_representacion,
+  'GEMELA: un representante sin firmas SÍ puede pasar a solo_contacto — el rechazo de arriba es por la firma, no por el cambio de alcance'
+);
+-- Y el representante que firma sigue siendo de patria potestad (el rechazo no dejó nada a medias).
+select pg_temp.assert(
+  (select alcance from public.representantes_paciente where id = :REPMENOR)
+    = 'patria_potestad'::public.alcance_representacion,
+  'REPMENOR sigue con alcance patria_potestad tras el rechazo'
+);
+call pg_temp.reset_sesion();
+
 \echo '07-capacidad: completa.'
