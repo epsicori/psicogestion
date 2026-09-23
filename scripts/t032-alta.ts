@@ -64,7 +64,13 @@ async function principal() {
   // 2 · cifrarIdentificacion() + alta_paciente()
   // -----------------------------------------------------------------------
   pasoActual = '2 · alta';
-  const dniPrueba = '12345678Z';
+  // DNI al azar con su letra de control (B7/H12 de la revisión): con uno fijo, la segunda
+  // ejecución sin `db reset` caía en el paso 2 con 23505, el mismo código que el paso 4
+  // espera como éxito, y el fallo se confundía con la negativa. Colisionar con un DNI ya
+  // dado de alta exige acertar uno entre cien millones.
+  const numeroDni = Math.floor(Math.random() * 100_000_000);
+  const dniPrueba =
+    String(numeroDni).padStart(8, '0') + 'TRWAGMYFPDXBNJZSQVHLCKE'[numeroDni % 23];
   const domicilioPrueba = 'Calle de Prueba T-032, 1, 28001 Madrid';
   const enviado = await cifrarIdentificacion({
     documento: dniPrueba,
@@ -87,7 +93,8 @@ async function principal() {
     p_domicilio_etiqueta: enviado.p_domicilio_etiqueta,
     p_clave_version: enviado.p_clave_version,
     p_indice_clave_version: enviado.p_indice_clave_version,
-    p_alergias: null,
+    // Con salud básica: es la gemela positiva del recuento del paso 5.
+    p_alergias: 'Penicilina',
     p_medicacion_actual: null,
   });
   assert(!errorAlta && typeof idPaciente === 'string', `alta_paciente: ${errorAlta?.message}`);
@@ -189,6 +196,63 @@ async function principal() {
     `el recuento de pacientes cambió (${pacientesAntes} → ${pacientesDespues}) pese al 23505: la transacción no fue atómica`,
   );
   console.log('✓ 4 · el segundo alta con el mismo DNI falló con 23505 y el recuento de pacientes no cambió');
+
+  // -----------------------------------------------------------------------
+  // 5 · alta mínima (criterio 12, M5 de la revisión): solo nombre, apellidos y fecha.
+  //     Ninguna fila en pacientes_identificacion ni en pacientes_salud_basica.
+  // -----------------------------------------------------------------------
+  pasoActual = '5 · alta mínima';
+  // Lo mismo que manda la Server Action con los opcionales vacíos: cifrarIdentificacion()
+  // sin documento ni domicilio (no pide ninguna clave, M3) y solo las claves no nulas de su
+  // resultado; el resto de opcionales, ausentes (Postgres aplica su default null).
+  const minimo = await cifrarIdentificacion({});
+  const soloPresentes = Object.fromEntries(
+    Object.entries(minimo).filter(([, valor]) => valor !== null),
+  );
+  const { data: idMinimo, error: errorMinimo } = await supabase.rpc('alta_paciente', {
+    p_nombre: 'Paciente',
+    p_apellidos: 'Mínimo T-032',
+    p_fecha_nacimiento: '1985-06-15',
+    ...soloPresentes,
+  });
+  assert(!errorMinimo && typeof idMinimo === 'string', `alta_paciente mínima: ${errorMinimo?.message}`);
+
+  // El recuento va con la sesión de Ana, que es la profesional asignada de los dos
+  // pacientes (alta_paciente() la pone desde auth.uid()), así que la RLS le deja ver sus
+  // filas. service_role no sirve: no tiene grant sobre estas tablas (comprobado en
+  // information_schema.role_table_grants). La identificación se cuenta por
+  // leer_identificacion(), el único camino de lectura (ADR-060), no con un select directo.
+  // Un 0 bajo RLS solo prueba algo junto a su gemela: el paciente del paso 2, misma sesión,
+  // mismo camino, da 1 y 1.
+  async function contarIdentificacion(pacienteId: string): Promise<number> {
+    const { data, error } = await supabase.rpc('leer_identificacion', { p_paciente_id: pacienteId });
+    assert(!error && Array.isArray(data), `leer_identificacion: ${error?.message}`);
+    return data.length;
+  }
+  async function contarSaludBasica(pacienteId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('pacientes_salud_basica')
+      .select('paciente_id', { count: 'exact', head: true })
+      .eq('paciente_id', pacienteId);
+    assert(!error, `contar pacientes_salud_basica: ${error?.message}`);
+    return count ?? 0;
+  }
+  const identificacionCompleto = await contarIdentificacion(idPaciente);
+  const saludCompleto = await contarSaludBasica(idPaciente);
+  assert(
+    identificacionCompleto === 1 && saludCompleto === 1,
+    `GEMELA: el paciente del paso 2 debía dar 1 y 1 y da ${identificacionCompleto} de identificación y ${saludCompleto} de salud básica`,
+  );
+  const identificacionMinimo = await contarIdentificacion(idMinimo);
+  const saludMinimo = await contarSaludBasica(idMinimo);
+  assert(
+    identificacionMinimo === 0,
+    `el alta mínima dejó ${identificacionMinimo} fila(s) en pacientes_identificacion`,
+  );
+  assert(saludMinimo === 0, `el alta mínima dejó ${saludMinimo} fila(s) en pacientes_salud_basica`);
+  console.log(
+    `✓ 5 · alta mínima ${idMinimo}: 0 filas en pacientes_identificacion y 0 en pacientes_salud_basica (gemela: el paciente del paso 2, 1 y 1)`,
+  );
 
   console.log('\n✓ t032-alta: completo. La transacción de alta_paciente() es de verdad.');
 }
