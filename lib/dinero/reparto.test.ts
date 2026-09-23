@@ -74,4 +74,9 @@ describe('pendiente', () => {
       excedente: 0,
     });
   });
+
+  it('rechaza un total o un cobrado que no sea entero: igual que repartir()', () => {
+    expect(() => pendiente(10000, 4000.5)).toThrow(/entero/);
+    expect(() => pendiente(10000.5, 4000)).toThrow(/entero/);
+  });
 });

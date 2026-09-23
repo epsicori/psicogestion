@@ -26,6 +26,9 @@ const FORMATEADOR_EUR = new Intl.NumberFormat('es-ES', {
 
 /** `1250` → `'12,50 €'`. Formato español vía `Intl`, no un `replace` a mano. */
 export function formatearImporte(centimos: Centimos): string {
+  if (!Number.isInteger(centimos)) {
+    throw new Error(`El importe ha de ser un entero en céntimos: '${centimos}'.`);
+  }
   return FORMATEADOR_EUR.format(centimos / 100);
 }
 

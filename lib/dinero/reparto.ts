@@ -47,6 +47,12 @@ export interface ResultadoPendiente {
  * (T-023) tiene que poder mostrar.
  */
 export function pendiente(total: Centimos, cobrado: Centimos): ResultadoPendiente {
+  if (!Number.isInteger(total)) {
+    throw new Error(`El total ha de ser un entero en céntimos: '${total}'.`);
+  }
+  if (!Number.isInteger(cobrado)) {
+    throw new Error(`Lo cobrado ha de ser un entero en céntimos: '${cobrado}'.`);
+  }
   const diferencia = total - cobrado;
   if (diferencia > 0) {
     return { estado: 'pendiente', pendiente: diferencia, excedente: 0 };

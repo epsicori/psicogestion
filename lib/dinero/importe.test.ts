@@ -67,6 +67,10 @@ describe('formatearImporte', () => {
     expect(normal(formatearImporte(aCentimos('12,50')))).toBe('12,50 €');
     expect(normal(formatearImporte(aCentimos('1.234.567,89')))).toBe('1.234.567,89 €');
   });
+
+  it('rechaza céntimos no enteros, igual que repartir(): el dinero vive en céntimos', () => {
+    expect(() => formatearImporte(4000.5)).toThrow(/entero/);
+  });
 });
 
 describe('redondearCentimos', () => {
