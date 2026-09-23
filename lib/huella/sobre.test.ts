@@ -33,6 +33,7 @@ function entradaBase(sobrescribe: Partial<EntradaFirma> = {}): EntradaFirma {
 function sobreBase(sobrescribe: Partial<Sobre> = {}): Sobre {
   return esquemaSobre.parse({
     abierta_en: '2026-08-29T09:12:03.123Z',
+    alcance: 'individual',
     anotaciones_reservadas: null,
     autor_id: AUTOR,
     cita_id: null,
@@ -48,11 +49,12 @@ function sobreBase(sobrescribe: Partial<Sobre> = {}): Sobre {
 }
 
 describe('construirSobre', () => {
-  it('produce exactamente las once claves del sobre', () => {
+  it('produce exactamente las doce claves del sobre', () => {
     const sobre = construirSobre(entradaBase());
     expect(Object.keys(sobre).sort()).toEqual(
       [
         'abierta_en',
+        'alcance',
         'anotaciones_reservadas',
         'autor_id',
         'cita_id',
@@ -67,10 +69,10 @@ describe('construirSobre', () => {
     );
   });
 
-  it('esquema_version es 2 y algoritmo_version (constante) es 1', () => {
+  it('esquema_version es 3 y algoritmo_version (constante) es 1', () => {
     const sobre = construirSobre(entradaBase());
-    expect(sobre.esquema_version).toBe(2);
-    expect(ESQUEMA_VERSION).toBe(2);
+    expect(sobre.esquema_version).toBe(3);
+    expect(ESQUEMA_VERSION).toBe(3);
     expect(ALGORITMO_VERSION).toBe(1);
   });
 
@@ -123,6 +125,11 @@ describe('construirSobre', () => {
     expect(() => esquemaSobre.parse({ ...sobreBase(), cuerpo: [] })).toThrow();
     expect(() => esquemaSobre.parse({ ...sobreBase(), cuerpo: 'texto' })).toThrow();
   });
+
+  it('el alcance del sobre es el de la entrada, no un valor fijo (ADR-057)', () => {
+    expect(construirSobre(entradaBase({ alcance: 'conjunta' })).alcance).toBe('conjunta');
+    expect(construirSobre(entradaBase({ alcance: 'individual' })).alcance).toBe('individual');
+  });
 });
 
 describe('canonizarSobre · sensibilidad de la huella a cada campo del sobre', () => {
@@ -141,6 +148,12 @@ describe('canonizarSobre · sensibilidad de la huella a cada campo del sobre', (
   it('cambiar autor_id cambia el canónico', () => {
     const a = canonizarSobre(sobreBase({ autor_id: AUTOR }));
     const b = canonizarSobre(sobreBase({ autor_id: OTRO_AUTOR }));
+    expect(a).not.toBe(b);
+  });
+
+  it('cambiar alcance de individual a conjunta cambia el canónico (ADR-057)', () => {
+    const a = canonizarSobre(sobreBase({ alcance: 'individual' }));
+    const b = canonizarSobre(sobreBase({ alcance: 'conjunta' }));
     expect(a).not.toBe(b);
   });
 
@@ -167,6 +180,7 @@ describe('canonizarSobre · sensibilidad de la huella a cada campo del sobre', (
       cita_id: sobre.cita_id,
       autor_id: sobre.autor_id,
       anotaciones_reservadas: sobre.anotaciones_reservadas,
+      alcance: sobre.alcance,
       abierta_en: sobre.abierta_en,
     };
     expect(canonizarSobre(sobre)).toBe(canonizarSobre(reordenado));

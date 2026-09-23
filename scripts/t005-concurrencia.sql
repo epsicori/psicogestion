@@ -58,22 +58,26 @@ create table public.t005_resultado (
 
 -- Función NO temporal (a diferencia de pg_temp.sobre_prueba del banco de RLS): la
 -- necesitan DOS conexiones distintas, que no comparten pg_temp. Se borra al final.
+-- T-012a: p_alcance nuevo, con default 'individual' porque es el valor por defecto de
+-- la columna homónima (ADR-057) y todas las filas de esta prueba son individuales.
 create or replace function public.t005_sobre_prueba(
   p_autor_id  uuid,
   p_creada_en timestamptz,
-  p_cuerpo    jsonb
+  p_cuerpo    jsonb,
+  p_alcance   text default 'individual'
 ) returns text
 language sql
 as $$
   select
     '{' ||
     '"abierta_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"alcance":' || coalesce(to_json(p_alcance)::text, 'null') || ',' ||
     '"anotaciones_reservadas":null,' ||
     '"autor_id":"' || lower(p_autor_id::text) || '",' ||
     '"cita_id":null,' ||
     '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"cuerpo":' || p_cuerpo::text || ',' ||
-    '"esquema_version":2,' ||
+    '"esquema_version":3,' ||
     '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"margen_sesion_minutos":null,' ||
     '"motivo_cambio":null,' ||
@@ -177,7 +181,7 @@ begin
 end;
 $$;
 
-drop function public.t005_sobre_prueba(uuid, timestamptz, jsonb);
+drop function public.t005_sobre_prueba(uuid, timestamptz, jsonb, text);
 drop table public.t005_resultado;
 
 \echo '=== T-005 · Concurrencia: completa ==='
