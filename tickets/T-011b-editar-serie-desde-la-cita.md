@@ -11,6 +11,7 @@ territorio:
   - supabase/migrations/*_editar_serie_desde_la_cita.sql
   - lib/supabase/tipos-bd.ts
   - scripts/rls/16-series.sql
+  - scripts/rls/17-vinculo-agenda.sql
   - scripts/rls/README.md
   - lib/citas/esquemas.ts
   - lib/citas/esquemas.test.ts
@@ -49,6 +50,16 @@ El **ADR-068** (24-09-2026) cierra las tres preguntas de la primera versión del
    **antes de confirmar**, desde la base. «Mantener la serie» es mover solo esa cita con `esta`,
    que ya existe.
 
+El **ADR-069** (24-09-2026) cierra los dos hallazgos que dejó la enmienda anterior:
+
+1. **Ordinal fijo, también al crear.** `ocurrencias_serie` recalculaba el ordinal desde la fecha
+   anterior: una serie del 5.º jueves, tras un mes sin quinto, se quedaba para siempre en el 4.º.
+   Se corrige para que crear y editar den las mismas fechas: el mismo ordinal cada mes, recortado
+   al último solo el mes que no lo tiene. Las series ya creadas no se corrigen en silencio: se
+   buscan con una consulta y, si hay alguna, se corrigen con una edición normal y sus propuestas.
+2. **Se retira el `INSERT` directo** de `authenticated` sobre `series_cita`. Las series solo
+   nacen por `agenda_crear_serie`, que ya es lo único que usa la aplicación.
+
 Condiciones que no cambian:
 
 - Se mantienen las propuestas del ADR-034: nada se mueve sin confirmarlo.
@@ -65,10 +76,16 @@ El diseño completo está en `tickets/T-011b/diseno.md`. **Léelo antes de tocar
 
 - [ ] **Migración nueva** `supabase/migrations/<sello>_editar_serie_desde_la_cita.sql`, con el
       sello posterior a la última migración de `main` en el momento de fusionar:
-  - [ ] `revoke update on table public.series_cita from authenticated`. La política
-        `series_cita_modificacion` se conserva, dormida y comentada (diseño §1.0).
+  - [ ] `revoke insert, update on table public.series_cita from authenticated`. Las políticas
+        `series_cita_alta` y `series_cita_modificacion` se conservan, dormidas y comentadas
+        (diseño §1.0).
+  - [ ] Función pura nueva `public.enesimo_dia_del_mes(date, smallint, smallint)`, la única
+        copia de la fórmula «n-ésimo día de la semana del mes, o el último» (§1.1a).
   - [ ] Función pura nueva `public.fecha_en_regla_nueva(…)`, que da la fecha nueva de una cita
         (diseño §1.1).
+  - [ ] `create or replace` de `ocurrencias_serie`, **con la misma firma**: ordinal mensual fijo,
+        tomado de la primera ocurrencia, y ramas semanal y quincenal intactas (§1.11). La
+        migración no toca ninguna cita.
   - [ ] Función nueva `public.calcular_propuesta_de_evento(…)`. Es la única fuente del cálculo de
         una propuesta, al crearla y al confirmarla (§1.2).
   - [ ] Ayudantes internos nuevos, sin `EXECUTE` para nadie: `public.citas_afectadas_por_regla(…)`,
@@ -91,6 +108,11 @@ El diseño completo está en `tickets/T-011b/diseno.md`. **Léelo antes de tocar
       edita a mano.
 - [ ] **Banco**: sección M nueva al final de `scripts/rls/16-series.sql`, según §3 del diseño.
       Las secciones G y L.2 no se tocan y siguen en verde.
+- [ ] En `scripts/rls/17-vinculo-agenda.sql` §A, la negativa de la **serie** pasa a
+      `assert_lanza_codigo_msg` con `permission denied for table series_cita`, y su comentario
+      explica que el vínculo en las series lo prueba §B. Nada más de ese módulo (§1.0, D18).
+- [ ] Ejecutar la consulta de detección de §1.11 tras `db reset` y `npm run seed`, y pegar la
+      salida en la evidencia.
 - [ ] **TypeScript**:
   - [ ] `esquemaEditarSerie` gana `fecha` (AAAA-MM-DD y fecha de calendario real). Está prohibida
         con `esta`, y debe coincidir con `diaSemana` si vienen las dos.
@@ -106,7 +128,8 @@ El diseño completo está en `tickets/T-011b/diseno.md`. **Léelo antes de tocar
    `db reset`), `npm run test:rls` sale con código distinto de cero. La primera aserción fallida
    es la de M.1 (H8): `ASERCIÓN FALLIDA: M.1 · …`. Se pega esa salida en la evidencia.
 3. Con la migración aplicada, `npm run test:rls` pasa con exit 0, con todas las secciones
-   anteriores de `16-series.sql` (en particular G y L.2) y los módulos 00-17 intactos.
+   anteriores de `16-series.sql` (en particular G y L.2) y los módulos 00-17 en verde. El 17
+   solo cambia en la aserción reapuntada del criterio 18.
 4. **H8, el alcance parte de la cita elegida** (M.1). En una serie semanal de seis citas futuras,
    editar desde la tercera deja en `citas_afectadas` exactamente las citas 3 a 6, en orden de
    inicio. Las citas 1 y 2 no reciben propuesta y la carga lleva `desde_cita_id` = la tercera.
@@ -127,10 +150,10 @@ El diseño completo está en `tickets/T-011b/diseno.md`. **Léelo antes de tocar
      domingo normal no queda desviada.
    - (c) La del domingo de octubre es la **primera** 02:30 (una hora después, el reloj local
      vuelve a leer 02:30) y, confirmada, queda `anomalia_horaria`.
-Todas las negativas de guarda de los criterios 8 a 11 y 16 usan
+Todas las negativas de guarda de los criterios 8 a 11, 16 y 18 usan
 `pg_temp.assert_lanza_codigo_msg` con el fragmento de mensaje de la tabla del diseño §3. Las
 guardas dan `22023`, así que el código solo no dice qué guarda mordió. Las de permisos (criterios
-11 y 16) dan `42501`, también con su fragmento.
+11, 16 y 18) dan `42501`, también con su fragmento.
 
 8. **Citas desviadas, pasadas y en curso** (M.7):
    - (a) `agenda_editar_serie(…, 'esta_y_siguientes', …)` sobre una cita pasada, en curso,
@@ -157,8 +180,8 @@ guardas dan `22023`, así que el código solo no dice qué guarda mordió. Las d
       `42501` con el fragmento `permission denied for table series_cita`. La fila no cambia y no
       se crea evento. La gemela: `agenda_editar_serie(…, 'esta_y_siguientes', p_dia_semana => …)`,
       como el mismo profesional, sigue creando el evento y las propuestas.
-      `has_table_privilege('authenticated', 'public.series_cita', 'update')` es falso; `select` e
-      `insert` siguen concedidos.
+      `has_table_privilege('authenticated', 'public.series_cita', …)` es falso para `update` y
+      para `insert`, y verdadero para `select`.
     - (b) Un `UPDATE` directo **como `postgres`** (el dueño de la tabla) crea un evento con todas
       las futuras no desviadas y `fecha_origen` nulo. `agenda_propuestas_de_evento()` propone
       para cada una el día nuevo de **su** semana ISO.
@@ -195,6 +218,21 @@ guardas dan `22023`, así que el código solo no dice qué guarda mordió. Las d
     - (e) Sin cambio de regla ni de fecha, `cambia = false` y ninguna cita.
     - (f) Un profesional ajeno recibe `42501`; una ancla desviada, o una fecha y un día que no
       coinciden, `22023` con el fragmento de su guarda.
+17. **Ordinal fijo al crear** (M.14). `m5` es el mes de M.13 con cinco jueves, y `m5b` el
+    siguiente mes con cinco jueves.
+    - (a) `ocurrencias_serie('mensual', 4, <5.º jueves de m5>, n, null)`, con `n` meses de `m5` a
+      `m5b`, da el último jueves de cada mes, y en `m5b` el **5.º** jueves, no el 4.º. Sin la
+      migración falla aquí.
+    - (b) `agenda_crear_serie` con los mismos datos materializa citas exactamente en esas fechas.
+    - (c) Crear es igual que editar: las fechas propuestas de M.13d son las de
+      `ocurrencias_serie` desde el 5.º jueves de `m5`.
+    - (d) La consulta de detección de §1.11 del diseño da 0 filas en la base sembrada. La salida
+      va en la evidencia.
+18. **El `INSERT` directo ya no entra** (M.15):
+    - (a) Como profesional, insertar a mano una serie válida para **su** paciente da `42501`
+      con `permission denied for table series_cita`, y la fila no existe. La gemela: la misma
+      serie por `agenda_crear_serie` entra y materializa sus citas.
+    - (b) `17-vinculo-agenda.sql` §A pasa con la aserción reapuntada, y §B sigue sin cambios.
 
 # Fuera de alcance
 
@@ -205,8 +243,9 @@ guardas dan `22023`, así que el código solo no dice qué guarda mordió. Las d
 - Un consumidor del outbox para los eventos creados fuera de `agenda_editar_serie` (T-015).
 - El diálogo «mantener o modificar la serie», la frase en castellano que describe la regla y el
   envoltorio TS de la previsualización: T-014.
-- Corregir la deriva del ordinal de `ocurrencias_serie` tras un recorte, y retirar el `insert`
-  directo sobre `series_cita` (hallazgos 5 y 6 del diseño).
+- Mover en la migración las series mensuales del 5.º ya creadas. Hoy no hay ninguna; si aparece
+  alguna, se corrige con una edición normal (diseño D17).
+- Borrar las políticas dormidas de `series_cita` o tocar `11-cobertura.sql`.
 - Recalcular `fin_el` o `sesiones_totales` de la serie tras desplazarla.
 - Las transiciones de estado del ADR-045 y los mensajes de `lib/citas/errores.ts`.
 
