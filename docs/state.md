@@ -19,12 +19,13 @@
   ficha, candado en la guarda de `solo_contacto`. En verde: test 581/581, rls 428 OK (base vacía y
   sembrada), build, lint y `territorio.mjs`. Falta: reverificar, dos revisores de cierre y merge.
   Detalle en `docs/bitacora/T-032.md`.
-- **T-031** · Dinero. Por decisión del propietario (23-09) `lib/dinero/**` pasa a la fábrica; lo de
-  Kimi (`170afbf`) es punto de partida. Revisión: altas H1 (`'1.23,50'` se acepta como 123,50 €) y
-  H2 (gobierno, resuelta con la decisión); medias H3 y H4.
-- **T-030** · Rejilla de la semana (rama `T-030-rejilla-semana`, carril de Kimi). La corrige la
-  fábrica por esta vez (decisión del 23-09): falta la prueba del domingo de 25 h de octubre (ALTA) y
-  `formatearFechaSinZona` no valida el día del calendario.
+- **T-031** · Dinero (worktree `t031`, `29e4c36`). Tercera vuelta de la fábrica sobre la 2.ª
+  revisión: H6-H11 cerrados (millares con cero inicial, céntimos seguros en todo el módulo,
+  redondeo **media lejos del cero** para que cargo + devolución = 0, sin `-0`). 42/42, cobertura
+  100 % líneas. Falta: verificador y revisor sobre `29e4c36`; el sello actual es anterior.
+- **T-030** · Rejilla (worktree `t030`, rama `T-030-rejilla-semana-fabrica`, `cd9cdbc`). Ronda 3
+  sin ALTA ni MEDIA; la fábrica cerró las BAJA H8 (semana o zona inválidas lanzan) y H9 (informe).
+  Falta: verificador y revisor sobre `cd9cdbc`; el sello actual es anterior.
 - T-002, T-006, T-013: solo les quedan los guiones de navegador (abajo).
 
 ## Bloqueos y decisiones que no toma un agente
@@ -57,8 +58,9 @@
 ## Siguiente paso
 
 1. T-032 · verificador y dos revisores sobre la segunda vuelta; merge.
-2. T-031 y T-030 · correcciones por la fábrica, nueva revisión, verificación.
-3. T-012 · nota clínica con firma, ya desbloqueada por T-012a.
+2. T-031 y T-030 · verificador y revisor sobre la última vuelta; merge.
+3. T-012 · corte A del diseño (§8): falta su contrato con `territorio:` (propietario/arquitecto)
+   y decidir si `verificar_cadena_huellas()` coteja `alcance`.
 4. Los guiones de navegador, de una sentada. `db reset` **no relee `config.toml`**.
 
 ## Verificación manual pendiente
