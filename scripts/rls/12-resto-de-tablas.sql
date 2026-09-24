@@ -272,10 +272,14 @@ call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
 -- tablas_solo_adicion: catálogo de solo lectura, abierto a cualquier autenticado.
+-- Se compara con lo que ve el dueño, no con un número fijo: cada tabla de solo adición
+-- nueva añade una fila (ADR-063 añadió la quinta).
 -- ---------------------------------------------------------------------------------------
+select count(*) as n_solo_adicion from public.tablas_solo_adicion \gset
 call pg_temp.como(:TEC1);
-select pg_temp.assert(pg_temp.contar('select * from public.tablas_solo_adicion') = 4,
-  'TEC1 lee el catálogo de las cuatro tablas de solo adición: tablas_solo_adicion_lectura');
+select pg_temp.assert(:n_solo_adicion > 0
+    and pg_temp.contar('select * from public.tablas_solo_adicion') = :n_solo_adicion,
+  'TEC1 lee el catálogo entero de tablas de solo adición: tablas_solo_adicion_lectura');
 call pg_temp.reset_sesion();
 
 \echo '12-resto-de-tablas: completa.'

@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -71,5 +73,36 @@ describe('PanelDiferido dentro de la ficha', () => {
     );
     expect(screen.queryByText(/detalle interno/)).not.toBeInTheDocument();
     consola.mockRestore();
+  });
+});
+
+// H4 de la segunda revisión: lo de arriba prueba `PanelDiferido` aislado, pero no que la
+// página lo use. Si alguien devuelve `page.tsx` a `datos={<Suspense><PanelDatos …/>…}` —por
+// ejemplo, al resolver un conflicto—, vuelven el rastro en cada visita y el DNI en el
+// payload, y ningún test lo notaría. La página es un Server Component con sesión y
+// Supabase: se comprueba su fuente, que es lo que se rompería.
+describe('page.tsx cablea la pestaña «Datos» por PanelDiferido', () => {
+  // Desde la raíz del repo, donde corre vitest: en jsdom `import.meta.url` no es `file:`.
+  // Sin los comentarios de línea: la página explica en uno por qué no pinta `<PanelDatos/>`.
+  const fuente = readFileSync(resolve('app/(app)/pacientes/[id]/page.tsx'), 'utf8').replace(
+    /^\s*\/\/.*$/gm,
+    '',
+  );
+
+  it('pasa PanelDiferido con la Server Function como `datos`', () => {
+    expect(fuente).toMatch(/datos=\{<PanelDiferido cargar=\{cargarPanelDatos\} \/>\}/);
+  });
+
+  it('solo pinta <PanelDatos> dentro de la Server Function, nunca en el árbol de la página', () => {
+    const usos = [...fuente.matchAll(/<PanelDatos\b/g)].map((m) => m.index);
+    const inicio = fuente.indexOf('async function cargarPanelDatos()');
+    const directiva = fuente.indexOf("'use server'", inicio);
+    const fin = fuente.indexOf('datos={', inicio);
+
+    expect(usos).toHaveLength(1);
+    expect(inicio).toBeGreaterThan(-1);
+    expect(directiva).toBeGreaterThan(inicio);
+    expect(usos[0]).toBeGreaterThan(directiva);
+    expect(usos[0]).toBeLessThan(fin);
   });
 });

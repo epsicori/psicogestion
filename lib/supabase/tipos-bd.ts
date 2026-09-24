@@ -1572,46 +1572,49 @@ export type Database = {
       }
       pacientes_salud_basica: {
         Row: {
-          actualizado_en: string
-          actualizado_por: string
           alergias: string | null
+          id: string
           medicacion_actual: string | null
           paciente_id: string
+          registrado_en: string
+          registrado_por: string
         }
         Insert: {
-          actualizado_en?: string
-          actualizado_por: string
           alergias?: string | null
+          id?: string
           medicacion_actual?: string | null
           paciente_id: string
+          registrado_en?: string
+          registrado_por: string
         }
         Update: {
-          actualizado_en?: string
-          actualizado_por?: string
           alergias?: string | null
+          id?: string
           medicacion_actual?: string | null
           paciente_id?: string
+          registrado_en?: string
+          registrado_por?: string
         }
         Relationships: [
           {
-            foreignKeyName: "pacientes_salud_basica_actualizado_por_fkey"
-            columns: ["actualizado_por"]
+            foreignKeyName: "pacientes_salud_basica_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_salud_basica_registrado_por_fkey"
+            columns: ["registrado_por"]
             isOneToOne: false
             referencedRelation: "directorio_perfiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pacientes_salud_basica_actualizado_por_fkey"
-            columns: ["actualizado_por"]
+            foreignKeyName: "pacientes_salud_basica_registrado_por_fkey"
+            columns: ["registrado_por"]
             isOneToOne: false
             referencedRelation: "perfiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pacientes_salud_basica_paciente_id_fkey"
-            columns: ["paciente_id"]
-            isOneToOne: true
-            referencedRelation: "pacientes"
             referencedColumns: ["id"]
           },
         ]

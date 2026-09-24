@@ -3,7 +3,7 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño (ADR, trampas, circuito)
 > en tickets y bitácora; las reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 23-09-2026 · `main` con T-012a integrado · tickets: 18 hechos · 6 en curso
+**Actualizado**: 24-09-2026 · `main` con T-012a integrado · tickets: 18 hechos · 6 en curso
 
 ## Dónde estamos
 
@@ -14,13 +14,11 @@
 ## En curso
 
 - **T-032** · Alta de paciente completa (riesgo alto), en el worktree `agent-a2fbeaf1f1cdd100e`.
-  Verificado (23-09): 18 PASA, **15 FALLA** (no existe la prueba de componente del estado
-  `no-legible`), 17 NO_VERIFICABLE (navegador). Revisiones en `tickets/T-032/revision-{sql,ts}.md`:
-  1 ALTA (la bitácora cita pruebas que no existen) y medias por corregir antes del merge, entre
-  ellas: `PanelDatos` se pinta en servidor en toda visita (audita y manda el DNI descifrado sin abrir
-  la pestaña), autoría falsificable en `pacientes_salud_basica`, `clave_version` sin check, el alta
-  mínima depende de Vault, `solo_contacto` se cuela cambiando `alcance`, la fila sembrada de Carmen
-  no se puede descifrar.
+  Segunda vuelta de correcciones hecha (24-09). Alergias y medicación son de solo adición y solo del
+  profesional asignado (**ADR-063**, decisión del propietario). Pruebas de unión y de cableado de la
+  ficha, candado en la guarda de `solo_contacto`. En verde: test 581/581, rls 428 OK (base vacía y
+  sembrada), build, lint y `territorio.mjs`. Falta: reverificar, dos revisores de cierre y merge.
+  Detalle en `docs/bitacora/T-032.md`.
 - **T-031** · Dinero. Por decisión del propietario (23-09) `lib/dinero/**` pasa a la fábrica; lo de
   Kimi (`170afbf`) es punto de partida. Revisión: altas H1 (`'1.23,50'` se acepta como 123,50 €) y
   H2 (gobierno, resuelta con la decisión); medias H3 y H4.
@@ -31,9 +29,6 @@
 
 ## Bloqueos y decisiones que no toma un agente
 
-- **T-032**: `app/(app)/pacientes/acciones.test.ts` está fuera de `territorio:`; alergias y
-  medicación visibles para el administrador en todos los pacientes (no hay fila en la matriz); el
-  criterio 6 reformulado (el `update` da cero filas, no 42501).
 - **Cada cuánto caduca una valoración de riesgo**: `MESES_VALORACION_VIGENTE = 6` es un marcador.
 - **`verificar_cadena_huellas()` no coteja `alcance`** de la fila contra el del sobre: decidirlo
   antes de la primera firma real (T-012).
@@ -55,12 +50,13 @@
   `git show`, no con `git archive`, o su hash deja de coincidir.
 - `merge-gate` busca el id de ticket en el texto de la orden: una rama `worktree-agent-*` no lo
   lleva; nómbralo en el `-m`.
-- `territorio.mjs` da EISDIR o salida según el directorio desde el que se ejecute.
+- `territorio.mjs` lee el contrato **de la rama**: tras ampliar `territorio:` en `main`, tráelo con
+  `git checkout main -- tickets/T-XXX-….md` (el merge-gate bloquea `git merge main`).
 - `implementador` fuerza worktree propio · `build | tail` da el estado de `tail` · rutas con espacio.
 
 ## Siguiente paso
 
-1. T-032 · ronda de correcciones (ALTA, criterio 15 y medias), reverificar y revisor de cierre.
+1. T-032 · verificador y dos revisores sobre la segunda vuelta; merge.
 2. T-031 y T-030 · correcciones por la fábrica, nueva revisión, verificación.
 3. T-012 · nota clínica con firma, ya desbloqueada por T-012a.
 4. Los guiones de navegador, de una sentada. `db reset` **no relee `config.toml`**.
@@ -72,6 +68,8 @@
 
 ## Hallazgos anotados (abiertos)
 
+- `alta_paciente()` no fija `centro_id` (ADR-033, T-032): un técnico no ve a los pacientes creados
+  desde el formulario hasta que algo les asigne centro. Ticket propio.
 - `docs/architecture.md:62-64,91` sigue en el sobre de once claves y `esquema_version = 2`.
 - `modalidad_relacional` bajo el candado (choque 11); técnico sin `consentimientos` (choque 12).
 - El `Button` compartido mide 40 px contra 44 px.

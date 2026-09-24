@@ -3,10 +3,11 @@
 -- domicilio cifrados, alergias y medicación
 -- =========================================================================
 --
--- Diseño: tickets/T-032/diseno.md §1.2. Tres ADR nuevos: ADR-060 (el técnico
+-- Diseño: tickets/T-032/diseno.md §1.2. Cuatro ADR nuevos: ADR-060 (el técnico
 -- administrativo lee DNI y domicilio de sus centros, con rastro en
 -- `auditoria`), ADR-061 (`pacientes_salud_basica`, en claro, sin el
--- técnico), ADR-062 (un solo campo de sexo, administrativo).
+-- técnico), ADR-062 (un solo campo de sexo, administrativo) y ADR-063
+-- (`pacientes_salud_basica` de solo adición y solo del profesional asignado).
 --
 -- Última redefinición de `registrar_evento_auditable()` antes de esta
 -- migración: 20260829150000_auditoria_y_solo_adicion.sql:125-163 (T-004).
@@ -92,10 +93,15 @@ comment on table public.pacientes_identificacion is
 
 
 -- =========================================================================
--- §4 · `pacientes_salud_basica` (ADR-061)
+-- §4 · `pacientes_salud_basica` (ADR-061, ADR-063)
 -- =========================================================================
+-- De solo adición (ADR-063, regla 6 de la constitución): cada cambio de alergias o
+-- medicación es una fila nueva, y lo vigente es la última de su paciente. No hay
+-- `update`: sobrescribir «Penicilina» con «AINE» borraría para siempre lo que la ficha
+-- decía el día en que alguien recetó.
 create table public.pacientes_salud_basica (
-  paciente_id uuid primary key references public.pacientes (id),
+  id uuid primary key default gen_random_uuid(),
+  paciente_id uuid not null references public.pacientes (id),
   alergias text
     check (alergias is null or (length(trim(alergias)) > 0 and length(alergias) <= 2000)),
   medicacion_actual text
@@ -103,54 +109,45 @@ create table public.pacientes_salud_basica (
            or (length(trim(medicacion_actual)) > 0 and length(medicacion_actual) <= 2000)),
   constraint pacientes_salud_basica_fila_no_vacia
     check (num_nonnulls(alergias, medicacion_actual) >= 1),
-  actualizado_en timestamptz not null default now(),
-  actualizado_por uuid not null references public.perfiles (id)
+  registrado_en timestamptz not null default now(),
+  registrado_por uuid not null references public.perfiles (id)
 );
+
+create index pacientes_salud_basica_vigente
+  on public.pacientes_salud_basica (paciente_id, registrado_en desc);
 
 comment on table public.pacientes_salud_basica is
   'Alergias y medicación actual, texto libre, SIN CIFRAR y fuera del candado del ADR-026 '
   '(ADR-061): es dato que puede hacer falta deprisa, y cifrar una frase clínica mientras '
-  'la nota clínica sigue en claro sería una falsa sensación de protección. Sin fila '
-  'vacía: si nadie ha preguntado, no hay fila (distinto de «sin alergias conocidas», que '
-  'no se modela aquí). Mutable, sin historial: versionar es otro ADR. CERO políticas '
-  'para el técnico administrativo, condición de la aprobación del propietario '
-  '(16-09-2026), no una preferencia del diseño.';
+  'la nota clínica sigue en claro sería una falsa sensación de protección. De SOLO '
+  'ADICIÓN (ADR-063): cada cambio es una fila nueva y lo vigente es la última de su '
+  'paciente por registrado_en. Sin fila vacía: si nadie ha preguntado, no hay fila '
+  '(distinto de «sin alergias conocidas», que no se modela aquí). La ve solo el '
+  'profesional asignado, administrador incluido (ADR-063). CERO políticas para el '
+  'técnico administrativo, condición de la aprobación del propietario (16-09-2026), no '
+  'una preferencia del diseño.';
 
 alter table public.pacientes_salud_basica enable row level security;
 
+-- Capa 1 de solo adición: ni `update` ni `delete` para nadie, `postgres` incluido.
 revoke all on table public.pacientes_salud_basica from public, anon, authenticated, service_role;
-grant select, insert, update on table public.pacientes_salud_basica to authenticated;
+revoke update, delete on table public.pacientes_salud_basica from postgres;
+grant select, insert on table public.pacientes_salud_basica to authenticated;
 
+-- Sin rama de administrador (ADR-063): alergias y medicación siguen la fila «Motivo de
+-- consulta y diagnósticos» de la matriz —el administrador, solo los suyos—, y de los suyos
+-- ya es el profesional asignado.
 create policy pacientes_salud_basica_lectura on public.pacientes_salud_basica
   for select to authenticated
-  using (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-  );
+  using (public.es_profesional_asignado(paciente_id));
 
 create policy pacientes_salud_basica_alta on public.pacientes_salud_basica
   for insert to authenticated
-  with check (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-  );
+  with check (public.es_profesional_asignado(paciente_id));
 
-create policy pacientes_salud_basica_modificacion on public.pacientes_salud_basica
-  for update to authenticated
-  using (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-  )
-  with check (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-  );
-
--- La autoría la fija la base, no quien escribe (M1 de la revisión): `actualizado_por` y
--- `actualizado_en` se sobrescriben con la sesión y el reloj del servidor en cada
--- escritura, y `paciente_id` no cambia nunca (mover unas alergias a otro paciente es
--- escribirle a ese otro un dato clínico ajeno). Sin sesión de usuario —`postgres` o
--- `service_role` sembrando— se respeta el `actualizado_por` recibido, que la columna
+-- La autoría la fija la base, no quien escribe (M1 de la revisión): `registrado_por` y
+-- `registrado_en` se sobrescriben con la sesión y el reloj del servidor. Sin sesión de
+-- usuario —`postgres` sembrando— se respeta el `registrado_por` recibido, que la columna
 -- sigue exigiendo NOT NULL y con FK a perfiles.
 create function public.fn_salud_basica_autoria()
 returns trigger
@@ -160,35 +157,49 @@ as $$
 declare
   v_usuario uuid := (select auth.uid());
 begin
-  if tg_op = 'UPDATE' and new.paciente_id is distinct from old.paciente_id then
-    raise exception
-      'pacientes_salud_basica.paciente_id no se puede cambiar: la fila es de su paciente.'
-      using errcode = '42501';
-  end if;
-  new.actualizado_en := now();
+  -- `clock_timestamp()` y no `now()`: dos filas del mismo paciente en una transacción
+  -- tendrían la misma hora, y «lo vigente es la última» dejaría de estar definido.
+  new.registrado_en := clock_timestamp();
   if v_usuario is not null then
-    new.actualizado_por := v_usuario;
+    new.registrado_por := v_usuario;
   end if;
   return new;
 end;
 $$;
 
 comment on function public.fn_salud_basica_autoria() is
-  'Fija actualizado_por = auth.uid() y actualizado_en = now() en cada escritura de '
-  'pacientes_salud_basica, y rechaza con 42501 un cambio de paciente_id (T-032, M1).';
+  'Fija registrado_por = auth.uid() y registrado_en = clock_timestamp() en cada fila nueva de '
+  'pacientes_salud_basica (T-032, M1).';
 
 revoke execute on function public.fn_salud_basica_autoria() from public;
 
 create trigger salud_basica_autoria
-  before insert or update on public.pacientes_salud_basica
+  before insert on public.pacientes_salud_basica
   for each row execute function public.fn_salud_basica_autoria();
+
+-- Capas 2 y 3 de solo adición (T-004), con la función genérica de T-000.
+create trigger impedir_modificacion_pacientes_salud_basica
+  before update or delete on public.pacientes_salud_basica
+  for each row
+  execute function public.fn_impedir_modificacion();
+
+create trigger impedir_truncado_pacientes_salud_basica
+  before truncate on public.pacientes_salud_basica
+  for each statement
+  execute function public.fn_impedir_modificacion();
+
+-- La fila del catálogo es lo que hace que `cobertura_solo_adicion()` y el banco
+-- (`10-solo-adicion.sql`) la recorran.
+insert into public.tablas_solo_adicion (tabla, motivo) values
+  ('pacientes_salud_basica',
+   'Alergias y medicación: lo que la ficha decía en cada fecha no se reescribe (ADR-063).');
 
 -- Auditoría explícita: el bucle de instalación masiva de 2026-08-29 no vuelve a correr
 -- para tablas nuevas. Se recortan las dos columnas de contenido: se audita QUE alguien
--- tocó la alergia y CUÁNDO, no QUÉ dice (mismo criterio que notas_clinicas.borrador_contenido).
+-- escribió la alergia y CUÁNDO, no QUÉ dice (mismo criterio que notas_clinicas.borrador_contenido).
 create trigger auditar_pacientes_salud_basica
-  after insert or update or delete on public.pacientes_salud_basica
-  for each row execute function public.fn_auditar('paciente_id', 'alergias', 'medicacion_actual');
+  after insert on public.pacientes_salud_basica
+  for each row execute function public.fn_auditar('id', 'alergias', 'medicacion_actual');
 
 
 -- =========================================================================
@@ -300,7 +311,7 @@ begin
 
   if p_alergias is not null or p_medicacion_actual is not null then
     insert into public.pacientes_salud_basica
-      (paciente_id, alergias, medicacion_actual, actualizado_por)
+      (paciente_id, alergias, medicacion_actual, registrado_por)
     values (v_id, p_alergias, p_medicacion_actual, (select auth.uid()));
   end if;
 
@@ -517,6 +528,16 @@ security definer          -- a propósito: consulta representantes_paciente, que
 set search_path = ''
 as $$
 begin
+  -- Cerrojo antes de mirar (H3 de la segunda revisión): sin él, este `exists` y el de la
+  -- gemela de abajo se cruzan en READ COMMITTED —el firmante entra mientras otra
+  -- transacción baja al representante a solo_contacto, y ninguna ve a la otra—. Con la
+  -- fila bloqueada `for share`, el `update of alcance` espera, y al seguir ve al firmante;
+  -- o este insert espera al update y relee `solo_contacto`.
+  if new.representante_id is not null then
+    perform 1 from public.representantes_paciente
+      where id = new.representante_id
+      for share;
+  end if;
   if new.representante_id is not null and exists (
     select 1 from public.representantes_paciente r
     where r.id = new.representante_id
@@ -544,7 +565,9 @@ create trigger firmante_no_es_solo_contacto
 -- La gemela del disparador de arriba (M4 de la revisión): sin ella, bastaba con dar de alta
 -- al representante como `custodia`, recoger su firma y bajarlo después a `solo_contacto`
 -- para tener un contacto de emergencia firmando. Si el representante ya firma algún
--- consentimiento, no puede pasar a `solo_contacto`: primero se le retira la firma.
+-- consentimiento, no puede pasar a `solo_contacto`. El camino es cerrar su representación
+-- (`vigente_hasta`) y dar de alta una fila nueva de `solo_contacto`; nunca reescribir
+-- `consentimiento_firmantes`, que haría decir al consentimiento que lo firmó otro.
 create function public.fn_solo_contacto_sin_firmas()
 returns trigger
 language plpgsql

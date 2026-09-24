@@ -387,10 +387,13 @@ export const cargarIdentificacion = cache(
 export type SaludBasicaDeVista = { alergias: string | null; medicacionActual: string | null };
 
 /**
- * Alergias y medicación actual. Decide **por rol antes de consultar** (administrador o
- * profesional sanitario), igual que `cargarRepresentantes`: el técnico administrativo no
- * entra, y su `null` hace que el bloque de la ficha no se pinte en absoluto — ni en gris,
- * ni «no tienes permiso», que ya diría que hay algo detrás.
+ * Alergias y medicación vigentes: la última fila del paciente, porque la tabla es de solo
+ * adición (ADR-063). Las ve **solo el profesional asignado**, administrador incluido: el
+ * técnico administrativo no entra por rol, y a quien no es el asignado se le pregunta a la
+ * base con la misma función que usa la política. Sin esa pregunta, el cero de la RLS se
+ * pintaría como «sin alergias registradas» sobre un paciente que las tiene. Su `null` hace
+ * que el bloque de la ficha no se pinte en absoluto — ni en gris, ni «no tienes permiso»,
+ * que ya diría que hay algo detrás.
  */
 export const cargarSaludBasica = cache(
   async (id: string): Promise<SaludBasicaDeVista | null> => {
@@ -398,10 +401,22 @@ export const cargarSaludBasica = cache(
     const rol = await cargarRol();
     if (rol !== 'administrador' && rol !== 'profesional_sanitario') return null;
 
+    const { data: asignado, error: errorAsignado } = await supabase.rpc(
+      'es_profesional_asignado',
+      { p_paciente_id: id },
+    );
+    if (errorAsignado) {
+      console.error('cargarSaludBasica: fallo al comprobar la asignación', errorAsignado);
+      return null;
+    }
+    if (asignado !== true) return null;
+
     const { data, error } = await supabase
       .from('pacientes_salud_basica')
       .select('alergias, medicacion_actual')
       .eq('paciente_id', id)
+      .order('registrado_en', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {
