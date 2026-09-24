@@ -3,10 +3,10 @@
 Arquitecto, 24-09-2026. Riesgo alto (`modelo: opus`). Contrato: `tickets/T-014-calendario-semanal.md`
 (el `territorio:` lo añade este diseño; es lo único que se ha tocado del contrato).
 
-> **BLOQUEO PARCIAL (lo decide el propietario en el gate; lo demás no espera).** El arrastre de una
-> cita de serie con «esta y las siguientes» no puede hacer lo que su nombre promete con lo que T-011
-> dejó en la base (§0, H9). Pregunta y opción recomendada en §2, D6. Todo el resto del diseño se
-> implementa sin esa respuesta; solo la rama `esta_y_siguientes` de §1.6 espera.
+> **D6 está resuelta (24-09-2026).** El propietario eligió la opción B (T-011b corrige la base) y
+> el ADR-068 fija el diálogo. **§8 · Enmienda por el ADR-068** manda sobre cualquier párrafo
+> anterior que hable de la rama «esta y las siguientes», del diálogo de mover o de «Por
+> confirmar». Esa parte se implementa con T-011b ya en `main`.
 
 ---
 
@@ -182,7 +182,7 @@ z.object({
    - **Cita suelta** (`serie_id` nulo): si viene `alcance`, `parametro_invalido`; si no, `desplazarCita(sesion, { citaId, inicio: iso, fin: iso })`.
    - **Cita de serie sin `alcance`**: `parametro_invalido`, con el mensaje «Elige solo esta, o esta y las siguientes.»
    - **Cita de serie con `esta`**: `editarSerie(sesion, { citaId, alcance: 'esta', inicio, fin })`. La cita queda desviada (H6, H7).
-   - **Cita de serie con `esta_y_siguientes`**: **rama BLOQUEADA hasta D6.** Con la opción A:
+   - **Cita de serie con `esta_y_siguientes`**: **sustituido por §8.4.** Lo que sigue es la opción A, descartada:
      - si `cita.desviada`, o si `datos.fecha` no es la fecha local de `cita.inicio`, devuelve `parametro_invalido`;
      - `editarSerie(sesion, { citaId, alcance: 'esta_y_siguientes', horaLocal: datos.hora })`;
      - entre las propuestas pendientes con `id` en `propuestaIds`, se busca la que tiene `citaId === datos.citaId` y se hace `confirmarPropuesta`. Si falla (por ejemplo `hueco_ocupado`), se devuelve `{ ok: true, movida: false, propuestasPendientes: n }` y un mensaje que lo dice;
@@ -370,7 +370,7 @@ Reglas:
   - `primario` = `en_curso`;
   - `diasPendiente` = `profesionalId === usuarioId && nota_pendiente === true` ? `diasEntre(fechaLocal(fin), hoy)` : `null`.
   - **El aviso se pinta aunque `mostrar` sea falso** (D8).
-- **Serie.** `alcanceSiguientesPermitido` = `deSerie && !desviada`. Con la opción A de D6, el diálogo además exige el mismo día.
+- **Serie.** `alcanceSiguientesPermitido` = `deSerie && !desviada && reprogramable` (§8.2). Sin condición de «mismo día».
 - **Filtro.** Con `profesionalFiltrado`, se filtra antes de colocar.
 
 #### 1.6.3 · La isla `calendario.tsx`
@@ -443,7 +443,7 @@ Reglas:
 
 - Usa `Dialogo` (modal existente), un formulario con react-hook-form y `esquemaReprogramarCita`.
 - Campos: `fecha` (`<input type="date">`) y `hora` (`<input type="time" step="900">`), prellenados con lo soltado o con `fechaLocal`/`horaLocal`. `zona` va oculta, con `vista.zona`.
-- En una cita de serie: grupo de radio **obligatorio**, sin preselección, con **dos** opciones: «Solo esta» y «Esta y las siguientes». La segunda se deshabilita con su motivo visible (desviada, o distinto día con la opción A) y siempre con el texto al lado. **Ninguna tercera opción, ni deshabilitada.**
+- En una cita de serie: **§8.3 manda** (dos opciones, previsualización, foco y ARIA). **Ninguna tercera opción, ni deshabilitada.**
 - Texto de confirmación: «Mover a <etiquetaLarga del día> · <hora>». La etiqueta sale de `vista.dias` si el día está visible y, si no, de la cadena `fecha` tal cual.
 - Enviar llama a `reprogramar` y, al cerrar, el foco vuelve a la cita.
 
@@ -453,7 +453,8 @@ Reglas:
   - `exigirSesion()` y `esquemaReprogramarCita.safeParse`; si falla, `{ ok: false, motivo: 'parametro_invalido', mensaje }`;
   - `reprogramarCita(sesion, datos, new Date())`;
   - si `ok`, `revalidatePath('/agenda')`.
-- **`confirmarPropuestaAgenda` y `descartarPropuestaAgenda`:** `safeParse` con los esquemas existentes, `confirmarPropuesta`/`descartarPropuesta` y `revalidatePath('/agenda')`.
+- **`confirmarPropuestaAgenda` y `descartarPropuestaAgenda`:** `safeParse` con los esquemas existentes, `confirmarPropuesta`/`descartarPropuesta` y `revalidatePath('/agenda')` **solo si `ok`**. El rechazo vuelve con su `detalle` (§8.5).
+- **`previsualizarMovimiento(entrada: unknown)`:** nueva, §8.3.
 - Ninguna importa `lib/supabase/administracion.ts`.
 
 ### 1.7 · Resto de ficheros
@@ -500,7 +501,7 @@ Reglas:
 | D3 | El estado del punto se adapta con `estadoParaPunto(estado, en_curso)` y el tipo `EstadoVisibleCita` **de `components/ui/estado-cita`**. | `estadoVisible()` de `lib/agenda`: recibe el reloj de fuera y trae `pasada_sin_marcar`, que el contrato no pinta. Tampoco se unifican los dos tipos: el de Kimi es de otro carril, y queda anotado. |
 | D4 | **Arrastre con Pointer Events solo en la semana `md+` y sin táctil.** El diálogo «Reprogramar» del panel es la alternativa sin arrastre (WCAG 2.5.7) y el único camino en móvil y en la vista mensual. | DnD de HTML5: no funciona en táctil y tiene un fantasma que no se puede estilar. Arrastre táctil: pelea con el scroll a 360 px. |
 | D5 | **Eje de horas de pared y altura en minutos reales.** La posición es la hora formateada en la zona; `colocarEnRejilla` solo agrupa. | Usar `inicioMinutos` absoluto como `top`: el domingo de marzo, todas las citas quedarían una franja por encima de su etiqueta (H16). |
-| D6 | **BLOQUEO parcial.** «Esta y las siguientes» por arrastre. T-011 aplica el cambio de regla a **todas** las futuras no desviadas, también las anteriores a la arrastrada (H8), y solo cambia la **hora**, conservando la fecha de cada una (H9). Arrastrar a otro día con ese alcance dejaría la cita en su día y a su hora nueva. **Pregunta al propietario:** ¿**A)** T-014 lo ofrece solo cuando el arrastre no cambia de día, mueve la cita arrastrada confirmando su propia propuesta (ya confirmada en el diálogo) y deja las demás como propuestas visibles en «Por confirmar», una a una (ADR-034); o **B)** se abre antes un ticket de riesgo alto que corrija `agenda_editar_serie` para que parta de la cita elegida y aplique el cambio de día, y T-014 ofrece la opción sin restricción? **Recomendación: A**, porque no toca la base de series y nada se mueve sin confirmar; el defecto H8 y H9 se anota para un ticket propio. | Ofrecer solo «Solo esta» en el arrastre: contradice la pregunta que exige el contrato. Corregir T-011 dentro de T-014: está fuera del contrato. |
+| D6 | **Resuelta como B el 24-09-2026; el diálogo lo fija el ADR-068 (§8).** Texto original: «Esta y las siguientes» por arrastre. T-011 aplica el cambio de regla a **todas** las futuras no desviadas, también las anteriores a la arrastrada (H8), y solo cambia la **hora**, conservando la fecha de cada una (H9). Arrastrar a otro día con ese alcance dejaría la cita en su día y a su hora nueva. **Pregunta al propietario:** ¿**A)** T-014 lo ofrece solo cuando el arrastre no cambia de día, mueve la cita arrastrada confirmando su propia propuesta (ya confirmada en el diálogo) y deja las demás como propuestas visibles en «Por confirmar», una a una (ADR-034); o **B)** se abre antes un ticket de riesgo alto que corrija `agenda_editar_serie` para que parta de la cita elegida y aplique el cambio de día, y T-014 ofrece la opción sin restricción? **Recomendación: A**, porque no toca la base de series y nada se mueve sin confirmar; el defecto H8 y H9 se anota para un ticket propio. | Ofrecer solo «Solo esta» en el arrastre: contradice la pregunta que exige el contrato. Corregir T-011 dentro de T-014: está fuera del contrato. |
 | D7 | **Color del profesional derivado del uuid**: hash a 6 tokens `--profesional-N`. | `perfiles.color`: migración y pantalla de ajustes, fuera del contrato. Reusar `accent`, `destructive` o `secondary`: esos tokens ya significan atención, error y selección. Las colisiones con más de 6 profesionales se aceptan: el nombre va siempre escrito. |
 | D8 | **«Notas» detrás de `RUTA_NOTAS_DISPONIBLE = false`** hasta que T-012 cree la ruta y ponga la constante a `true` (queda en el territorio de T-012). El aviso de nota pendiente sí se pinta. **El criterio 4 («Notas» lleva al editor y pide PIN) se cierra en T-012.** | Pintar un enlace que da 404: es un control sin acción real (regla 3 de `interfaz.md`). Adelantar T-012: cambia el orden que fijó el propietario, y queda para el gate. |
 | D9 | **Pila de paneles con devolución del foco al ancla**: solo se ve la cima y Escape vuelve al escalón anterior. | Paneles apilados a la vista: se tapan entre sí y a 360 px no caben. `useDevolucionDeFoco`: devuelve al elemento que tenía el foco al abrir, que no siempre es el escalón anterior. |
@@ -525,7 +526,7 @@ Reglas:
 | **M6** · El panel queda entero en la última fila y en la última columna. | `colocacion.test.ts`, casos de última fila y última columna. Manual: a 1280 y a 360 px. |
 | **M7** · Cita de ayer, realizada y sin nota: aviso con los días. | Automático: `vista.test.ts` da `diasPendiente = 1` con `nota_pendiente = true`, `fin` ayer y `hoy`. Manual: en Studio, una cita de ayer pasa a `realizada` (se dispara la alerta) y se mira su panel como su profesional. |
 | **M8** · Como técnico, sin tipo de terapia ni nota operativa. | Automático: R1 y R3 en `npm run test:rls`, y en `panel-cita.test.tsx` una cita con `tipoNombre: null` y `notaOperativa: null` no deja ningún separador «·» huérfano ni el rótulo «Nota operativa». Manual: iniciar sesión como técnico del seed. |
-| **M9** · Arrastrar una cita de serie pregunta y nunca ofrece «todas». | `dialogo-reprogramar.test.tsx`: en una cita de serie hay exactamente 2 radios con esas etiquetas; `queryByText(/todas/i)` es null; no se puede enviar sin elegir. Manual: arrastre real. La rama `esta_y_siguientes` espera a D6. |
+| **M9** · Arrastrar una cita de serie pregunta y nunca ofrece «todas». | `dialogo-reprogramar.test.tsx`: en una cita de serie hay exactamente 2 radios con esas etiquetas; `queryByText(/todas/i)` es null; no se puede enviar sin elegir. Manual: arrastre real. Más §8.7. |
 | **M10** · A 360 px se reorganiza, están todas las acciones y ningún objetivo baja de 44 px. | Manual en un teléfono real (D11) y con DevTools a 360: recorrer abrir cita, abrir día, reprogramar, confirmar y descartar propuesta, filtros, conmutador y navegación. En la consola, `[...document.querySelectorAll('button,a')].filter(e=>e.offsetParent&&e.getBoundingClientRect().height<44)` debe devolver `[]` dentro de `main`. |
 | **M11** · Recorrido completo con teclado. | `rejilla-foco.test.ts`, `panel-anclado.test.tsx` y `calendario.test.tsx`: flechas entre días; Tab entra a las citas del día y sale; Intro abre; Escape de la cita al día y del día al número. Además, manual. |
 | **M12** · `/agenda` junto a `/prototipo`. | Manual: capturas lado a lado en la bitácora. |
@@ -539,7 +540,7 @@ Reglas:
 
 1. **Alta.** El foco en la pila de paneles y en el foco rodante, al volver de un panel de cita al panel del día a la fila correcta. Mitigación: D9 y `calendario.test.tsx` con la secuencia completa.
 2. **Alta.** Hidratación o reloj en cliente: un `new Date()` o un `format` en un fichero `'use client'`. Mitigación: la vista baja solo cadenas (1.6.2), y la comprobación de §5 las busca con grep.
-3. **Media.** La semántica de «esta y las siguientes» (D6). Si el gate no responde, la rama queda deshabilitada con su texto y no se implementa a medias.
+3. **Media.** La semántica de «esta y las siguientes». Resuelta por T-011b y el ADR-068; sus riesgos propios, en §8.8.
 4. **Media.** La RPC devuelve filas de más o de menos a algún rol. Mitigación: R1 a R9.
 5. **Media.** La colocación del panel dentro de contenedores con scroll. Mitigación: `fixed` sobre el viewport y recálculo en `scroll` con captura.
 6. **Media.** Los cambios de hora en la rejilla y en el diálogo. Mitigación: D5; un caso en `vista.test.ts` para la semana del 23-03-2026 al 29-03-2026 con una cita a las 10:00 del domingo en `minutoPared = 600`; y el rechazo de `inexistente` y `ambigua` en `reprogramar.test.ts`.
@@ -643,6 +644,8 @@ app/page.tsx
 app/globals.css
 lib/i18n/es.ts
 lib/contraste/tokens.ts
+components/ui/dialogo.tsx
+components/ui/dialogo.test.tsx
 components/ui/estado-cita.tsx
 components/ui/estado-cita.test.tsx
 components/ui/panel-anclado.tsx
@@ -681,53 +684,433 @@ docs/interfaz.md
 - **Arrastre en la vista mensual y arrastre táctil.** La alternativa es «Reprogramar», con las mismas acciones (D4).
 - **Cambiar el estado de la cita** (confirmar, marcar realizada o no asistida) y **editar sala o nota operativa** desde el panel. No están en el contrato.
 - **Color del profesional configurable** (`perfiles.color`), D7.
-- **Corregir T-010** (`fecha_referencia` en UTC; la alerta cuando la cita se marca realizada antes del fin) y **T-011** (H8, H9). Se anotan como hallazgos; la corrección de T-011 es la opción B de D6 si el propietario la elige.
+- **Corregir T-010** (`fecha_referencia` en UTC; la alerta cuando la cita se marca realizada antes del fin) y **T-011** (H8, H9). T-010 se anota como hallazgo; T-011 lo corrige T-011b (opción B de D6).
 - **Unificar `EstadoVisibleCita` y las claves `agenda.estado.*` de `lib/agenda`.** Es otro carril y queda anotado.
 - **Pruebas de Playwright autenticadas de `/agenda`.** `test:a11y` no tiene sesión (H26). El teclado se prueba con Testing Library, que es la prueba de teclado propia que pide el ADR-041.
 - **Distinguir al director administrativo (ADR-065/066).** T-014 no lo necesita: el tipo y la nota van por datos (vista del técnico); «Notas» y el aviso, por ser el profesional de la cita; el cuadro, por lista blanca en fallo cerrado (D13). El ticket que implemente el ADR-065 decide si ese perfil ve el cuadro y el tipo de terapia.
 
 ---
 
-## Nota del 24-09-2026 · D6 queda resuelta como B y depende de T-011b
+## 8 · Enmienda por el ADR-068: el diálogo de la serie y los rechazos de «Por confirmar»
 
-El propietario eligió la **opción B** de D6. La rama «esta y las siguientes» de `reprogramarCita`
-(§1.3, paso 6) deja de estar bloqueada por D6 y pasa a **depender de T-011b**
-(`tickets/T-011b-editar-serie-desde-la-cita.md`, diseño en `tickets/T-011b/diseno.md`). No se
-implementa hasta que T-011b esté fusionado.
+Sustituye a la «Nota del 24-09-2026» y a la opción A de D6. Manda sobre §1.3 (paso 6, rama
+`esta_y_siguientes`), §1.6.3 (diálogo) y §1.6.4. **Se implementa con T-011b ya en `main`**
+(`depende_de` del contrato). El resto del diseño no cambia.
 
-Cambios para T-014 cuando T-011b esté en `main`. Solo afectan a esta rama; lo demás de este diseño
-no cambia.
+### 8.1 · Qué da la base (contrato de T-011b; **es su diseño, todavía no es código**)
 
-**Qué hace la rama.** Se va la condición de «mismo día» de la opción A. Con
-`cita.desviada` sigue devolviendo `parametro_invalido`.
+Sale de `tickets/T-011b/diseno.md` §1.4, §1.6, §1.10, §3 y «Para T-014». **Antes de escribir esta
+parte, el implementador lo coteja con la migración fusionada de T-011b.** Si una firma, una clave
+del `jsonb` o un fragmento de mensaje no coincide, se para y lo anota. No lo adapta por su cuenta.
 
-1. Se calcula el instante de destino como en los pasos 4 y 5.
-2. Se expresa ese instante en **la zona de la cita** (`cita.zona_horaria`, que es la de la serie)
-   como `fecha` (AAAA-MM-DD) y `hora` (HH:MM). **No** se pasa `zonaHoraria`: eso cambiaría la zona
-   de la serie.
-3. Se llama a
-   `editarSerie(sesion, { citaId, alcance: 'esta_y_siguientes', fecha, horaLocal: hora })`.
-4. Entre `propuestaIds` se busca la propuesta cuya `citaId === datos.citaId`, se confirma, y el
-   resto sigue como decía la opción A.
+- `agenda_previsualizar_edicion_serie(p_cita_id, p_fecha, p_dia_semana, p_hora_local,
+  p_duracion_minutos, p_zona_horaria) → jsonb`. Es de solo lectura, `definer` y se concede a
+  `authenticated`. Autoriza igual que la edición y lanza los mismos `22023` que ella.
+  - Devuelve: `serie_id`, `desde_cita_id`, `fecha_origen`, `fecha_destino` y `cambia`.
+  - `regla_anterior`: `{periodicidad, dia_semana, hora_local, duracion_minutos, zona_horaria}`.
+  - `regla`: lo mismo, más `ordinal` (1-5 o `null`), `ultimo` y `recorte`.
+  - `citas[]`: `{cita_id, fecha_actual, fecha_nueva, hora_local, inicio|null, fin|null,
+    clasificacion, recortada}`.
+- `agenda_editar_serie(..., p_fecha date)`:
+  - con `esta_y_siguientes`, la regla se aplica desde la cita elegida y la ancla cae exactamente
+    en `p_fecha`;
+  - con `esta`, no admite `p_fecha`.
+  - `editarSerie` gana `fecha` (T-011b §1.8).
+- `agenda_confirmar_propuesta` recalcula la propuesta y la rechaza con `22023` y un texto si ya no
+  vale. Si la hora de una cita de serie no es `normal`, al confirmarla queda
+  `desviada/anomalia_horaria` (T-011b D7).
+- «Mantener la serie» es `agenda_editar_serie(cita, 'esta', p_inicio, p_fin)`, que ya existe
+  (T-011b D14).
 
-La duración no cambia por arrastre, así que no se pasa `duracionMinutos`.
+Lo que sigue en pie de la nota anterior:
 
-**Qué garantiza T-011b.**
+- la fecha y la hora que se pasan a la serie se expresan en la zona de la cita, no en la de la
+  vista;
+- la hora ambigua o inexistente en esa zona se comprueba antes;
+- no se pasan ni zona ni duración;
+- las garantías de T-011b.
 
-- La regla parte de la cita elegida (H8).
-- Cada cita siguiente toma el día nuevo en su semana relativa, y la duración de la regla (H9).
-- La propuesta de la cita arrastrada cae exactamente en `fecha`.
-- `22023` si la cita ancla es pasada, en curso, cancelada o desviada, o si su horario nuevo ya
-  pasó.
-- Al confirmar, `22023` si la propuesta ya no vale.
+Todo eso está recogido abajo.
 
-**Qué cambia en el diseño de T-014.**
+### 8.2 · Piezas nuevas o que cambian
 
-- §1.6.2: `alcanceSiguientesPermitido = deSerie && !desviada && estado ∈ {programada, confirmada} && inicio > ahora`.
-- §1.6.3: el segundo radio ya no se deshabilita «por otro día»; solo por la condición anterior.
-- **Mensajes.** Todo `22023` llega como `parametro_invalido`. Si el diálogo quiere distinguir
-  «la serie ya tiene otra regla» o «la cita cambió», lo añade T-014 en `lib/citas/errores.ts`, que
-  está en su territorio. Los fragmentos literales están en la tabla del §3 del diseño de T-011b.
-- **Si el instante de destino cae en una hora ambigua** de la zona de la serie (la segunda 02:30 de
-  octubre), `resolver_hora_local` elige la primera. T-014 compara el `inicio_propuesto` de la
-  propuesta de la ancla con su instante. Si no coinciden, no confirma y dice por qué.
+**`lib/citas/tipos.ts`**
+
+- `MotivoErrorCitas` gana `destino_pasado` (ya en §1.3) y `previsualizacion_caducada`.
+- El fallo de `ResultadoCitas` gana `detalle?: DetalleRechazo`. Es opcional y no rompe a nadie.
+- `DetalleRechazo` =
+  `'yaEmpezada' | 'canceladaOCerrada' | 'movidaAMano' | 'fechaYDiaNoCoinciden' | 'horarioNuevoPasado' | 'propuestaPasada' | 'sinEvento' | 'otraRegla' | 'otraZona' | 'citaCambiada' | 'sinHorario'`.
+
+**`lib/citas/errores.ts`**
+
+- `detalleDeRechazo(error: PostgrestError): DetalleRechazo | null`: solo con `code === '22023'`,
+  busca con `includes` los fragmentos literales de la tabla de §8.5, en ese orden.
+- `resultadoDeError(error)` → `{ ok: false, motivo, detalle, mensaje }`, donde `mensaje` es el de
+  `mensajeParaMotivo`. La usan `confirmarPropuesta`, `editarSerie` y `previsualizarEdicionSerie`.
+- Un comentario dice que los fragmentos se escriben a la vez que la migración de T-011b, igual que
+  «pasada» en `42501`.
+
+**`lib/citas/previsualizar.ts`** (nuevo, `server-only`)
+
+`previsualizarEdicionSerie(sesion, { citaId, fecha, horaLocal }): Promise<ResultadoCitas<{ previa: PrevisualizacionSerie; firma: string }>>`
+
+- Una sola `rpc('agenda_previsualizar_edicion_serie', { p_cita_id, p_fecha, p_hora_local })`.
+  **Nunca** se pasan `p_dia_semana`, `p_duracion_minutos` ni `p_zona_horaria`: arrastrar no cambia
+  la duración ni la zona.
+- El `jsonb` se valida con un esquema Zod estricto (`esquemaPrevisualizacionSerie`), en camelCase.
+  Si no casa, `desconocido` y `console.error`: se falla cerrado.
+- `firma` = SHA-256 hexadecimal (`node:crypto`) del JSON canónico de
+  `[regla.periodicidad, regla.diaSemana, regla.horaLocal, regla.duracionMinutos, regla.zonaHoraria, regla.ordinal, citas.map(c => [c.citaId, c.fechaNueva, c.inicio])]`.
+  No es un control de seguridad, porque el cliente puede mentir sobre su propia confirmación.
+  Garantiza que lo que se aplica es lo que se enseñó (§8.4, paso 4).
+
+**`lib/citas/reprogramar.ts`**
+
+- Se extraen los pasos 1 a 5 de §1.3 (cargar, cita pasada, zona, clasificación de la hora,
+  destino pasado) a `prepararMovimiento(sesion, datos, ahora) → ResultadoCitas<{ cita, inicio: Date, fin: Date }>`,
+  que usan `reprogramarCita` y la previsualización.
+- `ubicarEnSerie(cita, inicio)` → `{ fecha, hora }` del instante en `cita.zona_horaria`, con
+  `TZDate`. La edición interpreta `p_fecha + p_hora_local` en la zona de la serie.
+- `DatosReprogramarCita` gana `firma?: string`. `esquemaReprogramarCita` gana
+  `firma: z.string().regex(/^[0-9a-f]{64}$/).optional()`, y un `refine`: si el alcance es
+  `esta_y_siguientes`, la firma es obligatoria.
+
+**`app/(app)/agenda/frase-serie.ts`** (puro; importa `tCon` y `formatearFechaLarga`/`formatearHora`)
+
+`describirPrevisualizacion(previa: PrevisualizacionSerie): DescripcionSerie`, con
+`DescripcionSerie = { ahora: string; despues: string; alcance: string; avisos: string[] }`.
+
+- **Solo formatea lo que trae la base.** El día sale de `regla.diaSemana`, el ordinal de
+  `regla.ordinal`, «último» de `regla.ultimo` y las fechas de `citas[]`. **Aquí no se calcula ni
+  el ordinal, ni el día de la semana, ni ninguna fecha nueva.**
+- Las fechas `AAAA-MM-DD` se formatean ancladas a las 12:00 en `regla.zonaHoraria`, con `TZDate`.
+- La usa **solo** la acción del servidor. Al cliente bajan cadenas.
+
+**`app/(app)/agenda/acciones.ts`**: `previsualizarMovimiento` (§8.3) y el cambio de
+`reprogramar` (§8.4).
+
+**`app/(app)/agenda/fila-propuesta.tsx`** (`'use client'`, nuevo)
+
+- Una fila de «Por confirmar» y del bloque de propuesta del panel de la cita.
+- Recibe cadenas y el id, y guarda el estado del último rechazo (§8.5).
+- Usa `useActionState` de React 19. El implementador lee antes
+  `node_modules/next/dist/docs/01-app/01-getting-started/07-mutating-data.md`.
+
+**`components/ui/dialogo.tsx`**: prop opcional `focoInicial?: RefObject<HTMLElement | null>`.
+
+- Si viene y apunta a un elemento conectado, el efecto de apertura lo enfoca en lugar de
+  `enfocables(contenedor)[0]`, que hoy es la «X» de cerrar.
+- Sin la prop, el comportamiento no cambia.
+- Prueba nueva en `dialogo.test.tsx`; las existentes siguen verdes.
+- Es la única edición en esa primitiva.
+
+**`components/ui/panel-anclado.tsx`**: prop `pausado?: boolean`. Con ella, sus
+`useFocoAtrapado` y `useCierreExterior` quedan inactivos. Mientras el diálogo modal está abierto
+encima del panel, ni el Escape ni el clic dentro del diálogo cierran el panel de debajo.
+
+**`app/(app)/agenda/vista.ts`**: `alcanceSiguientesPermitido = deSerie && !desviada && reprogramable`
+(sin la condición «mismo día» de la opción A).
+
+### 8.3 · El diálogo «Mover una cita de una serie»
+
+**Cuándo sale:**
+
+- al soltar el arrastre de una cita con `deSerie`;
+- al pulsar «Reprogramar» en su panel, que es la alternativa sin arrastre (WCAG 2.5.7).
+
+Para una cita suelta, el diálogo de §1.6.3 sigue igual, sin grupo de opciones.
+
+**Estructura** (`dialogo-reprogramar.tsx`, sobre `Dialogo`):
+
+1. **Título** `agenda.moverSerie.titulo`.
+2. **Destino.**
+   - Desde el panel, campos `fecha` y `hora`, como en §1.6.3.
+   - Tras un arrastre, van prellenados y se pueden corregir.
+   - Debajo, `agenda.moverSerie.destino` («Mover a jueves, 1 de octubre de 2026 · 10:00»),
+     formado en el servidor.
+3. **`<fieldset>`** con `<legend>` `agenda.moverSerie.pregunta` y **dos**
+   `<input type="radio" name="alcance">` nativos, **sin preselección**:
+   - **«Mantener la serie: mover solo esta cita»** (`mantener`). Debajo, con `aria-describedby`,
+     `mantenerDetalle`. Llama a `alcance: 'esta'`.
+   - **«Modificar la serie desde esta cita: esta y las siguientes»** (`modificar`). Debajo, con
+     `aria-describedby`, la **región de previsualización**:
+     - `ahora` («Ahora: los martes a las 17:00.»);
+     - `despues` («Esta y las siguientes pasarán a ser el 3.er jueves de cada mes a las 10:00.»);
+     - `alcance` («Afecta a 4 citas, del 1 de octubre al 17 de diciembre.»);
+     - la lista de `avisos`;
+     - `confirmacion`, que explica que esta cita se mueve ya y las demás quedan en «Por confirmar».
+4. **Error general** (`role="alert"`) y los botones **Cancelar** y **Mover**.
+
+**Flujo:**
+
+1. **Al abrir, y cada vez que `fecha` y `hora` cambian y son válidas** (con 300 ms de rebote), el
+   cliente llama a `previsualizarMovimiento({ citaId, fecha, hora, zona })`.
+   - Cada petición lleva una clave `fecha|hora`. Una respuesta cuya clave ya no es la de los campos
+     se ignora.
+   - Mientras carga, la región lleva `aria-busy="true"` y el texto `calculando`, y el radio
+     «modificar» queda `disabled`. No se acepta una regla que no se ha visto.
+2. **La acción `previsualizarMovimiento`**:
+   - `exigirSesion`;
+   - `safeParse` con `esquemaReprogramarCita.omit({ alcance: true, firma: true })`;
+   - `prepararMovimiento`, cuyo fallo es `general`: vale para las dos opciones;
+   - si la cita no es de serie, `general` = `parametro_invalido`;
+   - `ubicarEnSerie`, y si `clasificarHoraLocal(fecha, hora, cita.zona_horaria)` no da `normal`,
+     `modificar.bloqueo` = `horaDistintaEnSerie`;
+   - `previsualizarEdicionSerie`, cuyo fallo es `modificar.bloqueo`, con el texto del `detalle` de
+     §8.5; «mantener» sigue disponible.
+   - **Guardas sobre la respuesta**, que también bloquean solo «modificar»:
+     - `previa.reglaAnterior.zonaHoraria !== cita.zona_horaria` → `serieOtraZona`;
+     - la entrada de la ancla en `citas[]` tiene `clasificacion !== 'normal'`, o su `inicio` no es
+       el instante de destino → `horaDistintaEnSerie`;
+     - `cambia === false` → `sinCambio`, y entonces bloquea **las dos** opciones.
+   - **Devuelve** solo cadenas:
+     `{ ok: true, destino: string, general: string | null, modificar: { disponible: true, descripcion: DescripcionSerie, firma } | { disponible: false, mensaje: string } }`.
+3. **Mover** valida con react-hook-form y el mismo esquema.
+   - Sin opción elegida, el error `elige` va en el `fieldset` (`aria-invalid`, `aria-describedby`)
+     y el foco al primer radio.
+   - Con «modificar», se envía la `firma` de la última previsualización **vigente**.
+4. **Mientras se envía**, el botón lleva `aria-disabled` y el texto `moviendo`, y `alCerrar` se
+   ignora: Escape no corta una acción en vuelo.
+5. **Resultado:**
+   - `ok` → se cierra el diálogo y se vacía la pila de paneles. El anuncio va a una región
+     `role="status"` de `calendario.tsx`: `hechoMantener`, `hechoModificar.*` o `noMovida`
+     (§8.4, paso 7). El foco va a la cita movida (ver «Foco»).
+   - `previsualizacion_caducada` → el diálogo sigue abierto, `caducada` sale en el `role="alert"`
+     y se vuelve a previsualizar sola. La elección se conserva, pero hay que pulsar Mover otra vez.
+   - Otro fallo → `role="alert"` con el texto del `detalle`, o del `motivo` si no lo hay. El
+     diálogo sigue abierto.
+
+**Foco y ARIA** (modal):
+
+| Momento | Qué pasa |
+|---|---|
+| Abrir tras un arrastre | Antes de abrir, `citaBoton.focus()`. `useDevolucionDeFoco` captura el elemento activo al abrir, así que la devolución va a la cita y no a `body`. |
+| Abrir desde el panel | El foco está en «Reprogramar», que es a donde vuelve. El panel de debajo pasa a `pausado`. |
+| **Foco inicial** | El primer radio («Mantener»), con `focoInicial`. Si hay campos de fecha y hora (entrada desde el panel), va al campo `fecha`. |
+| Tab | Queda atrapado en el diálogo (`useFocoAtrapado`). El orden es: campos, radios (con flechas dentro del grupo, nativo), Cancelar, Mover y la «X». |
+| **Escape** o clic fuera | Cancela sin llamar a ninguna acción. El foco vuelve a la cita o a «Reprogramar». |
+| Se actualiza la previsualización | **No se mueve el foco.** La región tiene `aria-live="polite"` y `aria-busy` mientras carga. |
+| «Modificar» bloqueado | El radio va `disabled`, con el motivo visible como texto, que es su `aria-describedby`. Ni gris sin texto ni solo un tooltip. |
+| Éxito | Tras `revalidatePath`, un efecto de `calendario.tsx` enfoca `[data-cita-id="<id>"]` en la disposición visible (la que tiene `offsetParent !== null`). Si la cita salió de la vista, enfoca el número del día de `fechaFoco`. La devolución automática al botón antiguo, que puede estar desmontado, no basta. |
+
+**Avisos de la previsualización** (`frase-serie.ts`, uno por tipo, con plural):
+
+| Viene en `previa` | Aviso | Qué pasa después |
+|---|---|---|
+| `regla.recorte` (solo con ordinal 5) | `avisos.recorte`, con las `fechaNueva` de las `recortada` | Nada especial: son propuestas normales en «Por confirmar». |
+| Una cita con `clasificacion = 'inexistente'` | `avisos.inexistente`, con su fecha, la hora de la regla y la hora real (`formatearHora(inicio, zona)`) | Van a «Por confirmar» **como las demás**. Al confirmarlas, la base las deja `anomalia_horaria` (T-011b D7), y el aviso lo dice. |
+| `clasificacion = 'ambigua'` | `avisos.ambigua` | Lo mismo. |
+| `inicio = null` | `avisos.sinHora` | En «Por confirmar» solo se pueden descartar (§1.6.1). |
+
+En «Por confirmar», una fila cuyo `inicioPropuesto` cae en una hora no `normal` según
+`clasificarHoraLocal` (clasifica la hora; no es la regla de la serie) lleva la nota
+`agenda.rechazos.cambioDeHora`. El recorte solo se anuncia en el diálogo.
+
+**Nada se confirma solo, salvo la propuesta de la cita arrastrada**, que el usuario acaba de
+aceptar en el diálogo. Ninguna propuesta se descarta sola (ADR-068, punto 1).
+
+### 8.4 · `reprogramarCita` con `esta_y_siguientes` (sustituye a la rama de §1.3, paso 6)
+
+1. `prepararMovimiento`.
+2. Si la cita es suelta, o `cita.desviada`, `parametro_invalido` con el `detalle` `movidaAMano`
+   en el segundo caso. La base lo rechazaría igual; se adelanta el texto.
+3. `ubicarEnSerie` → `{ fecha, hora }` en la zona de la serie. Si esa hora no es `normal` en esa
+   zona, `parametro_invalido` con `horaDistintaEnSerie`.
+4. **Otra vez `previsualizarEdicionSerie`**, con las mismas guardas de §8.3.2. Si su `firma` no es
+   la recibida, devuelve `previsualizacion_caducada` y **no edita**.
+5. `editarSerie(sesion, { citaId, alcance: 'esta_y_siguientes', fecha, horaLocal: hora })`. Sin
+   `duracionMinutos` ni `zonaHoraria`. Un fallo se devuelve con su `detalle`.
+6. Se busca entre `listarPropuestasPendientes(sesion)` la de `id ∈ propuestaIds` y
+   `citaId === datos.citaId`.
+   - Si **no existe**, o su `inicioPropuesto` no es exactamente `inicio` (en milisegundos), no se
+     confirma nada.
+   - Si no, **un único** `confirmarPropuesta`.
+7. Devuelve `{ ok: true, movida, propuestasPendientes: propuestaIds.length - (movida ? 1 : 0), motivoNoMovida?: DetalleRechazo | MotivoErrorCitas }`.
+   - Si la edición ha ido bien pero la ancla no se ha movido (por ejemplo, `hueco_ocupado`), es
+     `ok: true` con `movida: false`. La regla **ya cambió**, y la propuesta de la ancla queda en
+     «Por confirmar», a la vista. El texto es `noMovida`.
+8. Nunca confirma ni descarta ninguna otra propuesta.
+
+Los pasos 4 y 5 son dos llamadas, no una transacción. La ventana entre ellas es de milisegundos.
+Lo que pase dentro lo cubre la frescura de T-011b al confirmar (§8.8).
+
+Con `esta` (mantener) no cambia nada respecto a §1.3: `editarSerie({ alcance: 'esta', inicio, fin })`,
+sin `fecha`.
+
+### 8.5 · El rechazo al confirmar una propuesta (ADR-068, punto 1)
+
+**Mapeo.** El fragmento es el literal de T-011b §3 y se busca con `includes`. La clave de i18n
+cuelga de `agenda.rechazos`.
+
+| Fragmento literal (T-011b §3) | `detalle` | Texto de interfaz | ¿Sigue «Confirmar»? |
+|---|---|---|---|
+| `ya ha empezado o ha pasado` | `yaEmpezada` | «La cita ya ha empezado o ha pasado.» | No |
+| `cancelada o cerrada` | `canceladaOCerrada` | «La cita está cancelada o cerrada.» | No |
+| `se movió a mano` | `movidaAMano` | «La cita se movió a mano y la serie ya no la gobierna.» | No |
+| `no coinciden` | `fechaYDiaNoCoinciden` | «La fecha y el día de la semana no coinciden.» | (solo en la edición) |
+| `nuevo horario de esta cita ya ha pasado` | `horarioNuevoPasado` | «El nuevo horario de esta cita ya ha pasado.» | (solo en la edición) |
+| `quedado en el pasado` | `propuestaPasada` | «La propuesta ha quedado en el pasado.» | No |
+| `sin evento` | `sinEvento` | «Esta propuesta no se puede comprobar.» | No |
+| `otra regla` | `otraRegla` | «La serie ya tiene otra regla.» | No |
+| `otra zona` | `otraZona` | «El centro ya tiene otra zona horaria.» | No |
+| `La cita cambió` | `citaCambiada` | «La cita cambió desde que se hizo la propuesta.» | No |
+| `no tiene horario` | `sinHorario` | «La propuesta no tiene horario.» | No (ya solo se ofrece Descartar) |
+| `Con "esta"` | — | Es un error de programación: se queda en el genérico `parametro_invalido`, con `console.error`. | — |
+| `no es tuya` (`42501`) | — | Motivo `no_autorizado`, que ya existe. | No |
+| `23P01` | — | Motivo `hueco_ocupado`, que ya existe. | **Sí**: es pasajero |
+
+**Cómo se pinta** (`fila-propuesta.tsx`, en «Por confirmar» y en el panel de la cita):
+
+- **La fila no desaparece.** No hay `revalidatePath` tras un fallo, así que la lista del servidor
+  no cambia.
+- Con un `detalle` permanente (los «No» de la tabla):
+  - junto al texto de la propuesta aparece la píldora `warning` `agenda.rechazos.yaNoVale`, y
+    debajo un párrafo con `noConfirmada` («No se ha confirmado: {motivo}») y `descartala`;
+  - **«Confirmar» se retira** y el foco pasa a «Descartar» de esa fila, con `aria-describedby`
+    apuntando a ese párrafo. El lector lee el motivo al llegar, y el foco no cae a `body` al
+    desaparecer el botón enfocado.
+- Con `hueco_ocupado` o `desconocido`: «Confirmar» se queda, el foco no se mueve y el texto va en
+  un `role="status"` de la fila.
+- El estado es de la sesión de la página. Al recargar, la fila vuelve a ofrecer «Confirmar», y
+  otro intento da el mismo rechazo. Es coherente con el ADR-068 («rechaza al confirmar»).
+
+### 8.6 · Claves de i18n nuevas (`lib/i18n/es.ts`, dentro de `agenda`)
+
+Todo con `t`/`tCon`. Ningún literal en `app/` ni en `components/`: `sin-literales.test.ts` lo vigila.
+
+```
+moverSerie: {
+  titulo: 'Mover una cita de una serie',
+  destino: 'Mover a {fecha} · {hora}',
+  pregunta: '¿Qué pasa con la serie?',
+  mantener: 'Mantener la serie: mover solo esta cita',
+  mantenerDetalle: 'La serie no cambia. Esta cita quedará marcada como movida a mano.',
+  modificar: 'Modificar la serie desde esta cita: esta y las siguientes',
+  ahora: 'Ahora: {regla}.',
+  despues: 'Esta y las siguientes pasarán a ser {regla}.',
+  afecta: { una: 'Afecta a 1 cita, la del {primera}.', varias: 'Afecta a {n} citas, del {primera} al {ultima}.' },
+  confirmacion: 'Esta cita se moverá ahora. Las demás quedarán en «Por confirmar» para que las confirmes una a una.',
+  calculando: 'Calculando en qué se convierte la serie…',
+  elige: 'Elige qué pasa con la serie.',
+  sinCambio: 'La cita ya está en ese día y a esa hora.',
+  serieOtraZona: 'La serie está en otra zona horaria que esta cita; mueve solo esta cita.',
+  horaDistintaEnSerie: 'Esa hora no existe o se repite ese día en la zona horaria de la serie; elige otra.',
+  caducada: 'La serie ha cambiado mientras decidías. Revisa el nuevo resumen y vuelve a pulsar Mover.',
+  cancelar: 'Cancelar',
+  mover: 'Mover',
+  moviendo: 'Moviendo…',
+  hechoMantener: 'Cita movida al {fecha} a las {hora}.',
+  hechoModificar: {
+    ninguna: 'Cita movida al {fecha} a las {hora}. La serie ha cambiado.',
+    una: 'Cita movida al {fecha} a las {hora}. 1 cita de la serie espera en «Por confirmar».',
+    varias: 'Cita movida al {fecha} a las {hora}. {n} citas de la serie esperan en «Por confirmar».',
+  },
+  noMovida: 'La serie ha cambiado, pero esta cita no se ha movido: {motivo} Su propuesta sigue en «Por confirmar».',
+  avisos: {
+    recorte: 'Hay meses sin 5.º {dia}. En ellos la cita irá al último, el 4.º: {fechas}.',
+    inexistente: 'El {fecha} las {hora} no existen por el cambio de hora: esa cita irá a las {horaReal} y quedará marcada al confirmarla.',
+    ambigua: 'El {fecha} las {hora} se repiten por el cambio de hora: esa cita irá a la primera y quedará marcada al confirmarla.',
+    sinHora: { una: '1 cita quedará sin hora y se decidirá a mano en «Por confirmar».', varias: '{n} citas quedarán sin hora y se decidirán a mano en «Por confirmar».' },
+  },
+},
+regla: {
+  semanal: 'los {dias} a las {hora}',
+  quincenal: 'los {dias}, cada dos semanas, a las {hora}',
+  mensual: 'el {ordinal} {dia} de cada mes a las {hora}',
+  mensualUltimo: 'el último {dia} de cada mes a las {hora}',
+  dias: { lunes: 'lunes', martes: 'martes', miercoles: 'miércoles', jueves: 'jueves', viernes: 'viernes', sabado: 'sábado', domingo: 'domingo' },
+  diasPlural: { lunes: 'lunes', martes: 'martes', miercoles: 'miércoles', jueves: 'jueves', viernes: 'viernes', sabado: 'sábados', domingo: 'domingos' },
+  ordinales: { primero: '1.er', segundo: '2.º', tercero: '3.er', cuarto: '4.º', quinto: '5.º' },
+},
+rechazos: {
+  yaEmpezada: 'La cita ya ha empezado o ha pasado.',
+  canceladaOCerrada: 'La cita está cancelada o cerrada.',
+  movidaAMano: 'La cita se movió a mano y la serie ya no la gobierna.',
+  fechaYDiaNoCoinciden: 'La fecha y el día de la semana no coinciden.',
+  horarioNuevoPasado: 'El nuevo horario de esta cita ya ha pasado.',
+  propuestaPasada: 'La propuesta ha quedado en el pasado.',
+  sinEvento: 'Esta propuesta no se puede comprobar.',
+  otraRegla: 'La serie ya tiene otra regla.',
+  otraZona: 'El centro ya tiene otra zona horaria.',
+  citaCambiada: 'La cita cambió desde que se hizo la propuesta.',
+  sinHorario: 'La propuesta no tiene horario.',
+  yaNoVale: 'Ya no vale',
+  noConfirmada: 'No se ha confirmado: {motivo}',
+  descartala: 'Descártala para quitarla de la lista.',
+  cambioDeHora: 'Cae en un cambio de hora: al confirmarla quedará marcada.',
+},
+```
+
+- `diaSemana` (ISO 1-7) se traduce a la clave con un array de siete nombres, y `ordinal` (1-5)
+  con uno de cinco. Es indexar, no calcular.
+- «Último» solo sale si `regla.ultimo`.
+- Los plurales se eligen por `n`, nunca concatenando.
+
+### 8.7 · Criterios de aceptación: los nuevos y los ajustados (el contrato ya los recoge)
+
+Correspondencia con el contrato, donde los criterios no llevan número: el primer manual nuevo es M9b más M9c, el segundo es M13 y el automático nuevo es A3.
+
+| Criterio | Cómo se demuestra |
+|---|---|
+| **M9 (ajustado)** · El diálogo pregunta «mantener / modificar» y nunca ofrece «todas». | `dialogo-reprogramar.test.tsx`: en una cita de serie hay exactamente 2 radios, sin ninguno marcado; `queryByText(/todas/i)` es null; Mover sin elegir muestra `elige` y enfoca el primer radio; el foco inicial está en el primer radio; Escape no llama a `reprogramar` y el foco vuelve a la cita; «Modificar» queda `disabled` mientras carga y con un bloqueo, con el motivo visible. |
+| **M9b (nuevo)** · La frase dice en qué se convierte la serie, con el recorte. | Automático, `frase-serie.test.ts`: semanal («los jueves a las 10:00»), quincenal, mensual con ordinal 3 («el 3.er jueves de cada mes a las 10:00»), ordinal 5 con `ultimo` y `recorte` («el último jueves…» y el aviso con las fechas recortadas), `inexistente`, `ambigua`, `inicio` nulo, plurales 1 y n. Manual: una serie mensual del seed arrastrada a un 5.º jueves. |
+| **M9c (nuevo)** · Al aceptar, se mueve la ancla y las demás quedan en «Por confirmar». | `reprogramar.test.ts`, con Supabase simulado: (a) `confirmarPropuesta` se llama **una vez**, con la propuesta de la ancla; (b) con una firma distinta, `previsualizacion_caducada` y `editarSerie` **no** se llama; (c) si `inicioPropuesto` es distinto del instante, `movida: false` y ninguna confirmación; (d) la edición va bien y la confirmación da `23P01`: `ok: true, movida: false`; (e) nunca se llama a `descartarPropuesta`. Manual: arrastre real y la lista. |
+| **M13 (nuevo)** · Una propuesta vieja se rechaza a la vista y no desaparece. | `fila-propuesta.test.tsx`: con un `detalle` permanente, la píldora, el texto, sin «Confirmar», el foco en «Descartar» y el `aria-describedby` correcto; con `hueco_ocupado`, «Confirmar» se queda y el foco no se mueve. Manual: el guion de abajo. |
+| **A3 (nuevo)** · Frase y fragmentos cubiertos. | `npm test` con `frase-serie.test.ts` y `errores.test.ts`. Este último comprueba cada fragmento de §8.5 contra su `detalle` y **lee el fichero de la migración de T-011b** (`supabase/migrations/*_editar_serie_desde_la_cita.sql`, el nombre real se fija al cotejar §8.1) para comprobar que cada fragmento está en él. Si la migración cambia un texto, la prueba se pone roja. |
+| Primitivas | `dialogo.test.tsx`: con `focoInicial`, el foco va a ese elemento; sin la prop, a la «X» como hoy. La prueba del panel: con `pausado`, Escape y el clic fuera no llaman a `alCerrar`. |
+
+**Guion manual añadido:**
+
+6. Serie mensual: arrastrar su cita al 5.º jueves del mes y leer la frase y el aviso de recorte.
+7. Aceptar «modificar»: la cita se mueve y «Por confirmar» crece.
+8. Mover a mano (mantener) otra de esas citas.
+9. Confirmar su propuesta: sale el motivo, no se mueve nada y la fila sigue ahí.
+10. Descartarla.
+
+### 8.8 · Riesgos añadidos, por probabilidad
+
+1. **Alta. El foco cuando el diálogo se abre sobre un panel.** Si el panel no se pausa, el Escape
+   del diálogo cierra también el panel, o el clic dentro del diálogo lo cierra por «fuera».
+   Mitigación: `pausado` y una prueba.
+2. **Media. La previsualización de un rebote llega tarde** y pisa a la vigente. Mitigación: la
+   clave `fecha|hora` por petición, y la firma al aceptar.
+3. **Media. T-011b cambia en su implementación** una clave del `jsonb` o un texto. Mitigación: el
+   Zod estricto (se falla cerrado), la prueba de los fragmentos contra la migración y el cotejo
+   de §8.1 antes de empezar.
+4. **Baja. Edición sin confirmación de la ancla.** La regla ya cambió, pero la ancla no se movió.
+   Es visible (`noMovida`) y está en «Por confirmar». Lo acepta el ADR-068: nada se mueve sin
+   confirmar.
+5. **Baja. Otra persona cambia la serie entre la previsualización y la edición.** Mitigación: la
+   firma, y la frescura de T-011b al confirmar.
+
+### 8.9 · Qué revisar (se suma a §5)
+
+- **Entradas que controla el llamante, nuevas:**
+  - `firma`: solo compara; no concede nada;
+  - `fecha` y `hora` de `previsualizarMovimiento`, validadas con el mismo esquema.
+  Ninguna llamada pasa `p_dia_semana`, `p_duracion_minutos` ni `p_zona_horaria`:
+  `grep -n "p_zona_horaria\|p_duracion_minutos\|p_dia_semana" lib/citas/previsualizar.ts lib/citas/reprogramar.ts` no da nada.
+- **La regla no se reimplementa:** `grep -rn "getUTCDay\|getDay()\|isodow\|/ 7" app/(app)/agenda lib/citas/previsualizar.ts lib/citas/reprogramar.ts` no da nada. El `refine` de `esquemas.ts` es de T-011b y valida, no calcula.
+- **Nada se confirma ni se descarta a espaldas del usuario:**
+  - `confirmarPropuesta` aparece en `reprogramar.ts` una sola vez, sobre la ancla;
+  - `descartarPropuesta` solo se llama desde la acción explícita.
+- **La firma se comprueba antes de `editarSerie`, no después.** Prueba M9c (b).
+- **Las dos opciones y ninguna más.** Nunca `alcance: 'todas'` ni una tercera opción deshabilitada.
+- **El diálogo es modal de verdad:**
+  - `aria-modal`, foco atrapado, foco inicial en el primer radio o en `fecha`;
+  - Escape cancela sin efecto;
+  - el foco vuelve a la cita o a «Reprogramar», y tras el éxito, a la cita movida;
+  - el panel de debajo, `pausado`.
+- **Rechazo en «Por confirmar»:**
+  - la fila no desaparece;
+  - el foco no cae a `body` al retirar «Confirmar»;
+  - `hueco_ocupado` no se trata como permanente.
+- **Los fragmentos** son literales de T-011b §3, con la prueba contra la migración.
+- **`Dialogo`:** sin `focoInicial`, sigue igual (las pruebas antiguas en verde).
+
+### 8.10 · Territorio y delegable
+
+- **Territorio:** se añaden `components/ui/dialogo.tsx` y `components/ui/dialogo.test.tsx`, en el
+  contrato y en §6. Lo demás ya estaba cubierto: `lib/citas/**`, `app/(app)/agenda/**`,
+  `components/ui/panel-anclado.tsx` y `lib/i18n/es.ts`.
+- **Delegable:** nada de esta sección. Es foco, formulario, series y rechazos.

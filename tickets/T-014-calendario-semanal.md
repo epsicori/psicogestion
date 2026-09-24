@@ -4,7 +4,7 @@ titulo: Calendario — vista semanal, estados y ficha de cita
 modelo: opus
 fase: 1
 prioridad: alta
-depende_de: [T-011, T-007]
+depende_de: [T-011, T-011b, T-007]
 estado: pendiente
 territorio:
   - supabase/migrations/*_agenda_citas_rango.sql
@@ -21,6 +21,8 @@ territorio:
   - app/globals.css
   - lib/i18n/es.ts
   - lib/contraste/tokens.ts
+  - components/ui/dialogo.tsx
+  - components/ui/dialogo.test.tsx
   - components/ui/estado-cita.tsx
   - components/ui/estado-cita.test.tsx
   - components/ui/panel-anclado.tsx
@@ -100,6 +102,14 @@ Módulo del prototipo: **Agenda**. Sección: `docs/interfaz.md` §Agenda. Choque
 - [ ] **Arrastrar para reprogramar**, con confirmación explícita y registro en auditoría.
       Sobre una cita de serie, la pregunta es **«¿solo esta, o esta y las siguientes?»**
       (T-011). La cita queda **marcada como desviada**.
+      - **ADR-068**: al mover una cita de serie sale un diálogo que pregunta si **se mantiene
+        la serie** (solo se mueve esta cita) o **se modifica desde esta cita** (esta y las
+        siguientes), y en la segunda opción dice **en palabras en qué se convierte la serie**
+        («las siguientes pasarán a ser el 3.er jueves de cada mes»), con el recorte cuando
+        aplique. El texto sale de `agenda_previsualizar_edicion_serie` (T-011b); la regla no
+        se reimplementa en TypeScript.
+      - Una propuesta de «Por confirmar» que ya no vale **no se descarta sola**: al
+        confirmarla, la base la rechaza y la pantalla enseña el motivo (ADR-068, punto 1).
 - [ ] **El calendario distingue la cita de serie de la suelta y marca la desviada.** Sin
       eso, mover una cita da miedo.
 - [ ] **La vista mensual tiene forma acordada** (`docs/state.md` § Sistema de diseño ·
@@ -153,12 +163,22 @@ Módulo del prototipo: **Agenda**. Sección: `docs/interfaz.md` §Agenda. Choque
       panel no enseña la nota operativa clínica de nadie.
 - [ ] **Manual** — arrastrar una cita de serie pregunta «¿solo esta, o esta y las
       siguientes?» y **nunca ofrece «todas»**, ni siquiera desactivada.
+- [ ] **Manual** — en ese diálogo, la opción de modificar la serie dice en palabras en qué se
+      convierte («el 3.er jueves de cada mes a las 10:00»). En una serie mensual llevada a un
+      5.º jueves avisa de los meses que no lo tienen. Al aceptar, se mueve la cita arrastrada y
+      las demás quedan en «Por confirmar».
+- [ ] **Manual** — confirmar en «Por confirmar» una propuesta que ya no vale (por ejemplo, la
+      de una cita movida a mano después) enseña el motivo, no mueve nada y deja la propuesta
+      en la lista hasta que se descarta.
 - [ ] **Manual** — a 360 px la semana se reorganiza, y **toda** acción disponible en
       escritorio sigue disponible. Ningún objetivo táctil por debajo de 44 px.
 - [ ] **Manual** — recorrido completo con teclado, sin ratón, con foco visible siempre.
 - [ ] **Manual** — `/agenda` al lado de `/prototipo`: mismo vocabulario visual, sin
       controles de adorno.
 - [ ] **Automático** — `disponible: true` para Agenda en `components/armazon/modulos.ts`.
+- [ ] **Automático** — `npm test` cubre la frase de la serie (semanal, quincenal, mensual y
+      «último» con recorte) y el mapeo de los fragmentos de rechazo de T-011b, cotejados con
+      el texto de su migración.
 - [ ] **Automático** — `npm run lint && npm run build` limpios, y el verificador de
       accesibilidad de T-009 en verde.
 
