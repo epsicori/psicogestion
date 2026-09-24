@@ -85,6 +85,29 @@ describe('colocarEnRejilla · fecha inválida (H6)', () => {
   });
 });
 
+describe('colocarEnRejilla · semana o zona inválidas (H8)', () => {
+  // Una rejilla vacía en pantalla se lee como «semana sin citas». Si la semana
+  // pedida o la zona no valen, eso no es una semana vacía: es un error, y
+  // tiene que llegar al error.tsx en vez de callar.
+  const valida = cita('valida', 0, 10, 11);
+
+  it('una fecha de semana inválida lanza, no devuelve una semana vacía', () => {
+    expect(() => colocarEnRejilla([valida], new Date('x'), ZONA)).toThrow(/semana/);
+  });
+
+  it('una zona desconocida lanza, no devuelve una semana vacía', () => {
+    expect(() => colocarEnRejilla([valida], FECHA_SEMANA, 'Europa/Madriz')).toThrow(/semana/);
+  });
+
+  it('gemela positiva: la misma cita con semana y zona válidas sí se coloca', () => {
+    expect(colocarEnRejilla([valida], FECHA_SEMANA, ZONA)).toHaveLength(1);
+  });
+
+  it('una semana válida sin citas sigue siendo una lista vacía, no un error', () => {
+    expect(colocarEnRejilla([], FECHA_SEMANA, ZONA)).toEqual([]);
+  });
+});
+
 describe('colocarEnRejilla · grupos de solape', () => {
   it('tres citas encadenadas (A-B, B-C) forman un grupo de tres columnas y la cuarta va sola', () => {
     // A 09:00-10:00, B 09:30-10:30, C 10:00-11:00 (A y C NO se tocan: semiabierto),

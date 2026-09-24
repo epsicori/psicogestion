@@ -93,7 +93,8 @@ function compararIds(a: string, b: string): number {
 /**
  * Coloca cada cita en la rejilla de la semana de `fecha` en `zona`.
  * Devuelve una celda por tramo (una cita que cruza la medianoche da dos),
- * ordenadas por inicio, fin e id de la cita.
+ * ordenadas por inicio, fin e id de la cita. Lanza si `fecha` no es un
+ * instante válido o `zona` no es una zona conocida (H8).
  */
 export function colocarEnRejilla(
   citas: CitaParaRejilla[],
@@ -103,6 +104,12 @@ export function colocarEnRejilla(
   const dias = diasDeSemana(fecha, zona);
   const { fin: finDeSemana } = limitesDeSemana(fecha, zona);
   const limitesDeDia = [...dias, finDeSemana];
+  // Una fecha de semana inválida o una zona desconocida dejan los ocho
+  // límites en `NaN`: ningún tramo cabría y la rejilla saldría vacía, que en
+  // pantalla es «semana sin citas». No lo es; es un error, y se lanza (H8).
+  if (limitesDeDia.some(esFechaInvalida)) {
+    throw new Error(`No se puede construir la semana de '${String(fecha)}' en la zona '${zona}'.`);
+  }
 
   // Decisión 2: partir cada cita en tramos de un día. La intersección vacía
   // (fuera de la semana, fin antes que inicio) no produce tramo; una fecha
