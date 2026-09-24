@@ -15,21 +15,19 @@
 
 ## En curso
 
-- **T-014·a · MiniMax por API** (`node minimax/encargar.mjs`, clave en `.env.local`): punto de
-  estado de la cita, leyenda y latido (ADR-047), en la rama `T-014a-estado-cita` (worktree
-  `../Psicogestion-T014a`). Dos vueltas (`minimax/revisiones/T-014a.md`); la segunda la aplicó la
-  fábrica con tres arreglos (`13373fe`, build verde). Sin integrar hasta que T-014 tenga territorio.
+- **T-012b** (verificador coteja sobre y fila): implementándose en worktree. Diseño `1496de7`.
+- **T-011b** (editar serie desde la cita elegida y con cambio de día; H8/H9 de T-014 §0): en
+  diseño. El propietario eligió arreglar las series **antes** de T-014 (D6 = opción B).
+- **T-014** diseñado, con territorio. Espera a T-011b. El botón «Notas» queda desactivado hasta
+  T-012 (decisión del propietario): el criterio 4 se cierra en T-012.
+- **T-014·a** (MiniMax por API): rama `T-014a-estado-cita` (`13373fe`, build verde). Entra con T-014.
 
 ## Decidido el 24-09 por el propietario (falta ticket)
 
-- **Salud básica, fila completa** (ADR-064, cierra SQL-H1/TS-H2): formulario con los valores
-  vigentes, las dos columnas obligatorias en fila nueva, vaciar es un valor explícito.
-- **El verificador coteja sobre y fila** (cierra M1 de T-012a): motivo `sobre_no_coincide_con_fila`
-  en `verificar_cadena_huellas()`. Ticket de riesgo alto **antes de T-012**.
-- **Cargo × función** (ADR-065): director sanitario = `administrador` de hoy; director
-  administrativo nuevo, sin dato clínico salvo emergencia con PIN y justificación (ADR-066).
-- **Orden**: T-014 y luego T-012, los dos con territorio y diseño del arquitecto (a ninguno de
-  los dos contratos le falta nada más que `territorio:`).
+- **Salud básica, fila completa** (ADR-064, cierra SQL-H1/TS-H2).
+- **Cargo × función** (ADR-065 y ADR-066): director administrativo sin dato clínico salvo emergencia.
+- **`nota_id` al sobre** (ADR-067): ticket T-012c entre T-012b y T-012. T-012 debe añadir
+  T-012b y T-012c a su `depende_de` (lo edita el arquitecto).
 
 ## Bloqueos
 
@@ -48,10 +46,9 @@
 
 ## Siguiente paso
 
-1. Arquitecto: territorio y diseño de T-014 (usa la pieza de T-014·a, rama `T-014a-estado-cita`).
-2. Tickets nuevos: verificador sobre/fila, salud básica completa (ADR-064), cargo × función
-   (ADR-065). Después, T-012.
-3. Guiones de navegador de una sentada.
+1. T-012b: verificador + dos revisores, integrar. Luego T-012c (diseño).
+2. T-011b: implementar tras su diseño; luego T-014.
+3. Tickets de ADR-064 y ADR-065. Guiones de navegador de una sentada.
 
 ## Verificación manual pendiente
 

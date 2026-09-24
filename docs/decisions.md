@@ -48,3 +48,4 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-064](decisions/ADR-064.md) | Alergias y medicación: cada fila es la foto completa (enmienda al 063) | aceptada | 24-09-2026 |
 | [ADR-065](decisions/ADR-065.md) | Cargo y función: el director puede ser sanitario o solo administrativo | aceptada | 24-09-2026 |
 | [ADR-066](decisions/ADR-066.md) | El director administrativo conserva el acceso de emergencia (cierra el punto abierto del 065) | aceptada | 24-09-2026 |
+| [ADR-067](decisions/ADR-067.md) | `nota_id` entra en el sobre: a qué nota pertenece una versión se sella igual que quién puede leerla | aceptada | 24-09-2026 |
