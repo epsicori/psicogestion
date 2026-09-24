@@ -6,6 +6,32 @@ fase: 1
 prioridad: alta
 depende_de: [T-011, T-007]
 estado: pendiente
+territorio:
+  - supabase/migrations/*_agenda_citas_rango.sql
+  - lib/supabase/tipos-bd.ts
+  - scripts/rls/18-agenda-rango.sql
+  - scripts/rls/README.md
+  - lib/citas/**
+  - lib/agenda/mes.ts
+  - lib/agenda/mes.test.ts
+  - lib/fechas/calendario.ts
+  - lib/fechas/calendario.test.ts
+  - app/(app)/agenda/**
+  - app/page.tsx
+  - app/globals.css
+  - lib/i18n/es.ts
+  - lib/contraste/tokens.ts
+  - components/ui/estado-cita.tsx
+  - components/ui/estado-cita.test.tsx
+  - components/ui/panel-anclado.tsx
+  - components/ui/panel-anclado.test.tsx
+  - components/ui/colocacion.ts
+  - components/ui/colocacion.test.ts
+  - components/ui/rejilla-foco.ts
+  - components/ui/rejilla-foco.test.ts
+  - components/armazon/modulos.ts
+  - components/armazon/modulos.test.ts
+  - docs/interfaz.md
 ---
 
 # Contexto
