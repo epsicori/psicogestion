@@ -18,20 +18,24 @@
 - **T-014·a · MiniMax por API** (`node minimax/encargar.mjs`, clave en `.env.local`): punto de
   estado de la cita, leyenda y latido (ADR-047), en la rama `T-014a-estado-cita` (worktree
   `../Psicogestion-T014a`). Dos vueltas (`minimax/revisiones/T-014a.md`); la segunda la aplicó la
-  fábrica con tres arreglos. Sin integrar: T-014 no tiene contrato de corte ni `territorio:`.
-- T-002, T-006, T-013: solo les quedan los guiones de navegador.
+  fábrica con tres arreglos (`13373fe`, build verde). Sin integrar hasta que T-014 tenga territorio.
 
-## Bloqueos y decisiones del propietario
+## Decidido el 24-09 por el propietario (falta ticket)
 
-- **Salud básica, fila parcial** (T-032 SQL-H1/TS-H2, MEDIA): la ficha lee la última fila de
-  `pacientes_salud_basica` entera y `fila_no_vacia` admite filas con un solo campo; una fila solo
-  con medicación **oculta la alergia**. Elegir: cada fila es la foto completa (check) o se lee el
-  último valor no nulo por campo. ADR-063 dice en falso que vaciar no tiene forma: ADR nuevo.
-- **`verificar_cadena_huellas()` no coteja `alcance`**: decidir antes de T-012 (primera firma real).
-- **T-012** necesita contrato con `territorio:` (propietario o arquitecto).
+- **Salud básica, fila completa** (ADR-064, cierra SQL-H1/TS-H2): formulario con los valores
+  vigentes, las dos columnas obligatorias en fila nueva, vaciar es un valor explícito.
+- **El verificador coteja sobre y fila** (cierra M1 de T-012a): motivo `sobre_no_coincide_con_fila`
+  en `verificar_cadena_huellas()`. Ticket de riesgo alto **antes de T-012**.
+- **Cargo × función** (ADR-065): director sanitario = `administrador` de hoy; director
+  administrativo nuevo, sin dato clínico. **Abierto**: ¿conserva el acceso de emergencia?
+- **Orden**: T-014 y luego T-012, los dos con territorio y diseño del arquitecto (a ninguno de
+  los dos contratos le falta nada más que `territorio:`).
+
+## Bloqueos
+
 - Económico sin comitear en el worktree `agent-a3e72807070793a0e`; retomar o rehacer.
-- **`stash@{0}`** (verificador T-031): lleva el arreglo del QR de `segundo-factor.tsx` (anotado como
-  erróneo: `qr_code` llega como SVG crudo, no data URI). No borrar sin decidir el QR.
+- BD local: queda `qr-prueba-…@psicogestion.test` (sonda del QR, 24-09); no se deja borrar por
+  las FK de auditoría. Lo limpia el próximo `db reset`.
 
 ## Trampas de la fábrica
 
@@ -44,8 +48,9 @@
 
 ## Siguiente paso
 
-1. Decisión de salud básica (arriba) y T-012 con contrato.
-2. T-014 · calendario semanal (depende de T-011 y T-007), usando la pieza de T-014·a.
+1. Arquitecto: territorio y diseño de T-014 (usa la pieza de T-014·a, rama `T-014a-estado-cita`).
+2. Tickets nuevos: verificador sobre/fila, salud básica completa (ADR-064), cargo × función
+   (ADR-065). Después, T-012.
 3. Guiones de navegador de una sentada.
 
 ## Verificación manual pendiente

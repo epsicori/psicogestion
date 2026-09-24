@@ -45,3 +45,5 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-061](decisions/ADR-061.md) | Alergias y medicación: tabla propia, en claro, fuera del candado, sin el técnico | aceptada | 16-09-2026 |
 | [ADR-062](decisions/ADR-062.md) | Un solo campo de sexo, administrativo | aceptada | 16-09-2026 |
 | [ADR-063](decisions/ADR-063.md) | Alergias y medicación: de solo adición y solo del profesional asignado (enmienda al 061) | aceptada | 24-09-2026 |
+| [ADR-064](decisions/ADR-064.md) | Alergias y medicación: cada fila es la foto completa (enmienda al 063) | aceptada | 24-09-2026 |
+| [ADR-065](decisions/ADR-065.md) | Cargo y función: el director puede ser sanitario o solo administrativo | aceptada | 24-09-2026 |
