@@ -8,6 +8,14 @@
 // El enganche a la ejecución nocturna NO se hace aquí (T-009, .github/**, territorio de
 // MiniMax): este comando, su bandera --json y su código de salida distinto de cero son
 // exactamente lo que ese ticket tiene que enganchar (ver docs/state.md).
+//
+// Desde T-012b una misma cadena puede tener MÁS DE UNA anomalía por versión
+// (p. ej. huella_no_coincide y sobre_no_coincide_con_fila a la vez, ver D.1
+// en scripts/rls/14-cadena-huellas.sql): el texto imprime el primer eslabón
+// roto de cada cadena y, si hay más anomalías en esa misma cadena, una línea
+// de resumen con las que faltan. --json no cambia de forma: sigue siendo el
+// array plano que devuelve verificar_cadena_huellas(), ahora con un orden
+// determinista también por motivo.
 
 import { localizarContenedor } from "./psql.mjs";
 import { execFileSync } from "node:child_process";
@@ -57,7 +65,7 @@ const contenedor = localizarContenedor();
 // ni nada que el parser SQL pueda reinterpretar.
 const argumento = paciente ? `'${paciente}'::uuid` : "null::uuid";
 const consulta =
-  `select coalesce(jsonb_agg(t order by t.paciente_id, t.posicion_cadena), '[]'::jsonb)::text ` +
+  `select coalesce(jsonb_agg(t order by t.paciente_id, t.posicion_cadena, t.motivo), '[]'::jsonb)::text ` +
   `from public.verificar_cadena_huellas(${argumento}) t;`;
 
 let salida;
@@ -101,12 +109,23 @@ if (anomalias.length === 0) {
 }
 
 // El primer eslabón roto de cada cadena (paciente): la posición mínima
-// entre las anomalías de ese paciente.
+// entre las anomalías de ese paciente. El resto de anomalías de esa misma
+// cadena (T-012b: una versión puede fallar por más de un motivo a la vez)
+// se guardan aparte para la línea de resumen.
 const primeraPorPaciente = new Map();
+const restoPorPaciente = new Map();
 for (const a of anomalias) {
   const actual = primeraPorPaciente.get(a.paciente_id);
-  if (!actual || a.posicion_cadena < actual.posicion_cadena) {
+  if (!actual) {
     primeraPorPaciente.set(a.paciente_id, a);
+    restoPorPaciente.set(a.paciente_id, []);
+    continue;
+  }
+  if (a.posicion_cadena < actual.posicion_cadena) {
+    restoPorPaciente.get(a.paciente_id).push(actual);
+    primeraPorPaciente.set(a.paciente_id, a);
+  } else {
+    restoPorPaciente.get(a.paciente_id).push(a);
   }
 }
 
@@ -116,6 +135,11 @@ for (const a of primeraPorPaciente.values()) {
     `  · paciente ${a.paciente_id} — primer eslabón roto: posición ${a.posicion_cadena} ` +
       `(versión ${a.version_id}, nota ${a.nota_id}, creada ${a.creada_en}) — ${a.motivo}`,
   );
+  const resto = restoPorPaciente.get(a.paciente_id);
+  if (resto.length > 0) {
+    const detalle = resto.map((r) => `${r.motivo} (posición ${r.posicion_cadena})`).join(", ");
+    console.error(`      y ${resto.length} anomalía(s) más en esta cadena: ${detalle}`);
+  }
 }
 
 process.exit(1);
