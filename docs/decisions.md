@@ -50,3 +50,4 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-066](decisions/ADR-066.md) | El director administrativo conserva el acceso de emergencia (cierra el punto abierto del 065) | aceptada | 24-09-2026 |
 | [ADR-067](decisions/ADR-067.md) | `nota_id` entra en el sobre: a qué nota pertenece una versión se sella igual que quién puede leerla | aceptada | 24-09-2026 |
 | [ADR-068](decisions/ADR-068.md) | Editar una serie: propuestas que se rechazan al confirmar, sin atajo directo, y el diálogo dice en qué se convierte la serie | aceptada | 24-09-2026 |
+| [ADR-069](decisions/ADR-069.md) | El ordinal de una serie mensual es fijo, y las series solo se crean por la función que las valida | aceptada | 24-09-2026 |
