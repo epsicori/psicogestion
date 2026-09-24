@@ -70,8 +70,10 @@ entran números, salen números.
 ## Criterios de aceptación (verificables)
 
 - [ ] **Automático** — `npm test`, `npm run lint` y `npx tsc --noEmit` limpios. Pega la salida.
-- [ ] **Automático** — `aCentimos('12,50')`, `'12.50'`, `'12'` y `' 12,50 € '` dan todos
-      `1250`; `'doce'` y `''` **no** dan `NaN` en silencio.
+- [ ] **Automático** — `aCentimos('12,50')`, `'12.50'` y `' 12,50 € '` dan todos `1250`, y
+      `aCentimos('12')` da `1200`; `'doce'` y `''` **no** dan `NaN` en silencio.
+      *(Errata corregida el 24-09-2026 con permiso del propietario: el texto original metía
+      `'12'` entre las grafías de `1250`, y un entero suelto son 12,00 €.)*
 - [ ] **Automático** — un importe con régimen `exento_sanitario` da **cuota cero**, y el
       desglose distingue «exento» de «21 % sobre cero».
 - [ ] **Automático** — repartir **30000 céntimos en 7** da siete partes cuya **suma es

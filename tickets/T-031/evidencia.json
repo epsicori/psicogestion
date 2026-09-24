@@ -1,0 +1,56 @@
+{
+  "ticket": "T-031",
+  "resumen": "Verificado en worktree .claude/worktrees/t031, rama T-031-dinero-importes-y-redondeo, HEAD 29e4c36. Territorio respetado (solo lib/dinero/** y kimi/informes/T-031.md, sin package.json). Lint, tsc y toda la suite de tests (535/535, 53 ficheros) limpios; sin regresiones. Con la errata del criterio 2 corregida por el propietario el 24-09-2026 (tickets/T-031-dinero-importes-y-redondeo.md:73-76: 'aCentimos(\"12\") da 1200', no 1250), los 7 criterios automáticos del contrato pasan con evidencia real de comandos.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "Automático — npm test, npm run lint y npx tsc --noEmit limpios.",
+      "veredicto": "PASA",
+      "comando": "npm run lint && npx tsc --noEmit && npm test",
+      "evidencia": "lint: '2 problems (0 errors, 2 warnings)' (warnings en lib/cuentas/accesos.test.ts, fichero no tocado por T-031). tsc --noEmit: sin salida (limpio). npm test: 'Test Files 53 passed (53)' / 'Tests 535 passed (535)'."
+    },
+    {
+      "id": 2,
+      "texto": "aCentimos('12,50'), '12.50' y ' 12,50 € ' dan todos 1250, y aCentimos('12') da 1200; 'doce' y '' no dan NaN en silencio.",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/dinero (ver lib/dinero/importe.test.ts:6-34)",
+      "evidencia": "Reejecutado sobre el mismo worktree y HEAD 29e4c36 tras la corrección del contrato: expect(aCentimos('12,50')).toBe(1250); expect(aCentimos('12.50')).toBe(1250); expect(aCentimos('12')).toBe(1200); expect(aCentimos(' 12,50 € ')).toBe(1250) — coincide exactamente con el texto corregido del criterio. expect(() => aCentimos('doce')).toThrow(/No es un importe/); expect(() => aCentimos('')).toThrow(/No es un importe/) — lanzan Error, nunca NaN en silencio. npm test -- lib/dinero: 'Test Files 3 passed (3)' / 'Tests 42 passed (42)'."
+    },
+    {
+      "id": 3,
+      "texto": "Un importe con régimen exento_sanitario da cuota cero, y el desglose distingue 'exento' de '21% sobre cero'.",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/dinero (ver lib/dinero/iva.test.ts:17-32)",
+      "evidencia": "desglosarDesdeBase(5000,'exento_sanitario') => {cuota:0, tipoImpositivo:null}; desglosarDesdeBase(0,'general') => {cuota:0, tipoImpositivo:21}. La prueba compara ambos casos explícitamente para fijar la distinción. Test pasa."
+    },
+    {
+      "id": 4,
+      "texto": "Repartir 30000 céntimos en 7 da siete partes cuya suma es exactamente 30000, y la prueba enseña el reparto entero, no solo la suma.",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/dinero (ver lib/dinero/reparto.test.ts:6-12)",
+      "evidencia": "expect(repartir(30000,7)).toEqual([4286,4286,4286,4286,4286,4285,4285]); expect(suma).toBe(30000). Test pasa."
+    },
+    {
+      "id": 5,
+      "texto": "Un caso de redondeo en el filo probado en las dos direcciones, con la regla escrita en la aserción.",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/dinero (ver lib/dinero/importe.test.ts:106-126 y lib/dinero/iva.test.ts:34-39)",
+      "evidencia": "redondearCentimos(10.5)->11 (sube) y redondearCentimos(10.49)->10 (baja), con negativos espejo (-10.5->-11). desglosarDesdeBase(50,'general').cuota=11 (10,5 sube) y desglosarDesdeBase(45,'general').cuota=9 (9,45 baja). Comentarios en la aserción documentan 'media lejos del cero'. Test pasa."
+    },
+    {
+      "id": 6,
+      "texto": "pendiente() con un cobro mayor que el total no devuelve un número negativo disfrazado, y hay una prueba que lo fija.",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/dinero (ver lib/dinero/reparto.test.ts:64-70)",
+      "evidencia": "pendiente(10000,12000) => {estado:'cobrado_de_mas', pendiente:0, excedente:2000}; se afirma expresamente pendiente=0 ('nunca negativo disfrazado') y estado!=='cobrado'. Test pasa."
+    },
+    {
+      "id": 7,
+      "texto": "Cobertura del módulo por encima del 95% (npm run test:cobertura).",
+      "veredicto": "PASA",
+      "comando": "npm run test:cobertura -- lib/dinero; y verificación manual sobre coverage/coverage-final.json (iva.ts y reparto.ts no aparecen en la tabla de texto por skipFull del reportero al estar al 100%)",
+      "evidencia": "Tabla 'All files' de lib/dinero: Stmts 100%, Branch 97.82%, Funcs 100%, Lines 100%. Verificado por fichero desde coverage-final.json: importe.ts stmts 30/30 branches 27/28; iva.ts stmts 16/16 branches 8/8 (100%); reparto.ts stmts 17/17 branches 10/10 (100%). Todas las métricas superan el 95% exigido."
+    }
+  ],
+  "regresiones": []
+}

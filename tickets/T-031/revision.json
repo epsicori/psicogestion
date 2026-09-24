@@ -1,0 +1,58 @@
+{
+  "ticket": "T-031",
+  "commit": "29e4c36",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 5,
+  "cerrados_de_ronda_anterior": ["H6", "H7", "H8", "H9", "H10", "H11"],
+  "hallazgos": [
+    {
+      "id": "H12",
+      "severidad": "MEDIA",
+      "archivo": "kimi/informes/T-031.md",
+      "linea": 24,
+      "descripcion": "El informe de entrega sigue diciendo 'media al alza' (tambien en su seccion 'Para docs/state.md', :168), cita pruebas renombradas que ya no existen (:82, :112) y da 100 % de ramas y 26 pruebas; en el arbol son 97,82 % y 42.",
+      "escenario": "Si se integra copiando la seccion 'Para docs/state.md', la memoria queda con 'redondeo media al alza' y T-023/T-027 dan por buena la conducta de Math.round en negativos que quito H8; quien coteje el criterio 5 no encuentra en vitest el nombre de prueba citado."
+    },
+    {
+      "id": "H13",
+      "severidad": "BAJA",
+      "archivo": "lib/dinero/importe.ts",
+      "linea": 32,
+      "descripcion": "Ninguna prueba sostiene el paso a Number.isSafeInteger en comprobarCentimos: todas las negativas de formatearImporte, desglosar*, repartir y pendiente usan fracciones o NaN.",
+      "escenario": "Medido en una copia: con Number.isInteger en comprobarCentimos, las 42 pruebas siguen en verde y formatearImporte(1e19) vuelve a pintar un importe inexacto sin lanzar."
+    },
+    {
+      "id": "H14",
+      "severidad": "BAJA",
+      "archivo": "lib/dinero/iva.ts",
+      "linea": 75,
+      "descripcion": "La guarda de entero seguro solo mira las entradas: el total del desglose (y la resta de pendiente, reparto.ts:50) puede salir del rango seguro sin error.",
+      "escenario": "desglosarDesdeBase(aCentimos('80000000000000'), 'general') -> total 9680000000000000 (no seguro); formatearImporte(d.total) lanza sobre un resultado del propio modulo. pendiente(MAX_SAFE_INTEGER, -MAX_SAFE_INTEGER) -> 18014398509481982. Solo con cifras absurdas."
+    },
+    {
+      "id": "H15",
+      "severidad": "BAJA",
+      "archivo": "lib/dinero/importe.ts",
+      "linea": 24,
+      "descripcion": "redondearCentimos es publica, es por donde deben pasar porcentajes y divisiones, y devuelve NaN o Infinity sin lanzar, contra la cabecera del modulo (:6-7).",
+      "escenario": "redondearCentimos(NaN) -> NaN y redondearCentimos(-Infinity) -> -Infinity (medido); un llamante que calcule precio*pct/100 con pct sin definir recibe NaN, que JSON.stringify serializa como null y llega nulo a la base."
+    },
+    {
+      "id": "H16",
+      "severidad": "BAJA",
+      "archivo": "lib/dinero/reparto.ts",
+      "linea": 47,
+      "descripcion": "pendiente() admite un total negativo (el modulo acepta negativos para devoluciones) y lo presenta como 'cobrado de mas'.",
+      "escenario": "pendiente(-6100, 0) -> { estado: 'cobrado_de_mas', pendiente: 0, excedente: 6100 }: una devolucion de 61 EUR sin pagar se ve como cobrado de mas. pendiente(10000, -500) -> pendiente 10500."
+    },
+    {
+      "id": "H17",
+      "severidad": "BAJA",
+      "archivo": "lib/dinero/iva.ts",
+      "linea": 95,
+      "descripcion": "Con entrada -0, el desglose devuelve -0 (cuota = total - base, y base/total en la rama exenta, :44); el bucle de simetria de iva.test.ts:110 pasa por t = 0 y no lo ve porque solo suma.",
+      "escenario": "La devolucion de un cargo de 0 EUR, construida como -cargo.total: desglosarDesdeTotal(-0, 'general') -> cuota -0, total -0; desglosarDesdeBase(-0, 'exento_sanitario') -> base -0. Una prueba de T-023 con toEqual({base:0,cuota:0,total:0}) falla, porque toEqual de vitest distingue -0 (medido)."
+    }
+  ]
+}
