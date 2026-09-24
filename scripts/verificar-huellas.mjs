@@ -9,13 +9,19 @@
 // MiniMax): este comando, su bandera --json y su código de salida distinto de cero son
 // exactamente lo que ese ticket tiene que enganchar (ver docs/state.md).
 //
-// Desde T-012b una misma cadena puede tener MÁS DE UNA anomalía por versión
-// (p. ej. huella_no_coincide y sobre_no_coincide_con_fila a la vez, ver D.1
-// en scripts/rls/14-cadena-huellas.sql): el texto imprime el primer eslabón
-// roto de cada cadena y, si hay más anomalías en esa misma cadena, una línea
-// de resumen con las que faltan. --json no cambia de forma: sigue siendo el
+// Una misma cadena ya podía tener MÁS DE UNA anomalía por versión desde
+// T-005 (p. ej. genesis_incorrecto y huella_no_coincide a la vez en la
+// posición 1, o eslabon_desencadenado y huella_no_coincide en cualquier
+// otra); lo que cambia en T-012b (que además añade huella_no_coincide y
+// sobre_no_coincide_con_fila a la vez, ver D.1 en
+// scripts/rls/14-cadena-huellas.sql) es que el CLI **deja de perderlas**:
+// hasta esta rama, el texto solo imprimía el primer eslabón roto de cada
+// cadena y descartaba el resto en silencio, con un desempate indeterminado
+// cuando dos anomalías caían en la misma posición. Ahora imprime el primer
+// eslabón roto y, si hay más anomalías en esa misma cadena, una línea de
+// resumen con las que faltan. --json no cambia de forma: sigue siendo el
 // array plano que devuelve verificar_cadena_huellas(), ahora con un orden
-// determinista también por motivo.
+// determinista también por motivo y por version_id.
 
 import { localizarContenedor } from "./psql.mjs";
 import { execFileSync } from "node:child_process";
@@ -65,7 +71,7 @@ const contenedor = localizarContenedor();
 // ni nada que el parser SQL pueda reinterpretar.
 const argumento = paciente ? `'${paciente}'::uuid` : "null::uuid";
 const consulta =
-  `select coalesce(jsonb_agg(t order by t.paciente_id, t.posicion_cadena, t.motivo), '[]'::jsonb)::text ` +
+  `select coalesce(jsonb_agg(t order by t.paciente_id, t.posicion_cadena, t.motivo, t.version_id), '[]'::jsonb)::text ` +
   `from public.verificar_cadena_huellas(${argumento}) t;`;
 
 let salida;

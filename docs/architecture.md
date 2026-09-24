@@ -95,7 +95,11 @@ solo por disciplina— y no se concede a `authenticated`. Desde T-012b también 
 valor y sin reserializar, las siete columnas que el sobre repite (`alcance`, `autor_id`,
 `cuerpo`, `anotaciones_reservadas`, `esquema_version`, `motivo_cambio`, `creada_en`) contra
 la fila que las guarda, con motivo `sobre_no_coincide_con_fila` (ADR-057): así se detecta
-también un `update` con los cerrojos levantados que cambie la fila sin tocar el sobre.
+un `update` con los cerrojos levantados que cambie una de esas siete columnas sin tocar el
+sobre. `nota_id` y `numero_version` quedan fuera de este cotejo hasta T-012c (ADR-067,
+sellar `nota_id`). Y sigue sin cubrir la reescritura completa de la ÚLTIMA versión de una
+cadena —columna, sobre y huella a la vez, sin eslabón siguiente que la delate—: ese riesgo
+lo acepta el diseño de T-012b y solo lo cierra un anclaje externo, fuera de alcance.
 Ejecutable a mano con `npm run verificar:huellas`.
 
 ### 2 · Solo adición
