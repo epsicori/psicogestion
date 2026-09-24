@@ -5,7 +5,8 @@ modelo: sonnet
 fase: 2
 prioridad: alta
 depende_de: [T-016]
-estado: en_curso
+estado: hecho
+completado: 2026-09-24
 riesgo: medio
 delegable: no
 territorio:

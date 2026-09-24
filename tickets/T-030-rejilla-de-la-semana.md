@@ -5,7 +5,8 @@ modelo: sonnet
 fase: 1
 prioridad: alta
 depende_de: [T-016, T-018, T-020]
-estado: en_curso
+estado: hecho
+completado: 2026-09-24
 territorio:
   - lib/agenda/rejilla.ts
   - lib/agenda/rejilla.test.ts

@@ -8,7 +8,8 @@ fase: 2
 prioridad: alta
 depende_de: [T-013, T-017]
 bloquea: []
-estado: en_curso
+estado: hecho
+completado: 2026-09-24
 territorio:
   - docs/decisions/ADR-060.md
   - docs/decisions/ADR-061.md

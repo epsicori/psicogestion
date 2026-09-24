@@ -1,67 +1,52 @@
 # Estado
 
-> Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño (ADR, trampas, circuito)
-> en tickets y bitácora; las reglas por ruta en `.claude/rules/` (se cargan solas).
+> Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
+> reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 24-09-2026 · `main` con T-012a integrado · tickets: 18 hechos · 6 en curso
+**Actualizado**: 24-09-2026 · T-030, T-031 y T-032 integrados en `main` (`ff49fa6`, `cbca245`, `b7aeea2`)
 
 ## Dónde estamos
 
-- Integrado en `main`: T-000 a T-011, **T-012a** (sobre de doce claves, `esquema_version = 3`),
-  T-013 (dos cortes), T-013a, T-016 a T-020 y T-029. La nota clínica (T-012) ya puede firmar.
-- La autenticación está completa de punta a punta; la ficha del paciente existe con cinco pestañas.
+- **Integrado en `main`**: T-000–T-013a, T-016–T-020, T-029–T-032. Autenticación de punta a punta;
+  ficha de paciente con identificación cifrada (descifrado registrado en auditoría), sexo, teléfono,
+  alergias y medicación (solo adición, solo el profesional asignado, ADR-063). Aritmética de dinero
+  (céntimos, IVA 21 %, reparto sin pérdida, redondeo de la mitad lejos del cero). Rejilla de la
+  semana con citas solapadas y cambios de hora (23 y 25 h) probados.
 
 ## En curso
 
-- **T-032** · Alta de paciente completa (riesgo alto), en el worktree `agent-a2fbeaf1f1cdd100e`.
-  Segunda vuelta de correcciones hecha (24-09). Alergias y medicación son de solo adición y solo del
-  profesional asignado (**ADR-063**, decisión del propietario). Pruebas de unión y de cableado de la
-  ficha, candado en la guarda de `solo_contacto`. En verde: test 581/581, rls 428 OK (base vacía y
-  sembrada), build, lint y `territorio.mjs`. Falta: reverificar, dos revisores de cierre y merge.
-  Detalle en `docs/bitacora/T-032.md`.
-- **T-031** · Dinero (worktree `t031`, `29e4c36`). Tercera vuelta de la fábrica sobre la 2.ª
-  revisión: H6-H11 cerrados (millares con cero inicial, céntimos seguros en todo el módulo,
-  redondeo **media lejos del cero** para que cargo + devolución = 0, sin `-0`). 42/42, cobertura
-  100 % líneas. Falta: verificador y revisor sobre `29e4c36`; el sello actual es anterior.
-- **T-030** · Rejilla (worktree `t030`, rama `T-030-rejilla-semana-fabrica`, `cd9cdbc`). Ronda 3
-  sin ALTA ni MEDIA; la fábrica cerró las BAJA H8 (semana o zona inválidas lanzan) y H9 (informe).
-  Falta: verificador y revisor sobre `cd9cdbc`; el sello actual es anterior.
-- T-002, T-006, T-013: solo les quedan los guiones de navegador (abajo).
+- **T-014·a · MiniMax por API** (`node minimax/encargar.mjs`, clave en `.env.local`): punto de
+  estado de la cita, leyenda y latido (ADR-047), en la rama `T-014a-estado-cita` (worktree
+  `../Psicogestion-T014a`). Dos vueltas (`minimax/revisiones/T-014a.md`); la segunda la aplicó la
+  fábrica con tres arreglos. Sin integrar: T-014 no tiene contrato de corte ni `territorio:`.
+- T-002, T-006, T-013: solo les quedan los guiones de navegador.
 
-## Bloqueos y decisiones que no toma un agente
+## Bloqueos y decisiones del propietario
 
-- **Cada cuánto caduca una valoración de riesgo**: `MESES_VALORACION_VIGENTE = 6` es un marcador.
-- **`verificar_cadena_huellas()` no coteja `alcance`** de la fila contra el del sobre: decidirlo
-  antes de la primera firma real (T-012).
-- Económico: implementación sin comitear en el worktree `agent-a3e72807070793a0e` (1413 líneas, sin
-  verificar ni revisar). Retomar o rehacer.
-- Obsoletos, a la espera de que alguien diga que se borran: la rama `verificacion-T-011a` y los
-  worktrees `agent-a0c13db09cb6a7b62`, `agent-a3133689fd69000ac`, `agent-a0cf274d698e0d85b`,
-  `agent-ac7b6a35059cc839d`, `agent-a0fd267d4973735c3` (con ficheros sin comitear; mirar antes).
-- **`stash@{0}` («verificador T-031 stash»)**: el verificador de T-031 guardó ahí todo lo no
-  comiteado. Los ficheros sin seguimiento ya están restaurados (evidencia y revisión selladas de
-  T-012a, contrato y diseño de T-032). Siguen dentro dos cambios de `main` sin comitear: el arreglo
-  del QR de `segundo-factor.tsx` (anotado como erróneo: `qr_code` llega como SVG crudo, no data URI)
-  y una nota de state.md. No borrar el stash sin decidir el QR.
+- **Salud básica, fila parcial** (T-032 SQL-H1/TS-H2, MEDIA): la ficha lee la última fila de
+  `pacientes_salud_basica` entera y `fila_no_vacia` admite filas con un solo campo; una fila solo
+  con medicación **oculta la alergia**. Elegir: cada fila es la foto completa (check) o se lee el
+  último valor no nulo por campo. ADR-063 dice en falso que vaciar no tiene forma: ADR nuevo.
+- **`verificar_cadena_huellas()` no coteja `alcance`**: decidir antes de T-012 (primera firma real).
+- **T-012** necesita contrato con `territorio:` (propietario o arquitecto).
+- Económico sin comitear en el worktree `agent-a3e72807070793a0e`; retomar o rehacer.
+- **`stash@{0}`** (verificador T-031): lleva el arreglo del QR de `segundo-factor.tsx` (anotado como
+  erróneo: `qr_code` llega como SVG crudo, no data URI). No borrar sin decidir el QR.
 
-## Trampas de la fábrica (v3.1)
+## Trampas de la fábrica
 
-- **Un verificador no hace `git stash`** en el repo principal: se llevó evidencia sellada ajena.
-- `git archive` con `core.autocrlf=true` convierte a CRLF: un JSON sellado se restaura con
-  `git show`, no con `git archive`, o su hash deja de coincidir.
-- `merge-gate` busca el id de ticket en el texto de la orden: una rama `worktree-agent-*` no lo
-  lleva; nómbralo en el `-m`.
-- `territorio.mjs` lee el contrato **de la rama**: tras ampliar `territorio:` en `main`, tráelo con
-  `git checkout main -- tickets/T-XXX-….md` (el merge-gate bloquea `git merge main`).
-- `implementador` fuerza worktree propio · `build | tail` da el estado de `tail` · rutas con espacio.
+- **El hook de sellado** (`~/.claude/hooks/verificador-gate.mjs`, del usuario) toma el id del
+  ticket del último texto del hilo principal, no del subagente: con agentes en marcha, el último
+  texto nombra solo el ticket que parará antes. Un ticket por ventana de parada.
+- Un verificador no hace `git stash` en el repo principal. `git archive` con `autocrlf` rompe sellos.
+- `merge-gate` busca el id en la orden: nómbralo en el `-m`. `db reset` no relee `config.toml`.
+- MiniMax por API: el sondeo elige modelo en cada llamada (Text-01 o M1 el 24-09; M2 no está).
 
 ## Siguiente paso
 
-1. T-032 · verificador y dos revisores sobre la segunda vuelta; merge.
-2. T-031 y T-030 · verificador y revisor sobre la última vuelta; merge.
-3. T-012 · corte A del diseño (§8): falta su contrato con `territorio:` (propietario/arquitecto)
-   y decidir si `verificar_cadena_huellas()` coteja `alcance`.
-4. Los guiones de navegador, de una sentada. `db reset` **no relee `config.toml`**.
+1. Decisión de salud básica (arriba) y T-012 con contrato.
+2. T-014 · calendario semanal (depende de T-011 y T-007), usando la pieza de T-014·a.
+3. Guiones de navegador de una sentada.
 
 ## Verificación manual pendiente
 
@@ -70,10 +55,20 @@
 
 ## Hallazgos anotados (abiertos)
 
-- `alta_paciente()` no fija `centro_id` (ADR-033, T-032): un técnico no ve a los pacientes creados
-  desde el formulario hasta que algo les asigne centro. Ticket propio.
-- `docs/architecture.md:62-64,91` sigue en el sobre de once claves y `esquema_version = 2`.
+- **Para T-014**: `new Date('2026-02-30')` da 2 de marzo: validar `?semana=`. T-030 H10: zona
+  `null` cae a la del servidor sin lanzar; pasar `zona_horaria_centro()`.
+- **T-030 H11**: el informe de Kimi trae evidencia desfasada del criterio 3.
+- **T-031**: H12 (MEDIA) `kimi/informes/T-031.md` dice «media al alza»; la regla es la mitad lejos
+  del cero, no copiarla. H13 sin prueba de `isSafeInteger` · H14 salidas sin guarda · H15
+  `redondearCentimos` deja pasar NaN/Infinity · H16 `pendiente(-6100, 0)` da `cobrado_de_mas` ·
+  H17 sale `-0` del desglose de IVA. Mirar antes de T-023 y T-027.
+- **T-032**: SQL-H2 (MEDIA) `TABLAS_SOLO_ADICION` de `scripts/lint-migraciones.ts` sin
+  `pacientes_salud_basica` (carril de Kimi) · SQL-H3 el `for share` de
+  `fn_firmante_no_es_solo_contacto()` sin prueba · SQL-H4 `scripts/rls/README.md:28` dice que el
+  administrador lee salud básica · TS-H3 `lib/cifrado/bytea.ts:24` mete el valor en el mensaje de
+  error y `datos.ts:381` lo manda a `console.error` · `alta_paciente()` no fija `centro_id` (ADR-033).
+- `Pildora` tono `success` pinta `text-primary-foreground` (casi blanco) sobre `bg-primary/10`.
+- `docs/architecture.md:62–64,91` sigue en el sobre de once claves y `esquema_version = 2`.
 - `modalidad_relacional` bajo el candado (choque 11); técnico sin `consentimientos` (choque 12).
-- El `Button` compartido mide 40 px contra 44 px.
-- T-011 · «entregado» a medias → T-015; sin transiciones del ADR-045 en base; `mensual` sin definir.
-- Los anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md` §Hallazgos anotados.
+- `Button` 40 px contra 44 px. T-011: sin transiciones del ADR-045 en base.
+- Anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md` §Hallazgos anotados.
