@@ -27,7 +27,7 @@
 - **El verificador coteja sobre y fila** (cierra M1 de T-012a): motivo `sobre_no_coincide_con_fila`
   en `verificar_cadena_huellas()`. Ticket de riesgo alto **antes de T-012**.
 - **Cargo × función** (ADR-065): director sanitario = `administrador` de hoy; director
-  administrativo nuevo, sin dato clínico. **Abierto**: ¿conserva el acceso de emergencia?
+  administrativo nuevo, sin dato clínico salvo emergencia con PIN y justificación (ADR-066).
 - **Orden**: T-014 y luego T-012, los dos con territorio y diseño del arquitecto (a ninguno de
   los dos contratos le falta nada más que `territorio:`).
 
