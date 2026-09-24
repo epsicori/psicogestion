@@ -26,6 +26,7 @@ territorio:
   - scripts/rls/07-capacidad.sql
   - scripts/rls/08-identificacion.sql
   - scripts/rls/11-cobertura.sql
+  - scripts/rls/12-resto-de-tablas.sql  # ADR-063: su aserción fijaba cuatro filas en tablas_solo_adicion
   - scripts/rls/README.md
   - scripts/t032-alta.ts
   - lib/cifrado/**
