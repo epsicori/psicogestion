@@ -13,6 +13,7 @@ territorio:
   - docs/decisions/ADR-060.md
   - docs/decisions/ADR-061.md
   - docs/decisions/ADR-062.md
+  - docs/decisions/ADR-063.md
   - docs/decisions.md
   - docs/architecture.md
   - docs/interfaz.md
@@ -156,7 +157,13 @@ una sola cosa**.
 - [ ] **ADR-062** — el sexo es **un solo campo administrativo** con los tres valores del RD
       1093/2010. Queda bloqueado: modelar identidad de género en v1, y usar este campo como si
       lo fuera.
-- [ ] Tres filas nuevas en `docs/decisions.md`. **Ningún ADR anterior se edita.**
+- [ ] **ADR-063** *(decisión del propietario del 24-09-2026, enmienda al ADR-061)* — alergias
+      y medicación son **de solo adición** (regla 6 de la constitución): cada cambio es una
+      fila nueva con quién y cuándo, lo vigente es la última, y la base impide `update`,
+      `delete` y `truncate` con las tres capas del T-004 (la tabla entra en
+      `tablas_solo_adicion`). Recoge también el criterio 7: las ve solo el profesional
+      asignado, administrador incluido.
+- [ ] Cuatro filas nuevas en `docs/decisions.md`. **Ningún ADR anterior se edita.**
 - [ ] `docs/architecture.md`: la celda «DNI y domicilio · Técnico administrativo» pasa a «Los
       de sus centros, lectura **registrada en `auditoria`**» con referencia al ADR-060;
       §Registro de accesos gana la línea del verbo `LECTURA_IDENTIFICACION` y de dónde vive
@@ -184,11 +191,12 @@ Un fichero, sello mayor que la última migración de `main` **en el momento de i
       pasa a todo-o-nada nulable y una restricción nueva impide la fila vacía. Sin esto, dar
       solo el domicilio sería imposible y el formulario tendría que mentir. Forma exacta en el
       diseño §1.2.
-- [ ] **`public.pacientes_salud_basica`** (ADR-061): `paciente_id` clave primaria,
-      `alergias text`, `medicacion_actual text`, quién y cuándo. RLS activada en el mismo
-      fichero, `revoke all` y después `grant select, insert, update to authenticated` —cero
-      `delete`, cero `anon`, cero `service_role`—, tres políticas y disparador de auditoría
-      **con las dos columnas de contenido recortadas**.
+- [ ] **`public.pacientes_salud_basica`** (ADR-061 y ADR-063): `id` clave primaria,
+      `paciente_id`, `alergias text`, `medicacion_actual text`, quién y cuándo. RLS activada
+      en el mismo fichero, `revoke all` y después `grant select, insert to authenticated`
+      —cero `update`, cero `delete`, cero `anon`, cero `service_role`—, dos políticas, las
+      tres capas de solo adición con su fila en `tablas_solo_adicion`, y disparador de
+      auditoría **con las dos columnas de contenido recortadas**.
 - [ ] **`public.clave_de_cifrado(p_nombre text)`**, `security definer`, `set search_path = ''`,
       que lee `vault.decrypted_secrets`, **acepta solo los dos nombres de este ticket** y lanza
       si el secreto no existe. `revoke execute … from public, anon, authenticated` y
@@ -353,6 +361,8 @@ Un fichero, sello mayor que la última migración de `main` **en el momento de i
    asignado y del administrador sobre un paciente suyo, que sí las ven. *(Decisión del
    propietario del 23-09-2026: alergias y medicación siguen la fila «Motivo de consulta y
    diagnósticos» de la matriz de `docs/architecture.md` —administrador, solo los suyos—.)*
+   Y es de solo adición (ADR-063): `10-solo-adicion` la recorre porque está en
+   `tablas_solo_adicion`, y `cobertura_solo_adicion()` sigue en cero.
 8. **Un contacto de emergencia no consiente ni firma.** `capacidad_consentimiento()` sobre un
    menor cuyo único representante es `solo_contacto` devuelve `representante_id` nulo; e
    insertarlo en `consentimiento_firmantes` falla con **23514**. Las dos con su gemela
@@ -410,8 +420,8 @@ Un fichero, sello mayor que la última migración de `main` **en el momento de i
   adición; meterlo en `accesos_historia` contradiría el ADR-037 y exigiría desbloqueo vigente
   para una lectura que no es clínica. La pantalla de auditoría es de fase 1 y tiene su ticket.
   Tampoco entra registrar la **búsqueda por DNI**, que todavía no existe.
-- **Historial de alergias y medicación**: la tabla es mutable y se sobrescribe. Versionarla
-  sería encadenarla, y eso es un ADR aparte.
+- **Encadenar por huella el historial de alergias y medicación** (ADR-063 lo deja de solo
+  adición, sin huella), y la pantalla para editarlas o consultar su historial.
 - **`centro_id` en el alta** (ADR-033): hoy no se fija y este ticket no cambia esa conducta. Se
   anota como hallazgo.
 - **`fecha_nacimiento not null` en la tabla**, identidad de género, correo del paciente, segundo
