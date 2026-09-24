@@ -1,0 +1,27 @@
+{
+  "ticket": "T-030",
+  "commit": "cd9cdbc",
+  "ronda": 4,
+  "altas": 0,
+  "medias": 0,
+  "bajas": 2,
+  "cerrados_de_la_revision_anterior": ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"],
+  "hallazgos": [
+    {
+      "id": "H10",
+      "severidad": "BAJA",
+      "archivo": "lib/agenda/rejilla.ts",
+      "linea": 110,
+      "descripcion": "La guarda de H8 solo detecta límites NaN. Con zona null o undefined, @date-fns/tz usa la zona local del proceso: los límites salen válidos y la rejilla se calcula en la zona equivocada, sin lanzar, aunque el JSDoc promete que lanza.",
+      "escenario": "T-014 pasa centro.zona_horaria! (string | null en tipos-bd.ts:238; null significa que hereda) para un centro que hereda. En el servidor en UTC, la cita 2026-04-13T08:00Z (10:00 en Madrid) sale en el minuto 480 en vez de 600: dos horas antes, sin error. Con el proceso en Madrid sale bien, así que en desarrollo no se ve. Medido con TZ=UTC."
+    },
+    {
+      "id": "H11",
+      "severidad": "BAJA",
+      "archivo": "kimi/informes/T-030.md",
+      "linea": 85,
+      "descripcion": "El arreglo de H9 se quedó a medias. La evidencia del criterio 3 cita un título de prueba que ya no existe y describe la comparación toEqual de arrays que H5 sustituyó. Además, las cifras de la suite (503 pruebas) no se actualizaron: hoy hay 518.",
+      "escenario": "En el merge, la bitácora docs/bitacora/T-030.md copia del informe la evidencia del criterio 3. Queda registrada como prueba de estabilidad una aserción que no discrimina. Quien busque el título citado en rejilla.test.ts no lo encuentra."
+    }
+  ]
+}

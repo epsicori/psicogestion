@@ -1,0 +1,51 @@
+{
+  "ticket": "T-030",
+  "resumen": "Rejilla de la semana y formatearFechaSinZona verificadas en rama T-030-rejilla-semana-fabrica (HEAD cd9cdbc), worktree .claude/worktrees/t030. Lint, tests, tsc y cobertura limpios; los cinco criterios de comportamiento tienen aserciones explícitas que cubren el caso pedido.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "npm test, npm run lint y npx tsc --noEmit limpios",
+      "veredicto": "PASA",
+      "comando": "npm test && npm run lint && npx tsc --noEmit",
+      "evidencia": "npm test: Test Files 52 passed (52), Tests 518 passed (518). npm run lint: 0 errors, 2 warnings ajenos al ticket (lib/cuentas/accesos.test.ts, fuera del territorio de T-030). npx tsc --noEmit: sin salida (sin errores)."
+    },
+    {
+      "id": 2,
+      "texto": "Tres citas que se solapan en cadena (A-B, B-C) caen en un solo grupo de tres columnas, y una cuarta que no toca a ninguna queda sola, en un grupo de una",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/agenda/rejilla.test.ts",
+      "evidencia": "lib/agenda/rejilla.test.ts:112-129, test 'tres citas encadenadas (A-B, B-C) forman un grupo de tres columnas y la cuarta va sola': las tres primeras celdas tienen columnasEnGrupo=3 con columnas {0,1,2}, la cuarta celda columna=0 y columnasEnGrupo=1. Test pasa (incluido en los 518 verdes)."
+    },
+    {
+      "id": 3,
+      "texto": "Dos citas idénticas en hora reciben columnas distintas, y el resultado es el mismo si se le pasan en el orden contrario",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/agenda/rejilla.test.ts",
+      "evidencia": "lib/agenda/rejilla.test.ts:131-157, test 'dos citas idénticas reciben columnas distintas y CADA UNA conserva su columna sea cual sea el orden de entrada (H5)': columnaDe(enOrden,'x') !== columnaDe(enOrden,'y'); columnaDe(alReves,'x') === columnaDe(enOrden,'x') y lo mismo para 'y'. El desempate es por id (compararIds), no por posición en el array. Test pasa."
+    },
+    {
+      "id": 4,
+      "texto": "Una semana que contiene el último domingo de marzo: el caso está probado y la aserción dice qué se espera y por qué, no solo que no lanza",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/agenda/rejilla.test.ts",
+      "evidencia": "lib/agenda/rejilla.test.ts:204-243, describe 'semana del cambio de hora': 'el domingo del salto tiene 23 franjas: la cita de las 10:00 cae en el minuto 540, no 600' (comentario explica por qué: la hora 02:00-02:59 no existió) y 'el domingo del salto mide 1380 minutos (23h) y el lunes siguiente vuelve a 1440'. También cubre el salto de octubre (25h, minuto 1500). Ambos con aserciones de valor exacto, no solo ausencia de excepción."
+    },
+    {
+      "id": 5,
+      "texto": "formatearFechaSinZona('2026-03-29', 'Europe/Madrid') y 'Atlantic/Canary' dan el mismo día, que es el 29",
+      "veredicto": "PASA",
+      "comando": "npm test -- lib/fechas/relativo.test.ts",
+      "evidencia": "lib/fechas/relativo.test.ts:10-17, test 'el domingo del salto de marzo da el mismo día en Madrid y en Canarias': formatearFechaSinZona('2026-03-29','Europe/Madrid') === '29/03/2026' y formatearFechaSinZona('2026-03-29','Atlantic/Canary') === '29/03/2026'. Test pasa."
+    },
+    {
+      "id": 6,
+      "texto": "Cobertura del módulo nuevo por encima del 90% (npm run test:cobertura)",
+      "veredicto": "PASA",
+      "comando": "npm run test:cobertura",
+      "evidencia": "coverage/coverage-final.json calculado por fichero: lib/agenda/rejilla.ts stmts 37/37 (100%), branches 23/23 (100%), funcs 5/5 (100%); lib/fechas/relativo.ts stmts 13/13 (100%), branches 7/7 (100%), funcs 1/1 (100%). El reporte de texto por consola agrupa por directorio y omite estos ficheros al estar en 100%, pero el JSON confirma los porcentajes por fichero."
+    }
+  ],
+  "regresiones": [
+    "npm test completo (52 ficheros, 518 tests) pasa sin regresiones en el resto del repo; npm run lint solo muestra 2 warnings preexistentes en lib/cuentas/accesos.test.ts, fuera del territorio de T-030."
+  ]
+}

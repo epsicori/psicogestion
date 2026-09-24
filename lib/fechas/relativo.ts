@@ -1,0 +1,37 @@
+// Fechas de calendario SIN hora: un `date` de Postgres ('2026-05-01') no es
+// un instante, es un día. Para formatearlo hay que anclarlo a un instante
+// concreto de ese día en la zona del centro, y ese instante es el MEDIODÍA:
+// los saltos de horario caen de madrugada, así que a las 12:00 no hay hora
+// inexistente ni ambigua en ninguna zona, y el día que entra es el que sale.
+import { TZDate } from '@date-fns/tz';
+
+import { formatearFechaCorta } from './formato';
+
+const PATRON_FECHA_ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** `'2026-05-01'` → `'01/05/2026'`. El día se ancla a las 12:00 en `zona`. */
+export function formatearFechaSinZona(fechaIso: string, zona: string): string {
+  const partes = PATRON_FECHA_ISO.exec(fechaIso);
+  if (!partes) {
+    throw new Error(`Fecha sin zona mal formada: '${fechaIso}' (se espera 'AAAA-MM-DD').`);
+  }
+  const [, anio, mes, dia] = partes;
+  const anioNum = Number(anio);
+  const mesNum = Number(mes);
+  const diaNum = Number(dia);
+  // `TZDate` (como `Date`) normaliza silenciosamente un mes o día fuera de
+  // rango en vez de lanzar: el 30 de febrero se convertiría en el 2 de marzo
+  // sin ningún aviso. Se comprueba el valor, no solo el formato, construyendo
+  // la fecha en UTC (sin zona de por medio) y confirmando que sus campos no
+  // se movieron.
+  const comprobacion = new Date(Date.UTC(anioNum, mesNum - 1, diaNum));
+  if (
+    comprobacion.getUTCFullYear() !== anioNum ||
+    comprobacion.getUTCMonth() !== mesNum - 1 ||
+    comprobacion.getUTCDate() !== diaNum
+  ) {
+    throw new Error(`Fecha sin zona inexistente: '${fechaIso}' no es un día de calendario.`);
+  }
+  const mediodia = new TZDate(anioNum, mesNum - 1, diaNum, 12, 0, 0, zona);
+  return formatearFechaCorta(mediodia, zona);
+}
