@@ -9,6 +9,7 @@ import { t, tCon } from '@/lib/i18n';
 import { cargarIndicadorDeRiesgo, cargarPaciente, cargarRol } from './datos';
 import { FichaCliente } from './ficha-cliente';
 import { PanelDatos } from './panel-datos';
+import { PanelDiferido } from './panel-diferido';
 import { PanelDocumentos } from './panel-documentos';
 import { PanelResumen } from './panel-resumen';
 import { edadEnAnios, fechaLarga, valoracionEsAntigua } from './presentacion';
@@ -24,12 +25,18 @@ import { edadEnAnios, fechaLarga, valoracionEsAntigua } from './presentacion';
  * **Nada de esto entra en `use cache`** (ADR-043), ni siquiera `use cache: private`: sería
  * servirle un paciente a quien no le toca.
  *
- * Tres campos que el ticket pide en la cabecera **no se pintan**, y el motivo de cada uno es
- * distinto (está razonado en `tickets/T-013/diseno.md` §1):
- *   · teléfono y teléfono de emergencia — no existe columna de teléfono del paciente en
- *     ninguna tabla; la única que hay es la del representante legal;
- *   · DNI y residencia — existen en `pacientes_identificacion` pero **cifrados**, y no hay
- *     hoy camino de descifrado en la aplicación;
+ * Lo que el ticket pide en la cabecera y **no se pinta ahí**, con el motivo de cada uno
+ * (razonado en `tickets/T-013/diseno.md` §1 y, desde T-032, en `tickets/T-032/diseno.md` §1.8):
+ *   · teléfono, sexo, DNI y domicilio — desde T-032 **sí existe** camino, pero no en la
+ *     cabecera fija: `pacientes.telefono` y `pacientes.sexo` se leen y se pintan dentro de
+ *     «Datos» (gestión asistencial), y el documento y el domicilio, cifrados, se descifran
+ *     con `cargarIdentificacion()` —que solo llama a `leer_identificacion()` (ADR-060), nunca
+ *     a un `select` directo a `pacientes_identificacion`, porque eso no dejaría rastro en
+ *     `auditoria`— y se pintan en el bloque «Identificación» de esa misma pestaña. Meterlos
+ *     en la cabecera obligaría a leer la identificación en cada visita a la ficha, no solo al
+ *     abrir la pestaña que la enseña, y con ella cada rastro de más que no hace falta dejar.
+ *     Por lo mismo la pestaña «Datos» entera se pide al abrirla (`PanelDiferido`, abajo en
+ *     `Cuerpo`), no con el resto de la página;
  *   · motivo de consulta y nivel de riesgo — viven detrás de `historia_desbloqueada()`, así
  *     que no caben en una cabecera fija: aparecen dentro de Historial clínico, donde
  *     abrirlos registra el acceso. El técnico, que no tiene candado, ve en su lugar el
@@ -104,6 +111,23 @@ async function Cuerpo({ params }: { params: Promise<{ id: string }> }) {
   if (!paciente) notFound();
 
   const rol = await cargarRol();
+  const pacienteId = paciente.id;
+
+  // «Datos» NO se renderiza aquí (H2 de la revisión de T-032). Un `<PanelDatos/>` pasado
+  // como prop a `FichaCliente` se ejecutaría en servidor en cada visita a la ficha aunque
+  // nadie abriera la pestaña: `leer_identificacion()` dejaría su rastro en `auditoria` y el
+  // documento descifrado viajaría en la carga útil de RSC. Esta Server Function devuelve el
+  // panel ya renderizado y `PanelDiferido` la llama al montarse, que es al abrir la
+  // pestaña. `pacienteId` viaja cifrado en el cierre (Next lo cifra), y aun así cada
+  // lector de `PanelDatos` vuelve a pedir la sesión y pasa por RLS: el id no autoriza nada.
+  async function cargarPanelDatos() {
+    'use server';
+    return (
+      <Suspense fallback={<Cargando filas={4} />}>
+        <PanelDatos pacienteId={pacienteId} />
+      </Suspense>
+    );
+  }
 
   return (
     <FichaCliente
@@ -116,11 +140,7 @@ async function Cuerpo({ params }: { params: Promise<{ id: string }> }) {
           <PanelResumen pacienteId={paciente.id} />
         </Suspense>
       }
-      datos={
-        <Suspense fallback={<Cargando filas={4} />}>
-          <PanelDatos pacienteId={paciente.id} />
-        </Suspense>
-      }
+      datos={<PanelDiferido cargar={cargarPanelDatos} />}
       documentos={
         <Suspense fallback={<Cargando filas={4} />}>
           <PanelDocumentos pacienteId={paciente.id} />

@@ -246,19 +246,34 @@ begin
      k_p_carmen, k_fecha_base, k_ana, 'Alta duplicada al importar: mismo documento, apellido con tilde')
   on conflict (id) do nothing;
 
-  -- Identificación cifrada (ADR-029) de una sola ficha. Los tamaños son medidas
-  -- exactas de AEAD comprobadas por restricciones de tabla: nonce 12, etiqueta 16,
-  -- índice 32. `sha256()` da 32 siempre, así que se recorta donde hace falta.
-  -- Solo una ficha la lleva: `dni_indice` es único y el duplicado de arriba no
-  -- puede compartirlo (consecuencia aceptada del ADR-029, y el primer tropiezo del
-  -- importador cuando llegue).
+  -- Identificación cifrada (ADR-029) de una sola ficha. Solo una ficha la lleva:
+  -- `dni_indice` es único y el duplicado de arriba no puede compartirlo (consecuencia
+  -- aceptada del ADR-029, y el primer tropiezo del importador cuando llegue).
+  --
+  -- Desde T-032 la ficha DESCIFRA esta fila, así que es un cifrado de verdad y no bytes de
+  -- relleno (B6/H5 de la revisión: con sha256 de relleno la ficha de Carmen pintaba
+  -- «no se puede mostrar» y un console.error en cada render, un fallo que no existía).
+  -- Precalculado fuera de la base con node:crypto y las claves DE JUGUETE del Vault que
+  -- este mismo fichero siembra más abajo (identificacion_cifrado_v1 e
+  -- identificacion_indice_v1, versión 1):
+  --   · texto claro: '87654321X' (DNI inventado con letra de control válida, ya normalizado
+  --     como lo deja normalizarNif());
+  --   · nonce FIJO = los 12 primeros bytes de sha256('demo-nonce-carmen'). Un nonce fijo es
+  --     inadmisible con una clave real; aquí la clave es pública y el fichero es de demo;
+  --   · dni_cifrado y dni_etiqueta = AES-256-GCM(clave de cifrado, nonce, texto);
+  --   · dni_indice = HMAC-SHA-256(clave de índice, texto).
+  -- Si se cambian las claves de juguete, esta fila vuelve a ser ilegible: hay que
+  -- recalcularla con ellas.
   insert into public.pacientes_identificacion
-    (paciente_id, tipo_documento, dni_cifrado, dni_nonce, dni_etiqueta, dni_indice, creado_en, actualizado_en)
+    (paciente_id, tipo_documento, dni_cifrado, dni_nonce, dni_etiqueta, dni_indice,
+     dni_clave_version, dni_indice_clave_version, creado_en, actualizado_en)
   values
-    (k_p_carmen, 'dni', sha256('demo-dni-carmen'::bytea),
-     substr(sha256('demo-nonce-carmen'::bytea), 1, 12),
-     substr(sha256('demo-etiqueta-carmen'::bytea), 1, 16),
-     sha256('demo-indice-carmen'::bytea), k_fecha_base, k_fecha_base)
+    (k_p_carmen, 'dni',
+     '\xfe6ad32e939a2713a7'::bytea,
+     '\xb035654231be48faa5f78727'::bytea,
+     '\xff87b95266af16fd94e6773e574708cc'::bytea,
+     '\x1f3994dd9ddfb652ada76c51bf489d91bba869c46079730fde1d54b336528e3e'::bytea,
+     1, 1, k_fecha_base, k_fecha_base)
   on conflict (paciente_id) do nothing;
 
   -- -----------------------------------------------------------------------
@@ -466,3 +481,19 @@ begin
   raise notice 'seed-completo: sembrado.';
 end;
 $seed$;
+
+-- -----------------------------------------------------------------------
+-- 10 · Vault · claves de cifrado de identificación (T-032, ADR-029)
+--
+-- MISMOS VALORES LITERALES que supabase/seed.sql: si los dos guiones sembraran
+-- valores distintos, lo cifrado por uno no lo descifraría el otro. Idempotente
+-- (`where not exists`): este fichero corre sobre una base que ya pasó por
+-- `db reset`, que ya sembró estos dos secretos con seed.sql.
+-- -----------------------------------------------------------------------
+select vault.create_secret('CKKnf5zj9mjBlvO1nUbdgoerSA6Es4+iCLqNxV65MQc=', 'identificacion_cifrado_v1',
+  'T-032 · AES-256-GCM de pacientes_identificacion (ADR-029). CLAVE DE JUGUETE.')
+where not exists (select 1 from vault.secrets where name = 'identificacion_cifrado_v1');
+
+select vault.create_secret('2gysmbQSmS2xXSPmn6eqBXSlW2nV7kDghHmIK29N8H0=', 'identificacion_indice_v1',
+  'T-032 · HMAC-SHA-256 del índice ciego (ADR-029). OTRA clave, a propósito. DE JUGUETE.')
+where not exists (select 1 from vault.secrets where name = 'identificacion_indice_v1');

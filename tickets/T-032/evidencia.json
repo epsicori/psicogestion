@@ -1,0 +1,146 @@
+{
+  "ticket": "T-032",
+  "resumen": "Verificado en el worktree .claude/worktrees/agent-a2fbeaf1f1cdd100e, rama worktree-agent-a2fbeaf1f1cdd100e, commit 0494226. db reset, tipos, lint:migraciones, test:rls (428 NOTICE OK, exit 0), npm test (581/581), lint (0 errores), build (limpio, sin blocking-prerender) y scripts/t032-alta.ts (exit 0) ejecutados de verdad contra Postgres local. 19 de los 20 criterios PASAN con evidencia de comando; el criterio 17 (guion de navegador con tres sesiones reales) es NO_VERIFICABLE porque no existe spec de Playwright para la ficha de paciente y el propio contrato admite anotarlo como verificación manual pendiente si no da tiempo.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "La base se levanta sola: db reset limpio, secretos del Vault y clave_de_cifrado devuelve 44 bytes",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset; docker exec -u postgres supabase_db_Psicogestion psql -U postgres -d postgres -c \"select name from vault.secrets order by name;\"; ... -c \"select length(public.clave_de_cifrado('identificacion_cifrado_v1'));\"",
+      "evidencia": "db reset termina con 'Finished supabase db reset on branch main'. vault.secrets devuelve identificacion_cifrado_v1 e identificacion_indice_v1. clave_de_cifrado('identificacion_cifrado_v1') como postgres devuelve length=44."
+    },
+    {
+      "id": 2,
+      "texto": "Los tipos se regeneran, no se escriben: telefono, sexo, sexo_administrativo, pacientes_salud_basica, documento nulable, alta_paciente y leer_identificacion en Functions",
+      "veredicto": "PASA",
+      "comando": "npm run tipos; git diff --stat lib/supabase/tipos-bd.ts; grep -n \"telefono|sexo_administrativo|pacientes_salud_basica|alta_paciente|leer_identificacion|tipo_documento\" lib/supabase/tipos-bd.ts",
+      "evidencia": "git diff vacío tras regenerar (ya estaba al día). grep confirma pacientes.telefono, pacientes.sexo: sexo_administrativo, tabla pacientes_salud_basica, tipo_documento nulable, y alta_paciente/leer_identificacion en Functions."
+    },
+    {
+      "id": 3,
+      "texto": "npm run lint:migraciones sin hallazgos, con el fichero nuevo en el total",
+      "veredicto": "PASA",
+      "comando": "npm run lint:migraciones",
+      "evidencia": "lint-migraciones: 14 migración(es) limpias."
+    },
+    {
+      "id": 4,
+      "texto": "La clave no la alcanza el navegador: authenticated 42501, postgres/service_role sí la obtiene",
+      "veredicto": "PASA",
+      "comando": "docker exec ... psql -c \"do $$ begin perform set_config('role','authenticated', true); begin perform public.clave_de_cifrado('identificacion_cifrado_v1'); exception when others then raise notice 'sqlstate=%, message=%', sqlstate, sqlerrm; end; end $$;\"",
+      "evidencia": "NOTICE: sqlstate=42501, message=permission denied for function clave_de_cifrado (rol authenticated). Como postgres, length()=44 (criterio 1)."
+    },
+    {
+      "id": 5,
+      "texto": "El técnico lee lo de sus centros y solo eso: test:rls verde, sube respecto a las 380 de main y la bitácora anota el número",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "exit 0. 428 líneas 'NOTICE:  OK' en el log, ninguna de fallo. docs/bitacora/T-032.md anota el número (406 aserciones de guardia nuevas / 428 NOTICE OK totales, según el conteo)."
+    },
+    {
+      "id": 6,
+      "texto": "El técnico no escribe identificación: insert 42501, update 0 filas sin cambiar el valor (sobre fila que TEC1 sí lee)",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (bloque scripts/rls/08-identificacion.sql líneas 66-86)",
+      "evidencia": "assert_lanza_codigo(..., '42501', 'TEC1 ... NO puede dar de alta una identificación'); luego update sobre P1 como TEC1, y una sesión ADM confirma dni_cifrado sigue siendo el original tras el update de TEC1."
+    },
+    {
+      "id": 7,
+      "texto": "Salud básica solo para el profesional asignado: cero para TEC1/TEC2 y para ADM sobre paciente ajeno; gemelas de asignado y de ADM sobre el suyo; de solo adición y cobertura_solo_adicion() en cero",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (bloque scripts/rls/02-matriz-roles.sql líneas 60-131 y scripts/rls/10-solo-adicion.sql)",
+      "evidencia": "TEC1 y TEC2 dan 0 filas; ADM da 0 sobre P1 (ajeno) y 1 sobre su propio paciente (alta_paciente con alergias); PRO1 (asignado) ve 2 filas; pacientes_salud_basica figura en tablas_solo_adicion y 10-solo-adicion.sql la recorre con las tres capas; cobertura_solo_adicion() = 0."
+    },
+    {
+      "id": 8,
+      "texto": "Un contacto de emergencia no consiente ni firma: representante_id nulo y 23514 al insertarlo como firmante, con gemelas positivas de patria_potestad",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (scripts/rls/07-capacidad.sql líneas 44-118)",
+      "evidencia": "capacidad_consentimiento() con solo_contacto ignora ese representante y resuelve al de patria_potestad; assert_lanza_codigo(..., '23514', 'Un representante de alcance solo_contacto NO puede firmar'); gemela positiva con patria_potestad sí firma; y gemela de que sin firmas sí puede pasar a solo_contacto."
+    },
+    {
+      "id": 9,
+      "texto": "Ida y vuelta real: npx tsx scripts/t032-alta.ts sale con 0 e imprime el DNI descifrado igual al enviado",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t032-alta.ts",
+      "evidencia": "'3a · leer_identificacion() + descifrarIdentificacion() coincide byte a byte con lo enviado'; salida final 't032-alta: completo. La transacción de alta_paciente() es de verdad.'; exit 0."
+    },
+    {
+      "id": 10,
+      "texto": "La transacción es de verdad: el mismo guion con el DNI repetido falla y el recuento de pacientes no cambia",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t032-alta.ts",
+      "evidencia": "'4 · el segundo alta con el mismo DNI falló con 23505 y el recuento de pacientes no cambió'."
+    },
+    {
+      "id": 11,
+      "texto": "La fecha de nacimiento no se puede omitir por el camino de la aplicación: esquema, acción y alta_paciente, demostrados por separado",
+      "veredicto": "PASA",
+      "comando": "grep en app/(app)/pacientes/esquemas.ts, formulario-nuevo-paciente.tsx y scripts/rls/08-identificacion.sql (línea 177-183)",
+      "evidencia": "esquemas.ts: fechaNacimiento obligatoria (z.string requerido, sin .optional()); formulario-nuevo-paciente.tsx: input con 'required'; banco de RLS: alta_paciente(..., p_fecha_nacimiento => null, ...) lanza 23514."
+    },
+    {
+      "id": 12,
+      "texto": "El alta mínima sigue siendo mínima: npm test verde, con los seis opcionales vacíos no se crea fila en pacientes_identificacion ni en pacientes_salud_basica",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "Test Files 58 passed (58); Tests 581 passed (581). Incluye acciones.test.ts, que comprueba que el alta sin los seis campos opcionales no llama a insertar identificación/salud básica, y scripts/t032-alta.ts paso 5 confirma con datos reales: 0 filas en ambas tablas para el alta mínima."
+    },
+    {
+      "id": 13,
+      "texto": "Un domicilio sin documento se guarda, y la ficha lo enseña",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (scripts/rls/08-identificacion.sql líneas 110-148); npm test (panel-datos.test.tsx 'criterio 13')",
+      "evidencia": "'Una fila SOLO con domicilio (sin documento) entra' (banco de RLS); prueba de componente 'criterio 13: solo con domicilio pinta el domicilio y no un «DNI: —»' en panel-datos.test.tsx, verde."
+    },
+    {
+      "id": 14,
+      "texto": "El índice ciego es el del ADR-029: tres formas del mismo DNI dan el mismo índice, que cambia con la clave y no coincide con el HMAC de la clave de cifrado",
+      "veredicto": "PASA",
+      "comando": "npm test (lib/cifrado/identificacion.test.ts 'normaliza el documento antes de indexar')",
+      "evidencia": "'12345678z', '12345678-Z' y ' 12345678 Z ' producen el mismo p_dni_indice, igual al HMAC calculado directamente con la clave de índice; lib/cifrado/aes-gcm.test.ts confirma que el índice difiere del HMAC con la clave de cifrado."
+    },
+    {
+      "id": 15,
+      "texto": "Un criptograma manipulado no se pinta: descifrar lanza con un byte cambiado, y la ficha dice «no se puede mostrar»",
+      "veredicto": "PASA",
+      "comando": "npm test (lib/cifrado/aes-gcm.test.ts 'un byte cambiado ... lanza'; panel-datos.test.tsx 'criterio 15')",
+      "evidencia": "aes-gcm.test.ts: descifrar lanza si se cambia un byte del cifrado o de la etiqueta; panel-datos.test.tsx: con descifrarIdentificacion rechazada, pinta 'No se puede mostrar' y no 'Sin documento registrado'."
+    },
+    {
+      "id": 16,
+      "texto": "npm run lint y npm run build limpios, sin blocking-prerender-* nuevos",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npm run build",
+      "evidencia": "lint: 0 errors, 2 warnings preexistentes en lib/cuentas/accesos.test.ts (fuera de territorio de T-032). build: 'Compiled successfully', TypeScript sin errores, 15 páginas generadas, sin ninguna línea 'blocking-prerender' en el log completo."
+    },
+    {
+      "id": 17,
+      "texto": "Guion de navegador con las tres sesiones: DNI/domicilio visibles para ADM, profesional asignado y técnico de ese centro; nada para técnico de otro centro; alergias/medicación nunca para ningún técnico",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "No existe spec de Playwright que cubra la ficha de paciente con las tres sesiones (solo hay accesibilidad/acceso.spec.ts, ajeno a este ticket); CLAUDE.md no define un script de e2e distinto de test:a11y. El propio contrato admite este resultado ('si no da tiempo, queda anotado como verificación manual pendiente'). Guion manual exacto para cerrarlo: 1) npm run seed (deja dos centros con técnicos distintos); 2) crear un paciente con DNI y domicilio vía formulario como profesional/administrador; 3) iniciar sesión como administrador y abrir la ficha del paciente -> debe verse documento y domicilio; 4) repetir como el profesional asignado -> mismo resultado; 5) repetir como el técnico del mismo centro -> mismo resultado, y comprobar que se añade una fila en auditoria con LECTURA_IDENTIFICACION; 6) repetir como técnico de OTRO centro -> el bloque de identificación no debe aparecer (ni vacío ni tachado); 7) en ninguna de las tres sesiones de técnico debe aparecer el bloque de alergias y medicación."
+    },
+    {
+      "id": 18,
+      "texto": "El descifrado deja rastro y solo uno por ventana: leer_identificacion(P1) añade fila en auditoria, la segunda llamada no añade otra, leer_identificacion(P2) de otro centro no deja rastro; y en el guion de punta a punta el recuento sube exactamente en 1",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (scripts/rls/08-identificacion.sql líneas 188-272); npx tsx scripts/t032-alta.ts",
+      "evidencia": "TEC1 leer_identificacion(P1): fila devuelta y auditoria sube en 1; segunda llamada seguida no añade otra; TEC1 leer_identificacion(P2) (otro centro): 0 filas y 0 rastro; gemelas de PRO1 y ADM también dejan rastro. scripts/t032-alta.ts: '3b · la auditoría subió exactamente en 1 tras la primera lectura' y '3c · una segunda lectura inmediata NO añade un segundo rastro'."
+    },
+    {
+      "id": 19,
+      "texto": "El rastro no lleva dentro ni el criptograma ni el dato: estado_posterior solo enseña rol, documento y domicilio (booleanos)",
+      "veredicto": "PASA",
+      "comando": "docker exec -u postgres supabase_db_Psicogestion psql -U postgres -d postgres -c \"select estado_posterior from public.auditoria where operacion = 'LECTURA_IDENTIFICACION' limit 5;\"",
+      "evidencia": "estado_posterior = {\"rol\": \"profesional_sanitario\", \"documento\": true, \"domicilio\": true} — sin nonce, sin etiqueta, sin dni_indice, sin ninguna letra del DNI."
+    },
+    {
+      "id": 20,
+      "texto": "Nadie lee identificación por la puerta de atrás: git grep pacientes_identificacion en app/ y lib/ no enseña ningún .from(...)",
+      "veredicto": "PASA",
+      "comando": "git grep -n \"pacientes_identificacion\" app/ lib/",
+      "evidencia": "Las 7 coincidencias son comentarios de cabecera, nombres de tabla en tipos generados o en el nombre de la clave AES-256-GCM (lib/cifrado/claves.ts); ninguna es un .from('pacientes_identificacion') ni un select directo."
+    }
+  ],
+  "regresiones": []
+}

@@ -2,20 +2,42 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition, type FormEvent } from 'react';
+import type { FieldErrors } from 'react-hook-form';
 import { useForm } from 'react-hook-form';
 
+import { AreaTexto } from '@/components/ui/area-texto';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
+import { Seleccion } from '@/components/ui/seleccion';
 import { t } from '@/lib/i18n';
 import { ESTADO_INICIAL, aplicarErroresDelServidor } from '@/lib/formularios';
 
 import { crearPaciente } from './acciones';
-import { esquemaNuevoPaciente, type DatosNuevoPaciente } from './esquemas';
+import { esquemaNuevoPaciente, type DatosNuevoPaciente, type EntradaNuevoPaciente } from './esquemas';
+
+// Los campos de «Más datos» son justo los que quedan fuera de la fila obligatoria: si alguno
+// trae un error tras el envío, el <details> se abre solo, porque un error invisible es un
+// formulario que no se envía y nadie sabe por qué.
+const CAMPOS_MAS_DATOS: readonly string[] = [
+  'telefono',
+  'sexo',
+  'dni',
+  'domicilio',
+  'alergias',
+  'medicacionActual',
+];
+
+const OPCIONES_SEXO = [
+  { valor: 'hombre', texto: t('pacientes.sexoHombre') },
+  { valor: 'mujer', texto: t('pacientes.sexoMujer') },
+  { valor: 'otro', texto: t('pacientes.sexoOtro') },
+];
 
 export function FormularioNuevoPaciente() {
   const [enviando, iniciarTransicion] = useTransition();
   const [mensaje, setMensaje] = useState('');
+  const detallesRef = useRef<HTMLDetailsElement>(null);
 
   const {
     register,
@@ -23,18 +45,33 @@ export function FormularioNuevoPaciente() {
     setError,
     reset,
     formState: { errors },
-  } = useForm<DatosNuevoPaciente>({
+  } = useForm<EntradaNuevoPaciente, unknown, DatosNuevoPaciente>({
     resolver: zodResolver(esquemaNuevoPaciente),
-    defaultValues: { nombre: '', apellidos: '' },
+    defaultValues: { nombre: '', apellidos: '', fechaNacimiento: '' },
   });
 
-  const enviar = handleSubmit((datos) => {
+  // El `<details>` NO es controlado (H9 de la revisión): con `open={abierto || hayError}`,
+  // si el usuario lo plegaba con el error puesto y volvía a enviar, la prop pasaba de true a
+  // true, React no tocaba el DOM y el foco de RHF caía en un campo invisible. Aquí se abre
+  // por la ref en el momento en que hace falta, y el usuario lo pliega cuando quiera.
+  function abrirMasDatosSiHayError(campos: string[]) {
+    if (detallesRef.current && campos.some((campo) => CAMPOS_MAS_DATOS.includes(campo))) {
+      detallesRef.current.open = true;
+    }
+  }
+
+  function alSerValido(datos: DatosNuevoPaciente) {
     setMensaje('');
     iniciarTransicion(async () => {
       const estado = (await crearPaciente(datos)) ?? ESTADO_INICIAL;
 
       if (estado.errores || estado.mensaje) {
         aplicarErroresDelServidor(estado, setError);
+        abrirMasDatosSiHayError(
+          Object.entries(estado.errores ?? {})
+            .filter(([, mensajes]) => mensajes?.[0])
+            .map(([campo]) => campo),
+        );
         setMensaje(estado.mensaje ?? '');
         return;
       }
@@ -42,8 +79,23 @@ export function FormularioNuevoPaciente() {
       // El alta salió bien: se vacía el formulario para el siguiente. La lista se
       // refresca sola con el `revalidatePath` de la acción.
       reset();
+      if (detallesRef.current) detallesRef.current.open = false;
     });
-  });
+  }
+
+  // `onInvalid` corre ANTES de que react-hook-form mueva el foco al primer campo con error
+  // (handleSubmit: onInvalid, luego _focusError), así que el campo ya es visible cuando el
+  // foco llega.
+  function alSerInvalido(erroresDeCliente: FieldErrors<EntradaNuevoPaciente>) {
+    abrirMasDatosSiHayError(Object.keys(erroresDeCliente));
+  }
+
+  // `handleSubmit` se llama dentro del manejador y no en el render: los dos callbacks tocan
+  // la ref del <details>, y el compilador de React (react-hooks/refs) no admite pasar a una
+  // función, durante el render, algo que lee una ref.
+  function enviar(evento: FormEvent<HTMLFormElement>) {
+    return handleSubmit(alSerValido, alSerInvalido)(evento);
+  }
 
   return (
     <form onSubmit={enviar} noValidate className="border-border bg-card rounded-xl border p-5 shadow-sm">
@@ -76,7 +128,93 @@ export function FormularioNuevoPaciente() {
           />
         </div>
 
-        <Button type="submit" disabled={enviando} className="sm:mt-7">
+        <div className="flex-1">
+          <Field
+            id="fechaNacimiento"
+            type="date"
+            required
+            etiqueta={t('pacientes.fechaDeNacimiento')}
+            className="w-full"
+            errores={
+              errors.fechaNacimiento?.message ? [errors.fechaNacimiento.message] : undefined
+            }
+            {...register('fechaNacimiento')}
+          />
+        </div>
+      </div>
+
+      <details ref={detallesRef} className="mt-4">
+        <summary className="text-muted-foreground hover:text-foreground min-h-11 cursor-pointer py-3 text-sm font-medium">
+          {t('pacientes.masDatos')}
+        </summary>
+
+        <div className="mt-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <div className="flex-1">
+              <Field
+                id="telefono"
+                type="tel"
+                etiqueta={t('pacientes.telefono')}
+                className="w-full"
+                errores={errors.telefono?.message ? [errors.telefono.message] : undefined}
+                {...register('telefono')}
+              />
+            </div>
+            <div className="flex-1">
+              <Seleccion
+                id="sexo"
+                etiqueta={t('pacientes.sexo')}
+                opciones={OPCIONES_SEXO}
+                className="w-full"
+                errores={errors.sexo?.message ? [errors.sexo.message] : undefined}
+                {...register('sexo')}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <div className="flex-1">
+              <Field
+                id="dni"
+                type="text"
+                etiqueta={t('pacientes.dniONie')}
+                className="w-full"
+                errores={errors.dni?.message ? [errors.dni.message] : undefined}
+                {...register('dni')}
+              />
+            </div>
+            <div className="flex-1">
+              <Field
+                id="domicilio"
+                type="text"
+                etiqueta={t('pacientes.domicilio')}
+                className="w-full"
+                errores={errors.domicilio?.message ? [errors.domicilio.message] : undefined}
+                {...register('domicilio')}
+              />
+            </div>
+          </div>
+
+          <AreaTexto
+            id="alergias"
+            etiqueta={t('pacientes.alergias')}
+            errores={errors.alergias?.message ? [errors.alergias.message] : undefined}
+            {...register('alergias')}
+          />
+
+          <AreaTexto
+            id="medicacionActual"
+            etiqueta={t('pacientes.medicacionActual')}
+            errores={
+              errors.medicacionActual?.message ? [errors.medicacionActual.message] : undefined
+            }
+            {...register('medicacionActual')}
+          />
+        </div>
+      </details>
+
+      <div className="mt-4 flex justify-end">
+        <Button type="submit" disabled={enviando}>
           <Plus />
           {enviando ? t('pacientes.creando') : t('pacientes.crearPaciente')}
         </Button>

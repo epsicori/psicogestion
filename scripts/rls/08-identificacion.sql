@@ -24,6 +24,14 @@ select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_iden
   'Un índice distinto sí entra, dado de alta por PRO2 en sesión real: el rechazo de arriba era por el índice repetido, no por la tabla en general');
 call pg_temp.reset_sesion();
 
+-- B3 de la revisión: la negativa de TEC1 (centro A) sobre P2 (centro B) vivía en
+-- 02-matriz-roles.sql, que corre ANTES de que P2 tenga fila, y daba 0 por no haber nada que
+-- ver. Aquí la fila existe (PRO2 acaba de verla, = 1 justo arriba): el 0 es de la política.
+call pg_temp.como(:TEC1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P2)) = 0,
+  'TEC1 (centro A) NO ve la fila de identificación de P2, que SÍ existe (PRO2 la ve): es de otro centro');
+call pg_temp.reset_sesion();
+
 -- Gemela positiva/negativa de la política de alta sobre la MISMA fila (PMENOR): PRO1 (su
 -- profesional asignado) SÍ puede darla de alta; PRO2 (no asignado) NO puede, con la misma
 -- sentencia salvo el rol y el índice.
@@ -45,6 +53,238 @@ select pg_temp.assert_lanza(
     :PBAJA, 'dni', sha256('dni-pbaja'::bytea), substr(sha256('nonce-pbaja'::bytea),1,12), substr(sha256('etiqueta-pbaja'::bytea),1,16), sha256('indice-pbaja'::bytea)
   ),
   'PRO2 (sin vínculo con PBAJA) NO puede dar de alta su identificación: pacientes_identificacion_alta lo rechaza'
+);
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------------------
+-- T-032 (ADR-060/061): el técnico NO escribe identificación, aunque SÍ la lea desde este
+-- ticket. El INSERT va sobre PMENOR (paciente del centro A, como TEC1): su 42501 sale del
+-- WITH CHECK de pacientes_identificacion_alta, no de una fila que TEC1 no vea. El UPDATE va
+-- sobre P1, que TEC1 SÍ lee (02-matriz-roles.sql). Un UPDATE 0 o un INSERT que fallara por
+-- otra vía no probarían nada (pruebas.md).
+-- ---------------------------------------------------------------------------------------
+call pg_temp.como(:TEC1);
+select pg_temp.assert_lanza_codigo(
+  format(
+    'insert into public.pacientes_identificacion (paciente_id, tipo_documento, dni_cifrado, dni_nonce, dni_etiqueta, dni_indice) values (%L, %L, %L, %L, %L, %L)',
+    :PMENOR, 'dni', sha256('dni-tec1-insert'::bytea), substr(sha256('nonce-tec1-insert'::bytea),1,12), substr(sha256('etiqueta-tec1-insert'::bytea),1,16), sha256('indice-tec1-insert'::bytea)
+  ),
+  '42501',
+  'TEC1 (lee P1/su centro) NO puede dar de alta una identificación: pacientes_identificacion_alta lo rechaza'
+);
+-- La política de UPDATE oculta la fila en la cláusula USING: un UPDATE de TEC1 sobre P1
+-- afecta CERO filas y no lanza nada por sí solo (pruebas.md: «UPDATE 0 no prueba nada»).
+-- La prueba real es que el valor NO cambió, leído después con una sesión que SÍ ve P1.
+update public.pacientes_identificacion set dni_cifrado = sha256('otro-tec1'::bytea) where paciente_id = :P1;
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  (select dni_cifrado from public.pacientes_identificacion where paciente_id = :P1) = sha256('dni-p1'::bytea),
+  'TEC1 NO puede modificar la identificación de P1: el UPDATE afectó cero filas (RLS) y el dni_cifrado sigue siendo el original — comprobado con una sesión que sí ve la fila, no con un UPDATE 0 a ciegas'
+);
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------------------
+-- clave_de_cifrado(): la clave no llega al navegador. authenticated -> 42501;
+-- service_role -> la lee. Sin la gemela positiva, un revoke de más pasaría por bueno
+-- (pruebas.md). La gemela corre con SET LOCAL ROLE service_role y no como postgres: postgres
+-- es el dueño de la función y la ejecuta con o sin grant (B1 de la revisión).
+-- ---------------------------------------------------------------------------------------
+call pg_temp.como(:TEC1);
+select pg_temp.assert_lanza_codigo(
+  'select public.clave_de_cifrado(''identificacion_cifrado_v1'')',
+  '42501',
+  'authenticated NO puede leer la clave de cifrado del Vault'
+);
+call pg_temp.reset_sesion();
+
+set local role service_role;
+select pg_temp.assert(
+  length(public.clave_de_cifrado('identificacion_cifrado_v1')) = 44,
+  'service_role SÍ lee la clave de cifrado: 44 caracteres en base64 (32 bytes)'
+);
+reset role;
+
+-- ---------------------------------------------------------------------------------------
+-- Fila solo-domicilio: entra sin documento. Y una fila vacía (ni documento ni domicilio)
+-- se rechaza con 23514, no con 42501: es una cuestión de coherencia, no de permiso.
+-- ---------------------------------------------------------------------------------------
+-- PBAJA y PFUS son de PRO1 (el segundo, desde la reasignación de 04-baja.sql y la
+-- fijación de PFUS respectivamente): la misma sesión sirve para las tres inserciones de
+-- este bloque, incluida la fila vacía de PFUS más abajo.
+call pg_temp.como(:PRO1);
+-- M2 de la revisión: mientras no haya rotación, una versión de clave distinta de 1 es una
+-- etiqueta falsa que el re-cifrado de mañana se saltaría. PBAJA no tiene fila todavía: el
+-- rechazo es del check pacientes_identificacion_clave_version_1, no de la clave primaria.
+-- La gemela positiva es el insert que sigue: misma sesión, mismo paciente, versión 1.
+select pg_temp.assert_lanza_codigo(
+  format(
+    'insert into public.pacientes_identificacion (paciente_id, tipo_documento, dni_cifrado, dni_nonce, dni_etiqueta, dni_indice, dni_clave_version) values (%L, %L, %L, %L, %L, %L, 9)',
+    :PBAJA, 'dni', sha256('dni-pbaja-v9'::bytea), substr(sha256('nonce-pbaja-v9'::bytea),1,12), substr(sha256('etiqueta-pbaja-v9'::bytea),1,16), sha256('indice-pbaja-v9'::bytea)
+  ),
+  '23514',
+  'Un documento etiquetado con la versión de clave 9 se rechaza: pacientes_identificacion_clave_version_1'
+);
+select pg_temp.assert_lanza_codigo(
+  format(
+    'insert into public.pacientes_identificacion (paciente_id, tipo_documento, dni_cifrado, dni_nonce, dni_etiqueta, dni_indice, dni_indice_clave_version) values (%L, %L, %L, %L, %L, %L, 2)',
+    :PBAJA, 'dni', sha256('dni-pbaja-i2'::bytea), substr(sha256('nonce-pbaja-i2'::bytea),1,12), substr(sha256('etiqueta-pbaja-i2'::bytea),1,16), sha256('indice-pbaja-i2'::bytea)
+  ),
+  '23514',
+  'Un índice etiquetado con la versión de clave 2 se rechaza: pacientes_identificacion_clave_version_1'
+);
+select pg_temp.assert_lanza_codigo(
+  format(
+    'insert into public.pacientes_identificacion (paciente_id, domicilio_cifrado, domicilio_nonce, domicilio_etiqueta, domicilio_clave_version) values (%L, %L, %L, %L, 2)',
+    :PBAJA, sha256('domicilio-pbaja-v2'::bytea), substr(sha256('nonce-domicilio-pbaja-v2'::bytea),1,12), substr(sha256('etiqueta-domicilio-pbaja-v2'::bytea),1,16)
+  ),
+  '23514',
+  'Un domicilio etiquetado con la versión de clave 2 se rechaza: pacientes_identificacion_clave_version_1'
+);
+insert into public.pacientes_identificacion (paciente_id, domicilio_cifrado, domicilio_nonce, domicilio_etiqueta, domicilio_clave_version) values
+  (:PBAJA, sha256('domicilio-solo-pbaja'::bytea), substr(sha256('nonce-domicilio-pbaja'::bytea),1,12), substr(sha256('etiqueta-domicilio-pbaja'::bytea),1,16), 1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L and dni_cifrado is null', :PBAJA)) = 1,
+  'Una fila SOLO con domicilio (sin documento) entra: pacientes_identificacion_documento_todo_o_nada no exige el documento en sí');
+
+select pg_temp.assert_lanza_codigo(
+  format(
+    'insert into public.pacientes_identificacion (paciente_id) values (%L)',
+    :PFUS
+  ),
+  '23514',
+  'Una fila SIN documento y SIN domicilio se rechaza: pacientes_identificacion_fila_no_vacia'
+);
+call pg_temp.reset_sesion();
+
+-- Índice único: dos filas de SOLO DOMICILIO conviven (los nulos de dni_indice no chocan),
+-- gemela de la doble alta ya probada arriba con documento. PFUS no tiene fila propia
+-- todavía (paciente_id es PRIMARY KEY: una sola fila por paciente), así que sirve de
+-- segundo sujeto sin chocar con el de PBAJA de arriba.
+call pg_temp.como(:PRO1);
+insert into public.pacientes_identificacion (paciente_id, domicilio_cifrado, domicilio_nonce, domicilio_etiqueta, domicilio_clave_version) values
+  (:PFUS, sha256('domicilio-solo-pfus'::bytea), substr(sha256('nonce-domicilio-pfus'::bytea),1,12), substr(sha256('etiqueta-domicilio-pfus'::bytea),1,16), 1);
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.pacientes_identificacion where paciente_id in (%L, %L) and dni_indice is null and domicilio_cifrado is not null',
+    :PBAJA, :PFUS
+  )) = 2,
+  'Dos filas de solo-domicilio conviven: el índice único sobre dni_indice no choca entre nulos (nulls distinct por defecto)'
+);
+
+-- ---------------------------------------------------------------------------------------
+-- alta_paciente(): fecha de nacimiento nula -> 23514 (criterio 11, tercera capa).
+-- ---------------------------------------------------------------------------------------
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo(
+  format('select public.alta_paciente(%L, %L, null)', 'Sin', 'Fecha'),
+  '23514',
+  'alta_paciente() con fecha_nacimiento nula se rechaza: la obligación también vive en la base'
+);
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------------------
+-- El rastro del descifrado (ADR-060). leer_identificacion() deja rastro en `auditoria`
+-- con operacion = 'LECTURA_IDENTIFICACION'; una segunda llamada seguida no añade otra
+-- (ventana de quince minutos, pruebas.md); otro centro no da ni fila ni rastro.
+-- ---------------------------------------------------------------------------------------
+call pg_temp.como(:TEC1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.leer_identificacion(%L)', :P1)) = 1,
+  'TEC1: leer_identificacion(P1) devuelve una fila');
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''LECTURA_IDENTIFICACION'' and actor_id = %L and registro_id = %L',
+    :TEC1, :P1::text
+  )) = 1,
+  'TEC1: la primera lectura de P1 añade UNA fila de rastro con su actor_id y el paciente'
+);
+select * from public.leer_identificacion(:P1);
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''LECTURA_IDENTIFICACION'' and actor_id = %L and registro_id = %L',
+    :TEC1, :P1::text
+  )) = 1,
+  'TEC1: una segunda lectura seguida de P1 NO añade otra fila (ventana de quince minutos)'
+);
+select pg_temp.assert(pg_temp.contar(format('select * from public.leer_identificacion(%L)', :P2)) = 0,
+  'TEC1 (centro A): leer_identificacion(P2) —otro centro— no devuelve fila');
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''LECTURA_IDENTIFICACION'' and actor_id = %L and registro_id = %L',
+    :TEC1, :P2::text
+  )) = 0,
+  'TEC1: sin fila de P2, tampoco hay rastro de P2: el registro no exime a nadie, pero tampoco inventa lecturas que no hubo');
+call pg_temp.reset_sesion();
+
+-- B4 de la revisión: las dos mitades de la ventana. El banco corre en una sola transacción
+-- (now() constante), así que la lectura «de antes» se siembra como postgres con su
+-- ocurrido_en. PMENOR tiene fila (PRO1 la dio de alta arriba) y nadie la ha leído aún.
+--   · PRO1: rastro sembrado hace 16 minutos -> la lectura de ahora AÑADE otra (2).
+--   · ADM:  rastro sembrado hace 14 minutos -> la lectura de ahora NO añade (1).
+-- Con 15 minutes cambiado por 100 years, o sin la condición de tiempo, cae la primera;
+-- sin deduplicación, cae la segunda.
+insert into public.auditoria (actor_id, tabla, operacion, registro_id, estado_posterior, ocurrido_en) values
+  (:PRO1, 'pacientes_identificacion', 'LECTURA_IDENTIFICACION', :PMENOR::text, '{}'::jsonb, now() - interval '16 minutes'),
+  (:ADM,  'pacientes_identificacion', 'LECTURA_IDENTIFICACION', :PMENOR::text, '{}'::jsonb, now() - interval '14 minutes');
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.leer_identificacion(%L)', :PMENOR)) = 1,
+  'PRO1: leer_identificacion(PMENOR) devuelve una fila');
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''LECTURA_IDENTIFICACION'' and actor_id = %L and registro_id = %L',
+    :PRO1, :PMENOR::text
+  )) = 2,
+  'PRO1: con su última lectura de PMENOR hace 16 minutos (fuera de la ventana), la de ahora SÍ añade rastro'
+);
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.contar(format('select * from public.leer_identificacion(%L)', :PMENOR)) = 1,
+  'ADM: leer_identificacion(PMENOR) devuelve una fila');
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''LECTURA_IDENTIFICACION'' and actor_id = %L and registro_id = %L',
+    :ADM, :PMENOR::text
+  )) = 1,
+  'GEMELA: ADM, con su última lectura de PMENOR hace 14 minutos (dentro de la ventana), NO añade rastro'
+);
+call pg_temp.reset_sesion();
+
+-- Gemelas: ADM y PRO1 también dejan rastro al leer — el registro no exime a nadie.
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.contar(format('select * from public.leer_identificacion(%L)', :P1)) = 1,
+  'ADM: leer_identificacion(P1) devuelve una fila');
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''LECTURA_IDENTIFICACION'' and actor_id = %L and registro_id = %L',
+    :ADM, :P1::text
+  )) = 1,
+  'ADM: su propia lectura de P1 también deja rastro');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.leer_identificacion(%L)', :P1)) = 1,
+  'PRO1 (asignado): leer_identificacion(P1) devuelve una fila');
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''LECTURA_IDENTIFICACION'' and actor_id = %L and registro_id = %L',
+    :PRO1, :P1::text
+  )) = 1,
+  'PRO1: su propia lectura de P1 también deja rastro');
+call pg_temp.reset_sesion();
+
+-- Guarda: registrar_evento_auditable('BUSQUEDA', …) sigue funcionando tras la redefinición
+-- de §7.1(b) — el riesgo que el diseño nombra explícitamente (§4, riesgo 11).
+call pg_temp.como(:PRO1);
+select public.registrar_evento_auditable('BUSQUEDA', 'pacientes', :P1::text, null);
+select pg_temp.assert(
+  pg_temp.contar(format(
+    'select * from public.auditoria where operacion = ''BUSQUEDA'' and actor_id = %L and registro_id = %L',
+    :PRO1, :P1::text
+  )) = 1,
+  'GUARDA: registrar_evento_auditable(''BUSQUEDA'', …) sigue funcionando después de redefinirse en T-032'
 );
 call pg_temp.reset_sesion();
 

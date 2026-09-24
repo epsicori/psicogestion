@@ -21,7 +21,7 @@ Región **París** (`eu-west-3` / `cdg1`). En desarrollo, Supabase local con Doc
 | Dominio | Tablas |
 |---|---|
 | Organización | `organizacion` (1 fila), `centros`, `perfiles`, `perfiles_centros`, `preferencias_usuario` |
-| Paciente · identificativo | `pacientes`, `pacientes_identificacion`, `consentimientos`, `consentimiento_firmantes`, `representantes_paciente` |
+| Paciente · identificativo | `pacientes`, `pacientes_identificacion`, `pacientes_salud_basica` (alergias y medicación actual, en claro, fuera del candado y de solo adición; ADR-061, ADR-063), `consentimientos`, `consentimiento_firmantes`, `representantes_paciente` |
 | Paciente · clínico | `episodios_asistenciales`, `episodio_participantes`, `diagnosticos`, `valoraciones_riesgo`, `notas_clinicas`, `notas_clinicas_versiones`, `evaluaciones`, `evaluacion_archivos`, `informes` |
 | Agenda | `tipos_terapia`, `series_cita`, `citas`, `disponibilidad`, `alertas_documentacion` |
 | Económico | `tarifas_paciente`, `series_facturacion`, `facturas`, `factura_lineas`, `cobros`, `bonos`, `gastos`, `registro_eventos_sif` |
@@ -148,8 +148,9 @@ es el bug: la serie creada en enero se corre una hora en julio.
 | Recurso | Administrador | Profesional | Técnico administrativo |
 |---|---|---|---|
 | Ficha básica del paciente | Total | Sus pacientes | Subconjunto de lectura |
-| DNI y domicilio | Total | Sus pacientes | Sin acceso |
+| DNI y domicilio | Total | Sus pacientes | Los de sus centros, lectura registrada en `auditoria` (ADR-060) |
 | Motivo de consulta y diagnósticos | Solo los suyos | Sus pacientes | Sin acceso |
+| Alergias y medicación | Solo los suyos | Sus pacientes | Sin acceso (ADR-061, ADR-063) |
 | Nivel de riesgo | Solo los suyos | Sus pacientes | Solo indicador binario |
 | Notas clínicas | Solo las suyas (+ emergencia) | Autor o asignado | Sin acceso |
 | Agenda | Todas | La suya | Todas, sin tipo de terapia |
@@ -195,7 +196,7 @@ el profesional se levanta. **ADR-026** lo fija entero; lo que manda sobre el mod
   establecerlo. El técnico administrativo no tiene PIN: no alcanza contenido clínico.
 - **Desbloqueo de sesión**, ventana de 15 minutos configurable, en `desbloqueos_historia`.
   Es estado operativo y se actualiza — como el outbox del ADR-024, y a diferencia de las
-  cuatro tablas de solo adición. La ventana se prolonga en Server Actions, **jamás en el
+  tablas de solo adición (`tablas_solo_adicion`). La ventana se prolonga en Server Actions, **jamás en el
   renderizado**.
 - **Se hace cumplir en RLS** vía `historia_desbloqueada()`, sobre `episodios_asistenciales`,
   `diagnosticos`, `valoraciones_riesgo`, `notas_clinicas`, `notas_clinicas_versiones`,
@@ -219,6 +220,11 @@ fila leída — que daría un registro ilegible y una escritura en cada render.
   no historia (invariante 3). Las búsquedas van a `auditoria`.
 - **La escritura la hace la Server Action de apertura, nunca el componente que pinta.** El
   render sigue siendo lectura pura.
+- **La lectura de DNI y domicilio no es esto.** Es dato de gestión, no clínico (invariante
+  3), así que su rastro no va a `accesos_historia`: va a `auditoria`, con el verbo
+  `LECTURA_IDENTIFICACION` (ADR-060), escrito por `public.leer_identificacion()` en la
+  misma transacción que la lectura, una fila por actor, paciente y ventana de quince
+  minutos — la misma unidad que arriba.
 
 **Entrar, seguir siendo tú, y seguir delante del teclado** son tres cosas distintas:
 contraseña, **TOTP** (ADR-039 — nunca SMS, para los tres roles) y **PIN** (ADR-026). El

@@ -1,0 +1,65 @@
+{
+  "ticket": "T-032",
+  "commit": "0494226",
+  "altas": 0,
+  "medias": 3,
+  "bajas": 4,
+  "hallazgos": [
+    {
+      "id": "SQL-H1",
+      "severidad": "MEDIA",
+      "archivo": "docs/decisions/ADR-063.md",
+      "linea": 22,
+      "descripcion": "«Lo vigente es la última fila» (lectura de fila entera en datos.ts:414-429) junto con fila_no_vacia, que admite filas de un solo campo: nada exige que cada fila sea la foto completa, y el ADR afirma en falso que vaciar un valor no tiene forma.",
+      "escenario": "Alta con alergias='Penicilina'; luego una fila nueva solo con medicacion_actual='Sertralina 100 mg' (PostgREST con la sesión del asignado, o la futura pantalla de edición siguiendo el ADR) -> cargarSaludBasica devuelve alergias null y la ficha deja de mostrar la alergia a la penicilina."
+    },
+    {
+      "id": "SQL-H2",
+      "severidad": "MEDIA",
+      "archivo": "scripts/lint-migraciones.ts",
+      "linea": 26,
+      "descripcion": "TABLAS_SOLO_ADICION del linter no incluye pacientes_salud_basica (fichero fuera de territorio) y el hueco no está anotado en docs/state.md §Hallazgos.",
+      "escenario": "Una migración futura desactiva el disparador, concede update, reescribe alergias y lo restaura todo -> lint:migraciones la da por limpia y cobertura_solo_adicion()/10-solo-adicion siguen en verde porque el estado final tiene las tres capas; la misma migración contra auditoria sí caería en la regla 1."
+    },
+    {
+      "id": "SQL-H3",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20260916120000_alta_de_paciente_completa.sql",
+      "linea": 536,
+      "descripcion": "El cerrojo for share que cierra la carrera de las dos guardas de solo_contacto no tiene ninguna prueba que se ponga roja si se quita.",
+      "escenario": "Un create or replace posterior de fn_firmante_no_es_solo_contacto() omite el perform ... for share -> test:rls y CI siguen en verde y un firmante puede volver a quedar como solo_contacto por una carrera."
+    },
+    {
+      "id": "SQL-H4",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/README.md",
+      "linea": 28,
+      "descripcion": "El README del banco sigue diciendo que el administrador lee pacientes_salud_basica, cosa que contradice el ADR-063 y el criterio 7.",
+      "escenario": "Quien amplía 02 a partir del README escribe la gemela «ADM ve P1 = 1», que sale en rojo, y la «arregla» devolviendo la rama de administrador a la política."
+    },
+    {
+      "id": "TS-H1",
+      "severidad": "MEDIA",
+      "archivo": "docs/bitacora/T-032.md",
+      "linea": 67,
+      "descripcion": "La tabla de criterios no se actualizó en esta vuelta. El criterio 5 da 406 aserciones cuando el pie de la misma bitácora y state.md dan 428. El criterio 14 cita como evidencia aes-gcm.test.ts:45, cuya prueba de las «tres formas» compara un HMAC consigo mismo; la prueba que sí lo demuestra es identificacion.test.ts:28, y no se nombra.",
+      "escenario": "Alguien quita normalizarNif de cifrarIdentificacion. La prueba que cita la bitácora para el criterio 14 sigue verde y solo cae identificacion.test.ts:28, que la evidencia no menciona. Quien lea el criterio 5 anota 406 como total del banco cuando el real es 428."
+    },
+    {
+      "id": "TS-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/datos.ts",
+      "linea": 414,
+      "descripcion": "Es la cara de la interfaz de SQL-H1, el mismo problema visto desde el lector (se cierra con él). La ficha toma los dos campos de la última fila de pacientes_salud_basica y pinta el null como «Sin alergias registradas».",
+      "escenario": "Alta con alergias='Penicilina'. Después, el profesional asignado inserta por PostgREST {paciente_id, medicacion_actual:'Sertralina'}. La ficha pinta 'Sin alergias registradas' para un paciente alérgico a la penicilina."
+    },
+    {
+      "id": "TS-H3",
+      "severidad": "BAJA",
+      "archivo": "lib/cifrado/bytea.ts",
+      "linea": 24,
+      "descripcion": "El error de formato de desdeBytea incluye el valor entero de la columna, y cargarIdentificacion (datos.ts:381) lo manda a console.error. Así llega al log del servidor el criptograma que el diseño §5 dice que no se imprime.",
+      "escenario": "PostgREST cambia la serialización de bytea (por ejemplo, base64 sin \\x). Cada apertura de la pestaña de datos escribe en el log el dni_cifrado del paciente, que se puede descifrar fuera de leer_identificacion() y sin rastro en auditoria si algún día se filtra la clave."
+    }
+  ]
+}

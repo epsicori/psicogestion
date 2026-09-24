@@ -82,6 +82,29 @@ export const es = {
     losApellidosSonDemasiadoLargos: 'Los apellidos son demasiado largos',
     noSePudoCrearElPaciente: 'No se pudo crear el paciente',
     noSePudoCargarLaListaDePacientes: 'No se pudo cargar la lista de pacientes',
+
+    // T-032 · el resto de los campos del alta
+    fechaDeNacimiento: 'Fecha de nacimiento',
+    introduceLaFechaDeNacimiento: 'Introduce la fecha de nacimiento',
+    fechaDeNacimientoNoValida: 'Esa fecha no es válida',
+    fechaDeNacimientoFueraDeRango: 'Fecha de nacimiento fuera de rango',
+    masDatos: 'Más datos (opcional)',
+    sexo: 'Sexo (opcional)',
+    sexoNoValido: 'Elige una opción de la lista',
+    sexoHombre: 'Hombre',
+    sexoMujer: 'Mujer',
+    sexoOtro: 'Otro',
+    telefono: 'Teléfono (opcional)',
+    telefonoNoValido: 'Introduce un teléfono válido',
+    dniONie: 'DNI o NIE (opcional)',
+    dniNoValido: 'Introduce un DNI o NIE válido',
+    eseDocumentoYaEstaDadoDeAlta: 'Ese documento ya está dado de alta',
+    domicilio: 'Domicilio (opcional)',
+    elDomicilioEsDemasiadoLargo: 'El domicilio es demasiado largo',
+    alergias: 'Alergias (opcional)',
+    lasAlergiasSonDemasiadoLargas: 'El texto de alergias es demasiado largo',
+    medicacionActual: 'Medicación actual (opcional)',
+    laMedicacionEsDemasiadoLarga: 'El texto de medicación es demasiado largo',
   },
   // --- T-006b1 · ajustes del administrador -------------------------------
 
@@ -187,6 +210,8 @@ export const es = {
     aceptar: 'Aceptar',
     si: 'Sí',
     no: 'No',
+    // T-032 · texto de la opción vacía de un <select> opcional (components/ui/seleccion.tsx)
+    sinIndicar: 'Sin indicar',
   },
   // --- T-006b2 · primer acceso ---------------------------------------------
 
@@ -378,8 +403,6 @@ export const es = {
     sinRepresentantes: 'No hay ninguna persona de contacto registrada',
     sinRepresentantesExplicacion:
       'Aquí aparecen quienes pueden actuar por el paciente —madre, padre, tutor— con su teléfono.',
-    sinTelefonoDelPaciente:
-      'El teléfono del propio paciente todavía no se guarda en ningún sitio. El que sale aquí es el de su persona de contacto.',
     telefono: 'Teléfono',
     correo: 'Correo',
     sinTelefono: 'Sin teléfono',
@@ -394,6 +417,31 @@ export const es = {
     alcanceSoloContacto: 'Solo contacto',
     vigenteDesde: 'Desde el {fecha}',
     yaNoVigente: 'Ya no está vigente',
+
+    // T-032 · Corte B: identificación (ADR-060), sexo administrativo (ADR-062) y salud
+    // básica (ADR-061) en la ficha.
+    identificacion: 'Identificación',
+    documento: 'Documento',
+    domicilio: 'Domicilio',
+    sinDocumento: 'Sin documento registrado',
+    sinDomicilio: 'Sin domicilio registrado',
+    identificacionNoLegible: 'No se puede mostrar',
+    identificacionNoLegibleExplicacion:
+      'Hay un documento o un domicilio guardados, pero no se han podido descifrar. Avisa a quien administra la cuenta.',
+    sexo: 'Sexo',
+    sinSexo: 'Sin especificar',
+    sexoHombre: 'Hombre',
+    sexoMujer: 'Mujer',
+    sexoOtro: 'Otro',
+    alergiasYMedicacion: 'Alergias y medicación',
+    alergias: 'Alergias',
+    medicacionActual: 'Medicación actual',
+    sinAlergias: 'Sin alergias registradas',
+    sinMedicacion: 'Sin medicación registrada',
+    representacionLegal: 'Representación legal',
+    sinRepresentacionLegal: 'No hay ninguna persona con representación legal registrada',
+    sinContactoDeEmergencia: 'No hay ningún contacto de emergencia registrado',
+    contactoDeEmergenciaExplicacion: 'No puede dar el consentimiento ni firmar por el paciente.',
 
     // Documentos y consentimientos (ADR-048: fuera del candado; ADR-054: lenguaje claro)
     consentimientos: 'Consentimientos',

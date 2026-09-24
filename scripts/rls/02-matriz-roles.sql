@@ -36,7 +36,9 @@ call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
 -- pacientes_identificacion: DNI cifrado. Total para admin y el profesional dueño; el
--- técnico SIN ACCESO (matriz de architecture.md §Roles).
+-- técnico de SU centro sí ve la fila desde T-032/ADR-060 (el candado ya no es la RLS de
+-- la tabla, es que no hay clave para descifrar sin pasar por leer_identificacion(), que
+-- deja rastro). La aserción de este bloque cambia de signo respecto a la de T-002.
 -- ---------------------------------------------------------------------------------------
 call pg_temp.como(:ADM);
 select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P1)) = 1,
@@ -49,8 +51,84 @@ select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_iden
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:TEC1);
-select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P1)) = 0,
-  'TEC1 NO debe ver identificación: sin acceso, aunque P1 sea de su centro');
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_identificacion where paciente_id = %L', :P1)) = 1,
+  'TEC1 (centro A) SÍ ve la fila de identificación de P1 (centro A) — ADR-060: la RLS ya no es el candado, lo es no tener la clave');
+-- La negativa sobre P2 (otro centro) vive en 08-identificacion.sql: aquí P2 aún no tiene
+-- fila y el 0 sería por no haber nada que ver (B3 de la revisión).
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------------------
+-- pacientes_salud_basica: alergias/medicación, sin cifrar, fuera del candado (ADR-061),
+-- de solo adición y solo del profesional asignado, administrador incluido (ADR-063).
+-- El técnico, en ningún centro (T-032 §1.4).
+-- 01-fijacion.sql es territorio ajeno a T-032 (diseño §6): la fila de P1 se da de alta
+-- aquí mismo, dentro de este bloque, como PRO1 (su profesional asignado, con permiso de
+-- alta según pacientes_salud_basica_alta), para que el resto del bloque tenga algo que
+-- distinguir de «cero por falta de fila».
+call pg_temp.como(:PRO1);
+insert into public.pacientes_salud_basica (paciente_id, alergias, medicacion_actual, registrado_por) values
+  (:P1, 'Penicilina', 'Sertralina 50mg/día', :PRO1);
+
+-- M1 de la revisión: registrado_por y registrado_en los fija fn_salud_basica_autoria(),
+-- no el llamante. PRO1 registra un cambio de medicación intentando firmarlo como ADM y
+-- fecharlo en 2020.
+insert into public.pacientes_salud_basica (paciente_id, alergias, medicacion_actual, registrado_por, registrado_en) values
+  (:P1, 'Penicilina', 'Sertralina 100mg/día', :ADM, '2020-01-01');
+select pg_temp.assert(
+  (select registrado_por = :PRO1::uuid and registrado_en > now() - interval '1 minute'
+     from public.pacientes_salud_basica
+    where paciente_id = :P1 and medicacion_actual = 'Sertralina 100mg/día'),
+  'El cambio de PRO1 entra, pero firmado por PRO1 y fechado ahora: la autoría y la hora las pone el servidor, no el llamante'
+);
+
+-- ADR-063: el cambio es una fila nueva y la anterior sigue ahí. La gemela del «2»: la
+-- versión de 50 mg existe todavía, con su texto intacto.
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :P1)) = 2
+  and exists (select 1 from public.pacientes_salud_basica
+               where paciente_id = :P1 and medicacion_actual = 'Sertralina 50mg/día'),
+  'Cambiar la medicación de P1 añade una fila: la de 50 mg sigue ahí, con su texto'
+);
+-- Y sobrescribir no se puede ni siendo el profesional asignado. 42501 del revoke (capa 1);
+-- la capa 2 con el privilegio recuperado la recorre 10-solo-adicion.sql.
+select pg_temp.assert_lanza_codigo(
+  format('update public.pacientes_salud_basica set alergias = %L where paciente_id = %L', 'AINE', :P1),
+  '42501',
+  'PRO1 no puede sobrescribir la alergia de P1: la tabla es de solo adición (ADR-063)'
+);
+call pg_temp.reset_sesion();
+-- 10-solo-adicion y cobertura_solo_adicion() solo recorren lo que está en el catálogo: sin
+-- esta fila, quitar un disparador de la tabla no pondría nada en rojo.
+select pg_temp.assert(
+  exists (select 1 from public.tablas_solo_adicion where tabla = 'pacientes_salud_basica'),
+  'pacientes_salud_basica está en tablas_solo_adicion: 10-solo-adicion la recorre (ADR-063)'
+);
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :P1)) = 2,
+  'PRO1 (asignado a P1) debe ver la salud básica de P1');
+call pg_temp.reset_sesion();
+
+-- ADM, sobre un paciente que no tiene asignado: cero (criterio 7, ADR-063). La gemela es
+-- ADM sobre uno suyo, dado de alta por el camino real (alta_paciente, que asigna a quien
+-- llama) y con alergias: esa sí la ve.
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :P1)) = 0,
+  'ADM NO debe ver la salud básica de P1: no es su profesional asignado (ADR-063)');
+select public.alta_paciente('Gema', 'Deadm', date '1980-05-05',
+                            p_alergias => 'Látex') as padm \gset
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :'padm')) = 1,
+  'ADM SÍ ve la salud básica de su propio paciente (gemela del cero sobre P1)');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:TEC1);
+select pg_temp.assert(pg_temp.contar(format('select * from public.pacientes_salud_basica where paciente_id = %L', :P1)) = 0,
+  'TEC1 NO debe ver salud básica de P1, aunque sea de su centro: no hay política de lectura para el técnico');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:TEC2);
+select pg_temp.assert(pg_temp.contar('select * from public.pacientes_salud_basica') = 0,
+  'TEC2 NO debe ver ninguna fila de salud básica: sin política de lectura para el técnico, sea cual sea el centro');
 call pg_temp.reset_sesion();
 
 -- ---------------------------------------------------------------------------------------
