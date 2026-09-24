@@ -4,7 +4,7 @@ titulo: Nota clínica — borrador, firma y versión sellada
 modelo: opus
 fase: 1
 prioridad: alta
-depende_de: [T-005, T-007, T-013]
+depende_de: [T-005, T-007, T-013, T-012b, T-012c]
 estado: pendiente
 ---
 
