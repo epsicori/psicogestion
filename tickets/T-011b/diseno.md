@@ -2,8 +2,21 @@
 
 Contrato: `tickets/T-011b-editar-serie-desde-la-cita.md`. Riesgo alto: es la cadena de series y
 propuestas (ADR-034). El diseño cierra H8 y H9 de `tickets/T-014/diseno.md` §0 sin romper el
-principio «nada se recalcula solo». Tampoco cambia ninguna tabla: la migración solo redefine
-funciones.
+principio «nada se recalcula solo». Tampoco cambia ninguna tabla: la migración redefine
+funciones, añade cinco y retira un privilegio de tabla.
+
+**Enmienda por el ADR-068 (24-09-2026).** El propietario respondió las tres preguntas de la
+primera versión, y esta versión las incorpora:
+
+1. **Propuestas viejas**: siguen en «Por confirmar» y se rechazan al confirmarlas, con `22023` y
+   su motivo legible. Queda cerrado como decisión (D4), no como pregunta.
+2. **`UPDATE` directo**: se retira el `update` de `authenticated` sobre `series_cita` en esta
+   misma migración (§1.0). La regla solo cambia por `agenda_editar_serie`. Criterio 11 reescrito.
+3. **Mensual y diálogo de T-014**: la regla es la de `ocurrencias_serie` (mismo ordinal que la
+   fecha de destino y, si el mes no lo tiene, el último de ese día). La base expone **antes de
+   confirmar** en qué se convierte la serie con una función de solo lectura,
+   `agenda_previsualizar_edicion_serie` (§1.10, criterio 16). «Mantener la serie» es mover solo
+   esa cita con `esta`, que ya existe (D14).
 
 Nombre: en `minimax/alcance.json:154` y `minimax/cortes/T-011.md:16` existe un «T-011b» antiguo,
 la rama `T-011b-acciones-series` del reparto a tres del 29-08. Es historia y no tiene contrato en
@@ -23,7 +36,7 @@ cada nombre en `supabase/migrations/*.sql`).
 | # | Hecho | Dónde |
 |---|---|---|
 | F1 | `series_cita` guarda `periodicidad` (`semanal`/`quincenal`/`mensual`), `dia_semana` ISODOW 1-7, `hora_local time`, `zona_horaria`, `duracion_minutos` (5-480), y `sesiones_totales` xor `fin_el`. No guarda la fecha de inicio: la serie **se materializa entera al crearse** y ninguna ocurrencia futura depende de la regla. | `20260906120000_agenda_esquema.sql:130-156`; M11 `agenda_crear_serie` 564-779 |
-| F2 | `authenticated` tiene `update` sobre `series_cita` (política `series_cita_modificacion`: administrador o profesional dueño). Ninguna línea de `lib/`, `app/` ni `components/` actualiza `series_cita` directamente: la única escritura de la aplicación es `agenda_editar_serie`. | `…agenda_esquema.sql`, grants; grep |
+| F2 | `authenticated` tiene hoy `update` sobre `series_cita` (política `series_cita_modificacion`: administrador o profesional dueño). Ninguna línea de `lib/`, `app/` ni `components/` actualiza `series_cita` directamente: la única escritura de la aplicación es `agenda_editar_serie`. El ADR-068 retira ese `update` (F21-F23, §1.0). | `…agenda_esquema.sql`, grants; grep |
 | F3 | `citas_desviacion_ck`: `desviada = (motivo_desviacion is not null)`. | `…agenda_esquema.sql:202` |
 | F4 | La exclusión `citas_sin_solape_profesional` da `23P01` en `programada/confirmada/realizada`. | `…agenda_esquema.sql` |
 
@@ -63,6 +76,16 @@ cada nombre en `supabase/migrations/*.sql`).
 | F19 | `esquemaEditarSerie` tiene dos `refine`: con `esta`, nada de regla; con `esta_y_siguientes`, ni `estado`, ni `sala`, ni `inicio`, ni `fin`. `FECHA_ISO` es una constante privada del mismo fichero. No hay ningún validador de fecha de calendario exportado en `lib/fechas/` (el de T-014 aún no existe). | `lib/citas/esquemas.ts:20, 76-111` |
 | F20 | `editarSerie` pasa los diez `p_*` a la RPC y devuelve `{ alcance, propuestaIds }`. Los errores salen de `mapearErrorCitas`, que convierte todo `22023` en `parametro_invalido`. | `lib/citas/series.ts:97-123`; `lib/citas/errores.ts:12-23` |
 
+**Enmienda ADR-068**
+
+| # | Hecho | Dónde |
+|---|---|---|
+| F21 | El privilegio sale de `grant select, insert, update on table public.series_cita to authenticated`, después de un `revoke all … from public, anon, authenticated, service_role` sobre las tablas de agenda. `service_role` y `anon` no tienen nada. Ninguna migración posterior vuelve a conceder ni a revocar sobre `series_cita` (grep de `grant`/`revoke`/`policy` con `series_cita` en `supabase/migrations/*.sql`). | `20260906120000_agenda_esquema.sql:846-855` |
+| F22 | La política `series_cita_modificacion` (`for update to authenticated`) está declarada en el arreglo de `scripts/rls/11-cobertura.sql:26`. Ese módulo falla si una política declarada desaparece de `pg_policies`. `series_cita_alta` se redefinió en T-011a. | `…agenda_esquema.sql:769`; `11-cobertura.sql:15-80`; `20260911120000_vinculo_en_el_alta_de_agenda.sql:54-66` |
+| F23 | Grep de `series_cita` en `lib/`, `app/`, `components/` y `scripts/`: **nada hace un `update` directo desde el cliente**. `lib/citas/esquemas.ts` y `esquemas.test.ts` solo la nombran en comentarios; `lib/supabase/tipos-bd.ts` es generado; `scripts/rls/15-agenda.sql`, `16-series.sql` y `17-vinculo-agenda.sql` insertan como `postgres` y leen; `11-cobertura.sql` nombra políticas. El único `UPDATE` de la base está dentro de `agenda_editar_serie` (`security definer`, M11 935). Ninguna aserción del banco comprueba hoy los privilegios de tabla de `series_cita`. El mensaje de Postgres para una tabla sin privilegio ya se usa como referencia en el banco: «permission denied for table …». | grep; `scripts/rls/13-cuentas.sql:390` |
+| F24 | **No existe nada que describa la regla resultante.** `ocurrencias_serie` genera fechas al crear la serie, no recibe ancla y no devuelve el ordinal. `fecha_en_regla_nueva` y `calcular_propuesta_de_evento` son nuevas en este ticket. Además, `ocurrencias_serie` **recalcula el ordinal desde la fecha anterior**, así que tras un recorte (5.º → último, que es el 4.º) la serie sigue en el 4.º los meses siguientes, aunque tengan quinto (hallazgo 5 de §8). | M11 254-323; recálculo en 309-316 |
+| F25 | `agenda_editar_serie` autoriza `esta_y_siguientes` con: administrador, profesional de la cita (`auth.uid()`), o técnico administrativo con la cita en `centros_actuales()`. Sin perfil, `42501` «No hay sesión activa con perfil.»; sin cita o ajena, `42501` «La cita no existe o no es tuya.». La cita suelta da `22023` «La cita no pertenece a una serie…». | M11 891-924 |
+
 ---
 
 ## 1 · Piezas y contratos
@@ -71,7 +94,28 @@ Una sola migración nueva: `supabase/migrations/<AAAAMMDDHHMMSS>_editar_serie_de
 El sello es posterior a la última migración de `main` al fusionar, porque T-012b tiene una en
 vuelo. La migración **no** crea tablas ni columnas ni toca enums, así que no hay relleno.
 
-Las funciones van en el orden de esta sección, porque cada una usa las anteriores.
+Las funciones van en el orden de esta sección, porque cada una usa las anteriores. La
+previsualización (§1.10) va después de §1.6 y antes del bloque de permisos (§1.7).
+
+### 1.0 · Retirar el `UPDATE` directo sobre `series_cita` (ADR-068, punto 2)
+
+```
+revoke update on table public.series_cita from authenticated;
+```
+
+- **Solo `update`.** `select` e `insert` se quedan como están (F21). El `insert` directo es otra
+  puerta, y no la pide el ADR (hallazgo 6 de §8).
+- **La política `series_cita_modificacion` no se borra** (F22, D13). Queda dormida: sin el
+  privilegio, Postgres rechaza el `UPDATE` con `42501` «permission denied for table series_cita»
+  antes de mirar las políticas. Se le añade:
+  `comment on policy series_cita_modificacion on public.series_cita is 'Dormida desde T-011b
+  (ADR-068): authenticated no tiene UPDATE sobre la tabla y la regla solo cambia por
+  agenda_editar_serie (security definer). Se conserva porque 11-cobertura la declara y para que
+  un grant futuro no abra la tabla sin filtro.'`
+- `agenda_editar_serie` es `security definer` y corre como el dueño de la tabla, que conserva el
+  privilegio. No cambia nada para ella.
+- Tras el revoke, el camino sin ancla del disparador (§1.3) solo lo recorre quien sea dueño de la
+  tabla: `postgres` en una migración, en una operación manual o en el banco. Se mantiene (D13).
 
 ### 1.1 · `public.fecha_en_regla_nueva` (nueva, pura)
 
@@ -151,7 +195,68 @@ Todas las tablas del cuerpo llevan alias (regla de `out` ambiguo).
 **Cualquier otro tipo.** `22023`.
 
 La función devuelve los valores **en bruto**: no mira el reloj. Qué hacer con un instante pasado
-lo deciden quienes la llaman (§1.5 y §1.6).
+lo deciden quienes la llaman (§1.5, §1.6 y §1.10).
+
+### 1.2a · `public.citas_afectadas_por_regla` (nueva, interna)
+
+```
+citas_afectadas_por_regla(p_serie_id uuid, p_desde_cita_id uuid default null)
+returns table (cita_id uuid)
+language sql stable set search_path = ''   -- security invoker
+```
+
+Es el conjunto de H8 escrito una vez, para el disparador (§1.3) y para la previsualización
+(§1.10):
+
+```
+select c.id
+  from public.citas c
+ where c.serie_id = p_serie_id
+   and c.inicio > now()
+   and c.estado in ('programada', 'confirmada')
+   and c.desviada = false
+   and (p_desde_cita_id is null
+        or c.inicio >= (select a.inicio from public.citas a where a.id = p_desde_cita_id))
+ order by c.inicio, c.id
+```
+
+- Con `p_desde_cita_id` nulo es el predicado de T-011 (F8), el camino sin ancla.
+- Un `p_desde_cita_id` que no existe da el conjunto vacío (`>= null`). Nunca pasa: quien la llama
+  ya ha leído la cita.
+- Es `invoker`, y sus dos llamantes son `definer`, así que corre como el dueño. No se concede a
+  nadie (§1.7).
+
+### 1.2b · `public.plan_edicion_serie` (nueva, interna)
+
+```
+plan_edicion_serie(
+  p_cita public.citas, p_serie public.series_cita,
+  p_fecha date, p_dia_semana smallint, p_hora_local time,
+  p_duracion_minutos smallint, p_zona_horaria text)
+returns jsonb
+language plpgsql stable set search_path = ''   -- security invoker
+```
+
+Es la validación de la ancla y el cálculo de la regla nueva, en un solo sitio para
+`agenda_editar_serie` (§1.4) y `agenda_previsualizar_edicion_serie` (§1.10).
+
+- **Cuerpo**: los pasos 2 a 5 de §1.4, en ese orden y con esos mismos mensajes. No lee tablas ni
+  bloquea: recibe las filas ya leídas.
+- **No autoriza.** Los dos llamantes autorizan y descartan la cita suelta antes de llamarla.
+- **Retorno.** Un `jsonb` con **las mismas claves que la carga del evento**, para que
+  `calcular_propuesta_de_evento('agenda.regla_serie_cambiada', plan, cita)` lo acepte tal cual:
+  ```
+  { serie_id, periodicidad, dia_semana, hora_local, duracion_minutos, zona_horaria,
+    desde_cita_id, fecha_origen, fecha_destino, cambia }
+  ```
+  - `dia_semana`, `hora_local` y `zona_horaria` son `v_dia`, `v_hora` y `v_zona` de §1.4.
+  - `duracion_minutos = coalesce(p_duracion_minutos, p_serie.duracion_minutos)`.
+  - `cambia` es verdadero si las cuatro columnas nuevas difieren de las de `p_serie` (con
+    `is distinct from`) **o** `fecha_origen <> fecha_destino`. Es la negación exacta del retorno
+    temprano del disparador (§1.3.2): `cambia = false` si y solo si la edición no crearía evento.
+- Los valores se construyen con `jsonb_build_object` desde los mismos tipos que usa el disparador
+  (`time`, `date`, `smallint`), así que la carga del evento y el plan escriben igual cada campo.
+- No se concede a nadie (§1.7).
 
 ### 1.3 · `fn_evento_regla_serie()` (`create or replace`, mismo disparador)
 
@@ -168,23 +273,24 @@ Pasos del disparador:
 2. **Retorno temprano**. Vuelve pronto si las cuatro columnas no cambian **y** además
    (`v_ancla is null` **o** `fecha_origen = fecha_destino`). Sin esa segunda condición, arrastrar
    al mismo día de la semana de otra semana no crearía evento.
-3. **Conjunto (H8)**. El predicado de hoy, más:
+3. **Conjunto (H8)**. Sale de §1.2a:
    ```
-   and (v_ancla is null
-        or c.inicio >= (select a.inicio from public.citas a
-                         where a.id = (v_ancla->>'desde_cita_id')::uuid))
+   select coalesce(jsonb_agg(a.cita_id order by a.n), '[]'::jsonb)
+     from public.citas_afectadas_por_regla(new.id, (v_ancla->>'desde_cita_id')::uuid)
+          with ordinality as a(cita_id, n)
    ```
-   y `jsonb_agg(c.id order by c.inicio, c.id)`. El ancla entra (es `>=`). Las desviadas, pasadas y
-   en curso quedan fuera como hoy (`inicio > now()`, `desviada = false`).
+   El ancla entra (es `>=`). Las desviadas, pasadas y en curso quedan fuera como hoy
+   (`inicio > now()`, `desviada = false`). Un conjunto vacío se trata como hoy.
 4. **Carga**. La de hoy, más:
    - `periodicidad` (`new.periodicidad`);
    - `desde_cita_id`, `fecha_origen` y `fecha_destino`, los tres `null` JSON sin ancla.
 5. Se publica `app.agenda_evento_regla` como hoy.
 6. El comentario de la función se actualiza.
 
-**Sin ancla** (un `UPDATE` directo, F2) el conjunto sigue siendo el de T-011, y el cálculo cae en
-la rama sin ancla de §1.1: cada cita toma el día nuevo en su propia semana. Hoy conservaría la
-fecha. Es la única diferencia de comportamiento de ese camino, y es la corrección de H9.
+**Sin ancla** (un `UPDATE` directo, que tras §1.0 solo puede hacer el dueño de la tabla) el
+conjunto sigue siendo el de T-011, y el cálculo cae en la rama sin ancla de §1.1: cada cita toma
+el día nuevo en su propia semana. Hoy conservaría la fecha. Es la única diferencia de
+comportamiento de ese camino, y es la corrección de H9.
 
 ### 1.4 · `agenda_editar_serie` (`drop function` + `create`)
 
@@ -206,7 +312,11 @@ returns jsonb language plpgsql volatile security definer set search_path = ''
 **`esta`.** Si `p_fecha is not null`, `22023` («Con "esta" la fecha nueva va en el inicio.»). Si
 no, igual que hoy.
 
-**`esta_y_siguientes`.** Autorización y cita suelta igual que hoy. Después, en este orden:
+**`esta_y_siguientes`.** Autorización y cita suelta igual que hoy (F25). Después, en este orden.
+Los pasos 2 a 5 **no** se escriben en esta función: son el cuerpo de `plan_edicion_serie` (§1.2b).
+Tras el paso 1, `agenda_editar_serie` hace
+`v_plan := public.plan_edicion_serie(v_cita, v_serie, p_fecha, p_dia_semana, p_hora_local, p_duracion_minutos, p_zona_horaria)`.
+Se describen aquí porque es donde se leen en orden:
 
 1. `select * into v_serie from public.series_cita s where s.id = v_cita.serie_id for no key update`.
    Serializa dos ediciones concurrentes de la misma serie antes de validar.
@@ -230,8 +340,8 @@ no, igual que hoy.
      horario de esta cita ya ha pasado.»).
    - Por la propiedad de §1.1, ninguna cita siguiente puede caer antes que ella.
 6. `set_config('app.agenda_evento_regla', '', true)`, como hoy.
-7. `set_config('app.agenda_regla_ancla', jsonb_build_object('serie_id', v_serie.id, 'desde_cita_id', v_cita.id, 'fecha_origen', v_origen, 'fecha_destino', v_destino)::text, true)`.
-8. `update public.series_cita set dia_semana = v_dia, hora_local = v_hora, duracion_minutos = coalesce(p_duracion_minutos, duracion_minutos), zona_horaria = v_zona where id = v_serie.id`.
+7. `set_config('app.agenda_regla_ancla', jsonb_build_object('serie_id', v_serie.id, 'desde_cita_id', v_cita.id, 'fecha_origen', v_plan->'fecha_origen', 'fecha_destino', v_plan->'fecha_destino')::text, true)`.
+8. `update public.series_cita set dia_semana = (v_plan->>'dia_semana')::smallint, hora_local = (v_plan->>'hora_local')::time, duracion_minutos = (v_plan->>'duracion_minutos')::smallint, zona_horaria = v_plan->>'zona_horaria' where id = v_serie.id`.
 9. `set_config('app.agenda_regla_ancla', '', true)`, **inmediatamente después** del `update`. Así
    un `UPDATE` posterior en la misma transacción no hereda el ancla.
 10. El resto, igual que hoy. El retorno no cambia de forma:
@@ -298,6 +408,76 @@ Orden exacto. El **código** de cada guarda está elegido para no romper F18.
      El `23P01` se propaga tal cual.
 8. Se marca `confirmada`, igual que hoy.
 
+### 1.10 · `agenda_previsualizar_edicion_serie` (nueva, de solo lectura; ADR-068, punto 3)
+
+Va aquí en la migración, antes de los permisos. Se numera 1.10 para no mover las referencias de la
+primera versión.
+
+```
+create function public.agenda_previsualizar_edicion_serie(
+  p_cita_id          uuid,
+  p_fecha            date     default null,
+  p_dia_semana       smallint default null,
+  p_hora_local       time     default null,
+  p_duracion_minutos smallint default null,
+  p_zona_horaria     text     default null)
+returns jsonb
+language plpgsql stable security definer set search_path = ''
+```
+
+Recibe los mismos argumentos de regla que `agenda_editar_serie` con `esta_y_siguientes`, sin
+`p_alcance`, `p_estado`, `p_sala`, `p_inicio` ni `p_fin`. **No escribe nada**: ni `insert`, ni
+`update`, ni `set_config`, ni cerrojos.
+
+1. **Autorización**: la de `esta_y_siguientes` (F25), con los mismos códigos y mensajes. Sin
+   perfil o sin cita, `42501`. Cita suelta, `22023`.
+2. `select * into v_serie from public.series_cita s where s.id = v_cita.serie_id`, sin cerrojo.
+3. `v_plan := public.plan_edicion_serie(v_cita, v_serie, p_fecha, p_dia_semana, p_hora_local,
+   p_duracion_minutos, p_zona_horaria)`. Mismas guardas `22023` y mismos fragmentos (§3).
+4. **Citas.** Si `v_plan->>'cambia'` es falso, `citas = []`, igual que `agenda_editar_serie`
+   devuelve `propuestas: []` cuando la regla no cambia. Si es verdadero, para cada `cita_id` de
+   `citas_afectadas_por_regla(v_serie.id, v_cita.id)`, en su orden, con el mismo salto de citas no
+   autorizadas que `agenda_propuestas_de_evento` (mismo predicado, §1.5), se llama a
+   `calcular_propuesta_de_evento('agenda.regla_serie_cambiada', v_plan, cita)`. Si `inicio <= now()`,
+   `inicio` y `fin` van nulos, como en §1.5.
+5. **Retorno**:
+   ```
+   {
+     "serie_id", "desde_cita_id", "fecha_origen", "fecha_destino", "cambia": bool,
+     "regla_anterior": { periodicidad, dia_semana, hora_local, duracion_minutos, zona_horaria },
+     "regla": { periodicidad, dia_semana, hora_local, duracion_minutos, zona_horaria,
+                "ordinal": 1-5 | null, "ultimo": bool, "recorte": bool },
+     "citas": [ { cita_id, fecha_actual, fecha_nueva, hora_local, inicio, fin,
+                  clasificacion, recortada } ]
+   }
+   ```
+   - `ordinal`: en `mensual`, `ord(fecha_destino)` con el `ord` de §1.1. En `semanal` y
+     `quincenal`, `null`.
+   - `ultimo = (ordinal = 5)`. Todo mes tiene al menos cuatro de cada día de la semana, así que
+     solo el 5.º puede faltar. Con ordinal 5, cada cita cae en el último de ese día de su mes, y el
+     diálogo puede decir «el último jueves de cada mes». Un 4.º que resulta ser el último de su mes
+     sigue siendo «4.º»: la regla es el ordinal (ADR-068).
+   - `recortada` (por cita): `mensual` y `ord(fecha_nueva) <> ordinal`. `recorte` es verdadero si
+     alguna cita está `recortada`. Solo puede serlo con `ordinal = 5`.
+   - `fecha_actual` es la fecha local de la cita en su zona. `fecha_nueva`, `hora_local`,
+     `inicio`, `fin` y `clasificacion` son la salida de `calcular_propuesta_de_evento`.
+     `clasificacion` deja al diálogo avisar de un hueco o de un solape de hora.
+   - `regla_anterior` sale de `v_serie`, para que el diálogo diga qué cambia.
+6. `comment on function` con la firma de seis argumentos: «Solo lectura. Describe la regla y las
+   fechas que produciría agenda_editar_serie(esta_y_siguientes) con los mismos argumentos. No
+   crea evento ni propuestas».
+
+**Por qué coincide con las propuestas.** La previsualización y la edición comparten el plan
+(§1.2b), el conjunto (§1.2a) y el cálculo (§1.2). La carga del evento lleva los mismos valores que
+el plan, porque el disparador los toma de la fila que `agenda_editar_serie` escribió con ese plan.
+Solo difieren si pasa el tiempo entre las dos llamadas (`now()` cambia): una cita que empieza
+entre medias sale de la edición, y la ancla se vuelve a validar. Eso es correcto.
+
+**«Mantener la serie» no necesita nada nuevo** (D14). Es
+`agenda_editar_serie(p_cita_id, 'esta', p_inicio => …, p_fin => …)`, que ya existe (F9): delega en
+`agenda_actualizar_cita`, la cita queda `desviada` con `reprogramada` (F6) y la serie no cambia.
+Mover una cita futura al pasado por esa puerta es H5, de T-014.
+
 ### 1.7 · Permisos y comentarios
 
 | Función | `revoke execute … from` | `grant execute … to` |
@@ -305,6 +485,12 @@ Orden exacto. El **código** de cada guarda está elegido para no romper F18.
 | `fecha_en_regla_nueva(periodicidad_serie, date, smallint, date, date)` | `public, anon` | `authenticated` (pura, como `ocurrencias_serie`) |
 | `calcular_propuesta_de_evento(text, jsonb, public.citas)` | `public, anon, authenticated` | nadie. Solo la llaman las funciones `definer`, que corren como su dueño |
 | `agenda_editar_serie(…11…)` | `public, anon` | `authenticated` |
+| `citas_afectadas_por_regla(uuid, uuid)` | `public, anon, authenticated` | nadie |
+| `plan_edicion_serie(public.citas, public.series_cita, date, smallint, time, smallint, text)` | `public, anon, authenticated` | nadie |
+| `agenda_previsualizar_edicion_serie(uuid, date, smallint, time, smallint, text)` | `public, anon` | `authenticated` |
+
+**Tabla**: `revoke update on table public.series_cita from authenticated` (§1.0). Es el único
+cambio de privilegios de tabla de la migración.
 
 - `fn_evento_regla_serie`, `agenda_propuestas_de_evento` y `agenda_confirmar_propuesta` conservan
   sus privilegios con `create or replace`. Aun así se repite el bloque, porque es barato y deja el
@@ -329,6 +515,10 @@ docblock dice que la regla parte de la cita elegida y que `fecha` fija el día n
 **`lib/citas/esquemas.test.ts`**: los cuatro casos del criterio 14. `lib/supabase/tipos-bd.ts` sale
 de `npm run tipos`.
 
+**La previsualización no tiene envoltorio TS en este ticket.** Aparece en `tipos-bd.ts` tras
+`npm run tipos`, y la envuelve T-014, que tiene `lib/citas/**` en su territorio y es quien la
+consume. Su esquema Zod es el de `esquemaEditarSerie` sin los campos de `esta`.
+
 ### 1.9 · Banco: sección M de `scripts/rls/16-series.sql`
 
 La sección va al final, **antes** del eco de cierre del módulo, y no toca nada de A-L. Detalle por
@@ -351,7 +541,8 @@ criterio en §3.
   confirmación.
 
 `scripts/rls/README.md`: una frase en la fila del módulo 16, «+ sección M (T-011b): ancla, día,
-duración, cambio de hora, guardas de confirmación y cambio de zona».
+duración, cambio de hora, guardas de confirmación, cambio de zona, `UPDATE` directo retirado y
+previsualización».
 
 ---
 
@@ -362,13 +553,18 @@ duración, cambio de hora, guardas de confirmación y cambio de zona».
 | D1 | **El ancla viaja en un GUC local a la transacción** (`app.agenda_regla_ancla`). El disparador lo lee y lo ignora si es de otra serie. | **Columna nueva en `series_cita`**: es estado persistente para algo que dura una sentencia, y exige migrar datos. **Filtrar en `agenda_editar_serie` después del disparador**: el evento ya estaría escrito con el conjunto malo. **Quitar el disparador**: el `UPDATE` directo (F2) perdería su evento. |
 | D2 | **Las citas siguientes conservan su semana (o mes) relativa y toman el día nuevo.** La ancla fija el desplazamiento. | **Recalcular las ocurrencias desde la ancla con `ocurrencias_serie`**: rehace el conjunto y crea o quita sesiones, que ya no es una propuesta por cita (ADR-034), y rompe la cuenta de `sesiones_totales`. **«El día nuevo más cercano»**: ambiguo a mitad de semana y distinto hacia delante que hacia atrás. |
 | D3 | **Una sola función de cálculo** (`calcular_propuesta_de_evento`) para crear y para confirmar. | **Guardar la clasificación en la propuesta**: exige una columna nueva y no sirve para detectar que la cita cambió. **Duplicar el cálculo**: dos fórmulas que divergen en el primer arreglo. |
-| D4 | **Una propuesta que ya no vale se rechaza al confirmar, con `22023`.** Las pendientes que queden, incluidas las que salieron del H9 antes de esta migración, se pueden descartar a mano. | **Descartar automáticamente las propuestas anteriores de la misma cita** al crear una nueva: cambia el estado de algo sin que nadie lo decida, y el propietario no lo ha pedido (§8). **No hacer nada**: se podría confirmar la de las 16:00 con la serie a las 17:00. |
+| D4 | **Cerrada por el ADR-068, punto 1.** Una propuesta que ya no vale sigue en «Por confirmar» y se rechaza al confirmarla, con `22023` y su motivo legible (los mensajes de §1.6; la traducción a la interfaz es de T-014). Las pendientes que queden, incluidas las que salieron del H9 antes de esta migración, se descartan a mano. Consecuencia aceptada por el ADR: «Por confirmar» puede acumular propuestas viejas. | **Descartar automáticamente las propuestas anteriores de la misma cita** al crear una nueva: algo desaparece sin que el usuario lo vea, que es lo que el ADR-068 prohíbe. **No hacer nada**: se podría confirmar la de las 16:00 con la serie a las 17:00. |
 | D5 | **`drop function` + `create`** de `agenda_editar_serie` con `p_fecha` al final. | **Sobrecarga de 11 argumentos junto a la de 10**: con los `default`, las llamadas son ambiguas («function is not unique») y PostgREST no sabe cuál elegir. **Función con otro nombre**: dos caminos de edición. `drop function` no es destructivo de datos y el linter no lo marca (F16). |
 | D6 | **La duración de la propuesta de regla es la de la regla** (`carga.duracion_minutos`). La de zona sigue siendo la de la cita. | Conservar la de la cita, que es H9. En una cita no desviada, la duración ya es la de la regla. |
 | D7 | **Un hueco o un solape confirmados dejan la cita `anomalia_horaria`**, como al materializar. | Confirmar sin marca, como hoy: una cita a las 03:00 de una serie de las 02:30 quedaría «no desviada» y contradiría el ADR-034. |
 | D8 | **Se valida la cita ancla** (futura, `programada/confirmada`, no desviada) **y su horario nuevo** (futuro). | Aceptar cualquier ancla: una pasada dejaría entrar citas de antes de ahora en el razonamiento, y una desviada editaría una regla que ya no la gobierna. Coincide con `alcanceSiguientesPermitido` de T-014 §1.6.2. |
 | D9 | **Una propuesta cuyo instante ya pasó queda sin hora**, y no se omite. | Omitirla: la cita quedaría en su sitio sin que nadie lo sepa. Confirmarla, que es H5: movería una cita al pasado. |
 | D10 | **Pruebas en la sección M de `16-series.sql`.** | **Módulo nuevo `18-…`**: T-014 ya reserva el 18 (`18-agenda-rango.sql`) y los dos tickets van seguidos. Además, G y L.2 viven en 16, y las pruebas de la misma función van juntas. |
+| D11 | **La regla resultante se expone con una función de solo lectura** (`agenda_previsualizar_edicion_serie`), que se llama antes de editar. | **Columnas en `propuestas_cita`** o **el retorno de `agenda_editar_serie`**: los dos existen solo después de cambiar la regla. El diálogo tiene que describirla antes, cuando el usuario aún elige entre mantener y modificar. Deshacerla después sería otro evento con sus propias propuestas. Las columnas, además, son esquema y relleno. |
+| D12 | **Dos ayudantes internos** (`citas_afectadas_por_regla`, `plan_edicion_serie`) que usan la edición y la previsualización. | **Copiar las validaciones y el conjunto en la previsualización**: dos copias que divergen en el primer arreglo, y el diálogo prometería una regla distinta de la que se aplica. Es la misma razón que D3. |
+| D13 | **Se revoca solo el privilegio `update`; la política y el camino sin ancla del disparador se quedan.** | **`drop policy series_cita_modificacion`**: `11-cobertura.sql` la declara (F22), está fuera del territorio y fallaría. Dormida, además, filtra si un grant futuro vuelve a abrir la tabla. **Quitar la rama sin ancla**: el dueño de la tabla aún puede hacer `UPDATE`, y el evento debe salir igual. |
+| D14 | **«Mantener la serie» es `esta`**, que ya existe: mueve solo esa cita y la deja desviada. | **Una función nueva «mover y mantener»**: sería un segundo camino de escritura de citas para lo mismo que ya hace `agenda_actualizar_cita`. |
+| D15 | **La base da datos (`ordinal`, `ultimo`, `recorte`, fechas); la frase la escribe T-014.** | **Devolver el texto en castellano desde SQL**: los textos de interfaz viven en `lib/i18n/`, y la frase depende del contexto del diálogo. |
 
 ---
 
@@ -393,6 +589,8 @@ T-012a escrita en el propio ayudante.
 | §1.6.7e zona del centro distinta | `otra zona` |
 | §1.6.7f frescura | `La cita cambió` |
 | sin hora (M11, ya existe) | `no tiene horario` |
+| §1.0 `UPDATE` directo como `authenticated` (`42501`, no `22023`) | `permission denied for table series_cita` |
+| F25 cita ajena, en la previsualización (`42501`) | `no es tuya` |
 
 Salvo que se diga otra cosa, las anclas de fecha son relativas a `now()`: el año que viene, o
 `domingo_marzo + N` lejos de otras fijaciones. Toda negativa tiene su gemela positiva.
@@ -417,11 +615,12 @@ Salvo que se diga otra cosa, las anclas de fecha son relativas a `now()`: el añ
 | 10b | Cita suelta a `now() + 5 days` en CT. Cambio a `Atlantic/Canary` y propuestas. Se desplaza la cita una hora con `agenda_actualizar_cita`. Confirmar da `22023` (frescura). |
 | 10c | Cita a `now() + 6 days`. Cambio a `Atlantic/Canary` (propuesta P1) y después a `Europe/Lisbon` (P2). Confirmar P1 da `22023` (zona del centro). |
 | 10d | Gemela: P2 se confirma. Una cita de serie **desviada** de CT con su propuesta de zona intacta se confirma, y conserva `desviada = true` con su motivo. |
-| 11 | **M.10**. Serie semanal nueva de miércoles. Como PRO, `update series_cita set dia_semana = 5` directo, sin función. El evento tiene todas las futuras no desviadas y `carga->'fecha_origen' = 'null'::jsonb`. Tras `agenda_propuestas_de_evento`, cada propuesta cae en viernes de **su** semana. |
+| 11 | **M.10**. (a) **El `UPDATE` directo ya no entra.** Serie semanal nueva de miércoles, de PRO. Como PRO (`pg_temp.como`), `assert_lanza_codigo_msg('update public.series_cita set dia_semana = 5 where id = …', '42501', 'permission denied for table series_cita', …)`. Después, como `postgres`, la fila sigue con `dia_semana = 3` (se compara `to_jsonb(s)` antes y después) y el número de eventos de la serie no ha cambiado. **Gemela**: como el mismo PRO, `agenda_editar_serie(primera, 'esta_y_siguientes', p_dia_semana => 5)` crea el evento y una propuesta por cita. Sin la migración, (a) falla porque el `update` entra. Además, `has_table_privilege('authenticated', 'public.series_cita', 'update')` es falso, y `select` e `insert` siguen verdaderos. (b) **El camino sin ancla sigue igual**, sobre otra serie de miércoles: como `postgres`, `update series_cita set dia_semana = 5` directo. El evento tiene todas las futuras no desviadas y `carga->'fecha_origen' = 'null'::jsonb`. Tras `agenda_propuestas_de_evento` como PRO, cada propuesta cae en viernes de **su** semana. |
 | 12 | **M.11**. Serie mensual del 2.º martes desde un mes lejano, 4 sesiones. `editar(2.ª, p_fecha => 3.er jueves del mes de la 2.ª)`: las propuestas de la 2.ª a la 4.ª son 3.er jueves de su mes. Sobre la función pura, `fecha_en_regla_nueva('mensual', <un 5.º martes>, 4::smallint)` = el último jueves de ese mes (recorte), y `fecha_en_regla_nueva('semanal', d, 3, d, d+9)` = `lunes(d) + 7 + 2`. |
-| 13 | **M.12**. `has_function_privilege('authenticated', 'public.agenda_editar_serie(uuid, public.alcance_cambio_serie, public.estado_cita, text, timestamptz, timestamptz, smallint, time, smallint, text, date)', 'execute')` es verdadero, y para `anon` es falso. `to_regprocedure('public.agenda_editar_serie(uuid, public.alcance_cambio_serie, public.estado_cita, text, timestamptz, timestamptz, smallint, time, smallint, text)') is null`. `has_function_privilege` de `anon` y `authenticated` sobre `calcular_propuesta_de_evento(text, jsonb, public.citas)` es falso. |
-| 14 | `npm run tipos`: el diff de `lib/supabase/tipos-bd.ts` muestra `p_fecha?: string` en `agenda_editar_serie`. `npm test` (vitest) pasa con los cuatro casos. |
+| 13 | **M.12**. `has_function_privilege('authenticated', 'public.agenda_editar_serie(uuid, public.alcance_cambio_serie, public.estado_cita, text, timestamptz, timestamptz, smallint, time, smallint, text, date)', 'execute')` es verdadero, y para `anon` es falso. `to_regprocedure('public.agenda_editar_serie(uuid, public.alcance_cambio_serie, public.estado_cita, text, timestamptz, timestamptz, smallint, time, smallint, text)') is null`. `has_function_privilege` de `anon` y `authenticated` sobre `calcular_propuesta_de_evento(text, jsonb, public.citas)`, `citas_afectadas_por_regla(uuid, uuid)` y `plan_edicion_serie(public.citas, public.series_cita, date, smallint, time, smallint, text)` es falso. Sobre `agenda_previsualizar_edicion_serie(uuid, date, smallint, time, smallint, text)`, verdadero para `authenticated` y falso para `anon`. |
+| 14 | `npm run tipos`: el diff de `lib/supabase/tipos-bd.ts` muestra `p_fecha?: string` en `agenda_editar_serie` y la entrada nueva `agenda_previsualizar_edicion_serie`. `npm test` (vitest) pasa con los cuatro casos. |
 | 15 | `npm run lint`, `npm run build` (comprueba los tipos de la RPC contra `tipos-bd.ts`) y `node ~/.claude/pipeline/territorio.mjs T-011b`. |
+| 16 | **M.13, previsualización.** (a) **Mensual con recorte.** `mes5` := el primer mes de **febrero a diciembre** del año que viene con cinco jueves; siempre hay alguno, y así el mes anterior es futuro. Dos meses seguidos nunca tienen cinco jueves (un mes de 31 días con cinco empieza su primer jueves el 1-3, y el del siguiente cae el 5-7). Serie mensual de PRO del 2.º martes, desde el día 1 del mes anterior a `mes5`, 4 sesiones, a una hora que ninguna otra fijación use (p. ej. 07:15). Como PRO, `agenda_previsualizar_edicion_serie(<cita de mes5>, p_fecha => <5.º jueves de mes5>)`. Asserts: `regla->>'ordinal' = '5'`, `ultimo` y `recorte` verdaderos, `cambia` verdadero, `regla->>'dia_semana' = '4'`; `citas` tiene 3 elementos (la de `mes5` y las dos siguientes, en orden); cada `fecha_nueva` es el último jueves de su mes; la de `mes5` es `p_fecha` y no está `recortada`; la de `mes5 + 1` está `recortada` y cae en su 4.º jueves; la de `mes5 + 2` está `recortada` si y solo si su mes no tiene quinto jueves. (b) **Semanal**: sobre la serie de M.1 (o una nueva), `p_fecha => fecha(c3) + 2`: `ordinal` nulo, `ultimo` y `recorte` falsos, ninguna `recortada`. (c) **Solo lectura**: antes y después de (a), son iguales el número de filas de `eventos_salientes` y de `propuestas_cita` de la serie, `to_jsonb` de la fila de `series_cita`, y `current_setting('app.agenda_regla_ancla', true)` y `current_setting('app.agenda_evento_regla', true)`. (d) **Una sola fuente**: con los mismos argumentos, `agenda_editar_serie(<cita de mes5>, 'esta_y_siguientes', p_fecha => …)`. El conjunto `(cita_id, fecha_nueva, inicio, fin)` de la previsualización, guardado antes en una tabla temporal, es igual a `(cita_id, fecha_prevista, inicio_propuesto, fin_propuesto)` de las propuestas del evento: `EXCEPT` en los dos sentidos más el recuento. (e) **Sin cambio**: previsualizar sin argumentos de regla da `cambia = false` y `citas = []`. (f) **Negativas**: como PRO2, `42501` con `no es tuya`; sobre una cita desviada, `22023` con `se movió a mano`; con `p_fecha` y `p_dia_semana` que no coinciden, `22023` con `no coinciden`. Sin la migración, M.13 falla porque la función no existe. |
 
 ---
 
@@ -444,7 +643,14 @@ Salvo que se diga otra cosa, las anclas de fecha son relativas a `now()`: el añ
 5. **Baja. Bisección y frescura.** La comparación de frescura exige que `resolver_hora_local`
    devuelva el mismo instante con las mismas entradas. Es `stable` y determinista (F12), y la misma
    entrada da la misma bisección.
-6. **Baja. Una ancla que otra sesión desvía a la vez.** El cerrojo de §1.4.1 es sobre la serie, no
+6. **Media. El revoke rompe una escritura que nadie vio.** F23 dice que ni la aplicación ni el
+   banco hacen `UPDATE` directo de `series_cita` como `authenticated`. Mitigación: el banco
+   entero en verde (criterio 3) y `npm run build`. Si algo falla con `permission denied for table
+   series_cita`, es un camino que había que pasar a `agenda_editar_serie`, no un motivo para
+   devolver el grant.
+7. **Baja. La previsualización promete lo que la edición no hace.** Solo si divergen el plan, el
+   conjunto o el cálculo, y los tres son la misma función (D12). M.13d lo comprueba.
+8. **Baja. Una ancla que otra sesión desvía a la vez.** El cerrojo de §1.4.1 es sobre la serie, no
    sobre la cita. Si otra transacción desvía la ancla entre la lectura y el `UPDATE`, el disparador
    la excluye del conjunto (`desviada = false`) y la edición sigue desde su `inicio`. La ancla no
    recibe propuesta y la interfaz lo ve en `propuestaIds`. Es aceptable y no merece otro cerrojo.
@@ -463,6 +669,23 @@ Salvo que se diga otra cosa, las anclas de fecha son relativas a `now()`: el añ
   en un hueco de marzo resuelto hacia delante.
 - `p_zona_horaria` cambia la zona **de la serie**, con todas sus consecuencias. `resolver_hora_local`
   valida que sea IANA antes del `UPDATE`.
+- `agenda_previsualizar_edicion_serie` recibe los mismos argumentos de regla. Comprobar que
+  autoriza **antes** de llamar a `plan_edicion_serie`, y que una cita ajena da `42501` con el
+  mismo mensaje que la edición, sin revelar si la cita existe.
+
+**Previsualización (ADR-068, punto 3)**
+
+- **Solo lectura**: ni `insert`, ni `update`, ni `delete`, ni `set_config`, ni `for … update` en
+  el cuerpo. `stable` impide a PL/pgSQL escribir, pero no impide `set_config`; por eso M.13c mira
+  los GUC.
+- **Una sola fuente**: los mensajes de las guardas de la ancla aparecen **una vez** en la migración,
+  dentro de `plan_edicion_serie`. Un `grep` de «ya ha empezado o ha pasado» en la migración da la
+  de §1.2b y la de §1.6.7b, y ninguna más. Ni `agenda_editar_serie` ni la previsualización repiten
+  el predicado de §1.2a.
+- `ultimo` es `ordinal = 5`, y no «es el último de su mes»: un 4.º jueves que resulta ser el
+  último sigue siendo el 4.º (ADR-068).
+- `recortada` se calcula por cita, contra `ordinal`, y no contra el ordinal de la fecha anterior
+  (la deriva de `ocurrencias_serie`, F24, no se copia).
 
 **GUC `app.agenda_regla_ancla`**
 
@@ -489,8 +712,11 @@ Salvo que se diga otra cosa, las anclas de fecha son relativas a `now()`: el añ
 
 **Invariantes que se podrían saltar por otra puerta**
 
-- **`UPDATE` directo de `series_cita`** (F2): sigue creando evento, con el conjunto de T-011 y el
-  cálculo sin ancla. Nadie lo procesa hasta T-015; queda anotado.
+- **`UPDATE` directo de `series_cita`**: cerrado para `authenticated` (§1.0). Comprobar con
+  `\dp public.series_cita` que `authenticated` conserva `r` y `a` y ha perdido `w`, y que nadie más
+  gana nada. La política queda dormida (D13). El dueño sí puede, y su evento sigue saliendo con el
+  conjunto de T-011 y el cálculo sin ancla; nadie lo procesa hasta T-015.
+- **`insert` directo de `series_cita`**: sigue abierto (hallazgo 6). No lo pide el ADR.
 - **`null`**: `->>` de un campo ausente da `NULL`. Comprobar que `fecha_en_regla_nueva` con los dos
   nulos va a la rama sin ancla, y que con uno solo da `22023`. Las comparaciones de la guarda de
   regla y de frescura van con `is distinct from`, nunca con `<>`.
@@ -507,8 +733,9 @@ Salvo que se diga otra cosa, las anclas de fecha son relativas a `now()`: el añ
   conservan `desviada` (F6 y §1.6.7g, que solo marca `anomalia_horaria` si **no** estaba desviada).
 - **F18**: `17-vinculo-agenda.sql` §E debe seguir dando `42501`. Ninguna guarda nueva de la rama
   sin cita corre antes del `insert`, salvo §1.6.5, y esa propuesta es futura.
-- **Permisos de tabla entera**: la migración no concede nada sobre tablas. Comprobar con `\dp`
-  que `propuestas_cita` y `eventos_salientes` siguen como en M11 1273-1278.
+- **Permisos de tabla entera**: la migración no concede nada sobre tablas y solo revoca
+  `update` de `series_cita`. Comprobar con `\dp` que `propuestas_cita` y `eventos_salientes`
+  siguen como en M11 1273-1278.
 - **`TRUNCATE`**: no aplica. No hay tabla nueva ni tabla de solo adición implicada.
 
 **Lectura del código**
@@ -539,6 +766,8 @@ lib/citas/esquemas.test.ts
 lib/citas/series.ts
 ```
 
+- **La enmienda del ADR-068 no amplía el territorio.** El revoke va en la misma migración, su
+  prueba en `16-series.sql` y la previsualización en la migración. El envoltorio TS es de T-014.
 - Siempre permitidos: `tickets/T-011b*`, `docs/bitacora/**` y `docs/state.md`.
 - `lib/citas/errores.ts` **no** entra. Todo `22023` sigue siendo `parametro_invalido`. Los mensajes
   distinguibles para el diálogo son de T-014, que tiene `lib/citas/**` en su territorio.
@@ -559,24 +788,57 @@ lib/citas/series.ts
 
 ## 8 · Hallazgos que el implementador anota en `docs/state.md`
 
-1. `UPDATE` directo de `series_cita` por `authenticated`: crea un evento que nadie procesa hasta
-   T-015. ¿Se retira el `grant update` y la edición queda solo por `agenda_editar_serie`?
-2. Las propuestas `festivo`, `ausencia` y `ocupada` (sin cita) no se recalculan cuando cambia la
+El antiguo hallazgo 1 (`UPDATE` directo) lo cerró el ADR-068 y ya no se anota.
+
+1. Las propuestas `festivo`, `ausencia` y `ocupada` (sin cita) no se recalculan cuando cambia la
    regla después.
-3. `fin_el` y `sesiones_totales` no se ajustan tras desplazar la serie semanas adelante o atrás.
+2. `fin_el` y `sesiones_totales` no se ajustan tras desplazar la serie semanas adelante o atrás.
    Son parámetros de creación (F1), pero el formulario de «editar serie», si algún día lo hay, los
    mostrará.
-4. Colisión de nombre «T-011b» con la rama MiniMax antigua (`minimax/alcance.json:154`,
+3. Colisión de nombre «T-011b» con la rama MiniMax antigua (`minimax/alcance.json:154`,
    `minimax/cortes/T-011.md:16`).
+4. «Por confirmar» puede acumular propuestas viejas (consecuencia aceptada del ADR-068). Si
+   molesta, el aviso es de T-015.
+5. **Deriva del ordinal en `ocurrencias_serie`** (F24). Al crear una serie mensual del 5.º jueves,
+   el primer mes sin quinto la recorta al 4.º, y a partir de ahí sigue en el 4.º aunque el mes
+   tenga quinto, porque el ordinal se recalcula desde la fecha anterior. La edición de este
+   ticket aplica el ADR-068 al pie de la letra (ordinal fijo, recorte por mes), así que una serie
+   creada y una editada con el mismo 5.º jueves divergen. Lo decide el propietario; aquí no se
+   toca `ocurrencias_serie`.
+6. `authenticated` conserva `insert` directo sobre `series_cita`. Una serie insertada a mano
+   nace sin citas (la materialización es de `agenda_crear_serie`). Es inerte, pero es la misma
+   clase de puerta que el ADR-068 cerró para `update`.
+
+---
+
+## Para T-014 (lo que el diálogo encuentra en la base)
+
+La nota D6 = B al final de `tickets/T-014/diseno.md` es anterior al ADR-068 y no menciona la
+previsualización. Este ticket no la edita. Lo que T-014 necesita:
+
+- **Al soltar una cita de serie en otra fecha**, el diálogo pregunta «mantener la serie» o
+  «modificarla según la nueva fecha».
+  - **Mantener**: `agenda_editar_serie(cita, 'esta', p_inicio, p_fin)` (D14).
+  - **Modificar**: primero `agenda_previsualizar_edicion_serie(cita, p_fecha, p_hora_local)` para
+    escribir la frase («las siguientes pasarán a ser el 3.er jueves de cada mes», o «el último
+    jueves de cada mes» si `ultimo`, con el aviso de los meses `recortada`). Tras aceptar,
+    `agenda_editar_serie(cita, 'esta_y_siguientes', p_fecha, p_hora_local)` y confirmar la
+    propuesta de la ancla, como dice la nota D6.
+- Los fragmentos de §3 son los motivos legibles del ADR-068.1. Su mapeo a textos de interfaz es de
+  T-014 (`lib/citas/errores.ts`).
+- T-014 debe llevar T-011b en `depende_de`.
 
 ---
 
 ## Lo que no entra, y por qué
 
-- **Interfaz.** La rama «esta y las siguientes» del diálogo es de T-014. Aquí solo se deja la
-  firma que T-014 necesita (nota al final de `tickets/T-014/diseno.md`).
-- **Descartar propuestas automáticamente.** D4: el rechazo al confirmar cierra el riesgo sin cambiar
-  estado a espaldas de nadie.
+- **Interfaz.** El diálogo de «mantener o modificar» y la rama «esta y las siguientes» son de
+  T-014, igual que la frase en castellano y el envoltorio TS de la previsualización. Aquí se dejan
+  la firma de edición, la previsualización y la sección «Para T-014».
+- **Descartar propuestas automáticamente.** D4 y el ADR-068, punto 1: el rechazo al confirmar
+  cierra el riesgo sin que nada desaparezca a espaldas del usuario.
+- **Corregir la deriva del ordinal de `ocurrencias_serie`** (hallazgo 5) y **retirar el `insert`
+  directo** (hallazgo 6). No los pide el ADR-068.
 - **Consumidor del outbox y aviso de propuestas pendientes.** T-015.
 - **Recalcular propuestas sin cita, `fin_el` y `sesiones_totales`.** Hallazgos 2 y 3: no los pide
   H8 ni H9.
