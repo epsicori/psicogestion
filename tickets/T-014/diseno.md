@@ -685,3 +685,49 @@ docs/interfaz.md
 - **Unificar `EstadoVisibleCita` y las claves `agenda.estado.*` de `lib/agenda`.** Es otro carril y queda anotado.
 - **Pruebas de Playwright autenticadas de `/agenda`.** `test:a11y` no tiene sesión (H26). El teclado se prueba con Testing Library, que es la prueba de teclado propia que pide el ADR-041.
 - **Distinguir al director administrativo (ADR-065/066).** T-014 no lo necesita: el tipo y la nota van por datos (vista del técnico); «Notas» y el aviso, por ser el profesional de la cita; el cuadro, por lista blanca en fallo cerrado (D13). El ticket que implemente el ADR-065 decide si ese perfil ve el cuadro y el tipo de terapia.
+
+---
+
+## Nota del 24-09-2026 · D6 queda resuelta como B y depende de T-011b
+
+El propietario eligió la **opción B** de D6. La rama «esta y las siguientes» de `reprogramarCita`
+(§1.3, paso 6) deja de estar bloqueada por D6 y pasa a **depender de T-011b**
+(`tickets/T-011b-editar-serie-desde-la-cita.md`, diseño en `tickets/T-011b/diseno.md`). No se
+implementa hasta que T-011b esté fusionado.
+
+Cambios para T-014 cuando T-011b esté en `main`. Solo afectan a esta rama; lo demás de este diseño
+no cambia.
+
+**Qué hace la rama.** Se va la condición de «mismo día» de la opción A. Con
+`cita.desviada` sigue devolviendo `parametro_invalido`.
+
+1. Se calcula el instante de destino como en los pasos 4 y 5.
+2. Se expresa ese instante en **la zona de la cita** (`cita.zona_horaria`, que es la de la serie)
+   como `fecha` (AAAA-MM-DD) y `hora` (HH:MM). **No** se pasa `zonaHoraria`: eso cambiaría la zona
+   de la serie.
+3. Se llama a
+   `editarSerie(sesion, { citaId, alcance: 'esta_y_siguientes', fecha, horaLocal: hora })`.
+4. Entre `propuestaIds` se busca la propuesta cuya `citaId === datos.citaId`, se confirma, y el
+   resto sigue como decía la opción A.
+
+La duración no cambia por arrastre, así que no se pasa `duracionMinutos`.
+
+**Qué garantiza T-011b.**
+
+- La regla parte de la cita elegida (H8).
+- Cada cita siguiente toma el día nuevo en su semana relativa, y la duración de la regla (H9).
+- La propuesta de la cita arrastrada cae exactamente en `fecha`.
+- `22023` si la cita ancla es pasada, en curso, cancelada o desviada, o si su horario nuevo ya
+  pasó.
+- Al confirmar, `22023` si la propuesta ya no vale.
+
+**Qué cambia en el diseño de T-014.**
+
+- §1.6.2: `alcanceSiguientesPermitido = deSerie && !desviada && estado ∈ {programada, confirmada} && inicio > ahora`.
+- §1.6.3: el segundo radio ya no se deshabilita «por otro día»; solo por la condición anterior.
+- **Mensajes.** Todo `22023` llega como `parametro_invalido`. Si el diálogo quiere distinguir
+  «la serie ya tiene otra regla» o «la cita cambió», lo añade T-014 en `lib/citas/errores.ts`, que
+  está en su territorio. Los fragmentos literales están en la tabla del §3 del diseño de T-011b.
+- **Si el instante de destino cae en una hora ambigua** de la zona de la serie (la segunda 02:30 de
+  octubre), `resolver_hora_local` elige la primera. T-014 compara el `inicio_propuesto` de la
+  propuesta de la ancla con su instante. Si no coinciden, no confirma y dice por qué.
