@@ -46,6 +46,31 @@ describe('aCentimos', () => {
     expect(aCentimos('123,50')).toBe(12350);
     expect(aCentimos('1234,50')).toBe(123450);
   });
+
+  it("rechaza un primer grupo de millares que empieza por cero: '0.500' no son 500 €", () => {
+    // Ninguna cifra española en millares empieza por cero: '0.500' no es un
+    // millar, y leerlo como tal multiplicaría por mil lo tecleado.
+    expect(() => aCentimos('0.500')).toThrow(/No es un importe/);
+    expect(() => aCentimos('00.500')).toThrow(/No es un importe/);
+    expect(() => aCentimos('0.123,00')).toThrow(/No es un importe/);
+    // Gemelas positivas: el cero como parte entera y los millares bien formados siguen valiendo.
+    expect(aCentimos('0.50')).toBe(50);
+    expect(aCentimos('1.500')).toBe(150000);
+    expect(aCentimos('100.000,00')).toBe(10000000);
+  });
+
+  it('un cero con signo menos es cero, no -0', () => {
+    expect(Object.is(aCentimos('-0'), 0)).toBe(true);
+    expect(Object.is(aCentimos('-0,00'), 0)).toBe(true);
+    expect(aCentimos('-0,01')).toBe(-1);
+  });
+
+  it('rechaza una cifra que no cabe exacta en céntimos en vez de devolver otra', () => {
+    expect(() => aCentimos('99999999999999999')).toThrow(/No es un importe/);
+    // 90.071.992.547.409,91 € es el mayor importe exacto (Number.MAX_SAFE_INTEGER céntimos).
+    expect(aCentimos('90071992547409,91')).toBe(Number.MAX_SAFE_INTEGER);
+    expect(() => aCentimos('90071992547409,92')).toThrow(/No es un importe/);
+  });
 });
 
 describe('formatearImporte', () => {
@@ -70,22 +95,32 @@ describe('formatearImporte', () => {
 
   it('rechaza céntimos no enteros, igual que repartir(): el dinero vive en céntimos', () => {
     expect(() => formatearImporte(4000.5)).toThrow(/entero/);
+    expect(() => formatearImporte(Number.NaN)).toThrow(/entero/);
+  });
+
+  it('un -0 se pinta como cero, sin signo', () => {
+    expect(normal(formatearImporte(-0))).toBe('0,00 €');
   });
 });
 
 describe('redondearCentimos', () => {
-  it('media al alza: medio céntimo sube, y por debajo baja', () => {
+  it('media lejos del cero: medio céntimo sube, y por debajo baja', () => {
     // La regla escrita una vez: 0,5 céntimo SUBE (al alza)...
     expect(redondearCentimos(10.5)).toBe(11);
     // ...y todo lo que no llega a la mitad BAJA. Las dos direcciones.
     expect(redondearCentimos(10.49)).toBe(10);
   });
 
-  it('media al alza también con importes negativos: sube hacia +Infinito en el filo', () => {
-    // -10,5 sube a -10 (más alto), no baja a -11: la misma regla "al alza",
-    // aplicada al signo negativo. Math.round de JS ya se comporta así.
-    expect(redondearCentimos(-10.5)).toBe(-10);
+  it('media lejos del cero con negativos: -10,5 va a -11, el opuesto exacto de 10,5', () => {
+    // La regla es simétrica: una devolución redondea igual que su cargo, con el
+    // signo cambiado. Math.round llevaría -10,5 a -10 y dejaría un céntimo.
+    expect(redondearCentimos(-10.5)).toBe(-11);
     expect(redondearCentimos(-10.49)).toBe(-10);
     expect(redondearCentimos(-10.51)).toBe(-11);
+  });
+
+  it('nunca devuelve -0', () => {
+    expect(Object.is(redondearCentimos(-0.3), 0)).toBe(true);
+    expect(Object.is(redondearCentimos(-0), 0)).toBe(true);
   });
 });

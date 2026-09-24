@@ -6,7 +6,7 @@
 // EXACTAMENTE el total, siempre: el céntimo que no divide se reparte, no se
 // redondea por ningún sitio (la regla de redondeo única es de `importe.ts`;
 // aquí no hay fracciones, hay resto entero).
-import type { Centimos } from './importe';
+import { comprobarCentimos, type Centimos } from './importe';
 
 /**
  * Reparte `total` en `partes` partes enteras cuya suma es exactamente
@@ -20,9 +20,7 @@ export function repartir(total: Centimos, partes: number): Centimos[] {
   if (!Number.isInteger(partes) || partes < 1) {
     throw new Error(`El número de partes ha de ser un entero mayor que cero: '${partes}'.`);
   }
-  if (!Number.isInteger(total)) {
-    throw new Error(`El total ha de ser un entero en céntimos: '${total}'.`);
-  }
+  comprobarCentimos(total, 'El total');
   const base = Math.trunc(total / partes);
   const resto = total - base * partes; // mismo signo que el total, |resto| < partes
   const unidades = Math.abs(resto);
@@ -47,12 +45,8 @@ export interface ResultadoPendiente {
  * (T-023) tiene que poder mostrar.
  */
 export function pendiente(total: Centimos, cobrado: Centimos): ResultadoPendiente {
-  if (!Number.isInteger(total)) {
-    throw new Error(`El total ha de ser un entero en céntimos: '${total}'.`);
-  }
-  if (!Number.isInteger(cobrado)) {
-    throw new Error(`Lo cobrado ha de ser un entero en céntimos: '${cobrado}'.`);
-  }
+  comprobarCentimos(total, 'El total');
+  comprobarCentimos(cobrado, 'Lo cobrado');
   const diferencia = total - cobrado;
   if (diferencia > 0) {
     return { estado: 'pendiente', pendiente: diferencia, excedente: 0 };

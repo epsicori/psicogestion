@@ -38,6 +38,24 @@ describe('desglosarDesdeBase', () => {
     expect(desglosarDesdeBase(45, 'general').cuota).toBe(9);
   });
 
+  it('una devolución se desglosa como el opuesto exacto de su cargo: cargo + devolución = 0', () => {
+    // Base 0,50 €: cuota 10,5 céntimos. El cargo da 11 y la devolución -11; con
+    // Math.round la devolución daba -10 y quedaba un céntimo que nadie cobró.
+    expect(desglosarDesdeBase(-50, 'general')).toMatchObject({ base: -50, cuota: -11, total: -61 });
+    for (let b = 0; b <= 10000; b++) {
+      const cargo = desglosarDesdeBase(b, 'general');
+      const devolucion = desglosarDesdeBase(-b, 'general');
+      expect(devolucion.cuota + cargo.cuota).toBe(0);
+      expect(devolucion.total + cargo.total).toBe(0);
+    }
+  });
+
+  it('rechaza una base que no es un entero en céntimos, NaN incluido', () => {
+    expect(() => desglosarDesdeBase(10.5, 'exento_sanitario')).toThrow(/entero/);
+    expect(() => desglosarDesdeBase(10.5, 'general')).toThrow(/entero/);
+    expect(() => desglosarDesdeBase(Number.NaN, 'general')).toThrow(/entero/);
+  });
+
   it('un régimen desconocido lanza, no cae al 21 % general por defecto', () => {
     // Dato corrupto o typo que TypeScript no pilla (viene de fetch/JSON):
     // rechazar es obligatorio, facturar en silencio al general no lo es.
@@ -86,6 +104,21 @@ describe('desglosarDesdeTotal', () => {
     const vuelta = desglosarDesdeTotal(ida.total, 'general');
     expect(vuelta.base).toBe(ida.base);
     expect(vuelta.cuota).toBe(ida.cuota);
+  });
+
+  it('una devolución desde el total es el opuesto exacto de su cargo', () => {
+    for (let t = 0; t <= 10000; t++) {
+      const cargo = desglosarDesdeTotal(t, 'general');
+      const devolucion = desglosarDesdeTotal(-t, 'general');
+      expect(devolucion.base + cargo.base).toBe(0);
+      expect(devolucion.cuota + cargo.cuota).toBe(0);
+    }
+  });
+
+  it('rechaza un total que no es un entero en céntimos, NaN incluido', () => {
+    expect(() => desglosarDesdeTotal(12100.5, 'general')).toThrow(/entero/);
+    expect(() => desglosarDesdeTotal(10.5, 'exento_sanitario')).toThrow(/entero/);
+    expect(() => desglosarDesdeTotal(Number.NaN, 'general')).toThrow(/entero/);
   });
 
   it('un régimen desconocido lanza también desde el total', () => {

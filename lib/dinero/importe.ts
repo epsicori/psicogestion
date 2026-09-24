@@ -10,13 +10,28 @@
 export type Centimos = number;
 
 /**
- * REGLA ÚNICA DE REDONDEO del dinero: **media al alza** (`0,5` céntimo sube).
+ * REGLA ÚNICA DE REDONDEO del dinero: **media lejos del cero** (`10,5` → `11`,
+ * `-10,5` → `-11`). En positivos es la media al alza de siempre; en negativos
+ * es su espejo, para que una devolución se desglose como el opuesto exacto de
+ * su cargo. `Math.round` llevaría `-10,5` a `-10`, y cargo más devolución
+ * dejaría un céntimo que nadie ha cobrado.
+ *
  * Se aplica aquí y solo aquí; quien calcule porcentajes o divisiones pasa el
  * resultado por esta función UNA vez, al final. Redondear dos veces en dos
- * pasos distintos es como se pierde el céntimo.
+ * pasos distintos es como se pierde el céntimo. Nunca devuelve `-0`.
  */
 export function redondearCentimos(valor: number): Centimos {
-  return Math.round(valor);
+  return Math.sign(valor) * Math.round(Math.abs(valor)) + 0;
+}
+
+/**
+ * Lanza si `valor` no es un importe en céntimos: un entero exacto (seguro en
+ * coma flotante). `que` nombra el dato en el mensaje: `'El total'`.
+ */
+export function comprobarCentimos(valor: number, que: string): void {
+  if (!Number.isSafeInteger(valor)) {
+    throw new Error(`${que} ha de ser un entero en céntimos: '${valor}'.`);
+  }
 }
 
 const FORMATEADOR_EUR = new Intl.NumberFormat('es-ES', {
@@ -26,20 +41,21 @@ const FORMATEADOR_EUR = new Intl.NumberFormat('es-ES', {
 
 /** `1250` → `'12,50 €'`. Formato español vía `Intl`, no un `replace` a mano. */
 export function formatearImporte(centimos: Centimos): string {
-  if (!Number.isInteger(centimos)) {
-    throw new Error(`El importe ha de ser un entero en céntimos: '${centimos}'.`);
-  }
-  return FORMATEADOR_EUR.format(centimos / 100);
+  comprobarCentimos(centimos, 'El importe');
+  // `+ 0` convierte un `-0` en `0`: Intl pintaría '-0,00 €'.
+  return FORMATEADOR_EUR.format((centimos + 0) / 100);
 }
 
 const PATRON_ENTEROS = /^(\d+)$/;
 const PATRON_DECIMALES = /^(\d+)[.,](\d{1,2})$/;
-const PATRON_MILLARES = /^\d{1,3}(\.\d{3})+$/;
+// El primer grupo de millares no empieza por cero: ninguna cifra española en
+// millares lo hace, y '0.500' leído como millar serían 500 €, no 0,50 €.
+const PATRON_MILLARES = /^[1-9]\d{0,2}(\.\d{3})+$/;
 // Con coma decimal, si hay puntos han de agrupar de tres en tres desde el
 // principio ('1.234,50', '12.345.678,90'): un punto que no cierra un grupo
-// de tres ('1.23,50', '12.3456,00', '.123,00') no es un millar mal escrito,
-// es un importe distinto del que se tecleó, y se rechaza.
-const PATRON_MILLARES_CON_DECIMALES = /^\d{1,3}(\.\d{3})+,\d{1,2}$/;
+// de tres ('1.23,50', '12.3456,00', '.123,00', '0.123,00') no es un millar
+// mal escrito, es un importe distinto del que se tecleó, y se rechaza.
+const PATRON_MILLARES_CON_DECIMALES = /^[1-9]\d{0,2}(\.\d{3})+,\d{1,2}$/;
 const PATRON_SIN_MILLARES_CON_DECIMALES = /^\d+,\d{1,2}$/;
 
 /**
@@ -51,8 +67,9 @@ const PATRON_SIN_MILLARES_CON_DECIMALES = /^\d+,\d{1,2}$/;
  * un punto seguido de 1-2 dígitos es decimal (`'12.50'` → 12,50 €) y grupos
  * de tres son millares (`'1.234'` → 1.234 €). Es la lectura española.
  *
- * Se acepta signo menos (`'-5,00'` → devolución). Se rechaza con excepción
- * todo lo que no es un importe: `'doce'`, `''`, `'12,5,0'`.
+ * Se acepta signo menos (`'-5,00'` → devolución; `'-0'` es `0`, no `-0`). Se
+ * rechaza con excepción todo lo que no es un importe: `'doce'`, `''`,
+ * `'12,5,0'`, y una cifra tan larga que no cabe exacta en céntimos.
  */
 export function aCentimos(texto: string): Centimos {
   const limpio = texto.trim().replace(/€\s*$/, '').trim();
@@ -85,8 +102,8 @@ export function aCentimos(texto: string): Centimos {
     }
   }
 
-  if (centimos === null) {
+  if (centimos === null || !Number.isSafeInteger(centimos)) {
     throw new Error(`No es un importe: '${texto}'.`);
   }
-  return negativo ? -centimos : centimos;
+  return negativo && centimos !== 0 ? -centimos : centimos;
 }

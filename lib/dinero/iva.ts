@@ -14,10 +14,11 @@
 // `desglosarDesdeBase` existe para quien presupueste «base más IVA».
 //
 // REDONDEO: una sola vez y siempre en el mismo sitio —`redondearCentimos`,
-// media al alza, en `importe.ts`—. La cuota se calcula redondeando la base
+// media lejos del cero, en `importe.ts`—. Por eso una devolución (importe
+// negativo) se desglosa como el opuesto exacto de su cargo. La cuota se calcula redondeando la base
 // por el tipo; en el desglose desde el total, la base se redondea y la cuota
 // es la diferencia, así que **base + cuota = total exacto** siempre.
-import { redondearCentimos, type Centimos } from './importe';
+import { comprobarCentimos, redondearCentimos, type Centimos } from './importe';
 
 /** Los dos valores del enum `regimen_iva`, con sus nombres reales. */
 export type RegimenIva = 'exento_sanitario' | 'general';
@@ -61,6 +62,7 @@ function comprobarRegimenConocido(regimen: RegimenIva): void {
 
 /** Desglose partiendo de la base (precio SIN IVA): cuota = base × tipo, redondeada una vez. */
 export function desglosarDesdeBase(base: Centimos, regimen: RegimenIva): DesgloseIva {
+  comprobarCentimos(base, 'La base');
   comprobarRegimenConocido(regimen);
   if (regimen === 'exento_sanitario') {
     return desgloseExento(base);
@@ -81,6 +83,7 @@ export function desglosarDesdeBase(base: Centimos, regimen: RegimenIva): Desglos
  * exactamente el total.
  */
 export function desglosarDesdeTotal(total: Centimos, regimen: RegimenIva): DesgloseIva {
+  comprobarCentimos(total, 'El total');
   comprobarRegimenConocido(regimen);
   if (regimen === 'exento_sanitario') {
     return desgloseExento(total);

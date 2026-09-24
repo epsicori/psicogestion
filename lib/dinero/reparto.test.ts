@@ -27,7 +27,9 @@ describe('repartir', () => {
   });
 
   it('con total negativo el resto también cuadra (devoluciones)', () => {
+    // El céntimo del resto va, en negativo, a la primera parte: la misma regla que en positivo.
     const partes = repartir(-100, 3);
+    expect(partes).toEqual([-34, -33, -33]);
     expect(partes.reduce((a, b) => a + b, 0)).toBe(-100);
   });
 
