@@ -82,3 +82,36 @@
     cursor: pointer;
   }
 }
+
+/*
+ * Estado de la cita (ADR-047). Solo la cita en curso late: ciclo de 2 s de opacidad y halo,
+ * sin encendido y apagado (la opacidad no baja de 0,8). Con movimiento reducido se para y
+ * queda el halo quieto, que es también lo que pinta la leyenda: la información no vive en
+ * el movimiento.
+ */
+@keyframes latido-estado {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 45%, transparent);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in oklch, var(--primary) 45%, transparent);
+    opacity: 0.8;
+  }
+}
+
+.halo-estado {
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 35%, transparent);
+}
+
+.latido-estado {
+  animation: latido-estado 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .latido-estado {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 35%, transparent);
+  }
+}
