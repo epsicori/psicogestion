@@ -65,8 +65,10 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
 
       setEnrolamiento({
         factorId: data.id,
-        // `qr_code` es un SVG; para pintarlo hay que anteponerle el prefijo de dato.
-        qr: `data:image/svg+xml;utf-8,${encodeURIComponent(data.totp.qr_code)}`,
+        // `qr_code` ya llega como data URI completa (`data:image/svg+xml;utf-8,...`):
+        // anteponerle el prefijo otra vez la codifica dos veces y el navegador no
+        // puede decodificarla (`EncodingError`).
+        qr: data.totp.qr_code,
         secreto: data.totp.secret,
       });
     })();
