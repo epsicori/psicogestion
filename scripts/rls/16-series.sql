@@ -684,4 +684,303 @@ select pg_temp.assert(
   'GEMELA: una edición que no cambia la regla no resuelve NINGÚN evento ni crea propuestas'
 );
 
+-- =========================================================================
+-- M · T-011b (ADR-068, ADR-069): ancla (H8), día y duración de la propuesta
+--     (H9), guardas de confirmación, previsualización, ordinal mensual fijo,
+--     y UPDATE/INSERT directos sobre series_cita retirados.
+-- =========================================================================
+
+\set M6CITA 'a1100006-0000-4000-8000-000000000001'
+
+select (:'domingo_marzo'::date + 500) as desde_m \gset
+
+-- --- M.1 · H8: «esta y las siguientes» desde la 3ª cita NO toca la 1ª ni la 2ª ---
+
+call pg_temp.como(:PRO1);
+select (public.agenda_crear_serie(
+  :P1, :PRO1, :CA, :TT3, 'semanal',
+  (extract(isodow from :'desde_m'::date))::smallint,
+  time '09:00', 50::smallint, :'desde_m'::date, 5::smallint, null
+) ->> 'serie_id')::uuid as serie_id \gset m1_
+call pg_temp.reset_sesion();
+
+select array_agg(id order by inicio) as citas from public.citas where serie_id = (:'m1_serie_id')::uuid \gset m1_
+
+call pg_temp.como(:PRO1);
+select public.agenda_editar_serie(
+  (:'m1_citas'::uuid[])[3], 'esta_y_siguientes', p_duracion_minutos => 60::smallint
+) as r \gset m1e_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  not exists (
+    select 1 from public.propuestas_cita
+     where cita_id in ((:'m1_citas'::uuid[])[1], (:'m1_citas'::uuid[])[2])
+  ),
+  'M.1 · H8: editar «esta y las siguientes» desde la 3ª cita NO genera propuesta para la 1ª ni la 2ª'
+);
+
+select pg_temp.assert(
+  (select count(*) from public.propuestas_cita
+    where cita_id in ((:'m1_citas'::uuid[])[3], (:'m1_citas'::uuid[])[4], (:'m1_citas'::uuid[])[5])
+      and motivo = 'regla_cambiada' and estado = 'pendiente') = 3,
+  'M.1 · H8: desde la 3ª cita en adelante (3ª, 4ª, 5ª) SÍ hay propuesta, una por cita'
+);
+
+select pg_temp.assert(
+  (select duracion_minutos from public.series_cita where id = (:'m1_serie_id')::uuid) = 60,
+  'GEMELA: la regla de la serie sí cambió a 60 minutos aunque las primeras dos citas no se propongan'
+);
+
+-- Confirmar la propuesta de la 3ª: la cita resultante dura 60 minutos (la
+-- regla nueva), no los 50 de la cita original.
+select id from public.propuestas_cita where cita_id = (:'m1_citas'::uuid[])[3] \gset m1p_
+
+call pg_temp.como(:PRO1);
+select public.agenda_confirmar_propuesta((:'m1p_id')::uuid) as cita_resultante_id \gset m1c_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select extract(epoch from (fin - inicio)) / 60 from public.citas where id = (:'m1c_cita_resultante_id')::uuid) = 60
+  and (select desviada from public.citas where id = (:'m1c_cita_resultante_id')::uuid) = false,
+  'M.1: la cita confirmada dura 60 minutos (la regla nueva) y no queda desviada (horario normal, sin anomalía)'
+);
+
+-- --- M.2 · H9: cambiar el día de la semana MUEVE la fecha, y usa la duración de la regla nueva ---
+
+-- +63 (múltiplo de 7): mismo día de la semana que desde_m (miércoles), para que
+-- el ancla de esta prueba no caiga por casualidad en domingo — el envoltorio
+-- ISO de fin de semana (domingo -> lunes) cambiaría de semana relativa y
+-- rompería la aserción de "misma semana" sin que sea un fallo del código.
+select (:'desde_m'::date + 63) as desde_m2 \gset
+select (extract(isodow from :'desde_m2'::date))::smallint as dia_origen_m2 \gset
+select (((:dia_origen_m2 + 1 - 1) % 7) + 1)::smallint as dia_destino_m2 \gset
+select (:'desde_m2'::date + ((:dia_destino_m2 - :dia_origen_m2 + 7) % 7)) as fecha_destino_m2 \gset
+
+call pg_temp.como(:PRO1);
+select (public.agenda_crear_serie(
+  :P1, :PRO1, :CA, :TT3, 'semanal', :dia_origen_m2::smallint,
+  time '09:00', 50::smallint, :'desde_m2'::date, 3::smallint, null
+) ->> 'serie_id')::uuid as serie_id \gset m2_
+call pg_temp.reset_sesion();
+
+select array_agg(id order by inicio) as citas from public.citas where serie_id = (:'m2_serie_id')::uuid \gset m2_
+
+call pg_temp.como(:PRO1);
+select public.agenda_editar_serie(
+  (:'m2_citas'::uuid[])[1], 'esta_y_siguientes',
+  p_dia_semana => :dia_destino_m2::smallint, p_fecha => (:'fecha_destino_m2')::date, p_duracion_minutos => 30::smallint
+) as r \gset m2e_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select extract(isodow from p.fecha_prevista) from public.propuestas_cita p
+    where p.cita_id = (:'m2_citas'::uuid[])[2]) = :dia_destino_m2::smallint,
+  'M.2 · H9: la propuesta de la 2ª cita cae en el día de la semana NUEVO, no conserva el de la cita original'
+);
+
+select pg_temp.assert(
+  date_trunc('week', (select p.fecha_prevista from public.propuestas_cita p
+    where p.cita_id = (:'m2_citas'::uuid[])[2])::timestamp)
+  = date_trunc('week', (select (c.inicio at time zone c.zona_horaria)::date
+    from public.citas c where c.id = (:'m2_citas'::uuid[])[2])::timestamp),
+  'M.2: la propuesta se queda en LA MISMA semana relativa que la cita original, solo cambia el día dentro de ella'
+);
+
+select pg_temp.assert(
+  (select extract(epoch from (p.fin_propuesto - p.inicio_propuesto)) / 60 from public.propuestas_cita p
+    where p.cita_id = (:'m2_citas'::uuid[])[2]) = 30,
+  'M.2 · H9: la propuesta dura 30 minutos — la duración de la regla NUEVA, no los 50 de la cita original'
+);
+
+-- --- M.3 · ADR-069: el ordinal mensual se fija en la primera ocurrencia ---
+
+-- enesimo_dia_del_mes() SIEMPRE cae dentro del mes pedido (recorta al último
+-- de ese día si el mes no llega al ordinal) — por diseño, así que comparar su
+-- resultado contra el mes de entrada nunca distingue "tiene 5º" de "recortó al
+-- 4º". Aquí se calcula el candidato SIN recortar (primer lunes + 4 semanas) y
+-- se comprueba si ese candidato crudo se sale del mes.
+with meses as (
+  select gs::date as mes,
+         (extract(month from
+            (gs::date + ((1 - extract(isodow from gs::date)::int + 7) % 7) + 28)
+          ) = extract(month from gs::date)) as tiene_5
+    from generate_series(date_trunc('month', now()), date_trunc('month', now()) + interval '36 months', interval '1 month') gs
+),
+candidatos as (
+  select mes, tiene_5,
+         lead(tiene_5)    over (order by mes) as tiene_5_sig,
+         lead(tiene_5, 2) over (order by mes) as tiene_5_sig2
+    from meses
+)
+select mes from candidatos where tiene_5 and not tiene_5_sig and tiene_5_sig2 limit 1 \gset m3mes_
+
+select pg_temp.assert(
+  :'m3mes_mes' is not null,
+  'M.3 · precondición: existe (en los próximos 36 meses) un mes con 5 lunes, seguido de uno con 4, seguido de uno con 5'
+);
+
+select (public.enesimo_dia_del_mes((:'m3mes_mes')::date, 1::smallint, 5::smallint)) as desde_m3 \gset
+
+select array_agg(o order by o) as ocurrencias
+  from public.ocurrencias_serie('mensual', 1::smallint, (:'desde_m3')::date, 3::smallint, null) o \gset m3_
+
+select pg_temp.assert(
+  (:'m3_ocurrencias'::date[])[3] = public.enesimo_dia_del_mes(((:'m3mes_mes')::date + interval '2 months')::date, 1::smallint, 5::smallint),
+  'M.3 · ADR-069: el 3er mes usa el ORDINAL 5 (el de la primera ocurrencia), aunque el 2º mes solo tuviera 4 lunes'
+);
+
+select pg_temp.assert(
+  (:'m3_ocurrencias'::date[])[3] <> public.enesimo_dia_del_mes(((:'m3mes_mes')::date + interval '2 months')::date, 1::smallint, 4::smallint),
+  'GEMELA: y por tanto NO coincide con el ordinal 4 — antes del arreglo, un mes corto degradaba el ordinal para siempre'
+);
+
+-- --- M.4 · agenda_previsualizar_edicion_serie(): enseña sin escribir nada ---
+
+select (select count(*) from public.eventos_salientes) as eventos_antes \gset m4_
+select (select count(*) from public.propuestas_cita) as propuestas_antes \gset m4_
+select (select hora_local from public.series_cita where id = (:'m1_serie_id')::uuid) as hora_antes \gset m4_
+
+call pg_temp.como(:PRO1);
+select public.agenda_previsualizar_edicion_serie(
+  (:'m1_citas'::uuid[])[4], p_hora_local => time '10:00'
+) as p \gset m4p_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select count(*) from public.eventos_salientes) = :m4_eventos_antes
+  and (select count(*) from public.propuestas_cita) = :m4_propuestas_antes
+  and (select hora_local from public.series_cita where id = (:'m1_serie_id')::uuid) = :'m4_hora_antes'::time,
+  'M.4: previsualizar NO crea eventos, NO crea propuestas y NO toca la regla de la serie'
+);
+
+select pg_temp.assert(
+  ((:'m4p_p')::jsonb -> 'citas') @> jsonb_build_array(jsonb_build_object('cita_id', (:'m1_citas'::uuid[])[4]::text))::jsonb
+    is not null
+  and not (
+    (:'m4p_p')::jsonb -> 'citas' @> jsonb_build_array(jsonb_build_object('cita_id', (:'m1_citas'::uuid[])[1]::text))
+  ),
+  'M.4 · H8 también en la previsualización: enseña la 4ª y la 5ª (desde el ancla), no la 1ª'
+);
+
+-- --- M.5 · Guardas de agenda_confirmar_propuesta() (ADR-068) ---
+
+-- (a) La regla cambió de nuevo desde que se creó la propuesta de la 5ª cita
+-- (M.1 dejó una propuesta pendiente para la 5ª; ahora se vuelve a editar).
+select id from public.propuestas_cita where cita_id = (:'m1_citas'::uuid[])[5] and estado = 'pendiente' \gset m5stale_
+
+call pg_temp.como(:PRO1);
+select public.agenda_editar_serie(
+  (:'m1_citas'::uuid[])[4], 'esta_y_siguientes', p_duracion_minutos => 45::smallint
+) as r \gset m5e_
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.agenda_confirmar_propuesta(%L::uuid)', :'m5stale_id'),
+  '22023', 'otra regla',
+  'M.5a: confirmar una propuesta cuya serie ya tiene OTRA regla se rechaza con 22023 y mensaje legible'
+);
+call pg_temp.reset_sesion();
+
+-- (b) La cita de la propuesta se canceló entre tanto.
+select id from public.propuestas_cita where cita_id = (:'m1_citas'::uuid[])[4] and estado = 'pendiente'
+  order by creada_en desc limit 1 \gset m5canc_
+
+call pg_temp.como(:PRO1);
+select public.agenda_cancelar_cita((:'m1_citas'::uuid[])[4], 'esta');
+call pg_temp.reset_sesion();
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.agenda_confirmar_propuesta(%L::uuid)', :'m5canc_id'),
+  '22023', 'cancelada',
+  'M.5b: confirmar la propuesta de una cita YA CANCELADA se rechaza con 22023 y mensaje legible'
+);
+call pg_temp.reset_sesion();
+
+-- (c) El horario propuesto ya quedó en el pasado (propuesta fabricada a mano:
+-- el tiempo real no permite esperar a que una propuesta real "caduque").
+insert into public.citas (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria)
+values (:'M6CITA', :P1, :PRO1, :CA, :TT3, now() + interval '15 minutes', now() + interval '65 minutes', 'Europe/Madrid');
+
+-- propuestas_cita_cuelga_ck exige serie_id o evento_id no nulo; esta cita no
+-- pertenece a ninguna serie, así que se fabrica también el evento del que
+-- "cuelga" la propuesta (su contenido no importa: no se vuelve a leer).
+insert into public.eventos_salientes (tipo, carga, estado)
+values ('agenda.zona_centro_cambiada', jsonb_build_object('centro_id', :CA, 'zona_horaria_nueva', 'Europe/Madrid'), 'entregado')
+returning id \gset m5pasadoev_
+
+insert into public.propuestas_cita
+  (evento_id, cita_id, paciente_id, profesional_id, centro_id, motivo,
+   fecha_prevista, hora_local_prevista, inicio_propuesto, fin_propuesto, zona_horaria, creada_por)
+values
+  ((:'m5pasadoev_id')::uuid, :'M6CITA', :P1, :PRO1, :CA, 'ausencia',
+   (now() - interval '1 day')::date, '09:00', now() - interval '1 day', now() - interval '1 day' + interval '50 minutes',
+   'Europe/Madrid', :PRO1)
+returning id \gset m5pasado_
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.agenda_confirmar_propuesta(%L::uuid)', :'m5pasado_id'),
+  '22023', 'pasado',
+  'M.5c: confirmar un horario propuesto que ya quedó en el pasado se rechaza con 22023'
+);
+call pg_temp.reset_sesion();
+
+-- --- M.6 · zona nueva empuja el instante al pasado: propuesta sin horario ---
+-- (la propuesta de M.5c queda pendiente y sin resolver: no estorba — M.6 fabrica
+-- su propia cita y su propio evento.)
+
+insert into public.eventos_salientes (tipo, carga, estado)
+values (
+  'agenda.zona_centro_cambiada',
+  jsonb_build_object(
+    'centro_id', :CA, 'zona_horaria_nueva', 'Pacific/Kiritimati',
+    'citas_afectadas', jsonb_build_array(:'M6CITA')
+  ),
+  'pendiente'
+)
+returning id \gset m6ev_
+
+call pg_temp.como(:PRO1);
+select public.agenda_propuestas_de_evento((:'m6ev_id')::uuid) as r \gset m6r_
+call pg_temp.reset_sesion();
+
+select (((:'m6r_r')::jsonb -> 'propuestas') ->> 0)::uuid as propuesta_id \gset m6_
+
+select pg_temp.assert(
+  (select inicio_propuesto from public.propuestas_cita where id = (:'m6_propuesta_id')::uuid) is null
+  and (select fin_propuesto from public.propuestas_cita where id = (:'m6_propuesta_id')::uuid) is null,
+  'M.6: un cambio de zona tan drástico que el instante recalculado cae en el pasado deja la propuesta SIN horario'
+);
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.agenda_confirmar_propuesta(%L::uuid)', :'m6_propuesta_id'),
+  '22023', 'horario',
+  'M.6: y esa propuesta sin horario no se puede confirmar (misma guarda que "no tiene horario")'
+);
+call pg_temp.reset_sesion();
+
+-- --- M.7 · ADR-069/ADR-068: UPDATE e INSERT directos sobre series_cita, retirados ---
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format($sql$update public.series_cita set hora_local = time '08:00' where id = %L$sql$, :'m1_serie_id'),
+  '42501', 'permission denied for table series_cita',
+  'M.7a: PRO1 no puede hacer UPDATE directo sobre su PROPIA serie — solo agenda_editar_serie()'
+);
+
+select pg_temp.assert_lanza_codigo_msg(
+  format($sql$insert into public.series_cita
+           (paciente_id, profesional_id, centro_id, tipo_terapia_id, periodicidad,
+            dia_semana, hora_local, zona_horaria, duracion_minutos, sesiones_totales, creada_por)
+         values (%L, %L, %L, %L, 'semanal', 3::smallint, time '10:00', 'Europe/Madrid', 50::smallint, 4::smallint, %L)$sql$,
+    :P1, :PRO1, :CA, :TT3, :PRO1),
+  '42501', 'permission denied for table series_cita',
+  'M.7b: PRO1 no puede hacer INSERT directo en series_cita ni para su propio paciente — solo agenda_crear_serie()'
+);
+call pg_temp.reset_sesion();
+
 \echo '16-series: completa.'
