@@ -2720,6 +2720,7 @@ export type Database = {
           p_fecha_cita: string
           p_fecha_destino?: string
           p_fecha_origen?: string
+          p_ordinal?: number
           p_periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
         }
         Returns: string

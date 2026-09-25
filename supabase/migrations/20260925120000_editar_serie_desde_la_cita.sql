@@ -81,7 +81,8 @@ create function public.fecha_en_regla_nueva(
   p_fecha_cita    date,
   p_dia_semana    smallint,
   p_fecha_origen  date default null,
-  p_fecha_destino date default null
+  p_fecha_destino date default null,
+  p_ordinal       smallint default null
 )
 returns date
 language plpgsql
@@ -102,6 +103,9 @@ begin
   if (p_fecha_origen is null) <> (p_fecha_destino is null) then
     raise exception 'fecha_en_regla_nueva: fecha_origen y fecha_destino van juntas o ninguna' using errcode = '22023';
   end if;
+  if p_ordinal is not null and (p_ordinal < 1 or p_ordinal > 5) then
+    raise exception 'fecha_en_regla_nueva: ordinal fuera de rango (1-5)' using errcode = '22023';
+  end if;
 
   if p_periodicidad in ('semanal', 'quincenal') then
     v_lunes_cita := p_fecha_cita - (extract(isodow from p_fecha_cita)::int - 1);
@@ -113,31 +117,36 @@ begin
     return v_lunes_cita + (p_dia_semana - 1);
   end if;
 
-  -- mensual: conserva el mes y el ordinal relativos al ancla.
+  -- mensual: conserva el mes relativo al ancla. El ordinal es p_ordinal si
+  -- viene (el de la regla, ADR-069.1: plan_edicion_serie lo fija), y si no,
+  -- el de la fecha de destino del ancla o el de la propia cita.
   if p_fecha_origen is not null and p_fecha_destino is not null then
     v_delta_meses :=
       (extract(year from p_fecha_destino)::int * 12 + extract(month from p_fecha_destino)::int)
       - (extract(year from p_fecha_origen)::int * 12 + extract(month from p_fecha_origen)::int);
     v_mes_base := (date_trunc('month', p_fecha_cita)::date + make_interval(months => v_delta_meses))::date;
-    v_ordinal := ((extract(day from p_fecha_destino)::int - 1) / 7) + 1;
+    v_ordinal := coalesce(p_ordinal, ((extract(day from p_fecha_destino)::int - 1) / 7) + 1);
   else
     v_mes_base := date_trunc('month', p_fecha_cita)::date;
-    v_ordinal := ((extract(day from p_fecha_cita)::int - 1) / 7) + 1;
+    v_ordinal := coalesce(p_ordinal, ((extract(day from p_fecha_cita)::int - 1) / 7) + 1);
   end if;
 
   return public.enesimo_dia_del_mes(v_mes_base, p_dia_semana, v_ordinal);
 end;
 $$;
 
-comment on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date) is
+comment on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date, smallint) is
   'H9: la fecha que le toca a p_fecha_cita bajo la regla nueva (p_dia_semana). '
   'Sin ancla (p_fecha_origen/p_fecha_destino nulos): mismo día de la semana '
   '(semanal/quincenal) u ordinal (mensual) que ya tenía. Con ancla: conserva '
   'la semana/mes relativos al desplazamiento del ancla — así "el resto de la '
-  'serie" se mueve con ella, no se queda en su día de siempre.';
+  'serie" se mueve con ella, no se queda en su día de siempre. En mensual, '
+  'p_ordinal (1-5) fija el ordinal de la regla (ADR-069.1, SQL-H2): sin él, '
+  'una ancla recortada (el 4.º jueves de un mes sin 5.º) bajaría toda la '
+  'serie del 5.º al 4.º.';
 
-revoke execute on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date) from public, anon;
-grant  execute on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date) to authenticated;
+revoke execute on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date, smallint) from public, anon;
+grant  execute on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date, smallint) to authenticated;
 
 
 -- =========================================================================
@@ -192,7 +201,9 @@ begin
       (p_cita.inicio at time zone p_cita.zona_horaria)::date,
       (p_carga ->> 'dia_semana')::smallint,
       (p_carga ->> 'fecha_origen')::date,
-      (p_carga ->> 'fecha_destino')::date
+      (p_carga ->> 'fecha_destino')::date,
+      -- Nulo en semanal/quincenal y en los eventos anteriores a SQL-H2.
+      (p_carga ->> 'ordinal')::smallint
     );
     v_hora := (p_carga ->> 'hora_local')::time;
 
@@ -252,7 +263,8 @@ revoke execute on function public.citas_afectadas_por_regla(uuid, uuid) from pub
 -- =========================================================================
 -- 5 · plan_edicion_serie() — valida el ancla y arma el plan de edición.
 --     No autoriza (el llamante ya lo hizo) ni bloquea filas (recibe filas ya
---     leídas): solo calendario y las guardas del §1 del diseño.
+--     leídas): calendario y las guardas del §1 del diseño. Única lectura de
+--     tabla: las citas de la serie, para el ordinal mensual (SQL-H2).
 -- =========================================================================
 
 create function public.plan_edicion_serie(
@@ -278,6 +290,8 @@ declare
   v_fecha_destino date;
   v_instante      timestamptz;
   v_cambia        boolean;
+  v_ordinal       smallint;
+  v_ordinal_otra  smallint;
 begin
   -- El orden importa: un UPDATE de postgres que pone la cita "en curso"
   -- TAMBIÉN la desvía (fn_marcar_cita_desviada); si esta guarda no fuera la
@@ -301,18 +315,57 @@ begin
     raise exception 'La fecha y el día de la semana no coinciden.' using errcode = '22023';
   end if;
 
+  -- SQL-H4: la misma cota que series_cita_duracion_ck, aquí y no en el UPDATE,
+  -- para que la previsualización no anuncie una edición que la base rechaza.
+  if p_duracion_minutos is not null and (p_duracion_minutos < 5 or p_duracion_minutos > 480) then
+    raise exception 'La duración de la sesión debe estar entre 5 y 480 minutos.' using errcode = '22023';
+  end if;
+
   v_dia_semana := coalesce(p_dia_semana, extract(isodow from p_fecha)::smallint, p_serie.dia_semana);
   v_hora_local := coalesce(p_hora_local, p_serie.hora_local);
   v_duracion   := coalesce(p_duracion_minutos, p_serie.duracion_minutos);
   v_zona       := coalesce(p_zona_horaria, p_serie.zona_horaria);
 
-  -- §1.4.4: sin p_fecha, la ancla va al día nuevo de SU semana (o al mismo
-  -- ordinal de su mes, en mensual): fecha_en_regla_nueva sin ancla.
-  v_fecha_origen  := (p_cita.inicio at time zone p_cita.zona_horaria)::date;
-  v_fecha_destino := coalesce(
-    p_fecha,
-    public.fecha_en_regla_nueva(p_serie.periodicidad, v_fecha_origen, v_dia_semana)
-  );
+  v_fecha_origen := (p_cita.inicio at time zone p_cita.zona_horaria)::date;
+
+  if p_serie.periodicidad <> 'mensual' then
+    -- §1.4.4: sin p_fecha, la ancla va al día nuevo de SU semana.
+    v_fecha_destino := coalesce(
+      p_fecha,
+      public.fecha_en_regla_nueva(p_serie.periodicidad, v_fecha_origen, v_dia_semana)
+    );
+  elsif p_fecha is not null and p_fecha <> v_fecha_origen then
+    -- ADR-068.3: la cita se mueve de fecha; el ordinal sale del destino.
+    v_ordinal       := ((extract(day from p_fecha)::int - 1) / 7) + 1;
+    v_fecha_destino := p_fecha;
+  else
+    -- SQL-H2 (decisión del propietario, 25-09-2026) y ADR-069.1: si la cita
+    -- no cambia de fecha, el ordinal es el de la serie, no el de la ancla.
+    -- Solo es ambiguo cuando la ancla es la 4.ª y la última de su mes: puede
+    -- ser un 4.º de verdad o un 5.º recortado. Lo decide la cita no recortada
+    -- (5.ª, o no la última de su mes) más cercana de la misma serie.
+    v_ordinal := ((extract(day from v_fecha_origen)::int - 1) / 7) + 1;
+    if v_ordinal = 4
+       and extract(month from v_fecha_origen + 7) <> extract(month from v_fecha_origen)
+    then
+      select ((extract(day from d.fecha)::int - 1) / 7) + 1
+        into v_ordinal_otra
+        from (select (c.inicio at time zone c.zona_horaria)::date as fecha, c.inicio
+                from public.citas c
+               where c.serie_id = p_serie.id
+                 and c.id <> p_cita.id
+                 and c.desviada = false) d
+       where extract(day from d.fecha) > 28
+          or extract(month from d.fecha + 7) = extract(month from d.fecha)
+       order by abs(extract(epoch from d.inicio - p_cita.inicio)), d.inicio desc
+       limit 1;
+      if v_ordinal_otra = 5 then
+        v_ordinal := 5;
+      end if;
+    end if;
+    v_fecha_destino := public.enesimo_dia_del_mes(
+      date_trunc('month', v_fecha_origen)::date, v_dia_semana, v_ordinal);
+  end if;
 
   select r.instante into v_instante
     from public.resolver_hora_local(v_zona, v_fecha_destino + v_hora_local) r;
@@ -338,6 +391,7 @@ begin
     'desde_cita_id', p_cita.id,
     'fecha_origen', v_fecha_origen,
     'fecha_destino', v_fecha_destino,
+    'ordinal', v_ordinal,
     'cambia', v_cambia
   );
 end;
@@ -345,10 +399,13 @@ $$;
 
 comment on function public.plan_edicion_serie(public.citas, public.series_cita, date, smallint, time, smallint, text) is
   'Guardas de la ancla (pasada/en curso, cancelada/cerrada, desviada), '
-  'coincidencia fecha/día de la semana y horario nuevo no pasado, y el plan '
-  '(regla + fecha_origen/fecha_destino + cambia) que agenda_editar_serie() '
-  'aplica y agenda_previsualizar_edicion_serie() enseña sin aplicar. Sin '
-  'grant a nadie: no autoriza por sí sola.';
+  'coincidencia fecha/día de la semana, duración 5-480 (SQL-H4) y horario '
+  'nuevo no pasado, y el plan (regla + fecha_origen/fecha_destino + ordinal '
+  '+ cambia) que agenda_editar_serie() aplica y '
+  'agenda_previsualizar_edicion_serie() enseña sin aplicar. En mensual, sin '
+  'mover la fecha, el ordinal es el de la serie (SQL-H2, ADR-069.1): para '
+  'desambiguar una ancla recortada lee otras citas de la serie, sin '
+  'bloquearlas. Sin grant a nadie: no autoriza por sí sola.';
 
 revoke execute on function public.plan_edicion_serie(public.citas, public.series_cita, date, smallint, time, smallint, text) from public, anon, authenticated;
 
@@ -407,6 +464,7 @@ begin
       'desde_cita_id', v_desde_cita_id,
       'fecha_origen', v_fecha_origen,
       'fecha_destino', v_fecha_destino,
+      'ordinal', v_ancla -> 'ordinal',
       'citas_afectadas', v_citas
     ),
     auth.uid()
@@ -476,14 +534,10 @@ begin
     raise exception 'La cita no existe o no es tuya.' using errcode = '42501';
   end if;
 
-  if p_alcance = 'esta' then
-    if p_fecha is not null then
-      raise exception 'Con "esta" no se cambia la fecha de la serie: usa esta_y_siguientes.' using errcode = '22023';
-    end if;
-    perform public.agenda_actualizar_cita(p_cita_id, p_estado, p_sala, p_inicio, p_fin);
-    return jsonb_build_object('alcance', 'esta', 'cita_id', p_cita_id);
-  end if;
-
+  -- SQL-H3: la autorización va ANTES de cualquier otra guarda, también en
+  -- la rama "esta" — si no, el 22023 de p_fecha distinguiría una cita ajena
+  -- (existe) de un id inexistente (42501). Es el mismo predicado que aplica
+  -- agenda_actualizar_cita(), así que "esta" no cambia de comportamiento.
   if not (
     v_rol = 'administrador'::public.rol_usuario
     or v_cita.profesional_id = (select auth.uid())
@@ -493,6 +547,14 @@ begin
     )
   ) then
     raise exception 'La cita no existe o no es tuya.' using errcode = '42501';
+  end if;
+
+  if p_alcance = 'esta' then
+    if p_fecha is not null then
+      raise exception 'Con "esta" no se cambia la fecha de la serie: usa esta_y_siguientes.' using errcode = '22023';
+    end if;
+    perform public.agenda_actualizar_cita(p_cita_id, p_estado, p_sala, p_inicio, p_fin);
+    return jsonb_build_object('alcance', 'esta', 'cita_id', p_cita_id);
   end if;
 
   if v_cita.serie_id is null then
@@ -533,7 +595,8 @@ comment on function public.agenda_editar_serie(
   uuid, public.alcance_cambio_serie, public.estado_cita, text, timestamptz, timestamptz,
   smallint, time, smallint, text, date
 ) is
-  'esta: delega en agenda_actualizar_cita() (T-010), rechaza p_fecha (22023). '
+  'Autoriza primero (42501, SQL-H3). esta: rechaza p_fecha (22023) y delega '
+  'en agenda_actualizar_cita() (T-010). '
   'esta_y_siguientes: plan_edicion_serie() valida el ancla y arma el plan; si '
   'cambia, se publica como ancla transaccional (app.agenda_regla_ancla) '
   'ANTES del UPDATE sobre series_cita y se limpia justo después, para que '
@@ -741,7 +804,11 @@ begin
         raise exception 'La cita se movió a mano: ya no la gobierna esta regla.' using errcode = '22023';
       end if;
 
-      select * into v_serie from public.series_cita where id = v_cita.serie_id;
+      -- SQL-H1: for share espera a un agenda_editar_serie() en vuelo (que
+      -- tiene la serie en for no key update) y, en READ COMMITTED, relee la
+      -- versión confirmada: sin candado, la comparación con la carga podría
+      -- ver la regla vieja y confirmar una propuesta que la edición anula.
+      select * into v_serie from public.series_cita where id = v_cita.serie_id for share;
       if v_serie.dia_semana       is distinct from (v_evento.carga ->> 'dia_semana')::smallint
          or v_serie.hora_local       is distinct from (v_evento.carga ->> 'hora_local')::time
          or v_serie.duracion_minutos is distinct from (v_evento.carga ->> 'duracion_minutos')::smallint
@@ -750,7 +817,8 @@ begin
         raise exception 'La serie ya tiene otra regla: esta propuesta quedó obsoleta.' using errcode = '22023';
       end if;
     elsif v_propuesta.motivo = 'zona_cambiada' then
-      select c.zona_horaria into v_zona_centro from public.centros c where c.id = v_cita.centro_id;
+      -- SQL-H1: lo mismo frente a un UPDATE de la zona del centro en vuelo.
+      select c.zona_horaria into v_zona_centro from public.centros c where c.id = v_cita.centro_id for share;
       if v_zona_centro is distinct from v_evento.carga ->> 'zona_horaria_nueva' then
         raise exception 'El centro ya tiene otra zona horaria: esta propuesta quedó obsoleta.' using errcode = '22023';
       end if;
@@ -818,7 +886,8 @@ end;
 $$;
 
 comment on function public.agenda_confirmar_propuesta(uuid) is
-  'ADR-068: bloquea propuesta y cita (for no key update), rechaza (22023) '
+  'ADR-068: bloquea propuesta y cita (for no key update) y lee la serie o '
+  'el centro en for share (SQL-H1), rechaza (22023) '
   'horario pasado, cita ya empezada/cancelada/cerrada, ancla desviada, regla '
   'o zona ya distinta de la que originó la propuesta, y frescura (recalcula '
   'con calcular_propuesta_de_evento y compara). Si la clasificación no es '
@@ -890,7 +959,9 @@ begin
   v_plan := public.plan_edicion_serie(v_cita, v_serie, p_fecha, p_dia_semana, p_hora_local, p_duracion_minutos, p_zona_horaria);
 
   if v_serie.periodicidad = 'mensual' then
-    v_ordinal := ((extract(day from (v_plan ->> 'fecha_destino')::date)::int - 1) / 7) + 1;
+    -- El ordinal de la regla es el del plan (SQL-H2), no el de fecha_destino:
+    -- una ancla recortada de una serie del 5.º cae en el 4.º y sigue siendo 5.
+    v_ordinal := (v_plan ->> 'ordinal')::smallint;
     v_ultimo  := (v_ordinal = 5);
   else
     v_ultimo  := false;

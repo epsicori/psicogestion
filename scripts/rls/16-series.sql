@@ -829,6 +829,24 @@ select array_agg(id order by inicio)::text as citas
 select ((inicio at time zone zona_horaria)::date)::text as f3
   from public.citas where id = (:'m2_citas'::uuid[])[3] \gset m2_
 
+-- SQL-H3: la autorización va antes que la guarda de p_fecha, también con
+-- «esta». Una cita AJENA y un id que no existe responden igual (42501, mismo
+-- mensaje): el 22023 de p_fecha no revela que la cita existe.
+call pg_temp.como(:PRO2);
+select pg_temp.assert_lanza_codigo_msg(
+  format($q$select public.agenda_editar_serie(%L::uuid, 'esta', p_fecha => %L::date)$q$,
+         (:'m2_citas'::uuid[])[3], :'m2_f3'::date + 2),
+  '42501', 'La cita no existe o no es tuya',
+  'M.2 · SQL-H3: PRO2 con «esta» y p_fecha sobre una cita de PRO1: 42501, no el 22023 de p_fecha'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  format($q$select public.agenda_editar_serie(%L::uuid, 'esta', p_fecha => %L::date)$q$,
+         gen_random_uuid(), :'m2_f3'::date + 2),
+  '42501', 'La cita no existe o no es tuya',
+  'M.2 · SQL-H3: con un id que no existe, el MISMO código y el MISMO mensaje que con la cita ajena'
+);
+call pg_temp.reset_sesion();
+
 -- NEGATIVAS primero (dentro de un sub-bloque: no dejan rastro).
 call pg_temp.como(:PRO1);
 select pg_temp.assert_lanza_codigo_msg(
@@ -959,6 +977,60 @@ select pg_temp.assert(
      from public.citas where id = (:'m4_citas'::uuid[])[1])
   and :'m4_cita'::uuid = (:'m4_citas'::uuid[])[1],
   'M.4 · Criterio 6: confirmada, la ancla dura 80 minutos y NO queda desviada (la mueve la serie)'
+);
+
+-- SQL-H4: una duración fuera de 5-480 se rechaza en plan_edicion_serie, con
+-- su propio 22023, igual en la previsualización que en la edición. Sin esa
+-- guarda la previsualización la anunciaría y la edición caería en el
+-- 23514 de series_cita_duracion_ck.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format($q$select public.agenda_previsualizar_edicion_serie(%L::uuid, p_duracion_minutos => 4::smallint)$q$,
+         (:'m4_citas'::uuid[])[2]),
+  '22023', 'entre 5 y 480 minutos',
+  'M.4 · SQL-H4: previsualizar con 4 minutos se rechaza'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  format($q$select public.agenda_previsualizar_edicion_serie(%L::uuid, p_duracion_minutos => 481::smallint)$q$,
+         (:'m4_citas'::uuid[])[2]),
+  '22023', 'entre 5 y 480 minutos',
+  'M.4 · SQL-H4: previsualizar con 481 minutos se rechaza'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  format($q$select public.agenda_editar_serie(%L::uuid, 'esta_y_siguientes', p_duracion_minutos => 4::smallint)$q$,
+         (:'m4_citas'::uuid[])[2]),
+  '22023', 'entre 5 y 480 minutos',
+  'M.4 · SQL-H4: editar con 4 minutos se rechaza con el mismo 22023, no con el 23514 del check'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  format($q$select public.agenda_editar_serie(%L::uuid, 'esta_y_siguientes', p_duracion_minutos => 481::smallint)$q$,
+         (:'m4_citas'::uuid[])[2]),
+  '22023', 'entre 5 y 480 minutos',
+  'M.4 · SQL-H4: editar con 481 minutos se rechaza con el mismo 22023, no con el 23514 del check'
+);
+
+-- GEMELA: 480, el borde, pasa en las dos.
+select public.agenda_previsualizar_edicion_serie(
+  (:'m4_citas'::uuid[])[2], p_duracion_minutos => 480::smallint
+)::text as pv \gset m4h_
+select public.agenda_editar_serie(
+  (:'m4_citas'::uuid[])[2], 'esta_y_siguientes', p_duracion_minutos => 480::smallint
+)::text as r \gset m4h_
+call pg_temp.reset_sesion();
+
+select ((:'m4h_r')::jsonb ->> 'evento_id') as ev \gset m4h_
+
+select pg_temp.assert(
+  ((:'m4h_pv')::jsonb -> 'regla' ->> 'duracion_minutos')::int = 480
+  and ((:'m4h_pv')::jsonb ->> 'cambia')::boolean
+  and (select duracion_minutos from public.series_cita where id = :'m4_serie_id'::uuid) = 480
+  and (select count(*) from public.propuestas_cita where evento_id = :'m4h_ev'::uuid) = 3
+  and not exists (
+    select 1 from public.propuestas_cita
+     where evento_id = :'m4h_ev'::uuid
+       and fin_propuesto - inicio_propuesto <> interval '480 minutes'
+  ),
+  'M.4 · SQL-H4 (GEMELA): con 480 la previsualización anuncia 480, la serie queda en 480 y sus tres propuestas duran 480'
 );
 
 -- =========================================================================
@@ -1781,6 +1853,20 @@ select pg_temp.assert(
   'M.12 · Criterio 13: agenda_previsualizar_edicion_serie: authenticated SÍ, anon NO'
 );
 
+-- SQL-H1: agenda_confirmar_propuesta lee la serie y el centro con candado
+-- (for share), para no comparar contra una regla o una zona que otra
+-- transacción está cambiando. Cada expresión fija UNA de las dos lecturas.
+select pg_temp.assert(
+  pg_get_functiondef('public.agenda_confirmar_propuesta(uuid)'::regprocedure)
+    ~ 'select \* into v_serie from public\.series_cita where id = v_cita\.serie_id for share;',
+  'M.12 · SQL-H1: la lectura de series_cita en agenda_confirmar_propuesta lleva for share'
+);
+select pg_temp.assert(
+  pg_get_functiondef('public.agenda_confirmar_propuesta(uuid)'::regprocedure)
+    ~ 'select c\.zona_horaria into v_zona_centro from public\.centros c where c\.id = v_cita\.centro_id for share;',
+  'M.12 · SQL-H1: la lectura de centros en agenda_confirmar_propuesta lleva for share'
+);
+
 -- =========================================================================
 -- M.13 · Criterio 16 — la previsualización
 -- =========================================================================
@@ -2027,6 +2113,149 @@ select pg_temp.assert(
 );
 
 -- (d) La consulta de detección de §1.11 va en la evidencia, no aquí.
+
+-- (e) SQL-H2 (decisión del propietario, 25-09-2026): si la cita NO cambia de
+-- fecha, el ordinal es el de la serie. La serie de (b) es el escenario de la
+-- revisión: del 5.º jueves de m5, con m5 + 1 recortado a su 4.º (y último)
+-- jueves. Se edita SOLO la hora desde esa cita recortada: m5b debe seguir en
+-- su 5.º jueves. Con el ordinal sacado de la ancla (el fallo), caería en el 4.º.
+select ((:'m14b_r')::jsonb ->> 'serie_id') as serie_id \gset m14e_
+select array_agg(id order by inicio)::text as citas
+  from public.citas where serie_id = :'m14e_serie_id'::uuid \gset m14e_
+
+select pg_temp.assert(
+  array_length(:'m14e_citas'::uuid[], 1) = :m14_n
+  and (select (inicio at time zone zona_horaria)::date from public.citas where id = (:'m14e_citas'::uuid[])[2])
+      = pg_temp.m_enesimo((:'m13_mes5'::date + interval '1 month')::date, 4, 4)
+  and pg_temp.m_enesimo((:'m13_mes5'::date + interval '1 month')::date, 4, 4)
+      = pg_temp.m_ultimo((:'m13_mes5'::date + interval '1 month')::date, 4),
+  'M.14 · SQL-H2 fijación: la 2.ª cita de la serie de (b) es el 4.º jueves de m5 + 1, que es también el último (recortada)'
+);
+
+-- (e.i) Previsualización, solo la hora.
+call pg_temp.como(:PRO2);
+select public.agenda_previsualizar_edicion_serie(
+  (:'m14e_citas'::uuid[])[2], p_hora_local => time '18:00'
+)::text as pv \gset m14e_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (:'m14e_pv')::jsonb -> 'regla' ->> 'ordinal' = '5'
+  and ((:'m14e_pv')::jsonb -> 'regla' ->> 'ultimo')::boolean
+  and ((:'m14e_pv')::jsonb ->> 'fecha_destino')::date = (select fecha from m14_esperadas where k = 2),
+  'M.14 · SQL-H2: previsualizar solo la hora desde la cita recortada: ordinal 5 («último»), no 4, y la ancla no se mueve'
+);
+
+select pg_temp.assert(
+  (select array_agg((e ->> 'fecha_nueva')::date order by n)
+     from jsonb_array_elements((:'m14e_pv')::jsonb -> 'citas') with ordinality as t(e, n))
+  = (select array_agg(fecha order by k) from m14_esperadas where k >= 2)
+  and ((:'m14e_pv')::jsonb -> 'citas' -> -1 ->> 'fecha_nueva')::date = pg_temp.m_enesimo(:'m14_m5b'::date, 4, 5),
+  'M.14 · SQL-H2: la previsualización propone las MISMAS fechas que la creación, y m5b en su 5.º jueves (no el 4.º)'
+);
+
+-- (e.ii) La edición, solo la hora.
+create temp table m14e_prev as
+select (e ->> 'cita_id')::uuid as cita_id,
+       (e ->> 'fecha_nueva')::date as fecha,
+       (e ->> 'inicio')::timestamptz as inicio,
+       (e ->> 'fin')::timestamptz as fin
+  from jsonb_array_elements((:'m14e_pv')::jsonb -> 'citas') e;
+
+call pg_temp.como(:PRO2);
+select public.agenda_editar_serie(
+  (:'m14e_citas'::uuid[])[2], 'esta_y_siguientes', p_hora_local => time '18:00'
+)::text as r \gset m14e_
+call pg_temp.reset_sesion();
+
+select ((:'m14e_r')::jsonb ->> 'evento_id') as ev \gset m14e_
+
+select pg_temp.assert(
+  (select array_agg(fecha_prevista order by fecha_prevista)
+     from public.propuestas_cita where evento_id = :'m14e_ev'::uuid)
+  = (select array_agg(fecha order by k) from m14_esperadas where k >= 2)
+  and (select max(fecha_prevista) from public.propuestas_cita where evento_id = :'m14e_ev'::uuid)
+      = pg_temp.m_enesimo(:'m14_m5b'::date, 4, 5),
+  'M.14 · SQL-H2: editar solo la hora propone las fechas de la creación; m5b sigue en su 5.º jueves, no una semana antes'
+);
+
+select pg_temp.assert(
+  not exists (
+    select cita_id, fecha, inicio, fin from m14e_prev
+    except
+    select cita_id, fecha_prevista, inicio_propuesto, fin_propuesto
+      from public.propuestas_cita where evento_id = :'m14e_ev'::uuid
+  )
+  and not exists (
+    select cita_id, fecha_prevista, inicio_propuesto, fin_propuesto
+      from public.propuestas_cita where evento_id = :'m14e_ev'::uuid
+    except
+    select cita_id, fecha, inicio, fin from m14e_prev
+  )
+  and (select count(*) from m14e_prev) = :m14_n - 1,
+  'M.14 · SQL-H2: previsualización = edición (cita, fecha, inicio, fin)'
+);
+
+-- (e.iii) GEMELA: la cita SÍ se mueve de fecha, al 2.º jueves de su mes. El
+-- ordinal sale entonces del destino (ADR-068.3): el 2.º en todos los meses.
+select pg_temp.m_enesimo((:'m13_mes5'::date + interval '1 month')::date, 4, 2)::text as f2 \gset m14e_
+
+call pg_temp.como(:PRO2);
+select public.agenda_previsualizar_edicion_serie(
+  (:'m14e_citas'::uuid[])[2], p_fecha => :'m14e_f2'::date
+)::text as pv2 \gset m14e_
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (:'m14e_pv2')::jsonb -> 'regla' ->> 'ordinal' = '2'
+  and not ((:'m14e_pv2')::jsonb -> 'regla' ->> 'ultimo')::boolean
+  and not exists (
+    select 1 from jsonb_array_elements((:'m14e_pv2')::jsonb -> 'citas') e
+     where (e ->> 'fecha_nueva')::date <> pg_temp.m_enesimo((e ->> 'fecha_actual')::date, 4, 2)
+  )
+  and jsonb_array_length((:'m14e_pv2')::jsonb -> 'citas') = :m14_n - 1,
+  'M.14 · SQL-H2 (GEMELA): moviendo la cita al 2.º jueves, la previsualización da ordinal 2 y el 2.º jueves de cada mes'
+);
+
+create temp table m14e_prev2 as
+select (e ->> 'cita_id')::uuid as cita_id,
+       (e ->> 'fecha_nueva')::date as fecha,
+       (e ->> 'inicio')::timestamptz as inicio,
+       (e ->> 'fin')::timestamptz as fin
+  from jsonb_array_elements((:'m14e_pv2')::jsonb -> 'citas') e;
+
+call pg_temp.como(:PRO2);
+select public.agenda_editar_serie(
+  (:'m14e_citas'::uuid[])[2], 'esta_y_siguientes', p_fecha => :'m14e_f2'::date
+)::text as r2 \gset m14e_
+call pg_temp.reset_sesion();
+
+select ((:'m14e_r2')::jsonb ->> 'evento_id') as ev2 \gset m14e_
+
+select pg_temp.assert(
+  (select count(*) from public.propuestas_cita where evento_id = :'m14e_ev2'::uuid) = :m14_n - 1
+  and not exists (
+    select 1
+      from public.propuestas_cita p
+      join public.citas c on c.id = p.cita_id
+     where p.evento_id = :'m14e_ev2'::uuid
+       and p.fecha_prevista <> pg_temp.m_enesimo((c.inicio at time zone c.zona_horaria)::date, 4, 2)
+  )
+  and not exists (
+    select cita_id, fecha, inicio, fin from m14e_prev2
+    except
+    select cita_id, fecha_prevista, inicio_propuesto, fin_propuesto
+      from public.propuestas_cita where evento_id = :'m14e_ev2'::uuid
+  )
+  and not exists (
+    select cita_id, fecha_prevista, inicio_propuesto, fin_propuesto
+      from public.propuestas_cita where evento_id = :'m14e_ev2'::uuid
+    except
+    select cita_id, fecha, inicio, fin from m14e_prev2
+  ),
+  'M.14 · SQL-H2 (GEMELA): editar moviendo al 2.º jueves propone el 2.º jueves de cada mes, igual que la previsualización'
+);
+
 
 -- =========================================================================
 -- M.15 · Criterio 18 — el INSERT directo sobre series_cita ya no entra
