@@ -42,6 +42,13 @@ declare
   v_mes  date;
   v_cand date;
 begin
+  if p_dia_semana is null or p_dia_semana < 1 or p_dia_semana > 7 then
+    raise exception 'enesimo_dia_del_mes: dia_semana fuera de rango (1-7, ISODOW)' using errcode = '22023';
+  end if;
+  if p_ordinal is null or p_ordinal < 1 or p_ordinal > 5 then
+    raise exception 'enesimo_dia_del_mes: ordinal fuera de rango (1-5)' using errcode = '22023';
+  end if;
+
   v_mes := date_trunc('month', p_mes)::date;
   v_cand := v_mes
     + ((p_dia_semana - extract(isodow from v_mes)::int + 7) % 7)
@@ -59,7 +66,7 @@ comment on function public.enesimo_dia_del_mes(date, smallint, smallint) is
   'Única fórmula: la comparten ocurrencias_serie() y fecha_en_regla_nueva(), '
   'para que "el 2º martes" signifique lo mismo en los dos sitios.';
 
-revoke execute on function public.enesimo_dia_del_mes(date, smallint, smallint) from public;
+revoke execute on function public.enesimo_dia_del_mes(date, smallint, smallint) from public, anon;
 grant  execute on function public.enesimo_dia_del_mes(date, smallint, smallint) to authenticated;
 
 
@@ -89,6 +96,13 @@ declare
   v_delta_meses   int;
   v_ordinal       smallint;
 begin
+  if p_dia_semana is null or p_dia_semana < 1 or p_dia_semana > 7 then
+    raise exception 'fecha_en_regla_nueva: dia_semana fuera de rango (1-7, ISODOW)' using errcode = '22023';
+  end if;
+  if (p_fecha_origen is null) <> (p_fecha_destino is null) then
+    raise exception 'fecha_en_regla_nueva: fecha_origen y fecha_destino van juntas o ninguna' using errcode = '22023';
+  end if;
+
   if p_periodicidad in ('semanal', 'quincenal') then
     v_lunes_cita := p_fecha_cita - (extract(isodow from p_fecha_cita)::int - 1);
     if p_fecha_origen is not null and p_fecha_destino is not null then
@@ -122,7 +136,7 @@ comment on function public.fecha_en_regla_nueva(public.periodicidad_serie, date,
   'la semana/mes relativos al desplazamiento del ancla — así "el resto de la '
   'serie" se mueve con ella, no se queda en su día de siempre.';
 
-revoke execute on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date) from public;
+revoke execute on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date) from public, anon;
 grant  execute on function public.fecha_en_regla_nueva(public.periodicidad_serie, date, smallint, date, date) to authenticated;
 
 
@@ -280,21 +294,25 @@ begin
     raise exception 'La cita elegida se movió a mano: ya no la gobierna la serie.' using errcode = '22023';
   end if;
 
-  v_dia_semana := coalesce(p_dia_semana, p_serie.dia_semana);
+  -- §1.4.3: el día nuevo sale de p_dia_semana, o si no del día de p_fecha, o
+  -- si no de la serie. Solo si vienen los DOS y no coinciden es un error.
+  if p_fecha is not null and p_dia_semana is not null
+     and extract(isodow from p_fecha)::smallint <> p_dia_semana then
+    raise exception 'La fecha y el día de la semana no coinciden.' using errcode = '22023';
+  end if;
+
+  v_dia_semana := coalesce(p_dia_semana, extract(isodow from p_fecha)::smallint, p_serie.dia_semana);
   v_hora_local := coalesce(p_hora_local, p_serie.hora_local);
   v_duracion   := coalesce(p_duracion_minutos, p_serie.duracion_minutos);
   v_zona       := coalesce(p_zona_horaria, p_serie.zona_horaria);
 
-  v_fecha_origen := (p_cita.inicio at time zone p_cita.zona_horaria)::date;
-
-  if p_fecha is not null then
-    if extract(isodow from p_fecha)::smallint <> v_dia_semana then
-      raise exception 'La fecha y el día de la semana no coinciden.' using errcode = '22023';
-    end if;
-    v_fecha_destino := p_fecha;
-  else
-    v_fecha_destino := v_fecha_origen;
-  end if;
+  -- §1.4.4: sin p_fecha, la ancla va al día nuevo de SU semana (o al mismo
+  -- ordinal de su mes, en mensual): fecha_en_regla_nueva sin ancla.
+  v_fecha_origen  := (p_cita.inicio at time zone p_cita.zona_horaria)::date;
+  v_fecha_destino := coalesce(
+    p_fecha,
+    public.fecha_en_regla_nueva(p_serie.periodicidad, v_fecha_origen, v_dia_semana)
+  );
 
   select r.instante into v_instante
     from public.resolver_hora_local(v_zona, v_fecha_destino + v_hora_local) r;
@@ -372,9 +390,9 @@ begin
   v_fecha_origen  := (v_ancla ->> 'fecha_origen')::date;
   v_fecha_destino := (v_ancla ->> 'fecha_destino')::date;
 
-  select coalesce(jsonb_agg(c.cita_id), '[]'::jsonb)
+  select coalesce(jsonb_agg(a.cita_id order by a.n), '[]'::jsonb)
     into v_citas
-    from public.citas_afectadas_por_regla(new.id, v_desde_cita_id) c;
+    from public.citas_afectadas_por_regla(new.id, v_desde_cita_id) with ordinality as a(cita_id, n);
 
   insert into public.eventos_salientes (tipo, carga, creado_por)
   values (
@@ -525,7 +543,7 @@ comment on function public.agenda_editar_serie(
 revoke execute on function public.agenda_editar_serie(
   uuid, public.alcance_cambio_serie, public.estado_cita, text, timestamptz, timestamptz,
   smallint, time, smallint, text, date
-) from public;
+) from public, anon;
 grant  execute on function public.agenda_editar_serie(
   uuid, public.alcance_cambio_serie, public.estado_cita, text, timestamptz, timestamptz,
   smallint, time, smallint, text, date
@@ -874,13 +892,29 @@ begin
   if v_serie.periodicidad = 'mensual' then
     v_ordinal := ((extract(day from (v_plan ->> 'fecha_destino')::date)::int - 1) / 7) + 1;
     v_ultimo  := (v_ordinal = 5);
+  else
+    v_ultimo  := false;
   end if;
 
   if (v_plan ->> 'cambia')::boolean then
     for v_c in
-      select c.* from public.citas_afectadas_por_regla(v_serie.id, v_cita.id) a
+      select c.* from public.citas_afectadas_por_regla(v_serie.id, v_cita.id) with ordinality as a(cita_id, n)
         join public.citas c on c.id = a.cita_id
+       order by a.n
     loop
+      -- Mismo salto que agenda_propuestas_de_evento (§1.5): lo que la edición
+      -- no propondría, la previsualización no lo enseña.
+      if not (
+        v_rol = 'administrador'::public.rol_usuario
+        or v_c.profesional_id = (select auth.uid())
+        or (
+          v_rol = 'tecnico_administrativo'::public.rol_usuario
+          and v_c.centro_id in (select public.centros_actuales())
+        )
+      ) then
+        continue;
+      end if;
+
       select cp.* into v_prop
         from public.calcular_propuesta_de_evento('agenda.regla_serie_cambiada', v_plan, v_c) cp;
 
@@ -940,7 +974,7 @@ comment on function public.agenda_previsualizar_edicion_serie(uuid, date, smalli
   'produciría confirmar. Para una regla mensual, ordinal/ultimo/recorte '
   'informan si el 5º ordinal se recorta al último del mes en algún mes.';
 
-revoke execute on function public.agenda_previsualizar_edicion_serie(uuid, date, smallint, time, smallint, text) from public;
+revoke execute on function public.agenda_previsualizar_edicion_serie(uuid, date, smallint, time, smallint, text) from public, anon;
 grant  execute on function public.agenda_previsualizar_edicion_serie(uuid, date, smallint, time, smallint, text) to authenticated;
 
 
@@ -1026,6 +1060,9 @@ comment on function public.ocurrencias_serie(public.periodicidad_serie, smallint
   'antes de este arreglo NO se corrigen aquí (ver detección en el informe del '
   'ticket); se corrigen editándolas por el camino normal si hiciera falta.';
 
+revoke execute on function public.ocurrencias_serie(public.periodicidad_serie, smallint, date, smallint, date) from public;
+grant  execute on function public.ocurrencias_serie(public.periodicidad_serie, smallint, date, smallint, date) to authenticated;
+
 
 -- =========================================================================
 -- 12 · Tabla: ADR-069 revoca INSERT sobre series_cita (solo
@@ -1034,3 +1071,14 @@ comment on function public.ocurrencias_serie(public.periodicidad_serie, smallint
 -- =========================================================================
 
 revoke insert, update on table public.series_cita from authenticated;
+
+comment on policy series_cita_modificacion on public.series_cita is
+  'Dormida desde T-011b (ADR-068): authenticated no tiene UPDATE sobre la tabla y la regla solo '
+  'cambia por agenda_editar_serie (security definer). Se conserva porque 11-cobertura la declara '
+  'y para que un grant futuro no abra la tabla sin filtro.';
+
+comment on policy series_cita_alta on public.series_cita is
+  'Dormida desde T-011b (ADR-069): authenticated no tiene INSERT sobre la tabla y las series solo '
+  'nacen por agenda_crear_serie. El vínculo (T-029) lo sigue exigiendo el disparador '
+  'exigir_vinculo_agenda dentro de la función. Se conserva porque 11-cobertura la declara y para '
+  'que un grant futuro no abra la tabla sin filtro.';
