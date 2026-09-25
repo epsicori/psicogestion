@@ -37,6 +37,12 @@
 \set NVEC '\'f0050001-0000-4000-8000-000000000008\''
 \set ANA  '\'11111111-1111-4111-8111-111111111111\''
 
+-- T-012b · Paciente y nota propios de la sección F (cotejo sobre-fila): no
+-- reutiliza PCAD, porque D ya cuenta «tres versiones» de esa cadena y D.1
+-- está afinada a esa cuenta exacta.
+\set PCOT '\'d012b001-0000-4000-8000-000000000001\''
+\set NCOT '\'f012b001-0000-4000-8000-000000000001\''
+
 \echo ''
 
 \echo '=== 14-cadena-huellas ==='
@@ -47,7 +53,8 @@ insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) 
 
   (:PCAD, 'Carla', 'Cadena', :PRO1, :CA),
   (:PDEMO, 'Dora', 'Demostración', :PRO1, :CA),
-  (:PVEC, 'Vera', 'Vector', :ANA, :CA);
+  (:PVEC, 'Vera', 'Vector', :ANA, :CA),
+  (:PCOT, 'Cora', 'Cotejo', :PRO1, :CA);
 
 insert into public.notas_clinicas (id, paciente_id, autor_id) values
 
@@ -61,7 +68,9 @@ insert into public.notas_clinicas (id, paciente_id, autor_id) values
 
   (:NDEMO, :PDEMO, :PRO1),
 
-  (:NVEC, :PVEC, :ANA);
+  (:NVEC, :PVEC, :ANA),
+
+  (:NCOT, :PCOT, :PRO1);
 
 -- =========================================================================
 -- A · Las fijaciones de 01-fijacion.sql ya forman cadenas de verdad
@@ -605,25 +614,31 @@ alter table public.notas_clinicas_versiones disable trigger impedir_modificacion
 -- posición 2 deja de cuadrar (huella_no_coincide) pero la posición 3 sigue
 -- encadenando bien, porque su huella_anterior sigue apuntando a la huella
 -- ORIGINAL, sin tocar, de la posición 2. Por eso la manipulación de una
--- intermedia señala EXACTAMENTE esa posición y ninguna otra.
+-- intermedia señala EXACTAMENTE esa posición y ninguna otra por la rama de
+-- huella_no_coincide.
+--
+-- Desde T-012b el mismo `replace` también desalinea el sobre con la fila: el
+-- `cuerpo` que dice `contenido_canonico` (ahora "MANIPULADO") ya no coincide
+-- con la columna `cuerpo`, intacta ("cad-b"). La posición 2 sale señalada
+-- DOS VECES, una por cada rama del `union all`, y ambas son ciertas: la
+-- huella no cuadra con sus bytes y, por separado, el sobre tampoco cuadra
+-- con la fila. No es redundante: cada motivo prueba una comprobación
+-- distinta del verificador (T-012b, criterio 2).
 
 update public.notas_clinicas_versiones
    set contenido_canonico = replace(contenido_canonico, 'cad-b', 'MANIPULADO')
  where nota_id = :NCADB;
 
 select pg_temp.assert(
-  (select count(*) from public.verificar_cadena_huellas(:PCAD)) = 1,
-  'Manipulada la posición intermedia (NCADB), el verificador señala EXACTAMENTE una fila'
+  (select count(*) from public.verificar_cadena_huellas(:PCAD)) = 2,
+  'Manipulada la posición intermedia (NCADB), el verificador señala EXACTAMENTE dos filas (T-012b: huella y sobre)'
 );
 
 select pg_temp.assert(
-  (select posicion_cadena from public.verificar_cadena_huellas(:PCAD)) = 2,
-  'La fila señalada es la posición 2 (NCADB) y ninguna anterior'
-);
-
-select pg_temp.assert(
-  (select motivo from public.verificar_cadena_huellas(:PCAD)) = 'huella_no_coincide',
-  'El motivo es huella_no_coincide: el contenido cambió, la huella guardada no'
+  (select array_agg(motivo || '@' || posicion_cadena order by motivo)
+     from public.verificar_cadena_huellas(:PCAD))
+    = array['huella_no_coincide@2', 'sobre_no_coincide_con_fila@2'],
+  'Las dos filas son de la posición 2 (NCADB): huella_no_coincide y sobre_no_coincide_con_fila'
 );
 
 -- Se restaura para que las comprobaciones siguientes partan de una cadena sana.
@@ -639,8 +654,12 @@ select pg_temp.assert(
 
 -- --- D.2 · Criterio 8 («no reserializa»), en sus dos sentidos ---
 -- 1) Reescribir la COLUMNA `cuerpo` con las claves en otro orden y espacios
---    de más (jsonb-equivalente, distinto en bytes): el verificador NO LO VE,
---    porque no deriva nada de `cuerpo`, solo lee `contenido_canonico`.
+--    de más (jsonb-equivalente, distinto en bytes): el verificador NO LO VE
+--    por huella_no_coincide, porque no deriva nada de `cuerpo` para la
+--    huella, solo lee `contenido_canonico`. Desde T-012b el cotejo del sobre
+--    (comprobación 6.3) SÍ lo ve, pero comparando JSONB (`c.cuerpo_jsonb`),
+--    no bytes: reescribir a una forma jsonb-EQUIVALENTE sigue sin señalarse,
+--    exactamente lo que exige el criterio 6(d) del ticket.
 
 update public.notas_clinicas_versiones
    set cuerpo = '{ "t" :   "cad-b" }'
@@ -648,7 +667,7 @@ update public.notas_clinicas_versiones
 
 select pg_temp.assert(
   (select count(*) from public.verificar_cadena_huellas(:PCAD)) = 0,
-  'Criterio 8.1: reescribir `cuerpo` (jsonb-equivalente, distinto en bytes) no lo detecta el verificador'
+  'Criterio 8.1 / 6(d) de T-012b: reescribir `cuerpo` (jsonb-equivalente, distinto en bytes) no lo detecta el verificador'
 );
 
 update public.notas_clinicas_versiones
@@ -671,6 +690,11 @@ update public.notas_clinicas_versiones
 select pg_temp.assert(
   (select count(*) from public.verificar_cadena_huellas(:PCAD)) = 1,
   'Criterio 8.2: reescribir `contenido_canonico` (jsonb-equivalente, distinto en bytes) SÍ lo detecta el verificador'
+);
+
+select pg_temp.assert(
+  (select motivo from public.verificar_cadena_huellas(:PCAD)) = 'huella_no_coincide',
+  'Criterio 8.2: el motivo es huella_no_coincide (los bytes cambiaron), no sobre_no_coincide_con_fila (el sobre sigue siendo el mismo JSONB que cuerpo)'
 );
 
 update public.notas_clinicas_versiones
@@ -756,6 +780,509 @@ select pg_temp.assert(
 );
 
 drop table t005_antes_de_fusion;
+
+-- =========================================================================
+-- F · Cotejo sobre-fila (T-012b): el verificador coteja el sobre sellado con
+--     las columnas de la fila. `fn_sellar_version_nota()` compara sobre y
+--     fila SOLO `before insert` (6.2-6.7, 6.10); con los cerrojos levantados
+--     un `update` puede alterar una columna sin tocar el sobre y la huella
+--     sigue cuadrando (el sobre no cambió). Esta sección demuestra el
+--     escenario de M1 de T-012a (`alcance` alterado por debajo) y las otras
+--     seis columnas que `lib/huella/firmar.ts` copia del sobre.
+-- =========================================================================
+
+call pg_temp.reset_sesion();
+
+-- F.0 · Dos versiones HONESTAS de NCOT, con anotaciones_reservadas y
+-- motivo_cambio no nulos en la segunda: la gemela positiva de toda la
+-- sección. numero_version 1 y 2 son también posicion_cadena 1 y 2, porque
+-- PCOT es un paciente nuevo con una sola nota (NCOT).
+
+insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
+  (:NCOT, '{"t":"cot-1"}',
+   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:40:00.123+00', '{"t":"cot-1"}'::jsonb),
+   :PRO1, timestamptz '2026-08-29 09:40:00.123+00');
+
+insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, anotaciones_reservadas, motivo_cambio, autor_id, creada_en) values
+  (:NCOT, '{"t":"cot-2"}',
+   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:41:00.456+00', '{"t":"cot-2"}'::jsonb,
+                         'reservada', 'Aclaración (T-012b)'),
+   'reservada', 'Aclaración (T-012b)', :PRO1, timestamptz '2026-08-29 09:41:00.456+00');
+
+select pg_temp.assert(
+  (select count(*) from public.verificar_cadena_huellas(:PCOT)) = 0,
+  'F.0 · gemela positiva: dos versiones honestas de NCOT (con anotaciones_reservadas y motivo_cambio no nulos en la segunda) dan cero filas'
+);
+
+-- F.0 · zona: sin `at time zone 'UTC'` en el cotejo de creada_en/firmada_en,
+-- toda fila saldría divergente en una sesión que no esté en UTC.
+select current_setting('TimeZone') as valor \gset t012b_zona_
+set timezone = 'Pacific/Kiritimati';
+select pg_temp.assert(
+  (select count(*) from public.verificar_cadena_huellas(:PCOT)) = 0,
+  'F.0 · zona: en sesión Pacific/Kiritimati, la cadena honesta de PCOT sigue dando cero filas'
+);
+set timezone = :'t012b_zona_valor';
+
+-- F.0 · permisos: ni anon, ni authenticated, ni service_role tienen EXECUTE
+-- sobre verificar_cadena_huellas(uuid). `create or replace` conserva los
+-- permisos de la definición original: si alguien lo cambiara por un `drop` +
+-- `create`, Supabase concedería EXECUTE por defecto y esta aserción lo
+-- atraparía.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.verificar_cadena_huellas(uuid)', 'execute'),
+  'F.0 · permisos: anon sigue sin EXECUTE sobre verificar_cadena_huellas(uuid)'
+);
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.verificar_cadena_huellas(uuid)', 'execute'),
+  'F.0 · permisos: authenticated sigue sin EXECUTE sobre verificar_cadena_huellas(uuid)'
+);
+select pg_temp.assert(
+  not has_function_privilege('service_role', 'public.verificar_cadena_huellas(uuid)', 'execute'),
+  'F.0 · permisos: service_role sigue sin EXECUTE sobre verificar_cadena_huellas(uuid)'
+);
+
+-- Los cerrojos, igual que en la sección D: el REVOKE de T-004 muerde también
+-- al propietario.
+
+grant update on public.notas_clinicas_versiones to postgres;
+
+alter table public.notas_clinicas_versiones disable trigger impedir_modificacion_notas_clinicas_versiones;
+
+-- F.1 · alcance cambiado por debajo (M1 de T-012a): el escenario exacto que
+-- este ticket existe para cerrar. Sin la migración de T-012b, esta es la
+-- aserción que falla PRIMERO (criterio 2): el verificador de T-005 no mira
+-- ninguna columna que el sobre repita, así que `verificar_cadena_huellas()`
+-- da cero filas aquí y `array_agg` sobre cero filas da NULL, distinto del
+-- array esperado.
+
+update public.notas_clinicas_versiones
+   set alcance = 'conjunta'
+ where nota_id = :NCOT and numero_version = 1;
+
+select pg_temp.assert(
+  (select array_agg(motivo || '@' || posicion_cadena order by motivo)
+     from public.verificar_cadena_huellas(:PCOT)) = array['sobre_no_coincide_con_fila@1'],
+  'F.1 · alcance cambiado por debajo (M1 de T-012a): con los cerrojos levantados, `update … set alcance = ''conjunta''` sobre una versión sellada `individual` hace que verificar_cadena_huellas(PCOT) devuelva exactamente una fila, de esa versión, con motivo sobre_no_coincide_con_fila'
+);
+
+select pg_temp.assert(
+  (select extensions.digest(convert_to(contenido_canonico, 'UTF8') || huella_anterior, 'sha256')
+     from public.notas_clinicas_versiones where nota_id = :NCOT and numero_version = 1)
+    = (select huella from public.notas_clinicas_versiones where nota_id = :NCOT and numero_version = 1),
+  'F.1 · la huella de la fila sigue cuadrando con sus bytes guardados: alcance no forma parte del sobre, así que huella_no_coincide NO la señala — solo el cotejo sobre-fila la ve'
+);
+
+update public.notas_clinicas_versiones
+   set alcance = 'individual'
+ where nota_id = :NCOT and numero_version = 1;
+
+select pg_temp.assert(
+  (select count(*) from public.verificar_cadena_huellas(:PCOT)) = 0,
+  'F.1 · restaurada `alcance`, la cadena de PCOT vuelve a estar sana'
+);
+
+-- F.2-F.9 · una negativa por columna cotejada, cada una con su propia
+-- restauración a cero filas. `pg_temp.t012b_caso()` recibe el fragmento
+-- `set` y el fragmento `restaura` ya formados (con `format(...)` del lado de
+-- fuera, donde `:PRO1`/`:PRO2` SÍ se sustituyen — a diferencia de dentro de
+-- un cuerpo `$$...$$`, donde no se sustituyen: por eso nota y paciente se
+-- pasan como parámetros).
+create or replace function pg_temp.t012b_caso(
+  p_nota uuid, p_paciente uuid, p_numero_version integer,
+  p_set text, p_restaura text, p_esperado text[], p_rotulo text
+) returns void
+language plpgsql
+as $$
+begin
+  execute format(
+    'update public.notas_clinicas_versiones set %s where nota_id = %L and numero_version = %s',
+    p_set, p_nota, p_numero_version);
+  perform pg_temp.assert(
+    (select array_agg(motivo || '@' || posicion_cadena order by motivo)
+       from public.verificar_cadena_huellas(p_paciente)) = p_esperado,
+    p_rotulo
+  );
+  execute format(
+    'update public.notas_clinicas_versiones set %s where nota_id = %L and numero_version = %s',
+    p_restaura, p_nota, p_numero_version);
+  perform pg_temp.assert(
+    (select count(*) from public.verificar_cadena_huellas(p_paciente)) = 0,
+    p_rotulo || ' — restaurada, cero filas'
+  );
+end;
+$$;
+
+-- F.2 · autor_id (comprobación 6.2)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 1,
+  format('autor_id = %L', :PRO2),
+  format('autor_id = %L', :PRO1),
+  array['sobre_no_coincide_con_fila@1'],
+  'F.2 · autor_id cambiado por debajo: el verificador señala exactamente esa versión (comprobación 6.2)'
+);
+
+-- F.3 · cuerpo no equivalente (comprobación 6.3)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 1,
+  format('cuerpo = %L', '{"t":"otro"}'),
+  format('cuerpo = %L', '{"t":"cot-1"}'),
+  array['sobre_no_coincide_con_fila@1'],
+  'F.3 · cuerpo cambiado por debajo (no jsonb-equivalente al sobre): el verificador señala exactamente esa versión (comprobación 6.3)'
+);
+
+-- F.4 · anotaciones_reservadas: NULL en la fila -> '' por debajo (sentido 1)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 1,
+  format('anotaciones_reservadas = %L', ''),
+  format('anotaciones_reservadas = %L', null::text),
+  array['sobre_no_coincide_con_fila@1'],
+  'F.4 · anotaciones_reservadas NULL -> '''' por debajo: el verificador señala exactamente esa versión (comprobación 6.4)'
+);
+
+-- F.5 · anotaciones_reservadas: cadena en la fila -> NULL por debajo (sentido 2)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 2,
+  format('anotaciones_reservadas = %L', null::text),
+  format('anotaciones_reservadas = %L', 'reservada'),
+  array['sobre_no_coincide_con_fila@2'],
+  'F.5 · anotaciones_reservadas cadena -> NULL por debajo: el verificador señala exactamente esa versión (comprobación 6.4)'
+);
+
+-- F.6 · motivo_cambio: NULL en la fila -> cadena por debajo (sentido 1)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 1,
+  format('motivo_cambio = %L', 'inventado'),
+  format('motivo_cambio = %L', null::text),
+  array['sobre_no_coincide_con_fila@1'],
+  'F.6 · motivo_cambio NULL -> cadena por debajo: el verificador señala exactamente esa versión (comprobación 6.6)'
+);
+
+-- F.7 · motivo_cambio: cadena en la fila -> otra cadena por debajo (sentido 2)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 2,
+  format('motivo_cambio = %L', 'Otro motivo'),
+  format('motivo_cambio = %L', 'Aclaración (T-012b)'),
+  array['sobre_no_coincide_con_fila@2'],
+  'F.7 · motivo_cambio cadena -> otra cadena por debajo: el verificador señala exactamente esa versión (comprobación 6.6)'
+);
+
+-- F.8 · esquema_version (comprobación 6.5)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 1,
+  format('esquema_version = %s', 2),
+  format('esquema_version = %s', 3),
+  array['sobre_no_coincide_con_fila@1'],
+  'F.8 · esquema_version cambiado por debajo (3 -> 2): el verificador señala exactamente esa versión (comprobación 6.5)'
+);
+
+-- F.9 · creada_en +1 ms (comprobación 6.7)
+select pg_temp.t012b_caso(
+  :NCOT, :PCOT, 1,
+  $set$creada_en = creada_en + interval '1 millisecond'$set$,
+  $set$creada_en = creada_en - interval '1 millisecond'$set$,
+  array['sobre_no_coincide_con_fila@1'],
+  'F.9 · creada_en desplazado un milisegundo por debajo: el verificador señala exactamente esa versión (comprobación 6.7)'
+);
+
+-- F.9b · firmada_en AISLADO (comprobación 6.7, hallazgo BAJA de la revisión
+-- SQL): F.9 mueve la columna `creada_en`, y como el predicado coteja las
+-- claves `creada_en` y `firmada_en` contra la MISMA `c.creada_en_iso`
+-- (derivada de esa columna), F.9 enciende las líneas 146 y 147 A LA VEZ — si
+-- se quitara cualquiera de las dos, F.9 seguiría en verde. F.9b deja la
+-- columna `creada_en` intacta y solo cambia la clave `firmada_en` DENTRO del
+-- sobre, con la huella recalculada sobre esos bytes nuevos (huella bien
+-- calculada: el verificador nunca reserializa, ADR-035), para que solo la
+-- línea 147 se encienda.
+--
+-- Sobre numero_version 2 (la ÚLTIMA de NCOT), no la 1: recalcular la huella
+-- de una versión que tiene un eslabón siguiente rompería ADEMÁS el
+-- encadenado (huella_anterior de v2 dejaría de casar con la huella nueva de
+-- v1), y eslabon_desencadenado ensuciaría la aserción exacta de abajo. Sobre
+-- la última versión, no hay ningún eslabón siguiente que le importe.
+--
+-- `regexp_replace` sobre el sobre guardado, no `pg_temp.sobre_prueba()`: las
+-- tres claves `abierta_en`/`creada_en`/`firmada_en` de NCOT v2 valen el MISMO
+-- literal ("2026-08-29T09:41:00.456Z"), así que solo el patrón con el nombre
+-- de la clave delante distingue cuál de las tres se toca.
+select contenido_canonico as valor from public.notas_clinicas_versiones
+ where nota_id = :NCOT and numero_version = 2
+\gset t012b_f9b_original_
+select encode(huella, 'hex') as valor from public.notas_clinicas_versiones
+ where nota_id = :NCOT and numero_version = 2
+\gset t012b_f9b_huella_original_
+
+select regexp_replace(
+         :'t012b_f9b_original_valor',
+         '"firmada_en":"2026-08-29T09:41:00\.456Z"',
+         '"firmada_en":"2026-08-29T09:41:00.457Z"'
+       ) as valor
+\gset t012b_f9b_nuevo_
+
+select pg_temp.assert(
+  :'t012b_f9b_nuevo_valor' <> :'t012b_f9b_original_valor',
+  'F.9b · el patrón encontró y cambió la clave firmada_en (si esto fallara, el resto de F.9b no probaría nada)'
+);
+
+update public.notas_clinicas_versiones
+   set contenido_canonico = :'t012b_f9b_nuevo_valor',
+       huella = extensions.digest(convert_to(:'t012b_f9b_nuevo_valor', 'UTF8') || huella_anterior, 'sha256')
+ where nota_id = :NCOT and numero_version = 2;
+
+select pg_temp.assert(
+  (select array_agg(motivo || '@' || posicion_cadena order by motivo)
+     from public.verificar_cadena_huellas(:PCOT)) = array['sobre_no_coincide_con_fila@2'],
+  'F.9b · firmada_en desalineado por sí solo (creada_en cuadra y la huella cuadra con el sobre nuevo): el verificador señala exactamente esa versión, y solo con sobre_no_coincide_con_fila (comprobación 6.7, línea 147 aislada de la 146)'
+);
+
+-- Demostración de guarda (.claude/rules/pruebas.md): se redefine la función
+-- SIN la línea 147, dentro de esta misma transacción, y se comprueba que la
+-- fila de arriba deja de señalarse; luego se restaura la definición exacta
+-- de la migración. Cuerpo copiado de
+-- supabase/migrations/20260924150000_verificador_coteja_sobre_y_fila.sql
+-- salvo esa línea.
+create or replace function public.verificar_cadena_huellas(p_paciente_id uuid default null)
+returns table (
+  paciente_id     uuid,
+  posicion_cadena integer,
+  version_id      uuid,
+  nota_id         uuid,
+  creada_en       timestamptz,
+  motivo          text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with c as (
+    select
+      v.paciente_id, v.posicion_cadena, v.id as version_id, v.nota_id, v.creada_en,
+      v.huella, v.huella_anterior, v.contenido_canonico, v.algoritmo_version,
+      lag(v.huella) over (partition by v.paciente_id order by v.posicion_cadena) as huella_prev_real,
+      lag(v.posicion_cadena) over (partition by v.paciente_id order by v.posicion_cadena) as posicion_prev,
+      v.cuerpo, v.anotaciones_reservadas, v.autor_id, v.esquema_version, v.motivo_cambio, v.alcance,
+      case when pg_input_is_valid(v.contenido_canonico, 'jsonb')
+           then v.contenido_canonico::jsonb end                                   as sobre,
+      case when pg_input_is_valid(v.cuerpo, 'jsonb')
+           then v.cuerpo::jsonb end                                               as cuerpo_jsonb,
+      to_jsonb(to_char(v.creada_en at time zone 'UTC',
+                       'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))                          as creada_en_iso
+    from public.notas_clinicas_versiones v
+    where p_paciente_id is null or v.paciente_id = p_paciente_id
+  )
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'era_desconocida'::text as motivo
+    from c
+   where c.algoritmo_version <> 1
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'huella_no_coincide'::text
+    from c
+   where c.algoritmo_version = 1
+     and extensions.digest(convert_to(c.contenido_canonico, 'UTF8') || c.huella_anterior, 'sha256')
+         <> c.huella
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'genesis_incorrecto'::text
+    from c
+   where c.algoritmo_version = 1
+     and c.posicion_prev is null
+     and c.posicion_cadena = 1
+     and c.huella_anterior <> decode(repeat('00', 32), 'hex')
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'hueco_de_posicion'::text
+    from c
+   where c.algoritmo_version = 1
+     and (
+       (c.posicion_prev is null and c.posicion_cadena <> 1)
+       or (c.posicion_prev is not null and c.posicion_cadena <> c.posicion_prev + 1)
+     )
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'eslabon_desencadenado'::text
+    from c
+   where c.algoritmo_version = 1
+     and c.posicion_prev is not null
+     and c.posicion_cadena = c.posicion_prev + 1
+     and c.huella_anterior <> c.huella_prev_real
+  union all
+  -- sobre_no_coincide_con_fila SIN la línea 147 (firmada_en): la demostración
+  -- de guarda de F.9b vive de que esta rama, tal cual, deje pasar el caso.
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'sobre_no_coincide_con_fila'::text
+    from c
+   where c.algoritmo_version = 1
+     and (
+          c.sobre is null
+       or jsonb_typeof(c.sobre) <> 'object'
+       or (c.sobre -> 'alcance')                is distinct from to_jsonb(c.alcance::text)
+       or (c.sobre -> 'autor_id')               is distinct from to_jsonb(c.autor_id::text)
+       or (c.sobre -> 'cuerpo')                 is distinct from c.cuerpo_jsonb
+       or (c.sobre -> 'anotaciones_reservadas') is distinct from coalesce(to_jsonb(c.anotaciones_reservadas), 'null'::jsonb)
+       or (c.sobre -> 'esquema_version')        is distinct from to_jsonb(c.esquema_version)
+       or (c.sobre -> 'motivo_cambio')          is distinct from coalesce(to_jsonb(c.motivo_cambio), 'null'::jsonb)
+       or (c.sobre -> 'creada_en')              is distinct from c.creada_en_iso
+       -- (línea 147, firmada_en, QUITADA A PROPÓSITO para esta demostración)
+     )
+  order by 1, 2, 6;
+$$;
+
+select pg_temp.assert(
+  (select count(*) from public.verificar_cadena_huellas(:PCOT)) = 0,
+  'F.9b · demostración de guarda: SIN la línea 147 (firmada_en) en el predicado, la MISMA fila con firmada_en desalineado ya no se señala — la cadena vuelve a darse por sana. Prueba que la aserción de arriba depende de esa línea y no de otra.'
+);
+
+-- Se restaura la definición EXACTA de la migración (con la línea 147).
+create or replace function public.verificar_cadena_huellas(p_paciente_id uuid default null)
+returns table (
+  paciente_id     uuid,
+  posicion_cadena integer,
+  version_id      uuid,
+  nota_id         uuid,
+  creada_en       timestamptz,
+  motivo          text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with c as (
+    select
+      v.paciente_id, v.posicion_cadena, v.id as version_id, v.nota_id, v.creada_en,
+      v.huella, v.huella_anterior, v.contenido_canonico, v.algoritmo_version,
+      lag(v.huella) over (partition by v.paciente_id order by v.posicion_cadena) as huella_prev_real,
+      lag(v.posicion_cadena) over (partition by v.paciente_id order by v.posicion_cadena) as posicion_prev,
+      v.cuerpo, v.anotaciones_reservadas, v.autor_id, v.esquema_version, v.motivo_cambio, v.alcance,
+      case when pg_input_is_valid(v.contenido_canonico, 'jsonb')
+           then v.contenido_canonico::jsonb end                                   as sobre,
+      case when pg_input_is_valid(v.cuerpo, 'jsonb')
+           then v.cuerpo::jsonb end                                               as cuerpo_jsonb,
+      to_jsonb(to_char(v.creada_en at time zone 'UTC',
+                       'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))                          as creada_en_iso
+    from public.notas_clinicas_versiones v
+    where p_paciente_id is null or v.paciente_id = p_paciente_id
+  )
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'era_desconocida'::text as motivo
+    from c
+   where c.algoritmo_version <> 1
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'huella_no_coincide'::text
+    from c
+   where c.algoritmo_version = 1
+     and extensions.digest(convert_to(c.contenido_canonico, 'UTF8') || c.huella_anterior, 'sha256')
+         <> c.huella
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'genesis_incorrecto'::text
+    from c
+   where c.algoritmo_version = 1
+     and c.posicion_prev is null
+     and c.posicion_cadena = 1
+     and c.huella_anterior <> decode(repeat('00', 32), 'hex')
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'hueco_de_posicion'::text
+    from c
+   where c.algoritmo_version = 1
+     and (
+       (c.posicion_prev is null and c.posicion_cadena <> 1)
+       or (c.posicion_prev is not null and c.posicion_cadena <> c.posicion_prev + 1)
+     )
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'eslabon_desencadenado'::text
+    from c
+   where c.algoritmo_version = 1
+     and c.posicion_prev is not null
+     and c.posicion_cadena = c.posicion_prev + 1
+     and c.huella_anterior <> c.huella_prev_real
+  union all
+  select c.paciente_id, c.posicion_cadena, c.version_id, c.nota_id, c.creada_en,
+         'sobre_no_coincide_con_fila'::text
+    from c
+   where c.algoritmo_version = 1
+     and (
+          c.sobre is null
+       or jsonb_typeof(c.sobre) <> 'object'
+       or (c.sobre -> 'alcance')                is distinct from to_jsonb(c.alcance::text)
+       or (c.sobre -> 'autor_id')               is distinct from to_jsonb(c.autor_id::text)
+       or (c.sobre -> 'cuerpo')                 is distinct from c.cuerpo_jsonb
+       or (c.sobre -> 'anotaciones_reservadas') is distinct from coalesce(to_jsonb(c.anotaciones_reservadas), 'null'::jsonb)
+       or (c.sobre -> 'esquema_version')        is distinct from to_jsonb(c.esquema_version)
+       or (c.sobre -> 'motivo_cambio')          is distinct from coalesce(to_jsonb(c.motivo_cambio), 'null'::jsonb)
+       or (c.sobre -> 'creada_en')              is distinct from c.creada_en_iso
+       or (c.sobre -> 'firmada_en')             is distinct from c.creada_en_iso
+     )
+  order by 1, 2, 6;
+$$;
+
+revoke all on function public.verificar_cadena_huellas(uuid) from public, anon, authenticated, service_role;
+
+-- … y se restauran los datos de NCOT v2.
+update public.notas_clinicas_versiones
+   set contenido_canonico = :'t012b_f9b_original_valor',
+       huella = decode(:'t012b_f9b_huella_original_valor', 'hex')
+ where nota_id = :NCOT and numero_version = 2;
+
+select pg_temp.assert(
+  (select count(*) from public.verificar_cadena_huellas(:PCOT)) = 0,
+  'F.9b · restaurados firmada_en, la definición de verificar_cadena_huellas() y sus permisos: la cadena de PCOT vuelve a estar sana'
+);
+
+-- 6.4 (anotaciones_reservadas) y 6.6 (motivo_cambio) NO llevan la misma
+-- demostración de guarda: el hueco que el revisor señala ahí no es «quitar
+-- la línea» (F.4-F.7 ya la ejercen con NULL en los dos sentidos), sino que
+-- una reescritura futura con `->>` en vez de `->` perdería la distinción de
+-- tipo sin que ninguna prueba actual lo note. Reproducir F.9b dos veces más
+-- —dos redefiniciones más de la función dentro de la misma transacción, cada
+-- una con su propio riesgo de desincronizarse del cuerpo real— para un hueco
+-- BAJA que hoy solo alcanza la puerta de F.11 (una fila con el disparador de
+-- sellado apagado, ya señalada por autor_id y esquema_version) no compensa
+-- frente a dejarlo escrito aquí para quien redefina la función en T-012c.
+
+-- Los cerrojos vuelven a su sitio, igual que al final de la sección D.
+
+alter table public.notas_clinicas_versiones enable trigger impedir_modificacion_notas_clinicas_versiones;
+
+revoke update on public.notas_clinicas_versiones from postgres;
+
+select pg_temp.assert(
+  not has_table_privilege('postgres', 'public.notas_clinicas_versiones', 'update'),
+  'Los cerrojos de la sección F vuelven a su sitio: postgres ya no tiene UPDATE sobre notas_clinicas_versiones'
+);
+
+select pg_temp.assert(
+  (select tgenabled from pg_trigger where tgname = 'impedir_modificacion_notas_clinicas_versiones') = 'O',
+  'Los cerrojos de la sección F vuelven a su sitio: el disparador impedir_modificacion_notas_clinicas_versiones vuelve a estar activo (''O'')'
+);
+
+-- F.10 · sin falsos positivos en todo el banco: cubre NCONJ (conjunta), NVEC
+-- (sobre real de TypeScript con NFC), P2/NCORR con motivo_cambio y, sobre la
+-- base sembrada, las cinco firmas del seed. Solo PDEMO puede aparecer (F.11,
+-- la fila insertada con el disparador de sellado apagado en la sección C).
+select pg_temp.assert(
+  not exists (
+    select 1 from public.verificar_cadena_huellas() v where v.paciente_id <> :PDEMO
+  ),
+  'F.10 · sin falsos positivos: al final de la sección F, verificar_cadena_huellas() no devuelve ninguna fila de ningún paciente salvo PDEMO'
+);
+
+-- F.11 · la otra puerta: la fila de PDEMO insertada en la sección C con
+-- fn_sellar_version_nota() apagado (sobre con autor_id 2222… frente a la
+-- columna PRO1, esquema_version 2 en el sobre frente a 3 en la columna y
+-- huella falsa) aparece ahora TAMBIÉN como sobre_no_coincide_con_fila,
+-- además de huella_no_coincide.
+select pg_temp.assert(
+  exists (
+    select 1 from public.verificar_cadena_huellas(:PDEMO) where motivo = 'sobre_no_coincide_con_fila'
+  ),
+  'F.11 · la fila de PDEMO, insertada con el disparador de sellado apagado, también sale como sobre_no_coincide_con_fila'
+);
 
 \echo '14-cadena-huellas: completa.'
 

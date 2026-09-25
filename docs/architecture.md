@@ -91,8 +91,16 @@ sobre `pacientes` — esa fila ya la usa la fusión de pacientes (ADR-031) y com
 mismo juego de cerrojos abriría interbloqueos nuevos. `esquema_version = 2` desde el
 ADR-046 (versión 1 nunca existió). El verificador, `verificar_cadena_huellas(uuid)`, vive
 en SQL y no en Node —para que reserializar el objeto sea imposible por construcción, no
-solo por disciplina— y no se concede a `authenticated`. Ejecutable a mano con
-`npm run verificar:huellas`.
+solo por disciplina— y no se concede a `authenticated`. Desde T-012b también coteja, por
+valor y sin reserializar, las siete columnas que el sobre repite (`alcance`, `autor_id`,
+`cuerpo`, `anotaciones_reservadas`, `esquema_version`, `motivo_cambio`, `creada_en`) contra
+la fila que las guarda, con motivo `sobre_no_coincide_con_fila` (ADR-057): así se detecta
+un `update` con los cerrojos levantados que cambie una de esas siete columnas sin tocar el
+sobre. Fuera de este cotejo quedan `nota_id`, hasta T-012c (ADR-067), y `numero_version`,
+sin decisión. Y sigue sin cubrir la reescritura completa de la ÚLTIMA versión de una
+cadena —columna, sobre y huella a la vez, sin eslabón siguiente que la delate—: ese riesgo
+lo acepta el diseño de T-012b y solo lo cierra un anclaje externo, fuera de alcance.
+Ejecutable a mano con `npm run verificar:huellas`.
 
 ### 2 · Solo adición
 

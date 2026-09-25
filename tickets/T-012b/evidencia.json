@@ -1,0 +1,84 @@
+{
+  "ticket": "T-012b",
+  "resumen": "Verificación independiente contra el worktree agent-a47a1a55a62171516, rama worktree-agent-a47a1a55a62171516, HEAD 9d716d8 (árbol limpio salvo el CRLF/LF sin diferencias de contenido en lib/supabase/tipos-bd.ts, confirmado con git diff --exit-code). Los once criterios se ejercieron con comandos reales sobre la base local (supabase_db_Psicogestion): db reset con las 15 migraciones, banco de RLS completo (17/17 módulos, 460 OK), la secuencia de tres pasadas exigida por el criterio 2 (sección F sin migración -> falla en F.1; migración con D.1 sin adaptar -> falla en D.1; estado final -> verde), seed-completo, verificar:huellas íntegro en texto y --json, el guion manual completo del criterio 8 (una manipulación, dos manipulaciones en la misma cadena, restauración con disparador reactivado y permiso retirado), 648 pruebas unitarias, lint/lint:migraciones/build limpios, npm run tipos sin diff y territorio.mjs en verde ejecutado desde el worktree. El ticket no toca pantallas: no hay criterio de interfaz que exija navegador.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "npx supabase db reset aplica todas las migraciones, la nueva incluida, sin errores.",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset",
+      "evidencia": "Applying migration 20260924150000_verificador_coteja_sobre_y_fila.sql... / Seeding data from supabase/seed.sql... / Restarting containers... / Finished supabase db reset on branch main. {\"target\":\"local\",\"version\":\"\",\"message\":\"Reset local database.\"} — ejecutado tres veces durante la verificación (limpia, sin migración temporalmente retirada, y final), siempre sin error."
+    },
+    {
+      "id": 2,
+      "texto": "La prueba negativa del escenario de fallo muerde: con la sección F escrita, la D.1 todavía sin adaptar y sin la migración nueva (tras db reset), npm run test:rls sale con código distinto de cero y la primera aserción fallida es la de F.1.",
+      "veredicto": "PASA",
+      "comando": "Retirada temporal de supabase/migrations/20260924150000_verificador_coteja_sobre_y_fila.sql + reversión temporal de D.1 a su forma pre-T-012b (count=1, tres aserciones escalares) + npx supabase db reset + npm run test:rls; luego, con D.1 aún sin adaptar, se repuso la migración y se repitió db reset + test:rls; ambos pasos deshechos byte a byte al terminar (diff vacío contra el HEAD del commit).",
+      "evidencia": "Paso (ii) sin migración y con D.1 revertida: EXIT=3, primera línea 'psql:<stdin>:3435: ERROR:  ASERCIÓN FALLIDA: F.1 · alcance cambiado por debajo (M1 de T-012a): con los cerrojos levantados, update … set alcance = 'conjunta' sobre una versión sellada individual hace que verificar_cadena_huellas(PCOT) devuelva exactamente una fila, de esa versión, con motivo sobre_no_coincide_con_fila' (el verificador de T-005 da NULL en array_agg, como predice el diseño §3 fila 2). Paso (iii) con la migración repuesta y D.1 aún sin adaptar: EXIT=3, primera línea 'psql:<stdin>:3200: ERROR:  ASERCIÓN FALLIDA: Manipulada la posición intermedia (NCADB), el verificador señala EXACTAMENTE una fila' (ahora hay 2 filas reales, lo que demuestra que la rama nueva también ve la manipulación del cuerpo del sobre). Tras restaurar 14-cadena-huellas.sql exactamente (comprobado con diff sin salida) y volver a aplicar db reset, git status solo muestra lib/supabase/tipos-bd.ts sin diferencias de contenido."
+    },
+    {
+      "id": 3,
+      "texto": "Con la migración aplicada, npm run test:rls pasa con exit 0, incluidas todas las aserciones de la sección F y la D.1 adaptada.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "EXIT=0. 460 líneas 'NOTICE:  OK' y ninguna 'ASERCIÓN FALLIDA'/'ERROR'. Incluye explícitamente: 'OK: F.0 · gemela positiva …' hasta 'OK: F.11 · la fila de PDEMO …', 'OK: Manipulada la posición intermedia (NCADB), el verificador señala EXACTAMENTE dos filas (T-012b: huella y sobre)', el array_agg de D.1 = ['huella_no_coincide@2','sobre_no_coincide_con_fila@2'], y D.2 8.1/8.2 con sus motivos. Los 17 módulos terminan en 'completa.' y el guion cierra con ROLLBACK."
+    },
+    {
+      "id": 4,
+      "texto": "F.1 (el escenario de M1): con los cerrojos levantados, update … set alcance = 'conjunta' sobre una versión sellada individual hace que verificar_cadena_huellas(PCOT) devuelva exactamente una fila, de esa versión, con motivo sobre_no_coincide_con_fila, y la huella de la fila sigue cuadrando. Restaurada, cero filas.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (aserciones F.1, incluidas en la corrida verde del criterio 3)",
+      "evidencia": "NOTICE:  OK: F.1 · alcance cambiado por debajo (M1 de T-012a): … devuelve exactamente una fila, de esa versión, con motivo sobre_no_coincide_con_fila / NOTICE:  OK: F.1 · la huella de la fila sigue cuadrando con sus bytes guardados: alcance no forma parte del sobre, así que huella_no_coincide NO la señala — solo el cotejo sobre-fila la ve / NOTICE:  OK: F.1 · restaurada alcance, la cadena de PCOT vuelve a estar sana."
+    },
+    {
+      "id": 5,
+      "texto": "Una negativa por columna cotejada (F.2–F.9): autor_id, cuerpo, anotaciones_reservadas (dos sentidos), motivo_cambio (dos sentidos), esquema_version, creada_en. Cada una: exactamente una fila, esa versión, motivo sobre_no_coincide_con_fila; restaurada, cero.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (aserciones F.2 a F.9, corrida verde del criterio 3)",
+      "evidencia": "NOTICE:  OK: F.2 · autor_id cambiado por debajo … / F.3 · cuerpo cambiado por debajo (no jsonb-equivalente) … / F.4 · anotaciones_reservadas NULL -> '' … / F.5 · anotaciones_reservadas cadena -> NULL … / F.6 · motivo_cambio NULL -> cadena … / F.7 · motivo_cambio cadena -> otra cadena … / F.8 · esquema_version cambiado por debajo (3 -> 2) … / F.9 · creada_en desplazado un milisegundo por debajo …, cada una con su línea '— restaurada, cero filas' inmediatamente después. El banco añade además F.9b (firmada_en aislado de creada_en, con demostración de guarda quitando la línea 147), fuera del contrato pero coherente con él."
+    },
+    {
+      "id": 6,
+      "texto": "Sin falsos positivos: (a) gemela positiva de F da cero filas; (b) la misma en Pacific/Kiritimati da cero filas; (c) al final de F, verificar_cadena_huellas() no devuelve fila de ningún paciente salvo PDEMO; (d) reescribir cuerpo de forma jsonb-equivalente sigue sin señalarse.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (aserciones F.0 y F.10, D.2 8.1, corrida verde del criterio 3)",
+      "evidencia": "NOTICE:  OK: F.0 · gemela positiva: dos versiones honestas de NCOT (con anotaciones_reservadas y motivo_cambio no nulos en la segunda) dan cero filas / NOTICE:  OK: F.0 · zona: en sesión Pacific/Kiritimati, la cadena honesta de PCOT sigue dando cero filas / NOTICE:  OK: F.10 · sin falsos positivos: al final de la sección F, verificar_cadena_huellas() no devuelve ninguna fila de ningún paciente salvo PDEMO / NOTICE:  OK: Criterio 8.1 / 6(d) de T-012b: reescribir cuerpo (jsonb-equivalente, distinto en bytes) no lo detecta el verificador."
+    },
+    {
+      "id": 7,
+      "texto": "Tras npx supabase db reset + npm run seed, npm run verificar:huellas imprime 'cadena íntegra: cero anomalías.' (exit 0) y --json imprime [].",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset && npm run seed && npm run verificar:huellas && npm run verificar:huellas -- --json",
+      "evidencia": "seed: completado. / verificar:huellas — cadena íntegra: cero anomalías. (EXIT=0) / npm run verificar:huellas -- --json → [] (EXIT=0)."
+    },
+    {
+      "id": 8,
+      "texto": "Manual, contra la base sembrada: con el update de alcance y los cerrojos levantados, verificar:huellas sale con exit 1 y nombra paciente, versión, nota, fecha y sobre_no_coincide_con_fila; --json y --paciente lo mismo; con una segunda manipulación en la misma cadena aparece la línea 'y N anomalía(s) más en esta cadena'. Restaurado, íntegra.",
+      "veredicto": "PASA",
+      "comando": "docker exec -i supabase_db_Psicogestion psql -U postgres -d postgres -c \"grant update … ; alter table … disable trigger … ; update … set alcance='conjunta' … returning …\" seguido de npm run verificar:huellas [-- --json] [-- --paciente <uuid>]; segunda manipulación con update … set cuerpo='{\"x\":1}' sobre otra versión de la misma cadena; restauración de alcance, restauración de cuerpo al valor exacto tomado de contenido_canonico->'cuerpo', enable trigger, revoke update.",
+      "evidencia": "1ª manipulación: 'verificar:huellas — 1 anomalía(s) en 1 cadena(s): · paciente d0080001-0000-4000-8000-000000000003 — primer eslabón roto: posición 1 (versión ed9a3bd2-…, nota f0080001-…, creada 2026-08-23T07:00:00+00:00) — sobre_no_coincide_con_fila' (EXIT=1). --json → array de un elemento con \"motivo\": \"sobre_no_coincide_con_fila\" y los mismos campos (EXIT=1). --paciente <uuid> → misma línea (EXIT=1). 2ª manipulación (cuerpo de la versión en posición 2): 'verificar:huellas — 2 anomalía(s) en 1 cadena(s): · … posición 1 … — sobre_no_coincide_con_fila / y 1 anomalía(s) más en esta cadena: sobre_no_coincide_con_fila (posición 2)' (EXIT=1). Restauración: 'verificar:huellas — cadena íntegra: cero anomalías.' (EXIT=0); comprobado además tgenabled='O' y has_table_privilege('postgres','public.notas_clinicas_versiones','update')=f."
+    },
+    {
+      "id": 9,
+      "texto": "anon, authenticated y service_role siguen sin EXECUTE sobre public.verificar_cadena_huellas(uuid).",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (aserciones F.0 · permisos, corrida verde del criterio 3)",
+      "evidencia": "NOTICE:  OK: F.0 · permisos: anon sigue sin EXECUTE sobre verificar_cadena_huellas(uuid) / NOTICE:  OK: F.0 · permisos: authenticated sigue sin EXECUTE sobre verificar_cadena_huellas(uuid) / NOTICE:  OK: F.0 · permisos: service_role sigue sin EXECUTE sobre verificar_cadena_huellas(uuid)."
+    },
+    {
+      "id": 10,
+      "texto": "npm run tipos no cambia lib/supabase/tipos-bd.ts (git diff --exit-code sobre ese fichero): la firma de la función es la misma.",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset && npm run tipos && git diff --exit-code lib/supabase/tipos-bd.ts",
+      "evidencia": "npm run tipos termina sin error (solo el aviso de normalización de fin de línea de Git); git diff --exit-code lib/supabase/tipos-bd.ts sale con EXIT=0, sin salida de diff."
+    },
+    {
+      "id": 11,
+      "texto": "npm test, npm run lint, npm run lint:migraciones y npm run build limpios; node ~/.claude/pipeline/territorio.mjs T-012b en verde.",
+      "veredicto": "PASA",
+      "comando": "npm test; npm run lint; npm run lint:migraciones; npm run build; (cd al worktree) node ~/.claude/pipeline/territorio.mjs T-012b",
+      "evidencia": "npm test → Test Files 63 passed (63), Tests 648 passed (648). npm run lint → 2 problems (0 errors, 2 warnings) preexistentes en lib/cuentas/accesos.test.ts, ajenos al ticket. npm run lint:migraciones → 'lint-migraciones: 15 migración(es) limpias.'. npm run build → 'Compiled successfully', 'Finished TypeScript', 15/15 páginas generadas. node ~/.claude/pipeline/territorio.mjs T-012b, ejecutado con cwd en el worktree (fuera de él cuenta ficheros sin seguimiento ajenos del árbol principal, como advierte el diseño §4 riesgo 8) → 'T-012b: 5 fichero(s) tocado(s), todos dentro de supabase/migrations/*_verificador_coteja_sobre_y_fila.sql, scripts/rls/14-cadena-huellas.sql, scripts/rls/README.md, scripts/verificar-huellas.mjs, docs/architecture.md.' (EXIT=0)."
+    }
+  ],
+  "regresiones": []
+}

@@ -6,7 +6,7 @@ fase: 2
 prioridad: alta
 depende_de: [T-012a]
 bloquea: [T-012]
-estado: pendiente
+estado: hecho
 territorio:
   - supabase/migrations/*_verificador_coteja_sobre_y_fila.sql
   - scripts/rls/14-cadena-huellas.sql

@@ -1,0 +1,86 @@
+{
+  "ticket": "T-012b",
+  "revisor": "revisor-cierre (consolida revision-sql.md y revision-ts.md; pasada final sobre 9d716d8)",
+  "fecha": "2026-09-24",
+  "base": "main",
+  "rama": "worktree-agent-a47a1a55a62171516",
+  "commit_revisado": "9d716d8",
+  "veredicto": "aprobado",
+  "altas": 0,
+  "medias": 2,
+  "bajas": 6,
+  "hallazgos": [
+    {
+      "id": "M1",
+      "severidad": "MEDIA",
+      "estado": "a cerrar en el commit de integracion a main (SQL-M1 = TS-M2)",
+      "archivo": "supabase/migrations/20260915130000_alcance_en_el_sobre.sql",
+      "linea": 161,
+      "descripcion": "La rama no deja docs/bitacora/T-012b.md ni docs/state.md (regla 4), ni anota en state.md §Hallazgos que el comentario de fn_sellar_version_nota() ('el verificador tampoco detecta un alcance alterado por debajo') es falso desde T-012b, como pide el diseño §1.4.",
+      "escenario": "T-012c (ADR-067) reescribe fn_sellar_version_nota() entera con create or replace y copia el comentario falso, que además remite a una entrada de state.md §Hallazgos que no existe."
+    },
+    {
+      "id": "TS-M1",
+      "severidad": "MEDIA",
+      "estado": "cerrado en 9d716d8",
+      "archivo": "docs/architecture.md",
+      "linea": 98,
+      "descripcion": "El destilado prometía detectar cualquier update de la fila con los cerrojos levantados, y nota_id no se coteja.",
+      "escenario": "update ... set nota_id = <otra nota del mismo paciente en otro episodio> sobre una versión conjunta: verificar:huellas dice 'cadena íntegra', y architecture.md decía que se detectaba."
+    },
+    {
+      "id": "SQL-B1",
+      "severidad": "BAJA",
+      "estado": "cerrado en 9d716d8 (firmada_en, F.9b con demostracion de guarda); 6.4/6.6 riesgo aceptado y escrito en el banco",
+      "archivo": "supabase/migrations/20260924150000_verificador_coteja_sobre_y_fila.sql",
+      "linea": 147,
+      "descripcion": "La línea firmada_en no tenía negativa propia: F.9 enciende a la vez las líneas 146 y 147.",
+      "escenario": "Si en una reescritura (T-012c) se quita la línea 147, el banco sigue en verde; una fila insertada con el sellado apagado y firmada_en distinto de creada_en, con la huella bien calculada, no se señala."
+    },
+    {
+      "id": "TS-B1",
+      "severidad": "BAJA",
+      "estado": "cerrado en 9d716d8",
+      "archivo": "scripts/verificar-huellas.mjs",
+      "linea": 12,
+      "descripcion": "El comentario atribuía a T-012b las anomalías múltiples por versión, que existen desde T-005.",
+      "escenario": "Quien engancha T-009 concluye que antes de T-012b el modo texto no perdía anomalías (genesis_incorrecto + huella_no_coincide en la posición 1), y es al revés."
+    },
+    {
+      "id": "TS-B2",
+      "severidad": "BAJA",
+      "estado": "cerrado en 9d716d8",
+      "archivo": "scripts/verificar-huellas.mjs",
+      "linea": 74,
+      "descripcion": "El order by del jsonb_agg no era total si falta el índice único (paciente_id, posicion_cadena).",
+      "escenario": "Tras drop index notas_clinicas_versiones_cadena_idx y dos versiones en la posición 2 con el mismo motivo, el primer eslabón roto y el orden de --json dependían del plan."
+    },
+    {
+      "id": "TS-B3",
+      "severidad": "BAJA",
+      "estado": "riesgo aceptado, escrito en docs/architecture.md tras TS-M1",
+      "archivo": "docs/architecture.md",
+      "linea": 100,
+      "descripcion": "Reescribir a la vez la columna, el sobre y la huella de la última versión de una cadena no se detecta: no hay eslabón siguiente ni anclaje externo.",
+      "escenario": "update ... set alcance='conjunta', contenido_canonico=<sobre con alcance conjunta>, huella=digest(<ese sobre> || huella_anterior) sobre la última versión: verificar:huellas dice 'cadena íntegra'."
+    },
+    {
+      "id": "N1",
+      "severidad": "BAJA",
+      "estado": "abierto, no bloquea (pasar al diseño de T-012c)",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 1138,
+      "descripcion": "F.9b restaura una copia del verificador escrita a mano en el banco, no la definición de la migración; F.10, F.11 y los módulos 15-17 corren sobre esa copia. Hoy es idéntica (medido), pero nada lo comprueba.",
+      "escenario": "T-012c añade a la migración la línea nota_id y no toca F.9b: tras F.9b el banco reinstala el verificador de T-012b, y un falso positivo de la línea nueva sobre filas honestas sale verde en F.10 y rojo en verificar:huellas sobre la base real."
+    },
+    {
+      "id": "N2",
+      "severidad": "BAJA",
+      "estado": "abierto, no bloquea",
+      "archivo": "docs/architecture.md",
+      "linea": 100,
+      "descripcion": "La frase 'nota_id y numero_version quedan fuera de este cotejo hasta T-012c' da a entender que T-012c cubrirá numero_version; el ADR-067 solo sella nota_id.",
+      "escenario": "Tras T-012c, un auditor lee en el destilado que numero_version ya se coteja, cuando ninguna línea del verificador lo hace."
+    }
+  ]
+}
