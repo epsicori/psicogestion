@@ -91,7 +91,9 @@ export async function cancelarCita(
  * segundo camino de escritura de citas). `esta_y_siguientes`: NO mueve
  * ninguna cita, cambia la regla de la serie y devuelve las propuestas que se
  * generan para que quien llama las confirme una a una
- * (`propuestas.ts::confirmarPropuesta`).
+ * (`propuestas.ts::confirmarPropuesta`). `entrada.fecha` (T-011b) es la
+ * fecha nueva de la cita ancla: desplaza la serie de semana (o de mes, en
+ * `mensual`), no solo de día dentro de la misma.
  */
 export async function editarSerie(
   sesion: Sesion,
@@ -108,6 +110,7 @@ export async function editarSerie(
     p_hora_local: entrada.horaLocal ?? undefined,
     p_duracion_minutos: entrada.duracionMinutos ?? undefined,
     p_zona_horaria: entrada.zonaHoraria ?? undefined,
+    p_fecha: entrada.fecha ?? undefined,
   });
 
   if (error) {
