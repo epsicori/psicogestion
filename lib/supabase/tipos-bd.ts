@@ -2570,10 +2570,22 @@ export type Database = {
           p_dia_semana?: number
           p_duracion_minutos?: number
           p_estado?: Database["public"]["Enums"]["estado_cita"]
+          p_fecha?: string
           p_fin?: string
           p_hora_local?: string
           p_inicio?: string
           p_sala?: string
+          p_zona_horaria?: string
+        }
+        Returns: Json
+      }
+      agenda_previsualizar_edicion_serie: {
+        Args: {
+          p_cita_id: string
+          p_dia_semana?: number
+          p_duracion_minutos?: number
+          p_fecha?: string
+          p_hora_local?: string
           p_zona_horaria?: string
         }
         Returns: Json
@@ -2605,6 +2617,21 @@ export type Database = {
         Returns: string
       }
       bloquear_historia: { Args: never; Returns: number }
+      calcular_propuesta_de_evento: {
+        Args: {
+          p_carga: Json
+          p_cita: Database["public"]["Tables"]["citas"]["Row"]
+          p_tipo: string
+        }
+        Returns: {
+          clasificacion: string
+          fecha: string
+          fin: string
+          hora: string
+          inicio: string
+          zona: string
+        }[]
+      }
       canjear_codigo_recuperacion: {
         Args: { p_codigo: string }
         Returns: {
@@ -2625,6 +2652,12 @@ export type Database = {
       centro_actual: { Args: never; Returns: string }
       centro_principal: { Args: { p_perfil_id: string }; Returns: string }
       centros_actuales: { Args: never; Returns: string[] }
+      citas_afectadas_por_regla: {
+        Args: { p_desde_cita_id?: string; p_serie_id: string }
+        Returns: {
+          cita_id: string
+        }[]
+      }
       clave_de_cifrado: { Args: { p_nombre: string }; Returns: string }
       cobertura_solo_adicion: {
         Args: never
@@ -2657,6 +2690,10 @@ export type Database = {
         Returns: boolean
       }
       desbloqueo_vigente: { Args: never; Returns: string }
+      enesimo_dia_del_mes: {
+        Args: { p_dia_semana: number; p_mes: string; p_ordinal: number }
+        Returns: string
+      }
       es_profesional_asignado: {
         Args: { p_paciente_id: string }
         Returns: boolean
@@ -2676,6 +2713,16 @@ export type Database = {
           rol: Database["public"]["Enums"]["rol_usuario"]
           tiene_pin: boolean
         }[]
+      }
+      fecha_en_regla_nueva: {
+        Args: {
+          p_dia_semana: number
+          p_fecha_cita: string
+          p_fecha_destino?: string
+          p_fecha_origen?: string
+          p_periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
+        }
+        Returns: string
       }
       fijar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
       generar_codigos_recuperacion: { Args: never; Returns: string[] }
@@ -2707,6 +2754,18 @@ export type Database = {
           p_sesiones: number
         }
         Returns: string[]
+      }
+      plan_edicion_serie: {
+        Args: {
+          p_cita: Database["public"]["Tables"]["citas"]["Row"]
+          p_dia_semana: number
+          p_duracion_minutos: number
+          p_fecha: string
+          p_hora_local: string
+          p_serie: Database["public"]["Tables"]["series_cita"]["Row"]
+          p_zona_horaria: string
+        }
+        Returns: Json
       }
       preparar_invitacion: {
         Args: {
