@@ -1,8 +1,9 @@
 // Esquemas Zod de lib/citas/. Mensajes de servidor, en castellano, literales:
 // esta carpeta NO importa lib/i18n/ (mismo patrón que lib/huella/ y
 // lib/cuentas/). Son el mismo esquema que usará el formulario en cliente de
-// T-011b (MiniMax): la convención del proyecto ("Mutaciones vía Server
-// Actions, validadas con el mismo esquema Zod que usa el formulario").
+// T-014 (el diálogo de serie; T-011b no tiene formulario): la convención del
+// proyecto ("Mutaciones vía Server Actions, validadas con el mismo esquema
+// Zod que usa el formulario").
 import { z } from 'zod';
 
 /**

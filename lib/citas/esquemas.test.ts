@@ -177,6 +177,31 @@ describe('esquemaEditarSerie', () => {
     }
   });
 
+  // TS-H2: el domingo es el único día en que getUTCDay() (0) y ISODOW (7) no
+  // coinciden; si se quita la traducción 0 → 7, la primera de estas dos falla.
+  it('esta_y_siguientes: domingo — fecha 2027-03-07 con diaSemana 7 (ISODOW) SÍ coincide', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-03-07',
+      diaSemana: 7,
+    });
+    expect(resultado.success).toBe(true);
+  });
+
+  it('esta_y_siguientes: domingo — fecha 2027-03-07 con diaSemana 6 (sábado) se rechaza en "fecha"', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-03-07',
+      diaSemana: 6,
+    });
+    expect(resultado.success).toBe(false);
+    if (!resultado.success) {
+      expect(resultado.error.issues.some((i) => i.path[0] === 'fecha')).toBe(true);
+    }
+  });
+
   it('esta_y_siguientes: rechaza una fecha de calendario inexistente (30 de febrero)', () => {
     const resultado = esquemaEditarSerie.safeParse({
       citaId,
