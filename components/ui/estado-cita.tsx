@@ -69,13 +69,16 @@ function Punto({ estado, late }: { estado: EstadoVisibleCita; late: boolean }) {
 export function PuntoEstadoCita({
   estado,
   conEtiqueta = true,
+  late = true,
 }: {
   estado: EstadoVisibleCita;
   conEtiqueta?: boolean;
+  /** `false` en todo lo que no sea LA cita en curso de la rejilla (T-014: un latido por pantalla). */
+  late?: boolean;
 }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Punto estado={estado} late />
+      <Punto estado={estado} late={late} />
       <span className={cn('text-foreground', !conEtiqueta && 'sr-only')}>
         {t(`agenda.estados.${estado}`)}
       </span>

@@ -35,6 +35,14 @@ describe('PuntoEstadoCita', () => {
     }
   });
 
+  // T-014: en el panel, la lista del día y las próximas el punto no late (un solo latido por pantalla).
+  it('con late={false}, «en curso» lleva el halo quieto y no el latido', () => {
+    const { container } = render(<PuntoEstadoCita estado="en_curso" late={false} />);
+    const punto = container.querySelector('[data-forma="en_curso"]');
+    expect(punto).toHaveClass('halo-estado');
+    expect(punto).not.toHaveClass('latido-estado');
+  });
+
   // Sin etiqueta visible, el lector de pantalla sigue oyendo el estado.
   it('con conEtiqueta={false} la etiqueta sigue en el DOM como sr-only', () => {
     render(<PuntoEstadoCita estado="programada" conEtiqueta={false} />);

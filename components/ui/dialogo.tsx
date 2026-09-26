@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -10,10 +10,15 @@ type Props = {
   abierto: boolean;
   alCerrar: () => void;
   titulo: string;
+  /**
+   * Dónde cae el foco al abrir, si no en el primer enfocable (que es la «X»). T-014: el
+   * diálogo de mover una cita de serie empieza en «Mantener».
+   */
+  focoInicial?: RefObject<HTMLElement | null>;
   children: ReactNode;
 };
 
-export function Dialogo({ abierto, alCerrar, titulo, children }: Props) {
+export function Dialogo({ abierto, alCerrar, titulo, focoInicial, children }: Props) {
   const panel = useRef<HTMLDivElement>(null);
   const idTitulo = useId();
 
@@ -27,8 +32,13 @@ export function Dialogo({ abierto, alCerrar, titulo, children }: Props) {
     if (!abierto) return;
     const contenedor = panel.current;
     if (!contenedor) return;
+    const elegido = focoInicial?.current;
+    if (elegido?.isConnected && contenedor.contains(elegido)) {
+      elegido.focus();
+      return;
+    }
     (enfocables(contenedor)[0] ?? contenedor).focus();
-  }, [abierto]);
+  }, [abierto, focoInicial]);
 
   if (!abierto) return null;
 

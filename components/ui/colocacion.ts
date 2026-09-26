@@ -1,0 +1,70 @@
+/**
+ * Dónde colocar un panel anclado a un elemento (T-014 §1.5). Pura: recibe
+ * rectángulos ya medidos y no toca el DOM, para poder probar los bordes (la
+ * última fila, la última columna, un teléfono de 360×640) sin navegador.
+ */
+
+export type Rect = { top: number; left: number; width: number; height: number };
+
+export type Colocacion = {
+  top: number;
+  left: number;
+  lado: 'arriba' | 'abajo';
+  /** Distancia del pico al borde izquierdo del panel. */
+  picoX: number;
+  /** Alto que cabe en el lado elegido; si el panel es más alto, hace scroll por dentro. */
+  altoMax: number;
+};
+
+/** El radio de `rounded-xl`: el pico no puede salir de la esquina redondeada. */
+export const RADIO_PANEL = 12;
+
+const MARGEN_POR_DEFECTO = 8;
+const PICO_POR_DEFECTO = 8;
+
+function recortar(valor: number, minimo: number, maximo: number): number {
+  // Si el panel no cabe entre los límites, manda el mínimo: mejor cortado a la
+  // derecha que con el principio fuera de la pantalla.
+  return Math.max(minimo, Math.min(valor, maximo));
+}
+
+export function colocarPanel({
+  ancla,
+  panel,
+  limites,
+  margen = MARGEN_POR_DEFECTO,
+  pico = PICO_POR_DEFECTO,
+}: {
+  ancla: Rect;
+  panel: { width: number; height: number };
+  limites: Rect;
+  margen?: number;
+  pico?: number;
+}): Colocacion {
+  const huecoAbajo = limites.top + limites.height - (ancla.top + ancla.height);
+  const huecoArriba = ancla.top - limites.top;
+  const necesario = panel.height + pico + margen;
+
+  const lado: Colocacion['lado'] =
+    huecoAbajo >= necesario
+      ? 'abajo'
+      : huecoArriba >= necesario
+        ? 'arriba'
+        : huecoAbajo >= huecoArriba
+          ? 'abajo'
+          : 'arriba';
+
+  const altoMax = Math.max(0, (lado === 'abajo' ? huecoAbajo : huecoArriba) - pico - margen);
+  const alto = Math.min(panel.height, altoMax);
+  const top = lado === 'abajo' ? ancla.top + ancla.height + pico : ancla.top - pico - alto;
+
+  const centroAncla = ancla.left + ancla.width / 2;
+  const left = recortar(
+    centroAncla - panel.width / 2,
+    limites.left + margen,
+    limites.left + limites.width - margen - panel.width,
+  );
+  const picoX = recortar(centroAncla - left, RADIO_PANEL + pico, panel.width - RADIO_PANEL - pico);
+
+  return { top, left, lado, picoX, altoMax };
+}
