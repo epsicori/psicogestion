@@ -493,4 +493,18 @@ export const es = {
     alertaEvaluacionSinCorregir: 'Hay una evaluación sin corregir',
     desdeEl: 'Desde el {fecha}',
   },
+
+  agenda: {
+    // Los cinco del enum `estado_cita` y «en curso», que se calcula (ADR-045). Las claves
+    // son el valor del estado, por eso van con guion bajo.
+    estados: {
+      programada: 'Programada',
+      confirmada: 'Confirmada',
+      en_curso: 'En curso',
+      realizada: 'Realizada',
+      cancelada: 'Cancelada',
+      no_asistida: 'No asistió',
+    },
+    leyendaEstados: 'Leyenda de estados de la cita',
+  },
 } as const;
