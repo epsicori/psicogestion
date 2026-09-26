@@ -1,0 +1,40 @@
+{
+  "ticket": "T-011b",
+  "altas": 0,
+  "medias": 2,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20260925120000_editar_serie_desde_la_cita.sql",
+      "linea": 351,
+      "descripcion": "Cuando el ancla es un 4.º que además es el último de su mes, la desambiguación del ordinal mensual toma la cita no desviada más cercana de la serie sin filtrar por día de la semana ni por regla vigente, así que vota una cita de una regla anterior.",
+      "escenario": "Serie mensual de viernes del 30-04-2027 (5.º viernes). Primera edición desde el 28-05 con p_fecha=2027-05-27: pasa a 4.º jueves y queda 27-05, 24-06, 22-07. Segunda edición desde el 27-05 cambiando solo la hora: la cita más cercana es el viernes 30-04 (ordinal 5), así que ordinal=5 y el 22-07 se propone el 29-07. La serie pasa de «4.º jueves» a «último jueves» sin que nadie haya movido una fecha."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/16-series.sql",
+      "linea": 2117,
+      "descripcion": "M.14(e) solo prueba el lado «es un 5.º» de la desambiguación; ninguna prueba edita un 4.º de verdad desde una cita que también sea la última de su mes, así que la mutación «ambiguo ⇒ 5» deja el banco en verde.",
+      "escenario": "Se simplifica la migración :348-365 a «si es 4.º y el último, 5». M.11, M.13 y M.14 siguen en verde. En producción, una serie creada el 27-05-2027 (4.º jueves) con la hora editada desde el 24-06 propone el 22-07 en el 29-07."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20260925120000_editar_serie_desde_la_cita.sql",
+      "linea": 532,
+      "descripcion": "agenda_editar_serie lee la cita ancla sin candado y bloquea la serie después (:564). Como la confirmación ahora sostiene la serie FOR SHARE, la edición espera justo entre las dos lecturas y sigue con una fecha_origen vieja.",
+      "escenario": "T2 confirma una propuesta +7 que mueve C del martes 09 al 16. A la vez, T1 edita desde C (visto el 09) con p_fecha=jueves 11, lee C y espera en :564. Cuando T2 confirma, el plan de T1 usa origen 09 y destino 11, pero el disparador parte de la posición real 16 y propone el jueves 18. La previsualización decía 11. Las guardas de desviada y cancelada también se evalúan con la fila vieja."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": ".claude/worktrees/t011b-banco/.claude/agent-memory/revisor/MEMORY.md",
+      "linea": 1,
+      "descripcion": "Hay dos ficheros sin seguimiento dentro del worktree (MEMORY.md y patrones-de-fallo.md) con la memoria de otro revisor, y con ellos territorio.mjs T-011b sale con 1.",
+      "escenario": "node ~/.claude/pipeline/territorio.mjs T-011b da «2 fichero(s) FUERA del territorio» y exit 1, así que el criterio 15 bloquea el gate por algo que no es del diff. Si en la integración se hace git add -A, .claude/** entra en main."
+    }
+  ]
+}

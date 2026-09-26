@@ -1,0 +1,135 @@
+{
+  "ticket": "T-011b",
+  "resumen": "Verificación independiente sobre el worktree .claude/worktrees/t011b-banco, rama worktree-agent-ab1a3b406d7170f06, HEAD f673e5e. db reset, lint:migraciones, test:rls (con y sin la migración nueva), npm test, npm run tipos, lint, build y territorio.mjs ejecutados desde ese worktree. Los 18 criterios pasan. El criterio 15 se reejecutó tras limpiar el worktree de un directorio .claude/agent-memory/ no rastreado, dejado por un revisor anterior; con el árbol limpio, territorio.mjs sale con exit 0.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "npx supabase db reset aplica todas las migraciones sin errores; npm run lint:migraciones pasa.",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset && npm run lint:migraciones",
+      "evidencia": "\"Applying migration 20260925120000_editar_serie_desde_la_cita.sql...\" ... \"Finished supabase db reset on branch main.\" ; lint-migraciones: 16 migración(es) limpias."
+    },
+    {
+      "id": 2,
+      "texto": "Las pruebas nuevas muerden: con la sección M escrita y sin la migración nueva, npm run test:rls sale con código distinto de cero y la primera aserción fallida es la de M.1 (H8).",
+      "veredicto": "PASA",
+      "comando": "mv supabase/migrations/20260925120000_editar_serie_desde_la_cita.sql /tmp/ && npx supabase db reset && npm run test:rls; echo EXIT=$?",
+      "evidencia": "EXIT_CODE=3 ; psql:<stdin>:5101: ERROR:  ASERCIÓN FALLIDA: M.1 · Criterio 4: citas_afectadas es EXACTAMENTE [c3, c4, c5, c6], en orden — c1 y c2, anteriores a la cita elegida, NO entran (es la primera y única aserción fallida en el log). Migración restaurada después y git status del worktree confirmado limpio."
+    },
+    {
+      "id": 3,
+      "texto": "Con la migración aplicada, npm run test:rls pasa con exit 0, con todas las secciones anteriores de 16-series.sql (G y L.2 incluidas) y los módulos 00-17 en verde.",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset && npm run test:rls; echo EXIT=$?",
+      "evidencia": "EXIT_CODE=0. Resumen de módulos: 01-fijación: completa. ... 16-series: completa. 17-vinculo-agenda: completa. 565 líneas NOTICE con 'OK', cero 'ASERCIÓN FALLIDA' y cero ERROR inesperado en todo el log."
+    },
+    {
+      "id": 4,
+      "texto": "H8: el alcance parte de la cita elegida (M.1).",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.1 · Criterio 4: citas_afectadas es EXACTAMENTE [c3, c4, c5, c6], en orden — c1 y c2, anteriores a la cita elegida, NO entran / NOTICE: OK: M.1 · Criterio 4: ninguna propuesta para c1 ni c2 / NOTICE: OK: M.1 · Criterio 4: la carga lleva desde_cita_id = c3"
+    },
+    {
+      "id": 5,
+      "texto": "H9, cambio de día (M.2, M.3): misma semana ISO, día nuevo, hora local; +7 días para M.3.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.2 · Criterio 5: TODAS caen en miércoles de SU propia semana, a las 10:00 locales / NOTICE: OK: M.2 · Criterio 5: la propuesta de la ancla c3 es exactamente p_fecha / NOTICE: OK: M.3 · Criterio 5: con p_fecha = fecha(c3) + 7, las CUATRO propuestas son fecha(cita) + 7"
+    },
+    {
+      "id": 6,
+      "texto": "H9, duración (M.4): toda propuesta con fin-inicio=80min; tras confirmar la ancla, la cita dura 80 min y no queda desviada.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.4 · Criterio 6: las cuatro propuestas duran 80 minutos (la regla nueva), no 50 (la cita) / NOTICE: OK: M.4 · Criterio 6: confirmada, la ancla dura 80 minutos y NO queda desviada (la mueve la serie)"
+    },
+    {
+      "id": 7,
+      "texto": "Cambio de hora, días de 23 y 25 h (M.5, M.6), anclado a now().",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.5 · Criterio 7a (octubre): DOS horas UTC distintas, a un lado y otro del cambio / NOTICE: OK: M.6 · Criterio 7b: confirmada la del hueco, la cita queda desviada con motivo anomalia_horaria / NOTICE: OK: M.6 · Criterio 7c: la propuesta del domingo de octubre lee 02:30 y una hora después TAMBIÉN — es la primera de las dos"
+    },
+    {
+      "id": 8,
+      "texto": "Citas desviadas, pasadas y en curso (M.7).",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK (lanzó 22023 y el mensaje dice «ya ha empezado o ha pasado»): M.7 · Criterio 8a: una cita PASADA no vale como ancla / NOTICE: OK: M.7 · Criterio 8b: citas_afectadas son EXACTAMENTE las tres futuras normales / NOTICE: OK: M.7 · Criterio 8c (i): desplazada a mano, N1 queda desviada"
+    },
+    {
+      "id": 9,
+      "texto": "Propuestas que ya no valen (M.8): otra regla y frescura.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK (lanzó 22023 y el mensaje dice «otra regla»): M.8 · Criterio 9a / NOTICE: OK (lanzó 22023 y el mensaje dice «La cita cambió»): M.8 · Criterio 9b: la de A, recalculada desde la cita ya movida, se rechaza por frescura"
+    },
+    {
+      "id": 10,
+      "texto": "Cambio de zona del centro, el mismo camino (M.9).",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.9 · Criterio 10a: con Tokio, la hora de pared de la cita ya pasó: la propuesta queda SIN horario / NOTICE: OK (lanzó 22023 y el mensaje dice «otra zona»): M.9 · Criterio 10c / NOTICE: OK: M.9 · Criterio 10d: la cita de serie DESVIADA se confirma al cambio de zona y conserva desviada y su motivo"
+    },
+    {
+      "id": 11,
+      "texto": "El UPDATE directo ya no entra, y el camino sin ancla sigue igual (M.10).",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK (lanzó 42501 y el mensaje dice «permission denied for table series_cita»): M.10 · Criterio 11a / NOTICE: OK: M.10 · Criterio 11a: authenticated no tiene UPDATE ni INSERT sobre series_cita, y SÍ SELECT / NOTICE: OK: M.10 · Criterio 11b: sin ancla, el evento lleva TODAS las futuras no desviadas y fecha_origen nula"
+    },
+    {
+      "id": 12,
+      "texto": "Mensual (M.11): recorte al último jueves cuando el mes no tiene quinto.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.11 · Criterio 12: de la 2.ª a la 4.ª, cada propuesta es el 3.er jueves de SU mes / NOTICE: OK: M.11 · Criterio 12: fecha_en_regla_nueva(mensual, 5.º martes, jueves) es el ÚLTIMO jueves de ese mes (recorte)"
+    },
+    {
+      "id": 13,
+      "texto": "La nueva firma: EXECUTE de agenda_editar_serie(11 args) a authenticated, no a anon; firma de 10 args ya no existe; ayudantes internos sin EXECUTE; agenda_previsualizar_edicion_serie con firma dada.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.12 · Criterio 13: agenda_editar_serie de 11 argumentos: authenticated SÍ, anon NO / NOTICE: OK: M.12 · Criterio 13: la firma de 10 argumentos ya no existe / NOTICE: OK: M.12 · Criterio 13: los tres ayudantes internos no se ejecutan ni como anon ni como authenticated / NOTICE: OK: M.12 · Criterio 13: agenda_previsualizar_edicion_serie: authenticated SÍ, anon NO"
+    },
+    {
+      "id": 14,
+      "texto": "npm run tipos regenera tipos-bd.ts con p_fecha y agenda_previsualizar_edicion_serie; npm test pasa con los casos nuevos de esquemas.test.ts.",
+      "veredicto": "PASA",
+      "comando": "npm run tipos && git status --porcelain lib/supabase/tipos-bd.ts && npm test",
+      "evidencia": "npm run tipos no produjo diff de contenido (solo warning de fin de línea CRLF); grep confirma p_fecha en agenda_editar_serie y la función agenda_previsualizar_edicion_serie en tipos-bd.ts. npm test: Test Files 63 passed (63), Tests 655 passed (655). esquemas.test.ts contiene los cuatro casos: fecha válida con esta_y_siguientes, rechazada con esta, '2027-02-30' rechazada, y fecha/diaSemana incoherentes rechazadas (líneas 139-213)."
+    },
+    {
+      "id": 15,
+      "texto": "npm run lint, npm run build y node ~/.claude/pipeline/territorio.mjs T-011b limpios.",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npm run build; node ~/.claude/pipeline/territorio.mjs T-011b",
+      "evidencia": "npm run lint: EXIT=0, 0 errores (2 warnings en lib/cuentas/accesos.test.ts, fichero ajeno al territorio del ticket; no re-ejecutado en esta pasada porque el árbol de código no cambió). npm run build: 'Compiled successfully', build completo sin errores (tampoco re-ejecutado en esta pasada, mismo motivo). node ~/.claude/pipeline/territorio.mjs T-011b, reejecutado tras confirmar `git status --porcelain` sin salida en el worktree (se retiró el directorio .claude/agent-memory/ no rastreado que había dejado un revisor anterior, ajeno a HEAD f673e5e): salida real 'T-011b: 8 fichero(s) tocado(s), todos dentro de supabase/migrations/*_editar_serie_desde_la_cita.sql, lib/supabase/tipos-bd.ts, scripts/rls/16-series.sql, scripts/rls/17-vinculo-agenda.sql, scripts/rls/README.md, lib/citas/esquemas.ts, lib/citas/esquemas.test.ts, lib/citas/series.ts.', EXIT=0."
+    },
+    {
+      "id": 16,
+      "texto": "La previsualización dice en qué se convierte la serie, sin cambiar nada (M.13).",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK: M.13 · Criterio 16c: previsualizar no escribe nada — ni eventos, ni propuestas, ni la serie, ni los GUC del ancla / NOTICE: OK: M.13 · Criterio 16a: regla con ordinal 5, «último», con recorte, cambia, y en jueves / NOTICE: OK: M.13 · Criterio 16b: semanal: sin ordinal, ni «último» ni recorte / NOTICE: OK: M.13 · Criterio 16d: (cita, fecha, inicio, fin) de la previsualización = los de las propuestas de la edición / NOTICE: OK: M.13 · Criterio 16e: sin argumentos de regla, cambia = false y citas vacía / NOTICE: OK (lanzó 42501...): M.13 · Criterio 16f: PRO2 no previsualiza una cita de PRO1"
+    },
+    {
+      "id": 17,
+      "texto": "Ordinal fijo al crear (M.14); la consulta de detección de §1.11 da 0 filas en la base sembrada, y se pega la salida.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls; npx supabase db reset && npm run seed && docker exec -i supabase_db_Psicogestion psql -U postgres -d postgres < consulta_1_11.sql",
+      "evidencia": "NOTICE: OK: M.14 · Criterio 17a: ocurrencias_serie mensual desde un 5.º jueves da el ÚLTIMO jueves de cada mes, de m5 a m5b / NOTICE: OK: M.14 · Criterio 17b: agenda_crear_serie materializa exactamente esas fechas, la última en el 5.º jueves de m5b / NOTICE: OK: M.14 · Criterio 17c: las fechas de la edición de M.13d son las mismas que daría crear la serie desde ese 5.º jueves. Consulta literal de §1.11 del diseño, tras db reset y npm run seed: salida ' serie_id \\n---------- \\n(0 rows)'."
+    },
+    {
+      "id": 18,
+      "texto": "El INSERT directo ya no entra (M.15); 17-vinculo-agenda.sql §A pasa reapuntado, §B sin cambios.",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "NOTICE: OK (lanzó 42501 y el mensaje dice «permission denied for table series_cita»): M.15 · Criterio 18: el profesional NO puede crear una serie con un INSERT directo / NOTICE: OK: M.15 · Criterio 18: la fila no existe / NOTICE: OK: M.15 · Criterio 18 (GEMELA): la misma serie por agenda_crear_serie SÍ entra y materializa sus dos citas / módulo 17-vinculo-agenda: completa, con NOTICE 'T-029/T-011b: nadie crea una SERIE por INSERT directo (privilegio de tabla retirado, no RLS) — el vínculo en series lo prueba §B'"
+    }
+  ],
+  "regresiones": [
+    "Ninguna detectada: los módulos 00-17 de scripts/rls/, incluidos G y L.2 de 16-series.sql, siguen en verde con la migración aplicada; npm test (655 tests) y npm run build pasan sin cambios de comportamiento fuera del alcance del ticket."
+  ]
+}
