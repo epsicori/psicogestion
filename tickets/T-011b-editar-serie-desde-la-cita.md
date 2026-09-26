@@ -6,7 +6,8 @@ fase: 1
 prioridad: alta
 depende_de: [T-011]
 bloquea: [T-014]
-estado: pendiente
+estado: hecho
+completado: 2026-09-26
 territorio:
   - supabase/migrations/*_editar_serie_desde_la_cita.sql
   - lib/supabase/tipos-bd.ts
