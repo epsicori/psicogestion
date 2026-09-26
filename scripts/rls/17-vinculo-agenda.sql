@@ -57,16 +57,24 @@ select pg_temp.assert(
   'GEMELA POSITIVA: PRO1 SÍ crea la cita cuando el paciente es suyo (P1) — la negativa de arriba no es «no puede insertar nunca»'
 );
 
--- NEGATIVA: lo mismo con una serie.
+-- NEGATIVA: lo mismo con una serie. T-011b (ADR-069) retira INSERT sobre
+-- series_cita de authenticated por completo: ya no es la política la que
+-- rechaza (el paciente ajeno), es el privilegio de tabla — el mensaje lo
+-- distingue de un 42501 de RLS.
+-- OJO: esta aserción YA NO prueba el vínculo profesional-paciente en las series.
+-- Con P1, que sí es de PRO1, daría el mismo 42501 de privilegio. El vínculo en
+-- las series lo prueba §B (agenda_crear_serie, negativa con P2 y gemela con P1),
+-- que es hoy el único camino para crear una serie. Si §B se rompe, esto no lo
+-- delata.
 call pg_temp.como(:PRO1);
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   format($sql$insert into public.series_cita
            (paciente_id, profesional_id, centro_id, tipo_terapia_id, periodicidad,
             dia_semana, hora_local, zona_horaria, duracion_minutos, sesiones_totales, creada_por)
          values (%L, %L, %L, %L, 'semanal', 3::smallint, time '10:00', 'Europe/Madrid', 50::smallint, 4::smallint, %L)$sql$,
     :P2, :PRO1, :CA, :TT4, :PRO1),
-  '42501',
-  'T-029: PRO1 NO puede crear una SERIE para P2 — ocho citas de golpe con más razón'
+  '42501', 'permission denied for table series_cita',
+  'T-029/T-011b: nadie crea una SERIE por INSERT directo (privilegio de tabla retirado, no RLS) — el vínculo en series lo prueba §B'
 );
 call pg_temp.reset_sesion();
 
@@ -76,6 +84,9 @@ call pg_temp.reset_sesion();
 
 -- NEGATIVA: agenda_crear_serie() es security definer. Sin el disparador entraría aunque
 -- la política dijera que no, que es el hallazgo 7 de T-011a en una línea.
+-- Desde T-011b (INSERT directo sobre series_cita retirado) este par es la ÚNICA
+-- prueba del vínculo profesional-paciente al crear una serie: la negativa de §A
+-- ya falla por privilegio, sea cual sea el paciente.
 call pg_temp.como(:PRO1);
 select pg_temp.assert_lanza_codigo(
   format($sql$select public.agenda_crear_serie(%L, %L, %L, %L, 'semanal', 3::smallint, time '11:00', 50::smallint, %L::date, 2::smallint, null)$sql$,

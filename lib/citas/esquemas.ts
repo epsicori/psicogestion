@@ -1,8 +1,9 @@
 // Esquemas Zod de lib/citas/. Mensajes de servidor, en castellano, literales:
 // esta carpeta NO importa lib/i18n/ (mismo patrón que lib/huella/ y
 // lib/cuentas/). Son el mismo esquema que usará el formulario en cliente de
-// T-011b (MiniMax): la convención del proyecto ("Mutaciones vía Server
-// Actions, validadas con el mismo esquema Zod que usa el formulario").
+// T-014 (el diálogo de serie; T-011b no tiene formulario): la convención del
+// proyecto ("Mutaciones vía Server Actions, validadas con el mismo esquema
+// Zod que usa el formulario").
 import { z } from 'zod';
 
 /**
@@ -18,6 +19,39 @@ export const esquemaPeriodicidad = z.enum(PERIODICIDADES);
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * ¿Es una fecha de calendario que existe de verdad? `FECHA_ISO` solo mira la
+ * forma (AAAA-MM-DD); un 30 de febrero pasa esa forma y `Date.UTC` lo
+ * normaliza en silencio al 2 de marzo. Se comprueba con una ida y vuelta:
+ * si al reconstruir la fecha desde sus tres números no coincide con lo que
+ * se pidió, es que no existía. Deliberadamente NO importa de `lib/fechas/`
+ * (mismo patrón que el resto de este fichero, ver cabecera).
+ */
+function esFechaReal(valor: string): boolean {
+  const coincidencia = FECHA_ISO.exec(valor);
+  if (!coincidencia) return false;
+  const anio = Number(valor.slice(0, 4));
+  const mes = Number(valor.slice(5, 7));
+  const dia = Number(valor.slice(8, 10));
+  const instante = Date.UTC(anio, mes - 1, dia);
+  const reconstruida = new Date(instante);
+  return (
+    reconstruida.getUTCFullYear() === anio &&
+    reconstruida.getUTCMonth() === mes - 1 &&
+    reconstruida.getUTCDate() === dia
+  );
+}
+
+/** ISODOW (1 = lunes … 7 = domingo) de una fecha AAAA-MM-DD ya validada. */
+function isodowDe(valor: string): number {
+  const anio = Number(valor.slice(0, 4));
+  const mes = Number(valor.slice(5, 7));
+  const dia = Number(valor.slice(8, 10));
+  // getUTCDay(): 0 = domingo … 6 = sábado. ISODOW: 1 = lunes … 7 = domingo.
+  const diaSemanaJS = new Date(Date.UTC(anio, mes - 1, dia)).getUTCDay();
+  return diaSemanaJS === 0 ? 7 : diaSemanaJS;
+}
 
 export const esquemaCrearSerie = z
   .object({
@@ -71,7 +105,12 @@ export type DatosCancelarCita = z.infer<typeof esquemaCancelarCita>;
  * `esta`: acepta lo mismo que `agenda_actualizar_cita()` de T-010 (estado,
  * sala, inicio, fin — nunca tipo_terapia_id ni nota_operativa, que el técnico
  * no debe ver). `esta_y_siguientes`: acepta la regla de la serie (día, hora,
- * duración, zona) y NADA de lo anterior — no mueve ninguna cita.
+ * duración, zona) y NADA de lo anterior — no mueve ninguna cita directamente.
+ * `fecha` (T-011b, `p_fecha` de `agenda_editar_serie`) es la fecha nueva de
+ * la cita ancla: solo tiene sentido con `esta_y_siguientes`, y si viene junto
+ * con `diaSemana` los dos deben señalar el mismo día de la semana — si no,
+ * la base los recibiría contradictorios y los rechazaría con menos contexto
+ * que aquí.
  */
 export const esquemaEditarSerie = z
   .object({
@@ -88,11 +127,21 @@ export const esquemaEditarSerie = z
     horaLocal: z.string().regex(HHMM, 'La hora debe tener forma HH:MM.').nullable().optional(),
     duracionMinutos: z.int().min(5).max(480).nullable().optional(),
     zonaHoraria: z.string().min(1, 'Selecciona una zona horaria.').nullable().optional(),
+    fecha: z
+      .string()
+      .regex(FECHA_ISO, 'La fecha debe tener forma AAAA-MM-DD.')
+      .refine(esFechaReal, 'La fecha no existe en el calendario.')
+      .nullable()
+      .optional(),
   })
   .refine(
     (datos) =>
       datos.alcance !== 'esta' ||
-      (datos.diaSemana == null && datos.horaLocal == null && datos.duracionMinutos == null && datos.zonaHoraria == null),
+      (datos.diaSemana == null &&
+        datos.horaLocal == null &&
+        datos.duracionMinutos == null &&
+        datos.zonaHoraria == null &&
+        datos.fecha == null),
     {
       message: 'Con alcance "esta" no se cambia la regla de la serie.',
       path: ['alcance'],
@@ -106,7 +155,11 @@ export const esquemaEditarSerie = z
       message: 'Con alcance "esta_y_siguientes" no se mueve ninguna cita directamente.',
       path: ['alcance'],
     },
-  );
+  )
+  .refine((datos) => datos.fecha == null || datos.diaSemana == null || isodowDe(datos.fecha) === datos.diaSemana, {
+    message: 'La fecha y el día de la semana no coinciden.',
+    path: ['fecha'],
+  });
 
 export type DatosEditarSerie = z.infer<typeof esquemaEditarSerie>;
 

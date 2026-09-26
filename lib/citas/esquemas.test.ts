@@ -135,4 +135,79 @@ describe('esquemaEditarSerie', () => {
     });
     expect(resultado.success).toBe(false);
   });
+
+  it('esta: rechaza traer una fecha nueva de ancla (T-011b, la fecha va con esta_y_siguientes)', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta',
+      fecha: '2027-03-08',
+    });
+    expect(resultado.success).toBe(false);
+  });
+
+  it('esta_y_siguientes: acepta una fecha nueva de ancla sin día de la semana', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-03-08',
+    });
+    expect(resultado.success).toBe(true);
+  });
+
+  it('esta_y_siguientes: fecha y diaSemana que SÍ coinciden (2027-03-08 es lunes, ISODOW 1)', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-03-08',
+      diaSemana: 1,
+    });
+    expect(resultado.success).toBe(true);
+  });
+
+  it('esta_y_siguientes: rechaza fecha y diaSemana que NO coinciden, con el error en "fecha"', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-03-08',
+      diaSemana: 2,
+    });
+    expect(resultado.success).toBe(false);
+    if (!resultado.success) {
+      expect(resultado.error.issues.some((i) => i.path[0] === 'fecha')).toBe(true);
+    }
+  });
+
+  // TS-H2: el domingo es el único día en que getUTCDay() (0) y ISODOW (7) no
+  // coinciden; si se quita la traducción 0 → 7, la primera de estas dos falla.
+  it('esta_y_siguientes: domingo — fecha 2027-03-07 con diaSemana 7 (ISODOW) SÍ coincide', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-03-07',
+      diaSemana: 7,
+    });
+    expect(resultado.success).toBe(true);
+  });
+
+  it('esta_y_siguientes: domingo — fecha 2027-03-07 con diaSemana 6 (sábado) se rechaza en "fecha"', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-03-07',
+      diaSemana: 6,
+    });
+    expect(resultado.success).toBe(false);
+    if (!resultado.success) {
+      expect(resultado.error.issues.some((i) => i.path[0] === 'fecha')).toBe(true);
+    }
+  });
+
+  it('esta_y_siguientes: rechaza una fecha de calendario inexistente (30 de febrero)', () => {
+    const resultado = esquemaEditarSerie.safeParse({
+      citaId,
+      alcance: 'esta_y_siguientes',
+      fecha: '2027-02-30',
+    });
+    expect(resultado.success).toBe(false);
+  });
 });

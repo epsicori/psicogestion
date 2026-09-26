@@ -89,9 +89,14 @@ export async function cancelarCita(
  * Edita una cita de una serie. `esta`: delega en `agenda_actualizar_cita()`
  * de T-010 (mismo camino que `desplazarCita()` de `citas.ts` — no hay un
  * segundo camino de escritura de citas). `esta_y_siguientes`: NO mueve
- * ninguna cita, cambia la regla de la serie y devuelve las propuestas que se
- * generan para que quien llama las confirme una a una
- * (`propuestas.ts::confirmarPropuesta`).
+ * ninguna cita, cambia la regla de la serie A PARTIR DE LA CITA ELEGIDA
+ * (T-011b): las citas anteriores a ella no se tocan ni reciben propuesta. Devuelve
+ * las propuestas de la cita elegida y las siguientes para que quien llama las
+ * confirme una a una (`propuestas.ts::confirmarPropuesta`). `entrada.fecha`
+ * (T-011b) fija el día nuevo de esa cita elegida: desplaza la serie de semana
+ * (o de mes, en `mensual`), no solo de día dentro de la misma. En `mensual`,
+ * si la cita no cambia de fecha, el ordinal («el 2.º jueves», «el último») es
+ * el de la serie; si cambia, el de la fecha nueva (ADR-069).
  */
 export async function editarSerie(
   sesion: Sesion,
@@ -108,6 +113,7 @@ export async function editarSerie(
     p_hora_local: entrada.horaLocal ?? undefined,
     p_duracion_minutos: entrada.duracionMinutos ?? undefined,
     p_zona_horaria: entrada.zonaHoraria ?? undefined,
+    p_fecha: entrada.fecha ?? undefined,
   });
 
   if (error) {
