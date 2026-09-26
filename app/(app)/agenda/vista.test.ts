@@ -166,6 +166,23 @@ describe('construirVista · la semana', () => {
     expect(v.citas[0].nombrePaciente).toBe('Paciente');
     expect(v.citas[0].nombreCorto).toBe('Paciente');
   });
+
+  it('sin nombre del profesional, «Profesional» en la cita y en el filtro', () => {
+    const v = construirVista(
+      entrada({
+        filas: [
+          fila({
+            id: 'x',
+            inicio: new Date('2026-09-24T08:00:00Z'),
+            fin: new Date('2026-09-24T08:50:00Z'),
+            profesionalNombre: null,
+          }),
+        ],
+      }),
+    );
+    expect(v.citas[0].profesionalNombre).toBe('Profesional');
+    expect(v.profesionales.map((p) => p.nombre)).toEqual(['Profesional']);
+  });
 });
 
 describe('construirVista · el latido', () => {

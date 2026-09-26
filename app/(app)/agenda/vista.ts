@@ -183,7 +183,7 @@ export function construirVista(entrada: EntradaVista): VistaCalendario {
   const { vista, fecha, zona, hoy, usuarioId } = entrada;
 
   const profesionales = [
-    ...new Map(entrada.filas.map((f) => [f.profesionalId, f.profesionalNombre])).entries(),
+    ...new Map(entrada.filas.map((f) => [f.profesionalId, f.profesionalNombre ?? t('agenda.cita.profesional')])).entries(),
   ]
     .map(([id, nombre]) => ({ id, nombre }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
@@ -240,7 +240,7 @@ export function construirVista(entrada: EntradaVista): VistaCalendario {
       rango: formatearRango(fila.inicio, fila.fin, zona),
       duracion: tCon('agenda.cita.minutos', { n: minutosTotales }),
       ...nombres(fila),
-      profesionalNombre: fila.profesionalNombre,
+      profesionalNombre: fila.profesionalNombre ?? t('agenda.cita.profesional'),
       colorProfesional: colorDe(fila.profesionalId),
       tipoNombre: fila.tipoTerapiaNombre,
       centroNombre: fila.centroNombre,

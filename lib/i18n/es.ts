@@ -539,6 +539,7 @@ export const es = {
 
     cita: {
       paciente: 'Paciente',
+      profesional: 'Profesional',
       minutos: '{n} min',
       deSerie: 'Cita de una serie',
       desviada: 'Movida fuera de la serie',
