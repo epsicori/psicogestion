@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { mapearErrorCitas, mensajeParaMotivo } from './errores';
+import { mapearErrorCitas, mensajeParaMotivo, resultadoDeError } from './errores';
 import type { DatosConfirmarPropuesta, DatosDescartarPropuesta } from './esquemas';
 import type { ResultadoCitas, Sesion } from './tipos';
 
@@ -85,8 +85,7 @@ export async function confirmarPropuesta(
 
   if (error) {
     console.error('confirmarPropuesta: agenda_confirmar_propuesta() falló', error);
-    const motivo = mapearErrorCitas(error);
-    return { ok: false, motivo, mensaje: mensajeParaMotivo(motivo) };
+    return resultadoDeError(error);
   }
 
   return { ok: true, citaId: data as string };

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { mapearErrorCitas, mensajeParaMotivo } from './errores';
+import { mapearErrorCitas, mensajeParaMotivo, resultadoDeError } from './errores';
 import type { DatosCancelarCita, DatosCrearSerie, DatosEditarSerie } from './esquemas';
 import type { ResultadoCitas, Sesion } from './tipos';
 
@@ -118,8 +118,7 @@ export async function editarSerie(
 
   if (error) {
     console.error('editarSerie: agenda_editar_serie() falló', error);
-    const motivo = mapearErrorCitas(error);
-    return { ok: false, motivo, mensaje: mensajeParaMotivo(motivo) };
+    return resultadoDeError(error);
   }
 
   // 'esta': {alcance, cita_id} — sin propuestas. 'esta_y_siguientes':

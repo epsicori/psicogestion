@@ -5,6 +5,7 @@ import {
   esquemaCancelarCita,
   esquemaCrearSerie,
   esquemaEditarSerie,
+  esquemaReprogramarCita,
 } from './esquemas';
 
 describe('esquemaAlcance', () => {
@@ -209,5 +210,46 @@ describe('esquemaEditarSerie', () => {
       fecha: '2027-02-30',
     });
     expect(resultado.success).toBe(false);
+  });
+});
+
+describe('esquemaReprogramarCita (T-014)', () => {
+  const base = {
+    citaId: '5b2f7a0e-1c3d-4e5f-8a9b-0c1d2e3f4a5b',
+    fecha: '2026-10-01',
+    hora: '10:00',
+    zona: 'Europe/Madrid',
+  };
+  const firma = 'a'.repeat(64);
+
+  it('una cita suelta: sin alcance ni firma', () => {
+    expect(esquemaReprogramarCita.safeParse(base).success).toBe(true);
+  });
+
+  it('rechaza un día que no existe (30 de febrero) en vez de normalizarlo al 2 de marzo', () => {
+    const resultado = esquemaReprogramarCita.safeParse({ ...base, fecha: '2027-02-30' });
+    expect(resultado.success).toBe(false);
+    if (!resultado.success) expect(resultado.error.issues[0].message).toBe('Ese día no existe.');
+  });
+
+  it('rechaza una hora sin forma HH:MM', () => {
+    expect(esquemaReprogramarCita.safeParse({ ...base, hora: '9:00' }).success).toBe(false);
+    expect(esquemaReprogramarCita.safeParse({ ...base, hora: '24:00' }).success).toBe(false);
+  });
+
+  it('solo dos alcances: «todas» no existe', () => {
+    expect(esquemaReprogramarCita.safeParse({ ...base, alcance: 'todas' }).success).toBe(false);
+  });
+
+  it('esta_y_siguientes exige la firma de la previsualización', () => {
+    const sinFirma = esquemaReprogramarCita.safeParse({ ...base, alcance: 'esta_y_siguientes' });
+    expect(sinFirma.success).toBe(false);
+    if (!sinFirma.success) expect(sinFirma.error.issues[0].path).toEqual(['firma']);
+    expect(esquemaReprogramarCita.safeParse({ ...base, alcance: 'esta_y_siguientes', firma }).success).toBe(true);
+  });
+
+  it('la firma es SHA-256 hexadecimal en minúsculas, nada más', () => {
+    expect(esquemaReprogramarCita.safeParse({ ...base, alcance: 'esta', firma: 'A'.repeat(64) }).success).toBe(false);
+    expect(esquemaReprogramarCita.safeParse({ ...base, alcance: 'esta' }).success).toBe(true);
   });
 });
