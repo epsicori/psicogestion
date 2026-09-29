@@ -183,15 +183,16 @@ describe('RejillaSemana · arrastrar', () => {
   });
 
   it('soltar donde estaba no pide nada', () => {
-    const props = montar();
+    const alSoltar = vi.fn();
+    montar({ alSoltar });
     darCaja();
     const cita = screen.getByRole('button', { name: /Ana G\./ });
     arrastrar(cita, { x: 150, y: yCita + 10 + 30 });
     // 30 px son 18,75 minutos: se ajusta a 17:15, que no es donde estaba. Se vuelve a 17:00:
-    expect(props.alSoltar).toHaveBeenCalledTimes(1);
-    props.alSoltar.mockClear();
+    expect(alSoltar).toHaveBeenCalledTimes(1);
+    alSoltar.mockClear();
     arrastrar(cita, { x: 150, y: yCita + 10 + 8 });
-    expect(props.alSoltar).not.toHaveBeenCalled();
+    expect(alSoltar).not.toHaveBeenCalled();
   });
 
   it('Escape durante el arrastre lo cancela', () => {
