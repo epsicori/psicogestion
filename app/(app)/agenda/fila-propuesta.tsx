@@ -35,9 +35,9 @@ type Props = {
   id: string;
   /** Nombre corto del paciente; `null` en el panel de la cita, que ya lo dice. */
   nombre: string | null;
-  /** «Prevista el 1 oct a las 10:00», ya formateada en el servidor. */
+  /** «Prevista el 1 oct a las 10:00», ya formateada en el servidor; vacía en el panel de la cita. */
   prevista: string;
-  /** El motivo, ya en texto. */
+  /** El motivo, ya en texto; vacío en el panel de la cita. */
   motivo: string;
   /** «Propuesta: 11:00–11:50», o `null` si la propuesta no trae horario (solo se puede descartar). */
   propuesta: string | null;
@@ -78,10 +78,10 @@ export function FilaPropuesta({ id, nombre, prevista, motivo, propuesta, cambioD
     <div className="flex flex-col gap-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         {nombre !== null && <span className="font-medium text-foreground">{nombre}</span>}
-        <span className="text-foreground">{prevista}</span>
+        {prevista !== '' && <span className="text-foreground">{prevista}</span>}
         {permanente && <Pildora tono="warning">{t('agenda.rechazos.yaNoVale')}</Pildora>}
       </div>
-      <p className="text-muted-foreground">{motivo}</p>
+      {motivo !== '' && <p className="text-muted-foreground">{motivo}</p>}
       <p className="text-foreground">{propuesta ?? t('agenda.porConfirmar.sinPropuesta')}</p>
       {cambioDeHora && <p className="text-muted-foreground">{t('agenda.rechazos.cambioDeHora')}</p>}
 
