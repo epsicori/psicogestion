@@ -561,6 +561,8 @@ export const es = {
       citas: { una: '1 cita', varias: '{n} citas' },
       masCitas: '+{n} más',
       horas: 'Horas del día',
+      diasDeLaSemana: 'Días de la semana',
+      citasDelDia: 'Citas del día',
     },
     panelCita: {
       profesional: 'Profesional',
