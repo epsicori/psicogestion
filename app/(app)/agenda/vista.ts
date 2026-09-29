@@ -122,7 +122,7 @@ function colorDe(uuid: string): CitaVista['colorProfesional'] {
   return (1 + (h % 6)) as CitaVista['colorProfesional'];
 }
 
-function nombres(fila: FilaAgenda): { nombrePaciente: string; nombreCorto: string } {
+export function nombres(fila: FilaAgenda): { nombrePaciente: string; nombreCorto: string } {
   if (fila.pacienteNombre === null) {
     const paciente = t('agenda.cita.paciente');
     return { nombrePaciente: paciente, nombreCorto: paciente };

@@ -719,6 +719,7 @@ export const es = {
         varias: 'pendiente desde hace {n} días',
         sinFecha: 'pendiente',
       },
+      fila: '{tipo} · {desde}',
       mas24: 'Más de 24 h',
       mas72: 'Más de 72 h',
       vacio: 'No hay documentación pendiente',
