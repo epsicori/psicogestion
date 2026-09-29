@@ -5,6 +5,7 @@ import type { RolUsuario } from '@/components/armazon/modulos';
 import { diasDelMes } from '@/lib/agenda/mes';
 import type { FilaAgenda } from '@/lib/citas/agenda';
 import { diasEntre, sumarDias } from '@/lib/fechas/calendario';
+import { clasificarHoraLocal } from '@/lib/fechas/anomalias';
 import { limitesDeSemana } from '@/lib/fechas/semana';
 
 import type { Vista } from './parametros';
@@ -128,4 +129,16 @@ export function diasPendiente(fechaReferencia: string | null, hoy: string): numb
 export function nivelDeAntiguedad(dias: number | null): 'mas24' | 'mas72' | null {
   if (dias === null || dias < 1) return null;
   return dias < 3 ? 'mas24' : 'mas72';
+}
+
+/**
+ * ¿La hora local de un instante propuesto cae en un cambio de hora (inexistente o ambigua)?
+ * Clasifica la hora, no la regla de la serie (T-014 §8.3). Sin propuesta, no.
+ */
+export function esCambioDeHora(inicioPropuesto: string | null, zona: string): boolean {
+  if (inicioPropuesto === null) return false;
+  const instante = new Date(inicioPropuesto);
+  const fecha = format(instante, 'yyyy-MM-dd', { in: tz(zona) });
+  const hora = format(instante, 'HH:mm', { in: tz(zona) });
+  return clasificarHoraLocal(fecha, hora, zona).clasificacion !== 'normal';
 }

@@ -4,6 +4,7 @@ import type { FilaAgenda } from '@/lib/citas/agenda';
 
 import {
   diasPendiente,
+  esCambioDeHora,
   filtrarPorCentro,
   hoyEn,
   metricasDelMes,
@@ -196,5 +197,22 @@ describe('rol', () => {
     expect(puedeVerCuadro('profesional_sanitario')).toBe(true);
     expect(puedeVerCuadro('tecnico_administrativo')).toBe(false);
     expect(puedeVerCuadro(null)).toBe(false);
+  });
+});
+
+describe('esCambioDeHora', () => {
+  it('una hora corriente no lo es', () => {
+    expect(esCambioDeHora('2026-10-01T08:00:00Z', ZONA)).toBe(false);
+  });
+
+  it('el salto de marzo y el solape de octubre sí, medidos con la hora local del instante', () => {
+    // 2026-10-25 02:30 local ocurre dos veces (ambigua); el instante 00:30Z es su primera vez.
+    expect(esCambioDeHora('2026-10-25T00:30:00Z', ZONA)).toBe(true);
+    // Una hora después del solape ya es normal.
+    expect(esCambioDeHora('2026-10-25T03:30:00Z', ZONA)).toBe(false);
+  });
+
+  it('sin propuesta no hay cambio de hora', () => {
+    expect(esCambioDeHora(null, ZONA)).toBe(false);
   });
 });
