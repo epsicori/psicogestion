@@ -90,6 +90,19 @@ Manda sobre todo lo anterior y lo que sigue donde choquen.
 - Criterios que cambian: el 5 (C.13 ya no admite `null`; hay una negativa nueva para
   `fecha_sesion`), el 6 (también `fecha_sesion`) y el 9 (dieciséis claves).
 
+# Enmienda por el ADR-072 (propietario, 29-09-2026)
+
+Manda sobre la enmienda anterior donde choquen.
+
+- **Depende de la columna del coprofesional** que añade T-034 en `notas_clinicas`.
+- **El coprofesional entra en el sobre**: diecisiete claves. Es la única clave **nulable** de las
+  nuevas (una nota sin coterapia lo sella como `null`, nunca omitido); con valor, UUID en
+  minúsculas. Se coteja con la cabecera igual que `episodio_id`, y el mensaje de
+  `fn_congelar_cabecera_sellada()` lo incluye.
+- Criterios que cambian: el 5 (negativas del coprofesional: distinto de la cabecera, y `null`
+  cuando la cabecera tiene valor), el 6 (también el coprofesional) y el 9 (diecisiete claves, y una
+  prueba de sensibilidad que cambia solo el coprofesional).
+
 # Tareas
 
 - [ ] **Diseño** (`tickets/T-012c/diseno.md`, arquitecto) con D1–D3 cerradas. El arquitecto

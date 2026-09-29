@@ -65,6 +65,16 @@ fusionados), ADR-067, ADR-071.
   (o del paciente participante, en conjuntas, ADR-030). Si hoy no lo impide nada, lo impone la
   base de datos, no la aplicación.
 
+- **D5 · Coprofesional (ADR-072, cerrada por el propietario el 29-09-2026).** Cada nota puede
+  indicar **un** coprofesional: quién más estuvo en la sesión. Es opcional y va en la cabecera de
+  `notas_clinicas`, que se congela al firmar (se añade a `congelar_cabecera_sellada`). La base de
+  datos impone que sea un profesional con `profesional_id` real, distinto del autor y con alta en
+  el centro del episodio. **No da acceso a nada**: ninguna política de RLS lo lee. El diseño
+  decide el nombre de la columna, la clave foránea y el errcode de cada negativa.
+- **D6 · Episodio cerrado (ADR-072, cerrada por el propietario el 29-09-2026).** Una nota nueva
+  no puede colgar de un episodio con `cerrado_en` no nulo, y lo impide la base de datos (el
+  disparador de coherencia de D4), no solo `episodio_para_nota()`.
+
 # Tareas
 
 - [ ] **Diseño** (`tickets/T-034/diseno.md`, arquitecto) con D1-D4 cerradas.
@@ -100,9 +110,15 @@ fusionados), ADR-067, ADR-071.
 8. **Técnico administrativo**: no puede abrir episodios por esta vía.
 9. `npm run test:rls` en verde, con el módulo 19 incluido. `npm run verificar:huellas` dice
    `cadena íntegra: cero anomalías.`
-10. `npm run tipos` deja `episodio_id` no nulable en `notas_clinicas`. `npm run lint`,
+10. `npm run tipos` deja `episodio_id` no nulable y el coprofesional nulable en `notas_clinicas`. `npm run lint`,
     `npm run lint:migraciones`, `npm run build` y `node ~/.claude/pipeline/territorio.mjs T-034`
     en verde.
+11. **Coprofesional**: una nota con coprofesional válido se guarda, y un coprofesional sin otra vía de lectura **no** la lee
+    (negativa de lectura en el módulo 19). Coprofesional igual al autor, inexistente o sin alta en
+    el centro del episodio falla. Cambiarlo tras la primera versión falla como los demás campos
+    congelados. Cada negativa tiene su gemela positiva.
+12. **Episodio cerrado**: un `insert` directo en `notas_clinicas` sobre un episodio cerrado falla en
+    base de datos, con el errcode que fije el diseño; sobre uno abierto, pasa.
 
 # Fuera de alcance
 
