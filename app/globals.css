@@ -34,6 +34,12 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-profesional-1: var(--profesional-1);
+  --color-profesional-2: var(--profesional-2);
+  --color-profesional-3: var(--profesional-3);
+  --color-profesional-4: var(--profesional-4);
+  --color-profesional-5: var(--profesional-5);
+  --color-profesional-6: var(--profesional-6);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -64,6 +70,14 @@
   --input: oklch(0.88 0.025 165);
   --ring: oklch(0.55 0.1 163);
   --radius: 0.7rem;
+  /* Franja de color del profesional en la agenda (T-014, D7): decoración no textual, el
+     profesional va siempre escrito. Seis matices separados, luminosidad media. */
+  --profesional-1: oklch(0.6 0.12 163);
+  --profesional-2: oklch(0.6 0.13 250);
+  --profesional-3: oklch(0.6 0.14 315);
+  --profesional-4: oklch(0.65 0.14 55);
+  --profesional-5: oklch(0.6 0.15 20);
+  --profesional-6: oklch(0.6 0.1 200);
 }
 
 @layer base {

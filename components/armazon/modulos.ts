@@ -49,7 +49,7 @@ export const MODULOS: Modulo[] = [
     etiqueta: t('modulos.agenda'),
     href: '/agenda',
     icono: CalendarDays,
-    disponible: false,
+    disponible: true,
     roles: TODOS_LOS_ROLES,
   },
   {

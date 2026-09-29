@@ -43,6 +43,11 @@ describe('modulosDe · el armazón enseña lo que la matriz concede, y nada más
     expect(recortados[0].roles).toEqual(['administrador']);
   });
 
+  it('Agenda está disponible: T-014 construye /agenda y el armazón la enlaza', () => {
+    const agenda = MODULOS.find((m) => m.href === '/agenda');
+    expect(agenda?.disponible).toBe(true);
+  });
+
   it('ningún módulo se queda sin rol: una lista vacía lo escondería de todos en silencio', () => {
     for (const modulo of MODULOS) {
       expect(modulo.roles.length).toBeGreaterThan(0);
