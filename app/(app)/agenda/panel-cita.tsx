@@ -24,7 +24,7 @@ type Props = {
 function Campo({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5 text-sm">
-      <span className="text-muted-foreground text-xs">{etiqueta}</span>
+      <span className="text-foreground text-xs">{etiqueta}</span>
       <span className="text-foreground">{children}</span>
     </div>
   );
@@ -78,7 +78,7 @@ export function PanelCita({ cita, ancla, limites, alCerrar, pausado, alReprogram
 
         {propuesta && (
           <div className="border-border flex flex-col gap-1 border-t pt-3">
-            <span className="text-muted-foreground text-xs">{t('agenda.panelCita.propuesta')}</span>
+            <span className="text-foreground text-xs">{t('agenda.panelCita.propuesta')}</span>
             <FilaPropuesta
               id={propuesta.id}
               nombre={null}

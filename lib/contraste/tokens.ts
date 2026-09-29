@@ -49,6 +49,7 @@ export const PARES: Par[] = [
   { texto: 'muted-foreground', fondo: 'background', donde: 'Texto secundario y ayudas sobre el fondo' },
   { texto: 'muted-foreground', fondo: 'card', donde: 'Texto secundario dentro de tarjeta (rótulos del armazón)' },
   { texto: 'muted-foreground', fondo: 'muted', donde: 'Píldora «pronto» de la navegación' },
+  { texto: 'foreground', fondo: 'secondary', donde: 'Etiquetas y texto del panel de la cita y del día en la agenda (PanelAnclado es bg-secondary)' },
   { texto: 'primary-foreground', fondo: 'primary', donde: 'Botón principal y marca del armazón' },
   { texto: 'secondary-foreground', fondo: 'secondary', donde: 'Módulo activo de la navegación y avatar de paciente' },
   { texto: 'accent-foreground', fondo: 'accent', donde: 'Avisos de atención' },

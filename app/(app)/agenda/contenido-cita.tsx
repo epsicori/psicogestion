@@ -68,7 +68,7 @@ export function ContenidoCita({ cita, late = false }: { cita: CitaVista; late?: 
             </>
           )}
         </span>
-        <span className="text-muted-foreground truncate text-xs">{tipoYProfesional(cita)}</span>
+        <span className="text-foreground truncate text-xs">{tipoYProfesional(cita)}</span>
         <span className="text-xs">
           <PuntoEstadoCita estado={cita.estado} conEtiqueta={false} late={late && cita.late} />
         </span>

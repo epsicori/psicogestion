@@ -91,7 +91,7 @@ export function FilaPropuesta({ id, nombre, prevista, motivo, propuesta, cambioD
         </p>
       )}
       {/* Siempre montada: un `role="status"` que aparece con el texto ya dentro no se anuncia. */}
-      <p role="status" className="text-muted-foreground min-h-0">
+      <p role="status" className="text-foreground min-h-0">
         {pendiente ? t('agenda.porConfirmar.enCurso') : !permanente && fallo ? fallo.mensaje : ''}
       </p>
 

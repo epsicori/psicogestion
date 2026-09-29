@@ -25,7 +25,7 @@ export function PanelDia({ dia, citas, ancla, limites, alCerrar, pausado, alAbri
   return (
     <PanelAnclado ancla={ancla} limites={limites} titulo={dia.etiquetaLarga} alCerrar={alCerrar} pausado={pausado}>
       {ordenadas.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{t('agenda.panelDia.sinCitas')}</p>
+        <p className="text-foreground text-sm">{t('agenda.panelDia.sinCitas')}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {ordenadas.map((cita) => (
