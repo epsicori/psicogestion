@@ -357,7 +357,10 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
 - **Toda nota cuelga de un episodio** (ADR-071, T-034): `notas_clinicas.episodio_id` es obligatorio,
   del episodio del AUTOR y del mismo paciente o de un participante (la base lo impone con
   `exigir_episodio_coherente_en_nota`). Una nota nueva no cuelga de un episodio cerrado y, si es
-  de coterapia, lleva un `coprofesional_id` opcional que no da acceso a nada (ADR-072). La
+  de coterapia, lleva un `coprofesional_id` opcional (profesional sanitario distinto del autor,
+  con alta vigente en el centro del episodio) que no da acceso a nada —ninguna política lo
+  lee— y se congela con la primera versión (ADR-072). Un episodio con notas no cambia de
+  paciente ni de profesional, y un participante con notas no se mueve ni se borra. La
   aplicación obtiene el episodio con `episodio_para_nota()`.
 - **Duplicados** (ADR-031): no se fusionan, **se vinculan**. `fusionado_en` apunta al
   superviviente, el absorbido queda en solo lectura, nada se repunta y RLS resuelve por el
