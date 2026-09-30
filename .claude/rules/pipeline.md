@@ -5,7 +5,7 @@
 |---|---|
 | `supabase/**`, `scripts/*.sql`, `scripts/rls/**`, `lib/supabase/**`, `lib/huella/**`, `lib/cuentas/**`, `lib/citas/**`, `lib/dinero/**`, `docs/**` | **Fábrica (Claude)** |
 | `components/**`, `app/**`, `next.config.ts`, `proxy.ts`, `lib/i18n/**`, `lib/contraste/**`, `.github/**` | Interfaz: la fábrica desde el 06-09-2026 (un CLI de volumen solo para piezas de pintura) |
-| `lib/identidad/**`, `lib/fechas/**`, `lib/agenda/**`, `scripts/lint-migraciones.ts` | Funciones puras (carril de Kimi) |
+| `lib/identidad/**`, `lib/fechas/**`, `lib/agenda/**`, `scripts/lint-migraciones.ts` | Funciones puras: la fábrica desde el 30-09-2026 (implementador Opus; Kimi deja el proyecto) |
 | `tickets/**`, `PLAN.md`, `CLAUDE.md`, `CARRILES.md`, `.claude/**` | Nadie automático: el usuario y el arquitecto |
 
 - Cada ticket declara `territorio:`; `node ~/.claude/pipeline/territorio.mjs T-XXX` lo comprueba. Lo que se sale se anota en `docs/state.md` §Hallazgos y se revierte; nunca se toca "un momento".

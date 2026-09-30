@@ -93,4 +93,6 @@ TanStack Table · date-fns.
 El reparto por fichero (quién escribe dónde, qué se delega y cómo se integra) está en
 `.claude/rules/pipeline.md`, que se carga siempre. `CARRILES.md` y `fabrica/ORDEN.md` quedan
 como historia del reparto a tres del 29-08-2026; el carril de interfaz lo lleva la fábrica desde
-el 06-09-2026 y el de funciones puras sigue siendo de Kimi.
+el 06-09-2026 y el de funciones puras desde el 30-09-2026 (Kimi deja el proyecto). `kimi/`,
+`KIMI.md` y `kimi/alcance.json` quedan como historia: el territorio lo da el `territorio:` del
+ticket, no ese fichero.
