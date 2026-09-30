@@ -297,6 +297,14 @@ export function construirVista(entrada: EntradaVista): VistaCalendario {
         columnasEnGrupo: celda.columnasEnGrupo,
       });
     });
+    // Una cita que cruza la medianoche da dos tramos, y los dos son la cita que late:
+    // el latido va a UNO solo, el del día de hoy, o al primero si hoy no está en la
+    // rejilla (revisión TS H2: «un único elemento animado»).
+    const tramosQueLaten = citas.flatMap((c, i) => (c.late ? [i] : []));
+    if (tramosQueLaten.length > 1) {
+      const elegido = tramosQueLaten.find((i) => dias[citas[i].diaIndice]?.fecha === hoy) ?? tramosQueLaten[0];
+      citas = citas.map((c, i) => (c.late && i !== elegido ? { ...c, late: false } : c));
+    }
     for (const c of citas) {
       const fin = Math.min(c.minutoPared + c.duracionMinutos, MINUTOS_DIA);
       eje = {

@@ -132,6 +132,22 @@ describe('construirVista · la semana', () => {
     expect(v.citas.every((c) => c.fechaLocal === '2026-09-22' && c.horaLocal === '23:30')).toBe(true);
   });
 
+  // Revisión TS H2: los dos tramos son la misma cita en curso; late solo en uno.
+  it.each([
+    ['2026-09-23', new Date('2026-09-22T22:15:00Z'), 1],
+    ['2026-09-22', new Date('2026-09-22T21:45:00Z'), 0],
+  ])('una cita en curso que cruza la medianoche late en un solo tramo: el de hoy (%s)', (hoy, ahora, tramoQueLate) => {
+    const v = construirVista(
+      entrada({
+        hoy,
+        ahora,
+        filas: [fila({ id: 'n', inicio: new Date('2026-09-22T21:30:00Z'), fin: new Date('2026-09-22T22:30:00Z'), enCurso: true })],
+      }),
+    );
+    expect(v.citas).toHaveLength(2);
+    expect(v.citas.filter((c) => c.late).map((c) => c.tramo)).toEqual([tramoQueLate]);
+  });
+
   it('rango, duración, nombre corto y la fila entera en cadenas (ningún Date cruza al cliente)', () => {
     const v = construirVista(
       entrada({
