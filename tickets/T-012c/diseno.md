@@ -283,3 +283,765 @@ Texto que sustituye la descripción del sobre en §1.1:
 > El sobre canónico es el de la **era 4** (`ESQUEMA_VERSION = 4`, T-012c, ADR-067), con quince claves: abierta_en, alcance, anotaciones_reservadas, autor_id, cita_id, creada_en, cuerpo, episodio_id, esquema_version, firmada_en, margen_sesion_minutos, motivo_cambio, nota_id, paciente_id y redactada_en_sesion. nota_id, paciente_id y episodio_id (null si la cabecera no tiene episodio) se sellan porque deciden quién lee la versión. La Server Action pasa a `firmarVersionNota` `pacienteId` y `episodioId` **leídos de la cabecera `notas_clinicas` que firma**, nunca del formulario. El disparador rechaza con 23514 cualquier discrepancia con la cabecera, también la de `autor_id` (6.11-6.14).
 
 En las líneas 335 y 694, aproximadamente: cambiar «era 3», «esquema_version 3» y «doce claves» por «era 4», «esquema_version 4» y «quince claves».
+
+---
+
+## 9 · Enmienda por el ADR-071 y el ADR-072
+
+Arquitecto · 29-09-2026 · Contrato: las secciones «Enmienda por el ADR-071» y «Enmienda por el
+ADR-072» de `tickets/T-012c-nota-id-en-el-sobre.md`. Decisiones: ADR-071 y ADR-072. Base: el
+diseño de T-034 con su «Enmienda por el ADR-072» (`tickets/T-034/diseno.md` §E.1-E.6).
+
+**Precedencia.** Esta sección manda sobre §0-§8 y sobre el Anexo A donde choquen. Lo que §9 no
+toca sigue en vigor: guarda de era (§1.3.1), `left join` del verificador (D7), mutantes por
+fragmento derecho (D8, D9), F.9b/N1, `t012c_mutar` y `t012c_restaurar`, el envoltorio de NCONJ
+(§1.7) y los criterios 1-4, 8 y 10-13. El Anexo A queda **sustituido**: la enmienda ya está
+escrita en `tickets/T-012/diseno.md` §1.1.
+
+**Dependencia dura.** T-012c se implementa **después de que T-034 esté en `main`**. Necesita:
+- `notas_clinicas.episodio_id not null`;
+- la columna `coprofesional_id`;
+- el disparador `exigir_episodio_coherente_en_nota`;
+- la re-emisión de `fn_congelar_cabecera_sellada` con `coprofesional_id` en el `update of`;
+- los episodios que T-034 añade a la fijación de 14.
+
+### 9.0 · Hechos verificados (nuevos)
+
+| # | Hecho | Ruta |
+|---|---|---|
+| H14 | La columna se llama **`coprofesional_id`**: `uuid` nulable, FK a `perfiles(id)`, `check notas_clinicas_coprofesional_no_es_autor`. El disparador `exigir_episodio_coherente_en_nota` exige que sea `profesional_sanitario` con alta vigente en el **centro del episodio**. El nombre queda fijado: no hay dependencia abierta. | `tickets/T-034/diseno.md` §E.1 |
+| H15 | T-034 re-emite `fn_congelar_cabecera_sellada()` con el mensaje `'…no se puede reatribuir (paciente, fecha de sesión, autor, episodio, cita o coprofesional): se congela con la primera versión (ADR-035/046/072)'`, errcode 42501. Su 19.41 comprueba el fragmento `no se puede reatribuir`. | `tickets/T-034/diseno.md:637, 731` |
+| H16 | La política de alta de versiones es `with check ((select public.historia_desbloqueada()) and autor_id = (select auth.uid()) and exists (select 1 from public.notas_clinicas n where n.id = nota_id and n.autor_id = (select auth.uid())))`. `authenticated` tiene `grant select, insert` de tabla entera sobre `notas_clinicas_versiones`. | `20260822160000_rls_funciones_y_politicas.sql:1169`, `20260822094547_*.sql:1565` |
+| H17 | Hay **dos** disparadores `before insert` en `notas_clinicas_versiones`, y disparan por orden alfabético: primero `exigir_episodio_en_nota_conjunta` (`when new.alcance = 'conjunta'`, 23514 si la nota no existe **o** no tiene episodio), después `sellar_version_nota`. El `with check` de la RLS se evalúa después de los `before`; la FK de `nota_id`, al final. | `20260822094547_*.sql:1302-1318, 1426-1430` |
+| H18 | `fn_vaciar_borrador_al_firmar` es `after insert` sobre versiones y hace `update` de la fila de `notas_clinicas` en la misma transacción. | `20260829210000_cadena_de_huellas.sql` |
+| H19 | El disparador **no** exige bytes canónicos: la 6.1 mira las claves del jsonb y la huella se calcula sobre los bytes recibidos. Un sobre producido con `jsonb::text` sirve para las negativas. | `20260915130000_alcance_en_el_sobre.sql` |
+| H20 | `pg_temp.como()` hace `set local role authenticated` y fija `request.jwt.claims`; `reset_sesion()` deshace las dos. | `scripts/rls/00-ayudantes.sql` |
+| H21 | **No existe** `pg_temp.assert_no_lanza`. La primera versión que inserta el banco es la de NCONJ. | `scripts/rls/00-ayudantes.sql`, `scripts/rls/01-fijacion.sql:124-129` |
+| H22 | `sobre_prueba()` tiene esta firma: `(p_autor_id, p_creada_en, p_cuerpo, p_anotaciones_reservadas, p_motivo_cambio, p_cita_id, p_margen_sesion_minutos, p_redactada_en_sesion, p_abierta_en, p_alcance)`, `language sql`, volátil por omisión. Llamadas: 5 en 01 (una con `p_alcance =>`), 1 en 04 y 34 en 14. **T-034 añade otra en `scripts/rls/19-nota-en-episodio.sql` (19.41)**, fuera del territorio de T-012c. | `scripts/rls/00-ayudantes.sql:180`, `tickets/T-034/diseno.md:731` |
+| H23 | `seed-completo.sql:41` define `pg_temp.sobre(...)` como `immutable`, con 5 llamadas. `t005-concurrencia.sql:63` crea `public.t005_sobre_prueba(uuid, timestamptz, jsonb, text)`; la línea 103 es un `\!` con UUID literales (nota `e0050002-0000-4000-8000-000000000002`); la 184 la borra por esa firma. T2 firma **otra** nota del mismo paciente y se exige 55P03. | `supabase/seed-completo.sql:41`, `scripts/t005-concurrencia.sql` |
+| H24 | PRO2 tiene alta en CB desde la fijación; PRO1 y TEC1, en CA. El módulo 19 de T-034 inserta `perfiles_centros (PRO2, CA, hasta null)`. El índice único parcial `perfiles_centros_una_vigente_por_par` impide que 14 inserte antes el mismo par. | `scripts/rls/01-fijacion.sql:57-69`, `20260829120000_perfiles_centros_multicentro.sql:73`, `tickets/T-034/diseno.md:716` |
+| H25 | `episodios_asistenciales.centro_id` no está atado por ninguna restricción al centro del paciente. | `20260822094547_*.sql:517-529` |
+| H26 | Patrón de caducidad del candado: `update public.desbloqueos_historia set concedido_en = now() - interval '1 hour', caduca_en = now() - interval '1 minute' where perfil_id = … and revocado_en is null`. | `scripts/rls/03-candado.sql:33-45` |
+| H27 | `cita_id` del sobre solo se comprueba de tipo (6.8) y contra margen y sesión (6.9). Ni el disparador ni el verificador lo cotejan con `notas_clinicas.cita_id`. | `20260915130000_alcance_en_el_sobre.sql`, `20260924150000_verificador_coteja_sobre_y_fila.sql:138-147` |
+
+Estado de lo que §0 dejó sin verificar:
+- **V1 y V3**: resueltos (H22, H23).
+- **V2**: resuelto. NCONJ es la primera firma y hay que crear `assert_no_lanza` (H21).
+- **V4**: resuelto. En `notas_clinicas` saltan `congelar_cabecera_sellada` y
+  `exigir_episodio_coherente_en_nota`; 9.7 dice cuál se apaga en cada escenario.
+- **V5**: lo cierra el ADR-071.7.
+- **V7**: resuelto (F.0-F.11 más F.9b).
+- **V6 y V8**: siguen abiertos, con el mismo tratamiento que en §0.
+
+Nuevos sin verificar (el implementador los comprueba primero):
+- **V9**: que `current_setting('role', true)` dentro de una función `security definer` siga
+  valiendo `'authenticated'` en una sesión de usuario. `security definer` cambia el usuario
+  efectivo, no el GUC `role`. C.perm lo demuestra solo: si el paso 0 no entrara, los intentos sin
+  mutante ya darían errores distintos y la aserción fallaría.
+- **V10**: los UUID de los episodios que T-034 da a NCADX (EPICAD
+  `e0050001-0000-4000-8000-000000000001`) y a NVEC (EPIVEC `e0050001-0000-4000-8000-000000000008`),
+  según `tickets/T-034/diseno.md:264`. Si al llegar a `main` son otros, se usan los reales.
+- **V11**: que la primera versión insertada **como `authenticated`** del banco (N067E, 9.7) pase
+  también por los disparadores `after`. Si alguno la rechaza, es un hallazgo para T-012 y se
+  escala; no se esquiva.
+
+### 9.1 · El sobre de la era 4: diecisiete claves (sustituye §1.1 y D3)
+
+En el orden de `array_agg(k order by k)`, que coincide en C, en en_US y con JCS:
+
+`abierta_en, alcance, anotaciones_reservadas, autor_id, cita_id, coprofesional_id, creada_en, cuerpo, episodio_id, esquema_version, fecha_sesion, firmada_en, margen_sesion_minutos, motivo_cambio, nota_id, paciente_id, redactada_en_sesion`
+
+| Clave nueva | Tipo en el sobre | Valor | Cotejo en disparador y verificador |
+|---|---|---|---|
+| `nota_id` | UUID en minúsculas, no nulable | `versiones.nota_id` | columna de la versión (6.11) |
+| `paciente_id` | UUID en minúsculas, no nulable | `notas_clinicas.paciente_id` | cabecera (6.12) y copia `versiones.paciente_id` (verificador) |
+| `episodio_id` | UUID en minúsculas, **no nulable** (ADR-071.4) | `notas_clinicas.episodio_id` | cabecera (6.13) |
+| `fecha_sesion` | cadena `AAAA-MM-DD`, no nulable (ADR-071.4) | `to_char(notas_clinicas.fecha_sesion, 'YYYY-MM-DD')` | cabecera (6.15) |
+| `coprofesional_id` | UUID en minúsculas **o `null`**; la clave siempre está (ADR-072.3) | `notas_clinicas.coprofesional_id` | cabecera (6.16) |
+
+- `autor_id` no cambia de forma. Se coteja además con `notas_clinicas.autor_id` (6.14, D2).
+- `fecha_sesion` es una **fecha**, no un instante: no lleva zona ni hora, así que no depende del
+  `TimeZone` de la sesión. F.19 (Kiritimati) lo comprueba.
+
+### 9.2 · `lib/huella/sobre.ts` (sustituye §1.2)
+
+- `ESQUEMA_VERSION = 4`. `ALGORITMO_VERSION` no se toca. El comentario de cabecera dice
+  «diecisiete claves» y cita ADR-067, ADR-071 y ADR-072.
+- `EntradaFirma` gana cuatro campos **obligatorios** (sin `?`), leídos de la cabecera que se firma:
+  - `pacienteId: string`
+  - `episodioId: string`
+  - `fechaSesion: string`, en `'AAAA-MM-DD'` tal como PostgREST devuelve una columna `date`.
+    Nunca un `Date`.
+  - `coprofesionalId: string | null`. Es obligatorio: el llamante escribe `null` a mano.
+- Esquema auxiliar nuevo, junto a `instanteIso`:
+  ```ts
+  const fechaIso = z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((s) => {
+      const d = new Date(`${s}T00:00:00.000Z`);
+      return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+    }, 'fecha_sesion debe ser una fecha real AAAA-MM-DD');
+  ```
+  El `refine` rechaza `2026-02-30`, que la expresión regular deja pasar.
+- `esquemaSobre` (sigue `.strict()`) añade:
+  - `coprofesional_id: uuidMinusculas.nullable()`, **sin `.optional()`**: omitir la clave falla;
+  - `episodio_id: uuidMinusculas`;
+  - `fecha_sesion: fechaIso`;
+  - `nota_id: uuidMinusculas`;
+  - `paciente_id: uuidMinusculas`.
+- `sinNormalizar` añade:
+  - `coprofesional_id: entrada.coprofesionalId === null ? null : entrada.coprofesionalId.toLowerCase()`
+  - `episodio_id: entrada.episodioId.toLowerCase()`
+  - `fecha_sesion: entrada.fechaSesion`
+  - `nota_id: entrada.notaId.toLowerCase()`
+  - `paciente_id: entrada.pacienteId.toLowerCase()`
+- `firmar.ts` no cambia (§1.2 sigue en pie): ninguna de las cinco es una columna que mande el
+  llamante, y el tipo ya obliga a T-012.
+
+### 9.3 · Migración `<sello>_nota_id_en_el_sobre.sql` (sustituye §1.3, puntos 2 a 6)
+
+El sello tiene que ser posterior al de la migración de T-034
+(`20260929120000_nota_siempre_en_episodio.sql` según su diseño). Orden de bloques:
+
+1. Guarda de era (§1.3.1, sin cambios).
+2. `fn_sellar_version_nota`.
+3. `fn_exigir_episodio_en_nota_conjunta` (2b).
+4. Verificador.
+5. `fn_congelar_cabecera_sellada`.
+6. `default 4`.
+7. `comment on`.
+
+**2 · `create or replace function public.fn_sellar_version_nota()`**
+
+Lleva el cuerpo íntegro de `20260915130000_alcance_en_el_sobre.sql`, con estos cambios y ninguno
+más:
+
+- `declare` añade `v_episodio_id uuid; v_autor_cabecera uuid; v_fecha_sesion date; v_coprofesional_id uuid;`.
+- `v_esperadas` pasa a las diecisiete claves de 9.1, en ese orden.
+- **Paso 0 (nuevo): permisos antes que cotejo (ADR-071.5).** Es la **primera sentencia** del
+  cuerpo, antes de la guarda 1:
+  ```sql
+  -- 0 · Permisos antes que cotejo (ADR-071.5). Misma condición que la política
+  -- notas_clinicas_versiones_alta. Todo lo que sigue lee la cabecera saltándose la
+  -- RLS (security definer) y lanza errores que dependen de ella; la RLS de alta se
+  -- evalúa DESPUÉS de este disparador. Sin este paso, el orden de los errores
+  -- revelaría a quien no puede firmar el paciente, el episodio, el autor, la fecha,
+  -- el coprofesional y hasta la existencia de la nota. postgres y service_role no
+  -- pasan por la RLS y tampoco por aquí. Si cambia la política, cambia este paso
+  -- (C.perm.0 lo vigila).
+  if current_setting('role', true) in ('authenticated', 'anon') then
+    if not coalesce(
+         (select public.historia_desbloqueada())
+         and new.autor_id = (select auth.uid())
+         and exists (select 1 from public.notas_clinicas n
+                      where n.id = new.nota_id and n.autor_id = (select auth.uid())),
+         false) then
+      raise exception 'No puedes firmar una versión de esta nota: la firma su autor, con la historia desbloqueada (T-012c, ADR-071)'
+        using errcode = '42501';
+    end if;
+  end if;
+  ```
+  - Fragmento: **`No puedes firmar una versión de esta nota`**.
+  - Una nota inexistente cae en el mismo error, porque el `exists` es falso. Esto cierra el
+    oráculo de existencia del `into strict` (P0002) del paso 2.
+  - El `coalesce(…, false)` convierte el `null` de `auth.uid()` sin `sub` en rechazo.
+  - Se decide por el GUC `role` y no por `auth.uid() is not null`: un `postgres` con
+    `request.jwt.claims` sin limpiar (siembra, t005) no debe quedar sometido a la regla (D19).
+- **Paso 2.** Sustituye el `for share` de D5, que interbloquea (D13):
+  ```sql
+  select n.paciente_id, n.episodio_id, n.autor_id, n.fecha_sesion, n.coprofesional_id
+    into strict v_paciente_id, v_episodio_id, v_autor_cabecera, v_fecha_sesion, v_coprofesional_id
+    from public.notas_clinicas n
+   where n.id = new.nota_id
+     for no key update;
+  ```
+- **Comentario del paso 6**: dice «dieciséis comprobaciones, diecisiete claves». Se **borra** el
+  paréntesis desfasado (líneas 161-163 de la migración anterior) y se pone la frase de §1.3.2.
+- **Mensaje de la 6.1**: cita `ADR-035/046/057/067/071/072` y conserva «exactamente las claves».
+- **Tras la 6.10, seis comprobaciones nuevas.** Todas lanzan 23514 y usan `is distinct from`
+  sobre jsonb. Cada condición va **en una sola línea**, porque los mutantes la buscan por
+  fragmento.
+
+| # | Condición (una línea) | Mensaje | Fragmento para `_msg` |
+|---|---|---|---|
+| 6.11 | `if (v_contenido -> 'nota_id') is distinct from to_jsonb(new.nota_id::text) then` | `'El nota_id del sobre no coincide con la columna nota_id, o no es una cadena (T-012c, ADR-067)'` | `El nota_id del sobre no coincide` |
+| 6.12 | `if (v_contenido -> 'paciente_id') is distinct from to_jsonb(v_paciente_id::text) then` | `'El paciente_id del sobre no coincide con el paciente de la cabecera notas_clinicas, o no es una cadena (T-012c, ADR-067)'` | `El paciente_id del sobre no coincide` |
+| 6.13 | `if (v_contenido -> 'episodio_id') is distinct from to_jsonb(v_episodio_id::text) then` | `'El episodio_id del sobre no coincide con el episodio de la cabecera notas_clinicas, o no es una cadena (T-012c, ADR-067, ADR-071)'` | `El episodio_id del sobre no coincide` |
+| 6.14 | `if (v_contenido -> 'autor_id') is distinct from to_jsonb(v_autor_cabecera::text) then` | `'El autor_id del sobre no coincide con el autor de la cabecera notas_clinicas (T-012c, ADR-067)'` | `no coincide con el autor de la cabecera` |
+| 6.15 | `if (v_contenido -> 'fecha_sesion') is distinct from to_jsonb(to_char(v_fecha_sesion, 'YYYY-MM-DD')) then` | `'La fecha_sesion del sobre no coincide con la fecha de sesión de la cabecera notas_clinicas (AAAA-MM-DD), o no es una cadena (T-012c, ADR-071)'` | `La fecha_sesion del sobre no coincide` |
+| 6.16 | `if (v_contenido -> 'coprofesional_id') is distinct from coalesce(to_jsonb(v_coprofesional_id::text), 'null'::jsonb) then` | `'El coprofesional_id del sobre no coincide con el coprofesional de la cabecera notas_clinicas (null si no hay), o no es una cadena ni null (T-012c, ADR-072)'` | `El coprofesional_id del sobre no coincide` |
+
+- La 6.13 ya no lleva `coalesce`: tras T-034, `v_episodio_id` nunca es null. Un sobre con
+  `"episodio_id":null` da `'null'::jsonb` frente a una cadena y falla.
+- Se repite `revoke all on function public.fn_sellar_version_nota() from public, anon, authenticated, service_role;`.
+
+**2b · `create or replace function public.fn_exigir_episodio_en_nota_conjunta()`** (nuevo en
+§9, D20). Mismo cuerpo que en `20260822094547:1305-1318`, con una sola línea cambiada. La
+condición pasa de «no existe una nota con este id y con episodio» a:
+```sql
+  if exists (select 1 from public.notas_clinicas n where n.id = new.nota_id and n.episodio_id is null) then
+```
+- **Por qué.** Este disparador corre **antes** que el paso 0 (H17). Con la condición vieja, una
+  versión `conjunta` contra una nota inexistente devuelve el 23514 «exige que su nota tenga
+  episodio», y contra una existente llega al 42501 del paso 0. Es un oráculo de existencia, y el
+  ADR-071.5 lo prohíbe.
+- **Qué hace la condición nueva.** Una nota inexistente pasa de largo y el paso 0 la rechaza como
+  a cualquier otra.
+- **Qué queda.** Tras T-034 la rama es inalcanzable (`episodio_id not null`), pero se mantiene
+  como defensa.
+- Se repite su `revoke`, con los mismos destinatarios que en `20260822094547`.
+
+**3 · `create or replace function public.verificar_cadena_huellas(p_paciente_id uuid default null)`**
+(sustituye §1.3.3):
+
+- La CTE hace `left join public.notas_clinicas n on n.id = v.nota_id` y añade estas columnas:
+  - `n.paciente_id as cab_paciente_id`
+  - `n.episodio_id as cab_episodio_id`
+  - `n.autor_id as cab_autor_id`
+  - `n.fecha_sesion as cab_fecha_sesion`
+  - `n.coprofesional_id as cab_coprofesional_id`
+- La rama `sobre_no_coincide_con_fila` añade siete líneas. Cada una tiene un fragmento derecho
+  único; su mutante lo sustituye por `(c.sobre -> '<clave>')`.
+
+| Línea | Fragmento derecho |
+|---|---|
+| `or (c.sobre -> 'nota_id') is distinct from to_jsonb(c.nota_id::text)` | `to_jsonb(c.nota_id::text)` |
+| `or (c.sobre -> 'paciente_id') is distinct from to_jsonb(c.paciente_id::text)` (fila) | `to_jsonb(c.paciente_id::text)` |
+| `or (c.sobre -> 'paciente_id') is distinct from to_jsonb(c.cab_paciente_id::text)` (cabecera) | `to_jsonb(c.cab_paciente_id::text)` |
+| `or (c.sobre -> 'episodio_id') is distinct from to_jsonb(c.cab_episodio_id::text)` | `to_jsonb(c.cab_episodio_id::text)` |
+| `or (c.sobre -> 'autor_id') is distinct from to_jsonb(c.cab_autor_id::text)` | `to_jsonb(c.cab_autor_id::text)` |
+| `or (c.sobre -> 'fecha_sesion') is distinct from to_jsonb(to_char(c.cab_fecha_sesion, 'YYYY-MM-DD'))` | `to_jsonb(to_char(c.cab_fecha_sesion, 'YYYY-MM-DD'))` |
+| `or (c.sobre -> 'coprofesional_id') is distinct from coalesce(to_jsonb(c.cab_coprofesional_id::text), 'null'::jsonb)` | `coalesce(to_jsonb(c.cab_coprofesional_id::text), 'null'::jsonb)` |
+
+- Si la cabecera no existe, el `left join` deja todos los `cab_*` a null y la versión se señala.
+- El `comment on function` dice que coteja con la fila y con la cabecera `notas_clinicas`
+  (paciente, episodio, autor, fecha de sesión y coprofesional), y que devuelve una fila por
+  versión divergente.
+- Se repite `revoke all … from public, anon, authenticated, service_role`.
+
+**4 · `create or replace function public.fn_congelar_cabecera_sellada()`** (sustituye §1.3.4):
+
+- El cuerpo es el que deja T-034; se toma con `pg_get_functiondef` tras aplicar T-034. Solo cambia
+  el mensaje, que pasa a ser:
+  `'La cabecera de una nota ya firmada no se puede reatribuir (paciente, fecha de sesión, autor, episodio, cita o coprofesional): el sobre canónico de la era 4 sella los seis campos, y verificar_cadena_huellas() los coteja con la cabecera salvo la cita (ADR-035/046/067/071/072)'`
+- El errcode sigue siendo 42501. Se conserva el fragmento `no se puede reatribuir`, que usa el
+  19.41 de T-034.
+- El disparador **no** se toca: T-034 ya lo recreó con `coprofesional_id`.
+- Se repite `revoke execute on function public.fn_congelar_cabecera_sellada() from public, anon, authenticated;`.
+
+**5 · Valor por omisión:**
+`alter table public.notas_clinicas_versiones alter column esquema_version set default 4;`
+
+**6 · `comment on column public.notas_clinicas_versiones.esquema_version`.** Empieza por
+`'Forma del sobre canónico. 4 desde el ADR-067, el ADR-071 y el ADR-072 (nota_id, paciente_id, episodio_id, fecha_sesion y coprofesional_id dentro del sobre firmado, diecisiete claves, T-012c); 3 desde el ADR-057 …'`
+y dice que las versiones 1-3 nacen muertas.
+
+`tipos-bd.ts` no cambia: ni tablas, ni columnas, ni firmas.
+
+### 9.4 · Vectores (sustituye §1.4)
+
+- Los nueve vectores ganan cinco valores:
+  - `"nota_id":"f0050001-0000-4000-8000-000000000008"` (NVEC)
+  - `"paciente_id":"d0050001-0000-4000-8000-000000000008"` (PVEC)
+  - `"episodio_id":"e0050001-0000-4000-8000-000000000008"` (EPIVEC, [V10])
+  - `"fecha_sesion":"2026-08-29"`
+  - `"esquema_version":4`
+- Ocho llevan `"coprofesional_id":null`. `alcance-conjunta` lleva
+  `"coprofesional_id":"44444444-4444-4444-8444-444444444444"`, que no se inserta nunca. Así hay un
+  vector por cada forma de la clave nulable sin pasar de nueve.
+- `genesis-minimo` se inserta como versión de NVEC, así que lleva exactamente la cabecera de NVEC:
+  PVEC, EPIVEC, `2026-08-29` y coprofesional `null`.
+- En 14, el `insert` de las siete notas de la fijación gana `fecha_sesion` explícita
+  (`date '2026-08-29'` en las siete). Así NVEC coincide con el vector y los literales de C no
+  dependen del día en que corre el banco.
+- `canonico` y `huella_hex` se recalculan con el guion de un solo uso de §1.4. En 14 se actualizan
+  byte a byte los tres `$vec$` y `\set VECGENESIS`.
+
+### 9.5 · Generadores de sobres (sustituye §1.5 y D4)
+
+**`pg_temp.sobre_prueba`** (`scripts/rls/00-ayudantes.sql`):
+
+- Firma nueva: `p_nota_id uuid` primero, **sin valor por defecto**; el resto de parámetros sigue
+  igual y en su orden (H22). Pasa a `stable`, porque lee `notas_clinicas`.
+- Emite las diecisiete claves en el orden de 9.1, con `"esquema_version":4`. Las claves de
+  cabecera salen de subconsultas escalares, con `null` si no hay fila:
+  - Tras `cita_id`:
+    `'"coprofesional_id":' || coalesce(to_json((select n.coprofesional_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ','`
+  - Tras `cuerpo`: `episodio_id`, con el mismo patrón.
+  - Tras `esquema_version`: `fecha_sesion`, con `to_char(n.fecha_sesion, 'YYYY-MM-DD')`.
+  - Tras `motivo_cambio`: `'"nota_id":"' || lower(p_nota_id::text) || '",'` y luego
+    `paciente_id`, con el mismo patrón de subconsulta.
+- No usa `into strict`, al contrario de lo que decía §1.5. Para una nota inexistente devuelve las
+  claves de cabecera a `null`. Lo necesita C.perm (sobre para una nota que no existe), y no
+  esconde nada: la 6.12-6.16 o el paso 0 lo rechazan.
+
+**Llamantes que se actualizan:**
+- los 5 de 01 (NCONJ conserva `p_alcance => 'conjunta'`);
+- el de 04;
+- los 34 de 14;
+- el **19.41 de `scripts/rls/19-nota-en-episodio.sql`**, que pasa a `sobre_prueba(:NCO, :PRO1, …)`.
+  Está fuera del territorio del contrato (P6, 9.15).
+
+**`pg_temp.sobre`** (`supabase/seed-completo.sql:41`): `p_nota_id uuid` primero, de `immutable`
+pasa a `stable`, y hace las mismas derivaciones con la misma forma. Se actualizan sus 5 llamadas.
+
+**`public.t005_sobre_prueba`** (`scripts/t005-concurrencia.sql`):
+- La firma pasa a
+  `(p_nota_id uuid, p_autor_id uuid, p_creada_en timestamptz, p_cuerpo jsonb, p_motivo_cambio text default null)`.
+- Las llamadas de T1 y T3 pasan la nota que firman.
+- En el `\!` de la línea 103, el primer argumento es `'e0050002-0000-4000-8000-000000000002'::uuid`.
+- El `drop` de la línea 184 pasa a `public.t005_sobre_prueba(uuid, uuid, timestamptz, jsonb, text)`.
+- T2 firma otra nota del mismo paciente, así que el cerrojo de fila de 9.3 no le afecta: sigue
+  esperando en el consultivo y el 55P03 no cambia.
+
+### 9.6 · Ayudantes nuevos
+
+En `scripts/rls/00-ayudantes.sql`:
+- **`pg_temp.assert_no_lanza(consulta text, mensaje text)`**, en plpgsql y con el estilo de
+  `assert_lanza`:
+  - hace `execute consulta`;
+  - si lanza: `raise exception 'FALLO: % (lanzó % · %)', mensaje, sqlstate, sqlerrm`;
+  - si no: `raise notice 'OK: %', mensaje`.
+
+  Lo usan §1.7 (NCONJ), las gemelas positivas y los mutantes. El `\echo` final de 00 lo nombra.
+
+En `14-cadena-huellas.sql`, locales en `pg_temp`, junto a `t012c_mutar` y `t012c_restaurar`:
+- **`pg_temp.t012c_sobre_con(p_sobre text, p_cambio jsonb) returns text`**, que devuelve
+  `(p_sobre::jsonb || p_cambio)::text`. Construye cada negativa cambiando una clave; por ejemplo,
+  `jsonb_build_object('episodio_id', :'EPI067A')`.
+  - Un `null` se pasa como `jsonb_build_object('nota_id', null)`.
+  - Para quitar una clave: `(p_sobre::jsonb - 'coprofesional_id')::text`.
+- **`pg_temp.t012c_error(p_sql text) returns text`**, en plpgsql. Hace `execute p_sql; return 'sin error';`
+  y, con `exception when others then`, devuelve `sqlstate || ' · ' || sqlerrm`. Captura el error
+  completo para compararlo entre intentos.
+- Además de las capturas de originales de §1.6, esta:
+  `select pg_get_functiondef('public.fn_exigir_episodio_en_nota_conjunta()'::regprocedure) as conjunta_original \gset`.
+
+### 9.7 · Banco `14-cadena-huellas.sql` (sustituye la fijación, la sección C y la F de §1.6)
+
+**Fijación nueva**, como `postgres`, tras la de T-034. Hecho comprobado: ninguno de estos prefijos
+existe en el repositorio (`grep` de `d067`, `e067`, `f067`, `d0710` y `f0710` en `scripts/` y en
+la siembra).
+
+| Var | UUID | Qué es |
+|---|---|---|
+| `P067` | `d0670001-0000-4000-8000-000000000001` | paciente de PRO1 (copiar el `insert` de PCAD) |
+| `PMOV` | `d0670001-0000-4000-8000-000000000002` | paciente sin versiones |
+| `EPI067A` | `e0670001-0000-4000-8000-000000000001` | P067, PRO1, **centro CB**, abierto (copiar el `insert` de EPICAD) |
+| `EPI067B` | `e0670001-0000-4000-8000-000000000002` | igual que EPI067A |
+| `N067A` | `f0670001-0000-4000-8000-000000000001` | EPI067A, **coprofesional PRO2**, una versión `conjunta` |
+| `N067B` | `f0670001-0000-4000-8000-000000000002` | EPI067B, sin coprofesional, sin versiones |
+| `N067C` | `f0670001-0000-4000-8000-000000000003` | EPI067B, coprofesional `null`, una versión individual |
+| `N067D` | `f0670001-0000-4000-8000-000000000004` | EPI067A, **coprofesional PRO2**, sin versiones; cabecera gemela de N067A |
+| `N067E` | `f0670001-0000-4000-8000-000000000005` | EPI067A, sin coprofesional, sin versiones; la firma PRO1 como `authenticated` en C.perm |
+| `NFANTASMA` | `f0710001-0000-4000-8000-0000000000ff` | UUID sin nota |
+
+- Las cinco notas son de P067, autor PRO1, con `fecha_sesion date '2026-08-29'`.
+- Antes de insertar N067A se afirma
+  `exists (select 1 from public.perfiles_centros where perfil_id = :'PRO2' and centro_id = :'CB' and hasta is null)`.
+  Sin esa fila, `exigir_episodio_coherente_en_nota` rechazaría el coprofesional.
+- Las versiones de N067A y N067C **no** son fijación: son las gemelas positivas de la sección C.
+
+**Sección C**
+
+- Todos los literales de sobre de NCADX ganan cinco claves y pasan a `"esquema_version":4`:
+  - `"coprofesional_id":null`
+  - `"episodio_id":"e0050001-0000-4000-8000-000000000001"` [V10]
+  - `"fecha_sesion":"2026-08-29"`
+  - `"nota_id":"f0050001-0000-4000-8000-000000000000"`
+  - `"paciente_id":"d0050001-0000-4000-8000-000000000001"`
+- **Toda** la sección C usa `assert_lanza_codigo_msg` con su fragmento, también las negativas de
+  42501 y 22P05.
+- Negativas nuevas. Salvo C.16d y C.era3, todas se construyen con
+  `t012c_sobre_con(sobre_prueba(<nota>, :'PRO1', …), <cambio>)` y esperan 23514.
+
+| Caso | Nota | Cambio en el sobre | Fragmento esperado |
+|---|---|---|---|
+| C.11a | NCADX | `nota_id` = NCADA | `El nota_id del sobre no coincide` |
+| C.11b | NCADX | `nota_id` null | ídem |
+| C.12a | NCADX | `paciente_id` = PDEMO | `El paciente_id del sobre no coincide` |
+| C.12b | NCADX | `paciente_id` null | ídem |
+| C.13a | NCADX | `episodio_id` = EPI067A | `El episodio_id del sobre no coincide` |
+| C.13b | NCADX | `episodio_id` null (ya no se admite nunca) | ídem |
+| C.13c | NCADX | `episodio_id` = 5 | ídem |
+| C.14 | NCADX | autor PRO2 en el sobre y en la columna | `no coincide con el autor de la cabecera` |
+| C.15a | NCADX | `fecha_sesion` = `"2026-08-30"` | `La fecha_sesion del sobre no coincide` |
+| C.15b | NCADX | `fecha_sesion` null | ídem |
+| C.15c | NCADX | `fecha_sesion` = `"29/08/2026"` | ídem |
+| C.16a | N067A | `coprofesional_id` = TEC1 (la cabecera dice PRO2) | `El coprofesional_id del sobre no coincide` |
+| C.16b | N067A | `coprofesional_id` null (la cabecera dice PRO2) | ídem |
+| C.16c | NCADX | `coprofesional_id` = PRO2 (la cabecera dice null) | ídem |
+| C.16d | NCADX | se quita la clave `coprofesional_id` | `exactamente las claves` (6.1) |
+| C.era3 | NCADX | sobre de doce claves, era 3, columna en 3 | `exactamente las claves` (6.1) |
+
+- C.16a y C.16b corren **antes** de sellar la gemela de N067A.
+- **Mutantes de 6.13, 6.15 y 6.16.** Se añaden a la tabla de §1.6 con el mismo método:
+  1. `savepoint`;
+  2. `t012c_mutar`;
+  3. `assert_no_lanza` de la negativa (a);
+  4. `rollback to savepoint`;
+  5. afirmar la igualdad con `:'sellar_original'`.
+
+| Comprobación | Fragmento | Se reemplaza por | Negativa que pasa a sellarse |
+|---|---|---|---|
+| 6.13 | `to_jsonb(v_episodio_id::text) then` | `(v_contenido -> 'episodio_id') then` | C.13a |
+| 6.15 | `to_jsonb(to_char(v_fecha_sesion, 'YYYY-MM-DD')) then` | `(v_contenido -> 'fecha_sesion') then` | C.15a |
+| 6.16 | `coalesce(to_jsonb(v_coprofesional_id::text), 'null'::jsonb) then` | `(v_contenido -> 'coprofesional_id') then` | C.16a |
+
+  La fila 6.13 de §1.6 (la que llevaba `coalesce`) queda sustituida. Las de 6.11, 6.12 y 6.14
+  quedan como allí.
+- **Gemelas positivas**, con `assert_no_lanza`:
+  - la versión `conjunta` de N067A (el sobre dice EPI067A y coprofesional PRO2);
+  - la versión individual de N067C (coprofesional `null`).
+- **C.congelar**, como `postgres`, tras sellar N067A:
+  `assert_lanza_codigo_msg('update public.notas_clinicas set coprofesional_id = null where id = ''f0670001-0000-4000-8000-000000000001''', '42501', 'el sobre canónico de la era 4 sella', …)`.
+  El fragmento es nuevo de T-012c: el mensaje de T-034 no lo contiene.
+
+**C.perm · permisos antes que cotejo** (criterio 5 de la enmienda del ADR-071). Va al final de C.
+
+- **C.perm.0 (cable trampa)**, como `postgres`:
+  `pg_temp.assert((select with_check from pg_policies where schemaname = 'public' and tablename = 'notas_clinicas_versiones' and policyname = 'notas_clinicas_versiones_alta') = '<literal>', 'C.perm.0 · la política de alta sigue igual; si cambia, cambia el paso 0 de fn_sellar_version_nota()')`.
+  El implementador copia el `<literal>` byte a byte de `pg_policies`, tras `db reset`.
+- **Sobres**, preparados como `postgres` y guardados con `\gset`. Cada uno moriría en un sitio
+  distinto si no existiera el paso 0:
+  - `sobre_b` = `sobre_prueba(:'N067B', :'PRO2', …)`: moriría en la 6.14 (la cabecera dice PRO1).
+  - `sobre_x` = `t012c_sobre_con(sobre_prueba(:'NCADX', :'PRO2', …), jsonb_build_object('paciente_id', :'PDEMO'))`:
+    moriría en la 6.12.
+  - `sobre_n` = `sobre_prueba(:'NFANTASMA', :'PRO2', …)`: moriría con P0002.
+  - `sobre_c` = `sobre_prueba(:'NFANTASMA', :'PRO2', …, p_alcance => 'conjunta')`: moriría en el
+    disparador de la conjunta.
+- **Intentos de PRO2.** `call pg_temp.como(:'PRO2')` y se afirma
+  `(select desbloqueado from public.desbloquear_historia('222222'))`. Después, cuatro capturas con
+  `t012c_error(format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values (%L, …)$sql$, …)) as err_… \gset`,
+  todas con `autor_id` PRO2:
+  - `err_b`: N067B, `sobre_b`, `individual`.
+  - `err_x`: NCADX, `sobre_x`, `individual`.
+  - `err_n`: NFANTASMA, `sobre_n`, `individual`.
+  - `err_c`: NFANTASMA, `sobre_c`, `conjunta` (ejerce 2b).
+
+  Al terminar, `call pg_temp.reset_sesion()`.
+- **Aserción:**
+  `:'err_b' = :'err_x' and :'err_x' = :'err_n' and :'err_n' = :'err_c' and :'err_b' like '42501 · No puedes firmar una versión de esta nota%'`.
+  Rótulo: «C.perm · cuatro intentos sin permiso contra cabeceras distintas (ajena, paciente
+  cambiado, inexistente, inexistente conjunta) dan el mismo errcode y el mismo mensaje».
+- **Candado cerrado**, dentro de `savepoint t012c_perm`:
+  1. PRO1 se desbloquea con `'111111'`.
+  2. Como `postgres`, se le caduca la ventana con el patrón de H26.
+  3. `como(:'PRO1')` intenta N067D con un sobre correcto y guarda el resultado en `err_d`.
+  4. Se afirma `:'err_d' = :'err_b'`.
+  5. `rollback to savepoint t012c_perm` y `reset_sesion()`.
+- **Mutantes**, dentro de `savepoint t012c_perm_m`:
+  - **Paso 0.** `t012c_mutar(:'sellar_original', 'if not coalesce(', 'if false and coalesce(')`.
+    - Se repiten las capturas como PRO2 y se afirma que `err_b`, `err_x` y `err_n` son
+      **distintos dos a dos**.
+    - Deben empezar por `23514 · El autor_id`, `23514 · El paciente_id` y `P0002`,
+      respectivamente.
+    - Después, `rollback to savepoint t012c_perm_m` y se afirma la igualdad con `:'sellar_original'`.
+  - **Disparador de la conjunta.** `t012c_mutar(:'conjunta_original', 'if exists (', 'if not exists (')`.
+    - `err_c` pasa a empezar por `23514 · Una versión de nota con alcance conjunta`.
+    - Después, `rollback to savepoint t012c_perm_m` y se afirma la igualdad con `:'conjunta_original'`.
+- **Gemela positiva.**
+  1. `como(:'PRO1')` y `desbloquear_historia('111111')`.
+  2. `assert_no_lanza(<insert de N067E con el sobre generado antes, como postgres, con sobre_prueba(:'N067E', :'PRO1', …)>, 'C.perm · el autor con la historia desbloqueada firma su nota como authenticated')`.
+  3. `reset_sesion()`.
+
+  Es la primera firma `authenticated` del banco [V11].
+
+**Sección F** (sustituye F.12-F.17 de §1.6)
+
+- Los cerrojos de T-012b van como en §1.6.
+- Antes de F.12 se guarda
+  `select count(*) as n067_versiones from public.notas_clinicas_versiones where paciente_id = :'P067' \gset`.
+  Salen tres: N067A, N067C y N067E.
+- Cada escenario restaura y afirma `verificar_cadena_huellas(:'P067')` en cero filas antes de
+  pasar al siguiente.
+
+| # | Qué se apaga en `notas_clinicas` | Cambio | Espera | Mutante que lo deja en 0 |
+|---|---|---|---|---|
+| F.12 (criterio 4) | nada | versiones: `nota_id = N067B where nota_id = N067A` | una fila `sobre_no_coincide_con_fila`, y la huella sigue cuadrando con sus bytes, en la **misma** aserción | — |
+| F.12b | nada | versiones: `nota_id = N067D where nota_id = N067A` | una fila | `to_jsonb(c.nota_id::text)`; después, `t012c_restaurar` |
+| F.13 | `congelar_cabecera_sellada` y `exigir_episodio_coherente_en_nota` | `N067A.paciente_id = PMOV` | una fila | `to_jsonb(c.cab_paciente_id::text)` |
+| F.14 | `congelar_cabecera_sellada` | (a) `N067A.episodio_id = EPI067B`; (b) `N067C.episodio_id = EPI067A` | una fila en cada caso | `to_jsonb(c.cab_episodio_id::text)`: 0 en (a) y en (b) |
+| F.15 | `congelar_cabecera_sellada` y `exigir_episodio_coherente_en_nota` | `N067C.autor_id = PRO2` | una fila | `to_jsonb(c.cab_autor_id::text)` |
+| F.16 | nada | versiones: `paciente_id = PMOV where paciente_id = P067` | `verificar(:'PMOV')` da `:n067_versiones` filas, todas `sobre_no_coincide_con_fila`, ningún otro motivo | `to_jsonb(c.paciente_id::text)` |
+| F.17 (nuevo) | `congelar_cabecera_sellada` | `N067A.fecha_sesion = date '2026-08-30'` | una fila | `to_jsonb(to_char(c.cab_fecha_sesion, 'YYYY-MM-DD'))` |
+| F.18 (nuevo) | `congelar_cabecera_sellada` | (a) `N067A.coprofesional_id = null`; (b) `N067C.coprofesional_id = PRO2` | una fila en cada caso | `coalesce(to_jsonb(c.cab_coprofesional_id::text), 'null'::jsonb)`: 0 en (a) y en (b) |
+| F.19 (criterio 7; antes F.17) | nada | `set time zone 'Pacific/Kiritimati'` | `verificar(:'P067')` = 0 y `verificar()` solo devuelve PDEMO; después, `reset time zone` | — |
+
+Notas a la tabla:
+- **F.14 y F.18(b)** dejan **encendido** `exigir_episodio_coherente_en_nota`, y el cambio lo
+  supera: mismo paciente y autor, episodio abierto, y PRO2 con alta en CB, que es el centro de
+  los dos episodios. Prueban que el escenario se alcanza sin apagar la coherencia.
+- **F.15** usa N067C y no N067A: con N067A, `autor_id = PRO2` violaría el `check` de T-034
+  (coprofesional distinto del autor).
+- **F.12b** exige que N067D sea gemela de cabecera de N067A, coprofesional incluido. Si no, la
+  línea del coprofesional señalaría la versión y el mutante de `nota_id` no llegaría a 0.
+- **Cerrojos**: cada `disable` tiene su `enable` en el mismo escenario. Al final de F se afirma que
+  `exigir_episodio_coherente_en_nota` y `congelar_cabecera_sellada` están en `'O'`, como ya se
+  hace con `impedir_modificacion_notas_clinicas_versiones`.
+- **F.11**: su comentario pasa de «frente a 3 en la columna» a «frente a 4». El literal de PDEMO
+  (insertado con el sellado apagado) no se toca.
+
+### 9.8 · `01-fijacion.sql` y `19-nota-en-episodio.sql`
+
+- **01**: §1.7 sigue en pie. El envoltorio de NCONJ usa el `assert_no_lanza` de 9.6, y la llamada
+  pasa `:'NCONJ'` como primer argumento de `sobre_prueba`. Las otras cuatro llamadas ganan su
+  nota.
+- **19**: solo cambia la llamada de 19.41, que pasa a `sobre_prueba(:'NCO', :'PRO1', …)`. Nada
+  más del módulo.
+
+### 9.9 · Pruebas TS (sustituye §1.8)
+
+**`sobre.test.ts`**
+
+- `entradaBase` gana cuatro campos:
+  - `pacienteId: '55555555-5555-4555-8555-555555555555'`
+  - `episodioId: '66666666-6666-4666-8666-666666666666'`
+  - `fechaSesion: '2026-08-29'`
+  - `coprofesionalId: null`
+
+  `sobreBase` gana las cinco claves.
+- Pruebas:
+  - Diecisiete claves literales, en el orden de 9.1, y `esquema_version === 4`.
+  - Sensibilidad, cambiando **solo** ese campo:
+    - `notaId`: cambia el canónico **y** la huella (sha256 de utf8 más 32 ceros, con
+      `node:crypto`).
+    - `pacienteId`, `episodioId` y `fechaSesion` (`'2026-08-30'`): cambian el canónico.
+    - `coprofesionalId`, de `null` a un UUID y de un UUID a otro: cambia el canónico **y** la
+      huella. Es la prueba que pide la enmienda del ADR-072.
+  - Mayúsculas a minúsculas en `notaId`, `pacienteId`, `episodioId` y `coprofesionalId`.
+  - Zod rechaza:
+    - `nota_id`, `paciente_id`, `episodio_id` o `fecha_sesion` a null;
+    - `fecha_sesion` `'2026-02-30'`, `'29/08/2026'` o `'2026-08-29T00:00:00Z'`;
+    - un sobre **sin** la clave `coprofesional_id`;
+    - `coprofesional_id: 'no-es-uuid'`.
+  - Zod acepta `coprofesional_id: null`.
+  - La prueba de reordenado, con diecisiete claves.
+
+**`vectores.test.ts`**
+
+- Se mantienen los nueve nombres.
+- `esquemaSobre.parse(normalizarNfc(v.sobre))` no lanza para ninguno.
+- Tiene `coprofesional_id` no nulo **exactamente** `alcance-conjunta`.
+- Los nueve llevan `episodio_id` EPIVEC y `fecha_sesion` `'2026-08-29'`.
+
+`vectores-sql.test.ts` no se toca y sigue en verde.
+
+### 9.10 · Documentación (sustituye §1.9)
+
+- **`docs/architecture.md`, líneas 62-66 y 89-92**:
+  - diecisiete claves y era 4;
+  - el paso 0 (permisos antes que cotejo, ADR-071.5);
+  - el cotejo del verificador con la fila y con la cabecera.
+
+  Se **quita** el riesgo aceptado «`fecha_sesion` no está sellada» que proponía §1.9.
+- **`scripts/rls/README.md`**, fila del módulo 14: C.perm, F.17 y F.18.
+- **H27** (`cita_id` sin cotejo con la cabecera) va a `docs/state.md` §Hallazgos al cerrar. No
+  entra en `architecture.md` como decisión, porque no la hay (P7).
+
+### 9.11 · Decisiones y alternativas descartadas (se añaden a §2; D3 y D5 quedan sustituidas)
+
+- **D3′ · Diecisiete claves.** Las cinco nuevas están siempre presentes; solo `coprofesional_id`
+  admite `null` (ADR-071.4, ADR-072.3).
+  - *Descartado*: omitir la clave cuando no hay coterapia. «Omitido» y «null» serían dos formas
+    canónicas del mismo hecho.
+- **D12 · `fecha_sesion` como cadena `AAAA-MM-DD` sacada con `to_char`.**
+  - *Descartado*: `to_jsonb(date)`. Su texto depende de `DateStyle`.
+  - *Descartado*: un instante ISO. Una fecha de calendario no tiene zona, y un instante movería
+    el día según el `TimeZone`.
+- **D13 · `for no key update` en el paso 2**, en lugar del `for share` de D5. Por H18, el
+  `after insert` actualiza la misma fila en la misma transacción.
+  - Con `for share`, dos firmas concurrentes de la misma nota tomarían los dos cerrojos
+    compartidos y se interbloquearían al subirlos (40P01).
+  - Con `for no key update`, la segunda espera en el paso 2 y relee la cabecera ya confirmada.
+  - No choca con el `key share` de las FK.
+- **D14 · Los episodios de la fijación van al centro CB**, donde PRO2 ya tiene alta.
+  - *Descartado*: dar de alta a PRO2 en CA dentro de 14. El módulo 19 de T-034 inserta ese mismo
+    par y el índice único parcial lo rompería (H24).
+  - *Descartado*: otro coprofesional. PRO2 es el único profesional sanitario activo de la
+    fijación distinto de PRO1.
+- **D15 · N067D es gemela de cabecera de N067A**, coprofesional incluido, para que F.12b aísle la
+  línea de `nota_id`.
+- **D16 · F.15 cambia el autor de N067C**, no el de N067A, por el `check` de T-034.
+- **D17 · `sobre_prueba` deriva de la cabecera las cuatro claves** y solo gana `p_nota_id`
+  (confirma D4). No usa `into strict`, para poder construir el sobre de una nota inexistente.
+- **D18 · Nuevo mensaje de `fn_congelar_cabecera_sellada`.** Tras T-012c es cierto que el sobre
+  sella los seis campos, y el mensaje dice que la cita no se coteja con la cabecera (H27). Se
+  conserva `no se puede reatribuir`.
+  - *Descartado*: dejar el mensaje de T-034, que tras T-012c describiría mal lo que pasa.
+- **D19 · El paso 0 se activa por el GUC `role`.**
+  - *Descartado*: activarlo por `auth.uid() is not null`. Bajo `postgres` con claims sin limpiar,
+    sometería la siembra a una regla de RLS que `postgres` no tiene.
+  - *Descartado*: un disparador aparte con un nombre que ordene primero. El orden quedaría
+    implícito en un nombre.
+- **D20 · Se re-emite `fn_exigir_episodio_en_nota_conjunta`** con la condición invertida («existe
+  y no tiene episodio»), en lugar de retirarla. Es el cambio mínimo que cierra el oráculo de H17
+  sin quitar una defensa. T-034 dejó fuera retirarla.
+- **D21 · Una sola aserción de igualdad** sobre `sqlstate · sqlerrm` completos, y no dos
+  `assert_lanza_codigo_msg`. El criterio pide el **mismo** errcode y el **mismo** mensaje, no
+  solo el mismo fragmento.
+
+### 9.12 · Cómo se cierra cada criterio (cambios sobre §3)
+
+- **Criterio 2**: sin cambios. Sin la migración, la primera aserción que falla es la de NCONJ
+  (01), por la 6.1 de la era 3.
+- **Criterio 5** se cierra con todo esto:
+  - las negativas C.11a/b, C.12a/b, C.13a/b/c (C.13b: `null` ya no se admite), C.14, C.15a/b/c,
+    C.16a/b/c/d y C.era3, todas con `_msg`;
+  - los mutantes de 6.11-6.16;
+  - las gemelas N067A (con coprofesional) y N067C (`null`);
+  - C.congelar;
+  - **C.perm**: igualdad de los cuatro errores, candado cerrado, los dos mutantes y la gemela
+    N067E;
+  - C.perm.0.
+- **Criterio 6**: D1 sella la cabecera, y cada campo tiene su escenario:
+  - F.13: paciente.
+  - F.14: episodio.
+  - F.15: autor.
+  - F.17: `fecha_sesion`.
+  - F.18: coprofesional, en los dos sentidos.
+
+  Cada escenario da su fila, vuelve a 0 al restaurar y da 0 con su mutante. El `grep` de «riesgo
+  aceptado» ya no aplica: no queda ningún campo de cabecera sin sellar. La única excepción es
+  `cita_id` frente a la cabecera (H27), que queda fuera de este criterio porque la cita no abre
+  lectura.
+- **Criterio 7**: pasa a F.19.
+- **Criterio 9**: se cierra con 9.9:
+  - diecisiete claves y era 4;
+  - la sensibilidad de `notaId` y de `coprofesionalId` (canónico y huella), y la de los otros
+    tres;
+  - los rechazos de Zod: `episodio_id` null, `fecha_sesion` mala y `coprofesional_id` omitido.
+- **Criterio 12**: el comentario de columna empieza por «Forma del sobre canónico. 4».
+- **Criterio 13**: `tipos-bd.ts` no cambia. Antes de pasar `territorio.mjs` hace falta la
+  ampliación de P6.
+
+### 9.13 · Riesgos nuevos, por probabilidad
+
+1. **Alta · T-034 cambia algo al llegar a `main`**: UUID de episodios, nombre de un disparador o
+   el cuerpo de `fn_congelar`.
+   - Mitigación: [V10]; el cuerpo de `fn_congelar` se toma de `pg_get_functiondef`; los nombres
+     de disparador se leen de `pg_trigger` antes de escribir F.
+2. **Media · El paso 0 se desincroniza de la política** si alguien cambia la política y no el
+   disparador.
+   - Mitigación: C.perm.0 y el comentario del paso 0.
+   - Si divergen, `authenticated` recibe el 42501 del paso 0 en lugar del de la RLS, o al revés.
+     Nadie firma sin permiso, porque la RLS sigue detrás.
+3. **Media · [V11]**: la firma `authenticated` de N067E choca con otro disparador `after`.
+4. **Media · El banco no carga sin el 19.41 actualizado** (P6). Sin ampliar el territorio, T-012c
+   no puede cerrar el criterio 3.
+5. **Baja · Interbloqueo nuevo por el cerrojo de fila.**
+   - Caso: una transacción firma dos notas del mismo paciente (N y luego N′) mientras otra firma
+     N′. La primera tiene el consultivo y espera la fila N′; la segunda tiene la fila N′ y espera
+     el consultivo.
+   - Por qué es baja: T-012 firma una nota por acción, y la siembra y el banco firman en una sola
+     sesión.
+   - Se documenta en el comentario del paso 3.
+6. **Baja · Oráculo de tiempo del paso 0**: el `exists` cuesta distinto si la nota existe.
+   Aceptado: exige medir microsegundos sobre un UUID que ya hay que conocer.
+7. **Baja · [V9]**: si el GUC `role` no se ve dentro del *definer*, C.perm falla.
+   - Alternativa ya decidida: activar el paso 0 con `(select auth.uid()) is not null` y
+     documentar que la siembra corre sin claims.
+
+### 9.14 · Qué revisar (se añade a §5)
+
+**Qué elige el llamante y qué efecto tiene**
+- [ ] `authenticated` elige `nota_id`, el sobre entero, `autor_id` y `alcance`. El paso 0 decide
+  si puede firmar **antes de leer nada de la cabecera**. Solo después se leen paciente, episodio,
+  autor, fecha y coprofesional, y se cotejan con el sobre.
+- [ ] Al firmar no se revalida el coprofesional (rol, centro): se coteja con la cabecera, que ya
+  validó T-034 al escribirla.
+- [ ] La `fecha_sesion` del sobre no admite hora, zona ni formato local (C.15c, Zod).
+
+**Pruebas que deben fallar, y por qué motivo exacto**
+- [ ] Sin el paso 0 (mutante), cada intento falla por un motivo distinto:
+  - `err_b`: el 23514 de la 6.14;
+  - `err_x`: el de la 6.12;
+  - `err_n`: un P0002.
+
+  Si el mutante da tres errores iguales, C.perm no prueba nada.
+- [ ] Con la condición vieja de 2b, `err_c` es el 23514 «alcance conjunta»: es la puerta lateral
+  del oráculo.
+- [ ] C.13b falla por la 6.13, no por Zod ni por la 6.1: la clave está, con `null`.
+- [ ] C.16b (null frente a PRO2) y C.16c (PRO2 frente a null) fallan los dos por la 6.16. Un `->>`
+  con `<>` dejaría pasar C.16b.
+- [ ] C.16d falla por la 6.1, no por la 6.16.
+- [ ] F.12b llega a 0 con el mutante solo porque N067D es gemela de N067A.
+
+**Invariantes que se podrían saltar por otra puerta**
+- [ ] **Null.** `coalesce(…, false)` solo en el paso 0; `coalesce(…, 'null'::jsonb)` solo en la
+  6.16 y en su línea del verificador. En ningún otro sitio.
+- [ ] **Otro disparador antes.** `exigir_episodio_en_nota_conjunta` corre antes que el sellado
+  por orden alfabético. Cualquier otro `before insert` sobre versiones que lea la cabecera repite
+  el oráculo. Se comprueba con
+  `select tgname from pg_trigger where tgrelid = 'public.notas_clinicas_versiones'::regclass and not tgisinternal order by tgname`.
+- [ ] **Concurrencia.** El paso 2 lleva `for no key update` y va **después** del paso 0, así que
+  un llamante sin permiso no llega a bloquear la fila de nadie.
+- [ ] **Cambio de cabecera entre lectura y firma** (antes de la primera versión, cuando aún no
+  está congelada). Lo serializa el cerrojo de fila. Si el sobre se hizo con la cabecera vieja, la
+  6.1x da 23514, y T-012 lo traduce a conflicto.
+- [ ] **Permisos de tabla entera.** El `grant insert` de tabla a `authenticated` (H16) no cambia;
+  el paso 0 y la RLS dicen lo mismo. El `revoke` se repite en las cuatro funciones re-emitidas.
+- [ ] **TRUNCATE o DELETE de la cabecera.** El `left join` señala la versión con todos los
+  `cab_*` nulos (§5, sin cambios).
+- [ ] **Forma.**
+  - Cada `disable` tiene su `enable`, también el de `exigir_episodio_coherente_en_nota`.
+  - Ninguna variable de psql va dentro de `$$`.
+  - Los UUID de C.perm van por `format(%L)`, nunca dentro del `\!`.
+
+### 9.15 · Territorio
+
+- El del contrato **más** `scripts/rls/19-nota-en-episodio.sql`, solo para la llamada de 19.41.
+  Pendiente de aprobación del propietario (P6). Sin ella, el banco no carga con la firma nueva de
+  `sobre_prueba`.
+- `docs/state.md` se escribe solo para anotar H27 en §Hallazgos, como manda la constitución.
+
+### 9.16 · Delegable (sustituye §7)
+
+Mecánico, una vez aprobada la migración:
+- Regenerar el JSON de vectores y copiar los cuatro literales.
+- Actualizar las 41 llamadas a `sobre_prueba` (5 + 1 + 34 + 1), las 5 de la siembra y las de t005.
+- Añadir las cinco claves a los literales de NCADX en C.
+- Poner la `fecha_sesion` explícita en el `insert` de las siete notas de 14.
+- La documentación.
+
+No delegable:
+- el paso 0 y 2b;
+- el disparador y el verificador;
+- C.perm entero;
+- F.12-F.19;
+- los mutantes y los ayudantes;
+- los fragmentos de `_msg`;
+- `fechaIso` y las pruebas de Zod.
+
+### 9.17 · Lo que no entra, y por qué (sustituye la lista final)
+
+- **Cotejar el `cita_id` del sobre con `notas_clinicas.cita_id`** (H27). Un firmante podría
+  declarar en el sobre otra cita suya y sellar «en sesión» con el margen de esa cita. No lo pide
+  ningún ADR ni el contrato, y la cita no abre lectura. Queda como hallazgo y como P7.
+- **Revalidar el coprofesional al firmar** (alta vigente el día de la firma). El ADR-072 lo valida
+  al escribir la cabecera, y la cabecera se congela en la primera firma.
+- **Retirar `fn_exigir_episodio_en_nota_conjunta`.** 2b la neutraliza como oráculo sin quitarla.
+- **`numero_version` (N2), `ALGORITMO_VERSION`, anclaje externo y TS-B3**: fuera por contrato.
+- **Normalizar `cita_id` a minúsculas**: sin cambios respecto a §8.
+- **Nada de T-012** salvo su §1.1, que ya está escrito.
+
+### 9.18 · Preguntas al propietario
+
+Estado de las preguntas de §8:
+- **P1**: cerrada por el ADR-071.1 y .4.
+- **P2**: cerrada por el ADR-071.5 (paso 0).
+- **P3**: cerrada por el ADR-071.7.
+- **P4**: cerrada por el ADR-071.6; hecho en `tickets/T-012/diseno.md` §1.1.
+- **P5**: cerrada por el ADR-071.4 (`fecha_sesion` sellada).
+
+Ningún ADR choca con este diseño. Quedan abiertas dos:
+
+- **P6 (bloquea el criterio 3).** ¿Se amplía el territorio de T-012c con
+  `scripts/rls/19-nota-en-episodio.sql`, solo para la llamada de 19.41?
+  - Motivo: T-034 crea el módulo llamando a `sobre_prueba` con la firma vieja, y T-012c cambia esa
+    firma por contrato.
+  - Alternativa: que T-034 escriba ya en 19.41 un sobre literal en lugar de llamar a
+    `sobre_prueba`. Eso obliga a enmendar T-034.
+- **P7.** Por H27, ¿se abre un ticket para cotejar el `cita_id` del sobre con la cabecera? No
+  cambia la forma del sobre ni abre una era 5: sería una comprobación 6.17 y una línea más en el
+  verificador.

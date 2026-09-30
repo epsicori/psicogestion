@@ -557,3 +557,280 @@ no la decide:
   `centros_actuales()` en `architecture.md:250-253`: fuera de territorio. Van a `docs/state.md`
   §Hallazgos.
 - **Coherencia `nota.cita_id` ↔ paciente/episodio**: no la pide el contrato.
+
+---
+
+## Enmienda por el ADR-072
+
+Arquitecto · 29-09-2026 · Cierra D5, D6 y los criterios 11 y 12 del contrato. Todo lo anterior de
+este documento sigue en vigor salvo lo que esta sección corrige explícitamente (E.7). La P1 de
+«Preguntas al propietario» queda **resuelta** por el ADR-072 punto 5: sí, lo prohíbe la base.
+
+### E.0 · Hechos verificados (nuevos)
+
+| # | Hecho | Dónde |
+|---|---|---|
+| H22 | `fn_congelar_cabecera_sellada()` vigente es la de la agenda (42501, mensaje «no se puede reatribuir (paciente, fecha de sesión, autor, episodio o cita)…»); trigger `before update of paciente_id, fecha_sesion, autor_id, episodio_id, cita_id` con `when` de `is distinct from` por columna. Ningún módulo del banco comprueba su texto (`grep reatribuir scripts/` vacío). | `supabase/migrations/20260906120000_agenda_esquema.sql:405-434` |
+| H23 | `perfiles(id, nombre_completo, rol public.rol_usuario, …, estado)`; el rol clínico se llama **`profesional_sanitario`** (enum: `administrador`, `profesional_sanitario`, `tecnico_administrativo`). `autor_id` y `borrador_autor_id` ya son FK a `perfiles(id)`. | `20260815192424_base_perfiles_pacientes_auditoria.sql:18-33`, `…094547…sql:622,628` |
+| H24 | `perfiles_centros(perfil_id, centro_id, principal, desde, hasta)`; vigente = `hasta is null` (índice único parcial por par; `centros_actuales()` usa la misma condición). | `20260829120000_perfiles_centros_multicentro.sql:39-81` |
+| H25 | `notas_clinicas_lectura` = candado **y** (`autor_id = auth.uid()` o `es_profesional_asignado(paciente_id)` o episodio conjunto con versión conjunta). Ninguna rama mira otra columna de la nota. `grant select, insert, update` es de **tabla** (no por columnas): la columna nueva no necesita `grant`. | `20260822160000_rls_funciones_y_politicas.sql:1117-1130`, `…094547…sql:1564` |
+| H26 | Ni la siembra ni el banco ponen `cerrado_en` en ningún episodio (`grep cerrado_en scripts/rls supabase/seed-completo.sql` vacío); todas las inserciones en `notas_clinicas` usan lista de columnas explícita. Una columna nulable nueva y la regla del cerrado no rompen ninguna fijación existente. | `seed-completo.sql:341-355`, `scripts/rls/01-fijacion.sql:115,140` |
+| H27 | En 01, PRO1 y TEC1 tienen centro principal CA; PRO2, CB. PIN de PRO2 = `222222`. | `scripts/rls/01-fijacion.sql:57-69,200-201` |
+
+### E.1 · D5 · La columna del coprofesional
+
+**Migración** (la misma `20260929120000_nota_siempre_en_episodio.sql`, que aún no está aplicada en
+ningún sitio: se escribe dentro, no en otra). Bloque nuevo **1b**, justo después del bloque 1 y
+**antes** del bloque 2 (el `create trigger … update of coprofesional_id` exige que la columna exista):
+
+```sql
+alter table public.notas_clinicas
+  add column coprofesional_id uuid
+    constraint notas_clinicas_coprofesional_id_fkey references public.perfiles (id),
+  add constraint notas_clinicas_coprofesional_no_es_autor
+    check (coprofesional_id is distinct from autor_id);
+
+create index notas_clinicas_coprofesional_idx
+  on public.notas_clinicas (coprofesional_id);
+```
+
+- Nombre: **`coprofesional_id`** (convención `<papel>_id`, como `autor_id` y `profesional_id`).
+  Nulable, sin `default`. FK a `perfiles(id)` como `autor_id`, sin `on delete` (restrict, igual que
+  el autor).
+- Índice de clave ajena, como `notas_clinicas_autor_idx`.
+- «Distinto del autor» es un **`check` de tabla**, no una rama del disparador: no depende del orden
+  de los disparadores ni de la sesión, y `is distinct from` deja pasar el nulo.
+
+**Comprobaciones en el disparador `exigir_episodio_coherente_en_nota` (bloque 2).** El paso 3 pasa a
+leer también `e.centro_id` y `e.cerrado_en`. El `update of` del `create trigger` pasa a
+`paciente_id, episodio_id, autor_id, coprofesional_id`. Cuerpo definitivo, en este orden:
+
+1. `new.episodio_id is null` → `return new` (sin cambios; habla el 23502).
+2. Sesión con `autor_id ≠ auth.uid()` → `return new` (sin cambios; anti-oráculo, lo rechaza la RLS).
+3. Leer `e.paciente_id, e.profesional_id, e.centro_id, e.cerrado_en`; si no existe → `return new` (23503).
+4. Autor ≠ dueño → `23514` «episodio de otro profesional» (sin cambios).
+5. Paciente incoherente → `23514` «no son del mismo paciente» (sin cambios).
+6. **D6** (E.2).
+7. **D5**, solo si `new.coprofesional_id is not null and new.coprofesional_id is distinct from new.autor_id and (TG_OP = 'INSERT' or new.coprofesional_id is distinct from old.coprofesional_id or new.episodio_id is distinct from old.episodio_id)`:
+   - 7a. `select f.rol into v_rol from public.perfiles f where f.id = new.coprofesional_id`; sin
+     fila → **saltar el resto del paso 7** (habla la FK: `23503`, `notas_clinicas_coprofesional_id_fkey`).
+   - 7b. `v_rol is distinct from 'profesional_sanitario'` → `raise exception 'El coprofesional tiene que ser un profesional sanitario (ADR-072)' using errcode = '23514'`. Fragmento: **`tiene que ser un profesional sanitario`**.
+   - 7c. `e.centro_id is null or not exists (select 1 from public.perfiles_centros pc where pc.perfil_id = new.coprofesional_id and pc.centro_id = e.centro_id and pc.hasta is null)` → `raise exception 'El coprofesional no tiene alta en el centro del episodio (ADR-072)' using errcode = '23514'`. Fragmento: **`no tiene alta en el centro del episodio`**.
+   - La exclusión `coprofesional_id is distinct from autor_id` de la guarda deja hablar al `check`
+     (igual que el paso 1 deja hablar al `NOT NULL`).
+8. `return new`.
+
+**Tabla de negativas D5:**
+
+| Caso | Quién lo rechaza | Errcode | Fragmento |
+|---|---|---|---|
+| Igual al autor | `check notas_clinicas_coprofesional_no_es_autor` | `23514` | `notas_clinicas_coprofesional_no_es_autor` |
+| Inexistente | FK `notas_clinicas_coprofesional_id_fkey` | `23503` | `notas_clinicas_coprofesional_id_fkey` |
+| Perfil que no es `profesional_sanitario` | disparador, 7b | `23514` | `tiene que ser un profesional sanitario` |
+| Sin alta vigente en el centro del episodio, o episodio sin centro | disparador, 7c | `23514` | `no tiene alta en el centro del episodio` |
+| Cambio tras la primera versión | `congelar_cabecera_sellada` | `42501` | `no se puede reatribuir` |
+
+**Congelación.** Bloque nuevo **2b** (tras el bloque 2), re-emisión en esta migración, nunca
+editando la de la agenda (lint regla 6):
+
+- `create or replace function public.fn_congelar_cabecera_sellada()` con el mismo cuerpo, errcode
+  `42501` y el mensaje: `'La cabecera de una nota ya firmada no se puede reatribuir (paciente, fecha de sesión, autor, episodio, cita o coprofesional): se congela con la primera versión (ADR-035/046/072)'`.
+  Se conserva el fragmento `no se puede reatribuir`. No dice «el sobre la sella»: hasta T-012c
+  (era 4) el coprofesional está congelado pero **no** sellado.
+- `drop trigger if exists congelar_cabecera_sellada on public.notas_clinicas;` y
+  `create trigger congelar_cabecera_sellada before update of paciente_id, fecha_sesion, autor_id, episodio_id, cita_id, coprofesional_id … when (… or new.coprofesional_id is distinct from old.coprofesional_id)`.
+  **Mismo nombre**: el orden alfabético `c` < `e` < `t` se mantiene (un cambio tras la firma da
+  42501, no 23514).
+- `revoke execute on function public.fn_congelar_cabecera_sellada() from public, anon, authenticated;`
+  (se reafirma tras el `create or replace`).
+
+**RLS.** Ninguna política cambia y ninguna lee `coprofesional_id` (H25). Tampoco lo leen las
+funciones que usan las políticas (`es_profesional_asignado`, `es_profesional_del_episodio`,
+`nota_tiene_version_conjunta`): la migración no las toca. El módulo 19 lo comprueba por catálogo
+(19.47) y por comportamiento (19.40).
+
+**`episodio_para_nota()` no cambia.** Ni parámetro nuevo ni firma nueva: el coprofesional es un
+dato de la nota, no del episodio (ADR-072 punto 2), y cada profesional escribe en su propio episodio
+(punto 1). T-012 lo manda en el `insert` de la nota y lo valida el disparador. Los `revoke`/`grant`
+del bloque 5 siguen con la firma `(uuid, uuid, uuid, uuid)`.
+
+**`comment on` (bloque 6, añadir):**
+- `comment on column public.notas_clinicas.coprofesional_id`: «Quién más estuvo en la sesión
+  (coterapia, ADR-072). Opcional, uno por nota. No da acceso a nada: ninguna política lo lee.
+  Profesional sanitario distinto del autor, con alta vigente en el centro del episodio
+  (exigir_episodio_coherente_en_nota y el check notas_clinicas_coprofesional_no_es_autor). Se
+  congela con la primera versión (fn_congelar_cabecera_sellada) y entra en el sobre de la era 4
+  (T-012c).»
+- `comment on column public.notas_clinicas.episodio_id`: el texto del bloque 6 más «una nota nueva
+  no cuelga de un episodio cerrado (ADR-072)».
+- `comment on function public.fn_exigir_episodio_coherente_en_nota()` al día con los pasos 6 y 7.
+- `comment on function public.fn_congelar_cabecera_sellada()`: lista de columnas congeladas con el
+  coprofesional.
+
+**`lib/supabase/tipos-bd.ts`** (regenerado): `coprofesional_id: string | null` en `Row`,
+`coprofesional_id?: string | null` en `Insert` y `Update`, y la relación
+`notas_clinicas_coprofesional_id_fkey` → `perfiles`.
+
+### E.2 · D6 · Episodio cerrado, en el disparador de D4
+
+Paso 6 del cuerpo de E.1:
+
+```sql
+if e.cerrado_en is not null
+   and (TG_OP = 'INSERT' or new.episodio_id is distinct from old.episodio_id) then
+  raise exception 'Una nota nueva no cuelga de un episodio cerrado (ADR-072)'
+    using errcode = '23514';
+end if;
+```
+
+- Errcode **`23514`**, fragmento **`episodio cerrado`**. Mismo código que las demás negativas de
+  la cabecera en este disparador; se distinguen por fragmento. No se usa `55000` para no confundirlo
+  con la guarda del bloque 0.
+- Va **después** del autor (paso 4): solo el dueño del episodio llega a saber si está cerrado (sin
+  oráculo), y después de la coherencia de paciente (un fallo de estructura se informa antes que uno
+  de estado).
+- **Nota existente cuyo episodio se cerró después**: un `update` que **no cambia** `episodio_id`
+  (p. ej. cambia el coprofesional o el paciente antes de la primera firma) **pasa** la regla del
+  cerrado: la nota no es «nueva» ni se mueve. Las demás comprobaciones siguen aplicando (D4 de
+  paciente; D5 si cambia el coprofesional). Los `update` de contenido (borrador) no disparan este
+  disparador (no están en el `update of`). Mover una nota **a** un episodio cerrado sí falla.
+  Firmar (insertar en `notas_clinicas_versiones`) no pasa por aquí: un borrador de un episodio que
+  se cerró después se puede firmar.
+- `episodio_para_nota()` sigue devolviendo `22023` «está cerrado» en la elección explícita (paso 6
+  del bloque 4). El `23514` del disparador es la red para el `insert` directo y para la carrera «la
+  función devolvió el episodio y alguien lo cerró antes del `insert`». T-012 traduce los dos.
+
+### E.3 · Módulo 19: comprobaciones nuevas
+
+**Fijaciones nuevas** (como `postgres`, junto a las demás, antes del primer `como`):
+
+| Var | UUID | Qué |
+|---|---|---|
+| `PK` | `d0340001-0000-4000-8000-00000000000b` | paciente de PRO1, centro CA |
+| `ECO` | `e0340001-0000-4000-8000-000000000008` | PK, PRO1, **CA**, individual, abierto |
+| `ECN` | `e0340001-0000-4000-8000-000000000009` | PK, PRO1, **`centro_id` null**, abierto |
+| `EK0` | `e0340001-0000-4000-8000-00000000000a` | PK, PRO1, CA, **cerrado** (`abierto_en` −40 d, `cerrado_en` −10 d) |
+| `EKC` | `e0340001-0000-4000-8000-00000000000b` | PK, PRO1, CA, abierto (se cierra en 19.45) |
+| `NCO` `NKC` `NPC` | `f0340001-0000-4000-8000-000000000001…003` | ids de las notas que crean las pruebas |
+| `NOEXISTE` | `b0340001-0000-4000-8000-0000000000ff` | uuid sin perfil |
+| — | fila `perfiles_centros (PRO2, CA, principal = false, hasta null)` | PRO2 con alta en CA (y **no** en CC) |
+
+Ninguna prueba llama a `episodio_para_nota(PK, …)` sin elección: que PK tenga varios episodios
+abiertos no interfiere.
+
+| # | Quién | Sentencia | Espera | Criterio |
+|---|---|---|---|---|
+| 19.32 | PRO1 | `insert (id, paciente_id, episodio_id, autor_id, coprofesional_id) values (NCO, PK, ECO, PRO1, PRO2)` | pasa; como postgres, `coprofesional_id = PRO2` | 11 (pos.) |
+| 19.33 | PRO1 | igual con `coprofesional_id = PRO1` | `23514` + `notas_clinicas_coprofesional_no_es_autor` | 11 (neg.), gemela 19.32 |
+| 19.34 | PRO1 | igual con `coprofesional_id = NOEXISTE` | `23503` + `notas_clinicas_coprofesional_id_fkey` | 11 (neg.), gemela 19.32 |
+| 19.35 | PRO1 | igual con `coprofesional_id = TEC1` (TEC1 **sí** tiene alta en CA: aísla el rol) | `23514` + «tiene que ser un profesional sanitario» | 11 (neg.), gemela 19.32 |
+| 19.36 | PRO1 | `insert (PA, vA, PRO1, coprofesional PRO2)`; vA está en **CC**, PA y PRO1 tienen CA | `23514` + «no tiene alta en el centro del episodio» | 11 (neg.), **discriminante**: mira el centro del episodio, no el del paciente ni el del autor. Gemela 19.32 |
+| 19.37 | PRO1 | `insert (PK, ECN, PRO1, coprofesional PRO2)` / igual sin coprofesional | `23514` + «no tiene alta en el centro del episodio» / pasa | 11 (episodio sin centro) |
+| 19.38 | postgres | 19.36 sin sesión | `23514` + «no tiene alta en el centro del episodio» | 11 (lo impone la base) |
+| 19.39 | PRO1 | sobre NCO sin firmar: `set coprofesional_id = null` / `= PRO2` / `= TEC1` | pasa / pasa / `23514` + «profesional sanitario» | 11 por `update` |
+| 19.41 | postgres, luego PRO1 | versión de NCO con el patrón de `01-fijacion.sql:124-129` (`sobre_prueba(PRO1, <ts>, <cuerpo>)`, `alcance 'individual'`); luego PRO1 `update NCO set coprofesional_id = null` y `set fecha_sesion = fecha_sesion - 1` | `42501` + «no se puede reatribuir» en **los dos** (paridad con un campo ya congelado); gemela: 19.39, antes de la versión | 11 congelado |
+| 19.40 | PRO2 (desbloqueo `222222`) | `insert (NPC, PC, EC, PRO2)`; `pg_temp.assert(historia_desbloqueada())`; `contar(select * from notas_clinicas where id = NPC)`; `contar(… where id = NCO)`; `contar(select * from notas_clinicas_versiones where nota_id = NCO)` | pasa; cierto; **1**; **0**; **0** | 11: el coprofesional no lee. La gemela a 1 y el candado abierto prueban que el 0 no viene del candado ni de la consulta. **Corre después de 19.41** (así hay versión que no leer). |
+| 19.42 | PRO1 | `insert (PK, EK0, PRO1)` | `23514` + «episodio cerrado»; gemela 19.32 (ECO, abierto) | 12 |
+| 19.43 | postgres | `insert (PK, EK0, PRO1)` / `insert (NKC, PK, EKC, PRO1)` | `23514` + «episodio cerrado» / pasa | 12 (base, sin RLS) |
+| 19.44 | PRO1 | `update NKC set episodio_id = EK0` / `set episodio_id = ECO` y de vuelta a `EKC` | `23514` + «episodio cerrado» / pasan | 12 por `update` |
+| 19.45 | postgres, luego PRO1 | `update episodios_asistenciales set cerrado_en = current_date where id = EKC`; PRO1 `update NKC set coprofesional_id = PRO2`; PRO1 `insert (PK, EKC, PRO1)` | pasa; **pasa** (nota existente, no se mueve); `23514` + «episodio cerrado» | D6 con nota existente |
+| 19.46 | postgres | `select tgname from pg_trigger where tgrelid = 'public.notas_clinicas'::regclass and not tgisinternal order by tgname`; `pg_get_triggerdef` de `congelar_cabecera_sellada` contiene `coprofesional_id` | orden `congelar_cabecera_sellada` < `exigir_episodio_coherente_en_nota` < `tocar_borrador`; cierto | orden y congelación |
+| 19.47 | postgres | `select count(*) from pg_policies where schemaname = 'public' and (coalesce(qual,'') ilike '%coprofesional%' or coalesce(with_check,'') ilike '%coprofesional%')`; `information_schema.columns … column_name = 'coprofesional_id'` → `is_nullable` | `0`; `YES` | ninguna política lo lee; nulable |
+
+Añadir a la fila del README del módulo 19: «D5 (ADR-072): coprofesional opcional, profesional
+sanitario distinto del autor con alta en el centro del episodio, congelado al firmar y sin acceso;
+D6: ninguna nota nueva ni movida en un episodio cerrado (23514)».
+
+**Siembra y banco fuera del 19: sin cambios por D5/D6.** La columna es nulable, las inserciones usan
+lista de columnas explícita y ningún episodio sembrado ni del banco está cerrado (H26). No se añade
+coprofesional a la siembra: ningún criterio lo pide (la casilla es de T-012, que sembrará lo que
+necesite). `docs/architecture.md`: la viñeta **Toda nota en un episodio** de §1.7 añade el
+coprofesional (sin acceso, congelado) y la regla del episodio cerrado.
+
+### E.4 · Cómo se cierran los criterios nuevos
+
+| # | Cómo | Evidencia |
+|---|---|---|
+| 10 (ampliado) | `npm run tipos`: `coprofesional_id: string \| null` en `Row`. | diff de `tipos-bd.ts` |
+| 11 | 19.32 (pos.), 19.33-19.38 (neg., cada una con gemela 19.32 o 19.37), 19.39, 19.41 (congelado), 19.40 (lectura), 19.47. | `npm run test:rls` |
+| 12 | 19.42, 19.43 (base), 19.44, 19.45; gemelas 19.32 y 19.43 (EKC abierto). | `npm run test:rls` |
+
+Demostración de guarda (bitácora, no se commitea): quitando `coprofesional_id` del `update of` de
+`congelar_cabecera_sellada`, 19.41 debe fallar («debía lanzar 42501 y no lanzó nada»); cambiando
+`e.centro_id` por el centro del paciente en 7c, 19.36 debe fallar; quitando el paso 6, 19.42-19.45
+deben fallar.
+
+### E.5 · Riesgos nuevos, por probabilidad
+
+1. **Media · Oráculo de directorio**: el disparador es *definer* y el mensaje distingue «no es
+   profesional» de «sin alta en el centro». PRO1 puede averiguar el rol y la pertenencia a un centro
+   de un uuid de perfil, y solo en centros donde él es dueño de un episodio. Es dato de organización,
+   no clínico. Aceptado; el revisor lo valora.
+2. **Media · Congelado pero no sellado**: entre T-034 y T-012c el coprofesional queda congelado por
+   disparador pero fuera del sobre. Solo importa si se firma de verdad antes de T-012c. Por eso el
+   mensaje nuevo no dice «el sobre la sella». El orden T-012c → T-012 lo decide el plan, no este diseño.
+3. **Baja · 19.40 da 0 por el candado** y no por la RLS: cubierto por el `assert` de
+   `historia_desbloqueada()` y la gemela NPC = 1 en la misma sesión.
+4. **Baja · La fila `perfiles_centros (PRO2, CA)`** cambia `centros_actuales()` de PRO2 dentro del
+   19. Ninguna prueba anterior del 19 depende de los centros de PRO2 (19.17 reutiliza EC).
+
+### E.6 · Qué revisar (añadir a §5)
+
+**Entradas que elige el llamante y su efecto**
+- [ ] `coprofesional_id`: el llamante elige cualquier uuid; la base solo acepta un
+  `profesional_sanitario` distinto del autor con alta **vigente** (`hasta is null`) en el
+  **centro del episodio**. Elegirlo **no** cambia qué filas ve nadie (19.40, 19.47).
+- [ ] `episodio_para_nota()` sigue con 4 parámetros; no se añadió ninguno.
+
+**Pruebas que deben fallar y por qué motivo exacto**
+- [ ] 19.34 falla con **23503** (FK), no con 23514: el paso 7a salta si el perfil no existe.
+- [ ] 19.33 falla por el **`check`** (fragmento = nombre de la restricción), no por el disparador.
+- [ ] 19.35 usa TEC1, que **sí** tiene alta en CA: si no se comprobara el rol, pasaría.
+- [ ] 19.36 es la discriminante del centro: con el centro del paciente o con `centros_actuales()`
+  del autor, pasaría.
+- [ ] 19.41 falla con 42501 **antes** que con cualquier 23514: `congelar_cabecera_sellada` conserva
+  el nombre y su `update of` incluye `coprofesional_id` (19.46).
+- [ ] 19.40 no es un falso negativo: candado abierto y gemela a 1 en la misma sesión.
+- [ ] 19.45: la nota existente en un episodio que se cerró después **se puede** editar sin moverla;
+  si el paso 6 no mira `TG_OP` y el cambio de `episodio_id`, falla.
+
+**Invariantes que se podrían saltar por otra puerta**
+- [ ] **Nulo**: coprofesional nulo pasa todo (`is distinct from` en el `check`, guarda del paso 7).
+- [ ] **Por `update`**: el `update of` del disparador de D4 incluye `coprofesional_id`; la regla del
+  cerrado se aplica también al **mover** (`episodio_id` cambia), no solo al insertar.
+- [ ] **Orden dentro del disparador**: autor (4) → paciente (5) → cerrado (6) → coprofesional (7). El
+  estado cerrado nunca se revela sobre un episodio ajeno.
+- [ ] **Coprofesional dado de baja del centro después**: no bloquea `update` que no tocan ni el
+  coprofesional ni el episodio (guarda del paso 7).
+- [ ] **Sin RLS nueva**: la migración no crea ni altera políticas ni funciones de política
+  (`create policy`/`alter policy` ausentes).
+- [ ] **Permisos**: `revoke execute … fn_congelar_cabecera_sellada() from public, anon, authenticated`
+  reafirmado; el `create or replace` está en la migración nueva, no en la de la agenda (lint regla 6).
+- [ ] **TRUNCATE / concurrencia**: ni tabla nueva ni contador; no aplica.
+
+### E.7 · Correcciones a la tabla de §1.6 (erratas del diseño original)
+
+- **19.9, 19.10 y 19.13** abren un episodio nuevo sin cita: tal como están escritas darían `22023`
+  «Falta el centro» (paso 8 del bloque 4). Se llaman con **`p_centro_id => CA`**:
+  `episodio_para_nota(PS, null, null, CA)`, `(PJ4, null, null, CA)`, `(PJ5, null, null, CA)`. El
+  resto de su expectativa no cambia.
+- §5 «Orden de disparadores»: ahora lo comprueba 19.46, no solo la lectura.
+
+### E.8 · Preguntas al propietario
+
+Ninguna bloquea; nada de D5/D6 choca con un ADR. Queda escrita una interpretación para que el
+propietario la confirme o la corrija:
+
+- **P2 · «Profesional con `profesional_id` real»** se lee como: FK a `perfiles(id)` con
+  `rol = 'profesional_sanitario'`. **No** se exige `perfiles.estado = 'activo'`, ni que el alta en
+  el centro cubra `fecha_sesion`: se exige alta **vigente al escribir el dato**, la misma vigencia
+  que `centros_actuales()`. Si el propietario quiere cualquiera de las dos, es una condición más en
+  7b/7c y una prueba 19.x.
+
+### E.9 · Lo que no entra (D5/D6), y por qué
+
+- **El coprofesional en el sobre** (diecisiete claves): T-012c (ADR-072 punto 3).
+- **La casilla del editor**: T-012.
+- **Coprofesional en la siembra**: ningún criterio lo pide.
+- **Impedir cerrar un episodio con borradores sin firmar**: cerrar episodios está fuera de alcance.
+- **Varios coprofesionales por nota**: el ADR-072 dice uno.
