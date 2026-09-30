@@ -20,6 +20,9 @@
 \set C18CAN  '\'a1800004-0000-4000-8000-000000000003\''
 \set C18FUT  '\'a1800004-0000-4000-8000-000000000004\''
 \set C18LEJ  '\'a1800004-0000-4000-8000-000000000005\''
+\set C18FCA  '\'a1800004-0000-4000-8000-000000000006\''
+\set C18NAS  '\'a1800004-0000-4000-8000-000000000007\''
+\set C18TEC  '\'a1800004-0000-4000-8000-000000000008\''
 
 -- =========================================================================
 -- Fijación
@@ -55,7 +58,22 @@ values
   -- mañana, programada: reprogramable
   (:C18FUT, :P18, :PRO18, :CA, :TT18, now() + interval '1 day', now() + interval '1 day 50 minutes', 'Europe/Madrid', 'programada', null),
   -- fuera del rango de un día que usan las lecturas
-  (:C18LEJ, :P18, :PRO18, :CA, :TT18, now() + interval '5 days', now() + interval '5 days 50 minutes', 'Europe/Madrid', 'programada', null);
+  (:C18LEJ, :P18, :PRO18, :CA, :TT18, now() + interval '5 days', now() + interval '5 days 50 minutes', 'Europe/Madrid', 'programada', null),
+  -- pasado mañana, pero cancelada: futura y aun así NO reprogramable (revisión SQL H7)
+  (:C18FCA, :P18, :PRO18, :CA, :TT18, now() + interval '2 days', now() + interval '2 days 50 minutes', 'Europe/Madrid', 'cancelada', null),
+  -- abarca ahora, pero no_asistida: tampoco está en curso (revisión SQL H8). La exclusión
+  -- solo mira programada/confirmada/realizada, así que convive con C18INI y C18CAN.
+  (:C18NAS, :P18, :PRO18, :CA, :TT18, now() - interval '10 minutes', now() + interval '40 minutes', 'Europe/Madrid', 'no_asistida', null);
+
+-- Una cita cuyo profesional_id es el TÉCNICO TEC1 (revisión SQL H1). Nada en la base lo
+-- impide: un alta por error desde recepción, o un profesional que pasa a técnico. La
+-- política de citas deja pasar profesional_id = auth.uid() sin mirar el rol, así que sin
+-- acotar por rol la rama `citas`, TEC1 la recibiría DOS veces, una con tipo y nota.
+insert into public.citas
+  (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria, estado, nota_operativa)
+values
+  (:C18TEC, :P18, :TEC1, :CA, :TT18, now() + interval '3 hours', now() + interval '3 hours 50 minutes',
+   'Europe/Madrid', 'programada', 'Nota que el técnico no debe leer');
 
 -- Una alerta abierta de nota sin firmar sobre la cita que acaba de terminar.
 insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
@@ -120,6 +138,47 @@ select pg_temp.assert(
   'R1: el técnico sí recibe el nombre del paciente, del profesional y del centro (lo que su RLS le deja)'
 );
 
+-- R1b · El técnico que figura como profesional de una cita (revisión SQL H1).
+select pg_temp.assert(
+  exists (select 1 from public.citas c where c.id = :C18TEC),
+  'R1b (el porqué): la política de citas SÍ le deja leer a TEC1 la cita de la que es profesional — la rama citas tiene que excluirlo por rol'
+);
+select pg_temp.assert(
+  (select count(*) from public.agenda_citas_rango(
+     (select desde from t18_rango), (select hasta from t18_rango)) r
+   where r.id = :C18TEC) = 1,
+  'R1b: la cita con profesional_id = TEC1 le llega UNA sola vez (las dos ramas son disjuntas por rol)'
+);
+select pg_temp.assert(
+  (select r.tipo_terapia_nombre is null and r.nota_operativa is null and r.nota_pendiente is null
+     from public.agenda_citas_rango((select desde from t18_rango), (select hasta from t18_rango)) r
+    where r.id = :C18TEC),
+  'R1b: y esa única fila es la de la rama del técnico: sin tipo, sin nota y sin nota_pendiente (choque 4)'
+);
+
+-- R1c · El solape también por la rama del técnico (revisión SQL H6): las pruebas de borde
+-- de R6 corren como PRO18 y solo ejercen la rama `citas`.
+select pg_temp.assert(
+  exists (select 1 from public.agenda_citas_rango(now() + interval '10 minutes', now() + interval '1 hour') r
+           where r.id = :C18INI),
+  'R1c: al técnico le entra la cita que empezó antes del rango y acaba dentro (solape)'
+);
+select pg_temp.assert(
+  not exists (select 1 from public.agenda_citas_rango(now(), now() + interval '1 hour') r
+               where r.id = :C18FIN),
+  'R1c: al técnico NO le entra la cita que acaba justo en el inicio del rango (fin > desde es estricto)'
+);
+select pg_temp.assert(
+  not exists (select 1 from public.agenda_citas_rango(now() - interval '2 hours', now() - interval '50 minutes') r
+               where r.id = :C18INI),
+  'R1c: al técnico NO le entra la cita que empieza justo en el fin del rango (inicio < hasta es estricto)'
+);
+select pg_temp.assert(
+  exists (select 1 from public.agenda_citas_rango(now() - interval '2 hours', now() - interval '49 minutes') r
+           where r.id = :C18FIN),
+  'R1c GEMELA: al técnico SÍ le entra la cita que termina dentro de un rango que la solapa por un minuto'
+);
+
 call pg_temp.reset_sesion();
 
 -- =========================================================================
@@ -179,11 +238,23 @@ select pg_temp.assert(
 );
 
 select pg_temp.assert(
+  (select not r.en_curso from public.agenda_citas_rango(
+     (select desde from t18_rango), (select hasta from t18_rango)) r where r.id = :C18NAS),
+  'R6: una no_asistida que abarca now() NO está en curso'
+);
+
+select pg_temp.assert(
   (select r.reprogramable and not (select r2.reprogramable from public.agenda_citas_rango(
       (select desde from t18_rango), (select hasta from t18_rango)) r2 where r2.id = :C18INI)
      from public.agenda_citas_rango((select desde from t18_rango), (select hasta from t18_rango)) r
     where r.id = :C18FUT),
   'reprogramable: la de mañana sí; la que empieza ahora no (inicio > now() es estricto)'
+);
+
+select pg_temp.assert(
+  (select not r.reprogramable from public.agenda_citas_rango(
+     now(), now() + interval '3 days') r where r.id = :C18FCA),
+  'reprogramable: una cancelada futura NO es reprogramable (manda el estado, no solo el reloj)'
 );
 
 -- El solape con el borde del rango: entra lo que cruza el borde, no lo que lo toca.
@@ -260,10 +331,21 @@ select pg_temp.assert_lanza_codigo(
   '22023',
   'R8: un rango de 63 días se rechaza'
 );
+-- 62 días en HORAS, y con la sesión en Europe/Madrid a propósito (revisión SQL H9):
+-- `now() + interval '62 days'` suma días de pared y, si cruza un cambio de hora, da 62 días
+-- ± 1 h según la TimeZone de quien corra el banco. La gemela no puede depender de eso.
+select current_setting('timezone') as zona_previa \gset r8_
+select set_config('timezone', 'Europe/Madrid', true);
 select pg_temp.assert(
-  (select count(*) >= 0 from public.agenda_citas_rango(now(), now() + interval '62 days')),
-  'R8 GEMELA: un rango de 62 días exactos se acepta'
+  (select count(*) >= 0 from public.agenda_citas_rango(now(), now() + interval '1488 hours')),
+  'R8 GEMELA: un rango de 62 días exactos (1488 h) se acepta, sea cual sea la zona de la sesión'
 );
+select pg_temp.assert_lanza_codigo(
+  'select * from public.agenda_citas_rango(now(), now() + interval ''1488 hours 1 second'')',
+  '22023',
+  'R8: un segundo más de 62 días se rechaza'
+);
+select set_config('timezone', :'r8_zona_previa', true);
 select pg_temp.assert_lanza_codigo(
   'select * from public.agenda_citas_rango(now(), now() - interval ''1 hour'')',
   '22023',

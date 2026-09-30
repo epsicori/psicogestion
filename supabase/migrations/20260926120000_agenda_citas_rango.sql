@@ -116,14 +116,18 @@ begin
   -- nombre sin cualificar sería ambiguo en ejecución.
   return query
   with visibles as (
-    -- Administrador y profesional: la RLS de citas les da filas; al técnico, cero
-    -- (no tiene política). Trae el tipo y la nota.
+    -- Administrador y profesional, y SOLO ellos. El filtro de rol es explícito porque la
+    -- política de citas deja leer la fila cuyo profesional_id = auth.uid() sin mirar el
+    -- rol: un técnico que figure como profesional de una cita la recibiría aquí con tipo
+    -- y nota, y otra vez por su vista (revisión SQL H1). Trae el tipo y la nota.
     select c.id, c.paciente_id, c.profesional_id, c.centro_id, c.serie_id,
            c.inicio, c.fin, c.zona_horaria, c.estado, c.sala, c.desviada,
            c.motivo_desviacion, c.tipo_terapia_id, c.nota_operativa,
            false as rama_tecnico
       from public.citas c
      where c.inicio < p_hasta and c.fin > p_desde
+       and (select public.rol_actual()) in ('administrador'::public.rol_usuario,
+                                           'profesional_sanitario'::public.rol_usuario)
     union all
     -- Técnico: su vista, cuyo where exige su rol, así que a los demás les da cero.
     -- El tipo y la nota son NULL LITERALES: no hay camino de vuelta a citas.
@@ -165,7 +169,8 @@ $$;
 comment on function public.agenda_citas_rango(timestamptz, timestamptz) is
   'La agenda de un rango [desde, hasta) —como mucho 62 días; si no, 22023—, por '
   'SOLAPE: entra toda cita con inicio < hasta y fin > desde. Dos ramas en union all, '
-  'DISJUNTAS POR ROL: citas (administrador y profesional; el técnico no tiene política) '
+  'DISJUNTAS POR ROL: citas (solo administrador y profesional, filtrado con rol_actual() '
+  'porque la política deja ver al técnico la cita de la que figure como profesional) '
   'y citas_agenda (solo el técnico; su where exige el rol). Es security INVOKER a '
   'propósito: en definer el técnico leería la organización entera. En la rama del '
   'técnico el tipo de terapia y la nota operativa son NULL literales, y nota_pendiente '
