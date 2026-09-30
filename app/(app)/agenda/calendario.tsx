@@ -53,23 +53,36 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
   // El foco se mueve en un efecto, cuando los paneles ya se han ido del DOM: hacerlo en el
   // manejador lo dejaría a merced de la trampa de foco del panel que se cierra.
   const [pulso, setPulso] = useState(0);
-  const devolverA = useRef<HTMLElement | null>(null);
+  /** El ancla a la que vuelve el foco, y qué buscar si ya no está en el documento. */
+  const devolverA = useRef<{ ancla: HTMLElement; citaId: string | null; fecha: string } | null>(null);
   const enfocarCita = useRef<{ id: string; fecha: string; citas: VistaCalendario['citas'] } | null>(null);
 
   useEffect(() => {
-    const ancla = devolverA.current;
-    if (ancla) {
+    // De las dos formas de la semana solo una se ve, y un panel tapado lleva `hidden`: se
+    // enfoca lo que tiene caja. La cita si se ve; si no, el número de su día (§8.3, «Éxito»);
+    // el día es el de la vista actual, que tras mover puede ser otro (revisión TS H4).
+    function enfocarVisible(citaId: string | null, fecha: string) {
+      if (!contenedor) return;
+      const visibles = (selector: string) =>
+        [...contenedor.querySelectorAll<HTMLElement>(selector)].filter((e) => e.offsetParent !== null);
+      const fechaActual = vista.citas.find((c) => c.id === citaId)?.fechaLocal ?? fecha;
+      const destino =
+        (citaId === null ? undefined : visibles(`[data-cita-id="${citaId}"]`)[0]) ??
+        visibles(`[data-dia="${fechaActual}"]`)[0];
+      destino?.focus();
+    }
+
+    const vuelta = devolverA.current;
+    if (vuelta) {
       devolverA.current = null;
-      if (ancla.isConnected) ancla.focus();
+      // El ancla se desmonta si la cita cambió de sitio con el panel abierto (revisión TS H5).
+      if (vuelta.ancla.isConnected) vuelta.ancla.focus();
+      else enfocarVisible(vuelta.citaId, vuelta.fecha);
     }
 
     const objetivo = enfocarCita.current;
-    if (objetivo && contenedor) {
-      const candidatas = [...contenedor.querySelectorAll<HTMLElement>(`[data-cita-id="${objetivo.id}"]`)];
-      // De las dos formas de la semana solo una se ve: la que tiene caja.
-      const cita = candidatas.find((e) => e.offsetParent !== null) ?? candidatas[0];
-      const dia = contenedor.querySelector<HTMLElement>(`[data-dia="${objetivo.fecha}"]`);
-      (cita ?? dia)?.focus();
+    if (objetivo) {
+      enfocarVisible(objetivo.id, objetivo.fecha);
       // Al llegar los datos nuevos la cita puede haber cambiado de sitio y de nodo: se enfoca
       // una segunda vez y se olvida.
       if (vista.citas !== objetivo.citas) enfocarCita.current = null;
@@ -106,15 +119,27 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
     const tope = pila[pila.length - 1];
     if (!tope) return;
     setPila(pila.slice(0, -1));
-    devolverA.current = tope.ancla;
+    devolverA.current =
+      tope.tipo === 'cita'
+        ? { ancla: tope.ancla, citaId: tope.cita.id, fecha: tope.cita.fechaLocal }
+        : { ancla: tope.ancla, citaId: null, fecha: tope.dia.fecha };
+    setPulso((n) => n + 1);
+  }
+
+  /** Tras mover la cita o resolver su propuesta: se cierra todo, se anuncia y el foco va a ella. */
+  function cerrarTodoEnCita(cita: CitaVista, texto: string) {
+    enfocarCita.current = { id: cita.id, fecha: cita.fechaLocal, citas: vista.citas };
+    setReprogramando(null);
+    setPila([]);
+    setAnuncio(texto);
     setPulso((n) => n + 1);
   }
 
   function alMovida(texto: string) {
     if (reprogramando) {
-      enfocarCita.current = { id: reprogramando.cita.id, fecha: reprogramando.cita.fechaLocal, citas: vista.citas };
+      cerrarTodoEnCita(reprogramando.cita, texto);
+      return;
     }
-    setReprogramando(null);
     setPila([]);
     setAnuncio(texto);
     setPulso((n) => n + 1);
@@ -238,7 +263,10 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
       </div>
 
       {pila.map((panel, i) => {
-        const pausado = reprogramando !== null || i < pila.length - 1;
+        // Solo se pinta la cima (D9). El de debajo sigue montado, oculto e inerte, para que su
+        // fila exista cuando se vuelva a él (revisión TS H3).
+        const oculto = i < pila.length - 1;
+        const pausado = reprogramando !== null;
         if (panel.tipo === 'dia') {
           const indice = vista.dias.findIndex((d) => d.fecha === panel.dia.fecha);
           return (
@@ -250,25 +278,33 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
               limites={contenedor}
               alCerrar={cerrarTope}
               pausado={pausado}
+              oculto={oculto}
               alAbrirCita={abrirCita}
             />
           );
         }
+        // La pila guarda la cita de cuando se abrió; se pinta la de la vista actual, que tras
+        // un recargado trae la propuesta, el rango y el estado al día (revisión TS H5).
+        const cita =
+          vista.citas.find((c) => c.id === panel.cita.id && c.tramo === panel.cita.tramo) ??
+          vista.citas.find((c) => c.id === panel.cita.id) ??
+          panel.cita;
         return (
           <PanelCita
             key={`cita-${panel.cita.id}-${panel.cita.tramo}`}
-            cita={panel.cita}
+            cita={cita}
             ancla={panel.ancla}
             limites={contenedor}
             alCerrar={cerrarTope}
             pausado={pausado}
             alReprogramar={() =>
               setReprogramando({
-                cita: panel.cita,
-                inicial: { fecha: panel.cita.fechaLocal, hora: panel.cita.horaLocal },
+                cita,
+                inicial: { fecha: cita.fechaLocal, hora: cita.horaLocal },
                 desdeArrastre: false,
               })
             }
+            alPropuestaResuelta={(texto) => cerrarTodoEnCita(cita, texto)}
           />
         );
       })}

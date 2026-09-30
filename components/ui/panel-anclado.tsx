@@ -18,6 +18,12 @@ type Props = {
    * foco ni se cierra con Escape o con un clic, que son del diálogo.
    */
   pausado?: boolean;
+  /**
+   * Con otro panel encima en la pila (D9): no se ve (`hidden`), el lector y el teclado no lo
+   * alcanzan (`inert`) y no se cierra. Sigue montado para que su fila, el ancla del panel de
+   * encima, exista cuando vuelva a la cima y reciba el foco.
+   */
+  oculto?: boolean;
   children: ReactNode;
 };
 
@@ -33,19 +39,21 @@ function rectDe(elemento: HTMLElement): Rect {
  * al escalón anterior (de la cita al día, del día al número) y no siempre al
  * elemento que lo abrió (D9).
  */
-export function PanelAnclado({ ancla, limites, titulo, alCerrar, pausado = false, children }: Props) {
+export function PanelAnclado({ ancla, limites, titulo, alCerrar, pausado = false, oculto = false, children }: Props) {
   const panel = useRef<HTMLDivElement>(null);
   const idTitulo = useId();
+  const activo = !pausado && !oculto;
 
-  useFocoAtrapado(panel, !pausado);
-  useCierreExterior(panel, !pausado, alCerrar);
+  useFocoAtrapado(panel, activo);
+  useCierreExterior(panel, activo, alCerrar);
 
   // La posición se escribe en el nodo y no en estado: se recalcula en cada
   // scroll, y pasar por React sería un render por evento y un fotograma con
   // el panel en su sitio anterior.
   useLayoutEffect(() => {
     const nodo = panel.current;
-    if (!nodo) return;
+    // Oculto no tiene caja que medir: se coloca al volver a la cima.
+    if (!nodo || oculto) return;
 
     const colocar = () => {
       const ventana = { width: window.innerWidth, height: window.innerHeight };
@@ -78,7 +86,7 @@ export function PanelAnclado({ ancla, limites, titulo, alCerrar, pausado = false
       window.removeEventListener('resize', colocar);
       window.removeEventListener('scroll', colocar, true);
     };
-  }, [ancla, limites]);
+  }, [ancla, limites, oculto]);
 
   // El foco entra al abrir, al primer enfocable: un contenedor enfocado no dice
   // al lector de pantalla qué se puede hacer.
@@ -94,6 +102,8 @@ export function PanelAnclado({ ancla, limites, titulo, alCerrar, pausado = false
       role="dialog"
       aria-labelledby={idTitulo}
       tabIndex={-1}
+      hidden={oculto}
+      inert={oculto}
       style={{ visibility: 'hidden' }}
       className={cn(
         'fixed z-40 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-border',

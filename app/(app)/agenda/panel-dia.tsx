@@ -14,16 +14,25 @@ type Props = {
   limites?: HTMLElement | null;
   alCerrar: () => void;
   pausado?: boolean;
+  /** Con la cita encima en la pila: no se pinta (D9). */
+  oculto?: boolean;
   /** Intro sobre una fila empuja el panel de la cita, con la fila como ancla (D9). */
   alAbrirCita: (cita: CitaVista, ancla: HTMLElement) => void;
 };
 
 /** El día entero en una lista: cada fila dice lo mismo que la cita de la rejilla, y nada más. */
-export function PanelDia({ dia, citas, ancla, limites, alCerrar, pausado, alAbrirCita }: Props) {
+export function PanelDia({ dia, citas, ancla, limites, alCerrar, pausado, oculto, alAbrirCita }: Props) {
   const ordenadas = [...citas].sort((a, b) => a.minutoPared - b.minutoPared || a.tramo - b.tramo);
 
   return (
-    <PanelAnclado ancla={ancla} limites={limites} titulo={dia.etiquetaLarga} alCerrar={alCerrar} pausado={pausado}>
+    <PanelAnclado
+      ancla={ancla}
+      limites={limites}
+      titulo={dia.etiquetaLarga}
+      alCerrar={alCerrar}
+      pausado={pausado}
+      oculto={oculto}
+    >
       {ordenadas.length === 0 ? (
         <p className="text-foreground text-sm">{t('agenda.panelDia.sinCitas')}</p>
       ) : (

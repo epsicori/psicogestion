@@ -108,6 +108,51 @@ describe('PanelAnclado', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  // D9 y revisión TS H3: con otro panel encima, este no se ve, no lo alcanza el lector ni el
+  // teclado, y no se cierra; al volver a la cima se recoloca.
+  it('con oculto: hidden e inert, no se cierra, y al dejar de estarlo vuelve a verse colocado', async () => {
+    const usuario = userEvent.setup();
+    const alCerrar = vi.fn();
+    const ANCLA = rect(100, 100, 100, 40);
+    let medidas = 0;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') medidas += 1;
+      return this.getAttribute('role') === 'dialog' ? rect(0, 0, 320, 240) : ANCLA;
+    });
+    function ConOculto({ oculto }: { oculto: boolean }) {
+      const [ancla, setAncla] = useState<HTMLElement | null>(null);
+      return (
+        <>
+          <button type="button" onClick={(e) => setAncla(e.currentTarget)}>
+            Día 8
+          </button>
+          <button type="button">Del fondo</button>
+          {ancla && (
+            <PanelAnclado ancla={ancla} titulo="Jueves 8" oculto={oculto} alCerrar={alCerrar}>
+              <button type="button">Primera cita</button>
+            </PanelAnclado>
+          )}
+        </>
+      );
+    }
+    const { rerender } = render(<ConOculto oculto={false} />);
+    const panel = await abrir(usuario);
+
+    rerender(<ConOculto oculto />);
+    expect(panel).toHaveAttribute('hidden');
+    expect(panel).toHaveAttribute('inert');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await usuario.keyboard('{Escape}');
+    await usuario.click(screen.getByRole('button', { name: 'Del fondo' }));
+    expect(alCerrar).not.toHaveBeenCalled();
+
+    const antes = medidas;
+    rerender(<ConOculto oculto={false} />);
+    expect(screen.getByRole('dialog', { name: 'Jueves 8' })).toBe(panel);
+    expect(panel).not.toHaveAttribute('inert');
+    expect(medidas).toBeGreaterThan(antes);
+  });
+
   it('se coloca donde dice colocarPanel', async () => {
     const usuario = userEvent.setup();
     const ANCLA = rect(700, 1180, 100, 40);

@@ -40,6 +40,40 @@ describe('FilaPropuesta', () => {
     expect(descartarPropuestaAgenda).not.toHaveBeenCalled();
   });
 
+  // Revisión TS H9: el «Hecho.» del éxito lo recibe quien sabe dónde anunciarlo y enfocar,
+  // porque la fila se va de la lista al recargar.
+  it.each([
+    ['Confirmar', () => confirmarPropuestaAgenda],
+    ['Descartar', () => descartarPropuestaAgenda],
+  ])('%s con éxito entrega el anuncio a alResuelta, una sola vez', async (boton, accion) => {
+    accion().mockResolvedValue({ ok: true, anuncio: 'Hecho.' });
+    const alResuelta = vi.fn();
+    const { rerender } = pintar({ alResuelta });
+    await userEvent.setup().click(screen.getByRole('button', { name: boton }));
+    await waitFor(() => expect(alResuelta).toHaveBeenCalledWith('Hecho.'));
+    // Un repintado con otro callback no lo vuelve a disparar.
+    const otro = vi.fn();
+    rerender(
+      <FilaPropuesta id={ID} nombre="Ana G." prevista="" motivo="" propuesta="Propuesta: 11:00–11:50" alResuelta={otro} />,
+    );
+    expect(alResuelta).toHaveBeenCalledTimes(1);
+    expect(otro).not.toHaveBeenCalled();
+  });
+
+  it('gemela: un rechazo no llama a alResuelta', async () => {
+    confirmarPropuestaAgenda.mockResolvedValue({
+      ok: false,
+      motivo: 'hueco_ocupado',
+      detalle: null,
+      mensaje: 'Ese hueco ya está ocupado.',
+    });
+    const alResuelta = vi.fn();
+    pintar({ alResuelta });
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Confirmar' }));
+    expect(await screen.findByText('Ese hueco ya está ocupado.')).toBeInTheDocument();
+    expect(alResuelta).not.toHaveBeenCalled();
+  });
+
   it('sin horario propuesto solo se ofrece Descartar', () => {
     pintar({ propuesta: null });
     expect(screen.queryByRole('button', { name: 'Confirmar' })).toBeNull();

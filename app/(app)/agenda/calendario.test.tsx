@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PX_MIN } from './arrastre';
 import { citaDePrueba, diasDePrueba } from './fixtures-cita';
@@ -41,6 +41,7 @@ vi.mock('./dialogo-reprogramar', () => ({
 }));
 
 const { Calendario } = await import('./calendario');
+const acciones = await import('./acciones');
 
 function vistaDePrueba(extra: Partial<VistaCalendario> = {}): VistaCalendario {
   return {
@@ -80,7 +81,17 @@ function montar(extra: Partial<React.ComponentProps<typeof Calendario>> = {}) {
 
 const enGrid = () => within(screen.getByRole('grid'));
 
-beforeEach(() => replace.mockClear());
+beforeEach(() => {
+  replace.mockClear();
+  // jsdom no maqueta: `offsetParent` es siempre null. Aquí, como en un navegador ancho, todo
+  // tiene caja salvo lo que lleva `hidden`; el bloque de 360 px lo estrecha.
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.closest('[hidden]') ? null : document.body;
+  });
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('Calendario · barra', () => {
   it('anterior, hoy y siguiente son enlaces que conservan el resto de los parámetros', () => {
@@ -170,6 +181,10 @@ describe('Calendario · paneles y foco', () => {
     const fila = within(panelDia).getByRole('button', { name: /Ana G\./ });
     await user.click(fila);
     expect(screen.getByRole('dialog', { name: 'Ana García López' })).toBeInTheDocument();
+    // Solo se pinta la cima (revisión TS H3): el panel del día no se ve ni lo alcanza el lector.
+    expect(screen.queryByRole('dialog', { name: 'martes, 29 de septiembre de 2026' })).toBeNull();
+    expect(panelDia).toHaveAttribute('hidden');
+    expect(panelDia).toHaveAttribute('inert');
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: 'Ana García López' })).toBeNull();
@@ -229,5 +244,108 @@ describe('Calendario · paneles y foco', () => {
     expect(screen.getByText('Cita movida al 30 a las 14:00.').closest('[role="status"]')).not.toBeNull();
     const enFoco = document.activeElement as HTMLElement;
     expect(enFoco.getAttribute('data-cita-id')).toBe(citaDePrueba().id);
+  });
+});
+
+describe('Calendario · foco en la disposición visible (revisión TS H4)', () => {
+  // Lo que hace el navegador a 360 px: la rejilla (`hidden md:block`) tampoco tiene caja.
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.closest('.hidden, [hidden]') ? null : document.body;
+    });
+  });
+
+  it('a 360 px, tras mover la cita a otro día, el foco va al número de ese día en la tira', async () => {
+    const user = userEvent.setup();
+    const { rerender } = montar();
+    const lista = within(screen.getByRole('region', { name: 'Citas del día' }));
+    await user.click(lista.getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await user.click(screen.getByRole('button', { name: 'movida' }));
+
+    // Llega la vista nueva: la cita está el jueves 1, que la lista (en el martes) no pinta.
+    const movida = citaDePrueba({ reprogramable: true, diaIndice: 3, fechaLocal: '2026-10-01', horaLocal: '10:00' });
+    rerender(
+      <Calendario
+        vista={vistaDePrueba({ citas: [movida] })}
+        parametros={{ centro: null, profesional: null }}
+        centros={[]}
+        centroElegido="todos"
+        rol="administrador"
+      />,
+    );
+
+    const tira = within(screen.getByRole('group', { name: 'Días de la semana' }));
+    expect(tira.getByRole('button', { name: 'jueves, 1 de octubre de 2026' })).toHaveFocus();
+  });
+
+  it('gemela: si la cita sigue en el día que enseña la lista, el foco va a su fila visible', async () => {
+    const user = userEvent.setup();
+    montar();
+    const lista = within(screen.getByRole('region', { name: 'Citas del día' }));
+    const fila = lista.getByRole('button', { name: /Ana G\./ });
+    await user.click(fila);
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await user.click(screen.getByRole('button', { name: 'movida' }));
+    expect(fila).toHaveFocus();
+  });
+});
+
+describe('Calendario · panel de la cita con la vista al día (revisión TS H5)', () => {
+  const PROPUESTA = { id: '44444444-4444-4444-8444-444444444444', rango: '11:00–11:50' };
+
+  it('el panel pinta la cita de la vista actual, no la copia de cuando se abrió', async () => {
+    const user = userEvent.setup();
+    const { rerender } = montar({ vista: vistaDePrueba({ citas: [citaDePrueba({ propuestaPendiente: PROPUESTA })] }) });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    const panel = screen.getByRole('dialog', { name: 'Ana García López' });
+    expect(within(panel).getByRole('button', { name: 'Confirmar' })).toBeInTheDocument();
+
+    rerender(
+      <Calendario
+        vista={vistaDePrueba({ citas: [citaDePrueba({ rango: '18:00–18:50', propuestaPendiente: null })] })}
+        parametros={{ centro: null, profesional: null }}
+        centros={[]}
+        centroElegido="todos"
+        rol="administrador"
+      />,
+    );
+    const alDia = screen.getByRole('dialog', { name: 'Ana García López' });
+    expect(within(alDia).queryByRole('button', { name: 'Confirmar' })).toBeNull();
+    expect(within(alDia).getByText(/18:00–18:50/)).toBeInTheDocument();
+  });
+
+  it('si la cita cambió de día con el panel abierto, Escape lleva el foco a la cita en su sitio nuevo', async () => {
+    const user = userEvent.setup();
+    const { rerender } = montar();
+    const ancla = enGrid().getByRole('button', { name: /Ana G\./ });
+    await user.click(ancla);
+    rerender(
+      <Calendario
+        vista={vistaDePrueba({ citas: [citaDePrueba({ diaIndice: 3, fechaLocal: '2026-10-01' })] })}
+        parametros={{ centro: null, profesional: null }}
+        centros={[]}
+        centroElegido="todos"
+        rol="administrador"
+      />,
+    );
+    expect(ancla.isConnected).toBe(false);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const enFoco = document.activeElement as HTMLElement;
+    expect(enFoco.getAttribute('data-cita-id')).toBe(citaDePrueba().id);
+    expect(enFoco.isConnected).toBe(true);
+  });
+
+  it('confirmar la propuesta desde el panel lo cierra, lo anuncia y el foco vuelve a la cita', async () => {
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockResolvedValue({ ok: true, anuncio: 'Hecho.' });
+    const user = userEvent.setup();
+    montar({ vista: vistaDePrueba({ citas: [citaDePrueba({ propuestaPendiente: PROPUESTA })] }) });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('Hecho.').closest('[role="status"]')).not.toBeNull();
+    expect((document.activeElement as HTMLElement).getAttribute('data-cita-id')).toBe(citaDePrueba().id);
   });
 });

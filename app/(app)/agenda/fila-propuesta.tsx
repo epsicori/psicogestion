@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useId, useRef } from 'react';
+import { useActionState, useEffect, useEffectEvent, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Pildora } from '@/components/ui/piezas';
@@ -43,6 +43,11 @@ type Props = {
   propuesta: string | null;
   /** La propuesta cae en una hora que cambia por el horario de verano (§8.3). */
   cambioDeHora?: boolean;
+  /**
+   * Con el «Hecho.» de un éxito (revisión TS H9). La fila se va con el recargado y se llevaría
+   * el foco a `body`: quien la contiene anuncia y decide adónde va el foco.
+   */
+  alResuelta?: (anuncio: string) => void;
 };
 
 /**
@@ -52,7 +57,7 @@ type Props = {
  * retira «Confirmar» y pasa el foco a «Descartar» (que se lee con su motivo), para que el foco
  * no caiga a `body` al desaparecer el botón enfocado.
  */
-export function FilaPropuesta({ id, nombre, prevista, motivo, propuesta, cambioDeHora = false }: Props) {
+export function FilaPropuesta({ id, nombre, prevista, motivo, propuesta, cambioDeHora = false, alResuelta }: Props) {
   const [estadoConfirmar, confirmar, confirmando] = useActionState<ResultadoAccion | null>(
     () => confirmarPropuestaAgenda({ propuestaId: id }),
     null,
@@ -68,6 +73,15 @@ export function FilaPropuesta({ id, nombre, prevista, motivo, propuesta, cambioD
   useEffect(() => {
     if (permanente) botonDescartar.current?.focus();
   }, [permanente, estadoConfirmar]);
+
+  // Una vez por resultado: el callback puede cambiar en cada repintado del padre.
+  const avisar = useEffectEvent((anuncio: string) => alResuelta?.(anuncio));
+  useEffect(() => {
+    if (estadoConfirmar?.ok) avisar(estadoConfirmar.anuncio);
+  }, [estadoConfirmar]);
+  useEffect(() => {
+    if (estadoDescartar?.ok) avisar(estadoDescartar.anuncio);
+  }, [estadoDescartar]);
 
   // El último resultado de cualquiera de las dos acciones; un `ok` lo lleva la lista al recargar.
   const ultimo = estadoDescartar && !estadoDescartar.ok ? estadoDescartar : estadoConfirmar;
