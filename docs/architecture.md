@@ -259,6 +259,9 @@ funciones auxiliares para que se lean como frases:
   **Rol-agnóstica**, para que ninguna política clínica necesite invocar `rol_actual()`
 - `es_profesional_del_episodio(episodio_id)` → participación, no copia (ADR-030). Incluye
   a los participantes dados de baja **del episodio**; exige que el lector siga activo
+- `episodio_para_nota(paciente, episodio?, cita?, centro?)` → *invoker*: valida el episodio elegido,
+  devuelve el único abierto del llamante con ese paciente, abre uno individual si no hay ninguno,
+  y con varios lanza `EP001` «elige episodio» (ADR-071, T-034)
 - `nota_tiene_version_conjunta(nota_id)` → definer **por necesidad**: sin ella, la política
   de `notas_clinicas` y la de `notas_clinicas_versiones` se consultan mutuamente y Postgres
   aborta con `infinite recursion detected in policy`
@@ -351,6 +354,11 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
   grupo se modelan en el episodio; **el paciente sigue siendo la persona**. La nota conjunta
   cuelga del episodio, es un solo eslabón de la cadena y **no se entrega entera** en un
   ejercicio de acceso individual.
+- **Toda nota cuelga de un episodio** (ADR-071, T-034): `notas_clinicas.episodio_id` es obligatorio,
+  del episodio del AUTOR y del mismo paciente o de un participante (la base lo impone con
+  `exigir_episodio_coherente_en_nota`). Una nota nueva no cuelga de un episodio cerrado y, si es
+  de coterapia, lleva un `coprofesional_id` opcional que no da acceso a nada (ADR-072). La
+  aplicación obtiene el episodio con `episodio_para_nota()`.
 - **Duplicados** (ADR-031): no se fusionan, **se vinculan**. `fusionado_en` apunta al
   superviviente, el absorbido queda en solo lectura, nada se repunta y RLS resuelve por el
   vínculo en un solo salto.

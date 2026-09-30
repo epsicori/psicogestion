@@ -137,7 +137,11 @@ insert into public.notas_clinicas_versiones
 -- Nota con dos versiones encadenadas (corrección) — para la batería de identificación NO,
 -- pero sirve de fijación positiva de "notas con historial" si algún ticket futuro la usa.
 -- Paciente P2: cadena propia, independiente de la de P1 de arriba.
-insert into public.notas_clinicas (id, paciente_id, autor_id) values (:NCORR, :P2, :PRO2);
+-- T-034 (ADR-071): toda nota cuelga de un episodio, y del de su autor (D2). EPI es de PRO1, así
+-- que la nota de PRO2 sobre P2 lleva un episodio individual propio.
+insert into public.episodios_asistenciales (id, paciente_id, profesional_id, centro_id) values
+  (:EPI2, :P2, :PRO2, :CB);
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) values (:NCORR, :P2, :EPI2, :PRO2);
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, motivo_cambio, autor_id, creada_en) values
   (:NCORR, '{"t":"v1"}',
