@@ -174,6 +174,19 @@ describe('RejillaSemana · arrastrar', () => {
     expect(props.alSoltar).toHaveBeenCalledWith(expect.objectContaining({ id: citaDePrueba().id }), '2026-09-30', '14:00');
   });
 
+  // Revisión TS H10: el diálogo devuelve el foco a lo que lo tenía al abrirse. Un pointerdown
+  // sobre un botón no lo enfoca en todos los navegadores (Safari, ni aquí): sin enfocar la cita
+  // antes de avisar, al cerrar el diálogo el foco cae a `body`.
+  it('al soltar, la cita arrastrada tiene el foco cuando se pide el diálogo', () => {
+    let enFocoAlSoltar: Element | null = null;
+    montar({ alSoltar: vi.fn(() => (enFocoAlSoltar = document.activeElement)) });
+    darCaja();
+    const cita = screen.getByRole('button', { name: /Ana G\./ });
+    expect(document.activeElement).toBe(document.body);
+    arrastrar(cita, { x: 250, y: yCita + 10 - 3 * 96 });
+    expect(enFocoAlSoltar).toBe(cita);
+  });
+
   it('un movimiento menor que el umbral no es un arrastre', () => {
     const props = montar();
     darCaja();

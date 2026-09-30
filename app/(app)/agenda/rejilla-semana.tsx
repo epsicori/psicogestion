@@ -28,6 +28,8 @@ type Props = {
 
 type Gesto = {
   cita: CitaVista;
+  /** El botón de la cita: recibe el foco antes de pedir el diálogo, que lo devuelve ahí. */
+  boton: HTMLButtonElement;
   x0: number;
   y0: number;
   yAgarre: number;
@@ -97,7 +99,11 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
         }, 0);
         const fecha = dias[g.destino.columna].fecha;
         const hora = horaDeMinuto(g.destino.minuto);
-        if (fecha !== g.cita.fechaLocal || hora !== g.cita.horaLocal) alSoltar(g.cita, fecha, hora);
+        if (fecha !== g.cita.fechaLocal || hora !== g.cita.horaLocal) {
+          // Un pointerdown no enfoca el botón en todos los navegadores (revisión TS H10).
+          g.boton.focus();
+          alSoltar(g.cita, fecha, hora);
+        }
       }
       terminar();
     }
@@ -133,6 +139,7 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
     huboArrastre.current = false;
     gesto.current = {
       cita,
+      boton: evento.currentTarget,
       x0: evento.clientX,
       y0: evento.clientY,
       yAgarre: evento.clientY - (cuerpo.getBoundingClientRect().top + (cita.minutoPared - eje.desdeMinuto) * PX_MIN),
