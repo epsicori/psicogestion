@@ -70,10 +70,15 @@ begin
   end if;
 
   -- 3 · El episodio. Si no existe, habla la clave ajena (23503).
+  --     `for share`: el `for key share` de la FK no choca con el `for no key update` de un
+  --     update de paciente_id, profesional_id o cerrado_en. Con él, esa puerta concurrente
+  --     espera a que la nota confirme y su `exists` la ve; si llegó antes, aquí se lee ya
+  --     la fila nueva (READ COMMITTED vuelve a evaluarla).
   select ea.paciente_id, ea.profesional_id, ea.centro_id, ea.cerrado_en
     into e
     from public.episodios_asistenciales ea
-   where ea.id = new.episodio_id;
+   where ea.id = new.episodio_id
+     for share;
   if not found then
     return new;
   end if;
@@ -86,14 +91,18 @@ begin
   end if;
 
   -- 5 · Mismo paciente, o un participante del episodio (ADR-030; activo o dado de baja).
-  if new.paciente_id is distinct from e.paciente_id
-     and not exists (
-       select 1 from public.episodio_participantes ep
-        where ep.episodio_id = new.episodio_id and ep.paciente_id = new.paciente_id
-     ) then
-    raise exception
-      'La nota y su episodio no son del mismo paciente ni de un participante (ADR-071, ADR-030)'
-      using errcode = '23514';
+  --     La fila del participante, en `for share`: un update o delete concurrente de esa
+  --     fila espera a la nota (y su puerta la ve), o, si llegó antes, aquí ya no se encuentra.
+  if new.paciente_id is distinct from e.paciente_id then
+    perform 1
+       from public.episodio_participantes ep
+      where ep.episodio_id = new.episodio_id and ep.paciente_id = new.paciente_id
+        for share;
+    if not found then
+      raise exception
+        'La nota y su episodio no son del mismo paciente ni de un participante (ADR-071, ADR-030)'
+        using errcode = '23514';
+    end if;
   end if;
 
   -- 6 · D6: una nota nueva (o movida) no cuelga de un episodio cerrado.
@@ -412,7 +421,9 @@ comment on function public.fn_exigir_episodio_coherente_en_nota() is
   'T-034. Coherencia de la nota con su episodio, en la base: episodio de su autor (D2), del '
   'mismo paciente o de un participante (D4), no cerrado si la nota es nueva o se mueve '
   '(ADR-072 D6), y coprofesional profesional sanitario con alta vigente en el centro del '
-  'episodio (D5). Deja hablar al NOT NULL, a la clave ajena y al check de tabla.';
+  'episodio (D5). Deja hablar al NOT NULL, a la clave ajena y al check de tabla. Lee el '
+  'episodio y la fila del participante en for share, para que las dos puertas concurrentes '
+  '(congelar_episodio_con_notas, congelar_participante_con_notas) no se crucen con la nota.';
 
 comment on function public.fn_congelar_episodio_con_notas() is
   'T-034. Un episodio con notas no cambia de paciente ni de profesional (42501).';
