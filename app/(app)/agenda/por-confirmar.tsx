@@ -5,8 +5,8 @@ import { t, tCon } from '@/lib/i18n';
 
 import { esCambioDeHora } from './bloques';
 import { cargarContexto } from './datos';
-import { FilaPropuesta } from './fila-propuesta';
 import { MarcoBloque } from './marco';
+import { FilaPorConfirmar } from './zona-por-confirmar';
 
 /** «Ana García López» → «Ana G.»: el mismo recorte que las citas del calendario. */
 function nombreCorto(nombre: string | null, apellidos: string | null): string {
@@ -54,7 +54,7 @@ export async function PorConfirmar({ centroParametro }: { centroParametro: strin
           const paciente = porId.get(propuesta.pacienteId);
           return (
             <li key={propuesta.id}>
-              <FilaPropuesta
+              <FilaPorConfirmar
                 id={propuesta.id}
                 nombre={nombreCorto(paciente?.nombre ?? null, paciente?.apellidos ?? null)}
                 prevista={tCon('agenda.porConfirmar.prevista', {

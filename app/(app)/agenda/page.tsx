@@ -16,6 +16,7 @@ import { leerParametros, type ParametrosAgenda } from './parametros';
 import { PorConfirmar } from './por-confirmar';
 import { Proximas } from './proximas';
 import { construirVista } from './vista';
+import { ZonaPorConfirmar } from './zona-por-confirmar';
 
 type ParametrosDeBusqueda = Promise<Record<string, string | string[] | undefined>>;
 
@@ -77,9 +78,11 @@ async function Cuerpo({ searchParams }: { searchParams: ParametrosDeBusqueda }) 
       </div>
 
       <div className="flex min-w-0 flex-col gap-6">
-        <Suspense fallback={null}>
-          <PorConfirmar centroParametro={parametros.centro} />
-        </Suspense>
+        <ZonaPorConfirmar>
+          <Suspense fallback={null}>
+            <PorConfirmar centroParametro={parametros.centro} />
+          </Suspense>
+        </ZonaPorConfirmar>
         <MarcoBloque id="agenda-proximas" titulo={t('agenda.proximas.titulo')}>
           <Suspense fallback={<EsqueletoLista />}>
             <Proximas centroParametro={parametros.centro} />
