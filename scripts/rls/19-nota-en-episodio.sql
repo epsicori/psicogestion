@@ -108,6 +108,10 @@ select pg_temp.assert_lanza_codigo(
 -- ---------------------------------------------------------------------------
 -- episodio_para_nota(): abrir o elegir (D1) bajo la sesión de PRO1
 -- ---------------------------------------------------------------------------
+-- El módulo 13 dejó a PRO1 con el PIN 424242 y a PRO2 con 999999: este banco fija los suyos.
+call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
+call pg_temp.como_con_2fa(:PRO2); select public.fijar_pin_historia('222222'); call pg_temp.reset_sesion();
+
 call pg_temp.como(:PRO1);
 select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia');
