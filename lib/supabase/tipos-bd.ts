@@ -1142,8 +1142,9 @@ export type Database = {
           borrador_autor_id: string | null
           borrador_contenido: Json | null
           cita_id: string | null
+          coprofesional_id: string | null
           creada_en: string
-          episodio_id: string | null
+          episodio_id: string
           fecha_sesion: string
           id: string
           paciente_id: string
@@ -1154,8 +1155,9 @@ export type Database = {
           borrador_autor_id?: string | null
           borrador_contenido?: Json | null
           cita_id?: string | null
+          coprofesional_id?: string | null
           creada_en?: string
-          episodio_id?: string | null
+          episodio_id: string
           fecha_sesion?: string
           id?: string
           paciente_id: string
@@ -1166,8 +1168,9 @@ export type Database = {
           borrador_autor_id?: string | null
           borrador_contenido?: Json | null
           cita_id?: string | null
+          coprofesional_id?: string | null
           creada_en?: string
-          episodio_id?: string | null
+          episodio_id?: string
           fecha_sesion?: string
           id?: string
           paciente_id?: string
@@ -1213,6 +1216,20 @@ export type Database = {
             columns: ["cita_id"]
             isOneToOne: false
             referencedRelation: "citas_agenda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_clinicas_coprofesional_id_fkey"
+            columns: ["coprofesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_clinicas_coprofesional_id_fkey"
+            columns: ["coprofesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
           {
@@ -2692,6 +2709,15 @@ export type Database = {
       desbloqueo_vigente: { Args: never; Returns: string }
       enesimo_dia_del_mes: {
         Args: { p_dia_semana: number; p_mes: string; p_ordinal: number }
+        Returns: string
+      }
+      episodio_para_nota: {
+        Args: {
+          p_centro_id?: string
+          p_cita_id?: string
+          p_episodio_id?: string
+          p_paciente_id: string
+        }
         Returns: string
       }
       es_profesional_asignado: {
