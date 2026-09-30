@@ -260,7 +260,8 @@ funciones auxiliares para que se lean como frases:
 - `es_profesional_del_episodio(episodio_id)` → participación, no copia (ADR-030). Incluye
   a los participantes dados de baja **del episodio**; exige que el lector siga activo
 - `episodio_para_nota(paciente, episodio?, cita?, centro?)` → *invoker*: valida el episodio elegido,
-  devuelve el único abierto del llamante con ese paciente, abre uno individual si no hay ninguno,
+  devuelve el único abierto del llamante con ese paciente, abre uno individual si no hay ninguno
+  (centro de la cita o, sin ella, el centro activo que pasa la aplicación en `p_centro_id`),
   y con varios lanza `EP001` «elige episodio» (ADR-071, T-034)
 - `nota_tiene_version_conjunta(nota_id)` → definer **por necesidad**: sin ella, la política
   de `notas_clinicas` y la de `notas_clinicas_versiones` se consultan mutuamente y Postgres
@@ -356,12 +357,16 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
   ejercicio de acceso individual.
 - **Toda nota cuelga de un episodio** (ADR-071, T-034): `notas_clinicas.episodio_id` es obligatorio,
   del episodio del AUTOR y del mismo paciente o de un participante (la base lo impone con
-  `exigir_episodio_coherente_en_nota`). Una nota nueva no cuelga de un episodio cerrado y, si es
-  de coterapia, lleva un `coprofesional_id` opcional (profesional sanitario distinto del autor,
-  con alta vigente en el centro del episodio) que no da acceso a nada —ninguna política lo
-  lee— y se congela con la primera versión (ADR-072). Un episodio con notas no cambia de
-  paciente ni de profesional, y un participante con notas no se mueve ni se borra. La
-  aplicación obtiene el episodio con `episodio_para_nota()`.
+  `exigir_episodio_coherente_en_nota`). Una nota nueva no cuelga de un episodio cerrado, y
+  ninguna nota se mueve a uno cerrado. Si es de coterapia, la nota lleva un `coprofesional_id`
+  opcional (profesional sanitario distinto del autor, con alta vigente en el centro del
+  episodio) que no da acceso a nada —ninguna política lo lee— y se congela con la primera
+  versión (ADR-072). Un episodio con notas no cambia de paciente ni de profesional, y un
+  participante con notas no se mueve ni se borra. La aplicación obtiene el episodio con
+  `episodio_para_nota()`: abre uno individual si no hay ninguno abierto propio, reutiliza el
+  único y exige elegir (`EP001`) si hay varios. El centro del episodio nuevo sale de la cita
+  o, sin cita, del centro activo, que la aplicación pasa en `p_centro_id` (la cookie no se lee
+  en SQL; sin ninguno de los dos, 22023).
 - **Duplicados** (ADR-031): no se fusionan, **se vinculan**. `fusionado_en` apunta al
   superviviente, el absorbido queda en solo lectura, nada se repunta y RLS resuelve por el
   vínculo en un solo salto.
