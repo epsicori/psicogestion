@@ -47,7 +47,13 @@ export function RejillaMes({ titulo, dias, citas, diaInicial, alAbrirDia, alAbri
   const cabeceras = dias.slice(0, 7);
 
   return (
-    <div role="grid" aria-label={titulo} className="border-border overflow-hidden rounded-lg border">
+    // Por debajo de sm la rejilla sangra el relleno de la tarjeta (p-4 en `page.tsx`): siete
+    // columnas a 360 px dan ≈ 45 px en vez de ≈ 41, y el número del día llega a 44 (evidencia, FALLA 2).
+    <div
+      role="grid"
+      aria-label={titulo}
+      className="border-border -mx-4 overflow-hidden border-y sm:mx-0 sm:rounded-lg sm:border"
+    >
       <div role="row" className="bg-muted grid grid-cols-7">
         {cabeceras.map((dia) => (
           <div
@@ -75,7 +81,14 @@ export function RejillaMes({ titulo, dias, citas, diaInicial, alAbrirDia, alAbri
               <div
                 key={dia.fecha}
                 role="gridcell"
-                className="border-border flex min-h-16 min-w-0 flex-col gap-0.5 border-t border-l p-0.5 first:border-l-0 sm:min-h-28"
+                // Tocar la celda fuera de sus botones (los puntos, el recuento, el hueco) abre el
+                // día como su número (evidencia, FALLA 1). El teclado entra por el número.
+                onClick={(evento) => {
+                  if ((evento.target as Element).closest('button')) return;
+                  const numero = evento.currentTarget.querySelector<HTMLElement>('[data-dia]');
+                  alAbrirDia(dia, numero ?? evento.currentTarget);
+                }}
+                className="border-border flex min-h-16 min-w-0 flex-col gap-0.5 border-t border-l p-0 first:border-l-0 sm:min-h-28 sm:p-0.5"
               >
                 <button
                   type="button"
@@ -87,7 +100,8 @@ export function RejillaMes({ titulo, dias, citas, diaInicial, alAbrirDia, alAbri
                   onFocus={() => setActivo(indice)}
                   onClick={(evento) => alAbrirDia(dia, evento.currentTarget)}
                   className={cn(
-                    'hover:bg-muted focus-visible:ring-ring/50 flex min-h-11 items-center justify-center rounded-md text-sm outline-none focus-visible:ring-2 sm:min-h-7 sm:justify-start sm:px-1',
+                    // Compacto solo con ratón: al tacto sigue en 44 px (revisión TS H8).
+                    'hover:bg-muted focus-visible:ring-ring/50 flex min-h-11 items-center justify-center rounded-md text-sm outline-none focus-visible:ring-2 sm:justify-start sm:px-1 sm:pointer-fine:min-h-7',
                     dia.delMes ? 'text-foreground' : 'text-muted-foreground',
                     dia.esHoy && 'text-primary font-semibold',
                   )}
@@ -104,7 +118,7 @@ export function RejillaMes({ titulo, dias, citas, diaInicial, alAbrirDia, alAbri
                       data-cita-id={cita.id}
                       tabIndex={indice === activo ? 0 : -1}
                       onClick={(evento) => alAbrirCita(cita, evento.currentTarget)}
-                      className="hover:bg-muted focus-visible:ring-ring/50 flex min-h-6 items-center gap-1 rounded px-1 text-left text-xs outline-none focus-visible:ring-2"
+                      className="hover:bg-muted focus-visible:ring-ring/50 pointer-coarse:min-h-11 flex min-h-6 items-center gap-1 rounded px-1 text-left text-xs outline-none focus-visible:ring-2"
                     >
                       <span className="truncate">
                         {tCon('agenda.cita.horaYNombre', { hora: horaDeCita(cita), nombre: cita.nombreCorto })}
@@ -117,7 +131,7 @@ export function RejillaMes({ titulo, dias, citas, diaInicial, alAbrirDia, alAbri
                       type="button"
                       tabIndex={indice === activo ? 0 : -1}
                       onClick={(evento) => alAbrirDia(dia, evento.currentTarget)}
-                      className="text-muted-foreground hover:bg-muted focus-visible:ring-ring/50 min-h-6 rounded px-1 text-left text-xs outline-none focus-visible:ring-2"
+                      className="text-muted-foreground hover:bg-muted focus-visible:ring-ring/50 pointer-coarse:min-h-11 min-h-6 rounded px-1 text-left text-xs outline-none focus-visible:ring-2"
                     >
                       {tCon('agenda.rejilla.masCitas', { n: restantes })}
                     </button>

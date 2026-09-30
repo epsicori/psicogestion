@@ -229,7 +229,8 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
                         }
                         alAbrirCita(cita, evento.currentTarget);
                       }}
-                      className="bg-card border-border hover:bg-muted focus-visible:ring-ring/50 absolute overflow-hidden rounded-md border p-1 text-left outline-none select-none focus-visible:ring-2"
+                      // Con ratón el alto dice la duración; al tacto, 44 px (revisión TS H8).
+                      className="bg-card border-border hover:bg-muted focus-visible:ring-ring/50 pointer-coarse:min-h-11 absolute overflow-hidden rounded-md border p-1 text-left outline-none select-none focus-visible:ring-2"
                       style={{
                         top: (cita.minutoPared - eje.desdeMinuto) * PX_MIN,
                         height: cita.duracionMinutos * PX_MIN,

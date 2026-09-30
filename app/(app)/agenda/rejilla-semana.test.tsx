@@ -73,6 +73,13 @@ describe('RejillaSemana · estructura', () => {
     expect(cita.style.height).toBe(`${50 * PX_MIN}px`);
   });
 
+  // Revisión TS H8: una cita de 15 minutos mide 24 px. Con ratón el alto dice la duración; al
+  // tacto (`pointer: coarse`, una tableta a partir de md) el botón no baja de 44 px.
+  it('las citas miden al menos 44 px de alto al tacto', () => {
+    montar({ citas: [citaDePrueba({ duracionMinutos: 15 })] });
+    expect(screen.getByRole('button', { name: /Ana G\./ }).className.split(' ')).toContain('pointer-coarse:min-h-11');
+  });
+
   it('las citas de un mismo grupo se reparten el ancho de la columna', () => {
     montar({
       citas: [

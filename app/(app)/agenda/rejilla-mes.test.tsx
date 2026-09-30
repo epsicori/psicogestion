@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -123,6 +123,62 @@ describe('RejillaMes · contenido de la celda', () => {
   it('nada late en el mes', () => {
     montar({ citas: [citaDePrueba({ id: 'a', estado: 'en_curso', late: true, diaIndice: 1 })] });
     expect(document.querySelector('.latido-estado')).toBeNull();
+  });
+});
+
+describe('RejillaMes · objetivos táctiles', () => {
+  const celdaDe = (fecha: string) => document.querySelector(`[data-dia="${fecha}"]`)!.closest<HTMLElement>('[role="gridcell"]')!;
+
+  // Evidencia, FALLA 1: a 360 px la celda enseña puntos y recuento debajo del número; tocar
+  // ahí no hacía nada.
+  it('un toque en la parte vacía de la celda abre el día, con su número como ancla', () => {
+    const props = montar({ citas: [citaDePrueba({ id: 'a', diaIndice: 1 })] });
+    const boton = document.querySelector<HTMLElement>('[data-dia="2026-09-29"]')!;
+    fireEvent.click(celdaDe('2026-09-29'));
+    expect(props.alAbrirDia).toHaveBeenCalledWith(expect.objectContaining({ fecha: '2026-09-29' }), boton);
+    props.alAbrirDia.mockClear();
+    fireEvent.click(celdaDe('2026-09-29').querySelector('[data-puntos]')!);
+    expect(props.alAbrirDia).toHaveBeenCalledWith(expect.objectContaining({ fecha: '2026-09-29' }), boton);
+  });
+
+  it('un toque en una cita o en el número no abre el día dos veces', () => {
+    const props = montar({ citas: [citaDePrueba({ id: 'a', nombreCorto: 'Aa', horaLocal: '09:00', diaIndice: 1 })] });
+    fireEvent.click(screen.getByRole('button', { name: /09:00 Aa/ }));
+    expect(props.alAbrirDia).not.toHaveBeenCalled();
+    expect(props.alAbrirCita).toHaveBeenCalledTimes(1);
+    fireEvent.click(document.querySelector('[data-dia="2026-09-29"]')!);
+    expect(props.alAbrirDia).toHaveBeenCalledTimes(1);
+  });
+
+  // Evidencia, FALLA 2. A 360 px, con el margen del armazón (px-5) y el de la tarjeta (p-4),
+  // siete columnas dan (360 − 40 − 2 − 32) / 7 ≈ 41 px. Sin el de la tarjeta, (360 − 40 − 2) / 7
+  // ≈ 45 px por columna: la rejilla sangra hasta el borde de la tarjeta y la celda no se come
+  // más. jsdom no maqueta: se comprueban las clases que dan esas cuentas.
+  it('por debajo de sm la rejilla sangra hasta el borde de la tarjeta y la celda no tiene relleno', () => {
+    montar();
+    const rejilla = screen.getByRole('grid');
+    expect(rejilla.className.split(' ')).toEqual(expect.arrayContaining(['-mx-4', 'sm:mx-0']));
+    for (const celda of screen.getAllByRole('gridcell')) {
+      expect(celda.className.split(' ')).toEqual(expect.arrayContaining(['p-0', 'sm:p-0.5']));
+    }
+  });
+
+  // Revisión TS H8: nada que se toque por debajo de 44 px de alto. Con ratón, las citas del mes
+  // conservan su alto compacto; con el dedo (`pointer: coarse`) crecen.
+  it('todo botón de la rejilla mide al menos 44 px de alto al tacto', () => {
+    const cuatro = ['a', 'b', 'c', 'd'].map((id, n) =>
+      citaDePrueba({ id, nombreCorto: id, horaLocal: `0${n + 1}:00`, minutoPared: (n + 1) * 60, diaIndice: 1 }),
+    );
+    montar({ citas: cuatro });
+    const botones = within(screen.getByRole('grid')).getAllByRole('button');
+    expect(botones.length).toBeGreaterThan(42);
+    for (const b of botones) {
+      const clases = b.className.split(' ');
+      // O bien 44 px siempre, o bien 44 px al tacto; y ningún `sm:min-h-*` que lo rebaje al tacto
+      // (el compacto de escritorio va tras `pointer-fine:`).
+      expect(clases.includes('min-h-11') || clases.includes('pointer-coarse:min-h-11')).toBe(true);
+      expect(clases.filter((c) => /^sm:min-h-/.test(c))).toEqual([]);
+    }
   });
 });
 

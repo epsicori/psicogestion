@@ -45,7 +45,12 @@ export function ListaDia({ dias, citas, diaInicial, alAbrirCita }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div role="group" aria-label={t('agenda.rejilla.diasDeLaSemana')} className="grid grid-cols-7 gap-1">
+      {/* Siete en fila a 360 px no llegan a 44 px de ancho: dos filas hasta sm (evidencia, FALLA 2). */}
+      <div
+        role="group"
+        aria-label={t('agenda.rejilla.diasDeLaSemana')}
+        className="grid grid-cols-4 gap-1 sm:grid-cols-7"
+      >
         {dias.map((dia, i) => (
           <button
             key={dia.fecha}

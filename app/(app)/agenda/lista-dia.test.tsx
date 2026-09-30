@@ -33,6 +33,16 @@ describe('ListaDia', () => {
     for (const b of botones) expect(b.className).toContain('min-h-11');
   });
 
+  // Evidencia, FALLA 2: siete en fila a 360 px son (360 − 40 − 2 − 32 − 6 · 4) / 7 ≈ 38 px de
+  // ancho. En dos filas (4 + 3) son ≈ 68 px; desde `sm` (640 px) caben las siete (≈ 77 px).
+  // jsdom no maqueta: se comprueban las clases que dan esas cuentas.
+  it('por debajo de sm la tira va en dos filas, para que cada día mida al menos 44 px de ancho', () => {
+    montar();
+    const clases = screen.getByRole('group', { name: 'Días de la semana' }).className.split(' ');
+    expect(clases).toEqual(expect.arrayContaining(['grid-cols-4', 'sm:grid-cols-7']));
+    expect(clases).not.toContain('grid-cols-7');
+  });
+
   it('lista solo las citas del día elegido, ordenadas y agrupadas por hora', () => {
     montar();
     const lista = screen.getByRole('region', { name: 'Citas del día' });
