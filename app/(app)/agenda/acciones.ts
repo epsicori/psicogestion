@@ -5,7 +5,12 @@ import { revalidatePath } from 'next/cache';
 import { esquemaConfirmarPropuesta, esquemaDescartarPropuesta, esquemaDestinoCita, esquemaReprogramarCita } from '@/lib/citas/esquemas';
 import { mensajeParaMotivo } from '@/lib/citas/errores';
 import { confirmarPropuesta, descartarPropuesta } from '@/lib/citas/propuestas';
-import { evaluarModificarSerie, prepararMovimiento, reprogramarCita } from '@/lib/citas/reprogramar';
+import {
+  evaluarModificarSerie,
+  prepararMovimiento,
+  reprogramarCita,
+  type EstadoPropuestaAncla,
+} from '@/lib/citas/reprogramar';
 import type { DetalleRechazo, MotivoErrorCitas } from '@/lib/citas/tipos';
 import { es, t, tCon } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
@@ -46,6 +51,25 @@ function fallo(r: { motivo: MotivoErrorCitas; mensaje: string; detalle?: Detalle
   };
 }
 
+/**
+ * La regla cambió y la ancla no se movió (revisión TS H11): solo se dice que su propuesta
+ * «sigue» en «Por confirmar» cuando se sabe que está, y nunca con dos puntos colgando.
+ */
+function anuncioNoMovida(
+  propuestaAncla: EstadoPropuestaAncla | undefined,
+  motivo: MotivoErrorCitas | DetalleRechazo | undefined,
+): string {
+  if (propuestaAncla === 'ninguna') return t('agenda.moverSerie.noMovidaSinPropuesta');
+  if (propuestaAncla === 'pendiente') {
+    return motivo
+      ? tCon('agenda.moverSerie.noMovida', { motivo: texto(motivo) })
+      : t('agenda.moverSerie.noMovidaSinMotivo');
+  }
+  return tCon('agenda.moverSerie.noMovidaSinComprobar', {
+    motivo: motivo ? texto(motivo) : mensajeParaMotivo('desconocido'),
+  });
+}
+
 function invalido(mensaje: string | undefined): ResultadoAccion {
   return {
     ok: false,
@@ -70,10 +94,7 @@ export async function reprogramar(entrada: unknown): Promise<ResultadoAccion> {
 
   revalidatePath('/agenda');
   const cuando = { fecha: fechaCorta(datos.fecha, datos.zona), hora: datos.hora };
-  if (!r.movida) {
-    const motivo = r.motivoNoMovida ? texto(r.motivoNoMovida) : '';
-    return { ok: true, anuncio: tCon('agenda.moverSerie.noMovida', { motivo }) };
-  }
+  if (!r.movida) return { ok: true, anuncio: anuncioNoMovida(r.propuestaAncla, r.motivoNoMovida) };
   if (datos.alcance === undefined) return { ok: true, anuncio: tCon('agenda.reprogramar.hechoSuelta', cuando) };
   if (datos.alcance === 'esta') return { ok: true, anuncio: tCon('agenda.moverSerie.hechoMantener', cuando) };
   const n = r.propuestasPendientes;

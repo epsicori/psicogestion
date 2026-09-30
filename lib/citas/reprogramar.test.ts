@@ -193,6 +193,33 @@ describe('prepararMovimiento (§5)', () => {
     expect(r).toMatchObject({ ok: false, motivo: 'cita_pasada' });
   });
 
+  // Revisión SQL H4: la guarda de la cita pasada solo miraba el fin; una cita en curso o
+  // cancelada llegaba hasta agenda_actualizar_cita, que la movía.
+  it('una cita que ya empezó (en curso) no se mueve: yaEmpezada', async () => {
+    const r = await prepararMovimiento(conCita(FILA_CITA), DESTINO, new Date('2026-10-01T08:20:00Z'));
+    expect(r).toMatchObject({ ok: false, motivo: 'parametro_invalido', detalle: 'yaEmpezada' });
+  });
+
+  it('el borde: una cita que empieza exactamente ahora ya ha empezado', async () => {
+    const r = await prepararMovimiento(conCita(FILA_CITA), DESTINO, new Date(FILA_CITA.inicio));
+    expect(r).toMatchObject({ ok: false, detalle: 'yaEmpezada' });
+    const bien = await prepararMovimiento(conCita(FILA_CITA), DESTINO, new Date(Date.parse(FILA_CITA.inicio) - 60_000));
+    expect(bien.ok).toBe(true);
+  });
+
+  it.each(['cancelada', 'realizada', 'no_asistida'])(
+    'una cita futura en estado %s no se mueve: canceladaOCerrada',
+    async (estado) => {
+      const r = await prepararMovimiento(conCita({ ...FILA_CITA, estado }), DESTINO, AHORA);
+      expect(r).toMatchObject({ ok: false, motivo: 'parametro_invalido', detalle: 'canceladaOCerrada' });
+    },
+  );
+
+  it('gemela: una cita futura confirmada sí se mueve', async () => {
+    const r = await prepararMovimiento(conCita({ ...FILA_CITA, estado: 'confirmada' }), DESTINO, AHORA);
+    expect(r.ok).toBe(true);
+  });
+
   it('un destino que ya pasó no se acepta: destino_pasado', async () => {
     const r = await prepararMovimiento(
       conCita(FILA_CITA),
@@ -323,7 +350,7 @@ describe('reprogramarCita: «esta y las siguientes» (M9c)', () => {
     });
     const r = await reprogramarCita(sesion, { ...DESTINO, alcance: 'esta_y_siguientes', firma }, AHORA);
 
-    expect(r).toEqual({ ok: true, movida: false, propuestasPendientes: 2 });
+    expect(r).toEqual({ ok: true, movida: false, propuestasPendientes: 2, propuestaAncla: 'pendiente' });
     expect(llamadas('agenda_confirmar_propuesta')).toHaveLength(0);
   });
 
@@ -334,7 +361,7 @@ describe('reprogramarCita: «esta y las siguientes» (M9c)', () => {
     });
     const r = await reprogramarCita(sesion, { ...DESTINO, alcance: 'esta_y_siguientes', firma }, AHORA);
 
-    expect(r).toEqual({ ok: true, movida: false, propuestasPendientes: 2, motivoNoMovida: 'hueco_ocupado' });
+    expect(r).toEqual({ ok: true, movida: false, propuestasPendientes: 2, motivoNoMovida: 'hueco_ocupado', propuestaAncla: 'pendiente' });
     expect(llamadas('agenda_confirmar_propuesta')).toHaveLength(1);
   });
 
@@ -348,6 +375,15 @@ describe('reprogramarCita: «esta y las siguientes» (M9c)', () => {
     });
     const r = await reprogramarCita(sesion, { ...DESTINO, alcance: 'esta_y_siguientes', firma }, AHORA);
     expect(r).toMatchObject({ ok: true, movida: false, motivoNoMovida: 'otraRegla' });
+  });
+
+  // Revisión TS H11: sin propuesta de la ancla, el anuncio no puede decir que «sigue» en la bandeja.
+  it('si la ancla no tiene propuesta pendiente, lo dice: propuestaAncla ninguna', async () => {
+    const firma = await firmaDe(previaBd());
+    const { sesion, llamadas } = escenarioSerie({ propuestas: { data: [], error: null } });
+    const r = await reprogramarCita(sesion, { ...DESTINO, alcance: 'esta_y_siguientes', firma }, AHORA);
+    expect(r).toEqual({ ok: true, movida: false, propuestasPendientes: 2, propuestaAncla: 'ninguna' });
+    expect(llamadas('agenda_confirmar_propuesta')).toHaveLength(0);
   });
 
   it('(e) nunca descarta una propuesta, en ningún camino', async () => {
@@ -368,7 +404,7 @@ describe('reprogramarCita: «esta y las siguientes» (M9c)', () => {
     const firma = await firmaDe(previaBd());
     const { sesion, llamadas } = escenarioSerie({ propuestas: { data: null, error: { code: '42501', message: 'x' } } });
     const r = await reprogramarCita(sesion, { ...DESTINO, alcance: 'esta_y_siguientes', firma }, AHORA);
-    expect(r).toMatchObject({ ok: true, movida: false, propuestasPendientes: 2, motivoNoMovida: 'no_autorizado' });
+    expect(r).toMatchObject({ ok: true, movida: false, propuestasPendientes: 2, motivoNoMovida: 'no_autorizado', propuestaAncla: 'desconocida' });
     expect(llamadas('agenda_confirmar_propuesta')).toHaveLength(0);
   });
 

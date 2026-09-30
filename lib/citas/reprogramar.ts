@@ -34,7 +34,9 @@ const MENSAJE_INEXISTENTE = 'Esa hora no existe ese día por el cambio de hora.'
 const MENSAJE_AMBIGUA = 'Esa hora se repite ese día por el cambio de hora; elige otra.';
 const MENSAJE_ELIGE = 'Elige solo esta, o esta y las siguientes.';
 const MENSAJE_SUELTA_CON_ALCANCE = 'Esta cita no pertenece a una serie.';
-const MENSAJE_MOVIDA_A_MANO = 'La cita se movió a mano y la serie ya no la gobierna.';
+const MENSAJE_YA_EMPEZADA = 'La cita ya ha empezado o ha pasado.';
+const MENSAJE_CANCELADA_O_CERRADA = 'La cita está cancelada o cerrada.';
+const MENSAJE_MOVIDA_A_MANO ='La cita se movió a mano y la serie ya no la gobierna.';
 
 /** Por qué «modificar la serie» no se puede ofrecer, aunque «mantener» sí. */
 export type BloqueoModificar = 'horaDistintaEnSerie' | 'serieOtraZona' | 'sinCambio';
@@ -64,6 +66,13 @@ export async function prepararMovimiento(
 
   if (cita.fin.getTime() <= ahora.getTime()) {
     return { ok: false, motivo: 'cita_pasada', mensaje: mensajeParaMotivo('cita_pasada') };
+  }
+  // Revisión SQL H4: la base (fn_proteger_cita_pasada) solo impide mover lo que ya acabó;
+  // una cita en curso o cancelada/cerrada no se mueve desde la agenda, igual que no es
+  // `reprogramable` en agenda_citas_rango. Los textos son los de T-011b (errores.ts).
+  if (cita.inicio.getTime() <= ahora.getTime()) return falloInvalido(MENSAJE_YA_EMPEZADA, 'yaEmpezada');
+  if (cita.estado !== 'programada' && cita.estado !== 'confirmada') {
+    return falloInvalido(MENSAJE_CANCELADA_O_CERRADA, 'canceladaOCerrada');
   }
 
   const zona = await zonaDeCentro(sesion, cita.centroId);
@@ -144,10 +153,18 @@ export async function evaluarModificarSerie(
   return { disponible: true, previa, firma };
 }
 
+/**
+ * Cuando la regla cambió pero la ancla no se movió: si su propuesta queda en «Por
+ * confirmar» (`pendiente`), si no la hay (`ninguna`), o si no se pudo leer la bandeja
+ * (`desconocida`). El anuncio no puede decir que «sigue» ahí sin saberlo (revisión TS H11).
+ */
+export type EstadoPropuestaAncla = 'pendiente' | 'ninguna' | 'desconocida';
+
 export type ResultadoReprogramar = ResultadoCitas<{
   movida: boolean;
   propuestasPendientes: number;
   motivoNoMovida?: DetalleRechazo | MotivoErrorCitas;
+  propuestaAncla?: EstadoPropuestaAncla;
 }>;
 
 /**
@@ -215,29 +232,32 @@ export async function reprogramarCita(
   if (!editada.ok) return editada;
 
   const { propuestaIds } = editada;
-  const noMovida = (motivo?: DetalleRechazo | MotivoErrorCitas): ResultadoReprogramar =>
+  const noMovida = (
+    propuestaAncla: EstadoPropuestaAncla,
+    motivo?: DetalleRechazo | MotivoErrorCitas,
+  ): ResultadoReprogramar =>
     motivo
-      ? { ok: true, movida: false, propuestasPendientes: propuestaIds.length, motivoNoMovida: motivo }
-      : { ok: true, movida: false, propuestasPendientes: propuestaIds.length };
+      ? { ok: true, movida: false, propuestasPendientes: propuestaIds.length, motivoNoMovida: motivo, propuestaAncla }
+      : { ok: true, movida: false, propuestasPendientes: propuestaIds.length, propuestaAncla };
 
   // La regla ya cambió: a partir de aquí ningún fallo es un fallo de la
   // operación. Si la ancla no se puede mover, su propuesta queda a la vista.
   const pendientes = await listarPropuestasPendientes(sesion);
-  if (!pendientes.ok) return noMovida(pendientes.motivo);
+  if (!pendientes.ok) return noMovida('desconocida', pendientes.motivo);
 
   const propuestaAncla = pendientes.propuestas.find(
     (p) => propuestaIds.includes(p.id) && p.citaId === cita.id,
   );
+  if (!propuestaAncla) return noMovida('ninguna');
   if (
-    !propuestaAncla ||
     propuestaAncla.inicioPropuesto === null ||
     new Date(propuestaAncla.inicioPropuesto).getTime() !== inicio.getTime()
   ) {
-    return noMovida();
+    return noMovida('pendiente');
   }
 
   const confirmada = await confirmarPropuesta(sesion, { propuestaId: propuestaAncla.id });
-  if (!confirmada.ok) return noMovida(confirmada.detalle ?? confirmada.motivo);
+  if (!confirmada.ok) return noMovida('pendiente', confirmada.detalle ?? confirmada.motivo);
 
   return { ok: true, movida: true, propuestasPendientes: propuestaIds.length - 1 };
 }

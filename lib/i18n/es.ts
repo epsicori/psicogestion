@@ -626,6 +626,10 @@ export const es = {
       },
       noMovida:
         'La serie ha cambiado, pero esta cita no se ha movido: {motivo} Su propuesta sigue en «Por confirmar».',
+      noMovidaSinMotivo: 'La serie ha cambiado, pero esta cita no se ha movido. Su propuesta sigue en «Por confirmar».',
+      noMovidaSinPropuesta: 'La serie ha cambiado, pero esta cita no se ha movido.',
+      noMovidaSinComprobar:
+        'La serie ha cambiado, pero no se ha podido comprobar esta cita: {motivo} Revisa «Por confirmar».',
       avisos: {
         recorte: 'Hay meses sin 5.º {dia}. En ellos la cita irá al último, el 4.º: {fechas}.',
         inexistente:

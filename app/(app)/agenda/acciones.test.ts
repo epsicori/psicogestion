@@ -68,13 +68,49 @@ describe('reprogramar', () => {
   });
 
   it('la regla cambió pero la ancla no se movió: lo dice con el motivo', async () => {
-    m.reprogramarCita.mockResolvedValueOnce({ ok: true, movida: false, propuestasPendientes: 3, motivoNoMovida: 'hueco_ocupado' });
+    m.reprogramarCita.mockResolvedValueOnce({
+      ok: true,
+      movida: false,
+      propuestasPendientes: 3,
+      motivoNoMovida: 'hueco_ocupado',
+      propuestaAncla: 'pendiente',
+    });
     const r = await reprogramar({ ...destino, alcance: 'esta_y_siguientes', firma: 'a'.repeat(64) });
     expect(r).toEqual({
       ok: true,
       anuncio:
         'La serie ha cambiado, pero esta cita no se ha movido: Ese hueco ya está ocupado. Su propuesta sigue en «Por confirmar».',
     });
+  });
+
+  // Revisión TS H11: sin motivo no quedan «dos puntos seguidos de nada», y sin propuesta
+  // de la ancla el anuncio no afirma que «sigue» en la bandeja.
+  it('la ancla con propuesta pero sin motivo: sin dos puntos colgando', async () => {
+    m.reprogramarCita.mockResolvedValueOnce({ ok: true, movida: false, propuestasPendientes: 3, propuestaAncla: 'pendiente' });
+    const r = await reprogramar({ ...destino, alcance: 'esta_y_siguientes', firma: 'a'.repeat(64) });
+    expect(r).toEqual({
+      ok: true,
+      anuncio: 'La serie ha cambiado, pero esta cita no se ha movido. Su propuesta sigue en «Por confirmar».',
+    });
+  });
+
+  it('la ancla sin propuesta: no dice que siga en «Por confirmar»', async () => {
+    m.reprogramarCita.mockResolvedValueOnce({ ok: true, movida: false, propuestasPendientes: 2, propuestaAncla: 'ninguna' });
+    const r = await reprogramar({ ...destino, alcance: 'esta_y_siguientes', firma: 'a'.repeat(64) });
+    expect(r).toEqual({ ok: true, anuncio: 'La serie ha cambiado, pero esta cita no se ha movido.' });
+  });
+
+  it('si no se pudo leer la bandeja: lo dice, con el motivo, y pide revisarla', async () => {
+    m.reprogramarCita.mockResolvedValueOnce({
+      ok: true,
+      movida: false,
+      propuestasPendientes: 2,
+      motivoNoMovida: 'no_autorizado',
+      propuestaAncla: 'desconocida',
+    });
+    const r = await reprogramar({ ...destino, alcance: 'esta_y_siguientes', firma: 'a'.repeat(64) });
+    expect(r.ok && r.anuncio).toMatch(/^La serie ha cambiado, pero no se ha podido comprobar esta cita: .+ Revisa «Por confirmar»\.$/);
+    expect(r.ok && r.anuncio).not.toMatch(/sigue en/);
   });
 
   it('modificar con varias pendientes usa el plural', async () => {
