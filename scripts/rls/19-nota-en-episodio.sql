@@ -544,4 +544,229 @@ select pg_temp.assert(
     where table_schema = 'public' and table_name = 'notas_clinicas' and column_name = 'coprofesional_id') = 'YES',
   '19.47 coprofesional_id es nulable');
 
-\echo '19-nota-en-episodio: completa (19.1-19.47).'
+-- ===========================================================================
+-- Ronda de correcciones tras las revisiones (tickets/T-034/revision-sql.md y
+-- revision-banco.md). Numeración a continuación de la 19.47, sin renumerar.
+-- ===========================================================================
+\set ESC      '\'e0340001-0000-4000-8000-00000000000c\''
+\set CKI      '\'c0340001-0000-4000-8000-0000000000e1\''
+\set CPP      '\'c0340001-0000-4000-8000-0000000000e2\''
+\set PZ1      '\'d0340001-0000-4000-8000-0000000000e1\''
+\set PZ2      '\'d0340001-0000-4000-8000-0000000000e2\''
+\set PADM     '\'d0340001-0000-4000-8000-0000000000e3\''
+\set CITA2    '\'a0340001-0000-4000-8000-000000000002\''
+\set NCOB     '\'f0340001-0000-4000-8000-000000000005\''
+
+-- Fijación de la ronda (como postgres).
+-- ESC: episodio CERRADO de PRO2 sobre PS (paciente de PRO1): el caso de H1 del banco.
+insert into public.episodios_asistenciales
+  (id, paciente_id, profesional_id, centro_id, modalidad_relacional, abierto_en, cerrado_en) values
+  (:ESC, :PS, :PRO2, :CB, 'individual', current_date - 40, current_date - 10);
+-- Dos centros en zonas que, juntas, nunca coinciden a la vez con la fecha UTC (H5 del banco):
+-- Kiritimati (UTC+14) cambia de día a las 10:00 UTC; Pago Pago (UTC-11), a las 11:00 UTC.
+insert into public.centros (id, nombre, zona_horaria) values
+  (:CKI, 'Centro Kiritimati (T-034)', 'Pacific/Kiritimati'),
+  (:CPP, 'Centro Pago Pago (T-034)',  'Pacific/Pago_Pago');
+insert into public.perfiles_centros (perfil_id, centro_id, principal) values
+  (:PRO1, :CKI, false),
+  (:PRO1, :CPP, false);
+insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values
+  (:PZ1,  'Zoe',   'T034 Z1',  :PRO1, :CA),
+  (:PZ2,  'Zacarías', 'T034 Z2', :PRO1, :CA),
+  -- PADM: paciente del ADMINISTRADOR (es_profesional_asignado es rol-agnóstica).
+  (:PADM, 'Adela', 'T034 ADM', :ADM,  :CA);
+-- CITA2: cita de PADM con PRO2 en CB. El administrador la LEE (citas_lectura), pero no es suya.
+insert into public.citas (id, paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria) values
+  (:CITA2, :PADM, :PRO2, :CB,
+   timestamptz '2030-01-14 10:00:00+01', timestamptz '2030-01-14 10:50:00+01', 'Europe/Madrid');
+
+-- ---------------------------------------------------------------------------
+-- 19.48 · (revision-sql H1) El disparador lee el episodio (paso 3) y el participante
+-- (paso 5) con `for share`: una puerta concurrente (update del episodio, cierre, update o
+-- delete del participante) espera a que la nota confirme, y entonces su `exists` la ve.
+-- El banco corre en una sola sesión: lo fija el texto de la función.
+-- ---------------------------------------------------------------------------
+select pg_temp.assert(
+  pg_get_functiondef('public.fn_exigir_episodio_coherente_en_nota()'::regprocedure)
+    ~* 'from\s+public\.episodios_asistenciales\s+ea\s+where\s+ea\.id\s*=\s*new\.episodio_id\s+for\s+share',
+  '19.48 El paso 3 lee el episodio con for share');
+select pg_temp.assert(
+  pg_get_functiondef('public.fn_exigir_episodio_coherente_en_nota()'::regprocedure)
+    ~* 'from\s+public\.episodio_participantes\s+ep\s+where[^;]*for\s+share',
+  '19.48 El paso 5 bloquea la fila del participante con for share');
+
+-- ---------------------------------------------------------------------------
+-- 19.49 · (revision-sql H5, revision-banco H2) Salida anti-oráculo del paso 2: una sesión
+-- que escribe como OTRO autor la rechaza la RLS (42501), no el disparador. Cada fila está
+-- construida para que el disparador, si corriera, diera un 23514 que revelaría algo ajeno.
+-- ---------------------------------------------------------------------------
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  'El PIN de PRO1 desbloquea la historia (ronda)');
+-- Sin el paso 2: autor PRO2 = dueño de ES pasa el paso 4, y PA no es de ES → 23514
+-- «no son del mismo paciente» (revela de qué paciente es ES).
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id) values (%L, %L, %L)', :PA, :ES, :PRO2),
+  '42501', 'row-level security',
+  '19.49 PRO1 escribiendo como PRO2 en ES con otro paciente: 42501 de la RLS, no 23514');
+-- Sin el paso 2: PS es de ES, y el coprofesional TEC1 → 23514 «profesional sanitario»
+-- (revela el rol de un perfil).
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id, coprofesional_id) values (%L, %L, %L, %L)',
+         :PS, :ES, :PRO2, :TEC1),
+  '42501', 'row-level security',
+  '19.49 PRO1 escribiendo como PRO2 en ES con coprofesional TEC1: 42501 de la RLS, no 23514');
+-- Sin el paso 2: ESC es de PRO2 y de PS, y está cerrado → 23514 «episodio cerrado».
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id) values (%L, %L, %L)', :PS, :ESC, :PRO2),
+  '42501', 'row-level security',
+  '19.49 PRO1 escribiendo como PRO2 en el cerrado ESC: 42501 de la RLS, no «episodio cerrado»');
+
+-- ---------------------------------------------------------------------------
+-- 19.50 · (revision-banco H1) Orden de guardas del disparador frente a un episodio AJENO:
+-- el autor (paso 4) habla antes que el paciente (paso 5) y que el cerrado (paso 6). Si no,
+-- PRO1 averigua de qué paciente es el episodio de un compañero, o si está cerrado.
+-- ---------------------------------------------------------------------------
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id) values (%L, %L, %L)', :PA, :ES, :PRO1),
+  '23514', 'episodio de otro profesional',
+  '19.50 Episodio abierto de PRO2 con OTRO paciente (PA): «episodio de otro profesional», no «no son del mismo paciente»');
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id) values (%L, %L, %L)', :PS, :ESC, :PRO1),
+  '23514', 'episodio de otro profesional',
+  '19.50 Episodio CERRADO de PRO2 con su paciente (PS): «episodio de otro profesional», no «episodio cerrado»');
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id) values (%L, %L, %L)', :PA, :ESC, :PRO1),
+  '23514', 'episodio de otro profesional',
+  '19.50 Episodio CERRADO de PRO2 con otro paciente (PA): «episodio de otro profesional»');
+
+-- ---------------------------------------------------------------------------
+-- 19.51 · (revision-banco H1) Orden de guardas de episodio_para_nota(): la propiedad antes
+-- que el cerrado. Gemela: la 19.15 (EA0, cerrado PROPIO) da 22023 «está cerrado».
+-- ---------------------------------------------------------------------------
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.episodio_para_nota(%L, %L)', :PS, :ESC),
+  '42501', 'no vale para esta nota',
+  '19.51 Elegir el episodio CERRADO de un compañero: 42501 «no vale», no 22023 «está cerrado»');
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------
+-- 19.52 · (revision-banco H3) La otra columna de cada puerta congelada, como postgres.
+-- ---------------------------------------------------------------------------
+-- Episodio con notas (vA, nota de 19.3): tampoco cambia de PROFESIONAL.
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.episodios_asistenciales set profesional_id = %L where id = %L', :PRO2, :'va'),
+  '42501', 'tiene notas',
+  '19.52 vA tiene nota: no cambia de profesional (42501 «tiene notas»)');
+-- Gemela: el episodio de 19.10 (sin notas) sí cambia de profesional.
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.notas_clinicas where episodio_id = %L', :'r10')) = 0,
+  '19.52 Antes: el episodio de 19.10 no tiene notas');
+update public.episodios_asistenciales set profesional_id = :PRO2 where id = :'r10';
+select pg_temp.assert(
+  (select profesional_id from public.episodios_asistenciales where id = :'r10') = :PRO2,
+  '19.52 Gemela: un episodio SIN notas sí cambia de profesional');
+-- Participante con notas (PJ2 en EJ, 19.24): tampoco se mueve de EPISODIO.
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.episodio_participantes set episodio_id = %L where episodio_id = %L and paciente_id = %L', :EB1, :EJ, :PJ2),
+  '42501', 'El participante tiene notas',
+  '19.52 Un participante con notas no se mueve a otro episodio (42501)');
+-- Gemela: un participante SIN notas (PJ5 en EJ) sí se mueve de episodio.
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.notas_clinicas where episodio_id = %L and paciente_id = %L', :EJ, :PJ5)) = 0,
+  '19.52 Antes: PJ5 no tiene notas en EJ');
+update public.episodio_participantes set episodio_id = :EB1 where episodio_id = :EJ and paciente_id = :PJ5;
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.episodio_participantes where episodio_id = %L and paciente_id = %L', :EB1, :PJ5)) = 1,
+  '19.52 Gemela: un participante sin notas sí se mueve de episodio');
+
+-- ---------------------------------------------------------------------------
+-- 19.53 · (revision-banco H5) abierto_en es la fecha en la zona del centro, no current_date.
+-- Kiritimati y Pago Pago no coinciden a la vez con la fecha de la sesión en ninguna hora:
+-- con `current_date` en la función, al menos una de las dos aserciones cae siempre.
+-- ---------------------------------------------------------------------------
+select pg_temp.assert(
+  (now() at time zone 'Pacific/Kiritimati')::date <> current_date
+  or (now() at time zone 'Pacific/Pago_Pago')::date <> current_date,
+  '19.53 Control: al menos una de las dos zonas está hoy en otra fecha que la sesión (la prueba discrimina)');
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  'El PIN de PRO1 desbloquea la historia (19.53)');
+select public.episodio_para_nota(:PZ1, null, null, :CKI) as vz1 \gset
+select public.episodio_para_nota(:PZ2, null, null, :CPP) as vz2 \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select abierto_en from public.episodios_asistenciales where id = :'vz1' and centro_id = :CKI)
+    = (now() at time zone 'Pacific/Kiritimati')::date,
+  '19.53 Episodio en Kiritimati: abierto_en = la fecha de Kiritimati');
+select pg_temp.assert(
+  (select abierto_en from public.episodios_asistenciales where id = :'vz2' and centro_id = :CPP)
+    = (now() at time zone 'Pacific/Pago_Pago')::date,
+  '19.53 Episodio en Pago Pago: abierto_en = la fecha de Pago Pago');
+
+-- ---------------------------------------------------------------------------
+-- 19.54 · (revision-banco H6) La cita tiene que ser DEL LLAMANTE, no solo del paciente.
+-- El administrador lee todas las citas y es asignado de PADM: sin el filtro
+-- `c.profesional_id = v_uid` abriría un episodio en CB (el centro de la cita de PRO2) sin
+-- pasar por centros_actuales().
+-- ---------------------------------------------------------------------------
+call pg_temp.como_con_2fa(:ADM); select public.fijar_pin_historia('333333'); call pg_temp.reset_sesion();
+call pg_temp.como(:ADM);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
+  'El PIN de ADM desbloquea la historia (19.54)');
+select pg_temp.assert(public.es_profesional_asignado(:PADM),
+  '19.54 Control: ADM es el profesional asignado de PADM');
+select pg_temp.assert(pg_temp.contar(format('select * from public.citas where id = %L', :CITA2)) = 1,
+  '19.54 Control: ADM LEE la cita de PRO2 (el rechazo de abajo no es la RLS de citas)');
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.episodio_para_nota(%L, null, %L, null)', :PADM, :CITA2),
+  '42501', 'La cita no es de este paciente con este profesional',
+  '19.54 La cita de PADM con PRO2 no vale para ADM: 42501, no un episodio en CB');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select count(*) from public.episodios_asistenciales where paciente_id = :PADM) = 0,
+  '19.54 ...y no se abrió ningún episodio para PADM');
+
+-- ---------------------------------------------------------------------------
+-- 19.55 · (revision-banco H4) El coprofesional necesita alta VIGENTE (hasta is null) en el
+-- centro del episodio; y una edición que no toca ni el coprofesional ni el episodio no lo
+-- revalida. Va la última: cierra el alta de PRO2 en CA.
+-- ---------------------------------------------------------------------------
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  'El PIN de PRO1 desbloquea la historia (19.55)');
+-- Con el alta abierta, la nota de PJ1 en EJ (CA) con coprofesional PRO2 entra.
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, coprofesional_id)
+  values (:NCOB, :PJ1, :EJ, :PRO1, :PRO2);
+call pg_temp.reset_sesion();
+update public.perfiles_centros set hasta = current_date
+ where perfil_id = :PRO2 and centro_id = :CA and hasta is null;
+select pg_temp.assert(
+  (select count(*) from public.perfiles_centros
+    where perfil_id = :PRO2 and centro_id = :CA and hasta is not null) = 1
+  and (select count(*) from public.perfiles_centros
+        where perfil_id = :PRO2 and centro_id = :CA and hasta is null) = 0,
+  '19.55 Control: PRO2 tiene fila en CA, pero cerrada (no es «sin fila», como en 19.36-19.38)');
+call pg_temp.como(:PRO1);
+-- Gemela: la 19.32, la misma fila con el alta abierta.
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id, coprofesional_id) values (%L, %L, %L, %L)',
+         :PK, :ECO, :PRO1, :PRO2),
+  '23514', 'no tiene alta en el centro del episodio',
+  '19.55 Coprofesional con el alta en CA cerrada: 23514 «no tiene alta en el centro del episodio»');
+-- Paso 7 solo si cambia el coprofesional o el episodio: cambiar el paciente a otro
+-- participante de EJ no revalida el alta perdida después.
+update public.notas_clinicas set paciente_id = :PJ2 where id = :NCOB;
+select pg_temp.assert(
+  (select paciente_id from public.notas_clinicas where id = :NCOB) = :PJ2
+  and (select coprofesional_id from public.notas_clinicas where id = :NCOB) = :PRO2,
+  '19.55 Cambiar el paciente (a otro participante) de una nota cuyo coprofesional perdió el alta pasa');
+-- ...pero quitarlo y volver a ponerlo sí lo revalida.
+update public.notas_clinicas set coprofesional_id = null where id = :NCOB;
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.notas_clinicas set coprofesional_id = %L where id = %L', :PRO2, :NCOB),
+  '23514', 'no tiene alta en el centro del episodio',
+  '19.55 Volver a poner a PRO2 (alta cerrada) como coprofesional: 23514');
+call pg_temp.reset_sesion();
+
+\echo '19-nota-en-episodio: completa (19.1-19.55).'
