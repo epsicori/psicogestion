@@ -35,7 +35,7 @@ export type ContextoAgenda = {
 const cargarSesion = cache(exigirSesion);
 
 /** La misma lectura que el armazón; sin perfil legible, `null`, y el cuadro no se pinta. */
-const cargarRol = cache(async (): Promise<RolUsuario | null> => {
+export const cargarRol = cache(async (): Promise<RolUsuario | null> => {
   const { supabase, usuario } = await cargarSesion();
   const { data, error } = await supabase.from('perfiles').select('rol').eq('id', usuario.id).maybeSingle();
   if (error) console.error('Agenda: fallo al leer el rol', error);

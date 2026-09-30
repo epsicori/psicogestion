@@ -3,7 +3,7 @@ import { leerCitasRango } from '@/lib/citas/agenda';
 import { t, tCon } from '@/lib/i18n';
 
 import { filtrarPorCentro, metricasDelMes, puedeVerCuadro, rangoDelMes, type MetricasDelMes } from './bloques';
-import { cargarContexto } from './datos';
+import { cargarContexto, cargarRol } from './datos';
 import { MarcoBloque } from './marco';
 import { TarjetaMetrica } from './tarjeta-metrica';
 
@@ -17,6 +17,9 @@ function porcentaje(valor: number | null): string {
  * ni se pinta. Por eso el bloque trae su propio marco: sin cuadro no queda una tarjeta vacía.
  */
 export async function Cuadro({ centroParametro }: { centroParametro: string | null }) {
+  // El rol va antes que el contexto (revisión TS H7): si el contexto falla, al técnico no se
+  // le pinta ni el marco del cuadro con un aviso.
+  if (!puedeVerCuadro(await cargarRol())) return null;
   const contexto = await cargarContexto(centroParametro);
   if (!contexto.ok) {
     return (
