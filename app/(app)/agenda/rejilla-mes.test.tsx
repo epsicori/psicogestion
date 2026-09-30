@@ -136,7 +136,7 @@ describe('RejillaMes · objetivos táctiles', () => {
     const boton = document.querySelector<HTMLElement>('[data-dia="2026-09-29"]')!;
     fireEvent.click(celdaDe('2026-09-29'));
     expect(props.alAbrirDia).toHaveBeenCalledWith(expect.objectContaining({ fecha: '2026-09-29' }), boton);
-    props.alAbrirDia.mockClear();
+    vi.mocked(props.alAbrirDia).mockClear();
     fireEvent.click(celdaDe('2026-09-29').querySelector('[data-puntos]')!);
     expect(props.alAbrirDia).toHaveBeenCalledWith(expect.objectContaining({ fecha: '2026-09-29' }), boton);
   });

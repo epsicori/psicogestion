@@ -63,8 +63,10 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
     // el día es el de la vista actual, que tras mover puede ser otro (revisión TS H4).
     function enfocarVisible(citaId: string | null, fecha: string) {
       if (!contenedor) return;
-      const visibles = (selector: string) =>
-        [...contenedor.querySelectorAll<HTMLElement>(selector)].filter((e) => e.offsetParent !== null);
+      function visibles(selector: string): HTMLElement[] {
+        const todos: HTMLElement[] = Array.from(contenedor!.querySelectorAll(selector));
+        return todos.filter((e) => e.offsetParent !== null);
+      }
       const fechaActual = vista.citas.find((c) => c.id === citaId)?.fechaLocal ?? fecha;
       const destino =
         (citaId === null ? undefined : visibles(`[data-cita-id="${citaId}"]`)[0]) ??
