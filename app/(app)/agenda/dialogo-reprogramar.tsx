@@ -7,11 +7,12 @@ import { useForm, useWatch } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Dialogo } from '@/components/ui/dialogo';
 import { Field } from '@/components/ui/field';
+import { mensajeParaMotivo } from '@/lib/citas/errores';
 import { esquemaDestinoCita, type DatosDestinoCita } from '@/lib/citas/esquemas';
 import { t, tCon } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
-import { previsualizarMovimiento, reprogramar, type ResultadoPrevisualizar } from './acciones';
+import { previsualizarMovimiento, reprogramar, type ResultadoAccion, type ResultadoPrevisualizar } from './acciones';
 import type { CitaVista, DiaVista } from './vista';
 
 type Alcance = 'esta' | 'esta_y_siguientes';
@@ -81,7 +82,13 @@ export function DialogoReprogramar({ cita, zona, dias, inicial, desdeArrastre, a
     versionVista.current = version;
     const espera = haRespondido.current && !inmediata ? ESPERA_MS : 0;
     const temporizador = setTimeout(async () => {
-      const resultado = await previsualizarMovimiento({ citaId: cita.id, fecha, hora, zona });
+      // Una acción que rechaza (red, 500) no deja «Calculando…» para siempre (revisión TS H6).
+      let resultado: ResultadoPrevisualizar;
+      try {
+        resultado = await previsualizarMovimiento({ citaId: cita.id, fecha, hora, zona });
+      } catch {
+        resultado = { ok: false, mensaje: mensajeParaMotivo('desconocido') };
+      }
       if (!vigente) return;
       haRespondido.current = true;
       setPrevia({ clave: `${fecha}|${hora}`, resultado });
@@ -139,8 +146,16 @@ export function DialogoReprogramar({ cita, zona, dias, inicial, desdeArrastre, a
     if (deSerie && elegida === 'esta_y_siguientes' && fresca?.ok === true && fresca.modificar.disponible) {
       carga = { ...base, alcance: 'esta_y_siguientes', firma: fresca.modificar.firma };
     }
-    const r = await reprogramar(carga);
-    setEnviando(false);
+    // Si la acción rechaza, `enviando` no puede quedarse en true: el modal atraparía el foco
+    // con Escape y Cancelar ignorados hasta recargar (revisión TS H6, WCAG 2.1.2).
+    let r: ResultadoAccion;
+    try {
+      r = await reprogramar(carga);
+    } catch {
+      r = { ok: false, motivo: 'desconocido', detalle: null, mensaje: mensajeParaMotivo('desconocido') };
+    } finally {
+      setEnviando(false);
+    }
     if (r.ok) {
       alMovida(r.anuncio);
       return;

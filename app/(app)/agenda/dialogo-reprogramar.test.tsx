@@ -292,6 +292,28 @@ describe('DialogoReprogramar · cita de una serie', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  // Revisión TS H6: una Server Action que rechaza (red caída, 500) no deja el diálogo bloqueado.
+  it('si la acción rechaza, se dice, Mover vuelve a estar disponible y Escape cierra', async () => {
+    reprogramar.mockRejectedValue(new Error('Failed to fetch'));
+    const usuario = await abrir();
+    await waitFor(() => expect(radioModificar()).toBeEnabled());
+    await usuario.click(radioMantener());
+    await usuario.click(screen.getByRole('button', { name: 'Mover' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo completar la operación.');
+    expect(screen.getByRole('button', { name: 'Mover' })).not.toHaveAttribute('aria-disabled', 'true');
+    await usuario.keyboard('{Escape}');
+    expect(alCerrar).toHaveBeenCalledTimes(1);
+  });
+
+  it('si la previsualización rechaza, no se queda en «Calculando…»: lo dice y «Mantener» sigue', async () => {
+    previsualizarMovimiento.mockRejectedValue(new Error('Failed to fetch'));
+    await abrir();
+    expect(await screen.findByText('No se pudo completar la operación.')).toBeInTheDocument();
+    expect(screen.queryByText(/Calculando/)).not.toBeInTheDocument();
+    expect(radioModificar()).toBeDisabled();
+    expect(radioMantener()).toBeEnabled();
+  });
+
   it('mientras se envía, Escape no cierra el diálogo', async () => {
     reprogramar.mockReturnValue(new Promise(() => {}));
     const usuario = await abrir();
