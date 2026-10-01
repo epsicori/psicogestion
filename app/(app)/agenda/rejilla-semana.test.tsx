@@ -77,7 +77,40 @@ describe('RejillaSemana · estructura', () => {
   // tacto (`pointer: coarse`, una tableta a partir de md) el botón no baja de 44 px.
   it('las citas miden al menos 44 px de alto al tacto', () => {
     montar({ citas: [citaDePrueba({ duracionMinutos: 15 })] });
-    expect(screen.getByRole('button', { name: /Ana G\./ }).className.split(' ')).toContain('pointer-coarse:min-h-11');
+    const cita = screen.getByRole('button', { name: /Ana G\./ });
+    expect(cita.className.split(' ')).toContain('pointer-coarse:min-h-(--alto-tactil)');
+    expect(cita.style.getPropertyValue('--alto-tactil')).toBe('44px');
+  });
+
+  // Revisión de cierre N3: crecer a 44 px no puede tapar a la cita que viene justo después.
+  describe('alto táctil con otra cita debajo', () => {
+    const seguidas = (huecoMin: number) => [
+      citaDePrueba({ id: 'a', nombreCorto: 'Aa', minutoPared: 600, duracionMinutos: 15 }),
+      citaDePrueba({ id: 'b', nombreCorto: 'Bb', minutoPared: 615 + huecoMin, duracionMinutos: 15 }),
+    ];
+    const altoTactil = (nombre: RegExp) =>
+      screen.getByRole('button', { name: nombre }).style.getPropertyValue('--alto-tactil');
+
+    it('la que acaba donde empieza la siguiente no crece más allá de ella (24 px)', () => {
+      montar({ citas: seguidas(0) });
+      expect(altoTactil(/Aa/)).toBe(`${15 * PX_MIN}px`);
+      expect(altoTactil(/Bb/)).toBe('44px');
+    });
+
+    it('gemela: con un hueco de 15 minutos hasta la siguiente crece hasta donde cabe, sin pasarse de 44', () => {
+      montar({ citas: seguidas(15) });
+      expect(altoTactil(/Aa/)).toBe('44px');
+    });
+
+    it('gemela: una cita en OTRA columna del grupo no limita el crecimiento', () => {
+      montar({
+        citas: [
+          citaDePrueba({ id: 'a', nombreCorto: 'Aa', minutoPared: 600, duracionMinutos: 15, columna: 0, columnasEnGrupo: 2 }),
+          citaDePrueba({ id: 'b', nombreCorto: 'Bb', minutoPared: 600, duracionMinutos: 60, columna: 1, columnasEnGrupo: 2 }),
+        ],
+      });
+      expect(altoTactil(/Aa/)).toBe('44px');
+    });
   });
 
   it('las citas de un mismo grupo se reparten el ancho de la columna', () => {

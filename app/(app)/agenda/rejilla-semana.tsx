@@ -13,6 +13,29 @@ import type { CitaVista, DiaVista, VistaCalendario } from './vista';
 /** Lo que hay que mover el puntero antes de que un clic se convierta en arrastre. */
 const UMBRAL_PX = 4;
 
+/** Lo que mide un objetivo táctil (44 px, WCAG 2.5.8 reforzado). */
+const OBJETIVO_TACTIL_PX = 44;
+
+/**
+ * El alto mínimo de una cita al tacto: 44 px, pero sin llegar a la siguiente cita que tiene debajo
+ * en su misma franja horizontal. Crecer sobre ella la taparía y dejaría un objetivo útil de 24 px
+ * con una caja que dice una duración que no tiene (revisión de cierre N3). Las de otra columna
+ * del grupo no cuentan: no están debajo.
+ */
+export function altoTactil(cita: CitaVista, delDia: CitaVista[]): number {
+  const finCita = cita.minutoPared + cita.duracionMinutos;
+  const izquierda = cita.columna / cita.columnasEnGrupo;
+  const derecha = (cita.columna + 1) / cita.columnasEnGrupo;
+  let siguiente = Infinity;
+  for (const otra of delDia) {
+    if (otra === cita || otra.minutoPared < finCita) continue;
+    const desde = otra.columna / otra.columnasEnGrupo;
+    const hasta = (otra.columna + 1) / otra.columnasEnGrupo;
+    if (desde < derecha && izquierda < hasta) siguiente = Math.min(siguiente, otra.minutoPared);
+  }
+  return Math.min(OBJETIVO_TACTIL_PX, (siguiente - cita.minutoPared) * PX_MIN);
+}
+
 type Props = {
   titulo: string;
   dias: DiaVista[];
@@ -229,11 +252,12 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
                         }
                         alAbrirCita(cita, evento.currentTarget);
                       }}
-                      // Con ratón el alto dice la duración; al tacto, 44 px (revisión TS H8).
-                      className="bg-card border-border hover:bg-muted focus-visible:ring-ring/50 pointer-coarse:min-h-11 absolute overflow-hidden rounded-md border p-1 text-left outline-none select-none focus-visible:ring-2"
+                      // Con ratón el alto dice la duración; al tacto, 44 px sin tapar a la de debajo (H8, N3).
+                      className="bg-card border-border hover:bg-muted focus-visible:ring-ring/50 pointer-coarse:min-h-(--alto-tactil) absolute overflow-hidden rounded-md border p-1 text-left outline-none select-none focus-visible:ring-2"
                       style={{
                         top: (cita.minutoPared - eje.desdeMinuto) * PX_MIN,
                         height: cita.duracionMinutos * PX_MIN,
+                        '--alto-tactil': `${altoTactil(cita, delDia)}px`,
                         left: `${(cita.columna / cita.columnasEnGrupo) * 100}%`,
                         width: `${100 / cita.columnasEnGrupo}%`,
                       }}
