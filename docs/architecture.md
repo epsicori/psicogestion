@@ -64,7 +64,11 @@ vuelve a leer esos bytes; **jamás los deriva otra vez del objeto**.
   `firmada_en` y `redactada_en_sesion` con el margen que aplicó (**ADR-046**). Sellar solo
   el cuerpo dejaría cambiar el autor sin romper la cadena; dejar fuera
   `redactada_en_sesion` dejaría convertir un «lo escribí el viernes» en un «lo escribí en
-  sesión» sin rastro.
+  sesión» sin rastro. Desde la **era 4** (T-012c, ADR-067) el sobre lleva diecisiete claves:
+  a las anteriores suma la identidad de la nota y su cabecera —`nota_id`, `paciente_id`,
+  `episodio_id`, `fecha_sesion` (`AAAA-MM-DD`, sin zona) y `coprofesional_id`, siempre
+  presente aunque valga `null`—, para que ni mover la versión a otra nota ni reatribuir la
+  cabecera pasen sin romper la cadena.
 - La huella anterior son **32 bytes fijos**, así que la concatenación no es ambigua y no
   necesita separador. El primer eslabón usa 32 bytes cero.
 - Cada versión guarda su `algoritmo_version`. Cambiar de algoritmo es abrir una era nueva,
@@ -88,16 +92,20 @@ lo calcula `extensions.digest()` (pgcrypto): la aplicación nunca calcula huella
 cierra por construcción el criterio de `blocking-prerender-*` (ADR-043). La serialización
 por paciente es un cerrojo consultivo (`pg_advisory_xact_lock`), no un `for no key update`
 sobre `pacientes` — esa fila ya la usa la fusión de pacientes (ADR-031) y compartir el
-mismo juego de cerrojos abriría interbloqueos nuevos. `esquema_version = 2` desde el
-ADR-046 (versión 1 nunca existió). El verificador, `verificar_cadena_huellas(uuid)`, vive
+mismo juego de cerrojos abriría interbloqueos nuevos. `esquema_version = 4` desde T-012c
+(ADR-046 abrió la 2; versión 1 nunca existió). Antes de nada (paso 0) el disparador exige
+que quien firma como `authenticated` sea el autor de la nota y tenga la historia
+desbloqueada; cualquier otro caso —nota ajena, inexistente, sobre incoherente,
+conjunta— recibe el mismo 42501, sin pistas sobre si la nota existe ni de quién es. El verificador, `verificar_cadena_huellas(uuid)`, vive
 en SQL y no en Node —para que reserializar el objeto sea imposible por construcción, no
 solo por disciplina— y no se concede a `authenticated`. Desde T-012b también coteja, por
-valor y sin reserializar, las siete columnas que el sobre repite (`alcance`, `autor_id`,
+valor y sin reserializar, las columnas que el sobre repite (`alcance`, `autor_id`,
 `cuerpo`, `anotaciones_reservadas`, `esquema_version`, `motivo_cambio`, `creada_en`) contra
 la fila que las guarda, con motivo `sobre_no_coincide_con_fila` (ADR-057): así se detecta
-un `update` con los cerrojos levantados que cambie una de esas siete columnas sin tocar el
-sobre. Fuera de este cotejo quedan `nota_id`, hasta T-012c (ADR-067), y `numero_version`,
-sin decisión. Y sigue sin cubrir la reescritura completa de la ÚLTIMA versión de una
+un `update` con los cerrojos levantados que cambie una de ellas sin tocar el sobre. Desde
+T-012c coteja además `nota_id` y `paciente_id` con la fila, y `paciente_id`, `episodio_id`,
+`autor_id`, `fecha_sesion` y `coprofesional_id` con la **cabecera** de `notas_clinicas`.
+Fuera del cotejo queda `numero_version`, sin decisión. Y sigue sin cubrir la reescritura completa de la ÚLTIMA versión de una
 cadena —columna, sobre y huella a la vez, sin eslabón siguiente que la delate—: ese riesgo
 lo acepta el diseño de T-012b y solo lo cierra un anclaje externo, fuera de alcance.
 Ejecutable a mano con `npm run verificar:huellas`.

@@ -37,6 +37,6 @@
 - **T-034 SQL-H3 y SQL-H4**: decididos en ADR-073 (congelar `centro_id`; admin sanitario vale de coprofesional). Código en T-035.
 - **Fuera de CI**: `t001-esquema.sql`, `t002-rls.sql` crean notas sin episodio. Territorio ajeno.
 - **T-011c** (MEDIA → ALTA): H1+H2+H3 de T-011b bajo ADR-070. Ordinal deducido de último evento. Falta gemela 4.º = último. Lectura de ancla sin candado.
-- **Para T-012c**: Comentario `20260915130000_…:161-163` falso desde T-012b; no copiar. Verificador a mano vs. `pg_get_functiondef`.
+- **H27 (T-012c)**: `cita_id` del sobre no se coteja contra la cabecera (`notas_clinicas` no la guarda; sale de la cita). Sin decisión. `t001`/`t002` pueden llevar generadores de sobre de la era 3 (territorio ajeno, fuera de CI).
 - **Para T-014**: Zod `.omit()/.pick()` lanzan con `refine` (TS-H7). Fecha `2026-02-30` = 2-03; validar `?semana=`. T-030 H10: zona `null` sin validación.
 - **T-031/T-032** (MEDIA). T-011 sin transiciones ADR-045. Anteriores 13-09: `estado-hasta-2026-09-13.md`.
