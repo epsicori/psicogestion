@@ -3,48 +3,40 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 26-09-2026 · T-011b integrado en `main`
+**Actualizado**: 01-10-2026 · T-034 integrado en `main`
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-013a, T-011b, T-012b, T-016–T-020, T-029–T-032. Autenticación,
+- **Integrado en `main`**: T-000–T-013a, T-011b, T-012b, T-016–T-020, T-029–T-032, T-034. Autenticación,
   ficha cifrada, series editables desde cita elegida, salud básica de solo adición, dinero, rejilla
-  de semana. Verificador de huellas coteja siete columnas con el sobre.
+  de semana, toda nota en episodio. Verificador de huellas coteja siete columnas con el sobre.
 
 ## En curso
 
-- **T-014** diseñado, espera «esta y las siguientes» de T-011b (ya integrado). Botón «Notas»
-  desactivado hasta T-012. **T-014·a** (MiniMax por API, rama `T-014a-estado-cita`) entra con T-014.
-- **T-012c** (`nota_id` al sobre): diseño a cargo del arquitecto. Depende de T-012b.
-
-## Decidido por el propietario (falta ticket)
-
-- **Salud básica, fila completa** (ADR-064). **Cargo × función** (ADR-065, ADR-066): administrativo
-  no ve clínicos, salvo emergencia.
+- **T-012c** (`nota_id` al sobre): diseño cerrado (P6 resuelta por ADR-073.3). Implementación por lanzar.
+- **T-035** (centro congelado + director sanitario coprofesional, ADR-073.1-2) y **T-036** (`cita_id`
+  cotejado, ADR-073.4, tras T-012c): nuevos, sin diseño.
+- **T-033** (segundo factor desactivable en local): nuevo, sin diseño. Bloquea T-014 en CI real.
+- **T-014** diseñado, espera T-033. **T-014·a** (MiniMax, rama `T-014a-estado-cita`) entra con T-014.
 
 ## Bloqueos
 
-- Hay trabajo económico sin comitear en el worktree `agent-a3e72807070793a0e`: retomar o rehacer.
-- BD local: `qr-prueba-…@psicogestion.test` (sonda del 24-09); FK de auditoría impide borrar.
-- Windows winnat a veces reserva puertos 54245–54344; Postgres no arranca en 54322. Arreglo: `net
-  stop winnat` + `net start winnat` en consola de administrador.
+- Hay trabajo económico sin comitear en worktree `agent-a3e72807070793a0e`.
+- BD local: `qr-prueba-…@psicogestion.test` (FK de auditoría impide borrar).
+- Windows winnat a veces reserva puertos 54245–54344; Postgres en 54322. Arreglo: `net stop winnat`.
 
 ## Siguiente paso
 
-1. T-014 + T-014·a: editar cita desde rejilla, confirmar cambio de serie que T-011b prepara.
-2. T-012c: diseño (arquitecto). N1 de T-012b (verificador escrito a mano vs. pg_get_functiondef).
-3. Tickets de ADR-064 y ADR-065. T-011c (ordinal mensual bajo ADR-070).
+1. T-012c: implementación (Opus), verificación y dos revisores. Después T-035 y T-036.
+2. T-033: segundo factor desactivable en local, para T-014 en CI.
+3. T-011c (ordinal mensual bajo ADR-070, MEDIA → ALTA riesgo).
 
 ## Hallazgos anotados (abiertos)
 
-- **T-011c (MEDIA → ALTA riesgo, diseño en tickets)**. H1+H2+H3 de T-011b, bajo ADR-070 (propietario
-  decidió opción a, c451d47). Ordinal deducido del último evento `agenda.regla_serie_cambiada` en
-  serie, no de heurística de cita más cercana. H2: falta gemela 4.º de verdad = último. H3: lectura
-  de ancla sin candado. Necesita diseño del arquitecto.
-- **Para T-012c (de T-012b)**: comentario `20260915130000_…:161-163` es falso desde T-012b; no copiar.
-  **N1**: F.9b restaura verificador escrito a mano. Usar `pg_get_functiondef` con `\gset`.
-- **Para T-014**: Zod `.omit()` y `.pick()` lanzan en esquemas con `refine` (TS-H7, bitácora T-011b).
-  `new Date('2026-02-30')` = 2-03: validar `?semana=`. T-030 H10: zona `null` cae a servidor sin lanzar.
-- **T-031 H12–H17** (MEDIA), **T-032 SQL-H2–H4, TS-H3** (MEDIA, sin prueba). Mirar antes de T-023.
-- `Pildora` success / `architecture.md` once claves / `Button` 44px / T-011 sin transiciones
-  ADR-045. Anteriores 13-09: `estado-hasta-2026-09-13.md`.
+- **T-034 SQL-H2** (MEDIA): Reabrir episodio (`cerrado_en = null`) esquiva D6 y mueve reloj. **Regla de ticket que cierre episodios.**
+- **T-034 SQL-H3 y SQL-H4**: decididos en ADR-073 (congelar `centro_id`; admin sanitario vale de coprofesional). Código en T-035.
+- **Fuera de CI**: `t001-esquema.sql`, `t002-rls.sql` crean notas sin episodio. Territorio ajeno.
+- **T-011c** (MEDIA → ALTA): H1+H2+H3 de T-011b bajo ADR-070. Ordinal deducido de último evento. Falta gemela 4.º = último. Lectura de ancla sin candado.
+- **Para T-012c**: Comentario `20260915130000_…:161-163` falso desde T-012b; no copiar. Verificador a mano vs. `pg_get_functiondef`.
+- **Para T-014**: Zod `.omit()/.pick()` lanzan con `refine` (TS-H7). Fecha `2026-02-30` = 2-03; validar `?semana=`. T-030 H10: zona `null` sin validación.
+- **T-031/T-032** (MEDIA). T-011 sin transiciones ADR-045. Anteriores 13-09: `estado-hasta-2026-09-13.md`.

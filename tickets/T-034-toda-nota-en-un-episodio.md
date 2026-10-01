@@ -6,7 +6,8 @@ fase: 2
 prioridad: alta
 depende_de: [T-012b]
 bloquea: [T-012c, T-012]
-estado: pendiente
+estado: hecho
+completado: 2026-10-01
 territorio:
   - supabase/migrations/*_nota_siempre_en_episodio.sql
   - lib/supabase/tipos-bd.ts
