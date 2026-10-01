@@ -21,8 +21,7 @@
 - **T-036** (firma cotejada, prioridad alta): el arquitecto agotó los turnos **sin escribir**
   `tickets/T-036/diseno.md`. Relanzar.
 - **T-012** (notas): diseñado y piezas de MiniMax entregadas y revisadas (`minimax/respuestas` y
-  `revisiones/T-012*`; copias corregidas y `catalogo.diff` en el scratchpad de la sesión 01-10,
-  se pierden: rehacer desde las revisiones). Aviso: `scripts/t012-nota.ts` no es idempotente.
+  `revisiones/T-012*`; copias corregidas y `catalogo.diff` en `minimax/correcciones/T-012/`). Aviso: `scripts/t012-nota.ts` no es idempotente.
 
 ## Bloqueos
 
