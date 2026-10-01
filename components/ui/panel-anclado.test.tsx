@@ -177,3 +177,71 @@ describe('PanelAnclado', () => {
     expect(panel).toHaveAttribute('data-lado', 'arriba');
   });
 });
+
+// Revisión de cierre N2: la fila del panel del día es el ancla del panel de la cita, y en el mismo
+// commit el panel del día pasa a `hidden`: su caja mide cero y el pico apuntaría a la esquina.
+describe('PanelAnclado con el ancla oculta', () => {
+  const SIN_CAJA = rect(0, 0, 0, 0);
+  const DIA = rect(300, 600, 40, 28);
+  const PANEL = rect(0, 0, 320, 240);
+
+  function Doble() {
+    const [anclas, setAnclas] = useState<{ fila: HTMLElement; dia: HTMLElement } | null>(null);
+    return (
+      <>
+        <button type="button" data-rol="dia">
+          Día 8
+        </button>
+        <button
+          type="button"
+          onClick={(e) => setAnclas({ fila: e.currentTarget, dia: document.querySelector<HTMLElement>('[data-rol=dia]')! })}
+        >
+          Fila
+        </button>
+        {anclas && (
+          <PanelAnclado ancla={anclas.fila} respaldo={anclas.dia} titulo="Cita" alCerrar={() => setAnclas(null)}>
+            <button type="button">Dentro</button>
+          </PanelAnclado>
+        )}
+      </>
+    );
+  }
+
+  it('si el ancla no tiene caja, se coloca contra el respaldo (el día que sigue visible)', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return PANEL;
+      return this.getAttribute('data-rol') === 'dia' ? DIA : SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800);
+
+    render(<Doble />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Fila' }));
+    const panel = screen.getByRole('dialog', { name: 'Cita' });
+
+    const esperado = colocarPanel({
+      ancla: DIA,
+      panel: { width: 320, height: 240 },
+      limites: { top: 0, left: 0, width: 1280, height: 800 },
+    });
+    expect(esperado.top).toBeGreaterThan(100); // no pegado arriba
+    expect(panel.style.top).toBe(`${esperado.top}px`);
+    expect(panel.style.left).toBe(`${esperado.left}px`);
+  });
+
+  it('con una ventana de 360 px el panel entero cabe en horizontal', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return rect(0, 0, 328, 240);
+      return this.getAttribute('data-rol') === 'dia' ? rect(300, 330, 28, 28) : SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(360);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(640);
+
+    render(<Doble />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Fila' }));
+    const panel = screen.getByRole('dialog', { name: 'Cita' });
+    const izquierda = parseFloat(panel.style.left);
+    expect(izquierda).toBeGreaterThanOrEqual(0);
+    expect(izquierda + 328).toBeLessThanOrEqual(360);
+  });
+});

@@ -15,6 +15,8 @@ import type { CitaVista } from './vista';
 type Props = {
   cita: CitaVista;
   ancla: HTMLElement;
+  /** Adónde apuntar si el ancla está oculta (la fila del día que queda debajo). */
+  respaldo?: HTMLElement;
   limites?: HTMLElement | null;
   alCerrar: () => void;
   pausado?: boolean;
@@ -51,12 +53,12 @@ function notaPendiente(dias: number): string {
  * La ficha de una cita, anclada a su botón (T-014 §1.6.3). El orden es el del diseño y lo que
  * no existe se omite, no se pinta vacío. El aviso de nota pendiente informa y no bloquea.
  */
-export function PanelCita({ cita, ancla, limites, alCerrar, pausado, alReprogramar, alPropuestaResuelta }: Props) {
+export function PanelCita({ cita, ancla, respaldo, limites, alCerrar, pausado, alReprogramar, alPropuestaResuelta }: Props) {
   const lugar = lugarDe(cita);
   const propuesta = cita.propuestaPendiente;
 
   return (
-    <PanelAnclado ancla={ancla} limites={limites} titulo={cita.nombrePaciente} alCerrar={alCerrar} pausado={pausado}>
+    <PanelAnclado ancla={ancla} respaldo={respaldo} limites={limites} titulo={cita.nombrePaciente} alCerrar={alCerrar} pausado={pausado}>
       <div className="flex flex-col gap-3">
         <p className="text-foreground text-sm">
           {tCon('agenda.cita.rangoYDuracion', { rango: cita.rango, duracion: cita.duracion })}

@@ -9,6 +9,12 @@ import { enfocables, useCierreExterior, useFocoAtrapado } from './foco';
 type Props = {
   /** El elemento al que apunta el pico. El llamante lo guarda en estado al abrir. */
   ancla: HTMLElement;
+  /**
+   * Adónde apuntar si el `ancla` no tiene caja (`display:none`): la fila de un panel que acaba
+   * de quedar oculto debajo de este. Es el ancla del escalón de debajo, que sigue a la vista
+   * (revisión de cierre N2).
+   */
+  respaldo?: HTMLElement;
   /** El calendario: el panel no se sale de él en horizontal. Sin él, la ventana. */
   limites?: HTMLElement | null;
   titulo: string;
@@ -27,8 +33,10 @@ type Props = {
   children: ReactNode;
 };
 
-function rectDe(elemento: HTMLElement): Rect {
+function rectDe(elemento: HTMLElement, respaldo?: HTMLElement): Rect {
   const { top, left, width, height } = elemento.getBoundingClientRect();
+  // Un elemento `hidden` o dentro de uno mide cero: colocar contra ese cero lo pega a la esquina.
+  if (width === 0 && height === 0 && respaldo) return rectDe(respaldo);
   return { top, left, width, height };
 }
 
@@ -39,7 +47,7 @@ function rectDe(elemento: HTMLElement): Rect {
  * al escalón anterior (de la cita al día, del día al número) y no siempre al
  * elemento que lo abrió (D9).
  */
-export function PanelAnclado({ ancla, limites, titulo, alCerrar, pausado = false, oculto = false, children }: Props) {
+export function PanelAnclado({ ancla, respaldo, limites, titulo, alCerrar, pausado = false, oculto = false, children }: Props) {
   const panel = useRef<HTMLDivElement>(null);
   const idTitulo = useId();
   const activo = !pausado && !oculto;
@@ -66,7 +74,7 @@ export function PanelAnclado({ ancla, limites, titulo, alCerrar, pausado = false
       }
       const medida = nodo.getBoundingClientRect();
       const c = colocarPanel({
-        ancla: rectDe(ancla),
+        ancla: rectDe(ancla, respaldo),
         panel: { width: medida.width, height: nodo.scrollHeight || medida.height },
         limites: { top: 0, left: izquierda, width: derecha - izquierda, height: ventana.height },
       });
@@ -86,7 +94,7 @@ export function PanelAnclado({ ancla, limites, titulo, alCerrar, pausado = false
       window.removeEventListener('resize', colocar);
       window.removeEventListener('scroll', colocar, true);
     };
-  }, [ancla, limites, oculto]);
+  }, [ancla, respaldo, limites, oculto]);
 
   // El foco entra al abrir, al primer enfocable: un contenedor enfocado no dice
   // al lector de pantalla qué se puede hacer.

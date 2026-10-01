@@ -296,6 +296,7 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
             key={`cita-${panel.cita.id}-${panel.cita.tramo}`}
             cita={cita}
             ancla={panel.ancla}
+            respaldo={pila[i - 1]?.ancla}
             limites={contenedor}
             alCerrar={cerrarTope}
             pausado={pausado}
