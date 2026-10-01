@@ -144,6 +144,21 @@ describe('leerAlertasNotaPendiente', () => {
     expect(resultado.alertas.map((a) => a.pacienteNombre)).toEqual(['Ana García', null]);
   });
 
+  // Revisión SQL H2 (choque 2 de interfaz.md): el secreto profesional es del profesional, no del
+  // cargo. La RLS deja al administrador ver todas las alertas; la bandeja no las enseña.
+  it('con soloPropias filtra por el profesional de la sesión; sin él, no filtra', async () => {
+    const { sesion, from } = sesionFalsa({ alertas_documentacion: { data: [], error: null } });
+
+    await leerAlertasNotaPendiente(sesion, { soloPropias: true });
+    const conFiltro = from.mock.results[0].value.eq as ReturnType<typeof vi.fn>;
+    expect(conFiltro).toHaveBeenCalledWith('profesional_id', 'u1');
+
+    from.mockClear();
+    await leerAlertasNotaPendiente(sesion);
+    const sinFiltro = from.mock.results[0].value.eq as ReturnType<typeof vi.fn>;
+    expect(sinFiltro).not.toHaveBeenCalledWith('profesional_id', expect.anything());
+  });
+
   it('un fallo de lectura es un fallo, no una bandeja vacía', async () => {
     const { sesion } = sesionFalsa({
       alertas_documentacion: { data: null, error: { code: '42501', message: 'permission denied' } },

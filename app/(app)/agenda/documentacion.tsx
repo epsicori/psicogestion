@@ -24,7 +24,8 @@ export async function Documentacion({ centroParametro }: { centroParametro: stri
   const contexto = await cargarContexto(centroParametro);
   if (!contexto.ok) return <AvisoDeError mensaje={contexto.mensaje} />;
 
-  const r = await leerAlertasNotaPendiente(contexto.sesion);
+  // El administrador no ve la bandeja de toda la organización (choque 2, revisión SQL H2).
+  const r = await leerAlertasNotaPendiente(contexto.sesion, { soloPropias: contexto.rol === 'administrador' });
   if (!r.ok) return <AvisoDeError mensaje={r.mensaje} />;
   if (r.alertas.length === 0) {
     return (

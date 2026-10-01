@@ -201,14 +201,21 @@ export async function zonaDeCentro(
  * antigua a la más reciente. `alertas_documentacion` vive fuera del candado y
  * no contiene nada clínico; el nombre del paciente sale de `pacientes`, con
  * su propia RLS (si no lo deja ver, queda nulo).
+ *
+ * `soloPropias`: la política de lectura da al administrador todas las alertas de la
+ * organización, y la bandeja no puede ser global (choque 2 de interfaz.md: el secreto
+ * profesional es del profesional, no del cargo). Con él, solo las del profesional de la sesión.
  */
 export async function leerAlertasNotaPendiente(
   sesion: Sesion,
+  { soloPropias = false }: { soloPropias?: boolean } = {},
 ): Promise<ResultadoCitas<{ alertas: AlertaPendiente[] }>> {
-  const { data, error } = await sesion.supabase
+  let consulta = sesion.supabase
     .from('alertas_documentacion')
     .select('id, paciente_id, tipo, fecha_referencia, creada_en')
-    .eq('estado', 'abierta')
+    .eq('estado', 'abierta');
+  if (soloPropias) consulta = consulta.eq('profesional_id', sesion.usuario.id);
+  const { data, error } = await consulta
     .order('fecha_referencia', { ascending: true })
     .order('creada_en', { ascending: true });
 
