@@ -13,8 +13,14 @@ import { describe, expect, it } from 'vitest';
 
 import { canonizar, type ValorJson } from './jcs';
 import { normalizarNfc } from './nfc';
-import { ESQUEMA_VERSION } from './sobre';
+import { ESQUEMA_VERSION, esquemaSobre } from './sobre';
 import vectores from './vectores-congelados.json';
+
+// La cabecera de NVEC/PVEC/EPIVEC en scripts/rls/14-cadena-huellas.sql: genesis-minimo se
+// inserta allí como versión de NVEC, así que los nueve llevan esa cabecera (T-012c).
+const NVEC = 'f0050001-0000-4000-8000-000000000008';
+const PVEC = 'd0050001-0000-4000-8000-000000000008';
+const EPIVEC = 'e0050001-0000-4000-8000-000000000008';
 
 interface VectorCongelado {
   nombre: string;
@@ -55,6 +61,28 @@ describe('vectores-congelados.json', () => {
     // el JSON, las dos suites de vectores siguen verdes por autoconsistencia y solo
     // lo caza el banco de RLS (T-012a, hallazgo BAJA H8-TS).
     expect((vector.sobre as { esquema_version: number }).esquema_version).toBe(ESQUEMA_VERSION);
+  });
+
+  it.each(vectores as unknown as VectorCongelado[])('"$nombre" es un sobre válido de la era vigente (Zod)', (vector) => {
+    expect(() => esquemaSobre.parse(normalizarNfc(vector.sobre))).not.toThrow();
+  });
+
+  it.each(vectores as unknown as VectorCongelado[])('"$nombre" lleva la cabecera de NVEC (T-012c)', (vector) => {
+    const sobre = vector.sobre as Record<string, unknown>;
+    expect(sobre.nota_id).toBe(NVEC);
+    expect(sobre.paciente_id).toBe(PVEC);
+    expect(sobre.episodio_id).toBe(EPIVEC);
+    expect(sobre.fecha_sesion).toBe('2026-08-29');
+  });
+
+  it('solo alcance-conjunta lleva coprofesional_id no nulo; los otros ocho, null (ADR-072)', () => {
+    const conCoprofesional = (vectores as unknown as VectorCongelado[])
+      .filter((v) => (v.sobre as Record<string, unknown>).coprofesional_id !== null)
+      .map((v) => v.nombre);
+    expect(conCoprofesional).toEqual(['alcance-conjunta']);
+    for (const v of vectores as unknown as VectorCongelado[]) {
+      expect(Object.hasOwn(v.sobre as object, 'coprofesional_id'), v.nombre).toBe(true);
+    }
   });
 
   it('acentos-nfd y acentos-nfc dan EXACTAMENTE la misma huella', () => {
