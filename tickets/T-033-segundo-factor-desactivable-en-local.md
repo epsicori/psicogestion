@@ -6,7 +6,8 @@ riesgo: alto
 fase: 1
 prioridad: media
 depende_de: []
-estado: pendiente
+estado: hecho
+completado: 2026-10-01
 territorio:
   - proxy.ts
   - lib/cuentas/primer-acceso.ts
