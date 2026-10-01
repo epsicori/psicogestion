@@ -46,6 +46,7 @@ async function BloqueCalendario({ parametros }: { parametros: ParametrosAgenda }
     hoy,
     ahora,
     usuarioId: sesion.usuario.id,
+    rol,
     profesionalFiltrado: parametros.profesional,
   });
 

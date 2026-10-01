@@ -53,6 +53,7 @@ function entrada(parcial: Partial<EntradaVista>): EntradaVista {
     hoy: '2026-09-24',
     ahora: new Date('2026-09-24T10:00:00Z'),
     usuarioId: YO,
+    rol: 'profesional_sanitario',
     profesionalFiltrado: null,
     ...parcial,
   };
@@ -266,6 +267,25 @@ describe('construirVista · notas y aviso (D8, M7)', () => {
       '3': false,
       '4': false,
     });
+  });
+
+  // Revisión A5: el técnico puede figurar como profesional de una cita (R1b del banco) y su RLS le
+  // cierra la historia; «Notas» sin destino es un control sin acción detrás.
+  it.each(['tecnico_administrativo', null] as const)(
+    'con el rol %s, la cita propia no lleva «Notas» ni aviso, aunque la ruta esté encendida',
+    (rol) => {
+      ruta.disponible = true;
+      const v = construirVista(
+        entrada({ rol, filas: [fila({ id: 't', ...ayer, estado: 'realizada', notaPendiente: true })] }),
+      );
+      expect(v.citas[0].notas).toMatchObject({ mostrar: false, diasPendiente: null });
+    },
+  );
+
+  it('el administrador, que también lleva consulta, sí ve «Notas» en las suyas', () => {
+    ruta.disponible = true;
+    const v = construirVista(entrada({ rol: 'administrador', filas: [fila({ id: 'a', ...ayer, estado: 'realizada' })] }));
+    expect(v.citas[0].notas.mostrar).toBe(true);
   });
 
   it('con la ruta apagada no se muestra nunca, pero el aviso sí', () => {

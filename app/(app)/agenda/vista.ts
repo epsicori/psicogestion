@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { es as localeEs } from 'date-fns/locale';
 import { TZDate, tz } from '@date-fns/tz';
 
+import type { RolUsuario } from '@/components/armazon/modulos';
 import type { EstadoVisibleCita } from '@/components/ui/estado-cita';
 import { colocarEnRejilla } from '@/lib/agenda/rejilla';
 import { diasDelMes } from '@/lib/agenda/mes';
@@ -25,6 +26,8 @@ export type EntradaVista = {
   hoy: string;
   ahora: Date;
   usuarioId: string;
+  /** Sin rol conocido no hay cita propia: se cierra, no se abre. */
+  rol: RolUsuario | null;
   profesionalFiltrado: string | null;
 };
 
@@ -180,7 +183,7 @@ function hora(minuto: number): string {
  * devuelve lo que la isla pinta, formateado en la zona del centro.
  */
 export function construirVista(entrada: EntradaVista): VistaCalendario {
-  const { vista, fecha, zona, hoy, usuarioId } = entrada;
+  const { vista, fecha, zona, hoy, usuarioId, rol } = entrada;
 
   const profesionales = [
     ...new Map(entrada.filas.map((f) => [f.profesionalId, f.profesionalNombre ?? t('agenda.cita.profesional')])).entries(),
@@ -227,7 +230,9 @@ export function construirVista(entrada: EntradaVista): VistaCalendario {
     colocacion: Pick<CitaVista, 'tramo' | 'diaIndice' | 'minutoPared' | 'duracionMinutos' | 'columna' | 'columnasEnGrupo'>,
   ): CitaVista {
     const estado = estadoParaPunto(fila.estado, fila.enCurso);
-    const propia = fila.profesionalId === usuarioId;
+    // Un técnico puede figurar como profesional de una cita (R1b del banco), pero su RLS le cierra
+    // la historia: «Notas» y el aviso de nota pendiente solo con un rol que lleva consulta (A5).
+    const propia = fila.profesionalId === usuarioId && (rol === 'profesional_sanitario' || rol === 'administrador');
     const deSerie = fila.serieId !== null;
     const propuesta = propuestaDe.get(fila.id);
     const minutosTotales = Math.round((fila.fin.getTime() - fila.inicio.getTime()) / 60_000);
