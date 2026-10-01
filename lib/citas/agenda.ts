@@ -208,13 +208,14 @@ export async function zonaDeCentro(
  */
 export async function leerAlertasNotaPendiente(
   sesion: Sesion,
-  { soloPropias = false }: { soloPropias?: boolean } = {},
+  { soloPropias = false, tipos }: { soloPropias?: boolean; tipos?: readonly AlertaPendiente['tipo'][] } = {},
 ): Promise<ResultadoCitas<{ alertas: AlertaPendiente[] }>> {
   let consulta = sesion.supabase
     .from('alertas_documentacion')
     .select('id, paciente_id, tipo, fecha_referencia, creada_en')
     .eq('estado', 'abierta');
   if (soloPropias) consulta = consulta.eq('profesional_id', sesion.usuario.id);
+  if (tipos) consulta = consulta.in('tipo', [...tipos]);
   const { data, error } = await consulta
     .order('fecha_referencia', { ascending: true })
     .order('creada_en', { ascending: true });

@@ -159,6 +159,19 @@ describe('leerAlertasNotaPendiente', () => {
     expect(sinFiltro).not.toHaveBeenCalledWith('profesional_id', expect.anything());
   });
 
+  it('con tipos, la consulta se limita a ellos; sin ellos, no', async () => {
+    const { sesion, from } = sesionFalsa({ alertas_documentacion: { data: [], error: null } });
+
+    await leerAlertasNotaPendiente(sesion, { tipos: ['consentimiento_pendiente', 'informe_pendiente'] });
+    const con = from.mock.results[0].value.in as ReturnType<typeof vi.fn>;
+    expect(con).toHaveBeenCalledWith('tipo', ['consentimiento_pendiente', 'informe_pendiente']);
+
+    from.mockClear();
+    await leerAlertasNotaPendiente(sesion);
+    const sin = from.mock.results[0].value.in as ReturnType<typeof vi.fn>;
+    expect(sin).not.toHaveBeenCalledWith('tipo', expect.anything());
+  });
+
   it('un fallo de lectura es un fallo, no una bandeja vacía', async () => {
     const { sesion } = sesionFalsa({
       alertas_documentacion: { data: null, error: { code: '42501', message: 'permission denied' } },

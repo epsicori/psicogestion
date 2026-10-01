@@ -14,6 +14,14 @@ function contexto(rol: string | null) {
   return { ok: true, sesion: { usuario: { id: 'u1' } }, rol, hoy: '2026-10-01' };
 }
 
+const TODOS = [
+  'nota_sin_firmar',
+  'borrador_abandonado',
+  'consentimiento_pendiente',
+  'informe_pendiente',
+  'evaluacion_sin_corregir',
+];
+
 describe('Documentacion (bandeja de la agenda)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -24,15 +32,33 @@ describe('Documentacion (bandeja de la agenda)', () => {
   it('al administrador le pide solo las alertas propias', async () => {
     m.cargarContexto.mockResolvedValue(contexto('administrador'));
     await Documentacion({ centroParametro: null });
-    expect(m.leerAlertasNotaPendiente).toHaveBeenCalledWith(expect.anything(), { soloPropias: true });
+    expect(m.leerAlertasNotaPendiente).toHaveBeenCalledWith(expect.anything(), { soloPropias: true, tipos: TODOS });
   });
 
-  it.each(['profesional_sanitario', 'tecnico_administrativo'])(
-    'gemela: a %s no se le recorta nada más de lo que ya hace la RLS',
-    async (rol) => {
-      m.cargarContexto.mockResolvedValue(contexto(rol));
-      await Documentacion({ centroParametro: null });
-      expect(m.leerAlertasNotaPendiente).toHaveBeenCalledWith(expect.anything(), { soloPropias: false });
-    },
-  );
+  it('gemela: al profesional sanitario no se le recorta nada más de lo que ya hace la RLS', async () => {
+    m.cargarContexto.mockResolvedValue(contexto('profesional_sanitario'));
+    await Documentacion({ centroParametro: null });
+    expect(m.leerAlertasNotaPendiente).toHaveBeenCalledWith(expect.anything(), { soloPropias: false, tipos: TODOS });
+  });
+
+  // Revisión A1, decisión del propietario (01-10-2026): el técnico no recibe `nota_sin_firmar`,
+  // ni la lista ni el recuento; se quita en la consulta, no al pintar.
+  it('al técnico le pide todos los tipos menos nota_sin_firmar', async () => {
+    m.cargarContexto.mockResolvedValue(contexto('tecnico_administrativo'));
+    await Documentacion({ centroParametro: null });
+    expect(m.leerAlertasNotaPendiente).toHaveBeenCalledWith(expect.anything(), {
+      soloPropias: false,
+      tipos: TODOS.filter((tipo) => tipo !== 'nota_sin_firmar'),
+    });
+  });
+
+  // Revisión A2: sin rol conocido se cierra, no se abre.
+  it('con el rol sin leer pide solo las alertas propias', async () => {
+    m.cargarContexto.mockResolvedValue(contexto(null));
+    await Documentacion({ centroParametro: null });
+    expect(m.leerAlertasNotaPendiente).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ soloPropias: true }),
+    );
+  });
 });

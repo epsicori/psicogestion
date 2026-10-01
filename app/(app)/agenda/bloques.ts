@@ -3,7 +3,7 @@ import { TZDate, tz } from '@date-fns/tz';
 
 import type { RolUsuario } from '@/components/armazon/modulos';
 import { diasDelMes } from '@/lib/agenda/mes';
-import type { FilaAgenda } from '@/lib/citas/agenda';
+import type { AlertaPendiente, FilaAgenda } from '@/lib/citas/agenda';
 import { diasEntre, sumarDias } from '@/lib/fechas/calendario';
 import { clasificarHoraLocal } from '@/lib/fechas/anomalias';
 import { limitesDeSemana } from '@/lib/fechas/semana';
@@ -78,6 +78,33 @@ export function leerRol(valor: string | null | undefined): RolUsuario | null {
 /** El cuadro inferior, solo a quien lleva consulta o administra; al resto ni se le consulta. */
 export function puedeVerCuadro(rol: RolUsuario | null): boolean {
   return rol === 'administrador' || rol === 'profesional_sanitario';
+}
+
+export const TIPOS_ALERTA_DOCUMENTACION: readonly AlertaPendiente['tipo'][] = [
+  'nota_sin_firmar',
+  'borrador_abandonado',
+  'consentimiento_pendiente',
+  'informe_pendiente',
+  'evaluacion_sin_corregir',
+];
+
+/**
+ * Qué trae la bandeja «Documentación pendiente» a cada rol. Se cierra ante lo desconocido: el
+ * profesional sanitario y el técnico van sin recorte de propietario (su RLS ya los limita); el
+ * administrador y un rol sin leer, solo lo propio (choque 2); y el técnico administrativo no
+ * recibe `nota_sin_firmar` (decisión del propietario, 01-10-2026; la RLS, en T-015).
+ */
+export function criterioDocumentacion(rol: RolUsuario | null): {
+  soloPropias: boolean;
+  tipos: readonly AlertaPendiente['tipo'][];
+} {
+  return {
+    soloPropias: rol !== 'profesional_sanitario' && rol !== 'tecnico_administrativo',
+    tipos:
+      rol === 'tecnico_administrativo'
+        ? TIPOS_ALERTA_DOCUMENTACION.filter((tipo) => tipo !== 'nota_sin_firmar')
+        : TIPOS_ALERTA_DOCUMENTACION,
+  };
 }
 
 /** `null` es «todos los centros»: no se filtra. */
