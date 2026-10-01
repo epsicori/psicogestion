@@ -434,7 +434,7 @@ select pg_temp.assert_lanza_codigo_msg(
     '{"abierta_en":"2026-08-29T09:30:09.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":null,"cita_id":null,"coprofesional_id":null,"creada_en":"2026-08-29T09:30:09.000Z","cuerpo":{"t":"neg"},"episodio_id":"e0050001-0000-4000-8000-000000000001","esquema_version":4,"fecha_sesion":"2026-08-29","firmada_en":"2026-08-29T09:30:09.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"nota_id":"f0050001-0000-4000-8000-000000000000","paciente_id":"d0050001-0000-4000-8000-000000000001","redactada_en_sesion":false}',
     :PRO1),
   '23514',
-  'El autor_id del sobre no coincide',
+  'no coincide con la columna autor_id',
   'REGRESIÓN — autor_id JSON null lanza 23514 POR LA 6.2 (era el hueco del hallazgo ALTA)'
 );
 
@@ -646,6 +646,25 @@ select pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) as se
        pg_get_functiondef('public.verificar_cadena_huellas(uuid)'::regprocedure) as verif_original
 \gset
 
+-- Demostración «CON EL ARREGLO DESHECHO» de la regresión de 6.2 (arriba, en C de T-005): la 6.2 reescrita con `<>` (el hueco de T-005: con
+-- `"autor_id":null`, `NULL <> x` es falso y no lanza). La misma inserción ya NO la para la 6.2
+-- sino la 6.14 (mismo 23514, otro mensaje: «con el autor de la cabecera»), y por eso la
+-- aserción de arriba, que pide el mensaje de la 6.2, cambia de resultado.
+savepoint t012c_m62;
+select pg_temp.t012c_mutar(:'sellar_original', '(v_contenido -> ''autor_id'') is distinct from to_jsonb(new.autor_id::text)', '(v_contenido ->> ''autor_id'') <> new.autor_id::text');
+select pg_temp.assert_lanza_codigo_msg(
+  format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en)
+         values (%L, '{"t":"neg"}', %L, %L, timestamptz '2026-08-29T09:30:09.000Z')$sql$,
+    :NCADX,
+    '{"abierta_en":"2026-08-29T09:30:09.000Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":null,"cita_id":null,"coprofesional_id":null,"creada_en":"2026-08-29T09:30:09.000Z","cuerpo":{"t":"neg"},"episodio_id":"e0050001-0000-4000-8000-000000000001","esquema_version":4,"fecha_sesion":"2026-08-29","firmada_en":"2026-08-29T09:30:09.000Z","margen_sesion_minutos":null,"motivo_cambio":null,"nota_id":"f0050001-0000-4000-8000-000000000000","paciente_id":"d0050001-0000-4000-8000-000000000001","redactada_en_sesion":false}',
+    :PRO1),
+  '23514',
+  'con el autor de la cabecera',
+  'REGRESIÓN con la 6.2 reescrita con <> — el autor_id null ya no lo para la 6.2 sino la 6.14: la aserción de la 6.2 depende de que la 6.2 sea `is distinct from`');
+rollback to savepoint t012c_m62;
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original',
+  'REGRESIÓN 6.2 · tras deshacer el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
 -- 6.11 · nota_id del sobre = nota_id de la fila
 select pg_temp.assert_lanza_codigo_msg(
   pg_temp.t012c_neg(:NCADX, :PRO1, timestamptz '2026-08-29 09:35:01+00', jsonb_build_object('nota_id', :NCADA::text)),
@@ -700,6 +719,31 @@ select pg_temp.assert_lanza_codigo_msg(
   pg_temp.t012c_neg(:NCADX, :PRO1, timestamptz '2026-08-29 09:35:11+00', jsonb_build_object('fecha_sesion', '29/08/2026'::text)),
   '23514', 'La fecha_sesion del sobre no coincide',
   'C.15c · la misma fecha en otro formato (29/08/2026): 23514 por la 6.15 (el formato es AAAA-MM-DD)');
+
+-- 6.15 · la ERA cuenta: una cabecera '2026-08-29 BC' no coincide con un sobre «2026-08-29».
+-- N067B no tiene versiones, así que su cabecera se puede mover (savepoint: se deshace). El
+-- sobre que construye sobre_prueba() usa to_char sin era, que es justo el sobre del ataque.
+savepoint t012c_bc;
+update public.notas_clinicas set fecha_sesion = date '2026-08-29 BC' where id = :N067B;
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.t012c_neg(:N067B, :PRO1, timestamptz '2026-08-29 09:35:30+00'),
+  '23514', 'La fecha_sesion del sobre no coincide',
+  'C.15d · cabecera 2026-08-29 BC y sobre «2026-08-29»: 23514 por la 6.15 (la era no se pierde)');
+-- Gemela positiva: el sobre que conserva la era SÍ se sella.
+select pg_temp.assert_no_lanza(
+  pg_temp.t012c_neg(:N067B, :PRO1, timestamptz '2026-08-29 09:35:31+00', jsonb_build_object('fecha_sesion', '2026-08-29 BC'::text)),
+  'C.15d · gemela: el sobre «2026-08-29 BC» sobre la cabecera BC SÍ se sella');
+rollback to savepoint t012c_bc;
+-- Mutante: la 6.15 con el to_char de siempre (sin era) deja pasar el sobre «2026-08-29».
+savepoint t012c_bc_m;
+update public.notas_clinicas set fecha_sesion = date '2026-08-29 BC' where id = :N067B;
+select pg_temp.t012c_mutar(:'sellar_original', 'to_jsonb(to_char(v_fecha_sesion, ''YYYY-MM-DD'') || case when v_fecha_sesion < date ''0001-01-01'' then '' BC'' else '''' end) then', 'to_jsonb(to_char(v_fecha_sesion, ''YYYY-MM-DD'')) then');
+select pg_temp.assert_no_lanza(
+  pg_temp.t012c_neg(:N067B, :PRO1, timestamptz '2026-08-29 09:35:30+00'),
+  'C.15d · SIN la era en la 6.15 el sobre «2026-08-29» sobre la cabecera BC se sella: la negativa depende de ella');
+rollback to savepoint t012c_bc_m;
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original',
+  'C.15d · tras deshacer el mutante, fn_sellar_version_nota() es idéntica a la guardada');
 
 -- 6.16 · coprofesional_id: PRIMERO, antes de sellar ninguna versión de N067A.
 select pg_temp.assert_lanza_codigo_msg(
@@ -773,7 +817,7 @@ select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regp
   'C.14 · tras deshacer el mutante, fn_sellar_version_nota() es idéntica a la guardada');
 
 savepoint t012c_m615;
-select pg_temp.t012c_mutar(:'sellar_original', 'to_jsonb(to_char(v_fecha_sesion, ''YYYY-MM-DD'')) then', '(v_contenido -> ''fecha_sesion'') then');
+select pg_temp.t012c_mutar(:'sellar_original', 'to_jsonb(to_char(v_fecha_sesion, ''YYYY-MM-DD'') || case when v_fecha_sesion < date ''0001-01-01'' then '' BC'' else '''' end) then', '(v_contenido -> ''fecha_sesion'') then');
 select pg_temp.assert_no_lanza(
   pg_temp.t012c_neg(:NCADX, :PRO1, timestamptz '2026-08-29 09:35:09+00', jsonb_build_object('fecha_sesion', '2026-08-30'::text)),
   'C.15a · SIN la 6.15 el sobre con otra fecha se sella: la negativa depende de ella');
@@ -848,11 +892,16 @@ select pg_temp.sobre_prueba(:N067B, :PRO2, timestamptz '2026-08-29 09:37:00+00',
        pg_temp.sobre_prueba(:N067E, :PRO1, timestamptz '2026-08-29 09:37:01+00', '{"t":"firma"}'::jsonb) as sobre_e
 \gset
 
+-- Los PIN de historia se FIJAN aquí (no se suponen los que dejó 13-cuentas): fijar_pin_historia()
+-- exige el segundo factor reciente, de ahí `como_con_2fa`. Un upsert: vale con o sin PIN previo.
+call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
+call pg_temp.como_con_2fa(:PRO2); select public.fijar_pin_historia('222222'); call pg_temp.reset_sesion();
+
 -- PRO2 (profesional, con PIN) desbloquea y firma «como» el autor de una nota ajena (N067B),
 -- con un sobre incoherente con la cabecera (NCADX, paciente de PDEMO), sobre una nota que
 -- no existe (NFANTASMA), y una versión `conjunta` de la nota que no existe.
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('999999')),
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
   'C.perm · PRO2 desbloquea su historia (el paso 0 pide la historia desbloqueada, y la tiene)');
 select pg_temp.t012c_error(format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en)
   values (%L, '{"t":"neg"}', %L, 'individual', %L, timestamptz '2026-08-29 09:37:00+00')$sql$, :N067B, :'sobre_b', :PRO2)) as err_b \gset
@@ -872,7 +921,7 @@ select pg_temp.assert(
 -- Ventana cerrada: PRO1 firma su propia nota, pero con la ventana caducada recibe el mismo error.
 savepoint t012c_perm;
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('424242')),
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
   'C.perm · PRO1 desbloquea su historia');
 call pg_temp.reset_sesion();
 update public.desbloqueos_historia
@@ -903,7 +952,7 @@ call pg_temp.reset_sesion();
 rollback to savepoint t012c_perm_m;
 call pg_temp.reset_sesion();
 select pg_temp.assert(
-  :'err_b2' like '23514 · El autor_id%' and :'err_x2' like '23514 · El paciente_id%' and :'err_n2' like 'P0002%'
+  :'err_b2' like '23514 · El autor_id del sobre no coincide con el autor de la cabecera%' and :'err_x2' like '23514 · El paciente_id%' and :'err_n2' like 'P0002%'
   and :'err_b2' <> :'err_x2' and :'err_b2' <> :'err_n2' and :'err_x2' <> :'err_n2',
   'C.perm · SIN el paso 0, las tres firmas dan errores distintos (' || :'err_b2' || ' / ' || :'err_x2' || ' / ' || :'err_n2' || '): el paso 0 es lo que los iguala');
 select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original',
@@ -928,7 +977,7 @@ select pg_temp.assert(pg_get_functiondef('public.fn_exigir_episodio_en_nota_conj
 -- Gemela positiva: la PRIMERA firma de un `authenticated` del banco. PRO1, autor de N067E,
 -- con la historia desbloqueada y un sobre de su nota, sí firma.
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('424242')),
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
   'C.perm · PRO1 desbloquea su historia para firmar N067E');
 select pg_temp.assert_no_lanza(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en)
@@ -1640,7 +1689,7 @@ select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P06
 update public.notas_clinicas set fecha_sesion = date '2026-08-30' where id = :N067A;
 select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 1,
   'F.17 · fecha_sesion de la cabecera cambiada por debajo (29-08 -> 30-08): una fila (6.15)');
-select pg_temp.t012c_mutar(:'verif_original', 'to_jsonb(to_char(c.cab_fecha_sesion, ''YYYY-MM-DD''))', '(c.sobre -> ''fecha_sesion'')');
+select pg_temp.t012c_mutar(:'verif_original', 'to_jsonb(to_char(c.cab_fecha_sesion, ''YYYY-MM-DD'') || case when c.cab_fecha_sesion < date ''0001-01-01'' then '' BC'' else '''' end)', '(c.sobre -> ''fecha_sesion'')');
 select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 0,
   'F.17 · SIN la línea 6.15 la misma fila deja de señalarse');
 select pg_temp.t012c_restaurar(:'verif_original', 'public.verificar_cadena_huellas(uuid)'::regprocedure,
@@ -1648,6 +1697,19 @@ select pg_temp.t012c_restaurar(:'verif_original', 'public.verificar_cadena_huell
 update public.notas_clinicas set fecha_sesion = date '2026-08-29' where id = :N067A;
 select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 0,
   'F.17 · restaurada, P067 vuelve a estar sana');
+
+-- F.17b · la era: la cabecera de N067A movida a '2026-08-29 BC' (el sobre dice 2026-08-29).
+update public.notas_clinicas set fecha_sesion = date '2026-08-29 BC' where id = :N067A;
+select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 1,
+  'F.17b · fecha_sesion de la cabecera movida a la misma fecha BC: una fila (6.15 conserva la era)');
+select pg_temp.t012c_mutar(:'verif_original', 'to_jsonb(to_char(c.cab_fecha_sesion, ''YYYY-MM-DD'') || case when c.cab_fecha_sesion < date ''0001-01-01'' then '' BC'' else '''' end)', 'to_jsonb(to_char(c.cab_fecha_sesion, ''YYYY-MM-DD''))');
+select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 0,
+  'F.17b · SIN la era en el verificador la misma fila deja de señalarse');
+select pg_temp.t012c_restaurar(:'verif_original', 'public.verificar_cadena_huellas(uuid)'::regprocedure,
+  'F.17b · el verificador restaurado es idéntico al guardado');
+update public.notas_clinicas set fecha_sesion = date '2026-08-29' where id = :N067A;
+select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 0,
+  'F.17b · restaurada, P067 vuelve a estar sana');
 
 -- F.18 · coprofesional de la cabecera (6.16), en los dos sentidos: de PRO2 a null (N067A, cuyo
 -- sobre dice PRO2) y de null a PRO2 (N067C, cuyo sobre dice null).

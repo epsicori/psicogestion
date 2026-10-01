@@ -368,7 +368,9 @@ begin
   end if;
 
   -- 6.15 · fecha_sesion del sobre = fecha de la cabecera, como cadena AAAA-MM-DD (ADR-071).
-  if (v_contenido -> 'fecha_sesion') is distinct from to_jsonb(to_char(v_fecha_sesion, 'YYYY-MM-DD')) then
+  -- La era se conserva (sufijo ' BC' antes de Cristo): to_char la descartaría y una cabecera BC
+  -- coincidiría con un sobre del mismo día d. C.; así no depende de DateStyle.
+  if (v_contenido -> 'fecha_sesion') is distinct from to_jsonb(to_char(v_fecha_sesion, 'YYYY-MM-DD') || case when v_fecha_sesion < date '0001-01-01' then ' BC' else '' end) then
     raise exception
       'La fecha_sesion del sobre no coincide con la fecha de sesión de la cabecera notas_clinicas (AAAA-MM-DD), o no es una cadena (T-012c, ADR-071)'
       using errcode = '23514';
@@ -564,7 +566,7 @@ as $$
        or (c.sobre -> 'paciente_id') is distinct from to_jsonb(c.cab_paciente_id::text)                            -- 6.12, cabecera
        or (c.sobre -> 'episodio_id') is distinct from to_jsonb(c.cab_episodio_id::text)                            -- 6.13
        or (c.sobre -> 'autor_id') is distinct from to_jsonb(c.cab_autor_id::text)                                  -- 6.14
-       or (c.sobre -> 'fecha_sesion') is distinct from to_jsonb(to_char(c.cab_fecha_sesion, 'YYYY-MM-DD'))         -- 6.15
+       or (c.sobre -> 'fecha_sesion') is distinct from to_jsonb(to_char(c.cab_fecha_sesion, 'YYYY-MM-DD') || case when c.cab_fecha_sesion < date '0001-01-01' then ' BC' else '' end) -- 6.15
        or (c.sobre -> 'coprofesional_id') is distinct from coalesce(to_jsonb(c.cab_coprofesional_id::text), 'null'::jsonb) -- 6.16
      )
 

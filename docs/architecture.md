@@ -66,7 +66,7 @@ vuelve a leer esos bytes; **jamás los deriva otra vez del objeto**.
   `redactada_en_sesion` dejaría convertir un «lo escribí el viernes» en un «lo escribí en
   sesión» sin rastro. Desde la **era 4** (T-012c, ADR-067) el sobre lleva diecisiete claves:
   a las anteriores suma la identidad de la nota y su cabecera —`nota_id`, `paciente_id`,
-  `episodio_id`, `fecha_sesion` (`AAAA-MM-DD`, sin zona) y `coprofesional_id`, siempre
+  `episodio_id`, `fecha_sesion` (`AAAA-MM-DD`, sin zona; con sufijo ` BC` si es anterior a Cristo) y `coprofesional_id`, siempre
   presente aunque valga `null`—, para que ni mover la versión a otra nota ni reatribuir la
   cabecera pasen sin romper la cadena.
 - La huella anterior son **32 bytes fijos**, así que la concatenación no es ambigua y no
