@@ -6,7 +6,8 @@ fase: 2
 prioridad: alta
 depende_de: [T-012b, T-034]
 bloquea: [T-012]
-estado: pendiente
+estado: hecho
+completado: 2026-10-01
 territorio:
   - lib/huella/sobre.ts
   - lib/huella/sobre.test.ts
