@@ -80,31 +80,38 @@ export function puedeVerCuadro(rol: RolUsuario | null): boolean {
   return rol === 'administrador' || rol === 'profesional_sanitario';
 }
 
-export const TIPOS_ALERTA_DOCUMENTACION: readonly AlertaPendiente['tipo'][] = [
-  'nota_sin_firmar',
-  'borrador_abandonado',
-  'consentimiento_pendiente',
-  'informe_pendiente',
-  'evaluacion_sin_corregir',
-];
+type TipoAlerta = AlertaPendiente['tipo'];
+
+/**
+ * Qué tipos de alerta ve quien no es profesional sanitario ni administrador (lista blanca,
+ * decisión del propietario, 01-10-2026): solo el consentimiento pendiente. Exhaustivo: un tipo
+ * nuevo del enum no compila hasta que se decide, y mientras no se decida queda oculto.
+ */
+const VISIBLE_AL_TECNICO = {
+  nota_sin_firmar: false,
+  borrador_abandonado: false,
+  consentimiento_pendiente: true,
+  informe_pendiente: false,
+  evaluacion_sin_corregir: false,
+} satisfies Record<TipoAlerta, boolean>;
+
+const TIPOS_DEL_TECNICO = (Object.keys(VISIBLE_AL_TECNICO) as TipoAlerta[]).filter((tipo) => VISIBLE_AL_TECNICO[tipo]);
 
 /**
  * Qué trae la bandeja «Documentación pendiente» a cada rol. Se cierra ante lo desconocido: el
- * profesional sanitario y el técnico van sin recorte de propietario (su RLS ya los limita); el
- * administrador y un rol sin leer, solo lo propio (choque 2); y el técnico administrativo no
- * recibe `nota_sin_firmar` (decisión del propietario, 01-10-2026; la RLS, en T-015).
+ * profesional sanitario va sin recorte de propietario (su RLS ya lo limita); el administrador y
+ * un rol sin leer, solo lo propio (choque 2); el profesional y el administrador, de todos los
+ * tipos (`tipos` ausente: sin filtro); y el técnico y el rol sin leer, solo los tipos de la lista
+ * blanca. No se filtra por `origen_tabla`: `fn_alertar_nota_sin_firmar` escribe `citas`. La RLS,
+ * en T-015.
  */
 export function criterioDocumentacion(rol: RolUsuario | null): {
   soloPropias: boolean;
-  tipos: readonly AlertaPendiente['tipo'][];
+  tipos?: readonly TipoAlerta[];
 } {
-  return {
-    soloPropias: rol !== 'profesional_sanitario' && rol !== 'tecnico_administrativo',
-    tipos:
-      rol === 'tecnico_administrativo'
-        ? TIPOS_ALERTA_DOCUMENTACION.filter((tipo) => tipo !== 'nota_sin_firmar')
-        : TIPOS_ALERTA_DOCUMENTACION,
-  };
+  const soloPropias = rol !== 'profesional_sanitario' && rol !== 'tecnico_administrativo';
+  if (rol === 'administrador' || rol === 'profesional_sanitario') return { soloPropias };
+  return { soloPropias, tipos: TIPOS_DEL_TECNICO };
 }
 
 /** `null` es «todos los centros»: no se filtra. */

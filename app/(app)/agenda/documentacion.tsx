@@ -42,7 +42,7 @@ export async function Documentacion({ centroParametro }: { centroParametro: stri
 
   // Qué ve cada rol, cerrado ante lo desconocido (choque 2, revisiones SQL H2, A1 y A2).
   const criterio = criterioDocumentacion(contexto.rol);
-  if (criterio.tipos.length === 0) return null;
+  if (criterio.tipos?.length === 0) return null;
   const r = await leerAlertasNotaPendiente(contexto.sesion, criterio);
   if (!r.ok)
     return (
