@@ -1,11 +1,22 @@
 # T-012 · Nota clínica — borrador, firma y versión sellada · Diseño
 
-**Fecha**: 15-09-2026 · **Riesgo**: alto (`modelo: opus`) · **Arquitecto**: fábrica (Opus 5)
+**Fecha**: 15-09-2026 · **Actualizado**: 01-10-2026, con el código de `main` después de T-012c, T-033
+y T-034, y con T-014 a punto de integrarse; y el mismo 01-10-2026, con las tres respuestas del
+propietario a las preguntas abiertas (§D) · **Riesgo**: alto (`modelo: opus`) · **Arquitecto**:
+fábrica (Opus 5.5)
 
 Leído para escribir esto: el contrato entero; `docs/architecture.md` §Invariantes 1-3 y
-§Reserva de anotaciones subjetivas; ADR 026, 027, 030, 035, 036, 037, 043, 044, 046, 056 y
-**057**; `docs/state.md` (80 líneas); `docs/bitacora/T-013.md` y `T-013a.md`;
-`docs/interfaz.md` §Pacientes y choques 11 y 12; y los ficheros de código citados en §0.
+§Reserva de anotaciones subjetivas; ADR 026, 027, 030, 035, 036, 043, 044, 046, 056, 057, 058,
+059, 071, 072 y 073; `docs/state.md` (80 líneas); `docs/interfaz.md` §Pacientes, §Anchos y choque 11;
+y los ficheros de código citados en §0. De la rama `T-014-correcciones`, que todavía no está en
+`main`, solo lo que toca a este ticket (`git show`).
+
+> **Qué cambió respecto al diseño del 29-09.** El sobre de la era 4 ya existe, así que T-012 solo
+> lo consume. `fn_vaciar_borrador_al_firmar()` también existe: no se crea. El margen se lee
+> directamente, sin la función `margen_sesion_de_cita`. Entran un índice único por cita y autor y
+> la resolución de la alerta al firmar. El cuerpo es `{texto}` a secas. El banco 18 pasa a
+> llamarse guion de aplicación, `scripts/t012-nota.ts`. Se activa `RUTA_NOTAS_DISPONIBLE` de
+> T-014. El §7 tiene ahora una ficha por pieza delegable. Cada cambio está marcado en su sección.
 
 ---
 
@@ -45,723 +56,1049 @@ ninguna de sus piezas conoce la ruta.
 
 ---
 
+## D · Preguntas abiertas: DECIDIDAS por el propietario el 01-10-2026
+
+El diseño del 01-10 dejó tres preguntas abiertas (§4.4, §4.5 y §2.16). El propietario las contestó
+el 01-10-2026:
+
+| # | Pregunta | Decisión | Dónde queda |
+|---|---|---|---|
+| **D1** | El sello es falsificable: el `cita_id` del sobre no se coteja con la cabecera (H27), y el autor puede insertar por PostgREST una versión con `abierta_en` o `redactada_en_sesion` inventados. ¿Se cierra en T-012? | **No. Lo arregla T-036**, que va inmediatamente después de T-012. T-012 sale con el riesgo declarado. | §4.4, §5, §8, «Lo que no entra» |
+| **D2** | ¿Entra en T-012 el disparador que da por resuelta la alerta `nota_sin_firmar` al firmar? | **Sí, entra en T-012.** | Hecho 18, §1.2 paso 9, §2.16, §2.18, criterio A y banco 20 §A de §3, §5 |
+| **D3** | Doble firma de una modificación (v2 y v3 idénticas por doble pulsación). ¿Se arregla en la base en T-012? | **No. En T-012 basta con desactivar el botón** mientras la firma está en vuelo. El arreglo en la base («exigir borrador vivo» en `fn_sellar_version_nota`) llega con el mismo cambio de T-036. Queda como **hallazgo abierto**. | §1.6, §2.19, §4.5, criterio B de §3, §5 |
+
+**Lo que el contrato escrito de T-036 no cubre hoy.** `tickets/T-036-cita-id-cotejado-con-la-cabecera.md`
+(leído el 01-10-2026) solo coteja el `cita_id` del sobre con `notas_clinicas.cita_id`, con una
+negativa en el banco 14 y una línea en el verificador. **No incluye**:
+- cotejar el `abierta_en` del sobre con `notas_clinicas.borrador_abierta_en`, la columna que crea
+  T-012 (resto de D1);
+- recalcular `redactada_en_sesion` con la ventana de la cita y el margen sellado (resto de D1);
+- exigir un borrador vivo al insertar una versión, que es lo que cierra D3.
+
+Para que D1 y D3 queden cerrados donde ha decidido el propietario, el contrato de T-036 tiene que
+ampliarse con esos tres puntos antes de diseñarlo. T-012 no edita T-036 (no es su territorio): lo
+eleva en el informe del diseño, y la bitácora de T-012 lo deja en `docs/state.md` §Hallazgos junto
+con D3.
+
+---
+
 ## 0 · Hechos verificados contra el código
 
-Todo lo de abajo está leído, no recordado. Ruta y línea cuando importa.
+*(Reescrito el 01-10-2026. Sustituye entera la lista del 15-09, que describía el sobre de once
+claves.)* Todo lo de abajo está leído en `main` (`c7bb544`), no recordado.
 
-### El sobre y la cadena
+### El sobre y la cadena (era 4, T-012c)
 
-1. `lib/huella/sobre.ts` — `ESQUEMA_VERSION = 2`, `ALGORITMO_VERSION = 1`, `esquemaSobre`
-   es un `z.object({…}).strict()` con **once** claves. `EntradaFirma` **ya recibe
-   `alcance: 'individual' | 'conjunta'`** y `construirSobre()` **no lo usa**: se queda por el
-   camino, tal como dice el ADR-057.
-2. `construirSobre()` impone el orden `normalizarNfc → esquemaSobre.parse → canonizar`, fuerza
-   `firmada_en === creada_en`, `autor_id.toLowerCase()`, y anula margen y ventana cuando
-   `cita_id === null`.
-3. `lib/huella/sesion.ts` — `calcularRedactadaEnSesion()` es pura: cierto si y solo si hay
-   ventana **y** margen y `abiertaEn >= inicio - margen` y `firmadaEn <= fin + margen`.
-4. `lib/huella/firmar.ts` — `firmarVersionNota(cliente, entrada)` construye el sobre, canoniza,
-   y hace **un solo `insert`** con `nota_id, cuerpo, anotaciones_reservadas,
-   contenido_canonico, motivo_cambio, alcance, esquema_version, autor_id, creada_en`. No manda
-   `huella`, `huella_anterior`, `paciente_id`, `posicion_cadena` ni `numero_version`. **No
-   importa `node:crypto`**; el SHA-256 es de pgcrypto, en la base.
-5. `supabase/migrations/20260829210000_cadena_de_huellas.sql` — `fn_sellar_version_nota()`,
-   `security definer`, `before insert`: guarda 1 (columnas calculadas a mano → 42501), guarda
-   1.bis (`algoritmo_version <> 1` → 42501), cerrojo consultivo por paciente, encadenado, y
-   **comprobaciones 6.1 a 6.9** (23514). `v_esperadas` es un `text[]` de **once** literales y
-   se compara con `array_agg(k order by k)` sobre `json_object_keys(new.contenido_canonico::json)`
-   —`::json`, no `::jsonb`, para que una clave repetida dé doce elementos y salte.
-6. `lib/huella/vectores-congelados.json` — **ocho** vectores, todos con `"esquema_version":2`.
-   `vectores.test.ts` recalcula la huella desde `canonico`; `vectores-sql.test.ts` exige que los
-   **tres** pares literales `$vec$…$vec$` de `scripts/rls/14-cadena-huellas.sql` estén idénticos
-   en el JSON.
-7. `scripts/rls/00-ayudantes.sql:146` — `pg_temp.sobre_prueba(...)` escribe el sobre a mano con
-   `'"esquema_version":2,'` literal. Sus llamantes: `01-fijacion.sql` (4, una con
-   `alcance = 'conjunta'`), `04-baja.sql` (1), `14-cadena-huellas.sql` (≈12).
-   `supabase/seed-completo.sql:57` y `scripts/t005-concurrencia.sql:76` tienen **su propia copia**
-   del mismo generador.
+1. `lib/huella/sobre.ts`: `ESQUEMA_VERSION = 4` y `ALGORITMO_VERSION = 1`. `esquemaSobre` es
+   estricto, con **diecisiete** claves: `abierta_en, alcance, anotaciones_reservadas, autor_id,
+   cita_id, coprofesional_id, creada_en, cuerpo, episodio_id, esquema_version, fecha_sesion,
+   firmada_en, margen_sesion_minutos, motivo_cambio, nota_id, paciente_id, redactada_en_sesion`.
+   - `EntradaFirma` (`sobre.ts:~90-105`) exige: `notaId, pacienteId, episodioId, fechaSesion
+     (string AAAA-MM-DD), coprofesionalId (string|null), autorId, cuerpo (Record<string,
+     ValorJson>), anotacionesReservadas (string|null), motivoCambio (string|null), alcance,
+     citaId (string|null), ventanaCita ({inicio:Date; fin:Date}|null), margenMinutos, abiertaEn:
+     Date` y un `ahora?: Date` opcional.
+   - `construirSobre()` normaliza a NFC, fuerza `firmada_en === creada_en` y, cuando
+     `citaId === null`, anula el margen y la ventana.
+2. `lib/huella/sesion.ts`: `calcularRedactadaEnSesion()` es una función pura. Da verdadero solo
+   si `abiertaEn >= inicio − margen` y `firmadaEn <= fin + margen`.
+3. `lib/huella/firmar.ts`: `firmarVersionNota(cliente, entrada)` hace un único `insert` con
+   `nota_id, cuerpo, anotaciones_reservadas, contenido_canonico, motivo_cambio, alcance,
+   esquema_version, autor_id, creada_en`. Si falla, lanza (línea 70)
+   `new Error(\`No se pudo firmar la versión de la nota: ${error.message}\`)`. **Al hacerlo
+   pierde el SQLSTATE**, y la acción no puede distinguir un 42501 de un 23514 ni de un 23505.
+4. `supabase/migrations/20261001120000_nota_id_en_el_sobre.sql` contiene la última definición de
+   `fn_sellar_version_nota()`:
+   - **Paso 0** (solo para `authenticated`/`anon`): exige candado abierto, `autor_id = auth.uid()`
+     y que la nota exista con ese autor. Si no, lanza 42501 «No puedes firmar una versión de esta
+     nota…».
+   - Guardas 1 y 1.bis (42501).
+   - Bloqueo `for no key update` de la cabecera, cerrojo consultivo por paciente y
+     `numero_version = max+1`.
+   - Comprobaciones **6.1 a 6.16**, todas con 23514. Las 6.11 a 6.16 cotejan `nota_id`,
+     `paciente_id`, `episodio_id`, el autor de la cabecera, `fecha_sesion` con la era y
+     `coprofesional_id`.
+   - **No coteja**:
+     - `cita_id`: es H27, va a T-036;
+     - `abierta_en` contra nada de la cabecera;
+     - `redactada_en_sesion` contra la ventana de la cita.
+5. `20260829210000_cadena_de_huellas.sql:~480-501`: **`fn_vaciar_borrador_al_firmar()` ya
+   existe**. Es `security definer` y su disparador `vaciar_borrador_al_firmar` es `after insert`
+   sobre `notas_clinicas_versiones`. Hace `update notas_clinicas set borrador_contenido = null
+   where id = new.nota_id and borrador_contenido is not null`, y `fn_tocar_borrador` limpia el
+   resto de columnas del borrador. *El diseño del 15-09 lo creaba de nuevo: ese paso se cae.*
+6. `notas_clinicas_versiones.cuerpo` es **`text`** (en `lib/supabase/tipos-bd.ts:1259` aparece
+   como `cuerpo: string`) y guarda un objeto JSON. La siembra (`supabase/seed-completo.sql:384-395`)
+   y los vectores del banco 14 usan **`{"texto":"…"}`** sin discriminante.
+7. Lo que ya prueban T-005 y T-012c:
+   - `lib/huella/sobre.test.ts`: NFC en `:166`, `anotaciones_reservadas` en `:218` y
+     `redactada_en_sesion` en `:242`;
+   - `lib/huella/nfc.test.ts` y `vectores*.test.ts`;
+   - `scripts/rls/14-cadena-huellas.sql`: sellado, encadenado, negativas 6.x y C.perm;
+   - `scripts/rls/10-solo-adicion.sql`: tres capas.
 
-### Las dos tablas
+### Las dos tablas (T-001, T-034)
 
-8. `notas_clinicas` (`20260822094547:618`): `id, paciente_id, episodio_id, autor_id,
-   fecha_sesion, borrador_contenido jsonb, borrador_actualizado_en timestamptz,
-   borrador_autor_id, creada_en`, más `cita_id` añadida en `20260906120000:399`. Restricción
-   `check (num_nonnulls(borrador_contenido, borrador_actualizado_en, borrador_autor_id) in (0,3))`.
-   **No hay columna `estado`**, y el comentario de la tabla dice que es deliberado.
-   **No hay ninguna columna donde viva `abierta_en`.**
-9. `notas_clinicas_versiones` (`20260822094547:648`): `id, nota_id, numero_version, cuerpo text,
-   anotaciones_reservadas text, contenido_canonico text, huella bytea(32), huella_anterior
-   bytea(32), algoritmo_version, esquema_version, motivo_cambio, alcance, autor_id, creada_en`,
-   más `paciente_id` y `posicion_cadena` (T-005). **No existen aquí `cita_id`, `abierta_en`,
-   `firmada_en`, `redactada_en_sesion` ni `margen_sesion_minutos`**: esos cinco viven
-   *únicamente dentro del sobre*, en `contenido_canonico`. El sello que la pantalla enseña hay
-   que sacarlo de ahí, parseando; no hay columna que consultar.
-10. `check (numero_version = 1 or (motivo_cambio is not null and length(trim(motivo_cambio)) > 0))`
-    — el «modificar exige motivo» ya está en la base, no hay que inventarlo.
-11. `fn_tocar_borrador()` (`20260822094547:1252`), `before insert or update`: pone
-    `borrador_actualizado_en := now()` cuando `borrador_contenido` cambia, y limpia las tres
-    columnas si el borrador pasa a nulo. **El testigo lo fija la base, nunca el cliente.**
-12. `fn_congelar_cabecera_sellada()` redefinida en `20260906120000:405`: en cuanto existe una
-    versión, `paciente_id`, `fecha_sesion`, `autor_id`, `episodio_id` y `cita_id` quedan
-    congelados (42501). El disparador es `before update of <esas cinco>`, así que un `update`
-    que solo toque columnas de borrador **no lo dispara**.
-13. Solo adición en tres capas: `revoke update, delete … from public, anon, authenticated,
-    service_role, postgres` (`20260829150000:395`), disparador `before update or delete` por fila
-    y `before truncate` por sentencia (`20260822094547:1436`).
+8. `notas_clinicas` tiene estas columnas: `id, paciente_id, episodio_id` (**not null** desde
+   T-034), `autor_id, fecha_sesion date not null default current_date` (la fecha UTC de la base,
+   **no** la del centro), `borrador_contenido jsonb, borrador_actualizado_en, borrador_autor_id,
+   creada_en`, `cita_id` (`20260906120000`, con índice **no único** `notas_clinicas_cita_idx`) y
+   `coprofesional_id` (T-034, `check (coprofesional_id is distinct from autor_id)`).
+   - Tiene `check num_nonnulls(borrador_contenido, borrador_actualizado_en, borrador_autor_id)
+     in (0,3)`.
+   - **No hay columna `estado`**, ni columna donde viva `abierta_en`, ni columna de margen en
+     ninguna tabla.
+9. `notas_clinicas_versiones` tiene
+   `check (numero_version = 1 or (motivo_cambio is not null and length(trim(motivo_cambio)) > 0))`
+   e índices únicos en `(nota_id, numero_version)` y en `huella`.
+10. La única definición de `fn_tocar_borrador()` está en `20260822094547`, `before insert or
+    update`, invoker. Si el borrador pasa a nulo, limpia las otras dos columnas. Si el contenido
+    cambia, `borrador_actualizado_en := now()`. **Hueco**: cuando el contenido no cambia, el
+    `borrador_actualizado_en` que mande el cliente **sobrevive**.
+11. `20260929120000_nota_siempre_en_episodio.sql` (T-034) define tres cosas:
+    - **`fn_exigir_episodio_coherente_en_nota`**. Es un disparador `before insert or update of
+      paciente_id, episodio_id, autor_id, coprofesional_id`. El coprofesional tiene que tener rol
+      `profesional_sanitario` y una fila en `perfiles_centros` con `centro_id` igual al del
+      episodio y `hasta is null`. Si no, lanza 23514 «El coprofesional tiene que ser…» o «…no
+      tiene alta en el centro del episodio».
+    - **`fn_congelar_cabecera_sellada`**. Con una versión ya existente, congela `paciente_id,
+      fecha_sesion, autor_id, episodio_id, cita_id, coprofesional_id` (42501).
+    - **`episodio_para_nota(p_paciente_id, p_episodio_id?, p_cita_id?, p_centro_id?) returns
+      uuid`** (invoker). Lanza 42501 sin candado o si no hay profesional asignado, y 22023 con un
+      episodio cerrado. Con `p_cita_id`, la cita tiene que ser del paciente y del profesional.
+      Con más de un episodio propio abierto lanza **`EP001`**. Con ninguno, abre uno individual
+      en el centro de la cita.
+12. Solo adición en tres capas para `notas_clinicas_versiones`: revoke, disparador por fila y
+    disparador `before truncate`.
 
-### RLS y candado
+### RLS, candado, accesos
 
-14. `notas_clinicas_modificacion`: `historia_desbloqueada() and autor_id = auth.uid()`, en
-    `using` y en `with check`. El borrador solo lo escribe **el autor de la cabecera**, y solo con
-    el candado abierto. `notas_clinicas_versiones_alta`: candado + `autor_id = auth.uid()` +
-    `exists(notas_clinicas n where n.id = nota_id and n.autor_id = auth.uid())`.
-15. `notas_clinicas_versiones_lectura` abre la versión a los profesionales del episodio cuando
-    `alcance = 'conjunta'` — es la política que el ADR-057 pone dentro del sobre.
-16. `registrar_acceso_historia(paciente, pestaña, agente, ip)` (`20260915120000`) es **solo para
-    `tipo = 'apertura'`** y levanta 42501 sin desbloqueo vigente. `lib/cuentas/accesos.ts` la
-    envuelve y devuelve `{ok, accesoId, vistas, apertura}`; nunca lanza.
-17. `accesos_historia_alta` permite `desbloqueo_id is null` para los tipos que no salen del
-    candado, y `authenticated` tiene `grant select, insert` sobre la tabla: **una exportación se
-    registra con un `insert` directo desde la Server Action**, sin función nueva.
-18. `app/(app)/pacientes/[id]/acciones.ts` — `abrirPestanaDeHistoria(pacienteId, pestana)` valida
-    con Zod, registra el acceso y **solo si el registro salió bien** lee; para
-    `pestana !== 'historial_clinico'` devuelve `historial: null`. Ese es el hueco de este ticket.
-19. `panel-historia.tsx` — cliente, con la sub-pestaña `notas_clinicas` cayendo hoy en
-    `<EnPreparacion/>`; el reloj del candado cierra con `setApertura(null)`.
+13. Políticas (`20260822160000:1117-1180`):
+    - `notas_clinicas_alta` exige candado, `autor_id = uid` y `es_profesional_asignado`.
+    - `notas_clinicas_modificacion` exige candado y `autor_id = uid`.
+    - `notas_clinicas_lectura` y `notas_clinicas_versiones_lectura` dejan leer al autor, al
+      asignado y, si la nota es conjunta, al profesional del episodio.
+    - `authenticated` tiene `grant select, insert, update` de **tabla entera** sobre
+      `notas_clinicas`.
+14. `registrar_acceso_historia(...)` (`20260915120000`) lo pueden usar el administrador y el
+    profesional asignado, siempre con desbloqueo vigente. La primera vez escribe la apertura y las
+    siguientes suman una vista. `lib/cuentas/accesos.ts` la envuelve: `{ok, accesoId, vistas,
+    apertura}`, y nunca lanza. **Llamarla en cada autoguardado inflaría las vistas.**
+15. `accesos_historia_alta` (`20260822160000:1269`) admite `desbloqueo_id is null` y **no mira el
+    candado**. `authenticated` tiene `grant select, insert`. El enum `tipo_acceso_historia`
+    incluye `exportacion`. `desbloqueo_vigente()` devuelve `timestamptz`, no un id.
+16. `prolongar_desbloqueo()` prolonga un desbloqueo vigente y nunca resucita uno caducado.
+    `lib/cuentas/candado.ts` exporta `prolongarDesbloqueo(sesion): Promise<string|null>` y
+    `estadoDeCuenta`.
+17. Lectura para cualquier `authenticated` con rol: `organizacion` (incluye `zona_horaria not
+    null` y `minutos_desbloqueo_historia`), `centros` (`zona_horaria` nulable), `perfiles_centros`
+    y la vista `directorio_perfiles(id, nombre_completo, rol, estado, centro_id)`.
+    `citas_lectura` admite al administrador o a `profesional_id = uid`. `citas` tiene `inicio, fin,
+    estado, centro_id, profesional_id, paciente_id, zona_horaria not null`.
+18. Alertas *(ampliado el 01-10-2026 para D2; todo leído en `supabase/migrations/`)*:
+    - Tabla `alertas_documentacion` (`20260822094547:863-885`): `paciente_id, profesional_id,
+      centro_id`, `tipo public.tipo_alerta_documentacion` (el enum, en `:95`, incluye
+      `'nota_sin_firmar'`), `origen_tabla text` (su check admite `'citas'` desde
+      `20260906120000:449`), `origen_id uuid` sin clave ajena, `fecha_referencia date`,
+      `estado text not null default 'abierta' check (estado in ('abierta','resuelta'))`,
+      `resuelta_en timestamptz` y `check ((estado = 'resuelta') = (resuelta_en is not null))`.
+      Índice único parcial `alertas_documentacion_origen_abierta_idx (origen_tabla, origen_id, tipo)
+      where estado = 'abierta'`. **No hay columna `resuelta_por`**: esa es de `propuestas_cita`.
+    - `authenticated` tiene `grant select, update` (`20260822094547:1578`). La política
+      `alertas_documentacion_modificacion` (`20260822160000:1328`) exige `rol_actual() is not null`
+      y además ser administrador, `profesional_id = uid` o profesional asignado. La tabla la audita
+      el bucle genérico de `20260829150000:313-365` (`auditar_alertas_documentacion`, después de
+      insert, update y delete).
+    - `fn_alertar_nota_sin_firmar()` (`20260906120000:453-499`) es `security definer`, con
+      `search_path = ''` y `revoke execute … from public`. Su disparador `alertar_nota_sin_firmar`
+      es **`after update of estado on public.citas`**. Abre la alerta solo cuando la cita **pasa** a
+      `realizada` con `fin <= now()`, y solo si no hay ninguna versión de ninguna nota con
+      `n.cita_id = cita`. Inserta `(paciente_id, profesional_id, centro_id, 'nota_sin_firmar',
+      'citas', cita.id, (fin at time zone 'UTC')::date)` con `on conflict do nothing`. El
+      `profesional_id` de la alerta es el de la cita.
+    - **Nada la resuelve al firmar.** La función `agenda_citas_rango()` de T-014 calcula
+      `nota_pendiente` a partir de esa alerta abierta, así que, sin resolverla, la agenda seguiría
+      avisando «nota pendiente» con la nota ya firmada.
+    - **`notas_clinicas.cita_id` no está atado a su cita** (`20260906120000:396`): solo tiene la
+      clave ajena a `citas(id)` y la congelación tras la primera versión. Ninguna regla exige que la
+      cita sea del mismo paciente ni que su profesional sea el autor. Un profesional asignado puede
+      crear por PostgREST una nota suya con el `cita_id` de una cita ajena.
+    - El banco 15 (`scripts/rls/15-agenda.sql:283-345`, §H) ya abre la alerta así: `insert` como
+      `postgres` de una cita de anteayer y `update … set estado = 'realizada'`.
+    - `pg_temp.sobre_prueba(p_nota_id, p_autor_id, p_creada_en, p_cuerpo, …, p_cita_id,
+      p_margen_sesion_minutos, …)` (`scripts/rls/00-ayudantes.sql:203`) lee de la cabecera
+      paciente, episodio, fecha y coprofesional. Se llama como `postgres`.
+19. La siembra no tiene ninguna nota con `cita_id` (`seed-completo.sql:362-376`), ni la tiene
+    ningún banco de `scripts/rls/`. Un índice único parcial por `(cita_id, autor_id)` entra sin
+    conflicto. El borrador sembrado es `{"texto":"…"}`.
 
-### Contexto del sello
+### Interfaz y framework
 
-20. `citas` tiene `inicio`, `fin`, `estado`, `centro_id` (nulable), `profesional_id`.
-21. **No existe ninguna columna de margen de sesión en ninguna tabla** (`grep margen` sobre
-    `supabase/migrations/` solo devuelve comentarios de T-005). El ADR-046 exige que el margen sea
-    «configurable por centro»: hay que crearlo.
-22. `organizacion` ya tiene el patrón exacto a copiar: `minutos_desbloqueo_historia smallint not
-    null default 15 check (between 1 and 60)`, y `centros.zona_horaria` es nulable con el
-    significado «hereda la de la organización». Las dos tablas las lee cualquier `authenticated`
-    (`organizacion_lectura`, `centros_lectura`).
-23. `fn_alertar_nota_sin_firmar()` (`20260906120000:451`) abre la alerta al pasar la cita a
-    `realizada` sin versión firmada. `alertas_documentacion` tiene `estado` y `resuelta_en`;
-    **nada la resuelve hoy al firmar**.
-24. `app/layout.tsx:28` exporta ya un `viewport: Viewport` (con `themeColor`), y
-    `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/generate-viewport.md:135`
-    confirma que `interactiveWidget` es una clave válida de ese objeto en Next 16.
-25. `components/ui/piezas.tsx` exporta `Tarjeta, Metrica, FilaConAvatar, Pildora,
-    BarraDeProgreso, FranjaDeColor, EncabezadoDeModulo, PanelLateral, EstadoVacio, Cargando,
-    AvisoDeError`. No hay editor, ni área de texto, ni `<textarea>` primitivo: **no existe
-    ninguna primitiva que este ticket pueda reutilizar para el editor**.
-
-26. `git show 2fddabd --stat` — el commit que acepta el ADR-057 toca **solo tres ficheros de
-    `docs/`** y su mensaje lo dice: «Solo la decision: el codigo y la migracion van con su
-    ticket». Es decir: el sobre de doce claves **no está implementado en ninguna parte**, y el
-    propietario ya dejó escrito que su código viaja en un ticket, no suelto. §2.1 se apoya en
-    esto.
+20. `app/(app)/pacientes/[id]/acciones.ts`:
+    - `abrirPestanaDeHistoria` sigue el orden Zod → registro → lectura solo si `ok`.
+    - `ResultadoDeApertura.historial` solo trae datos para `historial_clinico`.
+    - `ipDeLaPeticion` es **privada** y, al estar en un fichero `'use server'`, no se puede
+      exportar porque no es asíncrona.
+21. `panel-historia.tsx:223` pinta `<EnPreparacion explicacion={t('ficha.notasEnPreparacion')}/>`
+    para `notas_clinicas`. `FormularioPinHistoria({ alAbrirse })` está en
+    `formulario-pin-historia.tsx:27`.
+22. `components/ui/area-texto.tsx` existe: `AreaTexto(props: ComponentProps<'textarea'> &
+    {etiqueta; errores?})`. *El diseño del 15-09 decía que no había primitiva.* `Button` ya mide
+    `min-h-11`, desde el commit `5fe8400`, así que el `min-h-11` local deja de hacer falta.
+23. `components/ui/piezas.tsx`:
+    - `Pildora({tono:'success'|'info'|'warning', children})`;
+    - `EstadoVacio({icono?, frase, explicacion?, accion?})`;
+    - `Cargando({filas?})`, con `role="status"`;
+    - `Tarjeta({className?, children})`;
+    - `EncabezadoDeModulo` y `AvisoDeError({mensaje, accion?})`.
+24. `lib/i18n`:
+    - `t(clave)` y `tCon(clave, valores)` con huecos `{nombre}`;
+    - `es.ts` usa **CRLF**;
+    - `sin-literales.test.ts` rechaza texto visible fuera del catálogo en `app/` y `components/`,
+      incluidos los atributos `aria-label, title, placeholder, alt, etiqueta`.
+25. Next 16:
+    - `app/layout.tsx` exporta `viewport` y, desde T-033, envuelve el aviso de modo local en
+      `<Suspense>`.
+    - `generate-viewport.md:135` documenta `interactiveWidget`.
+    - En `page.md:75`, `searchParams` es una `Promise`.
+26. `lib/fechas/formato.ts` exporta `formatearHora`, `formatearFechaCorta` y `formatearRango`, que
+    reciben `(Date, zona)`. `lib/fechas/zona.ts` exporta `resolverZona(centro, organización)`. No
+    hay helper para obtener la fecha local en formato `AAAA-MM-DD`.
+27. **T-033** dejó `lib/cuentas/modo-desarrollo.ts`, con `superarSegundoFactorSembrado(supabase)`.
+    Un guion por el camino de la aplicación puede llegar a `aal2` igual que el inicio de sesión
+    local, sin TOTP a mano. `scripts/t032-alta.ts` es el precedente de un guion así: `tsx`, parche
+    de `server-only` y `signInWithPassword` con `ana@psicogestion.test`.
+28. **T-014** (rama `T-014-correcciones`, todavía no en `main`):
+    - `app/(app)/agenda/notas.ts` tiene `RUTA_NOTAS_DISPONIBLE = false` y
+      `rutaNotas(pacienteId, citaId)`, que devuelve `/pacientes/${p}/historia/notas?cita=${c}`.
+    - `notas.test.ts` **afirma que vale `false`**.
+    - `vista.test.ts` la enciende con un `vi.mock` de getter.
+    - En `vista.ts:263`, `mostrar` exige la ruta encendida, que la cita sea propia y que no esté
+      ni cancelada ni sin asistencia.
+    - Trae la migración `20260926120000_agenda_citas_rango.sql` y el banco
+      `scripts/rls/18-agenda-rango.sql`, y toca `lib/i18n/es.ts` y `tipos-bd.ts`.
 
 ---
 
 ## 1 · Piezas y contratos
 
-### 1.1 · El sobre de diecisiete claves (era 4: ADR-057, ADR-067, ADR-071, ADR-072)
+### 1.1 · El sobre (era 4): T-012 lo consume, no lo toca
 
-> Enmienda del 29-09-2026 (ADR-071.6). Sustituye la versión de doce claves de esta sección. La
-> escribe el arquitecto de T-012c: su diseño, `tickets/T-012c/diseno.md` §9, es la referencia
-> de la forma, del disparador y de las pruebas. Donde esta sección choque con §1.5 (pasos 4 y
-> 8), con §1.4 (línea «`esquema_version` no es 3») o con el punto 2 del Resumen, **manda esta
-> sección**.
+*(Actualizado el 01-10-2026: T-012a y T-012c ya están en `main`.)* La forma, el disparador y las
+negativas están hechos (hechos 1-4). T-012 **no cambia** la forma del sobre, ni la migración del
+sello, ni los generadores del banco. De `lib/huella/**` solo cambia el lanzamiento de error de
+`firmar.ts` (§1.3.b), y lo cambia allí porque el contrato dice «se corrige allí, no se parchea
+aquí».
 
-**Quién implementa qué.**
-- La era 3 (doce claves, `alcance`) la dejó hecha T-012a
-  (`supabase/migrations/20260915130000_alcance_en_el_sobre.sql`).
-- La era 4 la implementa **T-012c**, que depende de T-034: `notas_clinicas.episodio_id` pasa a
-  obligatorio y aparece la columna `coprofesional_id`.
-- T-012 **no toca** `lib/huella/**`, la migración del sello ni los generadores del banco. Consume
-  `firmarVersionNota` tal como la deja T-012c, y va después de T-012c.
+De dónde sale cada campo de `EntradaFirma` en `firmarNota`. **Nada sale del formulario salvo
+`alcance` y `motivo`:**
 
-**Forma exacta**, en el orden que produce JCS:
+| Campo | Origen |
+|---|---|
+| `notaId, pacienteId, episodioId, autorId, coprofesionalId` | la cabecera releída (`autorId` además tiene que ser `usuario.id`) |
+| `fechaSesion` | `cabecera.fecha_sesion`, cadena tal cual la da PostgREST, **nunca** `new Date()` |
+| `cuerpo` | `{ texto }` de `borrador_contenido`, validado con `esquemaCuerpo` |
+| `anotacionesReservadas` | `reservadas` del borrador; `''` se convierte en `null` |
+| `motivoCambio` | entrada del formulario; `null` en v1 |
+| `alcance` | entrada del formulario, solo si `puedeSerConjunta`; si no, `'individual'` |
+| `citaId` | `cabecera.cita_id` |
+| `ventanaCita` | `citas.inicio/fin` de esa cita |
+| `margenMinutos` | `centros.margen_sesion_minutos ?? organizacion.margen_sesion_minutos` |
+| `abiertaEn` | `new Date(cabecera.borrador_abierta_en)`; truncar a milisegundos es inocuo porque queda ≤ el original |
+| `ahora` | no se pasa; lo pone `construirSobre` |
 
-```json
-{"abierta_en":"…Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"…","cita_id":null,"coprofesional_id":null,"creada_en":"…Z","cuerpo":{…},"episodio_id":"…","esquema_version":4,"fecha_sesion":"AAAA-MM-DD","firmada_en":"…Z","margen_sesion_minutos":null,"motivo_cambio":null,"nota_id":"…","paciente_id":"…","redactada_en_sesion":false}
-```
+### 1.2 · Migración de T-012
 
-Las cinco claves nuevas:
+*(Actualizado el 01-10-2026.)* Fichero único:
+`supabase/migrations/20261002120000_nota_clinica_borrador_firma.sql`. La marca tiene que ser
+**posterior a `20261001120000` (T-012c) y a `20260926120000` (T-014)**. Si al integrar ya hay en
+`main` una migración con marca mayor (T-035 o T-036), se renombra con una marca posterior a todas.
+El orden de los pasos es parte del diseño:
 
-| Clave | Valor | Nulable | Sale de |
-|---|---|---|---|
-| `nota_id` | UUID en minúsculas | no | la nota que se firma |
-| `paciente_id` | UUID en minúsculas | no | `notas_clinicas.paciente_id` |
-| `episodio_id` | UUID en minúsculas | **no** (ADR-071.1 y .4) | `notas_clinicas.episodio_id` |
-| `fecha_sesion` | cadena `AAAA-MM-DD`, sin hora ni zona | no | `notas_clinicas.fecha_sesion`, tal como la devuelve PostgREST |
-| `coprofesional_id` | UUID en minúsculas o `null`; la clave está siempre | **sí** (ADR-072.2 y .3) | `notas_clinicas.coprofesional_id` |
-
-**Lo que cambia en T-012.**
-
-1. **Paso 4 de §1.5.** El `select` de la cabecera añade `fecha_sesion` y `coprofesional_id`.
-   Queda así:
-   `id, paciente_id, cita_id, episodio_id, autor_id, fecha_sesion, coprofesional_id, borrador_contenido, borrador_actualizado_en, borrador_abierta_en`.
-2. **Paso 8 de §1.5.** La llamada pasa cuatro campos más, **leídos de esa cabecera y nunca del
-   formulario**:
-   ```ts
-   firmarVersionNota(supabase, {
-     notaId, autorId: usuario.id, cuerpo, anotacionesReservadas, motivoCambio, alcance,
-     citaId, ventanaCita, margenMinutos, abiertaEn: cabecera.borrador_abierta_en,
-     pacienteId: cabecera.paciente_id,
-     episodioId: cabecera.episodio_id,
-     fechaSesion: cabecera.fecha_sesion,          // 'AAAA-MM-DD', string, nunca new Date()
-     coprofesionalId: cabecera.coprofesional_id,  // string | null
-   })
-   ```
-   El tipo `EntradaFirma` los hace obligatorios, así que olvidar uno es un error de `tsc`.
-3. **Episodio y coprofesional se eligen en el editor** y se escriben en la cabecera **antes** de
-   la primera firma:
-   - El episodio sale de la función de T-034 (`episodio_para_nota()`). El paso 4 de
-     `abrirEditorDeNota` (§1.4) ya no inserta un `episodio_id` libre.
-   - El coprofesional sale de la casilla que pinta T-012 (ADR-072).
-   - Tras la primera versión, los dos quedan congelados junto con el paciente, la fecha de
-     sesión, el autor y la cita. `congelar_cabecera_sellada` responde 42501 con «no se puede
-     reatribuir». La pantalla deja de ofrecer los dos controles en cuanto hay una versión.
-4. **Errores del sellado que hay que traducir**, además de los de §1.5:
-   - **42501 «No puedes firmar una versión de esta nota»**: es el paso 0 del disparador, que
-     comprueba permisos antes que cotejo (ADR-071.5). Significa lo mismo que el rechazo de la
-     RLS: no eres el autor o el candado está cerrado. El mensaje no revela nada de la cabecera.
-     Se desambigua con la misma relectura de la tabla «Desambiguar las cero filas» de §1.5:
-     - sin fila: `{ok:false, motivo:'sin_acceso'}`, pantalla de bloqueo y PIN;
-     - fila de otro autor: «Esta nota la escribe su autor».
-   - **23514 de las comprobaciones 6.11-6.16** (`nota_id`, `paciente_id`, `episodio_id`,
-     `autor_id`, `fecha_sesion`, `coprofesional_id` no coinciden con la cabecera): la cabecera
-     cambió entre el paso 4 y la firma, antes de estar congelada. Se trata como
-     `{ok:false, motivo:'conflicto'}`: releer y volver a pedir la firma. No se reintenta en
-     silencio.
-5. **Sello en pantalla (§1.4, línea «si el parseo falla o `esquema_version` no es 3»).** Pasa a
-   «no es 4». El parseo usa el `esquemaSobre` de diecisiete claves que exporta `sobre.ts`.
-6. **Resumen, punto 2.** Donde dice «sobre de doce claves con `alcance`, `esquema_version = 3`»,
-   se lee «sobre de diecisiete claves, `esquema_version = 4`, implementado por T-012a (era 3) y
-   T-012c (era 4); T-012 lo consume».
-
-**Por qué se sellan.**
-- `nota_id`, `paciente_id` y `episodio_id` deciden quién lee la versión.
-- `autor_id` decide quién la firmó.
-- `fecha_sesion` sitúa el acto clínico.
-- `coprofesional_id` dice quién más estuvo en la sala.
-
-El disparador los coteja con la cabecera al sellar (23514), y `verificar_cadena_huellas()` los
-vuelve a cotejar después. Si alguien mueve una versión o reatribuye una cabecera saltándose la
-congelación, la cadena lo señala aunque las huellas sigan cuadrando.
-
-### 1.2 · Migración de T-012: `abierta_en` y el margen
-
-Fichero único `supabase/migrations/2026MMDDHHMMSS_nota_clinica_borrador_firma.sql`, en este
-orden (el orden es el diseño; ver §4):
-
-1. **`notas_clinicas.borrador_abierta_en timestamptz`**, nulable.
-   *Por qué columna y no una clave dentro de `borrador_contenido`*: `abierta_en` es la mitad de
-   `redactada_en_sesion`, y `authenticated` tiene `grant update` **de tabla entera** sobre
-   `notas_clinicas`. Una `abierta_en` dentro del JSON del borrador la puede escribir el cliente
-   por PostgREST sin pasar por la Server Action, y entonces la casilla que el ADR-046 prohíbe
-   vuelve a existir por la puerta de atrás. En columna propia, escrita **solo** por disparador,
-   no la elige nadie.
-2. **Relleno**, antes de cualquier restricción:
+1. **`alter table public.notas_clinicas add column borrador_abierta_en timestamptz;`**
+   *Por qué columna propia y no clave del JSON*: `authenticated` tiene `update` de tabla entera.
+   Dentro de `borrador_contenido`, el cliente la escribiría por PostgREST. Escrita **solo** por
+   disparador, no la elige nadie (ADR-046).
+2. **Relleno**:
    `update public.notas_clinicas set borrador_abierta_en = borrador_actualizado_en where borrador_contenido is not null;`
-   (no dispara `congelar_cabecera_sellada`: su `update of` no incluye esta columna; tampoco
-   mueve el testigo, porque `fn_tocar_borrador` solo lo toca si cambia `borrador_contenido`).
-3. `alter table … add constraint notas_clinicas_borrador_abierta_ck check ((borrador_abierta_en is null) = (borrador_contenido is null));`
-4. `create or replace function public.fn_tocar_borrador()` — misma función, tres líneas más:
+   Es seguro por tres motivos:
+   - el `update of` de `congelar_cabecera_sellada` y de `exigir_episodio_coherente` no incluye
+     esta columna;
+   - `fn_tocar_borrador` no mueve el testigo si el contenido no cambia;
+   - va **antes** del paso 4.
+3. `alter table public.notas_clinicas add constraint notas_clinicas_borrador_abierta_ck check ((borrador_abierta_en is null) = (borrador_contenido is null));`
+4. **`create or replace function public.fn_tocar_borrador()`**. Misma firma, mismo disparador y
+   sigue siendo invoker. Cuerpo:
 
 ```sql
   if new.borrador_contenido is null then
     new.borrador_actualizado_en := null;
     new.borrador_autor_id := null;
-    new.borrador_abierta_en := null;                 -- descartar o firmar cierra la ventana
+    new.borrador_abierta_en := null;               -- firmar o descartar cierra la ventana
   else
-    -- Se ignora SIEMPRE lo que mande el llamante: primera vez `now()`, después la que
-    -- ya había. Es lo que hace que `redactada_en_sesion` no se pueda fingir (ADR-046).
+    -- abierta_en: la primera vez now(), después la que ya había. Lo que mande el llamante
+    -- se ignora SIEMPRE (ADR-046: no es una casilla).
     new.borrador_abierta_en := coalesce(
       case when TG_OP = 'UPDATE' then old.borrador_abierta_en end, now());
     if TG_OP = 'INSERT' or new.borrador_contenido is distinct from old.borrador_contenido then
       new.borrador_actualizado_en := now();
+    else
+      -- NUEVO: sin cambio de contenido, el testigo tampoco cambia. Antes sobrevivía el que
+      -- mandara el cliente (hecho 10) y el bloqueo optimista se podía falsear.
+      new.borrador_actualizado_en := old.borrador_actualizado_en;
     end if;
   end if;
+  return new;
 ```
 
-5. **`fn_vaciar_borrador_al_firmar()`**, `after insert on notas_clinicas_versiones for each row`,
-   **`security invoker`**: `update public.notas_clinicas set borrador_contenido = null,
-   borrador_actualizado_en = null, borrador_autor_id = null, borrador_abierta_en = null where id = new.nota_id;`
-   *Por qué en la base y no en la acción*: «el borrador se vacía» (ADR-036) tiene que ocurrir en
-   **la misma transacción** que la firma. Dos sentencias desde PostgREST no son una transacción:
-   entre el `insert` y el `update` cabe un fallo de red, y lo que queda es una versión firmada
-   con un borrador vivo cuyo `abierta_en` es el de la versión anterior — es decir, la siguiente
-   firma mentiría sobre `redactada_en_sesion`. *Por qué invoker y no definer*: quien inserta la
-   versión es, por `notas_clinicas_versiones_alta`, el autor de la cabecera y tiene el candado
-   abierto, que es exactamente lo que `notas_clinicas_modificacion` exige. No hace falta ningún
-   privilegio extra, y si algún día la política cambiara, esto **debe** fallar en voz alta en vez
-   de saltársela.
-6. **`organizacion.margen_sesion_minutos smallint not null default 15 check (between 0 and 120)`**
-   — los **15 minutos por defecto los confirma el propietario el 15-09-2026**: «escrita en sesión»
-   significa durante la cita o en el hueco hasta el paciente siguiente, y es el mismo número que la
-   ventana del candado del ADR-026, de modo que la aplicación no maneja dos relojes distintos con
-   el mismo aspecto. Quien escriba al final de la mañana verá `false`, y eso es lo que el sello
-   tiene que decir.
-   y **`centros.margen_sesion_minutos smallint check (between 0 and 120)`** (nulable = hereda,
-   igual que `zona_horaria`). Con sus `comment on column` citando el ADR-046.
-7. **`public.margen_sesion_de_cita(p_cita_id uuid) returns smallint`**, `stable`, `security
-   definer`, `set search_path = ''`: `coalesce(c.margen, o.margen)` resolviendo por
-   `citas.centro_id`; devuelve `null` si la cita no existe. Definer porque el margen no es dato
-   clínico y el profesional tiene que poder resolverlo aunque la cita sea de otro centro; no
-   revela nada que `centros_lectura` no dé ya. `grant execute … to authenticated`.
-8. **`fn_resolver_alerta_nota_sin_firmar()`**, `after insert on notas_clinicas_versiones`,
-   invoker: marca `resuelta` la alerta `nota_sin_firmar` cuyo `origen_id` es la `cita_id` de la
-   cabecera. *(Ver §Lo que no entra: si la revisión de alcance lo considera fuera del contrato,
-   se cae sin tocar nada más.)*
-9. `alter default privileges … revoke all on tables …` no hace falta: no se crea ninguna tabla.
-   **Sí** hay que pasar `npm run lint:migraciones` y regenerar `lib/supabase/tipos-bd.ts`
-   (`npm run tipos`) tras `npx supabase db reset`.
+5. *(Retirado el 01-10-2026.)* `fn_vaciar_borrador_al_firmar()` **no se crea**: ya existe (hecho
+   5). Con el paso 4, al vaciar `borrador_contenido` también se vacía `borrador_abierta_en`, en la
+   misma transacción que la firma.
+6. **Margen**. `alter table public.organizacion add column margen_sesion_minutos smallint not null default 15 check (margen_sesion_minutos between 0 and 120);`
+   y `alter table public.centros add column margen_sesion_minutos smallint check (margen_sesion_minutos between 0 and 120);`
+   El valor nulo significa que hereda, igual que `zona_horaria`. Cada columna lleva su `comment on
+   column` citando el ADR-046. Los 15 minutos los confirmó el propietario el 15-09-2026 (commit
+   `5fe8400`): es el mismo número que la ventana del candado.
+7. *(Retirado el 01-10-2026.)* No hay función `margen_sesion_de_cita`. `centros` y `organizacion`
+   se pueden leer con la RLS (hecho 17), así que la acción los lee directamente. Una función
+   `definer` menos.
+8. **NUEVO**:
+   `create unique index notas_clinicas_cita_autor_uidx on public.notas_clinicas (cita_id, autor_id) where cita_id is not null;`
+   Así dos aperturas simultáneas de la misma cita (StrictMode, dos dispositivos) no crean dos
+   cabeceras con dos `abierta_en`. La segunda recibe 23505 y relee. Es seguro con los datos
+   existentes (hecho 19).
+9. **`fn_resolver_alerta_nota_sin_firmar()`** *(D2: entra en T-012 por decisión del propietario
+   del 01-10-2026. Reescrito ese día: ahora ata la cita a la nota)*. Lleva `language plpgsql`,
+   `security definer`, `set search_path = ''`, `revoke execute … from public` y un `comment on
+   function` que diga que no lee ni escribe nada clínico. Su disparador es
+   `resolver_alerta_nota_sin_firmar`, **`after insert on public.notas_clinicas_versiones for each
+   row`**:
 
-### 1.3 · `lib/notas/` (nuevo, funciones puras, sin `server-only`)
+```sql
+declare
+  v_cita uuid;
+begin
+  -- La cita cuenta solo si es DE ESTA NOTA: mismo paciente y su profesional es el autor.
+  -- notas_clinicas.cita_id no está atado a la cita por ninguna otra regla (hecho 18) y esta
+  -- función es definer: sin estas dos condiciones, firmar una nota propia con el cita_id de
+  -- una cita ajena cerraría una alerta que quien firma no puede ni ver.
+  select c.id into v_cita
+    from public.notas_clinicas n
+    join public.citas c on c.id = n.cita_id
+   where n.id = new.nota_id
+     and c.paciente_id    = n.paciente_id
+     and c.profesional_id = n.autor_id;
+
+  if v_cita is null then             -- nota sin cita, o cita que no es de esta nota
+    return null;
+  end if;
+
+  update public.alertas_documentacion
+     set estado = 'resuelta', resuelta_en = now()
+   where origen_tabla = 'citas'
+     and origen_id    = v_cita
+     and tipo         = 'nota_sin_firmar'
+     and estado       = 'abierta';     -- la v2 no mueve el resuelta_en que dejó la v1
+  return null;
+end;
+```
+
+   - **Solo escribe las columnas del hecho 18**: `estado` y `resuelta_en`, las dos a la vez porque
+     lo exige el check. No hay `resuelta_por`. Quién firmó ya consta en la versión y en `auditoria`.
+   - **Por qué `definer`.** Es la gemela de `fn_alertar_nota_sin_firmar`, que también lo es, y
+     resolver no puede depender de que `alertas_documentacion_modificacion` deje ver la fila a quien
+     firma: el `profesional_id` de la alerta se copió de la cita al abrirla, y una firma como
+     `postgres` (siembra, bancos) no tiene `auth.uid()`. *(El diseño anterior lo justificaba por el
+     traspaso. Con la cita atada al autor, esa justificación ya no basta por sí sola.)*
+   - **Por qué el `join` con `citas`.** Es lo que impide que un `definer` sea una puerta. Solo toca
+     la alerta de una cita del mismo paciente cuyo profesional es quien firma, que en el caso normal
+     es justo la que esa persona podría resolver por RLS (`profesional_id = uid`).
+   - **Nunca lanza.** Cero filas es el caso normal: nota sin cita, cita ajena o alerta ya resuelta o
+     inexistente. Un error en un disparador `after insert` tumbaría la firma, y una alerta no puede
+     impedir firmar.
+   - **Es más estricta que la función que abre la alerta, y a propósito.**
+     `fn_alertar_nota_sin_firmar` no abre la alerta si existe *cualquier* versión con
+     `n.cita_id = cita`, sin mirar ni paciente ni autor. Esa holgura es anterior a T-012 y este
+     ticket no la toca (ver «Lo que no entra»).
+   - *Por qué entra*: sin este paso, la nueva entrada de T-014 miente justo después de firmar
+     (hecho 18).
+10. Después: `npm run lint:migraciones`, `npx supabase db reset` y `npm run tipos`, siempre juntos.
+    `tipos-bd.ts` se regenera, no se edita a mano.
+
+### 1.3 · Código de apoyo
+
+**a) `lib/notas/`** (nuevo). Puro salvo `servidor.ts`.
 
 | Fichero | Contrato |
 |---|---|
-| `lib/notas/cuerpo.ts` | `export const esquemaCuerpo = z.object({ formato: z.literal('texto_plano'), texto: z.string() }).strict()` y `export type CuerpoNota = z.infer<…>`. **Decisión**: el cuerpo es texto plano dentro de un objeto con discriminante, no un documento de editor enriquecido (§2.7). |
-| `lib/notas/estado.ts` | `export type EstadoNota = 'pendiente' \| 'borrador' \| 'firmada' \| 'firmada_con_cambios' \| 'modificada'`; `export function estadoDeNota(p: { versiones: number; hayBorrador: boolean }): EstadoNota`. Sin columna, sin segunda verdad (§2.6). |
-| `lib/notas/comparar.ts` | `export type Segmento = { tipo: 'igual' \| 'anadido' \| 'retirado'; texto: string }`; `export function compararTextos(antes: string, despues: string): Segmento[]` — LCS por palabras conservando los espacios. Pura, determinista, sin DOM. **Delegable** (§7). |
-| `lib/notas/exportar.ts` | `export function componerExportacion(n: NotaExportable): string` — el texto plano de la descarga (§1.6). Pura. **Delegable**. |
+| `cuerpo.ts` | `esquemaCuerpo = z.object({ texto: z.string() }).strict()`, que es la forma de la siembra y de los vectores (hecho 6). `esquemaBorrador = z.object({ texto: z.string(), reservadas: z.string().default('') })` es tolerante al leer, porque el borrador sembrado no lleva `reservadas`; al escribir se mandan siempre las dos claves. `SIN_NULO = /^[^\u0000]*$/`. *Cambio del 01-10: sin `formato`* (§2.7). |
+| `estado.ts` | `EstadoNota = 'borrador' \| 'firmada' \| 'modificada' \| 'firmada_con_cambios'`; `estadoDeNota({versiones, hayBorrador})` (§2.6). Sin «pendiente»: una nota sin cabecera no es una nota. |
+| `comparar.ts` | `Segmento = {tipo:'igual'\|'anadido'\|'retirado'; texto}`; `compararTextos(antes, despues): Segmento[]`, LCS por palabras que conserva los espacios. |
+| `sello.ts` | `leerSello(contenidoCanonico: string): SelloLeido \| null`, con `SelloLeido = {citaId: string\|null; abiertaEn: Date; firmadaEn: Date; redactadaEnSesion: boolean; margenMinutos: number\|null; fechaSesion: string}`. Parsea con `esquemaSobre`; devuelve `null` si falla o si `esquema_version !== 4`. `fraseDelSello(s: SelloLeido \| null, zona: string): string` produce la frase de §2.13 con `tCon`. |
+| `fecha.ts` | `fechaDeSesion(inicio: Date, zona: string): string` en formato `AAAA-MM-DD`, con `format(…, 'yyyy-MM-dd', {in: tz(zona)})` de `@date-fns/tz` (ya es dependencia). |
+| `coprofesional.ts` | `ROLES_COPROFESIONAL = ['profesional_sanitario'] as const`. **T-035 añade `'administrador'`** (ADR-073.2) en esta línea y en ningún otro sitio. |
+| `exportar.ts` | `componerExportacion(n: NotaExportable): string`, pura (§2.11). |
+| `servidor.ts` | `import 'server-only'`. Las seis operaciones de §1.4 escritas como funciones `(sesion: Sesion, entrada, contexto: {ip, agente})`. **Las Server Actions solo las envuelven.** Es lo que deja al guion de §3 llamar «a lo que llamaría la Server Action» (lección de T-013a) sin cookies. |
+
+**b) `lib/huella/firmar.ts`** (modificar, una pieza). Exporta
+`class ErrorFirmaVersion extends Error { codigo: string | null }` y lanza
+`new ErrorFirmaVersion(mensaje, error.code ?? null)` en lugar del `Error` de la línea 70. Mantiene
+el prefijo del mensaje. Su prueba nueva comprueba que un fallo de `insert` con
+`code: '42501'` llega como `ErrorFirmaVersion` con `codigo === '42501'`.
+
+**c) `app/(app)/pacientes/[id]/peticion.ts`** (nuevo, sin `'use server'`). Recibe
+`ipDeLaPeticion` movida tal cual desde `acciones.ts` de la ficha (hecho 20), para que la importen
+las dos acciones.
 
 ### 1.4 · Las Server Actions
 
-Viven en `app/(app)/pacientes/[id]/historia/notas/acciones.ts` (`'use server'`), con la misma
-disciplina literal que `acciones.ts` de T-013: `exigirSesion()` primero, Zod después, registro
-del acceso antes de leer nada clínico, y nunca leer si el registro falló.
-
-**Esquemas Zod compartidos** en `app/(app)/pacientes/[id]/historia/notas/esquemas.ts` (sin
-`'use server'`, importable desde el formulario de cliente — es el «mismo esquema» que exige
-CLAUDE.md):
+`app/(app)/pacientes/[id]/historia/notas/acciones.ts` (`'use server'`). Cada acción sigue este
+orden: `exigirSesion()` → Zod → `lib/notas/servidor.ts`. Los esquemas viven en
+`app/(app)/pacientes/[id]/historia/notas/esquemas.ts`, sin `'use server'`, para que el formulario
+de cliente importe **el mismo** esquema. No se usa `.omit()/.pick()` sobre esquemas con `refine`
+(TS-H7): cada esquema se escribe entero.
 
 ```ts
-export const SIN_NULO = /^[^\u0000]*$/;   // U+0000 no entra en jsonb: 22P05 (T-005)
-
-export const esquemaBorrador = z.object({
-  notaId: z.uuid(),
-  pacienteId: z.uuid(),
-  // El testigo del bloqueo optimista viaja como CADENA OPACA, jamás como Date (§4).
-  testigo: z.string().min(1),
-  texto: z.string().regex(SIN_NULO),
-  anotacionesReservadas: z.string().regex(SIN_NULO).nullable(),
-});
-
-export const esquemaFirma = z.object({
-  notaId: z.uuid(),
-  pacienteId: z.uuid(),
-  testigo: z.string().min(1),
-  alcance: z.enum(['individual', 'conjunta']),
-  // El `check` de la base exige length(trim(motivo)) > 0 a partir de la versión 2; aquí
-  // se refleja exactamente, sin inventar un mínimo más duro.
-  motivo: z.string().trim().min(1).max(500).regex(SIN_NULO).nullable(),
-});
+const texto      = z.string().max(60_000).regex(SIN_NULO);
+const reservadas = z.string().max(20_000).regex(SIN_NULO);
+export const esquemaApertura = z.object({ pacienteId: z.uuid(), citaId: z.uuid().nullable(),
+  notaId: z.uuid().nullable(), episodioId: z.uuid().nullable() });   // cita XOR nota
+export const esquemaBorrador = z.object({ pacienteId: z.uuid(), notaId: z.uuid(),
+  testigo: z.string().min(1), texto, reservadas });                 // testigo: CADENA opaca
+export const esquemaCoprofesional = z.object({ pacienteId: z.uuid(), notaId: z.uuid(),
+  coprofesionalId: z.uuid().nullable() });
+export const esquemaModificar = z.object({ pacienteId: z.uuid(), notaId: z.uuid() });
+export const esquemaFirma = z.object({ pacienteId: z.uuid(), notaId: z.uuid(),
+  testigo: z.string().min(1), alcance: z.enum(['individual','conjunta']),
+  motivo: z.string().trim().min(1).max(500).regex(SIN_NULO).nullable() });
 ```
 
-| Acción | Firma | Qué hace, en orden |
-|---|---|---|
-| `abrirEditorDeNota` | `(pacienteId: string, citaId: string \| null) => Promise<ResultadoEditor>` | 1 `exigirSesion`; 2 Zod; 3 `registrarAccesoHistoria(sesion, pacienteId, 'notas_clinicas', {ip, agente})` → si `!ok`, `{abierto:false, mensaje}` **sin tocar ninguna tabla clínica**; 4 localizar la cabecera: si `citaId` no es nulo, `select … from notas_clinicas where cita_id = citaId` (el índice `notas_clinicas_cita_idx` existe); si no hay, `insert` con `paciente_id, autor_id = usuario.id, cita_id, fecha_sesion = fecha local de la cita, episodio_id` y `borrador_contenido = {formato,texto:''}` + `borrador_autor_id = usuario.id`; 5 releer cabecera + versiones; 6 devolver el modelo de vista. |
-| `guardarBorrador` | `(entrada: z.infer<typeof esquemaBorrador>) => Promise<ResultadoGuardado>` | 1 sesión; 2 Zod; 3 `update notas_clinicas set borrador_contenido = {…}, borrador_autor_id = uid where id = notaId and borrador_actualizado_en = testigo` con `.select('id, borrador_actualizado_en')`; 4 si vuelven **0 filas**, desambiguar (§1.5); 5 `prolongarDesbloqueo(sesion)`; 6 devolver `{ok:true, testigo: nuevo, caducaEn}`. |
-| `firmarNota` | `(entrada: z.infer<typeof esquemaFirma>) => Promise<ResultadoFirma>` | §1.5. |
-| `descargarNotaCompleta` | `(notaId: string, pacienteId: string) => Promise<{ok:true; nombre:string; texto:string} \| {ok:false; mensaje:string}>` | 1 sesión; 2 Zod; 3 `insert into accesos_historia (perfil_id, paciente_id, tipo, pestana) values (uid, …, 'exportacion', 'notas_clinicas')` — **antes** de leer; si falla, no se lee; 4 leer todas las versiones ordenadas por `numero_version`; 5 `componerExportacion(...)`. |
+| Acción | Qué hace, en orden |
+|---|---|
+| `abrirEditorDeNota(entrada)` | 1. `registrarAccesoHistoria(sesion, pacienteId, 'notas_clinicas', …)`. Si `!ok`, devuelve `{estado:'bloqueada'}` **sin tocar ninguna tabla clínica** (ADR-058.2). 2. Con `notaId`: lee esa cabecera. Si RLS no la devuelve o es de otro paciente, `{estado:'no_disponible'}`. 3. Con `citaId`: lee la cita (`select id, paciente_id, profesional_id, inicio, fin, zona_horaria`). Si `paciente_id ≠ pacienteId` o `profesional_id ≠ usuario.id`, `{estado:'no_disponible'}`. Busca la cabecera por `cita_id` y `autor_id = usuario.id`. 4. Sin cabecera: `rpc('episodio_para_nota', {p_paciente_id, p_cita_id, p_episodio_id?})`. Si el código es **`EP001`**, devuelve `{estado:'elegir_episodio', episodios}` con los episodios propios abiertos del paciente (`episodios_asistenciales` donde `profesional_id = uid` y `cerrado_en is null`; etiqueta = modalidad + fecha de apertura en la zona). Si no, inserta la cabecera `{paciente_id, episodio_id, autor_id: uid, cita_id, fecha_sesion: fechaDeSesion(cita.inicio, cita.zona_horaria), borrador_contenido: {texto:'', reservadas:''}, borrador_autor_id: uid}`. **Con eso queda fijada `abierta_en`.** Si devuelve 23505 (índice del paso 8), relee. 5. `prolongarDesbloqueo`. 6. Devuelve `{estado:'abierta', caducaEn, nota: ModeloDeNota}`. |
+| `guardarBorrador(entrada)` | `update notas_clinicas set borrador_contenido = {texto, reservadas}, borrador_autor_id = uid where id = notaId and borrador_actualizado_en = testigo`, con `.select('borrador_actualizado_en')`. Si devuelve 0 filas, desambigua con la tabla de §1.5. Después `prolongarDesbloqueo` y `{ok:true, testigo, caducaEn}`. **No registra acceso** (hecho 14). |
+| `fijarCoprofesional(entrada)` | Solo sin versiones: `update … set coprofesional_id` donde `id = notaId`. Traduce el 23514 de T-034 a «Esa persona no puede figurar como coprofesional en este centro». Si ya hay versiones, 42501 de la congelación, que se traduce a «Ya firmada: no se cambia». Prolonga. |
+| `empezarModificacion(entrada)` | Solo el autor (ADR-059). `update … set borrador_contenido = {texto y reservadas de la versión vigente}, borrador_autor_id = uid where id = notaId and borrador_contenido is null`. **Con eso se fija la `abierta_en` de la versión siguiente.** Si devuelve 0 filas y ya hay borrador, devuelve el modelo tal cual: no se pisa. Prolonga. |
+| `firmarNota(entrada)` | §1.5. |
+| `descargarNotaCompleta({pacienteId, notaId})` | 1. Si `rpc('desbloqueo_vigente')` es nulo, `{ok:false, bloqueada}`. 2. `insert accesos_historia {perfil_id: uid, paciente_id, tipo:'exportacion', pestana:'notas_clinicas', agente, ip}` **antes** de leer. Si falla, no se lee. 3. Lee la cabecera y todas las versiones por `numero_version` (con `contenido_canonico` y `huella`), más los nombres de `directorio_perfiles`. 4. `{ok:true, nombre: 'nota-<notaId>.txt', texto: componerExportacion(…)}`. El cliente lo descarga como `Blob`. |
 
-`ResultadoEditor` es un **modelo de vista estrecho** (ADR-056): nada de filas crudas.
+`ModeloDeNota`. Un modelo de vista **estrecho**: nada de filas crudas ni del `contenido_canonico`
+en la pantalla.
 
 ```ts
-export type VersionDeVista = {
-  numero: number; autor: string; creadaEn: string;   // ya formateada en servidor (ADR-034)
-  motivo: string | null; alcance: 'individual' | 'conjunta';
-  huella: string; huellaAnterior: string;            // hex, para el sello y la descarga
-  cuerpo: string; anotacionesReservadas: string | null;
-  sello: { enSesion: boolean; citaId: string | null; ventana: string | null };
-};
-export type ResultadoEditor =
-  | { abierto: true; notaId: string; estado: EstadoNota; caducaEn: string | null;
-      borrador: { texto: string; anotacionesReservadas: string | null; testigo: string } | null;
-      soyElAutor: boolean; puedeSerConjunta: boolean; versiones: VersionDeVista[] }
-  | { abierto: false; mensaje: string };
+type VersionDeVista = { numero: number; autor: string; firmadaEn: string /* formateada en servidor */;
+  motivo: string | null; alcance: 'individual'|'conjunta'; texto: string; reservadas: string | null;
+  sello: string /* fraseDelSello */; huellaCorta: string /* 12 hex */ };
+type ModeloDeNota = { notaId: string; soyAutor: boolean; estado: EstadoNota;
+  cabecera: { fechaSesion: string; horario: string | null; episodio: string;
+              coprofesional: { id: string; nombre: string } | null };
+  borrador: { texto: string; reservadas: string; testigo: string } | null;
+  versiones: VersionDeVista[];                          // de la 1 a la vigente
+  candidatosCoprofesional: { id: string; nombre: string }[];   // vacío si hay versiones o !soyAutor
+  puedeSerConjunta: boolean };
 ```
 
-`sello` **se deriva parseando `contenido_canonico`** con `esquemaSobre` (hecho 9: no hay
-columnas). Si el parseo falla o `esquema_version` no es 3, el sello se pinta como
-«desconocido», jamás como `false`: un sobre que no se entiende no es una nota escrita fuera de
-sesión.
+- La zona de formato es `cita.zona_horaria` si hay cita y, si no, `organizacion.zona_horaria`
+  (ADR-034). Las horas se formatean en el servidor.
+- Candidatos a coprofesional: las filas de `perfiles_centros` con `centro_id` igual al del
+  episodio y `hasta is null`, cruzadas con `directorio_perfiles` donde
+  `rol ∈ ROLES_COPROFESIONAL`, `estado = 'activo'` e `id ≠ uid`. Es la misma regla que el
+  disparador (hecho 11), y el disparador es quien manda.
+- `puedeSerConjunta` es verdadero si la modalidad del episodio no es `individual` **y** hay más de
+  un participante con `baja_en is null` en `episodio_participantes`.
 
 ### 1.5 · Firmar, paso a paso (la pieza cara)
 
 ```
 firmarNota(entrada):
-  1  sesion = await exigirSesion()
-  2  esquemaFirma.parse                               // el mismo del formulario
-  3  registrarAccesoHistoria(...'notas_clinicas')     // el candado se prolonga aquí, no al pintar
-  4  cabecera = select id, paciente_id, cita_id, episodio_id, autor_id,
-                      borrador_contenido, borrador_actualizado_en, borrador_abierta_en
-                 from notas_clinicas where id = notaId
-     · sin fila              → {ok:false, motivo:'sin_acceso'}
-     · borrador_actualizado_en !== testigo → {ok:false, motivo:'conflicto', ...}
-     · borrador_contenido nulo → {ok:false, motivo:'sin_borrador'}
-  5  cuerpo = esquemaCuerpo.parse(cabecera.borrador_contenido)   // se firma LO GUARDADO
-  6  si cabecera.cita_id !== null:
-        cita = select inicio, fin from citas where id = cabecera.cita_id
-        · si no vuelve fila  → ABORTA: {ok:false, motivo:'cita_ilegible'}     (§2.4)
-        margen = rpc margen_sesion_de_cita(cita_id)
-        · si margen es null  → ABORTA
-     si no: ventana = null, margen = null
-  7  versiones = count(*) where nota_id = notaId
-     · versiones > 0 y motivo nulo → {ok:false, motivo:'falta_motivo'}
-     · versiones === 0 y motivo no nulo → se ignora y se manda null (la v1 no lleva motivo)
-  8  firmarVersionNota(supabase, { notaId, autorId: usuario.id, cuerpo,
-       anotacionesReservadas, motivoCambio, alcance, citaId, ventanaCita, margenMinutos,
-       abiertaEn: cabecera.borrador_abierta_en })          // lib/huella/firmar.ts, sin tocar
-  9  el disparador sella, encadena y VACÍA EL BORRADOR (§1.2.5) en la misma transacción
- 10  releer versiones y devolver el modelo de vista nuevo
+  1  sesion = exigirSesion(); esquemaFirma.parse
+  2  cabecera = select id, paciente_id, episodio_id, autor_id, fecha_sesion, cita_id,
+                       coprofesional_id, borrador_contenido, borrador_actualizado_en,
+                       borrador_abierta_en from notas_clinicas where id = notaId
+     · sin fila                    → {ok:false, motivo:'bloqueada'}   (RLS: candado o sin acceso)
+     · autor_id ≠ uid              → {ok:false, motivo:'no_autor'}    (ADR-059, con palabras)
+     · paciente_id ≠ pacienteId    → {ok:false, motivo:'no_disponible'}
+     · borrador nulo               → {ok:false, motivo:'sin_borrador'} (doble pulsación tras firmar)
+     · actualizado_en ≠ testigo    → {ok:false, motivo:'conflicto'}
+  3  {texto, reservadas} = esquemaBorrador.parse(borrador_contenido)   // se firma LO GUARDADO
+     · texto.trim() vacío          → {ok:false, motivo:'vacia'}
+  4  si cita_id: cita = select inicio, fin, centro_id from citas where id = cita_id
+        · sin fila → ABORTA {motivo:'cita_ilegible'}                   (§2.4)
+        margen = centros.margen_sesion_minutos ?? organizacion.margen_sesion_minutos
+        · nulo → ABORTA
+  5  versiones = count where nota_id
+     · > 0 y motivo nulo → {motivo:'falta_motivo'} SIN insertar; = 0 → motivo := null
+  6  alcance := puedeSerConjunta ? entrada.alcance : 'individual'
+  7  firmarVersionNota(supabase, EntradaFirma de §1.1)
+     · ErrorFirmaVersion.codigo:
+         42501 → releer: sin fila → 'bloqueada'; si no → 'no_disponible'
+         23514 → 'conflicto' (la cabecera cambió entre 2 y 7) — no se reintenta en silencio
+         23505 → 'conflicto' (otra firma entró antes)
+         otro  → 'error'
+  8  el disparador sella y encadena; vaciar_borrador_al_firmar y resolver_alerta… en la misma
+     transacción
+  9  prolongarDesbloqueo; releer y devolver el ModeloDeNota nuevo
 ```
 
-**El paso 5 es contrato**: `firmarNota` **no recibe el texto**. Sella lo que hay guardado. El
-editor guarda y *después* firma con el testigo que le devolvió el guardado. Así «lo que se
-firma» y «lo que el usuario vio guardado» son el mismo objeto por construcción, y la carga útil
-de la firma no puede traer un cuerpo distinto del que el bloqueo optimista protegía.
+**El paso 3 es contrato**: `firmarNota` **no recibe el texto**. El editor guarda primero y firma
+después, con el testigo que le devolvió el guardado.
 
-**Desambiguar las cero filas** (guardar y firmar): `update … where testigo` devolviendo 0 filas
-significa **tres cosas distintas** —otro dispositivo guardó antes, el candado se cerró, o no soy
-el autor— porque RLS no da error, devuelve vacío. Tras 0 filas se hace
-`select id, borrador_actualizado_en from notas_clinicas where id = notaId`:
+**Desambiguar las cero filas** de un `update` condicionado (en `guardarBorrador`,
+`fijarCoprofesional` y `empezarModificacion`). Se relee
+`select id, autor_id, borrador_actualizado_en`:
 
 | Relectura | Diagnóstico | Qué se dice |
 |---|---|---|
-| fila con testigo distinto | conflicto real | «Se guardó desde otro sitio…» + ofrecer ver lo guardado; **no se pisa** |
-| fila con el mismo testigo | no soy el autor (`notas_clinicas_modificacion`) | «Esta nota la escribe su autor» |
-| sin fila | candado cerrado o sin acceso | pantalla de bloqueo, PIN |
-
-Sin esto, un candado caducado se anuncia como «otro dispositivo guardó antes»: una mentira de la
-aplicación sobre un dato clínico.
+| sin fila | candado cerrado o sin acceso | pantalla de bloqueo con PIN |
+| `autor_id ≠ uid` | no soy el autor | «Esta nota solo la corrige quien la escribió (ADR-059). Si llevas el caso, escribe una nota nueva.» |
+| testigo distinto | conflicto real | «Se guardó desde otro sitio» y la opción de cargar lo guardado; **no se pisa** |
 
 ### 1.6 · Interfaz
 
 | Fichero | Qué es |
 |---|---|
-| `app/(app)/pacientes/[id]/historia/notas/page.tsx` | **Servidor, armazón estático**. Valida el UUID contra `pacientes` (404 si no), pinta cabecera no clínica (nombre, volver a la ficha) y monta `<EditorDeNota/>` cerrado. **No lee ni una fila clínica** y no recibe `searchParams` clínicos: `cita` solo viaja como UUID hacia la acción. Exporta `viewport` con `interactiveWidget: 'resizes-content'` (hecho 24). |
-| `.../editor-de-nota.tsx` | `'use client'`. Estado, candado (copia el patrón del reloj de `panel-historia.tsx`), autoguardado, firma, y el conmutador de cuerpos. |
-| `.../barra-de-acciones.tsx` | `'use client'`. La barra táctil del ADR-044 (§2.8). |
-| `.../comparador.tsx` | `'use client'`, pinta los `Segmento` de `lib/notas/comparar.ts` (§2.5). |
-| `.../sello.tsx` | Servidor puro (sin estado): la frase del sello a partir de `VersionDeVista.sello`. |
-| `app/(app)/pacientes/[id]/acciones.ts` | `ResultadoDeApertura` gana `notas: ResumenDeNota[] \| null`, rellenado cuando `pestana === 'notas_clinicas'`. Es **lista, no editor**: fecha, estado derivado, autor, nº de versiones y el sello. |
-| `app/(app)/pacientes/[id]/panel-historia.tsx` | El `<EnPreparacion/>` de `notas_clinicas` pasa a `<ListaDeNotas/>`, con un enlace por nota a la ruta del editor y un botón «Nueva nota». |
-| `lib/i18n/es.ts` | Todas las cadenas. **Fichero CRLF** (bitácora T-013): cualquier edición por bytes repone `\r\n` o git lo marca binario. |
+| `app/(app)/pacientes/[id]/historia/notas/page.tsx` | **Servidor, armazón** (ADR-058). Hace `await params` y `await searchParams`, y valida `cita` y `nota` como UUID; si llegan las dos, o una no es UUID, `notFound()`. Con `cargarPaciente(id)` (de `../../datos`) obtiene el nombre; si es nulo, `notFound()`. Con `cita` lee `citas(inicio, fin, zona_horaria, paciente_id)` (no es clínico) y pinta «Sesión del {fecha} · {rango}». Si la cita no es de ese paciente, `notFound()`. **No lee `notas_clinicas` ni `_versiones`.** Exporta `viewport: Viewport = { interactiveWidget: 'resizes-content' }`. Sin `use cache`. Monta `<EditorDeNota pacienteId citaId notaId/>`. |
+| `.../editor-de-nota.tsx` | `'use client'`. Máquina de estados: `inicial` (botón «Abrir el editor») → `bloqueada` (pantalla de bloqueo + `FormularioPinHistoria alAbrirse={reintentar}`) → `elegir_episodio` → `abierta`. Lleva el reloj del candado copiado de `panel-historia.tsx`, el autoguardado (§2.9), los dos cuerpos con `AreaTexto`, el selector de coprofesional (`Desplegable`) y el diálogo de firma (`Dialogo`) con motivo y alcance. **D3**: firmar va dentro de `startTransition`; el botón «Firmar» del diálogo y el de la barra que lo abre llevan `disabled={pendiente}` (el `isPending` de `useTransition`), y el manejador sale sin llamar a la acción si ya hay una firma en vuelo. Esto es mitigación de interfaz, no la defensa de fondo (§4.5). |
+| `.../barra-de-acciones.tsx` | `'use client'`. Barra táctil abajo (§2.8): Guardar, Firmar/Modificar, Comparar, Descargar. |
+| `.../comparador.tsx` | `'use client'`. Selector de dos versiones y pinta los `Segmento` (§2.5). |
+| Piezas de pintura de §7 (P1-P8) | `estado-de-nota.tsx`, `sello-de-nota.tsx`, `fila-de-version.tsx`, `modificada-por.tsx`, `aviso-reservadas.tsx`, `esqueleto-editor.tsx`, `cabecera-de-nota.tsx`; `lista-de-notas.tsx` en `app/(app)/pacientes/[id]/`. |
+| `app/(app)/pacientes/[id]/acciones.ts` | `ResultadoDeApertura` gana `notas: ResumenDeNota[] \| null`, que se rellena con `pestana === 'notas_clinicas'`. `ResumenDeNota = {id, fechaSesion (formateada), estado: EstadoNota, versiones: number, autor: string, conjunta: boolean, href}`. **No lleva texto.** `href` = `?cita=` si la nota tiene cita, `?nota=` si no. |
+| `app/(app)/pacientes/[id]/panel-historia.tsx` | El `EnPreparacion` de `notas_clinicas` se sustituye por `<ListaDeNotas notas={…}/>`. |
+| `app/(app)/agenda/notas.ts` y `notas.test.ts` | **Activación de T-014**: `RUTA_NOTAS_DISPONIBLE = true`, y el comentario pasa a «T-012 creó la ruta». La prueba pasa a `toBe(true)`. Si el `vi.mock` de `vista.test.ts` queda redundante, **se deja** (no es territorio). Se hace en el mismo commit que crea `page.tsx`, para que nunca exista un enlace a un 404. |
+| `lib/i18n/es.ts` | Namespace nuevo `notas` (§7 lista las claves de pintura; el implementador añade las de comportamiento). Se borra `ficha.notasEnPreparacion`. **CRLF.** |
 
 ---
 
 ## 2 · Decisiones y alternativas descartadas
 
-**2.1 · El ADR-057 va en un corte previo con ticket propio, no dentro de T-012.** Toca seis
-ficheros de la cadena y cero de pantalla; se verifica entero con `db reset` + `npm test` +
-`npm run test:rls` + `verificar:huellas`, sin una línea de interfaz. Es el mismo argumento
-literal de `docs/bitacora/T-013a.md`: «se separó para no enrutarlo por la revisión equivocada».
-Aquí el riesgo es mayor todavía —define la era del esquema **para siempre**, y el ADR-035
-prohíbe recalcular— así que lo que quiero es una revisión mirando una sola cosa, no dos
-revisores repartiéndose quince tareas. *Descartado*: meterlo en el corte A (se diluye entre
-columnas, disparadores y acciones); *descartado*: dejarlo para después (caduca en cuanto se
-firme la primera nota, y entonces cuesta `esquema_version = 4` y dos lectores para siempre).
+**2.1 · El sobre ya no es de este ticket.** *(01-10: el corte previo se hizo como T-012a y
+T-012c.)* T-012 no abre era nueva ni toca la forma del sobre. Descartado: «aprovechar» para
+cotejar `cita_id` o `abierta_en` en el disparador, porque T-036 redefine esa misma función y
+dos tickets redefiniéndola a la vez es justo lo que prohíbe la regla de un solo dueño de
+`supabase/`.
 
-**2.2 · `abierta_en` en columna propia escrita por disparador.** Alternativas descartadas: (a)
-dentro de `borrador_contenido` — el cliente tiene `grant update` de tabla entera y puede
-escribirla por PostgREST sin pasar por la acción, es decir, la casilla prohibida por otro
-nombre; (b) en la sesión o en una cookie — no sobrevive a cambiar de dispositivo, y el ADR-046
-exige que sobreviva al borrador; (c) columna escrita por la Server Action — mismo agujero que
-(a), porque el grant no distingue quién escribe.
+**2.2 · `abierta_en` en una columna propia, escrita solo por disparador.** Descartados: dentro de
+`borrador_contenido` (por el `grant update` de tabla entera), en una cookie (no sobrevive a un
+cambio de dispositivo) y escrita por la acción (mismo agujero que la primera).
 
-**2.3 · Abrir el editor escribe un borrador vacío.** Es lo que hace que `abierta_en` sea «la
-primera vez que se abre el editor» y no «la primera vez que se teclea», que puede caer fuera de
-la sesión con toda legitimidad. Precio aceptado: abrir y abandonar deja un borrador vacío; el
-ADR-036 ya prevé que un borrador abandonado genere aviso, y el aviso no es de este ticket.
+**2.3 · Abrir el editor escribe un borrador vacío.** Así `abierta_en` es «se abrió» y no «se
+tecleó». Precio: un borrador vacío abandonado, que el ADR-036 ya prevé.
 
-**2.4 · Si la cita no se puede leer, la firma se aborta.** La alternativa —sellar
-`redactada_en_sesion: false` porque no pudimos leer la ventana— guarda **para siempre** una
-afirmación falsa dentro de una huella que nadie podrá recalcular. Un error que el usuario ve es
-infinitamente más barato que un sello mentiroso.
+**2.4 · Si la cita no se puede leer, la firma se aborta.** Sellar `false` por no haber podido leer
+la ventana guardaría para siempre una afirmación falsa.
 
-**2.5 · La comparación no usa color como único canal.** Cada segmento va con tres señales
-redundantes: elemento semántico (`<ins>` / `<del>`), marca tipográfica (subrayado / tachado) y
-**texto**: un prefijo `+` / `−` visible más una etiqueta `sr-only` («Añadido:», «Retirado:»).
-Descartado el clásico verde/rojo a secas (ADR-041/WCAG 1.4.1) y descartado apoyarse solo en
-`<ins>/<del>`, que muchos lectores de pantalla no anuncian por defecto.
+**2.5 · La comparación no usa el color como único canal.** `<ins>`/`<del>`, subrayado y tachado,
+prefijo `+`/`−` visible y `sr-only` («Añadido:» / «Retirado:»).
 
-**2.6 · El estado se deriva, no se guarda.** `estadoDeNota({versiones, hayBorrador})`:
-`0 + no → pendiente`; `0 + sí → borrador`; `≥1 + no → firmada` (y `modificada` si `versiones > 1`);
-`≥1 + sí → firmada_con_cambios`. El comentario de la tabla lo pide y el contrato lo repite:
-una columna de estado es una segunda verdad que se desincroniza en silencio.
+**2.6 · El estado se deriva.** Sin versiones y con borrador, `borrador`. Con una versión y sin
+borrador, `firmada`. Con más de una y sin borrador, `modificada`. Con al menos una y con
+borrador, `firmada_con_cambios`. *(01-10: se cae `pendiente`; una cita sin nota es un dato de la
+agenda, no una nota.)*
 
-**2.7 · El cuerpo es texto plano dentro de `{formato:'texto_plano', texto}`.** El maestro
-mencionaba TipTap, pero **el contrato no nombra ninguna dependencia** y la regla de
-`.claude/rules/pipeline.md` es tajante: solo las dependencias que el ticket nombra. Ningún
-criterio de aceptación necesita texto enriquecido, y los que sí existen —NFC, dos cuerpos,
-comparación, 360 px— se cierran igual. El discriminante `formato` deja la puerta abierta:
-`{formato:'tiptap', doc:{…}}` entra mañana **sin subir `esquema_version`**, porque `cuerpo` es
-un objeto opaco para el sobre y para el disparador.
+**2.7 · El cuerpo es `{texto}` sin discriminante.** *(Cambia el 01-10.)* La siembra y los vectores
+congelados del banco 14 ya son `{"texto":…}`. Un `formato` obligatorio partiría las notas en dos
+formas desde el primer día. Si mañana llega texto enriquecido, una clave nueva (`formato`
+ausente = texto plano) entra sin subir `esquema_version`, porque `cuerpo` es opaco para el sobre.
+Sin TipTap: el contrato no nombra ninguna dependencia.
 
-**2.8 · El diseño táctil del ADR-044.** (a) La barra de acciones va **abajo**, `sticky bottom-0`
-con `padding-bottom: env(safe-area-inset-bottom)`, altura mínima `min-h-11` (44 px) por destino
-—la primitiva `Button` mide 40 px, hallazgo abierto en `state.md`, así que aquí se repite el
-`min-h-11` local de T-013 y **no se toca la primitiva**—. (b) El teclado virtual no tapa el
-cursor: `interactiveWidget: 'resizes-content'` en el `viewport` de la ruta, el área de texto con
-`flex-1` dentro de un contenedor `h-[100dvh]` (no `100vh`) y `scroll-margin-bottom` en el área;
-así el navegador reduce el contenido en vez de superponer. (c) Ningún atajo de teclado es la
-única forma de nada: Guardar, Firmar y el conmutador Cuerpo/Reservadas son botones reales. (d)
-Los dos cuerpos en móvil son **un conmutador de dos pestañas** con el aviso del art. 18.3
-siempre visible sobre la zona reservada; en pantalla ancha, dos bloques apilados y visibles a la
-vez. Nunca «se ve mejor en ordenador».
+**2.8 · Diseño táctil (ADR-044).**
+- (a) La barra va **abajo**, `sticky bottom-0`, con `pb-[env(safe-area-inset-bottom)]`. Usa
+  `Button`, que ya mide 44 px (hecho 22).
+- (b) `interactiveWidget: 'resizes-content'` en el `viewport` de la ruta. Contenedor
+  `min-h-[100dvh] flex flex-col`, área con `flex-1` y `scroll-mb-24`.
+- (c) Ningún atajo de teclado es la única forma de hacer algo.
+- (d) Por debajo de `md`, los dos cuerpos van en un conmutador de dos `Pestanas` («Nota» /
+  «Anotaciones reservadas»), con el aviso del art. 18.3 siempre visible sobre la zona reservada.
+  En `md` y más ancho, apilados y visibles a la vez.
 
-**2.9 · El autoguardado prolonga la ventana del candado; el reloj del cliente, no.** ADR-026:
-la ventana se prolonga en las Server Actions, jamás en el renderizado. Teclear es presencia; un
-temporizador no demuestra nada. Debounce de 3 s tras la última tecla y al perder el foco, una
-sola escritura en vuelo, y la última pendiente se encola.
+**2.9 · El autoguardado prolonga el candado; el reloj, no.** Espera de 3 s tras la última tecla y
+al perder el foco. Una escritura en vuelo como máximo; la última pendiente se encola.
 
-**2.10 · La nota conjunta (ADR-030).** `alcance` se elige **una vez, al firmar**, y solo se
-ofrece la elección si la cabecera tiene `episodio_id` y ese episodio tiene más de un
-participante activo (`episodio_participantes`). En cualquier otro caso es `individual` fijo y
-**no se pinta ningún control** —la regla de interfaz prohíbe controles sin una acción real
-detrás—, lo que además evita chocar de frente con `fn_exigir_episodio_en_nota_conjunta()`. Al
-marcar «conjunta», el diálogo de firma dice las tres cosas en este orden: cuelga del episodio y
-la leerán los profesionales del episodio (es literalmente lo que hace
-`notas_clinicas_versiones_lectura`); es **un solo eslabón**, no una copia por participante; y
-**no se entregará entera** en un ejercicio de acceso individual. Desde el ADR-057 esa elección
-va sellada: cambiarla es una versión nueva con motivo.
+**2.10 · Nota conjunta (ADR-030).** El alcance solo se elige al firmar, y solo si
+`puedeSerConjunta`. Si no, no se pinta ningún control. El diálogo dice tres cosas: la leerán los
+profesionales del episodio, es un solo eslabón y no se entregará entera en un acceso individual.
 
-**2.11 · La descarga es texto plano, no PDF.** Sin dependencia nueva. Incluye, versión a versión
-y en orden: número, autor, fecha, motivo, alcance, el sello, **los dos cuerpos**, `huella` y
-`huella_anterior` en hex y el `contenido_canonico` literal —que es lo que permite a un tercero
-recalcular la cadena sin nuestro código—. Encabezado explícito: copia íntegra para uso
-profesional o judicial, **incluye anotaciones reservadas** y por tanto **no es** la salida del
-derecho de acceso del paciente (ADR-027) ni de un acceso individual sobre nota conjunta
-(ADR-030). Registra `accesos_historia.tipo = 'exportacion'`.
+**2.11 · La descarga es texto plano.** Por cada versión: número, autor, fecha, motivo, alcance,
+sello, los dos cuerpos, `huella` y `huella_anterior` en hex, y el `contenido_canonico` literal.
+Encabezado: copia íntegra para uso profesional o judicial; **incluye anotaciones reservadas**; no
+es la salida del derecho de acceso.
 
-**2.12 · U+0000 se rechaza en el formulario.** Es una mina conocida de T-005: un texto pegado con
-un NUL revienta el `::jsonb` del disparador con `22P05` y la nota **no se puede firmar**. El
-`regex(SIN_NULO)` del esquema Zod lo convierte en un mensaje de formulario en vez de en un
-error de base de datos al final del trabajo del usuario.
+**2.12 · U+0000 se rechaza en Zod**, antes de que la base devuelva 22P05.
+
+**2.13 · La frase del sello sale entera del sobre sellado.** *(Nueva el 01-10.)* Se usan
+`abierta_en–firmada_en` y no el horario de la cita: «Escrita durante la sesión del 26/08 ·
+17:05–17:52» describe **cuándo se escribió**, y eso es lo que prueba la huella. El horario de la
+cita es un dato mutable de otra tabla. Las tres formas son:
+- en sesión: «Escrita durante la sesión del {fecha} · {abierta}–{firmada}»;
+- fuera de sesión: «Escrita fuera de la sesión del {fecha} · {abierta}–{firmada}»;
+- sin cita: «Escrita el {fecha} · {abierta}–{firmada}».
+
+Si `abierta` y `firmada` caen en días locales distintos, cada hora va con su `dd/MM`. Un sobre
+ilegible se pinta como «Sello no legible», nunca como `false`.
+
+**2.14 · El margen se lee directamente.** *(Nueva el 01-10.)* Descartada la función `definer`
+`margen_sesion_de_cita`: `centros` y `organizacion` ya se pueden leer, y una función con
+privilegios que no hace falta es superficie de ataque sin uso.
+
+**2.15 · Un índice único por cita y autor**, en lugar de un `select`-y-luego-`insert` en la
+acción. La carrera de dos aperturas solo la cierra la base.
+
+**2.16 · Se resuelve la alerta al firmar** *(D2, decidido por el propietario el 01-10-2026)*, en
+lugar de dejarla para «otro ticket». La agenda de T-014 la convierte en un aviso visible, y T-012 es
+quien hace verdad «ya está firmada». Descartado: resolverla desde `firmarNota` con un `update` de la
+aplicación. Una versión que entre por otra puerta (PostgREST, un guion) dejaría la alerta abierta,
+mientras que el disparador la resuelve venga de donde venga la versión.
+
+**2.17 · Entrada desde la ficha.** La sub-pestaña lista las notas y enlaza a la misma ruta: con
+`?cita=` si la nota la tiene y con `?nota=` si no (las notas sembradas no tienen cita). Desde la
+ficha **no se crea** una nota sin cita (ver «Lo que no entra»).
+
+**2.18 · El resolutor ata la cita a la nota.** *(Nueva el 01-10, con D2.)* Descartado: copiar el
+criterio de la función que abre la alerta (`n.cita_id = cita` a secas). En un `definer`, ese
+criterio permite a cualquier profesional asignado cerrar la alerta de una cita ajena firmando una
+nota propia con ese `cita_id` (hecho 18). También descartado: atar `notas_clinicas.cita_id` a su
+cita con un disparador en la cabecera. Cerraría además la holgura de la función que abre la alerta,
+pero es otro cambio de esquema que ningún criterio pide (ver «Lo que no entra»).
+
+**2.19 · Doble firma de una modificación: se desactiva el botón y la base no cambia.** *(D3,
+decidido por el propietario el 01-10-2026.)* Descartado aquí: «exigir borrador vivo» en
+`fn_sellar_version_nota`. Redefinir esa función es de T-036 (§2.1), y el propietario ha decidido
+que el arreglo llegue con ese mismo cambio.
 
 ---
 
 ## 3 · Cómo se cierra cada criterio de aceptación
 
-Cada criterio automático es una aserción en `scripts/rls/18-notas-firma.sql` (banco nuevo, mismo
-patrón que el 14) o una prueba de Vitest. Los del banco se ejecutan con `npm run test:rls`.
+*(Cambia el 01-10.)* Las negativas de la base ya las prueban los bancos 10 y 14. Lo nuevo de
+T-012 es **el camino de la aplicación**, y eso lo cierra un guion,
+`scripts/t012-nota.ts` (`npx tsx scripts/t012-nota.ts`), con el mismo patrón que
+`scripts/t032-alta.ts`:
+- preparación como `postgres` vía `scripts/psql.mjs`: PIN de Ana con `crypt('123456')` en
+  `pines_historia`, y dos citas de Ana con un paciente suyo de la siembra, una de `now()−10 min` a
+  `now()+40 min` y otra de ayer;
+- sesión real con `signInWithPassword`, más `superarSegundoFactorSembrado` si el RPC lo exige;
+- `desbloquearHistoria`, y después **las funciones de `lib/notas/servidor.ts`**;
+- comprobación con `psql`.
+
+Es idempotente: crea citas nuevas en cada ejecución. Las migraciones nuevas tienen además su banco
+**`scripts/rls/20-nota-borrador.sql`** (el 18 es de T-014 y el 19 de T-034).
 
 | # | Criterio | Cómo se demuestra |
 |---|---|---|
-| 1 | v1 con `numero_version = 1`, `huella` no nula y `huella_anterior` de 32 ceros | `18-notas-firma.sql`: paciente nuevo sin cadena previa; `assert` sobre las tres columnas; además `posicion_cadena = 1`. |
-| 2 | Releer `contenido_canonico` y su SHA-256 da la `huella` guardada | `assert(digest(convert_to(contenido_canonico,'UTF8') \|\| huella_anterior,'sha256') = huella)` **leyendo la columna**, nunca reconstruyendo el sobre. Y `verificar_cadena_huellas()` = 0 filas. |
-| 3 | `redactada_en_sesion` true dentro de la ventana, false al día siguiente; tocarlo rompe la huella | Vitest sobre `construirSobre()` con `ahora` inyectado (los dos casos) + banco: `assert_lanza_codigo` al insertar un sobre con el campo cambiado y la huella vieja… **ojo**: la huella la recalcula el disparador, así que la demostración correcta es la de T-005: cambiar el campo en el texto canónico produce **otra** `huella`, y se comprueba `<>` contra la del vector gemelo. |
-| 4 | `update`/`delete`/`truncate` como `postgres` fallan | Ya cubierto por `scripts/rls/10-solo-adicion.sql`; se añaden las tres aserciones **con la fila recién firmada por el camino de la aplicación**, no con una sembrada a mano (lección T-013a). |
-| 5 | Sin motivo falla; con motivo, v2 cuya `huella_anterior` es la `huella` de v1 | Banco: negativa con `assert_lanza_codigo(…, '23514')` (el `check` de tabla) y positiva encadenada. Vitest: `firmarNota` sin motivo con una versión previa devuelve `motivo:'falta_motivo'` **sin llegar a insertar**. |
-| 6 | Acento compuesto y precompuesto → misma huella | `lib/huella/vectores-congelados.json` (`acentos-nfd`/`acentos-nfc`) ya lo hace; **hay que regenerarlos** con `alcance` y comprobar que la igualdad se mantiene. |
-| 7 | `anotaciones_reservadas` entra en el cómputo | `sobre.test.ts` ya tiene la prueba; se conserva y se añade la gemela para `alcance` (ADR-057). |
-| 8 | **Manual** · Candado cerrado: pantalla de bloqueo y **el HTML no contiene el borrador** | `curl -s <ruta> \| grep -c "<texto sembrado>"` → `0`, y además `npm test` con una prueba de render del `page.tsx` que afirma que no aparece. El HTML no puede contenerlo por construcción: el `page.tsx` no lee nada. |
-| 9 | **Manual** · Comparación v1↔v2 distinguible sin color | Vitest sobre `compararTextos()` (la lógica) + comprobación visual en escala de grises. La prueba de unidad **no** demuestra el criterio: lo demuestra la captura en grises. |
-| 10 | **Manual** · 360 px con teclado virtual: cursor visible, barra alcanzable | Guion del contrato, en teléfono real o emulación con teclado. |
-| 11 | `disponible: true` no aplica | No se toca el armazón; se comprueba que `components/armazon/**` no aparece en el diff. |
-| 12 | `npm run lint && npm run build` limpios | Con `> log 2>&1; echo "exit=$?"` (trampa de `state.md`). |
+| 1 | v1: `numero_version = 1`, `huella` no nula, `huella_anterior` de 32 ceros | Guion: paciente sin cadena previa (uno nuevo, dado de alta con `alta_paciente` como en t032). Abrir, guardar y firmar. `psql` comprueba las tres columnas y `posicion_cadena = 1`. |
+| 2 | SHA-256 del `contenido_canonico` releído da la `huella` | Guion: `select digest(convert_to(contenido_canonico,'UTF8') \|\| huella_anterior,'sha256') = huella` leyendo la columna. Después, `npm run verificar:huellas` íntegra. |
+| 3 | `redactada_en_sesion` true dentro de la ventana y false al día siguiente; tocarlo rompe la huella | Guion: firmar contra la cita en curso da `true`; firmar contra la cita de ayer da `false` (`contenido_canonico::jsonb->'redactada_en_sesion'`). Rotura: recalcular el `digest` sobre el canónico con el booleano invertido da `<> huella`. Además ya existe `sobre.test.ts:242`. |
+| 4 | `update`, `delete` y `truncate` como `postgres` fallan | Guion: las tres sentencias por `psql` como `postgres` **sobre la fila que acaba de firmar el guion**. Fallan con el error de la capa de disparador. |
+| 5 | Sin motivo falla; con motivo, v2 encadenada | Guion: `empezarModificacion` → `guardarBorrador` → `firmarNota` sin motivo devuelve `falta_motivo` y la cuenta de filas no cambia. Con motivo, `numero_version = 2` y `huella_anterior` = `huella` de v1. Vitest de `servidor.ts`: sin motivo **no llama** a `firmarVersionNota`. |
+| 6 | NFC: misma huella | Ya cubierto por `sobre.test.ts:166` y `nfc.test.ts`. Se añade en `lib/notas/servidor.test.ts`: el mismo borrador en NFD y en NFC produce **el mismo `contenido_canonico`** (cliente simulado que captura el `insert`). |
+| 7 | `anotaciones_reservadas` entra en la huella | Ya está en `sobre.test.ts:218`. Guion: v2 que solo cambia las reservadas tiene una `huella` distinta y su canónico contiene el texto. |
+| 8 | **Manual** · candado cerrado: bloqueo y el HTML no contiene el borrador | `curl -s -b <cookie> http://localhost:3000/pacientes/<p>/historia/notas?cita=<c> \| grep -c "<texto sembrado>"` → `0`. Además, prueba de render del armazón: el `page.tsx` no importa nada de `notas_clinicas`. |
+| 9 | **Manual** · comparación distinguible sin color | Captura en escala de grises más `comparar.test.ts`. |
+| 10 | **Manual** · 360 px con teclado virtual | Guion del contrato, en un teléfono real o en emulación con teclado. |
+| 11 | `disponible: true` no aplica | `git diff --stat main` no toca `components/armazon/**`. |
+| 12 | `npm run lint && npm run build` | `> log 2>&1; echo "exit=$?"`. |
+| M4 de T-014 | «Notas» lleva al editor y pide PIN | Manual, en `/agenda` con una cita propia: el botón aparece y lleva al armazón; «Abrir el editor» pide el PIN. |
+| **A** (D2, 01-10) | Firmar resuelve la alerta `nota_sin_firmar` de su cita, y solo esa | Banco 20 §A (abajo): negativas 20.A1 y 20.A2 con su gemela 20.A3. Guion, por el camino de la aplicación: antes de firmar contra la cita de ayer, `psql` como `postgres` la pasa a `realizada` y comprueba que hay **una** alerta `nota_sin_firmar` `abierta` con `origen_id` = la cita. Después de `firmarNota`, esa misma fila tiene `estado = 'resuelta'` y `resuelta_en` no nulo. Una v2 posterior de esa nota (`empezarModificacion` → `guardarBorrador` → `firmarNota` con motivo) deja `resuelta_en` igual. Manual, en la agenda de T-014: esa cita deja de avisar «nota pendiente». |
+| **B** (D3, 01-10) | El botón de firmar no admite una segunda pulsación en vuelo | `editor-de-nota.test.tsx`: con la acción de firma simulada como una promesa sin resolver, el botón «Firmar» tiene `disabled`, y dos `click` seguidos llaman a la acción **una sola vez**. No prueba la base: la base no lo impide hasta T-036 (§4.5). |
 
-Evidencia: `tickets/T-012/evidencia.json` con la salida real de `npx supabase db reset`,
-`npm test`, `npm run test:rls`, `npm run verificar:huellas`, `npm run lint:migraciones`, `lint`
-y `build`.
+El banco 20 comprueba:
+- que la base pisa `borrador_abierta_en` mandado por el cliente, en insert y en update;
+- que se conserva entre guardados;
+- que se vacía al firmar;
+- que `borrador_actualizado_en` mandado sin cambiar el contenido no se mueve;
+- el check `notas_clinicas_borrador_abierta_ck`;
+- el 23505 del índice;
+- la resolución de la alerta (§A, abajo);
+- los `check` del margen (`-1` y `121` dan 23514).
+
+Las pruebas del banco 20 hacen como `authenticated` lo que haría la acción, salvo las de §A.
+
+**Banco 20 §A · La alerta `nota_sin_firmar` se resuelve al firmar** *(D2, 01-10-2026)*. Se hace
+como `postgres`: el paso 0 no se aplica a `postgres` y lo que se prueba es el disparador, no la RLS.
+La apertura de las alertas sigue el patrón del banco 15 §H y el sellado, el de las positivas con
+cita del banco 14.
+- **Preparación.**
+  - Un paciente P de la fijación, con un episodio abierto E del profesional A, y otro paciente Q.
+  - Cuatro citas de anteayer: C1 (P, A), C2 (Q, A), C3 (P, B, con B ≠ A) y C4 (P, A). Las tres
+    de A van en horas que no se solapen: `citas_sin_solape_profesional` (`20260906120000:300`)
+    cuenta también las `realizada`.
+  - Las cuatro pasan a `realizada`, así que hay cuatro alertas `abiertas`. **Se asevera que lo
+    están antes de firmar**: si se firmara primero, `fn_alertar_nota_sin_firmar` no las abriría y
+    las negativas pasarían sin probar nada.
+  - Tres cabeceras en P/E con autor A y `borrador_contenido = '{"texto":"x","reservadas":""}'`
+    más `borrador_autor_id = A`, para que sigan valiendo cuando T-036 exija borrador vivo: N1 con
+    `cita_id = C1`, N2 con `cita_id = C2` y N3 con `cita_id = C3`. Una cuarta, N0, sin cita.
+  - Cada versión se inserta con `pg_temp.sobre_prueba(nota, A, now(), '{"texto":"x"}', …,
+    p_cita_id => <cita de la cabecera>, p_margen_sesion_minutos => 15)` (`null` y `null` en N0).
+- **20.A1 · NEGATIVA, cita de otro paciente.** Se firma la v1 de N2. Se asevera primero que la
+  versión **entró** (`contar` = 1) y después que la alerta de C2 sigue `abierta`. Mata al mutante
+  sin `c.paciente_id = n.paciente_id`.
+- **20.A2 · NEGATIVA, cita de otro profesional.** Se firma la v1 de N3. Se asevera que entró y que
+  la alerta de C3 sigue `abierta`. Mata al mutante sin `c.profesional_id = n.autor_id`.
+- **20.A3 · GEMELA POSITIVA.** Se firma la v1 de N1. La alerta de C1 queda `resuelta` con
+  `resuelta_en` no nulo y, **en la misma aserción**, las de C2, C3 y C4 siguen `abiertas`. Sin esta
+  gemela, un resolutor que no hiciera nada pasaría A1 y A2. La comprobación de C4 mata además al
+  mutante sin `origen_id = v_cita`.
+- **20.A4 · Idempotencia.** Se firma la v2 de N1 con motivo. `assert_no_lanza`, y el `resuelta_en`
+  de C1 es el mismo que había tras 20.A3. Mata al mutante sin `estado = 'abierta'`.
+- **20.A5 · Nota sin cita.** Se firma la v1 de N0. No lanza, y el número de alertas `abiertas` no
+  cambia.
+
+`tickets/T-012/evidencia.json` recoge la salida real de: `db reset`, `npm run tipos`, `npm test`,
+`npm run test:rls`, `npx tsx scripts/t012-nota.ts`, `verificar:huellas`, `lint:migraciones`,
+`lint` y `build`.
 
 ---
 
 ## 4 · Riesgos, por probabilidad
 
-1. **Alta · El testigo pierde precisión al pasar por JavaScript.** `borrador_actualizado_en`
-   llega de PostgREST con microsegundos (`…:00.123456+00:00`). Si alguien lo mete en un `Date` y
-   lo devuelve con `toISOString()`, pierde tres dígitos, el `where` no encuentra la fila y **todo
-   guardado da conflicto permanente**. Mitigación: tipo `string` en toda la cadena de estado y
-   una prueba con un testigo de seis decimales.
-2. **Alta · Cero filas se lee como conflicto.** RLS no da error. Sin la desambiguación de §1.5,
-   un candado caducado se anuncia como edición concurrente. Mitigación: la tabla de §1.5, con
-   prueba por cada una de las tres ramas.
-3. **Media · El banco de RLS deja de sembrar al cambiar el sobre.** `01-fijacion.sql` firma
-   `NCONJ` con `alcance = 'conjunta'`: si no se le pasa a `sobre_prueba()`, la 6.10 lo rechaza y
-   fallan los diecisiete ficheros del banco, no uno. Mitigación: es lo primero que se ejecuta
-   tras el cambio.
-4. **Media · Se regeneran los vectores de TypeScript y no los literales de SQL.**
-   `vectores-sql.test.ts` lo atrapa, pero solo si se ejecuta `npm test` antes que `test:rls`.
-5. **Media · El disparador de vaciado del borrador se salta el candado.** Si alguien lo escribe
-   `security definer` «para que no falle», el borrador se vacía aunque `notas_clinicas_modificacion`
-   lo hubiera impedido. Mitigación: invoker, escrito y comentado como tal.
-6. **Baja · Doble firma por doble pulsación.** Dos `insert` concurrentes se serializan por el
-   cerrojo consultivo, pero producen **dos versiones** (v1 y v2), y la v2 necesitaría motivo →
-   falla con 23514. Feo pero no corrompe. Mitigación: botón deshabilitado durante la transición e
-   idempotencia por testigo (tras la primera firma el borrador es nulo → `sin_borrador`).
-7. **Baja · Alertas huérfanas.** Si se cae el punto 8 de §1.2, firmar deja la alerta
-   `nota_sin_firmar` abierta y la bandeja miente. Se anota en `state.md` si se cae.
-8. **Baja · `fecha_sesion` de la nota creada desde el calendario.** Se toma de la cita en la zona
-   del centro (ADR-034), no `current_date` del servidor: una cita de las 23:30 crearía la nota con
-   la fecha del día siguiente en UTC.
+1. **Alta · El testigo pierde precisión al pasar por `Date`.** PostgREST lo da con microsegundos.
+   Va como `string` en toda la cadena, con una prueba que usa seis decimales.
+2. **Alta · Las cero filas se leen como conflicto.** Se aplica la tabla de §1.5, con una prueba
+   por rama.
+3. **Alta · Conflicto al integrar con T-014**, en `lib/i18n/es.ts` (CRLF, los dos añaden un
+   namespace), `tipos-bd.ts` (se regenera, no se resuelve a mano) y `notas.ts` (no existe en
+   `main` hasta que entre T-014). **T-012 empieza desde un `main` que ya tenga T-014.**
+4. **Media · Falsificar el sello por PostgREST.** *(D1: riesgo residual declarado. Lo cierra
+   T-036, por decisión del propietario del 01-10-2026.)* El autor puede insertar a mano una versión
+   con `cita_id`, `abierta_en`, `firmada_en` o `redactada_en_sesion` inventados: el disparador
+   comprueba los tipos, no el origen (hecho 4). Ya pasaba antes de T-012, y T-012 no lo agranda.
+   **T-012 sale con este riesgo**, y T-036 va inmediatamente después. Su contrato escrito hoy solo
+   cubre el `cita_id` (H27). Para cerrar el resto le faltan dos comprobaciones que T-012 hace
+   posibles: cotejar `abierta_en` con `borrador_abierta_en`, y recalcular `redactada_en_sesion` con
+   la ventana de la cita y el margen sellado (§D). La bitácora de T-012 lo anota en `docs/state.md`.
+5. **Media · Doble firma de una modificación.** *(D3: hallazgo abierto. Lo cierra T-036, por
+   decisión del propietario del 01-10-2026.)* Dos pulsaciones concurrentes de «Firmar v2» con motivo
+   pueden dar una v2 y una v3 idénticas, porque la segunda leyó el borrador antes de que la primera
+   lo vaciara. La v1 doble ya la para el `check` del motivo. **Mitigación en T-012, y solo esta**:
+   - el botón desactivado mientras la firma está en vuelo (§1.6, criterio B);
+   - el paso 2 de §1.5, que devuelve `sin_borrador` si el borrador ya se vació.
+
+   No cubre dos pestañas, dos dispositivos ni una llamada directa a la acción o a PostgREST. El
+   cierre de verdad es «exigir borrador vivo» en `fn_sellar_version_nota`, en el mismo cambio de
+   T-036, cuyo contrato **hoy no lo incluye** (§D). Queda como hallazgo abierto en `docs/state.md`.
+6. **Media · Reloj de Node frente al de la base.** `abierta_en` sale de `now()` en la base y
+   `firmada_en` del reloj de Node. Si Node va atrasado y se firma segundos después de abrir, la
+   6.8 lanza 23514 (`abierta_en <= firmada_en`). Exige teclear y guardar antes, así que es
+   improbable. Se traduce a «Vuelve a intentarlo» y no se ajusta ninguna fecha.
+7. **Baja · `fecha_sesion` en UTC** si alguien deja el valor por defecto. La acción la escribe
+   siempre con `fechaDeSesion(cita.inicio, cita.zona_horaria)`.
+8. **Baja · Lista de coprofesionales distinta de la regla de la base.** La base manda y el 23514
+   se traduce. T-035 cambia una sola constante.
+9. **Baja · Carrera entre abrir y resolver la alerta.** *(Nueva el 01-10, con D2.)* Si la cita
+   pasa a `realizada` mientras se firma la v1, `fn_alertar_nota_sin_firmar` no ve la versión todavía
+   sin confirmar y abre una alerta que el resolutor ya no volverá a mirar. Hace falta que las dos
+   cosas ocurran en el mismo instante. Cerrarlo exige tocar la función que abre la alerta, y eso no
+   entra (ver «Lo que no entra»). Si pasa, la alerta se resuelve a mano desde la bandeja.
 
 ---
 
 ## 5 · Qué revisar
 
-Lista específica de este ticket, para los dos revisores y para la autoevaluación del
-implementador. Ordenada por lo que más caro sale si se escapa.
-
 **Lo que el llamante puede elegir, y qué efecto tiene**
 
-- `notas_clinicas_versiones` tiene `grant insert` **de tabla entera** a `authenticated`: el
-  llamante elige `alcance`, `esquema_version`, `creada_en`, `cuerpo`, `anotaciones_reservadas`,
-  `motivo_cambio` y `nota_id`. Comprobar que **cada uno** está atado por una comprobación 6.x
-  —`alcance` por la 6.10 nueva— o por una política. `algoritmo_version` lo cierra la guarda
-  1.bis; las cinco calculadas, la guarda 1.
-- `notas_clinicas` tiene `grant update` de tabla entera: el llamante puede mandar
-  `borrador_abierta_en`, `borrador_actualizado_en` y `borrador_autor_id`. Verificar con un
-  `update` crudo (rol `authenticated`, no `postgres`) que **el disparador pisa los dos primeros**
-  y que el tercero, aunque no esté atado, no entra en ningún sobre.
-- `firmarNota` no recibe el cuerpo. Si en el código acabado lo recibe, aunque sea «para validar»,
-  es un hallazgo: abre la puerta a firmar algo distinto de lo guardado.
-- `?cita=<uuid>` es entrada pública: comprobar que la acción **no confía** en ella para decidir
-  el paciente. El paciente sale del segmento de ruta y el acceso se registra contra ese paciente;
-  una `cita` de otro paciente no puede reatribuir la nota (y si la cabecera ya existe, manda la
-  cabecera).
+- Tabla entera en `notas_clinicas`: el llamante puede mandar `borrador_abierta_en`,
+  `borrador_actualizado_en`, `borrador_autor_id`, `coprofesional_id`, `cita_id` y
+  `fecha_sesion`.
+  - Las dos primeras las pisa el disparador: es el banco 20, y la prueba tiene que ser un
+    `update` crudo como `authenticated`.
+  - `coprofesional_id` lo valida T-034.
+  - `cita_id` y `fecha_sesion` antes de firmar **no están atados por la base** a la cita: es H27,
+    va a T-036.
+  - Comprobar que la acción **nunca** los toma del cliente.
+- `?cita=` y `?nota=` son entrada pública. El paciente sale del segmento de ruta. La acción exige
+  `cita.paciente_id = pacienteId` y `cita.profesional_id = uid`, y que la cabecera pertenezca a
+  ese paciente.
+- `firmarNota` no recibe cuerpo, ni `abiertaEn`, ni `citaId`, ni `episodioId`. Si alguno aparece
+  en `esquemaFirma`, es un hallazgo.
+- `alcance` del formulario solo se usa si `puedeSerConjunta`.
+- *(D2.)* Lo único que mueve el resolutor es el `nota_id` de la versión. Quien llama elige la nota
+  (suya, por el paso 0) y, a través de su `cita_id`, una cita. El `join` con `citas`, con sus dos
+  condiciones, es lo que impide que esa elección llegue a una alerta ajena (§2.18).
 
 **Qué prueba debe fallar, y por qué motivo exacto**
 
-- La negativa de la 6.10 tiene que fallar con **`23514`** usando `assert_lanza_codigo`, no
-  `assert_lanza` a secas (hallazgo MEDIA-1 de la segunda revisión de T-005): con `assert_lanza`,
-  una fila que choca con el índice único de `huella` da «OK» sin haber pasado por la
-  comprobación.
-- La prueba de `"alcance":null` debe fallar **por la 6.10** y no por el `strict()` de Zod ni por
-  el enum de la columna: es el caso exacto que `->>`+`<>` dejaba pasar.
-- La prueba de conflicto de borrador debe fallar **por testigo distinto**, no porque la fila no
-  exista: si la sesión de prueba no es la del autor, cero filas por RLS y la prueba pasa por el
-  motivo equivocado.
-- El banco nuevo **firma por el camino de la aplicación** (insert con solo las nueve columnas que
-  manda `firmar.ts`). Una prueba que inserte `huella` y `posicion_cadena` a mano prueba el
-  esquema, no el producto (lección T-013a) — y además fallaría por la guarda 1.
+- La negativa del índice único da **23505** con `assert_lanza_codigo`. No vale `assert_lanza`
+  sin código.
+- La negativa de conflicto de borrador tiene que fallar **porque el testigo es distinto**, con la
+  sesión del autor. Con otra sesión daría cero filas por RLS y pasaría por el motivo equivocado.
+- `falta_motivo` se devuelve **sin `insert`**: la prueba cuenta las llamadas al cliente simulado.
+- El guion firma por `lib/notas/servidor.ts`. Una versión insertada con `psql` no prueba nada de
+  T-012.
+- Con un mutante, el banco 20 tiene que caer:
+  - un `fn_tocar_borrador` que respete el `borrador_abierta_en` del cliente → la aserción de
+    «pisado» cae;
+  - resolutor sin `origen_id = v_cita` → cae 20.A3 (C4 deja de estar abierta);
+  - resolutor sin `c.paciente_id = n.paciente_id` → cae 20.A1;
+  - resolutor sin `c.profesional_id = n.autor_id` → cae 20.A2;
+  - resolutor sin `estado = 'abierta'` → cae 20.A4 (`resuelta_en` se mueve);
+  - resolutor vacío (`return null`) → cae 20.A3. La gemela es la que lo caza: A1 y A2 seguirían
+    en verde.
+- Las negativas 20.A1 y 20.A2 tienen que fallar **porque la cita no es de la nota**, no porque la
+  versión no entrara. Cada una asevera primero que la versión existe y después que la alerta sigue
+  abierta. Una firma rechazada dejaría la alerta abierta por el motivo equivocado.
+- En todo el §A, la alerta se asevera `abierta` **antes** de firmar.
+- *(D3.)* La prueba del botón cuenta las llamadas a la acción (una). Comprobar solo el atributo
+  `disabled` no basta.
 
 **Invariantes que se pueden saltar por otra puerta**
 
-- **Nulos**: toda comparación sobre el sobre va con `is distinct from` sobre el valor JSONB
-  completo. Un `->>` nuevo en la 6.10 es un fallo de revisión, no un detalle de estilo.
-- **Duplicados**: `json_object_keys(…::json)`, nunca `jsonb_object_keys`. Una clave `alcance`
-  repetida debe dar trece elementos y saltar por `is distinct from v_esperadas`.
-- **Concurrencia**: `npm run test:huellas` sigue en verde tras el cambio de sobre (no es
-  idempotente: exige `db reset` antes).
-- **Permisos de tabla entera y TRUNCATE**: las tres capas del invariante 2 se comprueban **sobre
-  una fila firmada por la aplicación**, incluido `truncate` como `postgres`.
-- **El candado**: `guardarBorrador` y `firmarNota` no pueden tener ningún camino que lea o escriba
-  contenido clínico antes de `registrarAccesoHistoria`. Y la ventana se prolonga **solo** en
-  acciones; buscar cualquier `prolongarDesbloqueo` en un componente de servidor.
-- **`use cache`**: ni una directiva en toda la ruta del editor (ADR-043), tampoco
-  `use cache: private`.
-- **El HTML**: `page.tsx` no puede tener ni un `await supabase.from('notas…')`.
-- **Migración**: `npm run lint:migraciones` en verde y `lib/supabase/tipos-bd.ts` regenerado, no
-  editado a mano.
-- **La guarda de era**: la migración del ADR-057 **debe** abortar si `notas_clinicas_versiones`
-  tiene una sola fila. Revisar que está y que el mensaje se entiende.
+- **Nulos**: el check nuevo usa `(a is null) = (b is null)`, no `num_nonnulls` mezclado con el
+  viejo.
+- **Duplicados**: el índice parcial es `where cita_id is not null`. Una nota sin cita no queda
+  limitada, y así tiene que ser.
+- **Concurrencia**: apertura doble → 23505 → releer (prueba con dos llamadas en
+  `Promise.all`). Firma doble → §4.5: por D3, en T-012 solo se desactiva el botón y la base no lo
+  impide hasta T-036. Encontrarlo no es un hallazgo nuevo de la revisión: ya está declarado. Lo que
+  sí hay que comprobar es el criterio B. Resolver la alerta dos veces es inocuo por el filtro
+  `estado = 'abierta'` (20.A4).
+- **`security definer`**: solo `fn_resolver_alerta_nota_sin_firmar`. Revisar:
+  - que lleva `search_path = ''`, con todos los nombres calificados con `public.`, y `revoke
+    execute … from public`;
+  - el `join` con `citas` y sus dos condiciones (paciente y autor);
+  - que solo escribe `estado` y `resuelta_en`, y solo en `origen_tabla = 'citas'`,
+    `tipo = 'nota_sin_firmar'` y `estado = 'abierta'`;
+  - que no lanza;
+  - que de `notas_clinicas` solo lee `cita_id, paciente_id, autor_id`, y nada clínico.
+- **Sello falsificable (D1)**: declarado y diferido a T-036. La revisión de T-012 comprueba solo que
+  la acción toma `citaId`, `abiertaEn` y la ventana de la base y nunca del cliente (arriba). Que el
+  disparador no los coteje no es un fallo de T-012.
+- **TRUNCATE y tabla entera**: las tres capas se comprueban sobre la fila del guion.
+- **Candado**: ninguna lectura clínica antes de `registrarAccesoHistoria` en `abrirEditorDeNota`.
+  `descargarNotaCompleta` mira `desbloqueo_vigente()` antes de escribir el acceso.
+  `prolongarDesbloqueo` aparece solo en acciones (`grep` en `page.tsx` y componentes: 0).
+- **`use cache`**: ninguna aparición bajo `historia/notas/` (ADR-043).
+- **HTML**: el `page.tsx` no tiene ningún `from('notas_clinicas…')`.
+- **i18n**: `sin-literales.test.ts` en verde. Ninguna cadena visible en las piezas de §7 fuera
+  de `es.ts`.
 
 ---
 
 ## 6 · Territorio
 
-El contrato no declara `territorio:`. Se declara aquí (comprobable con
-`node ~/.claude/pipeline/territorio.mjs`):
+*(Actualizado el 01-10.)* El contrato no declara `territorio:`. Se declara aquí:
 
 ```
-supabase/migrations/**            scripts/rls/**              supabase/seed-completo.sql
-scripts/t005-concurrencia.sql     lib/huella/**               lib/notas/**
-lib/supabase/tipos-bd.ts (generado)
-app/(app)/pacientes/[id]/**       lib/i18n/es.ts
-tickets/T-012/**                  docs/bitacora/              docs/state.md
-docs/decisions/ (solo el ADR nuevo del BLOQUEO B1, si se aprueba)
+supabase/migrations/2026100*_nota_clinica_borrador_firma.sql
+scripts/rls/20-nota-borrador.sql          scripts/rls/README.md (una fila)
+scripts/t012-nota.ts
+lib/notas/**                              lib/huella/firmar.ts   lib/huella/firmar.test.ts
+lib/supabase/tipos-bd.ts (generado)       lib/i18n/es.ts
+app/(app)/pacientes/[id]/**               app/(app)/agenda/notas.ts   app/(app)/agenda/notas.test.ts
+tickets/T-012/**                          docs/bitacora/T-012.md       docs/state.md
 ```
 
-**Fuera**: `components/ui/**` (las primitivas de T-007 no se reescriben; el hallazgo abierto de
-los 40 px se sortea con `min-h-11` local, como en T-013), `components/armazon/**`,
-`next.config.ts`, `proxy.ts`, `package.json` (ninguna dependencia nueva).
+**Fuera**:
+- el resto de `lib/huella/**`, `scripts/rls/14-*.sql` y `scripts/rls/19-*.sql` (los tocará T-036);
+- el resto de `app/(app)/agenda/**` (`vista.test.ts` se queda como está);
+- `components/ui/**` (no se reescribe ninguna primitiva) y `components/armazon/**`;
+- `supabase/seed*.sql`, `next.config.ts`, `proxy.ts` y `package.json` (ninguna dependencia
+  nueva).
 
 ---
 
 ## 7 · Delegable
 
-`delegable: volumen`, sin comportamiento y con contrato cerrado:
+*(Reescrito el 01-10-2026, con el detalle por pieza para encargos autocontenidos al carril
+MiniMax, que trabaja por API y sin repo.)*
 
-- `lib/notas/comparar.ts` + su prueba: LCS por palabras, entrada y salida de tipos fijados en
-  §1.3, casos obligatorios (vacío↔texto, todo añadido, todo retirado, cambio en medio, acentos
-  NFC/NFD, espacios múltiples).
-- `lib/notas/exportar.ts` + su prueba: función pura de composición de texto; el formato de cada
-  bloque se le entrega literal.
-- La regeneración de `lib/huella/vectores-congelados.json` es **mecánica pero no delegable**: es
-  la era del esquema, y el generador de un CLI que se equivoque en una clave se congela para
-  siempre. La hace la fábrica y la revisan los dos revisores.
+**Lo que es común a todos los encargos.** Hay que pegar en cada uno:
+- Componentes de servidor (sin `'use client'`), TypeScript, React 19, Tailwind 4 y `cn` de
+  `@/lib/utils`.
+- Iconos de `lucide-react`.
+- Texto **solo** con `t('clave')` o `tCon('clave', {…})` de `@/lib/i18n`, y **ningún literal
+  visible** (hay una prueba que lo rompe). Las claves nuevas se entregan como bloque para pegar
+  en el namespace `notas` de `lib/i18n/es.ts` (CRLF; lo pega la fábrica).
+- Primitivas disponibles, con la firma exacta del hecho 23: `Pildora`, `EstadoVacio`, `Cargando`
+  y `Tarjeta` de `@/components/ui/piezas`.
+- Tokens de color: `text-muted-foreground`, `bg-muted`, `border-border`, `text-foreground`.
+  **Nunca el color como único canal.**
+- Pruebas con Vitest y `@testing-library/react` (`render`, `screen`), en un fichero hermano
+  `*.test.tsx`.
+- Sin estado, sin efectos, sin manejadores de eventos, sin foco y sin ARIA más allá de lo
+  indicado.
+- Todo vive en `app/(app)/pacientes/[id]/historia/notas/` salvo `lista-de-notas.tsx`, que va en
+  `app/(app)/pacientes/[id]/`.
 
-**No delegable**: nada de `supabase/**` (dueño único), nada con foco, ARIA o teclado virtual
-(regla medida en T-007: la pintura a la primera, los diálogos con foco tres veces mal), y nada
-que toque el candado.
+**P1 · `estado-de-nota.tsx`**
+- Firma: `export function PildoraDeEstado({ estado }: { estado: 'borrador' | 'firmada' | 'modificada' | 'firmada_con_cambios' })`.
+- Pinta una `Pildora`:
+  - `borrador` → `tono="warning"`, `t('notas.estado.borrador')`;
+  - `firmada` → `success`, `notas.estado.firmada`;
+  - `modificada` → `success`, `notas.estado.modificada`;
+  - `firmada_con_cambios` → `info`, `notas.estado.firmadaConCambios`.
+- Claves:
+  `notas.estado.{borrador:'Borrador', firmada:'Firmada', modificada:'Modificada', firmadaConCambios:'Firmada · con cambios sin firmar'}`.
+- Pruebas: los cuatro estados pintan su texto; el texto distingue los cuatro sin depender del
+  tono (cuatro cadenas distintas).
+
+**P2 · `sello-de-nota.tsx`**
+- Firma: `export function SelloDeNota({ frase, enSesion }: { frase: string; enSesion: boolean | null })`.
+- Pinta un `<p className="text-sm text-muted-foreground">` con un icono decorativo
+  (`aria-hidden`): `Clock` si `enSesion === true`, `CalendarClock` si `false` y `HelpCircle` si
+  `null`. Después, la `frase` tal cual, que llega ya compuesta. Sin insignias ni color de
+  reproche: es un hecho (contrato).
+- Claves: ninguna (la frase la compone `fraseDelSello`). Para que la fábrica las pegue en
+  `sello.ts`, entregar:
+  - `notas.sello.enSesion:'Escrita durante la sesión del {fecha} · {desde}–{hasta}'`
+  - `notas.sello.fueraDeSesion:'Escrita fuera de la sesión del {fecha} · {desde}–{hasta}'`
+  - `notas.sello.sinCita:'Escrita el {fecha} · {desde}–{hasta}'`
+  - `notas.sello.ilegible:'Sello no legible'`
+  - `notas.sello.margen:'Margen aplicado: {minutos} min'`
+- Pruebas: pinta la frase; el icono tiene `aria-hidden="true"` en los tres casos; no hay ningún
+  `role` añadido.
+
+**P3 · `fila-de-version.tsx`**
+- Firma: `export function FilaDeVersion({ numero, autor, firmadaEn, motivo, conjunta, sello, huellaCorta, vigente }: { numero: number; autor: string; firmadaEn: string; motivo: string | null; conjunta: boolean; sello: string; huellaCorta: string; vigente: boolean })`.
+- Pinta un `<li>`:
+  - primera línea: `tCon('notas.version.titulo', {numero})`, más `t('notas.version.vigente')`
+    entre paréntesis si `vigente`;
+  - segunda: `tCon('notas.version.firmadaPor', {fecha: firmadaEn, autor})`;
+  - si hay `motivo`: `tCon('notas.version.motivo', {motivo})`;
+  - si `conjunta`: `t('notas.version.conjunta')`;
+  - el `sello` en texto pequeño;
+  - `tCon('notas.version.huella', {huella: huellaCorta})` en `font-mono text-xs`.
+- Claves:
+  `notas.version.{titulo:'Versión {numero}', vigente:'vigente', firmadaPor:'Firmada el {fecha} por {autor}', motivo:'Motivo del cambio: {motivo}', conjunta:'Nota conjunta del episodio', huella:'Huella {huella}…'}`.
+- Pruebas: v1 sin motivo no pinta la línea de motivo; con motivo sí; con `vigente` aparece
+  «vigente»; la huella va en un elemento con clase `font-mono`.
+
+**P4 · `modificada-por.tsx`**
+- Firma: `export function ModificadaPor({ fecha, autor }: { fecha: string; autor: string })`.
+- Pinta `tCon('notas.modificadaPor', {fecha, autor})` en `text-sm text-muted-foreground`, con el
+  icono `History` decorativo.
+- Clave: `notas.modificadaPor:'Modificada el {fecha} · por {autor}'`.
+- Prueba: pinta la frase con los dos valores.
+
+**P5 · `aviso-reservadas.tsx`**
+- Firma: `export function AvisoReservadas()`, sin props.
+- Pinta un bloque `rounded-lg border border-border bg-muted p-3 text-sm` con un icono `ShieldAlert`
+  decorativo, un título `t('notas.reservadas.titulo')` en `font-medium` y una lista `<ul>` de
+  tres `<li>`: `notas.reservadas.excluye`, `notas.reservadas.noOculta`, `notas.reservadas.noOpone`.
+- Claves:
+  - `titulo`: 'Anotaciones reservadas (art. 18.3, Ley 41/2002)'
+  - `excluye`: 'Se excluyen de las copias que se entregan al paciente.'
+  - `noOculta`: 'No se ocultan al profesional que herede el caso.'
+  - `noOpone`: 'No se pueden oponer a un requerimiento judicial.'
+- Pruebas: los tres puntos están, en ese orden; hay exactamente un `<ul>` con tres `<li>`.
+
+**P6 · `lista-de-notas.tsx`** (en `app/(app)/pacientes/[id]/`)
+- Firma: `export function ListaDeNotas({ notas }: { notas: { id: string; fechaSesion: string; estado: 'borrador' | 'firmada' | 'modificada' | 'firmada_con_cambios'; versiones: number; autor: string; conjunta: boolean; href: string }[] })`.
+- Con la lista vacía, pinta `EstadoVacio` con el icono `NotebookPen`, `frase=t('notas.lista.vacia')`
+  y `explicacion=t('notas.lista.vaciaExplicacion')`.
+- Con notas, pinta un `<ul>` y en cada `<li>` un `<Link href={href}>` de `next/link`,
+  `min-h-11`, con:
+  - la fecha en `font-medium`;
+  - `PildoraDeEstado` (P1);
+  - `tCon('notas.lista.versiones', {n: versiones})` si `versiones > 1`;
+  - el autor;
+  - `t('notas.version.conjunta')` si `conjunta`.
+- Claves:
+  `notas.lista.{vacia:'Todavía no hay notas', vaciaExplicacion:'Las notas se escriben desde la cita en la agenda.', versiones:'{n} versiones'}`.
+- Pruebas: lista vacía → frase vacía y ningún enlace; dos notas → dos enlaces con su `href`
+  exacto; `versiones: 1` no pinta el contador; `versiones: 3` pinta «3 versiones».
+
+**P7 · `esqueleto-editor.tsx`**
+- Firma: `export function EsqueletoEditor()`.
+- Pinta una columna `flex flex-col gap-4` con:
+  - un bloque `h-6 w-1/2 animate-pulse rounded bg-muted motion-reduce:animate-none` (título);
+  - un `Cargando` con `filas={6}`;
+  - una barra inferior falsa `h-11 rounded bg-muted`.
+- Claves: ninguna (`Cargando` trae las suyas).
+- Pruebas: hay un `role="status"`; ningún elemento interactivo (`queryAllByRole('button')` vacío).
+
+**P8 · `cabecera-de-nota.tsx`** (armazón, no clínica)
+- Firma: `export function CabeceraDeNota({ paciente, sesion, volverHref }: { paciente: string; sesion: string | null; volverHref: string })`.
+- Pinta:
+  - un `<Link href={volverHref}>` con `ChevronLeft` y `t('notas.cabecera.volver')`, `min-h-11`;
+  - un `<h1 className="font-serif text-2xl">` con `tCon('notas.cabecera.titulo', {paciente})`;
+  - si hay `sesion`, `<p className="text-sm text-muted-foreground">{sesion}</p>`.
+- Claves:
+  `notas.cabecera.{volver:'Volver a la ficha', titulo:'Nota de {paciente}'}`.
+- Pruebas: con `sesion` nula no hay `<p>` de sesión; el enlace apunta a `volverHref`; hay un
+  único `h1`.
+
+**No delegable** (la fábrica):
+- `editor-de-nota.tsx` (estado, autoguardado, candado y foco);
+- `barra-de-acciones.tsx` (objetivos táctiles con comportamiento);
+- `comparador.tsx` (selector y `<ins>`/`<del>` con su `sr-only`; la regla de no depender del
+  color es un criterio);
+- el diálogo de firma y el selector de coprofesional;
+- todo `lib/notas/**` (funciones puras: de la fábrica desde el 30-09);
+- la migración, los bancos y el guion.
 
 ---
 
 ## 8 · Cortes propuestos
 
-| Corte | Qué entra | Por qué corta ahí | Cierra |
-|---|---|---|---|
-| **Previo · ticket propio (T-012·a)** `riesgo: alto` | El ADR-057 entero: §1.1. Cero interfaz. | Define la era del esquema y tiene que estar **antes de la primera firma real**. Revisión mirando una sola cosa (argumento literal de T-013a). | Criterios 6 y 7; deja 1-3 y 5 listos para el corte A. |
-| **A** `riesgo: alto` | Migración de §1.2, `lib/notas/{cuerpo,estado}.ts`, las tres Server Actions de §1.4-1.5 con su Zod, banco `18-notas-firma.sql`. Sin pantalla. | Es todo el mecanismo que hay que revisar de verdad: sobre, sello, candado, bloqueo optimista, solo adición. | Criterios **1, 2, 3, 4, 5** y 12. |
-| **B** `riesgo: medio` | El editor: ruta sin apertura automática (B1-a, ADR-058), dos cuerpos, autoguardado, barra táctil, firma desde pantalla, lista dentro de la ficha. | No toca la cadena ni una vez; lo que se revisa aquí es foco, candado en pantalla y 360 px. | Criterios **8, 10, 11** y 12. |
-| **C** `riesgo: medio` | Versión vigente con «modificada el · por», comparación, sello como frase, descarga completa. | Todo lectura y presentación sobre lo que A y B ya sellaron. | Criterio **9** y la tarea de descarga. |
+*(Actualizado el 01-10: el corte previo está hecho como T-012a y T-012c.)*
 
-El corte A **no puede empezar** hasta que el previo esté en `main`: firmar con el sobre de once
-claves crea filas que la migración del 057 hará abortar (y con razón).
+| Corte | Qué entra | Cierra |
+|---|---|---|
+| **A** `riesgo: alto` | Migración de §1.2, `lib/huella/firmar.ts`, `lib/notas/{cuerpo,estado,fecha,coprofesional,sello,servidor}.ts`, banco 20 y guion `t012-nota.ts`. Sin pantalla. | 1-7, 12 y A |
+| **B** `riesgo: medio` | Ruta y armazón, editor, barra táctil, firma desde la pantalla, lista en la ficha, activación de `RUTA_NOTAS_DISPONIBLE`, piezas P1-P8. | 8, 10, 11, B, M4 de T-014 |
+| **C** `riesgo: medio` | `comparar.ts` y el comparador, «modificada el · por», `exportar.ts` y la descarga. | 9 y la tarea de descarga |
+
+Orden de integración: **T-014 → T-012 → T-035/T-036**, en serie, porque los cuatro tocan
+`supabase/`. T-035 cambia `ROLES_COPROFESIONAL`. T-036 recoge §4.4 y §4.5 por decisión del
+propietario (D1 y D3), pero su contrato escrito solo cubre el `cita_id`: hay que ampliarlo antes de
+diseñarlo (§D).
 
 ---
 
 ## Lo que no entra, y por qué
 
-- **Editor de texto enriquecido (TipTap o equivalente).** Ninguna dependencia que el contrato no
-  nombre (regla de pipeline), ningún criterio lo necesita, y el discriminante `formato` del
-  cuerpo deja que entre mañana sin subir `esquema_version`.
-- **Pantalla de ajustes para el margen de sesión.** Se crean las dos columnas porque el ADR-046
-  exige que sea configurable y que quede *guardado con la nota*; la pantalla que lo edita es de
-  Ajustes, y Ajustes no es este ticket. Se anota en `state.md`.
-- **Aviso de borrador abandonado más de N días** (ADR-036). Necesita decidir N; no hay criterio de
-  aceptación que lo pida.
-- **Recuperar el borrador tras un conflicto** más allá de enseñar lo guardado. El ADR-036 dice
-  explícitamente que el borrador no es recuperable versión a versión.
-- **Que un colega que hereda el caso pueda corregir una nota ajena.** Decidido por el propietario
-  el 15-09-2026 y escrito en el [ADR-059](../../docs/decisions/ADR-059.md): **se queda como está**.
-  `notas_clinicas_versiones_alta` exige `n.autor_id = auth.uid()` a propósito, y quien hereda el
-  caso escribe nota nueva en vez de reescribir el relato de otro. Ya no es un hallazgo abierto: es
-  una restricción que nadie debe «arreglar». La pantalla lo dice con palabras cuando el que mira no
-  es el autor, en vez de esconder el botón.
-- **La proyección para el derecho de acceso del paciente** (sin anotaciones reservadas, con la
-  valoración del profesional sobre la nota conjunta). Es su propio ticket; aquí solo se deja dicho
-  en la cabecera de la descarga que esta **no** es esa salida.
-- **Enganchar `verificar:huellas` a la ejecución nocturna**: es de T-009 y de `.github/**`.
+- **Cotejar en la base `cita_id`, `abierta_en`, `redactada_en_sesion` y «hay borrador vivo»**
+  (§4.4 y §4.5). *Lo decidió el propietario el 01-10-2026 (D1 y D3): va en T-036, inmediatamente
+  después de T-012.* Exige redefinir `fn_sellar_version_nota`, que es lo que hace T-036. Su contrato
+  hay que ampliarlo (§D).
+- **Atar `notas_clinicas.cita_id` al paciente y al profesional de su cita** en la cabecera. El
+  resolutor se protege solo (§2.18), pero la función que abre la alerta sigue dándose por
+  satisfecha con cualquier versión que lleve ese `cita_id`. Es anterior a T-012, ningún criterio lo
+  pide y tampoco está en el contrato de T-036. La bitácora lo anota como hallazgo.
+- **La carrera entre abrir y resolver la alerta** (§4.9). Cerrarla exige tocar
+  `fn_alertar_nota_sin_firmar`.
+- **Nota nueva sin cita desde la ficha.** Exige elegir centro (`episodio_para_nota` con
+  `p_centro_id`) y ninguna tarea lo pide: el contrato entra por la cita. Las notas sin cita que ya
+  existen se abren con `?nota=`.
+- **Editor de texto enriquecido**: ninguna dependencia nueva (§2.7).
+- **Pantalla de Ajustes para el margen**: las columnas existen; la pantalla es de Ajustes.
+- **Aviso de borrador abandonado** (ADR-036): hay que decidir N y ningún criterio lo pide.
+- **Que quien hereda el caso corrija una nota ajena**: el ADR-059 lo prohíbe a propósito, y la
+  pantalla lo dice con palabras.
+- **Proyección para el derecho de acceso** (sin reservadas): tiene su propio ticket. La descarga
+  dice que no es esa salida.
+- **Coprofesional `administrador`**: T-035 (ADR-073.2).
+- **`verificar:huellas` nocturno**: T-009 y `.github/**`.
 
 ---
 
 ## Resumen
 
-1. Se construye la nota clínica de punta a punta: borrador en la cabecera mutable, firma que
-   entra en la cadena, versiones encadenadas con motivo, comparación, sello y descarga.
-2. **Decisión 1**: el ADR-057 —sobre de doce claves con `alcance`, `esquema_version = 3`— va en un
-   **corte previo con ticket propio**, antes de la primera firma real, por el mismo motivo por el
-   que se separó T-013a: para que una revisión mire una sola cosa, y porque esta decide la era del
-   esquema para siempre.
-3. **Decisión 2**: `abierta_en` vive en una columna nueva, `notas_clinicas.borrador_abierta_en`,
-   escrita **solo por disparador** y nunca por el llamante; abrir el editor crea el borrador vacío
-   y ahí queda fijada. Es lo que impide que «lo escribí en sesión» vuelva a ser una casilla por la
-   puerta de atrás, ahora que `authenticated` tiene `update` de tabla entera.
-4. **Decisión 3**: firmar **no recibe el texto**: sella el borrador guardado, y el vaciado del
-   borrador lo hace un disparador `after insert` en la misma transacción que la firma.
-5. Hay **un BLOQUEO real**: la ruta `/pacientes/<uuid>/historia/notas` que pide el contrato
-   contradice al ADR-056 («la pestaña activa es estado de cliente, no de URL»), aceptado después
-   del contrato. Recomiendo la ruta **sin apertura automática** más un ADR-058 que enmiende;
-   decide el propietario. Solo bloquea el corte B.
-6. Lo que más caro sale si se escapa: una comparación del sobre escrita con `->>` en vez de
-   `is distinct from` (un `null` JSON la desactiva en silencio), y el testigo del bloqueo optimista
-   perdiendo microsegundos al pasar por `Date`.
-7. Segundo foco de revisión: que «cero filas» no se anuncie como conflicto cuando lo que pasó es
-   que el candado se cerró — la aplicación diciendo una falsedad sobre un dato clínico.
-8. Tercer foco: que el banco nuevo firme **por el camino de la aplicación** y no sembrando filas a
-   mano, que es la lección exacta de T-013a.
-9. No entra ninguna dependencia nueva, ninguna primitiva de `components/ui/` se reescribe y el
-   armazón no se toca.
-10. Cuatro cortes: previo (cadena), A (base y acciones, todo lo automático), B (editor táctil),
-    C (versiones y descarga).
+1. Se construye la nota clínica de punta a punta sobre el sobre de la era 4, que ya está en
+   `main`: borrador con autoguardado y bloqueo optimista, firma que sella lo guardado, versiones
+   con motivo, sello como frase, comparación y descarga íntegra.
+2. **Decisión 1**: `abierta_en` vive en `notas_clinicas.borrador_abierta_en` y la escribe **solo**
+   el disparador. Abrir el editor crea el borrador y la fija; firmar la vacía en la misma
+   transacción, con el `fn_vaciar_borrador_al_firmar` que ya existe.
+3. **Decisión 2**: firmar **no recibe el texto**. Lee la cabecera, la cita y el margen en el
+   servidor, y traduce los errores por SQLSTATE gracias a `ErrorFirmaVersion` en `firmar.ts`.
+4. **Decisión 3**: se demuestra **por el camino de la aplicación**, con `lib/notas/servidor.ts` +
+   `scripts/t012-nota.ts`. Lo nuevo de la base va en el banco 20.
+5. Migración `20261002120000_…`: `borrador_abierta_en` con su check, `fn_tocar_borrador`
+   endurecido, margen en organización (15) y en centro (hereda), índice único `(cita_id,
+   autor_id)` y resolución de la alerta `nota_sin_firmar` al firmar (D2), atada a la cita de la
+   propia nota.
+6. T-014 entra antes. T-012 pone `RUTA_NOTAS_DISPONIBLE = true` en el mismo commit que crea la
+   ruta.
+7. Revisar con más cuidado: el testigo como cadena; las cero filas desambiguadas; que el
+   disparador pise `borrador_abierta_en` y el testigo sin cambio de contenido; y el único
+   `definer` nuevo, cuyo `join` con `citas` ata paciente y autor. Sus negativas 20.A1 y 20.A2
+   tienen que fallar por eso, no porque la versión no entrara.
+8. Riesgo declarado, por decisión del propietario del 01-10 (D1 y D3): el sello se puede
+   falsificar por PostgREST, y una modificación con doble pulsación puede duplicar la versión. En
+   T-012 solo se desactiva el botón. Los cierra T-036, cuyo contrato hoy solo cubre `cita_id` y hay
+   que ampliar.
+9. Delegables a MiniMax: ocho piezas de pintura (P1-P8), con firma, claves y pruebas. El editor,
+   la barra, el comparador, la firma y el candado se quedan en la fábrica.
+10. Tres cortes: A (base, acciones y guion), B (editor y entradas) y C (comparación y descarga).
