@@ -2556,6 +2556,32 @@ export type Database = {
         }
         Returns: Json
       }
+      agenda_citas_rango: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          centro_id: string
+          centro_nombre: string
+          desviada: boolean
+          en_curso: boolean
+          estado: Database["public"]["Enums"]["estado_cita"]
+          fin: string
+          id: string
+          inicio: string
+          motivo_desviacion: Database["public"]["Enums"]["motivo_desviacion_cita"]
+          nota_operativa: string
+          nota_pendiente: boolean
+          paciente_apellidos: string
+          paciente_id: string
+          paciente_nombre: string
+          profesional_id: string
+          profesional_nombre: string
+          reprogramable: boolean
+          sala: string
+          serie_id: string
+          tipo_terapia_nombre: string
+          zona_horaria: string
+        }[]
+      }
       agenda_confirmar_propuesta: {
         Args: { p_propuesta_id: string }
         Returns: string
@@ -2669,6 +2695,14 @@ export type Database = {
       centro_actual: { Args: never; Returns: string }
       centro_principal: { Args: { p_perfil_id: string }; Returns: string }
       centros_actuales: { Args: never; Returns: string[] }
+      cita_en_curso: {
+        Args: {
+          p_estado: Database["public"]["Enums"]["estado_cita"]
+          p_fin: string
+          p_inicio: string
+        }
+        Returns: boolean
+      }
       citas_afectadas_por_regla: {
         Args: { p_desde_cita_id?: string; p_serie_id: string }
         Returns: {

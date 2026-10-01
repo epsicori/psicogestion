@@ -22,7 +22,7 @@ export type Sesion = {
  */
 export type ResultadoCitas<Exito extends object = object> =
   | ({ ok: true } & Exito)
-  | { ok: false; motivo: MotivoErrorCitas; mensaje: string };
+  | { ok: false; motivo: MotivoErrorCitas; mensaje: string; detalle?: DetalleRechazo };
 
 /**
  * Mapa de errores único (§8 del diseño de T-011): todo módulo de `lib/citas/`
@@ -44,4 +44,27 @@ export type MotivoErrorCitas =
   | 'no_autorizado'
   | 'cita_pasada'
   | 'parametro_invalido'
+  | 'destino_pasado'
+  | 'previsualizacion_caducada'
   | 'desconocido';
+
+/**
+ * Por qué la base rechazó con `22023` una edición de serie, su
+ * previsualización o la confirmación de una propuesta (T-011b §3, ADR-068).
+ * `motivo` sigue siendo `parametro_invalido`; esto afina el texto para que la
+ * pantalla diga qué pasó y si «Confirmar» tiene sentido todavía. Lo produce
+ * `detalleDeRechazo()` de `errores.ts`; `destino_pasado` y
+ * `previsualizacion_caducada` no salen de la base, los emite `reprogramar.ts`.
+ */
+export type DetalleRechazo =
+  | 'yaEmpezada'
+  | 'canceladaOCerrada'
+  | 'movidaAMano'
+  | 'fechaYDiaNoCoinciden'
+  | 'horarioNuevoPasado'
+  | 'propuestaPasada'
+  | 'sinEvento'
+  | 'otraRegla'
+  | 'otraZona'
+  | 'citaCambiada'
+  | 'sinHorario';

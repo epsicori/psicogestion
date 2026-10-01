@@ -1,0 +1,80 @@
+{
+  "ticket": "T-014",
+  "altas": 0,
+  "medias": 2,
+  "bajas": 7,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20260926120000_agenda_citas_rango.sql",
+      "linea": 118,
+      "descripcion": "Las ramas del union all no son disjuntas por rol: citas_lectura deja pasar profesional_id = uid sin mirar el rol, y nada impide que el profesional_id de una cita sea un técnico.",
+      "escenario": "Un técnico TEC es profesional_id de una cita de su centro (alta por error desde recepción o perfil reconvertido): agenda_citas_rango le devuelve dos filas con el mismo id, una de la rama citas con tipo_terapia_nombre, nota_operativa y nota_pendiente (choque 4 roto por la propia RPC) y otra con NULL; la rejilla la duplica."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "lib/citas/agenda.ts",
+      "linea": 208,
+      "descripcion": "La bandeja «Documentación pendiente» del administrador lista todas las alertas de la organización (rama administrador de la RLS), en contra del choque 2 de interfaz.md, que la cierra como no global.",
+      "escenario": "Consulta con cuatro profesionales: la administradora abre /agenda y ve por nombre de paciente las notas sin firmar de los otros tres y su antigüedad; decide el propietario (filtrar en la lectura o ADR que enmiende el choque 2)."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "lib/citas/agenda.ts",
+      "linea": 225,
+      "descripcion": "Lectura de alertas sin límite y todos los paciente_id en un .in('id', …) que va en la URL (el mismo patrón en por-confirmar.tsx).",
+      "escenario": "Cientos de alertas abiertas con pacientes distintos (el administrador, por H2): la query string supera el límite del proxy de PostgREST, pacientes.error y el bloque entero cae en error; aunque no llegue a fallar, pinta cientos de filas sin paginar."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "lib/citas/reprogramar.ts",
+      "linea": 65,
+      "descripcion": "prepararMovimiento solo rechaza fin <= ahora; no exige estado programada/confirmada ni inicio > ahora (lo que la interfaz llama reprogramable), y agenda_actualizar_cita tampoco mira el estado.",
+      "escenario": "Llamada directa a la Server Action con una cita cancelada de mañana o con una en curso: la cancelada cambia de fecha y sigue cancelada, y la sesión en curso salta de hora a mitad de consulta."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "lib/citas/reprogramar.ts",
+      "linea": 71,
+      "descripcion": "Con ?centro=todos la zona de la vista es la de la organización, y el arrastre de una cita de un centro con otra zona falla siempre.",
+      "escenario": "Organización en Europe/Madrid y centro B en Atlantic/Canary, filtro «todos», se arrastra una cita de B: sale «La vista estaba en otra zona horaria; recarga la agenda», y recargar no lo arregla nunca."
+    },
+    {
+      "id": "H6",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/18-agenda-rango.sql",
+      "linea": 189,
+      "descripcion": "Las pruebas de solape corren solo como PRO18 (rama citas); la rama citas_agenda no tiene prueba de borde.",
+      "escenario": "Cambiar en la rama del técnico a.fin > p_desde por a.inicio >= p_desde: la batería sigue verde y el técnico deja de ver la cita que empezó antes del rango y sigue en curso."
+    },
+    {
+      "id": "H7",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/18-agenda-rango.sql",
+      "linea": 181,
+      "descripcion": "reprogramable no tiene negativa de estado: ninguna cita futura cancelada o realizada exige false.",
+      "escenario": "Borrar «and v.estado in ('programada','confirmada')» en la l.147 de la migración: la batería sigue verde y una cancelada de mañana sale arrastrable."
+    },
+    {
+      "id": "H8",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/18-agenda-rango.sql",
+      "linea": 163,
+      "descripcion": "R6 no cubre no_asistida en cita_en_curso.",
+      "escenario": "Dejar en cita_en_curso solo p_estado <> 'cancelada': la batería sigue verde y una no_asistida marcada dentro de su franja late como «en curso»."
+    },
+    {
+      "id": "H9",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/18-agenda-rango.sql",
+      "linea": 263,
+      "descripcion": "La gemela de R8 (62 días exactos) depende de que la sesión del banco esté en UTC.",
+      "escenario": "Con PGTZ=Europe/Madrid el 30-09-2026, now() + interval '62 days' cruza el cambio de hora del 25-10: la diferencia vale 62 days 01:00, la guarda lanza 22023 y la gemela sale roja sin cambio de código."
+    }
+  ]
+}

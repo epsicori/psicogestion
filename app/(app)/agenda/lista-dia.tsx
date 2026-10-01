@@ -1,0 +1,108 @@
+'use client';
+
+import { useState } from 'react';
+
+import { useFocoRodante } from '@/components/ui/rejilla-foco';
+import { t } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
+
+import { ContenidoCita } from './contenido-cita';
+import type { CitaVista, DiaVista } from './vista';
+
+type Props = {
+  dias: DiaVista[];
+  citas: CitaVista[];
+  diaInicial: number;
+  alAbrirCita: (cita: CitaVista, ancla: HTMLElement) => void;
+};
+
+/** Cabecera de hora: `HH:00` de un minuto de pared, con enteros. */
+function cabeceraDeHora(minuto: number): string {
+  return `${String(Math.floor(minuto / 60)).padStart(2, '0')}:00`;
+}
+
+/**
+ * La semana a 360 px (T-014 §1.6.3): siete botones para elegir el día y, debajo, sus citas por
+ * hora. No hay rejilla que desplazar en horizontal (WCAG 1.4.10) ni arrastre: el camino para
+ * mover una cita es el botón «Reprogramar» de su panel. Nada late aquí; el latido es de la
+ * rejilla de la semana, que es la que se ve a partir de `md`.
+ */
+export function ListaDia({ dias, citas, diaInicial, alAbrirCita }: Props) {
+  const [elegido, setElegido] = useState(diaInicial);
+  const { activo, setActivo, alTeclear, refDe } = useFocoRodante(dias.length, diaInicial, 7);
+
+  const delDia = citas
+    .filter((c) => c.diaIndice === elegido)
+    .sort((a, b) => a.minutoPared - b.minutoPared || a.tramo - b.tramo);
+
+  const grupos: { hora: string; citas: CitaVista[] }[] = [];
+  for (const cita of delDia) {
+    const hora = cabeceraDeHora(cita.minutoPared);
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.hora === hora) ultimo.citas.push(cita);
+    else grupos.push({ hora, citas: [cita] });
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Siete en fila a 360 px no llegan a 44 px de ancho: dos filas hasta sm (evidencia, FALLA 2). */}
+      <div
+        role="group"
+        aria-label={t('agenda.rejilla.diasDeLaSemana')}
+        className="grid grid-cols-4 gap-1 sm:grid-cols-7"
+      >
+        {dias.map((dia, i) => (
+          <button
+            key={dia.fecha}
+            type="button"
+            data-dia={dia.fecha}
+            ref={refDe(i)}
+            tabIndex={i === activo ? 0 : -1}
+            aria-label={dia.etiquetaLarga}
+            aria-pressed={i === elegido}
+            aria-current={dia.esHoy ? 'date' : undefined}
+            onKeyDown={alTeclear}
+            onFocus={() => setActivo(i)}
+            onClick={() => setElegido(i)}
+            className={cn(
+              'focus-visible:ring-ring/50 flex min-h-11 flex-col items-center justify-center rounded-lg border text-xs outline-none focus-visible:ring-2',
+              i === elegido
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-background hover:bg-muted',
+              dia.esHoy && i !== elegido && 'text-primary font-semibold',
+            )}
+          >
+            <span>{dia.etiquetaCorta}</span>
+            <span className="font-mono text-sm">{dia.numero}</span>
+          </button>
+        ))}
+      </div>
+
+      <section aria-label={t('agenda.rejilla.citasDelDia')} className="flex flex-col gap-3">
+        {grupos.length === 0 ? (
+          <p className="text-muted-foreground text-sm">{t('agenda.rejilla.sinCitas')}</p>
+        ) : (
+          grupos.map((grupo) => (
+            <div key={grupo.hora} className="flex flex-col gap-1">
+              <h3 className="text-muted-foreground font-mono text-xs">{grupo.hora}</h3>
+              <ul className="flex flex-col gap-1">
+                {grupo.citas.map((cita) => (
+                  <li key={`${cita.id}-${cita.tramo}`}>
+                    <button
+                      type="button"
+                      data-cita-id={cita.id}
+                      onClick={(evento) => alAbrirCita(cita, evento.currentTarget)}
+                      className="bg-card border-border hover:bg-muted focus-visible:ring-ring/50 min-h-11 w-full rounded-lg border px-2 py-1.5 outline-none focus-visible:ring-2"
+                    >
+                      <ContenidoCita cita={cita} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        )}
+      </section>
+    </div>
+  );
+}

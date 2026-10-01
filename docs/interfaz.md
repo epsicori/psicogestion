@@ -261,7 +261,7 @@ Reglas tipográficas y de color:
 
 ## Donde el prototipo choca con la arquitectura
 
-Trece choques leídos uno a uno contra `architecture.md`. **Ya están resueltos: no se
+Catorce choques leídos uno a uno contra `architecture.md`. **Ya están resueltos: no se
 vuelven a discutir en el ticket, se implementan así.**
 
 ### 1 · El selector de la barra lateral es de centro, no de organización
@@ -401,6 +401,24 @@ pantalla con un selector que solo aparece para el administrador**.
 «Nueva factura» es la acción primaria de la cabecera, no una sección; y el **libro de
 gastos** sí es sección propia, porque `gastos` tiene deducibilidad y justificante y no es
 una vista de las facturas.
+
+### 14 · La agenda enseña de más: «Pendientes», «modalidad» y el cuadro inferior
+
+Tres cosas del prototipo de la agenda no tienen dato detrás (T-014):
+
+- **«Pendientes»** del panel derecho (citas sin preparación o sin cobro) no tiene datos: no
+  hay preparación ni cobro registrados. Hoy enseña **las propuestas por confirmar** de las
+  series (bloque «Por confirmar»), que sí existen y sí esperan una decisión.
+- **«Modalidad»** no existe en la cita, así que la línea es `tipo · profesional`, sin
+  modalidad. Si `tipo` no se puede ver (el técnico, choque 4), se omite con su separador.
+- **El cuadro inferior se limita a asistencia y ausencia sin aviso.** Ingresos, abandono y
+  trazabilidad documental esperan a que haya facturación, una definición de abandono y
+  trazabilidad. Sigue siendo solo para administrador y profesional sanitario (choque 6).
+
+**La forma a 360 px** (WCAG 1.4.10, reflujo): la semana por debajo de `md` es una tira de
+7 días y, debajo, la lista de las citas del día por hora, sin arrastre; la rejilla de 7
+columnas solo desde `md`. Es una decisión de diseño **pendiente de confirmar en un teléfono
+real**, como pedía §Anchos.
 
 
 ## Lo que el prototipo no cubre

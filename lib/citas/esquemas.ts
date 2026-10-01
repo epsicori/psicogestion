@@ -187,3 +187,44 @@ export const esquemaDesplazarCita = z.object({
 });
 
 export type DatosDesplazarCita = z.infer<typeof esquemaDesplazarCita>;
+
+/**
+ * El destino de una cita que se mueve en la agenda (T-014): día y hora de
+ * pared en la zona de la VISTA, que la acción comprueba que es la del centro.
+ * Separado de `esquemaReprogramarCita` porque la previsualización lo usa sin
+ * `alcance` ni `firma`, y en Zod 4 un objeto con `refine` no admite `omit`.
+ */
+export const esquemaDestinoCita = z.object({
+  citaId: z.uuid('Cita no válida.'),
+  fecha: z
+    .string('Introduce el día.')
+    .regex(FECHA_ISO, 'La fecha debe tener forma AAAA-MM-DD.')
+    .refine(esFechaReal, 'Ese día no existe.'),
+  hora: z.string('Introduce la hora.').regex(HHMM, 'La hora debe tener forma HH:MM.'),
+  zona: z.string().min(1, 'Falta la zona horaria de la vista.'),
+});
+
+export type DatosDestinoCita = z.infer<typeof esquemaDestinoCita>;
+
+/**
+ * Mover una cita desde la agenda. `alcance` es opcional en el esquema porque
+ * una cita suelta no lo lleva; que una de serie lo traiga lo comprueba la
+ * acción, que sabe si la cita es de serie. `firma` es la de la
+ * previsualización que el usuario vio (§8.4 del diseño de T-014): con
+ * `esta_y_siguientes` es obligatoria, y si la regla ya no es la que se
+ * enseñó, la acción no edita.
+ */
+export const esquemaReprogramarCita = esquemaDestinoCita
+  .extend({
+    alcance: esquemaAlcance.optional(),
+    firma: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/, 'La previsualización no es válida.')
+      .optional(),
+  })
+  .refine((datos) => datos.alcance !== 'esta_y_siguientes' || datos.firma !== undefined, {
+    message: 'Falta la previsualización del cambio de la serie.',
+    path: ['firma'],
+  });
+
+export type DatosReprogramarCita = z.infer<typeof esquemaReprogramarCita>;

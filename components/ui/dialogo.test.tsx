@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Dialogo } from './dialogo';
 
@@ -111,5 +111,53 @@ describe('Dialogo', () => {
 
     await usuario.click(cerrar);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+
+// T-014 §8.2: el diálogo de mover una cita de serie pone el foco en «Mantener», no en la «X».
+function MontajeConFocoInicial() {
+  const [abierto, setAbierto] = useState(false);
+  const segundo = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button type="button" onClick={() => setAbierto(true)}>
+        Abrir
+      </button>
+      <Dialogo abierto={abierto} alCerrar={() => setAbierto(false)} titulo="Ficha" focoInicial={segundo}>
+        <button type="button">Guardar</button>
+        <button type="button" ref={segundo}>
+          Descartar
+        </button>
+      </Dialogo>
+    </>
+  );
+}
+
+describe('Dialogo con focoInicial', () => {
+  // jsdom no maqueta: `offsetParent` es siempre null y `enfocables()` sale vacía, con lo que
+  // el foco caería en el contenedor. Aquí se simula que lo conectado está visible, para que
+  // «sin la prop» mida lo que pasa en un navegador (la «X») y no un artefacto de jsdom.
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.isConnected ? document.body : null;
+    });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('el foco va al elemento indicado', async () => {
+    const usuario = userEvent.setup();
+    render(<MontajeConFocoInicial />);
+    await abrir(usuario);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Descartar' }));
+  });
+
+  it('sin la prop, el foco va a la «X», como antes', async () => {
+    const usuario = userEvent.setup();
+    render(<Montaje />);
+    await abrir(usuario);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cerrar' }));
   });
 });
