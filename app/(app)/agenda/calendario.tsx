@@ -56,6 +56,12 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
   /** El ancla a la que vuelve el foco, y qué buscar si ya no está en el documento. */
   const devolverA = useRef<{ ancla: HTMLElement; citaId: string | null; fecha: string } | null>(null);
   const enfocarCita = useRef<{ id: string; fecha: string; citas: VistaCalendario['citas'] } | null>(null);
+  // Lo abierto ahora mismo. Una acción que vuelve tarde llama a una función de cuando se lanzó;
+  // lo que decide si cierra algo es lo que hay abierto cuando vuelve, no lo de entonces (revisión B-1).
+  const vigente = useRef({ pila, reprogramando });
+  useEffect(() => {
+    vigente.current = { pila, reprogramando };
+  });
 
   useEffect(() => {
     // De las dos formas de la semana solo una se ve, y un panel tapado lleva `hidden`: se
@@ -128,22 +134,33 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
     setPulso((n) => n + 1);
   }
 
-  /** Tras mover la cita o resolver su propuesta: se cierra todo, se anuncia y el foco va a ella. */
-  function cerrarTodoEnCita(cita: CitaVista, texto: string) {
+  /**
+   * Dos anuncios iguales seguidos no cambian el DOM y el lector no vuelve a hablar (revisión B-2):
+   * el repetido lleva un espacio duro al final, y el siguiente vuelve a quitarlo.
+   */
+  function anunciar(texto: string) {
+    setAnuncio((previo) => (previo === texto ? `${texto}\u00A0` : texto));
+  }
+
+  /**
+   * Tras mover la cita o resolver su propuesta: se cierra todo, se anuncia y el foco va a ella,
+   * pero solo si lo que lanzó la acción sigue siendo lo abierto (revisión B-1). Si el panel o el
+   * diálogo ya se cerró, o hay otro encima, el resultado se anuncia y nada más: no cierra lo de
+   * ahora ni le quita el foco.
+   */
+  function resolverCita(cita: CitaVista, texto: string, origen: 'panel' | 'dialogo') {
+    const { pila: abiertos, reprogramando: dialogo } = vigente.current;
+    const tope = abiertos[abiertos.length - 1];
+    const mismo = (otra: CitaVista) => otra.id === cita.id && otra.tramo === cita.tramo;
+    const sigueAbierto =
+      origen === 'dialogo'
+        ? dialogo !== null && mismo(dialogo.cita)
+        : dialogo === null && tope?.tipo === 'cita' && mismo(tope.cita);
+    anunciar(texto);
+    if (!sigueAbierto) return;
     enfocarCita.current = { id: cita.id, fecha: cita.fechaLocal, citas: vista.citas };
     setReprogramando(null);
     setPila([]);
-    setAnuncio(texto);
-    setPulso((n) => n + 1);
-  }
-
-  function alMovida(texto: string) {
-    if (reprogramando) {
-      cerrarTodoEnCita(reprogramando.cita, texto);
-      return;
-    }
-    setPila([]);
-    setAnuncio(texto);
     setPulso((n) => n + 1);
   }
 
@@ -307,7 +324,7 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
                 desdeArrastre: false,
               })
             }
-            alPropuestaResuelta={(texto) => cerrarTodoEnCita(cita, texto)}
+            alPropuestaResuelta={(texto) => resolverCita(cita, texto, 'panel')}
           />
         );
       })}
@@ -320,7 +337,7 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
           inicial={reprogramando.inicial}
           desdeArrastre={reprogramando.desdeArrastre}
           alCerrar={() => setReprogramando(null)}
-          alMovida={alMovida}
+          alMovida={(texto) => resolverCita(reprogramando.cita, texto, 'dialogo')}
         />
       )}
     </div>

@@ -19,6 +19,9 @@ vi.mock('./acciones', () => ({
   previsualizarMovimiento: vi.fn(),
 }));
 
+// Las resoluciones que el diálogo entrega «tarde»: se disparan a mano, cuando la prueba quiere.
+const tardias = vi.hoisted(() => [] as Array<() => void>);
+
 // El diálogo tiene su propia prueba: aquí solo importa cómo lo abre el calendario y qué hace con
 // lo que devuelve.
 vi.mock('./dialogo-reprogramar', () => ({
@@ -35,6 +38,9 @@ vi.mock('./dialogo-reprogramar', () => ({
       </button>
       <button type="button" onClick={() => p.alMovida('Cita movida al 30 a las 14:00.')}>
         movida
+      </button>
+      <button type="button" onClick={() => tardias.push(() => p.alMovida('Cita movida tarde.'))}>
+        movida-tarde
       </button>
     </div>
   ),
@@ -83,6 +89,7 @@ const enGrid = () => within(screen.getByRole('grid'));
 
 beforeEach(() => {
   replace.mockClear();
+  tardias.length = 0;
   // jsdom no maqueta: `offsetParent` es siempre null. Aquí, como en un navegador ancho, todo
   // tiene caja salvo lo que lleva `hidden`; el bloque de 360 px lo estrecha.
   vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
@@ -373,5 +380,190 @@ describe('Calendario · panel de la cita con la vista al día (revisión TS H5)'
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByText('Propuesta confirmada.').closest('[role="status"]')).not.toBeNull();
     expect((document.activeElement as HTMLElement).getAttribute('data-cita-id')).toBe(citaDePrueba().id);
+  });
+});
+
+// Revisión B-1: una acción que vuelve tarde no actúa sobre lo que haya abierto en ese momento.
+describe('Calendario · resultados que llegan tarde (revisión B-1)', () => {
+  const PROPUESTA = { id: '44444444-4444-4444-8444-444444444444', rango: '11:00–11:50' };
+  const CITA_B = {
+    id: '55555555-5555-4555-8555-555555555555',
+    pacienteId: '66666666-6666-4666-8666-666666666666',
+    diaIndice: 2,
+    fechaLocal: '2026-09-30',
+    nombrePaciente: 'Berta Ruiz',
+    nombreCorto: 'Berta R.',
+  };
+
+  function dosCitas() {
+    return vistaDePrueba({
+      citas: [citaDePrueba({ propuestaPendiente: PROPUESTA }), citaDePrueba(CITA_B)],
+    });
+  }
+
+  it('si el panel de la cita ya se cerró y hay otro abierto, el resultado se anuncia pero no lo cierra ni le quita el foco', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(
+      () => new Promise((resolve) => (resolver = resolve as typeof resolver)),
+    );
+    const user = userEvent.setup();
+    montar({ vista: dosCitas() });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await user.keyboard('{Escape}');
+    await user.click(enGrid().getByRole('button', { name: /Berta R\./ }));
+    const panelB = screen.getByRole('dialog', { name: 'Berta Ruiz' });
+
+    await act(async () => resolver({ ok: true, anuncio: 'Propuesta de Ana confirmada.' }));
+
+    expect(screen.getByRole('dialog', { name: 'Berta Ruiz' })).toBe(panelB);
+    expect(panelB.contains(document.activeElement)).toBe(true);
+    expect(screen.getByText('Propuesta de Ana confirmada.').closest('[role="status"]')).not.toBeNull();
+  });
+
+  it('dos tramos de la misma cita son dos paneles: el resultado de uno no cierra el del otro', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(
+      () => new Promise((resolve) => (resolver = resolve as typeof resolver)),
+    );
+    const user = userEvent.setup();
+    montar({
+      vista: vistaDePrueba({
+        citas: [
+          citaDePrueba({ propuestaPendiente: PROPUESTA }),
+          citaDePrueba({ tramo: 1, diaIndice: 2, fechaLocal: '2026-09-30' }),
+        ],
+      }),
+    });
+    const [tramo0, tramo1] = enGrid().getAllByRole('button', { name: /Ana G./ });
+    await user.click(tramo0);
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await user.keyboard('{Escape}');
+    await user.click(tramo1);
+    const panel = screen.getByRole('dialog', { name: 'Ana García López' });
+
+    await act(async () => resolver({ ok: true, anuncio: 'Hecho.' }));
+
+    expect(screen.getByRole('dialog', { name: 'Ana García López' })).toBe(panel);
+  });
+
+  it('gemela: si el panel que lanzó la acción sigue siendo el abierto, el resultado lo cierra y el foco vuelve a la cita', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(
+      () => new Promise((resolve) => (resolver = resolve as typeof resolver)),
+    );
+    const user = userEvent.setup();
+    montar({ vista: dosCitas() });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await act(async () => resolver({ ok: true, anuncio: 'Hecho.' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect((document.activeElement as HTMLElement).getAttribute('data-cita-id')).toBe(citaDePrueba().id);
+  });
+
+  it('si la propuesta vuelve con el diálogo de reprogramar abierto encima, no lo cierra', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(
+      () => new Promise((resolve) => (resolver = resolve as typeof resolver)),
+    );
+    const user = userEvent.setup();
+    montar({ vista: dosCitas() });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+
+    await act(async () => resolver({ ok: true, anuncio: 'Hecho.' }));
+
+    expect(screen.getByRole('dialog', { name: 'Reprogramar la cita' })).toBeInTheDocument();
+    expect(screen.getByText('Hecho.').closest('[role="status"]')).not.toBeNull();
+  });
+
+  it('si la cita movida ya no tiene su diálogo y hay otro abierto, el resultado se anuncia pero no cierra el otro', async () => {
+    const user = userEvent.setup();
+    montar({ vista: dosCitas() });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await user.click(screen.getByRole('button', { name: 'movida-tarde' }));
+    await user.click(screen.getByRole('button', { name: 'cerrar-dialogo' }));
+    await user.keyboard('{Escape}');
+    await user.click(enGrid().getByRole('button', { name: /Berta R\./ }));
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    const dialogoB = screen.getByRole('dialog', { name: 'Reprogramar la cita' });
+
+    act(() => tardias[0]());
+
+    expect(screen.getByRole('dialog', { name: 'Reprogramar la cita' })).toBe(dialogoB);
+    expect(screen.getByRole('dialog', { name: 'Berta Ruiz' })).toBeInTheDocument();
+    expect(screen.getByText('Cita movida tarde.').closest('[role="status"]')).not.toBeNull();
+  });
+});
+
+// Revisión B-2: dos anuncios idénticos seguidos no cambian el DOM y el lector no vuelve a hablar.
+describe('Calendario · anuncios repetidos (revisión B-2)', () => {
+  it('al mover dos veces seguidas con el mismo texto, la región cambia (espacio duro alterno)', async () => {
+    const user = userEvent.setup();
+    montar();
+    async function mover() {
+      await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+      await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+      await user.click(screen.getByRole('button', { name: 'movida' }));
+    }
+    const region = () => screen.getByText(/Cita movida al 30/).textContent;
+    await mover();
+    expect(region()).toBe('Cita movida al 30 a las 14:00.');
+    await mover();
+    expect(region()).toBe('Cita movida al 30 a las 14:00.\u00A0');
+    await mover();
+    expect(region()).toBe('Cita movida al 30 a las 14:00.');
+  });
+
+  it('lo mismo al resolver una propuesta desde el panel', async () => {
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockResolvedValue({ ok: true, anuncio: 'Hecho.' });
+    const user = userEvent.setup();
+    montar({
+      vista: vistaDePrueba({
+        citas: [citaDePrueba({ propuestaPendiente: { id: '44444444-4444-4444-8444-444444444444', rango: '11:00–11:50' } })],
+      }),
+    });
+    for (const esperado of ['Hecho.', 'Hecho.\u00A0']) {
+      await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+      await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByText('Hecho.').textContent).toBe(esperado);
+    }
+  });
+});
+
+// Revisión B-3: el panel de la cita abierta desde el del día se ancla al día cuando su propia
+// fila (dentro del panel oculto) no tiene caja. Sin el `respaldo` caería al calendario entero.
+describe('Calendario · respaldo del ancla (revisión B-3)', () => {
+  it('la cita abierta desde el panel del día se coloca contra el número del día', async () => {
+    const DIA = { top: 300, left: 600, width: 40, height: 28 };
+    const CALENDARIO = { top: 50, left: 20, width: 1000, height: 700 };
+    const PANEL = { top: 0, left: 0, width: 320, height: 240 };
+    const SIN_CAJA = { top: 0, left: 0, width: 0, height: 0 };
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const r = this.closest('[hidden]')
+        ? SIN_CAJA
+        : this.getAttribute('role') === 'dialog'
+          ? PANEL
+          : this.matches('button[data-dia="2026-09-29"]')
+            ? DIA
+            : CALENDARIO;
+      return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top, toJSON: () => ({}) };
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800);
+
+    const user = userEvent.setup();
+    montar();
+    await user.click(enGrid().getByRole('button', { name: /mar 29/ }));
+    const panelDia = screen.getByRole('dialog', { name: 'martes, 29 de septiembre de 2026' });
+    await user.click(within(panelDia).getByRole('button', { name: /Ana G\./ }));
+    const panelCita = screen.getByRole('dialog', { name: 'Ana García López' });
+
+    // Contra el número del día: debajo de él (300 + 28 + 8 del pico), no contra el calendario.
+    expect(panelCita.style.top).toBe('336px');
   });
 });

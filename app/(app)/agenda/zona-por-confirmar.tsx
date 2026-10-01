@@ -19,6 +19,8 @@ export function ZonaPorConfirmar({ children }: { children: ReactNode }) {
     // Dos anuncios iguales seguidos no cambian el DOM y el lector no vuelve a hablar (revisión
     // de cierre N5): el repetido lleva un espacio duro al final.
     setAnuncio((previo) => (previo === texto ? `${texto} ` : texto));
+    // Con un panel o un diálogo abierto el foco es suyo: la resolución llegó tarde (revisión B-1).
+    if (document.querySelector('[role="dialog"]:not([hidden])')) return;
     zona.current?.focus();
   }
 

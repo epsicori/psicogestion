@@ -99,3 +99,47 @@ describe('ZonaPorConfirmar', () => {
     expect(document.activeElement).toBe(confirmar);
   });
 });
+
+// Revisión B-1: la zona no le quita el foco a quien ya está en un panel o un diálogo.
+describe('ZonaPorConfirmar con un panel abierto', () => {
+  beforeEach(() => {
+    confirmarPropuestaAgenda.mockReset();
+  });
+
+  it('el resultado se anuncia pero el foco no salta a la zona', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    confirmarPropuestaAgenda.mockImplementation(() => new Promise((resolve) => (resolver = resolve as typeof resolver)));
+    render(
+      <>
+        <div role="dialog" aria-label="Otra cita">
+          <button type="button">Dentro del panel</button>
+        </div>
+        <ZonaPorConfirmar>{fila()}</ZonaPorConfirmar>
+      </>,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Confirmar' }));
+    const dentro = screen.getByRole('button', { name: 'Dentro del panel' });
+    act(() => dentro.focus());
+
+    await act(async () => resolver({ ok: true, anuncio: 'Hecho.' }));
+
+    expect(regionDeZona()).toHaveTextContent('Hecho.');
+    expect(document.activeElement).toBe(dentro);
+  });
+
+  it('gemela: con el panel oculto (debajo de otro) o sin panel, la zona sí recibe el foco', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    confirmarPropuestaAgenda.mockImplementation(() => new Promise((resolve) => (resolver = resolve as typeof resolver)));
+    render(
+      <>
+        <div role="dialog" aria-label="Otra cita" hidden>
+          <button type="button">Dentro del panel</button>
+        </div>
+        <ZonaPorConfirmar>{fila()}</ZonaPorConfirmar>
+      </>,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Confirmar' }));
+    await act(async () => resolver({ ok: true, anuncio: 'Hecho.' }));
+    expect(document.activeElement).toBe(regionDeZona().parentElement);
+  });
+});
