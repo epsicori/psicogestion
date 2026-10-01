@@ -79,6 +79,16 @@ values
 insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
 values (:P18, :PRO18, :CA, 'nota_sin_firmar', 'citas', :C18FIN);
 
+-- Revisión A4: dos alertas que NO son «nota sin firmar abierta» y que no deben encender
+-- nota_pendiente. Cada una sobre su cita, para que cada condición del exists tenga su propio
+-- caso: una alerta RESUELTA de nota_sin_firmar (discrimina `al.estado = 'abierta'`) y una
+-- alerta ABIERTA de otro tipo (discrimina `al.tipo = 'nota_sin_firmar'`).
+insert into public.alertas_documentacion
+  (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id, estado, resuelta_en)
+values
+  (:P18, :PRO18, :CA, 'nota_sin_firmar', 'citas', :C18INI, 'resuelta', now()),
+  (:P18, :PRO18, :CA, 'borrador_abandonado', 'citas', :C18FUT, 'abierta', null);
+
 -- El rango de todas las lecturas: de ayer a mañana a esta hora + 2 h.
 create temp table t18_rango as
   select now() - interval '1 day' as desde, now() + interval '1 day 2 hours' as hasta;
@@ -272,6 +282,38 @@ select pg_temp.assert(
   not exists (select 1 from public.agenda_citas_rango(
      (select desde from t18_rango), (select hasta from t18_rango)) r where r.id = :C18LEJ),
   'Una cita fuera del rango no entra'
+);
+
+-- Revisión A3: el borde inicio = hasta, por la rama `citas` (la del profesional; R1c lo cubre
+-- por la del técnico). C18FIN empieza en now() - 50 min.
+select pg_temp.assert(
+  not exists (select 1 from public.agenda_citas_rango(now() - interval '2 hours', now() - interval '50 minutes') r
+               where r.id = :C18FIN),
+  'R6b: al profesional NO le entra la cita que empieza justo en el fin del rango (inicio < hasta es estricto)'
+);
+select pg_temp.assert(
+  exists (select 1 from public.agenda_citas_rango(now() - interval '2 hours', now() - interval '49 minutes') r
+           where r.id = :C18FIN),
+  'R6b GEMELA: al profesional SÍ le entra la misma cita con el fin del rango un minuto después de su inicio'
+);
+
+-- Revisión A4: la alerta resuelta y la de otro tipo no encienden nota_pendiente.
+select pg_temp.assert(
+  (select r.nota_pendiente = false from public.agenda_citas_rango(
+     (select desde from t18_rango), (select hasta from t18_rango)) r where r.id = :C18INI),
+  'R3b: una alerta nota_sin_firmar RESUELTA sobre la cita no enciende nota_pendiente (estado = abierta)'
+);
+select pg_temp.assert(
+  (select r.nota_pendiente = false from public.agenda_citas_rango(
+     (select desde from t18_rango), (select hasta from t18_rango)) r where r.id = :C18FUT),
+  'R3b: una alerta ABIERTA de otro tipo (borrador_abandonado) sobre la cita no enciende nota_pendiente (tipo = nota_sin_firmar)'
+);
+select pg_temp.assert(
+  exists (select 1 from public.alertas_documentacion al
+           where al.origen_id = :C18INI and al.estado = 'resuelta' and al.tipo = 'nota_sin_firmar')
+  and exists (select 1 from public.alertas_documentacion al
+           where al.origen_id = :C18FUT and al.estado = 'abierta' and al.tipo = 'borrador_abandonado'),
+  'R3b (el porqué): las dos alertas existen y el profesional las ve — el false es de la función, no de que falten'
 );
 
 -- =========================================================================
