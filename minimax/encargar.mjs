@@ -96,7 +96,7 @@ async function descubrir(clave) {
   const fallos = [];
   for (const endpoint of ENDPOINTS) {
     for (const modelo of MODELOS) {
-      const r = await llamar(endpoint, modelo, clave, [{ role: "user", content: "Responde solo: ok" }], 32);
+      const r = await llamar(endpoint, modelo, clave, [{ role: "user", content: "Responde solo: ok" }], 1024); // M1 razona antes de contestar: con 32 tokens el sondeo acaba en finish_reason "length" sin contenido
       if (r.ok) return { endpoint, modelo };
       fallos.push(`${new URL(endpoint).host} · ${modelo} → ${r.detalle}`);
     }
