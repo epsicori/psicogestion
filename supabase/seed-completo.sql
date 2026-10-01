@@ -95,6 +95,8 @@ declare
   k_cons      constant uuid := 'a0080003-0000-4000-8000-000000000001';
 
   k_epi_pareja constant uuid := 'e0080001-0000-4000-8000-000000000001';
+  k_epi_carmen constant uuid := 'e0080001-0000-4000-8000-000000000002';
+  k_epi_ivan   constant uuid := 'e0080001-0000-4000-8000-000000000003';
 
   k_n_borrador constant uuid := 'f0080001-0000-4000-8000-000000000001';
   k_n_firmada  constant uuid := 'f0080001-0000-4000-8000-000000000002';
@@ -330,6 +332,17 @@ begin
      (k_fecha_base - interval '60 days')::date)
   on conflict (id) do nothing;
 
+  -- T-034 (ADR-071): toda nota cuelga de un episodio, y del de su autor. Los dos
+  -- pacientes con notas individuales tienen el suyo, abierto antes de todas sus notas.
+  insert into public.episodios_asistenciales
+    (id, paciente_id, profesional_id, centro_id, modalidad_relacional, motivo_consulta, abierto_en, creado_en)
+  values
+    (k_epi_carmen, k_p_carmen, k_ana,  k_c_madrid,   'individual', null,
+     (k_fecha_base - interval '30 days')::date, k_fecha_base),
+    (k_epi_ivan,   k_p_ivan,   k_baja, k_c_canarias, 'individual', null,
+     (k_fecha_base - interval '45 days')::date, k_fecha_base)
+  on conflict (id) do nothing;
+
   -- -----------------------------------------------------------------------
   -- 7 · Notas, en sus tres estados
   --
@@ -341,17 +354,17 @@ begin
   insert into public.notas_clinicas
     (id, paciente_id, episodio_id, autor_id, fecha_sesion, borrador_contenido,
      borrador_actualizado_en, borrador_autor_id, creada_en) values
-    (k_n_borrador, k_p_carmen, null, k_ana, (k_fecha_base - interval '2 days')::date,
+    (k_n_borrador, k_p_carmen, k_epi_carmen, k_ana, (k_fecha_base - interval '2 days')::date,
      '{"texto":"Sesión 4. Pendiente de repasar el registro de la semana."}'::jsonb,
      k_fecha_base - interval '2 days', k_ana, k_fecha_base - interval '2 days')
   on conflict (id) do nothing;
 
   insert into public.notas_clinicas
     (id, paciente_id, episodio_id, autor_id, fecha_sesion, creada_en) values
-    (k_n_firmada,   k_p_carmen, null,         k_ana,  (k_fecha_base - interval '9 days')::date,  k_fecha_base - interval '9 days'),
-    (k_n_corregida, k_p_carmen, null,         k_ana,  (k_fecha_base - interval '16 days')::date, k_fecha_base - interval '16 days'),
+    (k_n_firmada,   k_p_carmen, k_epi_carmen, k_ana,  (k_fecha_base - interval '9 days')::date,  k_fecha_base - interval '9 days'),
+    (k_n_corregida, k_p_carmen, k_epi_carmen, k_ana,  (k_fecha_base - interval '16 days')::date, k_fecha_base - interval '16 days'),
     (k_n_conjunta,  k_p_sofia,  k_epi_pareja, k_ana,  (k_fecha_base - interval '5 days')::date,  k_fecha_base - interval '5 days'),
-    (k_n_de_baja,   k_p_ivan,   null,         k_baja, (k_fecha_base - interval '30 days')::date, k_fecha_base - interval '30 days')
+    (k_n_de_baja,   k_p_ivan,   k_epi_ivan,   k_baja, (k_fecha_base - interval '30 days')::date, k_fecha_base - interval '30 days')
   on conflict (id) do nothing;
 
   -- Las versiones no tienen identificador fijo (lo pone la base), así que la

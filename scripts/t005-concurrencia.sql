@@ -40,9 +40,14 @@ select id as pconc_id from public.pacientes where profesional_id = :ANA order by
 \set NOTA1 '\'e0050002-0000-4000-8000-000000000001\''
 \set NOTA2 '\'e0050002-0000-4000-8000-000000000002\''
 
-insert into public.notas_clinicas (id, paciente_id, autor_id) values
-  (:NOTA1, :'pconc_id', :ANA),
-  (:NOTA2, :'pconc_id', :ANA);
+-- T-034 (ADR-071): toda nota cuelga de un episodio del autor.
+\set EPICONC '\'e0050003-0000-4000-8000-000000000001\''
+insert into public.episodios_asistenciales (id, paciente_id, profesional_id) values
+  (:EPICONC, :'pconc_id', :ANA);
+
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) values
+  (:NOTA1, :'pconc_id', :EPICONC, :ANA),
+  (:NOTA2, :'pconc_id', :EPICONC, :ANA);
 
 -- Tabla NO temporal (a diferencia de las de pg_temp del banco de RLS): la necesitan DOS
 -- conexiones distintas, que no comparten `pg_temp`. Guarda éxito/SQLSTATE de la segunda

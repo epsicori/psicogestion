@@ -12,6 +12,10 @@
 -- sí la toque hereda filas manipuladas y restauradas a mano: léase antes la sección D.
 
 \set PCAD  '\'d0050001-0000-4000-8000-000000000001\''
+\set EPICAD  '\'e0050001-0000-4000-8000-000000000001\''
+\set EPIDEMO '\'e0050001-0000-4000-8000-000000000009\''
+\set EPIVEC  '\'e0050001-0000-4000-8000-000000000008\''
+\set EPICOT  '\'e012b001-0000-4000-8000-000000000001\''
 
 \set NCADX '\'f0050001-0000-4000-8000-000000000000\''
 
@@ -56,21 +60,22 @@ insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) 
   (:PVEC, 'Vera', 'Vector', :ANA, :CA),
   (:PCOT, 'Cora', 'Cotejo', :PRO1, :CA);
 
-insert into public.notas_clinicas (id, paciente_id, autor_id) values
+-- T-034 (ADR-071): toda nota cuelga de un episodio, y del de su autor (D2). Un episodio
+-- individual por paciente, a nombre de quien escribe la nota, en el centro CA.
+insert into public.episodios_asistenciales (id, paciente_id, profesional_id, centro_id) values
+  (:EPICAD,  :PCAD,  :PRO1, :CA),
+  (:EPIDEMO, :PDEMO, :PRO1, :CA),
+  (:EPIVEC,  :PVEC,  :ANA,  :CA),
+  (:EPICOT,  :PCOT,  :PRO1, :CA);
 
-  (:NCADX, :PCAD, :PRO1),
-
-  (:NCADA, :PCAD, :PRO1),
-
-  (:NCADB, :PCAD, :PRO1),
-
-  (:NCADC, :PCAD, :PRO1),
-
-  (:NDEMO, :PDEMO, :PRO1),
-
-  (:NVEC, :PVEC, :ANA),
-
-  (:NCOT, :PCOT, :PRO1);
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) values
+  (:NCADX, :PCAD, :EPICAD, :PRO1),
+  (:NCADA, :PCAD, :EPICAD, :PRO1),
+  (:NCADB, :PCAD, :EPICAD, :PRO1),
+  (:NCADC, :PCAD, :EPICAD, :PRO1),
+  (:NDEMO, :PDEMO, :EPIDEMO, :PRO1),
+  (:NVEC, :PVEC, :EPIVEC, :ANA),
+  (:NCOT, :PCOT, :EPICOT, :PRO1);
 
 -- =========================================================================
 -- A · Las fijaciones de 01-fijacion.sql ya forman cadenas de verdad
