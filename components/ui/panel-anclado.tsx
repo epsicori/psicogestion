@@ -3,7 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
-import { colocarPanel, type Rect } from './colocacion';
+import { colocarPanel, limitesHorizontales, type Rect } from './colocacion';
 import { enfocables, useCierreExterior, useFocoAtrapado } from './foco';
 
 type Props = {
@@ -33,11 +33,32 @@ type Props = {
   children: ReactNode;
 };
 
-function rectDe(elemento: HTMLElement, respaldo?: HTMLElement): Rect {
+const CELDA_O_DIA = '[data-dia], [role="gridcell"], td';
+
+function caja(elemento: HTMLElement): Rect {
   const { top, left, width, height } = elemento.getBoundingClientRect();
-  // Un elemento `hidden` o dentro de uno mide cero: colocar contra ese cero lo pega a la esquina.
-  if (width === 0 && height === 0 && respaldo) return rectDe(respaldo);
   return { top, left, width, height };
+}
+
+/**
+ * Contra qué colocar: el ancla; si no tiene caja (`hidden` o dentro de uno), el respaldo; si
+ * tampoco, la celda o el día que los contiene; y por último el calendario. Colocar contra un
+ * cero pega el panel a la esquina de la ventana (revisión B-4).
+ */
+function rectDe(ancla: HTMLElement, respaldo?: HTMLElement, limites?: HTMLElement | null): Rect {
+  const candidatos = [
+    ancla,
+    respaldo,
+    respaldo?.closest<HTMLElement>(CELDA_O_DIA),
+    ancla.closest<HTMLElement>(CELDA_O_DIA),
+    limites,
+  ];
+  for (const candidato of candidatos) {
+    if (!candidato) continue;
+    const medida = caja(candidato);
+    if (medida.width !== 0 || medida.height !== 0) return medida;
+  }
+  return caja(ancla);
 }
 
 /**
@@ -65,18 +86,16 @@ export function PanelAnclado({ ancla, respaldo, limites, titulo, alCerrar, pausa
 
     const colocar = () => {
       const ventana = { width: window.innerWidth, height: window.innerHeight };
-      let izquierda = 0;
-      let derecha = ventana.width;
-      if (limites) {
-        const caja = limites.getBoundingClientRect();
-        izquierda = Math.max(0, caja.left);
-        derecha = Math.min(ventana.width, caja.left + caja.width);
-      }
       const medida = nodo.getBoundingClientRect();
+      const horizontales = limitesHorizontales({
+        contenedor: limites ? limites.getBoundingClientRect() : null,
+        ventana: ventana.width,
+        panelAncho: medida.width,
+      });
       const c = colocarPanel({
-        ancla: rectDe(ancla, respaldo),
+        ancla: rectDe(ancla, respaldo, limites),
         panel: { width: medida.width, height: nodo.scrollHeight || medida.height },
-        limites: { top: 0, left: izquierda, width: derecha - izquierda, height: ventana.height },
+        limites: { top: 0, left: horizontales.left, width: horizontales.width, height: ventana.height },
       });
       nodo.style.top = `${c.top}px`;
       nodo.style.left = `${c.left}px`;

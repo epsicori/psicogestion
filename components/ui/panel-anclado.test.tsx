@@ -180,6 +180,90 @@ describe('PanelAnclado', () => {
 
 // Revisión de cierre N2: la fila del panel del día es el ancla del panel de la cita, y en el mismo
 // commit el panel del día pasa a `hidden`: su caja mide cero y el pico apuntaría a la esquina.
+// Criterio 12 y revisión B-4: los límites son el calendario, que en un teléfono no empieza en 0.
+describe('PanelAnclado con límites', () => {
+  const SIN_CAJA = rect(0, 0, 0, 0);
+
+  function ConLimites({ conRespaldo = false }: { conRespaldo?: boolean }) {
+    const [limites, setLimites] = useState<HTMLElement | null>(null);
+    const [ancla, setAncla] = useState<HTMLElement | null>(null);
+    const [respaldo, setRespaldo] = useState<HTMLElement | null>(null);
+    return (
+      <div ref={setLimites} data-rol="limites">
+        <button type="button" data-rol="ancla" ref={setAncla}>
+          Ancla
+        </button>
+        <button type="button" data-rol="respaldo" ref={setRespaldo}>
+          Respaldo
+        </button>
+        {limites && ancla && (
+          <PanelAnclado
+            ancla={ancla}
+            respaldo={conRespaldo ? (respaldo ?? undefined) : undefined}
+            limites={limites}
+            titulo="Cita"
+            alCerrar={() => {}}
+          >
+            <button type="button">Dentro</button>
+          </PanelAnclado>
+        )}
+      </div>
+    );
+  }
+
+  it('360 px: con el calendario a 37 px del borde, el panel de 320 px deja 8 px de margen a cada lado', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return rect(0, 0, 320, 240);
+      if (this.getAttribute('data-rol') === 'limites') return rect(100, 37, 323, 600);
+      return this.getAttribute('data-rol') === 'ancla' ? rect(300, 60, 40, 28) : SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(360);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(640);
+
+    render(<ConLimites />);
+    const panel = await screen.findByRole('dialog', { name: 'Cita' });
+    const izquierda = parseFloat(panel.style.left);
+    expect(izquierda).toBeGreaterThanOrEqual(8);
+    expect(izquierda + 320).toBeLessThanOrEqual(360 - 8);
+  });
+
+  it('con límites anchos (escritorio) el panel sigue acotado por el calendario, no por la ventana', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return rect(0, 0, 320, 240);
+      if (this.getAttribute('data-rol') === 'limites') return rect(100, 300, 700, 600);
+      return this.getAttribute('data-rol') === 'ancla' ? rect(300, 310, 40, 28) : SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800);
+
+    render(<ConLimites />);
+    const panel = await screen.findByRole('dialog', { name: 'Cita' });
+    expect(parseFloat(panel.style.left)).toBe(308);
+  });
+
+  it('B-4: si ni el ancla ni el respaldo tienen caja, se coloca contra el calendario, no contra la esquina', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return rect(0, 0, 320, 240);
+      if (this.getAttribute('data-rol') === 'limites') return rect(120, 300, 700, 40);
+      return SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(800);
+
+    render(<ConLimites conRespaldo />);
+    const panel = await screen.findByRole('dialog', { name: 'Cita' });
+    const esperado = colocarPanel({
+      ancla: rect(120, 300, 700, 40),
+      panel: { width: 320, height: 240 },
+      limites: { top: 0, left: 300, width: 700, height: 800 },
+    });
+    // La esquina daría top = 8 y left = 308.
+    expect(parseFloat(panel.style.top)).toBeGreaterThan(100);
+    expect(panel.style.top).toBe(`${esperado.top}px`);
+    expect(panel.style.left).toBe(`${esperado.left}px`);
+  });
+});
+
 describe('PanelAnclado con el ancla oculta', () => {
   const SIN_CAJA = rect(0, 0, 0, 0);
   const DIA = rect(300, 600, 40, 28);

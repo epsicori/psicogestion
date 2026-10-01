@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { colocarPanel, RADIO_PANEL, type Rect } from './colocacion';
+import { colocarPanel, limitesHorizontales, RADIO_PANEL, type Rect } from './colocacion';
 
 const VENTANA: Rect = { top: 0, left: 0, width: 1280, height: 800 };
 const PANEL = { width: 320, height: 240 };
@@ -80,5 +80,30 @@ describe('colocarPanel', () => {
     const ancla = celda(100, 240, 40);
     const c = colocarPanel({ ancla, panel: PANEL, limites, margen: MARGEN, pico: PICO });
     expect(c.left).toBe(240 + MARGEN);
+  });
+});
+
+describe('limitesHorizontales', () => {
+  it('el calendario ancho manda; el estrecho cede a la ventana (360 px: calendario en 37 + 323)', () => {
+    expect(limitesHorizontales({ contenedor: { left: 300, width: 700 }, ventana: 1280, panelAncho: 320 })).toEqual({
+      left: 300,
+      width: 700,
+    });
+    expect(limitesHorizontales({ contenedor: { left: 37, width: 323 }, ventana: 360, panelAncho: 320 })).toEqual({
+      left: 0,
+      width: 360,
+    });
+    expect(limitesHorizontales({ contenedor: null, ventana: 360, panelAncho: 320 })).toEqual({ left: 0, width: 360 });
+  });
+
+  it('con ellos, el panel de 320 px en 360 px queda entre 8 y 32 px, nunca fuera', () => {
+    const l = limitesHorizontales({ contenedor: { left: 37, width: 323 }, ventana: 360, panelAncho: 320 });
+    const c = colocarPanel({
+      ancla: celda(300, 330, 28, 28),
+      panel: { width: 320, height: 240 },
+      limites: { top: 0, left: l.left, width: l.width, height: 640 },
+    });
+    expect(c.left).toBe(32);
+    expect(c.left + 320).toBeLessThanOrEqual(360 - MARGEN);
   });
 });

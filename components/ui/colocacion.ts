@@ -28,6 +28,32 @@ function recortar(valor: number, minimo: number, maximo: number): number {
   return Math.max(minimo, Math.min(valor, maximo));
 }
 
+/**
+ * Los límites horizontales del panel: el calendario, y la ventana cuando el calendario no deja
+ * sitio para el panel con su margen a cada lado (un teléfono de 360 px, donde el calendario
+ * empieza a unos 37 px del borde y `recortar` pegaría el panel a su izquierda, fuera de la
+ * pantalla por la derecha). Con el panel ya acotado a la ventana (`min(20rem, 100vw - 2rem)`),
+ * en la ventana siempre cabe con margen.
+ */
+export function limitesHorizontales({
+  contenedor,
+  ventana,
+  panelAncho,
+  margen = MARGEN_POR_DEFECTO,
+}: {
+  contenedor: { left: number; width: number } | null;
+  ventana: number;
+  panelAncho: number;
+  margen?: number;
+}): { left: number; width: number } {
+  if (contenedor) {
+    const izquierda = Math.max(0, contenedor.left);
+    const derecha = Math.min(ventana, contenedor.left + contenedor.width);
+    if (derecha - izquierda >= panelAncho + 2 * margen) return { left: izquierda, width: derecha - izquierda };
+  }
+  return { left: 0, width: ventana };
+}
+
 export function colocarPanel({
   ancla,
   panel,
