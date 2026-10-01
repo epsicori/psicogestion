@@ -30,7 +30,7 @@ territorio:
   - components/ui/colocacion.ts
   - components/ui/colocacion.test.ts
   - components/ui/rejilla-foco.ts
-  - components/ui/rejilla-foco.test.ts
+  - components/ui/rejilla-foco.test.tsx
   - components/armazon/modulos.ts
   - components/armazon/modulos.test.ts
   - docs/interfaz.md
