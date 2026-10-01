@@ -78,6 +78,9 @@ describe('decidirModoSegundoFactor · la URL se compara por host exacto', () => 
     'http://evil.com/?h=127.0.0.1',
     'https://127.0.0.1:54321',
     'http://127.0.0.2:54321',
+    'http://evil-localhost:54321',
+    'http://x.localhost:54321',
+    'http://supabase-127.0.0.1:54321',
     'no-es-una-url',
   ])('rechaza %s con la variable puesta', async (url) => {
     const { decidirModoSegundoFactor, ErrorModoLocal } = await importarConEntorno({
@@ -141,6 +144,17 @@ describe('codigoTotp · vectores RFC 6238 (SHA-1, 6 dígitos, 30 s)', () => {
   ])('a los %i s da %s (ceros a la izquierda conservados)', async (segundos, esperado) => {
     const { codigoTotp } = await importarConEntorno({ variable: undefined, url: URL_LOCAL });
     expect(codigoTotp(SECRETO_RFC, segundos * 1000)).toBe(esperado);
+  });
+
+  // Los secretos sembrados tienen 18 caracteres: pasan por el relleno de base32, que el
+  // secreto RFC (32, múltiplo de 8) no ejercita. Esperados calculados con Python
+  // (`base64.b32decode` con relleno + `hmac`), no con `codigoTotp`.
+  it.each([
+    [0, '837195'],
+    [2000000000, '986607'],
+  ])('secreto sembrado SEMILLATOTPDEMOANA a los %i s da %s', async (segundos, esperado) => {
+    const { codigoTotp } = await importarConEntorno({ variable: undefined, url: URL_LOCAL });
+    expect(codigoTotp('SEMILLATOTPDEMOANA', segundos * 1000)).toBe(esperado);
   });
 
   it('un carácter fuera del alfabeto base32 lanza', async () => {
@@ -214,21 +228,19 @@ describe('superarSegundoFactorSembrado', () => {
   });
 
   it('con el modo activo y el factor sembrado de Ana, verifica con el código del instante', async () => {
-    const { superarSegundoFactorSembrado, codigoTotp } = await importarConEntorno({
+    const { superarSegundoFactorSembrado } = await importarConEntorno({
       variable: 'activo',
       url: URL_LOCAL,
     });
     vi.useFakeTimers();
-    const ahora = new Date('2026-10-01T09:15:42Z').getTime();
-    vi.setSystemTime(ahora);
+    vi.setSystemTime(new Date('2026-10-01T09:15:42Z'));
     const { cliente, challengeAndVerify } = clienteFingido({ totp: [{ id: ID_ANA }] });
 
     expect(await superarSegundoFactorSembrado(cliente)).toBe('superado');
     expect(challengeAndVerify).toHaveBeenCalledTimes(1);
-    expect(challengeAndVerify).toHaveBeenCalledWith({
-      factorId: ID_ANA,
-      code: codigoTotp('SEMILLATOTPDEMOANA', ahora),
-    });
+    // Literal calculado con Python para ese instante: no con `codigoTotp`, que sería
+    // comparar la función consigo misma.
+    expect(challengeAndVerify).toHaveBeenCalledWith({ factorId: ID_ANA, code: '972604' });
   });
 
   it('GEMELA · un factor verificado que no es de la siembra (cuenta real) no se supera', async () => {
@@ -297,5 +309,36 @@ describe('superarSegundoFactorSembrado', () => {
 
     await expect(superarSegundoFactorSembrado(cliente)).rejects.toThrow(ErrorModoLocal);
     expect(listFactors).not.toHaveBeenCalled();
+  });
+});
+
+describe('instrumentation.ts · register() (capa 1: el servidor no arranca mal configurado)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function registrarCon(entorno: { variable: string | undefined; url: string }) {
+    await importarConEntorno(entorno);
+    vi.stubEnv('NEXT_RUNTIME', 'nodejs');
+    const { register } = await import('../../instrumentation');
+    return register();
+  }
+
+  it('con la variable puesta y Supabase remoto, register() rechaza con ErrorModoLocal', async () => {
+    const promesa = registrarCon({ variable: 'activo', url: URL_REMOTA });
+    const { ErrorModoLocal } = await import('./modo-desarrollo');
+    await expect(promesa).rejects.toThrow(ErrorModoLocal);
+  });
+
+  it('GEMELA · con la variable puesta y Supabase local, register() resuelve y avisa en la terminal', async () => {
+    const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(registrarCon({ variable: 'activo', url: URL_LOCAL })).resolves.toBeUndefined();
+    expect(aviso).toHaveBeenCalledWith(expect.stringMatching(/modo local/));
+  });
+
+  it('sin la variable, register() resuelve sin avisar', async () => {
+    const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(registrarCon({ variable: undefined, url: URL_REMOTA })).resolves.toBeUndefined();
+    expect(aviso).not.toHaveBeenCalled();
   });
 });

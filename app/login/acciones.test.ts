@@ -64,6 +64,18 @@ describe('iniciarSesion · modo local del segundo factor', () => {
     );
   });
 
+  it.each(['fallo', 'sin_factor_sembrado'])(
+    'con el pase en «%s» redirige igual a /pacientes (la guardia manda a /primera-vez) y usa el cliente que inició sesión',
+    async (resultado) => {
+      segundoFactorAutomaticoActivo.mockReturnValue(true);
+      superarSegundoFactorSembrado.mockResolvedValue(resultado);
+
+      await expect(iniciarSesion(CREDENCIALES)).rejects.toMatchObject({ destino: '/pacientes' });
+      const [cliente] = superarSegundoFactorSembrado.mock.calls[0];
+      expect(cliente).toMatchObject({ auth: { signInWithPassword } });
+    },
+  );
+
   it('con el modo encendido y credenciales malas no intenta el pase', async () => {
     segundoFactorAutomaticoActivo.mockReturnValue(true);
     signInWithPassword.mockResolvedValue({ error: { code: 'invalid_credentials' } });
