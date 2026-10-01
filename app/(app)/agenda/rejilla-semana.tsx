@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 
 import { useFocoRodante } from '@/components/ui/rejilla-foco';
 import { t, tCon } from '@/lib/i18n';
@@ -260,7 +260,7 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
                         '--alto-tactil': `${altoTactil(cita, delDia)}px`,
                         left: `${(cita.columna / cita.columnasEnGrupo) * 100}%`,
                         width: `${100 / cita.columnasEnGrupo}%`,
-                      }}
+                      } as CSSProperties}
                     >
                       <ContenidoCita cita={cita} late />
                     </button>
