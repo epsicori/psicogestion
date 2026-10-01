@@ -71,6 +71,35 @@ describe('ZonaPorConfirmar', () => {
     expect(document.activeElement?.isConnected).toBe(true);
   });
 
+  // Revisión B2-2: la zona solo toma el foco si lo tenía ella o `body`; no se lo quita a otro control.
+  it('si el foco está en otro control (un selector), la resolución no se lo quita', async () => {
+    let terminar: (r: { ok: true; anuncio: string }) => void = () => {};
+    confirmarPropuestaAgenda.mockImplementation(() => new Promise((resolve) => (terminar = resolve as typeof terminar)));
+    const { rerender } = render(
+      <>
+        <select aria-label="Profesional">
+          <option>Todos</option>
+        </select>
+        <ZonaPorConfirmar>{fila()}</ZonaPorConfirmar>
+      </>,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Confirmar' }));
+    screen.getByRole('combobox', { name: 'Profesional' }).focus();
+
+    await act(async () => terminar({ ok: true, anuncio: 'Hecho.' }));
+    rerender(
+      <>
+        <select aria-label="Profesional">
+          <option>Todos</option>
+        </select>
+        <ZonaPorConfirmar>{null}</ZonaPorConfirmar>
+      </>,
+    );
+
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Profesional' }));
+    expect(regionDeZona()).toHaveTextContent('Hecho.');
+  });
+
   // Revisión de cierre N5: dos anuncios iguales seguidos no cambian el DOM y el lector no habla.
   it('dos anuncios idénticos seguidos cambian el texto de la región', async () => {
     confirmarPropuestaAgenda.mockResolvedValue({ ok: true, anuncio: 'Propuesta confirmada.' });
