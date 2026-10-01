@@ -94,3 +94,37 @@ export function colocarPanel({
 
   return { top, left, lado, picoX, altoMax };
 }
+
+/** La parte de `rect` que se ve en una ventana de alto `alto` (solo en vertical). */
+export function visibleEnVentana(rect: Rect, alto: number): Rect {
+  const top = Math.max(0, rect.top);
+  const abajo = Math.min(alto, rect.top + rect.height);
+  return { ...rect, top, height: Math.max(0, abajo - top) };
+}
+
+/**
+ * Último recurso cuando el panel no cabe ni encima ni debajo del ancla (un calendario más alto
+ * que la ventana, sin otra referencia): centrado en vertical y visible en la ventana, con el
+ * pico en el centro del panel. Revisión B2-3.
+ */
+export function centrarEnVentana({
+  ancla,
+  panel,
+  limites,
+  margen = MARGEN_POR_DEFECTO,
+}: {
+  ancla: Rect;
+  panel: { width: number; height: number };
+  limites: Rect;
+  margen?: number;
+}): Colocacion {
+  const altoMax = Math.max(0, limites.height - 2 * margen);
+  const alto = Math.min(panel.height, altoMax);
+  const top = limites.top + (limites.height - alto) / 2;
+  const left = recortar(
+    ancla.left + ancla.width / 2 - panel.width / 2,
+    limites.left + margen,
+    limites.left + limites.width - margen - panel.width,
+  );
+  return { top, left, lado: 'abajo', picoX: panel.width / 2, altoMax };
+}

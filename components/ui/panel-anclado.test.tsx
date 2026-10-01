@@ -264,6 +264,101 @@ describe('PanelAnclado con límites', () => {
   });
 });
 
+
+function ConLimitesYRespaldo() {
+  const [limites, setLimites] = useState<HTMLElement | null>(null);
+  const [ancla, setAncla] = useState<HTMLElement | null>(null);
+  const [respaldo, setRespaldo] = useState<HTMLElement | null>(null);
+  return (
+    <div ref={setLimites} data-rol="limites">
+      <button type="button" ref={setAncla}>
+        Ancla
+      </button>
+      <button type="button" ref={setRespaldo}>
+        Respaldo
+      </button>
+      {limites && ancla && respaldo && (
+        <PanelAnclado ancla={ancla} respaldo={respaldo} limites={limites} titulo="Cita" alCerrar={() => {}}>
+          <button type="button">Dentro</button>
+        </PanelAnclado>
+      )}
+    </div>
+  );
+}
+
+// Revisión B2-3 y B2-4: el último escalón del respaldo y el de la celda o el día.
+describe('PanelAnclado · últimos escalones del respaldo', () => {
+  const SIN_CAJA = rect(0, 0, 0, 0);
+
+  it('B2-3: con el calendario más alto que la ventana, el panel queda dentro de la ventana y con alto útil', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return rect(0, 0, 320, 240);
+      // De −300 a 1300 px: más alto que la ventana, que ve de 0 a 1133.
+      if (this.getAttribute('data-rol') === 'limites') return rect(-300, 20, 704, 1600);
+      return SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(744);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(1133);
+
+    render(<ConLimitesYRespaldo />);
+    const panel = await screen.findByRole('dialog', { name: 'Cita' });
+    const top = parseFloat(panel.style.top);
+    expect(top).toBeGreaterThanOrEqual(0);
+    expect(top + 240).toBeLessThanOrEqual(1133);
+    expect(parseFloat(panel.style.getPropertyValue('--alto-max'))).toBeGreaterThanOrEqual(240);
+  });
+
+  it('gemela: con el calendario dentro de la ventana, se coloca contra él', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return rect(0, 0, 320, 240);
+      if (this.getAttribute('data-rol') === 'limites') return rect(120, 20, 704, 40);
+      return SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(744);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(1133);
+
+    render(<ConLimitesYRespaldo />);
+    const panel = await screen.findByRole('dialog', { name: 'Cita' });
+    expect(parseFloat(panel.style.top)).toBe(120 + 40 + 8);
+  });
+
+  // Una cita del mes (`hidden sm:flex`) al girar por debajo de `sm`: sin caja ella y sin respaldo,
+  // pero su celda se ve. Quitar `ancla.closest(CELDA_O_DIA)` manda el panel al calendario.
+  it('B2-4: sin caja el ancla ni el respaldo, se coloca contra la celda que contiene al ancla', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute('role') === 'dialog') return rect(0, 0, 320, 240);
+      if (this.getAttribute('data-rol') === 'limites') return rect(100, 20, 704, 900);
+      if (this.hasAttribute('data-dia')) return rect(500, 300, 90, 90);
+      return SIN_CAJA;
+    });
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(1000);
+
+    function EnCelda() {
+      const [limites, setLimites] = useState<HTMLElement | null>(null);
+      const [ancla, setAncla] = useState<HTMLElement | null>(null);
+      return (
+        <div ref={setLimites} data-rol="limites">
+          <div data-dia="2026-10-08">
+            <button type="button" ref={setAncla}>
+              Cita del mes
+            </button>
+          </div>
+          {limites && ancla && (
+            <PanelAnclado ancla={ancla} limites={limites} titulo="Cita" alCerrar={() => {}}>
+              <button type="button">Dentro</button>
+            </PanelAnclado>
+          )}
+        </div>
+      );
+    }
+    render(<EnCelda />);
+    const panel = await screen.findByRole('dialog', { name: 'Cita' });
+    // Contra la celda (500..590): el panel va debajo, a 598. Contra el calendario (100..1000) no cabe.
+    expect(parseFloat(panel.style.top)).toBe(500 + 90 + 8);
+  });
+});
+
 describe('PanelAnclado con el ancla oculta', () => {
   const SIN_CAJA = rect(0, 0, 0, 0);
   const DIA = rect(300, 600, 40, 28);

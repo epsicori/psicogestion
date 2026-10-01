@@ -3,7 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
-import { colocarPanel, limitesHorizontales, type Rect } from './colocacion';
+import { centrarEnVentana, colocarPanel, limitesHorizontales, visibleEnVentana, type Rect } from './colocacion';
 import { enfocables, useCierreExterior, useFocoAtrapado } from './foco';
 
 type Props = {
@@ -42,23 +42,22 @@ function caja(elemento: HTMLElement): Rect {
 
 /**
  * Contra qué colocar: el ancla; si no tiene caja (`hidden` o dentro de uno), el respaldo; si
- * tampoco, la celda o el día que los contiene; y por último el calendario. Colocar contra un
- * cero pega el panel a la esquina de la ventana (revisión B-4).
+ * tampoco, la celda o el día que contiene al ancla; y por último el calendario. Colocar contra
+ * un cero pega el panel a la esquina de la ventana (revisión B-4). `calendario` avisa de que se
+ * ha llegado al último escalón.
  */
-function rectDe(ancla: HTMLElement, respaldo?: HTMLElement, limites?: HTMLElement | null): Rect {
-  const candidatos = [
-    ancla,
-    respaldo,
-    respaldo?.closest<HTMLElement>(CELDA_O_DIA),
-    ancla.closest<HTMLElement>(CELDA_O_DIA),
-    limites,
-  ];
+function rectDe(
+  ancla: HTMLElement,
+  respaldo?: HTMLElement,
+  limites?: HTMLElement | null,
+): { medida: Rect; calendario: boolean } {
+  const candidatos = [ancla, respaldo, ancla.closest<HTMLElement>(CELDA_O_DIA), limites];
   for (const candidato of candidatos) {
     if (!candidato) continue;
     const medida = caja(candidato);
-    if (medida.width !== 0 || medida.height !== 0) return medida;
+    if (medida.width !== 0 || medida.height !== 0) return { medida, calendario: candidato === limites };
   }
-  return caja(ancla);
+  return { medida: caja(ancla), calendario: false };
 }
 
 /**
@@ -92,11 +91,18 @@ export function PanelAnclado({ ancla, respaldo, limites, titulo, alCerrar, pausa
         ventana: ventana.width,
         panelAncho: medida.width,
       });
-      const c = colocarPanel({
-        ancla: rectDe(ancla, respaldo, limites),
+      const referencia = rectDe(ancla, respaldo, limites);
+      const entrada = {
         panel: { width: medida.width, height: nodo.scrollHeight || medida.height },
         limites: { top: 0, left: horizontales.left, width: horizontales.width, height: ventana.height },
-      });
+      };
+      // El calendario puede ser más alto que la ventana: se coloca contra lo que se ve de él y,
+      // si ni encima ni debajo cabe el panel, centrado en la ventana (revisión B2-3).
+      const anclaMedida = referencia.calendario ? visibleEnVentana(referencia.medida, ventana.height) : referencia.medida;
+      let c = colocarPanel({ ancla: anclaMedida, ...entrada });
+      if (referencia.calendario && c.altoMax < entrada.panel.height) {
+        c = centrarEnVentana({ ancla: anclaMedida, ...entrada });
+      }
       nodo.style.top = `${c.top}px`;
       nodo.style.left = `${c.left}px`;
       nodo.style.setProperty('--pico-x', `${c.picoX}px`);
