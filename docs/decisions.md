@@ -52,3 +52,6 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-068](decisions/ADR-068.md) | Editar una serie: propuestas que se rechazan al confirmar, sin atajo directo, y el diálogo dice en qué se convierte la serie | aceptada | 24-09-2026 |
 | [ADR-069](decisions/ADR-069.md) | El ordinal de una serie mensual es fijo, y las series solo se crean por la función que las valida | aceptada | 24-09-2026 |
 | [ADR-070](decisions/ADR-070.md) | El ordinal de una serie mensual se lee de su último cambio de regla, no de las citas | aceptada | 26-09-2026 |
+| [ADR-071](decisions/ADR-071.md) | Toda nota clínica cuelga de un episodio, y el sobre de la era 4 lo sella junto con la fecha de sesión | aceptada | 29-09-2026 |
+| [ADR-072](decisions/ADR-072.md) | La coterapia se registra en la nota y se sella; no abre la historia a nadie | aceptada | 29-09-2026 |
+| [ADR-073](decisions/ADR-073.md) | El centro de un episodio con notas no cambia; el director sanitario puede ser coprofesional | aceptada | 01-10-2026 |

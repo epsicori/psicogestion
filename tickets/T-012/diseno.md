@@ -160,42 +160,91 @@ Todo lo de abajo está leído, no recordado. Ruta y línea cuando importa.
 
 ## 1 · Piezas y contratos
 
-### 1.1 · El sobre de doce claves (ADR-057)
+### 1.1 · El sobre de diecisiete claves (era 4: ADR-057, ADR-067, ADR-071, ADR-072)
 
-Forma exacta, en el orden que produce JCS (ordenación por unidades UTF-16; `alcance` cae entre
-`abierta_en` y `anotaciones_reservadas` porque `b < l`):
+> Enmienda del 29-09-2026 (ADR-071.6). Sustituye la versión de doce claves de esta sección. La
+> escribe el arquitecto de T-012c: su diseño, `tickets/T-012c/diseno.md` §9, es la referencia
+> de la forma, del disparador y de las pruebas. Donde esta sección choque con §1.5 (pasos 4 y
+> 8), con §1.4 (línea «`esquema_version` no es 3») o con el punto 2 del Resumen, **manda esta
+> sección**.
+
+**Quién implementa qué.**
+- La era 3 (doce claves, `alcance`) la dejó hecha T-012a
+  (`supabase/migrations/20260915130000_alcance_en_el_sobre.sql`).
+- La era 4 la implementa **T-012c**, que depende de T-034: `notas_clinicas.episodio_id` pasa a
+  obligatorio y aparece la columna `coprofesional_id`.
+- T-012 **no toca** `lib/huella/**`, la migración del sello ni los generadores del banco. Consume
+  `firmarVersionNota` tal como la deja T-012c, y va después de T-012c.
+
+**Forma exacta**, en el orden que produce JCS:
 
 ```json
-{"abierta_en":"…Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"…","cita_id":null,"creada_en":"…Z","cuerpo":{…},"esquema_version":3,"firmada_en":"…Z","margen_sesion_minutos":null,"motivo_cambio":null,"redactada_en_sesion":false}
+{"abierta_en":"…Z","alcance":"individual","anotaciones_reservadas":null,"autor_id":"…","cita_id":null,"coprofesional_id":null,"creada_en":"…Z","cuerpo":{…},"episodio_id":"…","esquema_version":4,"fecha_sesion":"AAAA-MM-DD","firmada_en":"…Z","margen_sesion_minutos":null,"motivo_cambio":null,"nota_id":"…","paciente_id":"…","redactada_en_sesion":false}
 ```
 
-**Ficheros a modificar** (esto es el corte previo, §8):
+Las cinco claves nuevas:
 
-| Fichero | Cambio exacto |
-|---|---|
-| `lib/huella/sobre.ts` | `ESQUEMA_VERSION = 3`. En `esquemaSobre`, una clave más: `alcance: z.enum(['individual','conjunta'])`. En `construirSobre()`, `alcance: entrada.alcance` dentro de `sinNormalizar` (colocado alfabéticamente, aunque JCS reordene igual). Comentario de cabecera: «doce claves», con la cita del ADR-057. `ALGORITMO_VERSION` **no se toca**. |
-| `lib/huella/sobre.test.ts` | `«produce exactamente las once claves»` → doce, con la lista literal. `«esquema_version es 2»` → 3. Una prueba nueva en el bloque de sensibilidad: **cambiar `alcance` de `individual` a `conjunta` cambia el canónico**. |
-| `lib/huella/vectores-congelados.json` | Los ocho vectores ganan `"alcance"` y `"esquema_version":3`; `canonico` y `huella_hex` **se regeneran** con un guion de un solo uso (usar `canonizar()` y el mismo `createHash` de `vectores.test.ts`; el guion no se comitea). Se añade un noveno vector, `conjunta`, con `"alcance":"conjunta"`. |
-| `supabase/migrations/2026MMDDHHMMSS_alcance_en_el_sobre.sql` | `create or replace function public.fn_sellar_version_nota()` con el cuerpo actual **más**: `v_esperadas` con doce literales, la comprobación **6.10**, y el rótulo «las nueve comprobaciones» → «las diez». Actualizar el `comment on column …esquema_version` a 3. **La migración empieza con la misma guarda de era que T-005**: `if exists (select 1 from public.notas_clinicas_versiones) then raise exception …` — si hay una sola fila firmada, esta migración **debe** fallar en voz alta, porque el ADR-035 prohíbe convivir con dos formas sin recalcular nada. |
-| `scripts/rls/00-ayudantes.sql` | `sobre_prueba()` gana `p_alcance text default 'individual'` y emite `'"alcance":"' || p_alcance || '",'` **después** de `abierta_en`; `'"esquema_version":3,'`. |
-| `scripts/rls/01-fijacion.sql` | La llamada de `NCONJ` pasa `'conjunta'` (su columna `alcance` es `'conjunta'`): si no, la 6.10 la rechaza y **el banco entero deja de sembrar**. |
-| `scripts/rls/14-cadena-huellas.sql` | Los tres pares `$vec$…$vec$` y `\set VECGENESIS` se sustituyen por el texto regenerado (copiado byte a byte del JSON: `vectores-sql.test.ts` lo comprueba). Sección **C**: dos negativas nuevas con `assert_lanza_codigo(…, '23514')` — sobre con `alcance` que no coincide con la columna, y sobre con `"alcance":null` —, y una positiva gemela con `alcance = 'conjunta'` coherente. |
-| `supabase/seed-completo.sql`, `scripts/t005-concurrencia.sql` | Sus copias del generador: misma clave, misma cifra. |
+| Clave | Valor | Nulable | Sale de |
+|---|---|---|---|
+| `nota_id` | UUID en minúsculas | no | la nota que se firma |
+| `paciente_id` | UUID en minúsculas | no | `notas_clinicas.paciente_id` |
+| `episodio_id` | UUID en minúsculas | **no** (ADR-071.1 y .4) | `notas_clinicas.episodio_id` |
+| `fecha_sesion` | cadena `AAAA-MM-DD`, sin hora ni zona | no | `notas_clinicas.fecha_sesion`, tal como la devuelve PostgREST |
+| `coprofesional_id` | UUID en minúsculas o `null`; la clave está siempre | **sí** (ADR-072.2 y .3) | `notas_clinicas.coprofesional_id` |
 
-Comprobación **6.10**, calcada de la 6.2 y colocada entre la 6.9 y el punto 7:
+**Lo que cambia en T-012.**
 
-```sql
-  -- 6.10 · alcance del sobre = columna, y CADENA JSON (ADR-057). Mismo `is distinct
-  -- from` sobre el jsonb completo que la 6.2: con `->>` y `<>`, un `"alcance":null`
-  -- da SQL NULL, y NULL <> x es NULL, que en un `if` es falso.
-  if (v_contenido -> 'alcance') is distinct from to_jsonb(new.alcance::text) then
-    raise exception 'El alcance del sobre no coincide con la columna alcance, o no es una cadena (ADR-057)'
-      using errcode = '23514';
-  end if;
-```
+1. **Paso 4 de §1.5.** El `select` de la cabecera añade `fecha_sesion` y `coprofesional_id`.
+   Queda así:
+   `id, paciente_id, cita_id, episodio_id, autor_id, fecha_sesion, coprofesional_id, borrador_contenido, borrador_actualizado_en, borrador_abierta_en`.
+2. **Paso 8 de §1.5.** La llamada pasa cuatro campos más, **leídos de esa cabecera y nunca del
+   formulario**:
+   ```ts
+   firmarVersionNota(supabase, {
+     notaId, autorId: usuario.id, cuerpo, anotacionesReservadas, motivoCambio, alcance,
+     citaId, ventanaCita, margenMinutos, abiertaEn: cabecera.borrador_abierta_en,
+     pacienteId: cabecera.paciente_id,
+     episodioId: cabecera.episodio_id,
+     fechaSesion: cabecera.fecha_sesion,          // 'AAAA-MM-DD', string, nunca new Date()
+     coprofesionalId: cabecera.coprofesional_id,  // string | null
+   })
+   ```
+   El tipo `EntradaFirma` los hace obligatorios, así que olvidar uno es un error de `tsc`.
+3. **Episodio y coprofesional se eligen en el editor** y se escriben en la cabecera **antes** de
+   la primera firma:
+   - El episodio sale de la función de T-034 (`episodio_para_nota()`). El paso 4 de
+     `abrirEditorDeNota` (§1.4) ya no inserta un `episodio_id` libre.
+   - El coprofesional sale de la casilla que pinta T-012 (ADR-072).
+   - Tras la primera versión, los dos quedan congelados junto con el paciente, la fecha de
+     sesión, el autor y la cita. `congelar_cabecera_sellada` responde 42501 con «no se puede
+     reatribuir». La pantalla deja de ofrecer los dos controles en cuanto hay una versión.
+4. **Errores del sellado que hay que traducir**, además de los de §1.5:
+   - **42501 «No puedes firmar una versión de esta nota»**: es el paso 0 del disparador, que
+     comprueba permisos antes que cotejo (ADR-071.5). Significa lo mismo que el rechazo de la
+     RLS: no eres el autor o el candado está cerrado. El mensaje no revela nada de la cabecera.
+     Se desambigua con la misma relectura de la tabla «Desambiguar las cero filas» de §1.5:
+     - sin fila: `{ok:false, motivo:'sin_acceso'}`, pantalla de bloqueo y PIN;
+     - fila de otro autor: «Esta nota la escribe su autor».
+   - **23514 de las comprobaciones 6.11-6.16** (`nota_id`, `paciente_id`, `episodio_id`,
+     `autor_id`, `fecha_sesion`, `coprofesional_id` no coinciden con la cabecera): la cabecera
+     cambió entre el paso 4 y la firma, antes de estar congelada. Se trata como
+     `{ok:false, motivo:'conflicto'}`: releer y volver a pedir la firma. No se reintenta en
+     silencio.
+5. **Sello en pantalla (§1.4, línea «si el parseo falla o `esquema_version` no es 3»).** Pasa a
+   «no es 4». El parseo usa el `esquemaSobre` de diecisiete claves que exporta `sobre.ts`.
+6. **Resumen, punto 2.** Donde dice «sobre de doce claves con `alcance`, `esquema_version = 3`»,
+   se lee «sobre de diecisiete claves, `esquema_version = 4`, implementado por T-012a (era 3) y
+   T-012c (era 4); T-012 lo consume».
 
-`to_jsonb(new.alcance::text)` sobre un enum `alcance_nota` da `"individual"` / `"conjunta"`:
-cadena JSON, que es lo que el sobre lleva.
+**Por qué se sellan.**
+- `nota_id`, `paciente_id` y `episodio_id` deciden quién lee la versión.
+- `autor_id` decide quién la firmó.
+- `fecha_sesion` sitúa el acto clínico.
+- `coprofesional_id` dice quién más estuvo en la sala.
+
+El disparador los coteja con la cabecera al sellar (23514), y `verificar_cadena_huellas()` los
+vuelve a cotejar después. Si alguien mueve una versión o reatribuye una cabecera saltándose la
+congelación, la cadena lo señala aunque las huellas sigan cuadrando.
 
 ### 1.2 · Migración de T-012: `abierta_en` y el margen
 

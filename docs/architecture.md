@@ -64,7 +64,11 @@ vuelve a leer esos bytes; **jamás los deriva otra vez del objeto**.
   `firmada_en` y `redactada_en_sesion` con el margen que aplicó (**ADR-046**). Sellar solo
   el cuerpo dejaría cambiar el autor sin romper la cadena; dejar fuera
   `redactada_en_sesion` dejaría convertir un «lo escribí el viernes» en un «lo escribí en
-  sesión» sin rastro.
+  sesión» sin rastro. Desde la **era 4** (T-012c, ADR-067) el sobre lleva diecisiete claves:
+  a las anteriores suma la identidad de la nota y su cabecera —`nota_id`, `paciente_id`,
+  `episodio_id`, `fecha_sesion` (`AAAA-MM-DD`, sin zona; con sufijo ` BC` si es anterior a Cristo) y `coprofesional_id`, siempre
+  presente aunque valga `null`—, para que ni mover la versión a otra nota ni reatribuir la
+  cabecera pasen sin romper la cadena.
 - La huella anterior son **32 bytes fijos**, así que la concatenación no es ambigua y no
   necesita separador. El primer eslabón usa 32 bytes cero.
 - Cada versión guarda su `algoritmo_version`. Cambiar de algoritmo es abrir una era nueva,
@@ -88,16 +92,20 @@ lo calcula `extensions.digest()` (pgcrypto): la aplicación nunca calcula huella
 cierra por construcción el criterio de `blocking-prerender-*` (ADR-043). La serialización
 por paciente es un cerrojo consultivo (`pg_advisory_xact_lock`), no un `for no key update`
 sobre `pacientes` — esa fila ya la usa la fusión de pacientes (ADR-031) y compartir el
-mismo juego de cerrojos abriría interbloqueos nuevos. `esquema_version = 2` desde el
-ADR-046 (versión 1 nunca existió). El verificador, `verificar_cadena_huellas(uuid)`, vive
+mismo juego de cerrojos abriría interbloqueos nuevos. `esquema_version = 4` desde T-012c
+(ADR-046 abrió la 2; versión 1 nunca existió). Antes de nada (paso 0) el disparador exige
+que quien firma como `authenticated` sea el autor de la nota y tenga la historia
+desbloqueada; cualquier otro caso —nota ajena, inexistente, sobre incoherente,
+conjunta— recibe el mismo 42501, sin pistas sobre si la nota existe ni de quién es. El verificador, `verificar_cadena_huellas(uuid)`, vive
 en SQL y no en Node —para que reserializar el objeto sea imposible por construcción, no
 solo por disciplina— y no se concede a `authenticated`. Desde T-012b también coteja, por
-valor y sin reserializar, las siete columnas que el sobre repite (`alcance`, `autor_id`,
+valor y sin reserializar, las columnas que el sobre repite (`alcance`, `autor_id`,
 `cuerpo`, `anotaciones_reservadas`, `esquema_version`, `motivo_cambio`, `creada_en`) contra
 la fila que las guarda, con motivo `sobre_no_coincide_con_fila` (ADR-057): así se detecta
-un `update` con los cerrojos levantados que cambie una de esas siete columnas sin tocar el
-sobre. Fuera de este cotejo quedan `nota_id`, hasta T-012c (ADR-067), y `numero_version`,
-sin decisión. Y sigue sin cubrir la reescritura completa de la ÚLTIMA versión de una
+un `update` con los cerrojos levantados que cambie una de ellas sin tocar el sobre. Desde
+T-012c coteja además `nota_id` y `paciente_id` con la fila, y `paciente_id`, `episodio_id`,
+`autor_id`, `fecha_sesion` y `coprofesional_id` con la **cabecera** de `notas_clinicas`.
+Fuera del cotejo queda `numero_version`, sin decisión. Y sigue sin cubrir la reescritura completa de la ÚLTIMA versión de una
 cadena —columna, sobre y huella a la vez, sin eslabón siguiente que la delate—: ese riesgo
 lo acepta el diseño de T-012b y solo lo cierra un anclaje externo, fuera de alcance.
 Ejecutable a mano con `npm run verificar:huellas`.
@@ -237,6 +245,12 @@ fila leída — que daría un registro ilegible y una escritura en cada render.
 **Entrar, seguir siendo tú, y seguir delante del teclado** son tres cosas distintas:
 contraseña, **TOTP** (ADR-039 — nunca SMS, para los tres roles) y **PIN** (ADR-026). El
 administrador puede reponer un TOTP perdido, auditado y con aviso; un PIN, jamás.
+**Modo local (T-033)**: con `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo`, el inicio de sesión
+supera él mismo el TOTP, en servidor (`lib/cuentas/modo-desarrollo.ts`, variable sin
+`NEXT_PUBLIC_`), y solo para factores cuyo secreto está en `supabase/seed-completo.sql`; la
+sesión llega a `aal2` real y ni la guardia ni la base cambian. Exige Supabase en
+`http://127.0.0.1`/`localhost`, que ninguna instancia de producción (Supabase en la nube,
+§Topología) cumple: mal puesto, el servidor no arranca (`instrumentation.ts`).
 
 ## RLS
 
@@ -259,6 +273,10 @@ funciones auxiliares para que se lean como frases:
   **Rol-agnóstica**, para que ninguna política clínica necesite invocar `rol_actual()`
 - `es_profesional_del_episodio(episodio_id)` → participación, no copia (ADR-030). Incluye
   a los participantes dados de baja **del episodio**; exige que el lector siga activo
+- `episodio_para_nota(paciente, episodio?, cita?, centro?)` → *invoker*: valida el episodio elegido,
+  devuelve el único abierto del llamante con ese paciente, abre uno individual si no hay ninguno
+  (centro de la cita o, sin ella, el centro activo que pasa la aplicación en `p_centro_id`),
+  y con varios lanza `EP001` «elige episodio» (ADR-071, T-034)
 - `nota_tiene_version_conjunta(nota_id)` → definer **por necesidad**: sin ella, la política
   de `notas_clinicas` y la de `notas_clinicas_versiones` se consultan mutuamente y Postgres
   aborta con `infinite recursion detected in policy`
@@ -351,6 +369,18 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
   grupo se modelan en el episodio; **el paciente sigue siendo la persona**. La nota conjunta
   cuelga del episodio, es un solo eslabón de la cadena y **no se entrega entera** en un
   ejercicio de acceso individual.
+- **Toda nota cuelga de un episodio** (ADR-071, T-034): `notas_clinicas.episodio_id` es obligatorio,
+  del episodio del AUTOR y del mismo paciente o de un participante (la base lo impone con
+  `exigir_episodio_coherente_en_nota`). Una nota nueva no cuelga de un episodio cerrado, y
+  ninguna nota se mueve a uno cerrado. Si es de coterapia, la nota lleva un `coprofesional_id`
+  opcional (profesional sanitario distinto del autor, con alta vigente en el centro del
+  episodio) que no da acceso a nada —ninguna política lo lee— y se congela con la primera
+  versión (ADR-072). Un episodio con notas no cambia de paciente ni de profesional, y un
+  participante con notas no se mueve ni se borra. La aplicación obtiene el episodio con
+  `episodio_para_nota()`: abre uno individual si no hay ninguno abierto propio, reutiliza el
+  único y exige elegir (`EP001`) si hay varios. El centro del episodio nuevo sale de la cita
+  o, sin cita, del centro activo, que la aplicación pasa en `p_centro_id` (la cookie no se lee
+  en SQL; sin ninguno de los dos, 22023).
 - **Duplicados** (ADR-031): no se fusionan, **se vinculan**. `fusionado_en` apunta al
   superviviente, el absorbido queda en solo lectura, nada se repunta y RLS resuelve por el
   vínculo en un solo salto.

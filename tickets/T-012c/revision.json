@@ -1,0 +1,44 @@
+{
+  "ticket": "T-012c",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "revisor": "B",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 437,
+      "descripcion": "La regresión 'autor_id JSON null lanza 23514 POR LA 6.2' exige el fragmento 'El autor_id del sobre no coincide', que desde T-012c también es el prefijo del mensaje de la 6.14 (mismo SQLSTATE 23514); la demostración 'con el arreglo deshecho' que promete 14:428-429 no existe.",
+      "escenario": "Se reescribe la 6.2 como (v_contenido->>'autor_id') <> new.autor_id::text → el sobre con autor_id null pasa la 6.2 (NULL <> x es falso), muere en la 6.14 ('...no coincide con el autor de la cabecera...') → assert_lanza_codigo_msg sigue verde con el hueco ALTA de T-005 reabierto."
+    },
+    {
+      "id": "H2",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 906,
+      "descripcion": "C.perm sin paso 0 acepta err_b2 like '23514 · El autor_id%', que casa con la 6.2 y con la 6.14; §9.14 exige específicamente el 23514 de la 6.14.",
+      "escenario": "Si sobre_b o la columna autor_id del insert sobre N067B divergen, el error pasa a ser la 6.2 → la aserción sigue verde y C.perm deja de probar que el mutante llega al cotejo con la cabecera."
+    },
+    {
+      "id": "H3",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 855,
+      "descripcion": "C.perm desbloquea con los PIN '999999' (PRO2) y '424242' (PRO1), que no fija la fijación (01 pone 111111/222222) sino 13-cuentas.sql:198 y :384: 14 depende del estado global que deja otro módulo (contra .claude/rules/pruebas.md).",
+      "escenario": "Se cambia el PIN de la gemela positiva de 13:384 (p. ej. a '434343') → 14 cae en 'C.perm · PRO1 desbloquea su historia', un fallo sin relación con T-012c y a varios módulos de la causa."
+    },
+    {
+      "id": "H4",
+      "revisor": "A",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261001120000_nota_id_en_el_sobre.sql",
+      "linea": 371,
+      "descripcion": "to_char(fecha,'YYYY-MM-DD') descarta la era: 6.15 (y su cotejo en el verificador, línea 567) no distingue una fecha_sesion antes de Cristo de la misma fecha después de Cristo.",
+      "escenario": "Con congelar_cabecera_sellada desactivado, update notas_clinicas set fecha_sesion='2026-08-29 BC' sobre una nota firmada con \"fecha_sesion\":\"2026-08-29\" deja verificar_cadena_huellas() en 0 filas; antes de la primera firma, el autor puede poner su cabecera en BC (sin check de rango) y sellar \"2026-08-29\" por insert directo, y 6.15 lo acepta."
+    }
+  ]
+}

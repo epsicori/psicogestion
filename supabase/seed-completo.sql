@@ -29,8 +29,8 @@
 -- que decir «cadena íntegra».
 -- =============================================================================
 
--- Construye el sobre canónico (ADR-035 + ADR-046 + ADR-057) de una versión sembrada, con
--- las doce claves exactas en el orden alfabético que exige la comprobación 6.1 del
+-- Construye el sobre canónico (ADR-035 + ADR-046 + ADR-057 + ADR-067/071/072, era 4) de una versión sembrada, con
+-- las diecisiete claves exactas en el orden alfabético que exige la comprobación 6.1 del
 -- disparador. `p_cuerpo` se pasa YA como texto canónico (una sola clave, ASCII en
 -- las claves) en vez de como jsonb, a diferencia del ayudante del banco de pruebas:
 -- `jsonb::text` mete un espacio tras los dos puntos y produciría un sobre que el
@@ -38,7 +38,10 @@
 -- bien, y así lo sembrado es canónico de verdad.
 -- T-012a: p_alcance nuevo, debe coincidir con la columna `alcance` de la fila o la
 -- comprobación 6.10 rechaza el INSERT con 23514.
+-- T-012c: p_nota_id nuevo y primero; la cabecera (paciente, episodio, fecha, coprofesional) se
+-- lee de `notas_clinicas`, que se siembra ANTES que sus versiones, por eso es `stable`.
 create or replace function pg_temp.sobre(
+  p_nota_id        uuid,
   p_autor_id       uuid,
   p_creada_en      timestamptz,
   p_cuerpo         text,
@@ -47,7 +50,7 @@ create or replace function pg_temp.sobre(
   p_alcance        text default 'individual'
 ) returns text
 language sql
-immutable
+stable
 as $$
   select
     '{' ||
@@ -56,12 +59,17 @@ as $$
     '"anotaciones_reservadas":' || coalesce(to_json(p_anotaciones)::text, 'null') || ',' ||
     '"autor_id":' || to_json(lower(p_autor_id::text))::text || ',' ||
     '"cita_id":null,' ||
+    '"coprofesional_id":' || coalesce(to_json((select n.coprofesional_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"cuerpo":' || p_cuerpo || ',' ||
-    '"esquema_version":3,' ||
+    '"episodio_id":' || coalesce(to_json((select n.episodio_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
+    '"esquema_version":4,' ||
+    '"fecha_sesion":' || coalesce(to_json((select to_char(n.fecha_sesion, 'YYYY-MM-DD') from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"margen_sesion_minutos":null,' ||
     '"motivo_cambio":' || coalesce(to_json(p_motivo_cambio)::text, 'null') || ',' ||
+    '"nota_id":' || to_json(lower(p_nota_id::text))::text || ',' ||
+    '"paciente_id":' || coalesce(to_json((select n.paciente_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"redactada_en_sesion":false' ||
     '}';
 $$;
@@ -95,6 +103,8 @@ declare
   k_cons      constant uuid := 'a0080003-0000-4000-8000-000000000001';
 
   k_epi_pareja constant uuid := 'e0080001-0000-4000-8000-000000000001';
+  k_epi_carmen constant uuid := 'e0080001-0000-4000-8000-000000000002';
+  k_epi_ivan   constant uuid := 'e0080001-0000-4000-8000-000000000003';
 
   k_n_borrador constant uuid := 'f0080001-0000-4000-8000-000000000001';
   k_n_firmada  constant uuid := 'f0080001-0000-4000-8000-000000000002';
@@ -330,6 +340,17 @@ begin
      (k_fecha_base - interval '60 days')::date)
   on conflict (id) do nothing;
 
+  -- T-034 (ADR-071): toda nota cuelga de un episodio, y del de su autor. Los dos
+  -- pacientes con notas individuales tienen el suyo, abierto antes de todas sus notas.
+  insert into public.episodios_asistenciales
+    (id, paciente_id, profesional_id, centro_id, modalidad_relacional, motivo_consulta, abierto_en, creado_en)
+  values
+    (k_epi_carmen, k_p_carmen, k_ana,  k_c_madrid,   'individual', null,
+     (k_fecha_base - interval '30 days')::date, k_fecha_base),
+    (k_epi_ivan,   k_p_ivan,   k_baja, k_c_canarias, 'individual', null,
+     (k_fecha_base - interval '45 days')::date, k_fecha_base)
+  on conflict (id) do nothing;
+
   -- -----------------------------------------------------------------------
   -- 7 · Notas, en sus tres estados
   --
@@ -341,17 +362,17 @@ begin
   insert into public.notas_clinicas
     (id, paciente_id, episodio_id, autor_id, fecha_sesion, borrador_contenido,
      borrador_actualizado_en, borrador_autor_id, creada_en) values
-    (k_n_borrador, k_p_carmen, null, k_ana, (k_fecha_base - interval '2 days')::date,
+    (k_n_borrador, k_p_carmen, k_epi_carmen, k_ana, (k_fecha_base - interval '2 days')::date,
      '{"texto":"Sesión 4. Pendiente de repasar el registro de la semana."}'::jsonb,
      k_fecha_base - interval '2 days', k_ana, k_fecha_base - interval '2 days')
   on conflict (id) do nothing;
 
   insert into public.notas_clinicas
     (id, paciente_id, episodio_id, autor_id, fecha_sesion, creada_en) values
-    (k_n_firmada,   k_p_carmen, null,         k_ana,  (k_fecha_base - interval '9 days')::date,  k_fecha_base - interval '9 days'),
-    (k_n_corregida, k_p_carmen, null,         k_ana,  (k_fecha_base - interval '16 days')::date, k_fecha_base - interval '16 days'),
+    (k_n_firmada,   k_p_carmen, k_epi_carmen, k_ana,  (k_fecha_base - interval '9 days')::date,  k_fecha_base - interval '9 days'),
+    (k_n_corregida, k_p_carmen, k_epi_carmen, k_ana,  (k_fecha_base - interval '16 days')::date, k_fecha_base - interval '16 days'),
     (k_n_conjunta,  k_p_sofia,  k_epi_pareja, k_ana,  (k_fecha_base - interval '5 days')::date,  k_fecha_base - interval '5 days'),
-    (k_n_de_baja,   k_p_ivan,   null,         k_baja, (k_fecha_base - interval '30 days')::date, k_fecha_base - interval '30 days')
+    (k_n_de_baja,   k_p_ivan,   k_epi_ivan,   k_baja, (k_fecha_base - interval '30 days')::date, k_fecha_base - interval '30 days')
   on conflict (id) do nothing;
 
   -- Las versiones no tienen identificador fijo (lo pone la base), así que la
@@ -367,10 +388,10 @@ begin
       k_n_firmada,
       '{"texto":"Sesión 3. Trabajo con registro de pensamientos automáticos."}'::jsonb,
       'Impresión clínica preliminar, no compartida con el paciente.',
-      pg_temp.sobre(k_ana, k_fecha_base - interval '9 days',
+      pg_temp.sobre(k_n_firmada, k_ana, k_fecha_base - interval '9 days',
         '{"texto":"Sesión 3. Trabajo con registro de pensamientos automáticos."}',
         'Impresión clínica preliminar, no compartida con el paciente.'),
-      null, 'individual', 3, k_ana, k_fecha_base - interval '9 days');
+      null, 'individual', 4, k_ana, k_fecha_base - interval '9 days');
 
     -- La nota corregida: DOS versiones encadenadas. La segunda lleva
     -- `motivo_cambio`, que es lo que hace visible la corrección — corregir no es
@@ -383,9 +404,9 @@ begin
       k_n_corregida,
       '{"texto":"Sesión 2. Se acuerda pauta de exposición gradual."}'::jsonb,
       null,
-      pg_temp.sobre(k_ana, k_fecha_base - interval '16 days',
+      pg_temp.sobre(k_n_corregida, k_ana, k_fecha_base - interval '16 days',
         '{"texto":"Sesión 2. Se acuerda pauta de exposición gradual."}'),
-      null, 'individual', 3, k_ana, k_fecha_base - interval '16 days');
+      null, 'individual', 4, k_ana, k_fecha_base - interval '16 days');
 
     insert into public.notas_clinicas_versiones
       (nota_id, cuerpo, anotaciones_reservadas, contenido_canonico, motivo_cambio, alcance,
@@ -394,12 +415,12 @@ begin
       k_n_corregida,
       '{"texto":"Sesión 2. Se acuerda pauta de exposición gradual, empezando por la situación 3 de la jerarquía."}'::jsonb,
       null,
-      pg_temp.sobre(k_ana, k_fecha_base - interval '15 days',
+      pg_temp.sobre(k_n_corregida, k_ana, k_fecha_base - interval '15 days',
         '{"texto":"Sesión 2. Se acuerda pauta de exposición gradual, empezando por la situación 3 de la jerarquía."}',
         null,
         'Se concreta la situación de inicio, que quedó sin anotar en la sesión.'),
       'Se concreta la situación de inicio, que quedó sin anotar en la sesión.',
-      'individual', 3, k_ana, k_fecha_base - interval '15 days');
+      'individual', 4, k_ana, k_fecha_base - interval '15 days');
 
     -- Nota conjunta del episodio de pareja: `alcance = 'conjunta'` solo es legal
     -- si la nota tiene episodio (ADR-030, comprobado por disparador).
@@ -410,10 +431,10 @@ begin
       k_n_conjunta,
       '{"texto":"Sesión de pareja. Se trabaja el turno de palabra en las discusiones."}'::jsonb,
       null,
-      pg_temp.sobre(k_ana, k_fecha_base - interval '5 days',
+      pg_temp.sobre(k_n_conjunta, k_ana, k_fecha_base - interval '5 days',
         '{"texto":"Sesión de pareja. Se trabaja el turno de palabra en las discusiones."}',
         null, null, 'conjunta'),
-      null, 'conjunta', 3, k_ana, k_fecha_base - interval '5 days');
+      null, 'conjunta', 4, k_ana, k_fecha_base - interval '5 days');
 
     -- La nota de la profesional que después se da de baja. Firmada por ella y
     -- suya para siempre: la baja quita el acceso, no la autoría.
@@ -424,9 +445,9 @@ begin
       k_n_de_baja,
       '{"texto":"Sesión de seguimiento. Continúa la mejoría del sueño."}'::jsonb,
       null,
-      pg_temp.sobre(k_baja, k_fecha_base - interval '30 days',
+      pg_temp.sobre(k_n_de_baja, k_baja, k_fecha_base - interval '30 days',
         '{"texto":"Sesión de seguimiento. Continúa la mejoría del sueño."}'),
-      null, 'individual', 3, k_baja, k_fecha_base - interval '30 days');
+      null, 'individual', 4, k_baja, k_fecha_base - interval '30 days');
 
   end if;
 

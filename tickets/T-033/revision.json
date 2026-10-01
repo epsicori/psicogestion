@@ -1,0 +1,44 @@
+{
+  "ticket": "T-033",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "revisor": "B",
+      "severidad": "MEDIA",
+      "archivo": "lib/cuentas/modo-desarrollo.test.ts",
+      "linea": 132,
+      "descripcion": "Ninguna prueba ejercita la decodificación base32 con relleno y bits sobrantes que usan los secretos sembrados (18 caracteres); los vectores RFC son de 32 caracteres y la prueba 'superado' calcula lo esperado con el propio codigoTotp (:230).",
+      "escenario": "Si decodificarBase32 añade un byte con los bits sobrantes, las 43 pruebas siguen en verde (mutación hecha). Ningún código sembrado es válido, y el modo cae siempre a 'fallo' con el aviso engañoso de reloj desfasado. Arreglo: vector fijo independiente, por ejemplo SEMILLATOTPDEMOANA con t=0 da '837195' y con t=2000000000 s da '986607'."
+    },
+    {
+      "id": "H2",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "app/login/acciones.test.ts",
+      "linea": 58,
+      "descripcion": "Ningún caso fija que un pase 'fallo' o 'sin_factor_sembrado' siga redirigiendo a /pacientes, ni que el pase reciba el mismo cliente que inició sesión.",
+      "escenario": "Si iniciarSesion devuelve un mensaje de error cuando el pase no da 'superado', las cuatro pruebas siguen en verde (mutación hecha). Con el reloj de Docker desfasado (R1), el usuario se queda en /login en vez de caer a /primera-vez."
+    },
+    {
+      "id": "H3",
+      "revisor": "A",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/modo-desarrollo.test.ts",
+      "linea": 74,
+      "descripcion": "Las URL adversarias no cazan la mutación endsWith('localhost')/endsWith('127.0.0.1') sobre hostname en modo-desarrollo.ts:65, que el diseño §5.2 declara rechazo.",
+      "escenario": "Con hostname.endsWith en lugar de HOSTS_LOCALES.has, las 7 adversarias siguen rechazadas y las pruebas siguen verdes. NEXT_PUBLIC_SUPABASE_URL=http://supabase-localhost:54321, un nombre de una etiqueta que resuelve a una máquina de la red, pasaría la capa 2. La capa 3 sigue en pie. Arreglo: añadir http://evil-localhost:54321 y http://x.localhost:54321."
+    },
+    {
+      "id": "H4",
+      "revisor": "A",
+      "severidad": "BAJA",
+      "archivo": "instrumentation.ts",
+      "linea": 13,
+      "descripcion": "La capa 1 (el servidor no arranca) no tiene ninguna prueba automática: nada importa register().",
+      "escenario": "Si alguien envuelve segundoFactorAutomaticoActivo() en try/catch, test, lint y build siguen verdes. Un despliegue mal configurado arranca y sirve páginas, porque la franja va en Suspense y no da 500. Solo falla el inicio de sesión. Falla cerrado, pero el criterio 4 queda sin vigilancia automática."
+    }
+  ]
+}

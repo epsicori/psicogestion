@@ -1,0 +1,91 @@
+{
+ "ticket": "T-034",
+ "resumen": "Rama T-034-nota-en-episodio (HEAD 56ada3f). Verificado de forma independiente en el worktree: reset, seed x2, test:rls (exit 0, 19.1-19.55), huellas, lint (0 errores, 2 warnings preexistentes en un fichero ajeno), lint:migraciones, 655 tests, build, territorio, guarda de migracion y mutaciones de guardas 19.48-19.55. Sin regresiones.",
+ "criterios": [
+  {
+   "id": 1,
+   "texto": "db reset y seed sin errores",
+   "veredicto": "PASA",
+   "comando": "npx supabase db reset; npm run seed (x2)",
+   "evidencia": "Applying migration 20260929120000_nota_siempre_en_episodio.sql... Finished supabase db reset; seed: completado (dos veces, sin error)"
+  },
+  {
+   "id": 2,
+   "texto": "episodio_id null falla 23502",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "OK (lanzó 23502 como se esperaba): 19.1 Una nota sin episodio_id no entra (NOT NULL); information_schema: episodio_id is_nullable=NO"
+  },
+  {
+   "id": 3,
+   "texto": "Guarda de la migracion con nota sin episodio",
+   "veredicto": "PASA",
+   "comando": "begin; desactivar triggers, drop not null, insertar nota con episodio null; aplicar la migracion; rollback",
+   "evidencia": "ERROR: T-034: hay 1 notas clínicas sin episodio. Una persona decide a qué episodio va cada una (ADR-071); esta migración no las rellena. Tras rollback: 0 notas sin episodio."
+  },
+  {
+   "id": 4,
+   "texto": "Sin episodio abierto: abre individual, auditado",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "OK: 19.2 Abre un episodio individual nuevo ... del llamante; OK: 19.2 La apertura queda auditada una vez; 19.3, 19.4"
+  },
+  {
+   "id": 5,
+   "texto": "Uno abierto: se reutiliza",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "OK: 19.4 Otra llamada devuelve vA; PA sigue con 2 episodios y la auditoría de vA en 1; 19.12 reutiliza el conjunto"
+  },
+  {
+   "id": 6,
+   "texto": "Varios abiertos: EP001 sin eleccion; con eleccion funciona",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "OK (lanzó EP001 ... «elige episodio»): 19.5; OK: 19.6 Con elección explícita devuelve EB2 y no abre otro"
+  },
+  {
+   "id": 7,
+   "texto": "Episodio ajeno falla, con gemelas positivas",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "19.7 otro paciente 42501; 19.8 compañero 42501; 19.11; 19.23/19.25 (disparador 23514) con gemelas 19.12, 19.14, 19.24, 19.25"
+  },
+  {
+   "id": 8,
+   "texto": "Tecnico administrativo no abre episodios",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "OK (lanzó 42501 ... «técnico administrativo»): 19.18; 19.54 no se abrió ningún episodio para PADM"
+  },
+  {
+   "id": 9,
+   "texto": "test:rls verde con modulo 19; huellas integra",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls; npm run verificar:huellas",
+   "evidencia": "exit=0, '19-nota-en-episodio: completa (19.1-19.55).'; 'verificar:huellas — cadena íntegra: cero anomalías.' Mutaciones: quitando cada guarda (for share, oraculo RLS, autor del episodio, profesional en eleccion, congelar episodio con notas, zona horaria, cita-paciente/profesional, alta vigente) test:rls sale 3 con ASERCIÓN FALLIDA en 19.48, 19.49, 19.25(19.50), 19.8(19.51), 19.28(19.52), 19.53, 19.22(19.54), 19.55; las de 19.50/51/52/54 las detecta antes una aserción hermana del mismo módulo."
+  },
+  {
+   "id": 10,
+   "texto": "tipos, lint, lint:migraciones, build, territorio",
+   "veredicto": "PASA",
+   "comando": "npm run tipos; git status; npm run lint; npm run lint:migraciones; npm run build; node territorio.mjs T-034; npm test",
+   "evidencia": "tipos regenerados sin diff: notas_clinicas episodio_id: string, coprofesional_id: string | null; lint 0 errores (2 warnings no usados en fichero ajeno); lint-migraciones: 17 limpias; build OK; territorio: 15 ficheros dentro; vitest 63 files / 655 tests passed"
+  },
+  {
+   "id": 11,
+   "texto": "Coprofesional: guarda, no lee, negativas y congelacion",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "19.32 entra; 19.33 23514 autor; 19.34 23503 sin perfil; 19.35 23514 tecnico; 19.36-19.38 23514 sin alta; 19.40 PRO2 coprofesional no ve la nota ni versiones (con gemela positiva); 19.41 42501 al cambiarlo tras version; 19.39 gemelas; 19.47 ninguna politica lo lee"
+  },
+  {
+   "id": 12,
+   "texto": "Episodio cerrado: insert directo falla en BD",
+   "veredicto": "PASA",
+   "comando": "npm run test:rls",
+   "evidencia": "OK (lanzó 23514 ... «episodio cerrado»): 19.42 y 19.43 como postgres; OK: 19.43 Gemela: en EKC (abierto) la nota entra"
+  }
+ ],
+ "regresiones": []
+}

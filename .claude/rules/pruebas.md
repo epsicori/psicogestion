@@ -30,3 +30,4 @@ buena, pregúntate si seguiría verde con la guarda quitada. (T-001, T-003, T-00
 - Una política "cubierta" solo por nombre no está cubierta: el módulo de cobertura exige ejercerla. (T-003)
 - `auth.mfa_factors` tiene sus propias trampas de siembra; consulta la bitácora de T-006a antes de tocar el banco de cuentas.
 - Aserción que fija un **número específico** se rompe cuando el escenario crece (más eventos, más propuestas); aserción que **compara dos caminos** sin fijar cantidad es más robusta (T-011).
+- **Cada módulo fija el estado que necesita.** Si una negativa necesita un PIN, un desbloqueo o un rol, se fija en el mismo módulo (`call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111');`), nunca se supone el que dejó otro (`13-cuentas.sql` deja `'999999'`/`'424242'`; la fijación, `'111111'`/`'222222'`). Si el otro módulo cambia, la prueba se rompe sin que el ticket tenga culpa. (T-012c H3)

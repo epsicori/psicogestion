@@ -48,6 +48,12 @@
       "donde": "^(app|lib|components)/.*\\.(ts|tsx)$",
       "busca": "console\\.log\\(",
       "msg": "Sin console.log en código de aplicación: los logs van a Vercel y se conservan; un dato clínico en un log es una fuga."
+    },
+    {
+      "id": "AUTH-02", "nivel": "error",
+      "donde": "^lib/cuentas/modo-desarrollo\\.ts$",
+      "busca": "^\\s*['\"]use server['\"]",
+      "msg": "lib/cuentas/modo-desarrollo.ts no puede tener `'use server'`: es server-only, no un Server Action (T-033)."
     }
   ]
 }

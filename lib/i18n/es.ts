@@ -213,6 +213,13 @@ export const es = {
     // T-032 · texto de la opción vacía de un <select> opcional (components/ui/seleccion.tsx)
     sinIndicar: 'Sin indicar',
   },
+  // --- T-033 · modo local del segundo factor ---------------------------------
+
+  modoLocal: {
+    aviso:
+      'Desarrollo local: el segundo factor se supera solo con las cuentas sembradas. Esto no es un entorno real.',
+  },
+
   // --- T-006b2 · primer acceso ---------------------------------------------
 
   primeraVez: {

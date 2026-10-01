@@ -11,21 +11,26 @@
 -- adivinada.
 -- `como_con_2fa` y no `como`: fijar_pin_historia() exige segundo factor reciente desde el
 -- arreglo del hallazgo ALTA 2 de T-006a.
+-- T-034 (ADR-071): la nota cuelga de un episodio de su autor. Se abre como postgres, antes de
+-- entrar en la sesión de PROBAJA (el banco no depende de que la sesión pueda abrirlo).
+insert into public.episodios_asistenciales (id, paciente_id, profesional_id, centro_id) values
+  ('e0030001-0000-4000-8000-000000000003', :PBAJA, :PROBAJA, :CA);
+
 call pg_temp.dar_segundo_factor(:PROBAJA, interval '4 seconds');
 call pg_temp.como_con_2fa(:PROBAJA);
 select public.fijar_pin_historia('333333');
 select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
   'El PIN de PROBAJA debe desbloquear la historia mientras sigue activo');
 
-insert into public.notas_clinicas (id, paciente_id, autor_id) values
-  ('f0030001-0000-4000-8000-000000000004', :PBAJA, :PROBAJA);
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) values
+  ('f0030001-0000-4000-8000-000000000004', :PBAJA, 'e0030001-0000-4000-8000-000000000003', :PROBAJA);
 -- T-005: numero_version/huella/huella_anterior ya no se pueden mandar a mano; los calcula
 -- fn_sellar_version_nota(). Se inserta bajo la sesión de PROBAJA (arriba) para que la
 -- política notas_clinicas_versiones_alta se ejerza de verdad.
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
   ('f0030001-0000-4000-8000-000000000004', '{"t":"baja"}',
-   pg_temp.sobre_prueba(:PROBAJA, timestamptz '2026-08-29 09:22:00+00', '{"t":"baja"}'::jsonb),
+   pg_temp.sobre_prueba('f0030001-0000-4000-8000-000000000004', :PROBAJA, timestamptz '2026-08-29 09:22:00+00', '{"t":"baja"}'::jsonb),
    :PROBAJA, timestamptz '2026-08-29 09:22:00+00');
 insert into public.accesos_historia (perfil_id, paciente_id, tipo, pestana) values
   (:PROBAJA, :PBAJA, 'apertura', 'notas_clinicas');

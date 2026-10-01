@@ -1,0 +1,49 @@
+{
+  "ticket": "T-034",
+  "revisor": "revisor-1-sql",
+  "altas": 0,
+  "medias": 2,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20260929120000_nota_siempre_en_episodio.sql",
+      "linea": 73,
+      "descripcion": "El disparador de la nota lee el episodio y el participante sin cerrojo, y las puertas del episodio y del participante miran las notas con un exists simple; en READ COMMITTED no se ven entre sí (write skew).",
+      "escenario": "T1 inserta la nota (PJ2, EJ, PRO1) mientras T2 hace update episodio_participantes set paciente_id = PA (o cierra EKC, o cambia paciente_id del episodio). Cada disparador pasa porque no ve lo que el otro aún no ha confirmado; confirman las dos y queda una nota de PJ2 en EJ sin participante PJ2, o una nota nueva en un episodio cerrado. Arreglo: for share sobre el episodio y el participante en los pasos 3 y 5."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20260929120000_nota_siempre_en_episodio.sql",
+      "linea": 104,
+      "descripcion": "D6 se esquiva reabriendo el episodio: episodios_modificacion deja cambiar cerrado_en al dueño y a quien atiende al paciente, y nada lo congela.",
+      "escenario": "PRO1: update episodios_asistenciales set cerrado_en = null where id = EK0; insert nota (PK, EK0, PRO1) pasa; update set cerrado_en = <fecha original>. Queda una nota nueva en un episodio cerrado, y el reloj de retención se mueve a voluntad. Queda fuera del alcance de T-034: anotarlo en docs/state.md §Hallazgos para el ticket que cierre episodios."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20260929120000_nota_siempre_en_episodio.sql",
+      "linea": 128,
+      "descripcion": "La regla del centro del coprofesional (7c) se esquiva cambiando centro_id del episodio después: congelar_episodio_con_notas no lo congela.",
+      "escenario": "Nota NCO en ECO (CA) con coprofesional PRO2; update episodios_asistenciales set centro_id = CC (o null) where id = ECO pasa. La nota queda guardada con un coprofesional sin alta en el centro de su episodio, y T-012c lo sellará."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20260929120000_nota_siempre_en_episodio.sql",
+      "linea": 123,
+      "descripcion": "El coprofesional exige rol profesional_sanitario, pero un administrador que atiende pacientes es autor legítimo de notas (es_profesional_asignado no depende del rol).",
+      "escenario": "Coterapia entre PRO1 y el administrador-psicólogo ADM: la nota de ADM con coprofesional PRO1 entra, y la de PRO1 con coprofesional ADM da 23514 «tiene que ser un profesional sanitario». Llevar a la P2 del diseño (E.8) para que decida el propietario."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20260929120000_nota_siempre_en_episodio.sql",
+      "linea": 68,
+      "descripcion": "La salida anti-oráculo del paso 2 no tiene ninguna prueba en el módulo 19: si se quita, el banco sigue en verde.",
+      "escenario": "Sin las líneas 68-70, PRO1 inserta (P, EY de PRO3, autor PRO3) y distingue 23514 «no son del mismo paciente» de 42501 de la RLS: sabe a qué paciente pertenece un episodio ajeno. Ninguna de 19.1-19.47 usa autor_id distinto de la sesión."
+    }
+  ]
+}
