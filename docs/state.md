@@ -44,10 +44,20 @@
 - **T-011c** (MEDIA → ALTA): ordinal deducido del último evento; falta gemela 4.º = último; lectura
   de ancla sin candado.
 - **H27 (T-012c)**: `cita_id` del sobre no se coteja con la cabecera → T-036 (ADR-073.4).
+- **T-012 D1/D3** (propietario, 01-10): sello falsificable y doble firma de una modificación → T-036;
+  su contrato aún no exige borrador vivo, ni coteja `abierta_en`, ni recalcula `redactada_en_sesion`.
+- `fn_alertar_nota_sin_firmar` no abre alerta si existe *cualquier* versión con ese `cita_id`
+  (de otro paciente incluido); ni T-012 ni T-036 lo atan. Sin ticket.
 - **Fuera de CI** (territorio ajeno): `t001-esquema.sql` y `t002-rls.sql` crean notas sin episodio y
   pueden llevar generadores de sobre de la era 3.
 - **Para T-014**: Zod `.omit()/.pick()` lanzan con `refine` (TS-H7). `2026-02-30` se lee como 2-03:
   validar `?semana=`. T-030 H10: zona `null` sin validación.
+- **T-014, ronda de arreglos** (abiertos a propósito): SQL-H3 bandeja sin límite y `.in('id', ids)`
+  (`leerAlertasNotaPendiente`, `por-confirmar.tsx`); SQL-H5 `reprogramar.ts:80` «recarga» no sirve con
+  `?centro=todos`; la RPC `agenda_actualizar_cita` no comprueba el estado (barrera real de SQL-H4);
+  la caja de cita < 44 px al tacto (por diseño); `test:a11y` en paralelo; a 360 px la semana no
+  muestra citas (consultar con el arquitecto). La bandeja del administrador filtra por
+  `profesional_id` propio: no incluye pacientes donde solo es asignado. CRLF rompe `prettier --check`.
 - **T-031/T-032** (MEDIA). T-011 sin transiciones ADR-045.
 - **Memoria desfasada**: T-002, T-006 y T-013 dicen `estado: en_curso` en su frontmatter, pero están
   integrados. `docs/interfaz.md:67` dice «Lista y alta, sin ficha» y `/pacientes/[id]` existe.
