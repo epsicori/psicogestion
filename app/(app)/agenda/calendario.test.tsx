@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -346,6 +346,32 @@ describe('Calendario · panel de la cita con la vista al día (revisión TS H5)'
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByText('Hecho.').closest('[role="status"]')).not.toBeNull();
+    expect((document.activeElement as HTMLElement).getAttribute('data-cita-id')).toBe(citaDePrueba().id);
+  });
+
+  // Revisión de cierre N1: la vista nueva (sin la propuesta) llega en el mismo commit que el `ok`
+  // y se lleva el botón Confirmar; el panel tiene que cerrarse y anunciar igualmente.
+  it('si el recargado llega con el ok, el panel igualmente se cierra, anuncia y devuelve el foco', async () => {
+    const user = userEvent.setup();
+    const props = {
+      parametros: { centro: null, profesional: null },
+      centros: [],
+      centroElegido: 'todos',
+      rol: 'administrador' as const,
+    };
+    const { rerender } = montar({ vista: vistaDePrueba({ citas: [citaDePrueba({ propuestaPendiente: PROPUESTA })] }) });
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(async () => {
+      await Promise.resolve();
+      act(() =>
+        rerender(<Calendario {...props} vista={vistaDePrueba({ citas: [citaDePrueba({ propuestaPendiente: null })] })} />),
+      );
+      return { ok: true, anuncio: 'Propuesta confirmada.' };
+    });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('Propuesta confirmada.').closest('[role="status"]')).not.toBeNull();
     expect((document.activeElement as HTMLElement).getAttribute('data-cita-id')).toBe(citaDePrueba().id);
   });
 });

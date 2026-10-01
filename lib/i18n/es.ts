@@ -708,7 +708,8 @@ export const es = {
       confirmar: 'Confirmar',
       descartar: 'Descartar',
       enCurso: 'Un momento…',
-      hecho: 'Hecho.',
+      hechoConfirmada: 'Propuesta confirmada.',
+      hechoDescartada: 'Propuesta descartada.',
       motivos: {
         festivo: 'Cae en un festivo',
         ausencia: 'El profesional tiene una ausencia',

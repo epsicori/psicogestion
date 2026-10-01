@@ -22,7 +22,7 @@ vi.mock('@/lib/citas/propuestas', () => ({
   descartarPropuesta: m.descartarPropuesta,
 }));
 
-import { confirmarPropuestaAgenda, previsualizarMovimiento, reprogramar } from './acciones';
+import { confirmarPropuestaAgenda, descartarPropuestaAgenda, previsualizarMovimiento, reprogramar } from './acciones';
 
 const CITA = '6f1c1b4e-2a1d-4c7e-9a3b-0d2e5f8a9b10';
 const PROPUESTA = '7f1c1b4e-2a1d-4c7e-9a3b-0d2e5f8a9b10';
@@ -176,5 +176,15 @@ describe('confirmarPropuestaAgenda', () => {
     m.confirmarPropuesta.mockResolvedValueOnce({ ok: true, citaId: CITA });
     expect((await confirmarPropuestaAgenda({ propuestaId: PROPUESTA })).ok).toBe(true);
     expect(m.revalidatePath).toHaveBeenCalledWith('/agenda');
+  });
+
+  // Revisión de cierre N5: confirmar y descartar no pueden devolver el mismo «Hecho.».
+  it('confirmar y descartar anuncian cosas distintas', async () => {
+    m.confirmarPropuesta.mockResolvedValueOnce({ ok: true, citaId: CITA });
+    m.descartarPropuesta.mockResolvedValueOnce({ ok: true });
+    const confirmada = await confirmarPropuestaAgenda({ propuestaId: PROPUESTA });
+    const descartada = await descartarPropuestaAgenda({ propuestaId: PROPUESTA });
+    expect(confirmada).toEqual({ ok: true, anuncio: 'Propuesta confirmada.' });
+    expect(descartada).toEqual({ ok: true, anuncio: 'Propuesta descartada.' });
   });
 });

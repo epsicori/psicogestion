@@ -157,7 +157,7 @@ export async function confirmarPropuestaAgenda(entrada: unknown): Promise<Result
   // Tras un rechazo no se revalida: la fila sigue a la vista con su motivo (§8.5).
   if (!r.ok) return fallo(r);
   revalidatePath('/agenda');
-  return { ok: true, anuncio: t('agenda.porConfirmar.hecho') };
+  return { ok: true, anuncio: t('agenda.porConfirmar.hechoConfirmada') };
 }
 
 export async function descartarPropuestaAgenda(entrada: unknown): Promise<ResultadoAccion> {
@@ -168,5 +168,5 @@ export async function descartarPropuestaAgenda(entrada: unknown): Promise<Result
   const r = await descartarPropuesta(sesion, leida.data);
   if (!r.ok) return fallo(r);
   revalidatePath('/agenda');
-  return { ok: true, anuncio: t('agenda.porConfirmar.hecho') };
+  return { ok: true, anuncio: t('agenda.porConfirmar.hechoDescartada') };
 }

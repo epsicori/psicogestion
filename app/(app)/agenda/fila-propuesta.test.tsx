@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -58,6 +58,24 @@ describe('FilaPropuesta', () => {
     );
     expect(alResuelta).toHaveBeenCalledTimes(1);
     expect(otro).not.toHaveBeenCalled();
+  });
+
+  // Revisión de cierre N1: en producción el recargado de `revalidatePath` llega en el mismo
+  // commit que el `ok`, y la fila ya no está para pintarlo. El aviso sale del manejador, antes.
+  it.each([
+    ['Confirmar', () => confirmarPropuestaAgenda],
+    ['Descartar', () => descartarPropuestaAgenda],
+  ])('%s: el aviso llega aunque la fila se desmonte con el mismo resultado', async (boton, accion) => {
+    const alResuelta = vi.fn();
+    const { unmount } = pintar({ alResuelta });
+    accion().mockImplementation(async () => {
+      await Promise.resolve();
+      act(() => unmount());
+      return { ok: true, anuncio: 'Hecho.' };
+    });
+    await userEvent.setup().click(screen.getByRole('button', { name: boton }));
+    await waitFor(() => expect(alResuelta).toHaveBeenCalledWith('Hecho.'));
+    expect(alResuelta).toHaveBeenCalledTimes(1);
   });
 
   it('gemela: un rechazo no llama a alResuelta', async () => {

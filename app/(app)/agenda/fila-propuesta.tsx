@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useEffectEvent, useId, useRef } from 'react';
+import { useActionState, useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Pildora } from '@/components/ui/piezas';
@@ -44,8 +44,10 @@ type Props = {
   /** La propuesta cae en una hora que cambia por el horario de verano (§8.3). */
   cambioDeHora?: boolean;
   /**
-   * Con el «Hecho.» de un éxito (revisión TS H9). La fila se va con el recargado y se llevaría
-   * el foco a `body`: quien la contiene anuncia y decide adónde va el foco.
+   * Con el anuncio de un éxito (revisión TS H9 y de cierre N1). La fila se va con el recargado y
+   * se llevaría el foco a `body`: quien la contiene anuncia y decide adónde va el foco. Se llama
+   * desde la propia acción, al volver el servidor y antes de que React pinte el resultado: el
+   * recargado y el `ok` se confirman en el mismo commit, y un efecto de la fila no llega a correr.
    */
   alResuelta?: (anuncio: string) => void;
 };
@@ -58,14 +60,21 @@ type Props = {
  * no caiga a `body` al desaparecer el botón enfocado.
  */
 export function FilaPropuesta({ id, nombre, prevista, motivo, propuesta, cambioDeHora = false, alResuelta }: Props) {
-  const [estadoConfirmar, confirmar, confirmando] = useActionState<ResultadoAccion | null>(
-    () => confirmarPropuestaAgenda({ propuestaId: id }),
-    null,
-  );
-  const [estadoDescartar, descartar, descartando] = useActionState<ResultadoAccion | null>(
-    () => descartarPropuestaAgenda({ propuestaId: id }),
-    null,
-  );
+  // El último `alResuelta` que se pintó: la acción lo lee al volver, no al crearse.
+  const aviso = useRef(alResuelta);
+  useEffect(() => {
+    aviso.current = alResuelta;
+  });
+  const [estadoConfirmar, confirmar, confirmando] = useActionState<ResultadoAccion | null>(async () => {
+    const r = await confirmarPropuestaAgenda({ propuestaId: id });
+    if (r.ok) aviso.current?.(r.anuncio);
+    return r;
+  }, null);
+  const [estadoDescartar, descartar, descartando] = useActionState<ResultadoAccion | null>(async () => {
+    const r = await descartarPropuestaAgenda({ propuestaId: id });
+    if (r.ok) aviso.current?.(r.anuncio);
+    return r;
+  }, null);
   const botonDescartar = useRef<HTMLButtonElement>(null);
   const idMotivo = useId();
 
@@ -73,15 +82,6 @@ export function FilaPropuesta({ id, nombre, prevista, motivo, propuesta, cambioD
   useEffect(() => {
     if (permanente) botonDescartar.current?.focus();
   }, [permanente, estadoConfirmar]);
-
-  // Una vez por resultado: el callback puede cambiar en cada repintado del padre.
-  const avisar = useEffectEvent((anuncio: string) => alResuelta?.(anuncio));
-  useEffect(() => {
-    if (estadoConfirmar?.ok) avisar(estadoConfirmar.anuncio);
-  }, [estadoConfirmar]);
-  useEffect(() => {
-    if (estadoDescartar?.ok) avisar(estadoDescartar.anuncio);
-  }, [estadoDescartar]);
 
   // El último resultado de cualquiera de las dos acciones; un `ok` lo lleva la lista al recargar.
   const ultimo = estadoDescartar && !estadoDescartar.ok ? estadoDescartar : estadoConfirmar;

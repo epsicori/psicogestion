@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,6 +25,9 @@ function fila() {
   );
 }
 
+/** La región de la zona va después de las filas, que llevan sus propios `status`. */
+const regionDeZona = () => screen.getAllByRole('status').at(-1)!;
+
 // Revisión TS H9: al resolver una propuesta de «Por confirmar» la fila se va con el recargado
 // (y el bloque entero si era la última). El anuncio no puede vivir en ella, ni el foco quedarse
 // en un botón que desaparece.
@@ -49,6 +52,37 @@ describe('ZonaPorConfirmar', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Hecho.'));
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement?.isConnected).toBe(true);
+  });
+
+  // Revisión de cierre N1: la fila se desmonta en el mismo commit en que llegaría el `ok`.
+  it.each([
+    ['Confirmar', () => confirmarPropuestaAgenda],
+    ['Descartar', () => descartarPropuestaAgenda],
+  ])('%s: con el recargado en el mismo commit que el ok, se anuncia y el foco queda en la zona', async (boton, accion) => {
+    const { rerender } = render(<ZonaPorConfirmar>{fila()}</ZonaPorConfirmar>);
+    accion().mockImplementation(async () => {
+      await Promise.resolve();
+      act(() => rerender(<ZonaPorConfirmar>{null}</ZonaPorConfirmar>));
+      return { ok: true, anuncio: 'Propuesta resuelta.' };
+    });
+    await userEvent.setup().click(screen.getByRole('button', { name: boton }));
+    await waitFor(() => expect(regionDeZona()).toHaveTextContent('Propuesta resuelta.'));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.isConnected).toBe(true);
+  });
+
+  // Revisión de cierre N5: dos anuncios iguales seguidos no cambian el DOM y el lector no habla.
+  it('dos anuncios idénticos seguidos cambian el texto de la región', async () => {
+    confirmarPropuestaAgenda.mockResolvedValue({ ok: true, anuncio: 'Propuesta confirmada.' });
+    const { rerender } = render(<ZonaPorConfirmar>{fila()}</ZonaPorConfirmar>);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(regionDeZona()).toHaveTextContent('Propuesta confirmada.'));
+    const primero = regionDeZona().textContent;
+    rerender(<ZonaPorConfirmar>{fila()}</ZonaPorConfirmar>);
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(regionDeZona().textContent).not.toBe(primero));
+    expect(regionDeZona()).toHaveTextContent('Propuesta confirmada.');
   });
 
   it('un rechazo no mueve el foco ni anuncia en la zona: lo dice la fila', async () => {
