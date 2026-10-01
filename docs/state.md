@@ -58,7 +58,7 @@
   la caja de cita < 44 px al tacto (por diseño); `test:a11y` en paralelo; a 360 px la semana no
   muestra citas (consultar con el arquitecto). La bandeja del administrador filtra por
   `profesional_id` propio: no incluye pacientes donde solo es asignado. CRLF rompe `prettier --check`.
-- **T-014, decisión del propietario (01-10)**: el técnico no ve alertas `nota_sin_firmar` en la bandeja;
+- **T-014, decisión del propietario (01-10)**: el técnico no ve ninguna alerta con origen en notas clínicas (`nota_sin_firmar`, `borrador_abandonado`);
   en T-014 se filtra en la aplicación, la política RLS sobre `alertas_documentacion` entra con **T-015**.
 - **Armazón** (fuera de T-014): objetivos < 44 px (abrir menú 36, cerrar menú y sesión 32, selector de
   centro 40). Tras entrar, el login lleva a `/pacientes` y no a `/agenda`. Sin ticket.
