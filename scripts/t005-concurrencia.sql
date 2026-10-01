@@ -65,13 +65,16 @@ create table public.t005_resultado (
 -- necesitan DOS conexiones distintas, que no comparten pg_temp. Se borra al final.
 -- T-012a: p_alcance nuevo, con default 'individual' porque es el valor por defecto de
 -- la columna homónima (ADR-057) y todas las filas de esta prueba son individuales.
+-- T-012c: p_nota_id nuevo y primero (la cabecera del sobre se lee de notas_clinicas).
 create or replace function public.t005_sobre_prueba(
+  p_nota_id   uuid,
   p_autor_id  uuid,
   p_creada_en timestamptz,
   p_cuerpo    jsonb,
   p_alcance   text default 'individual'
 ) returns text
 language sql
+stable
 as $$
   select
     '{' ||
@@ -80,12 +83,17 @@ as $$
     '"anotaciones_reservadas":null,' ||
     '"autor_id":"' || lower(p_autor_id::text) || '",' ||
     '"cita_id":null,' ||
+    '"coprofesional_id":' || coalesce(to_json((select n.coprofesional_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"cuerpo":' || p_cuerpo::text || ',' ||
-    '"esquema_version":3,' ||
+    '"episodio_id":' || coalesce(to_json((select n.episodio_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
+    '"esquema_version":4,' ||
+    '"fecha_sesion":' || coalesce(to_json((select to_char(n.fecha_sesion, 'YYYY-MM-DD') from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"margen_sesion_minutos":null,' ||
     '"motivo_cambio":null,' ||
+    '"nota_id":"' || lower(p_nota_id::text) || '",' ||
+    '"paciente_id":' || coalesce(to_json((select n.paciente_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"redactada_en_sesion":false' ||
     '}';
 $$;
@@ -94,7 +102,7 @@ $$;
 begin;
 insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
   (:NOTA1, '{"t":"conc-a"}',
-   public.t005_sobre_prueba(:ANA, timestamptz '2026-01-01 00:00:00+00', '{"t":"conc-a"}'::jsonb),
+   public.t005_sobre_prueba(:NOTA1, :ANA, timestamptz '2026-01-01 00:00:00+00', '{"t":"conc-a"}'::jsonb),
    :ANA, timestamptz '2026-01-01 00:00:00+00');
 
 -- `\!` NO interpola variables de psql: la segunda conexión lleva los UUID literales, no
@@ -105,7 +113,7 @@ insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico
 -- escapar, `/bin/sh` intentaría expandir `$do` como variable de entorno (vacía) y rompería
 -- la etiqueta de la comilla de dólar.
 \echo '--- T2 (segunda conexión), con T1 todavía sin commit: debe morir con 55P03 lock_not_available ---'
-\! psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "set lock_timeout='2s'; do \$do\$ begin begin insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values ('e0050002-0000-4000-8000-000000000002', '{\"t\":\"conc-b\"}', public.t005_sobre_prueba('11111111-1111-4111-8111-111111111111'::uuid, timestamptz '2026-01-01 00:00:01+00', '{\"t\":\"conc-b\"}'::jsonb), '11111111-1111-4111-8111-111111111111', timestamptz '2026-01-01 00:00:01+00'); insert into public.t005_resultado values ('t2_insert', true, null, 'insertó sin esperar (inesperado si T1 seguia sin commit)'); exception when others then insert into public.t005_resultado values ('t2_insert', false, sqlstate, sqlerrm); end; end \$do\$;"
+\! psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "set lock_timeout='2s'; do \$do\$ begin begin insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values ('e0050002-0000-4000-8000-000000000002', '{\"t\":\"conc-b\"}', public.t005_sobre_prueba('e0050002-0000-4000-8000-000000000002'::uuid, '11111111-1111-4111-8111-111111111111'::uuid, timestamptz '2026-01-01 00:00:01+00', '{\"t\":\"conc-b\"}'::jsonb), '11111111-1111-4111-8111-111111111111', timestamptz '2026-01-01 00:00:01+00'); insert into public.t005_resultado values ('t2_insert', true, null, 'insertó sin esperar (inesperado si T1 seguia sin commit)'); exception when others then insert into public.t005_resultado values ('t2_insert', false, sqlstate, sqlerrm); end; end \$do\$;"
 
 commit;
 
@@ -145,7 +153,7 @@ $$;
 \echo '--- T1 comprometida: ahora sí entra la segunda firma, ya sin contención ---'
 insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
   (:NOTA2, '{"t":"conc-b"}',
-   public.t005_sobre_prueba(:ANA, timestamptz '2026-01-01 00:00:02+00', '{"t":"conc-b"}'::jsonb),
+   public.t005_sobre_prueba(:NOTA2, :ANA, timestamptz '2026-01-01 00:00:02+00', '{"t":"conc-b"}'::jsonb),
    :ANA, timestamptz '2026-01-01 00:00:02+00');
 
 \echo '--- Aserción 3: dos versiones, posiciones 1 y 2, huella_anterior DISTINTAS ---'
@@ -186,7 +194,7 @@ begin
 end;
 $$;
 
-drop function public.t005_sobre_prueba(uuid, timestamptz, jsonb, text);
+drop function public.t005_sobre_prueba(uuid, uuid, timestamptz, jsonb, text);
 drop table public.t005_resultado;
 
 \echo '=== T-005 · Concurrencia: completa ==='
