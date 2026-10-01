@@ -157,10 +157,15 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
         ? dialogo !== null && mismo(dialogo.cita)
         : dialogo === null && tope?.tipo === 'cita' && mismo(tope.cita);
     anunciar(texto);
-    if (!sigueAbierto) return;
+    const nadaAbierto = dialogo === null && abiertos.length === 0;
+    // Otro panel o diálogo abierto: el foco es suyo. Con nada abierto no hay nada que cerrar,
+    // pero el foco sigue a la cita, que puede cambiar de día y desmontar su botón (revisión B2-1).
+    if (!sigueAbierto && !nadaAbierto) return;
     enfocarCita.current = { id: cita.id, fecha: cita.fechaLocal, citas: vista.citas };
-    setReprogramando(null);
-    setPila([]);
+    if (sigueAbierto) {
+      setReprogramando(null);
+      setPila([]);
+    }
     setPulso((n) => n + 1);
   }
 

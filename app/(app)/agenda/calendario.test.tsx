@@ -421,6 +421,61 @@ describe('Calendario · resultados que llegan tarde (revisión B-1)', () => {
     expect(screen.getByText('Propuesta de Ana confirmada.').closest('[role="status"]')).not.toBeNull();
   });
 
+  // Revisión B2-1: con nada abierto, el resultado no cierra nada pero el foco sigue a la cita.
+  it('si se cerró el panel con Escape y no hay nada abierto, el foco sigue a la cita aunque cambie de día', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(
+      () => new Promise((resolve) => (resolver = resolve as typeof resolver)),
+    );
+    const user = userEvent.setup();
+    const { rerender } = montar({ vista: dosCitas() });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await act(async () => resolver({ ok: true, anuncio: 'Hecho.' }));
+    // El recargado pinta la cita en otro día: el botón del martes se desmonta.
+    rerender(
+      <Calendario
+        vista={vistaDePrueba({
+          citas: [citaDePrueba({ diaIndice: 3, fechaLocal: '2026-10-01' }), citaDePrueba(CITA_B)],
+        })}
+        parametros={{ centro: null, profesional: null }}
+        centros={[
+          { id: 'c1', nombre: 'Centro Norte' },
+          { id: 'c2', nombre: 'Centro Sur' },
+        ]}
+        centroElegido="todos"
+        rol="administrador"
+      />,
+    );
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect((document.activeElement as HTMLElement).getAttribute('data-cita-id')).toBe(citaDePrueba().id);
+  });
+
+  it('con otro panel abierto, el resultado tardío no le quita el foco ni tras recargar', async () => {
+    let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
+    vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(
+      () => new Promise((resolve) => (resolver = resolve as typeof resolver)),
+    );
+    const user = userEvent.setup();
+    montar({ vista: dosCitas() });
+    await user.click(enGrid().getByRole('button', { name: /Ana G\./ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await user.keyboard('{Escape}');
+    await user.click(enGrid().getByRole('button', { name: /Berta R\./ }));
+    const panelB = screen.getByRole('dialog', { name: 'Berta Ruiz' });
+    const foco = document.activeElement;
+
+    await act(async () => resolver({ ok: true, anuncio: 'Hecho.' }));
+
+    expect(screen.getByRole('dialog', { name: 'Berta Ruiz' })).toBe(panelB);
+    expect(document.activeElement).toBe(foco);
+  });
+
   it('dos tramos de la misma cita son dos paneles: el resultado de uno no cierra el del otro', async () => {
     let resolver: (r: { ok: true; anuncio: string }) => void = () => {};
     vi.mocked(acciones.confirmarPropuestaAgenda).mockImplementation(
