@@ -1,0 +1,34 @@
+{
+  "ticket": "T-033",
+  "resumen": "Todos los criterios pasan ejecutados con Supabase local (db reset + seed), dev server y Playwright/Chromium. Matices: (a) territorio.mjs sale 1 solo por ficheros sin versionar de .claude/agent-memory/revisor (artefacto de los revisores, no del diff de la rama); (b) con `next start` y config mala el proceso no sale: queda vivo y responde 500 a todo (en `next dev` si sale con codigo 1). Cierra en fallo igualmente. (c) La URL local se evalua contra NEXT_PUBLIC_SUPABASE_URL tal como esta inlineada en build, no en runtime. No hay script de E2E en el contrato; las comprobaciones de navegador se hicieron con scripts Playwright ad hoc.",
+  "criterios": [
+    {"id": 1, "texto": "Apagado por defecto", "veredicto": "PASA",
+     "comando": "next dev -p 3104 sin variable; Playwright: login ana@psicogestion.test y goto /pacientes; npx vitest run lib/cuentas/modo-desarrollo.test.ts",
+     "evidencia": "banner en login: 0 | aal: aal1 amr:[password] | tras goto: http://localhost:3104/primera-vez | 'PRIMER ACCESO ... Escribe el numero de seis digitos que te de tu aplicacion de autenticacion'. Tests de modo: 39 passed (con aviso-modo-local)."},
+    {"id": 2, "texto": "Encendido en local, aal2 sin teclear codigo", "veredicto": "PASA",
+     "comando": "SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo next dev -p 3103; Playwright login ana y tecnico; decodificar JWT de la cookie sb-*-auth-token",
+     "evidencia": "URL final: http://localhost:3103/pacientes | aal: aal2 amr: [{method:password},{method:totp}] (ana y tecnico). Nota: la agenda es 'pronto' en la barra y /agenda da 404 (preexistente, app/page.tsx intacto); el destino post-login real es /pacientes."},
+    {"id": 3, "texto": "El PIN sigue funcionando en modo local", "veredicto": "PASA",
+     "comando": "psql: delete from pines_historia de bruno; modo activo; Playwright: login bruno, goto /pacientes, rellenar #pin/#confirmacion en /primera-vez",
+     "evidencia": "goto /pacientes -> 307 -> /primera-vez (paso pin); POST fijarPin({pin}) 200; count pines_historia 3 -> 4; 0 apariciones de 42501 en el log del servidor; redirige a / -> /agenda."},
+    {"id": 4, "texto": "Falla cerrado", "veredicto": "PASA",
+     "comando": "vitest matriz (8 combinaciones variable x URL x NODE_ENV) + SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo NEXT_PUBLIC_SUPABASE_URL=https://abc.supabase.co next dev / next start",
+     "evidencia": "Matriz 8 casos en lib/cuentas/modo-desarrollo.test.ts (pasan). next dev: 'ErrorModoLocal: ... Supabase no es local (host abc.supabase.co)' y el proceso termina (curl http 000). Build con URL remota + next start: 'Failed to prepare server ErrorModoLocal', el proceso sigue vivo y /login responde http=500 (fallo cerrado funcional, no sale del proceso)."},
+    {"id": 5, "texto": "Nada en el navegador", "veredicto": "PASA",
+     "comando": "npm run build; grep -rlE \"SEGUNDO_FACTOR_AUTOMATICO_LOCAL|SEMILLATOTPDEMO\" .next/static",
+     "evidencia": "grep exit=1 (sin coincidencias en .next/static). Los secretos solo aparecen en .next/server (servidor)."},
+    {"id": 6, "texto": "La base no cambia", "veredicto": "PASA",
+     "comando": "git diff --stat main -- supabase/ | wc -c",
+     "evidencia": "0 (salida vacia)."},
+    {"id": 7, "texto": "Visible: aviso permanente", "veredicto": "PASA",
+     "comando": "Playwright con modo activo, capturas de /login y /pacientes",
+     "evidencia": "Franja roja superior 'Desarrollo local: el segundo factor se supera solo con las cuentas sembradas. Esto no es un entorno real.' presente en /login y /pacientes (capturas en %TEMP%/vf/on-ana-login.png y on-ana.png); ausente sin la variable (banner count 0)."},
+    {"id": 8, "texto": "npm test, lint, build, test:rls, territorio", "veredicto": "PASA",
+     "comando": "npm test; npm run lint; npm run build; npm run test:rls; node ~/.claude/pipeline/territorio.mjs T-033",
+     "evidencia": "test: 66 files / 699 tests passed. lint: 0 errores, 2 warnings preexistentes (lib/cuentas/accesos.test.ts, no tocado). build OK. test:rls exit 0 ('19-nota-en-episodio: completa'). territorio.mjs exit 1 SOLO por 3 ficheros untracked .claude/agent-memory/revisor/* (los mismos ?? .claude/agent-memory/ de main; git diff --name-only main -- .claude vacio); todos los ficheros del diff de la rama estan dentro del territorio."}
+  ],
+  "regresiones": [
+    "Ninguna atribuible al ticket. Observacion: territorio.mjs reporta .claude/agent-memory/revisor/* sin versionar (artefacto de revisores; hay que no commitearlos o excluirlos).",
+    "Observacion: en next start con config mala el proceso no termina (500 en todo); el contrato de la capa 1 dice que el proceso sale."
+  ]
+}
