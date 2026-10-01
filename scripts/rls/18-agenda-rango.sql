@@ -170,7 +170,7 @@ select pg_temp.assert(
 );
 select pg_temp.assert(
   not exists (select 1 from public.agenda_citas_rango(now() - interval '2 hours', now() - interval '50 minutes') r
-               where r.id = :C18INI),
+               where r.id = :C18FIN),
   'R1c: al técnico NO le entra la cita que empieza justo en el fin del rango (inicio < hasta es estricto)'
 );
 select pg_temp.assert(
