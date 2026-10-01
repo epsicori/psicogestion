@@ -3,25 +3,26 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 01-10-2026 · T-012c integrado en `main` (a7ebc5e)
+**Actualizado**: 01-10-2026 · T-014 integrado en `main` (c6b0cf8)
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-013a, T-011b, T-012b, T-012c, T-016–T-020, T-029–T-034.
-  Autenticación (segundo factor automático solo en local), ficha cifrada, series editables, dinero,
-  rejilla de semana, toda nota en episodio. La huella de cada versión sella el sobre de la era 4
-  (diecisiete claves) y el disparador y el verificador lo cotejan con la cabecera de la nota.
-- `main` al integrar T-012c: build exit 0, `npm test` 737/737, lint 0 errores, `test:rls` exit 0,
-  `verificar:huellas` íntegra.
+- **Integrado en `main`**: T-000–T-014, T-011b, T-012b, T-012c, T-016–T-020, T-029–T-034.
+  Autenticación, ficha cifrada, series editables, dinero, toda nota en episodio (era 4) y el
+  calendario (semana, mes, estados, ficha de cita, «Por confirmar»).
+- `main` al integrar T-014: `npm test` 1150/1150, build exit 0. **Falta en `main`**: `db reset` +
+  `seed` + `test:rls` y playwright (`SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo`, `--workers=1`);
+  en la rama pasaron los dos.
 
 ## En curso
 
-- Nada en implementación.
-- **T-014** (calendario: vista semanal, estados y ficha de cita): diseñado (`tickets/T-014/diseno.md`),
-  libre para entrar.
-- **T-035** (congelar `centro_id` + director sanitario como coprofesional) y **T-036** (`cita_id`
-  cotejado con la cabecera): sin diseño. T-036 ya no espera a nadie.
-- **T-037** (códigos de recuperación solo al activar el segundo factor): sin diseño.
+- **T-014 sin cerrar la memoria**: falta el documentalista (frontmatter a hecho, bitácora). Limpiar
+  los worktrees de T-014 (`.claude/worktrees/agent-*`; sin junction, node_modules propio).
+- **T-036** (firma cotejada, prioridad alta): el arquitecto agotó los turnos **sin escribir**
+  `tickets/T-036/diseno.md`. Relanzar.
+- **T-012** (notas): diseñado y piezas de MiniMax entregadas y revisadas (`minimax/respuestas` y
+  `revisiones/T-012*`; copias corregidas y `catalogo.diff` en el scratchpad de la sesión 01-10,
+  se pierden: rehacer desde las revisiones). Aviso: `scripts/t012-nota.ts` no es idempotente.
 
 ## Bloqueos
 
@@ -30,10 +31,10 @@
 
 ## Siguiente paso
 
-1. T-014 (`modelo: opus`, migración `*_agenda_citas_rango.sql` + banco 18): implementación.
-2. T-035 y T-036: diseño con el arquitecto mientras T-014 se implementa. T-014, T-035 y T-036 tocan
-   `supabase/`: se implementan uno detrás de otro, nunca a la vez.
-3. T-011c (ordinal mensual, MEDIA → ALTA) y T-037.
+1. Comprobaciones de BD en `main` y documentalista de T-014.
+2. T-012 (implementación, cortes A, B y C) y en paralelo el diseño de T-036. `supabase/` en orden:
+   T-012 → T-036 → T-035; nunca dos a la vez.
+3. T-015 (incluye la RLS de `alertas_documentacion` para el técnico), T-035, T-011c, T-037, T-028.
 
 ## Hallazgos anotados (abiertos)
 
@@ -64,6 +65,11 @@
   lee todas las alertas sin mirar el rol (`pacientes/[id]/datos.ts:320`, `PanelResumen`, `PanelDocumentos`).
 - **T-014** (sin FALLA): en la vista mes, el panel de la última fila rebasa el recuadro del calendario
   (queda entero en pantalla); el contrato dice «se recorta a los límites del calendario».
+- **T-014, B3 (BAJA, aceptadas al integrar)**: B3-1 el foco cae a `body` si la cita cambia de día
+  con el foco en su fila del panel del día; B3-2 `dialogo === null` sin prueba; B3-3 «Por confirmar»
+  roba el foco desde el Confirmar de otra propuesta; B3-4 pico dibujado con el panel centrado;
+  B3-5 tres mutantes vivos en colocación y `visibleEnVentana` solo recorta arriba. El panel sigue
+  a su ancla al desplazar: sale de pantalla con ella (verificador).
 - **Armazón** (fuera de T-014): objetivos < 44 px (abrir menú 36, cerrar menú y sesión 32, selector de
   centro 40). Tras entrar, el login lleva a `/pacientes` y no a `/agenda`. Sin ticket.
 - **T-031/T-032** (MEDIA). T-011 sin transiciones ADR-045.

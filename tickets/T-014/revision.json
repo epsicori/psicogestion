@@ -1,0 +1,53 @@
+{
+  "ticket": "T-014",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 5,
+  "hallazgos": [
+    {
+      "id": "B3-1",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/calendario.tsx",
+      "linea": 160,
+      "descripcion": "Con el panel del día abierto y el foco en la fila de la cita, el resultado tardío no hace nada y, si la cita cambia de día, el foco cae a body. nadaAbierto exige abiertos.length === 0: con la pila [día] no es «nada abierto» ni «sigue abierto» y la función sale sin tocar el foco (el mismo tercer estado de B2-1, con el día debajo).",
+      "escenario": "Se abre el martes desde su número y, desde la lista del día, la cita A; se pulsa Confirmar en su propuesta («el jueves a las 11:00»); durante «Un momento…», Escape: el panel de A se cierra y el foco vuelve a la fila de A en el panel del martes (D9); la acción vuelve y el recargado saca a A del martes → la fila se desmonta con el foco dentro y el foco cae a body con el panel del día abierto; el lector pierde el sitio. Reproducido (R1): document.activeElement === document.body y el panel del martes sigue abierto."
+    },
+    {
+      "id": "B3-2",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/calendario.tsx",
+      "linea": 160,
+      "descripcion": "La conjunción dialogo === null de nadaAbierto no tiene prueba: si se quita, el resultado tardío roba el foco a un diálogo modal y ninguna prueba cae. El diálogo de reprogramar se abre con la pila vacía al soltar una cita arrastrada (alSoltar).",
+      "escenario": "Se confirma la propuesta de A desde su panel y se pulsa Escape; durante la espera se arrastra B a otra hora y se abre «Reprogramar la cita» con el foco dentro; vuelve el resultado de A → sin la conjunción, nadaAbierto es true y enfocarCita lleva el foco a A en la rejilla, detrás del modal. Medido: con el mutante las 334 pruebas siguen verdes; una prueba temporal (R2) con ese recorrido pasa con el árbol y se pone roja con el mutante."
+    },
+    {
+      "id": "B3-3",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/zona-por-confirmar.tsx",
+      "linea": 25,
+      "descripcion": "«Dentro de la zona» incluye las filas de las otras propuestas, y la resolución de una les quita el foco: zona.current.contains(activo) es verdad para cualquier botón de «Por confirmar», no solo para los de la fila que se resuelve.",
+      "escenario": "Dos propuestas, Ana y Berta; se pulsa Confirmar en la de Ana y durante «Un momento…» se pasa con Tab al Confirmar de Berta → vuelve la de Ana y el foco salta al div de la zona (tabIndex=-1); un Intro ya no confirma la de Berta y el lector anuncia la zona. Reproducido (R3): el Confirmar de Berta sigue montado (isConnected === true) y activeElement es el div de la zona."
+    },
+    {
+      "id": "B3-4",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "components/ui/colocacion.ts",
+      "linea": 129,
+      "descripcion": "Con el panel centrado, el pico sigue dibujado (panel-anclado.tsx:147) y apunta a lo que haya justo encima del panel, que no es la cita: centrarEnVentana devuelve lado: 'abajo' y picoX = ancho / 2.",
+      "escenario": "iPad mini con la semana en horizontal, una cita abierta desde el panel del día, y se gira a vertical (744 px, por debajo de md) → la semana pasa a la ListaDia y el panel se centra en top 446; el pico apunta a la fila de la lista que queda encima del panel, que puede ser la de Berta: quien mira lee que el panel de Ana pertenece a Berta."
+    },
+    {
+      "id": "B3-5",
+      "revisor": "B",
+      "severidad": "BAJA",
+      "archivo": "components/ui/panel-anclado.tsx",
+      "linea": 101,
+      "descripcion": "Las dos condiciones nuevas del último escalón (referencia.calendario && en panel-anclado.tsx:101-104 y visibleEnVentana en colocacion.ts:99-103) no tienen prueba que las fije, y visibleEnVentana solo recorta por un lado (top no se acota a alto).",
+      "escenario": "Teléfono en horizontal (932 × 430) y el panel de un día con diez citas (unos 500 px) abierto desde un número a media altura → con el mutante sin referencia.calendario se despega del día y se centra, y ninguna de las 334 pruebas cae. visibleEnVentana cambiada por la identidad o sin Math.max(0, …) deja todo verde; con el calendario acabando en −100 px, sin el recorte el panel va a top −92, cortado por arriba (con él, a 8), y ese caso no tiene prueba."
+    }
+  ]
+}
