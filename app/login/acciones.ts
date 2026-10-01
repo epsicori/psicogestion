@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
+import { segundoFactorAutomaticoActivo, superarSegundoFactorSembrado } from '@/lib/cuentas/modo-desarrollo';
 import { t } from '@/lib/i18n';
 import { ESTADO_INICIAL, type EstadoFormulario } from '@/lib/formularios';
 import { crearClienteServidor } from '@/lib/supabase/servidor';
@@ -16,6 +17,10 @@ import { esquemaInicioSesion } from './esquemas';
  * validación de cliente es comodidad; ESTA es la que manda.
  */
 export async function iniciarSesion(datos: unknown): Promise<EstadoFormulario> {
+  // T-033: lo primero. Mal configurado (variable puesta y Supabase no local), lanza
+  // ANTES de crear ninguna sesión.
+  const modoLocal = segundoFactorAutomaticoActivo();
+
   const resultado = esquemaInicioSesion.safeParse(datos);
 
   if (!resultado.success) {
@@ -34,6 +39,12 @@ export async function iniciarSesion(datos: unknown): Promise<EstadoFormulario> {
   if (error) {
     // Mensaje genérico: no revelar si el correo existe.
     return { ...ESTADO_INICIAL, mensaje: t('acceso.credencialesNoValidas') };
+  }
+
+  if (modoLocal) {
+    // Solo desarrollo local, solo factores sembrados. El resultado no cambia el destino:
+    // si no se superó, la guardia del proxy manda a /primera-vez como siempre.
+    await superarSegundoFactorSembrado(supabase);
   }
 
   redirect('/pacientes');
