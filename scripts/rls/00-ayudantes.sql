@@ -158,6 +158,24 @@ begin
 end;
 $$;
 
+-- T-012c · La gemela positiva de assert_lanza: ejecuta `consulta` y falla si LANZA,
+-- con el SQLSTATE y el mensaje reales en el fallo. Sirve para que una inserción que
+-- debe sellarse diga POR QUÉ no se selló en vez de cortar el banco con un error suelto
+-- (la primera firma de la fijación, las gemelas positivas y los mutantes de 14).
+create or replace function pg_temp.assert_no_lanza(consulta text, mensaje text)
+returns void
+language plpgsql
+as $$
+begin
+  begin
+    execute consulta;
+  exception when others then
+    raise exception 'FALLO: % (lanzó % · %)', mensaje, sqlstate, sqlerrm;
+  end;
+  raise notice 'OK: %', mensaje;
+end;
+$$;
+
 create or replace procedure pg_temp.reset_sesion()
 language plpgsql
 as $$
@@ -171,13 +189,19 @@ $$;
 -- prueba. NO es un canonicalizador general —los valores del banco son ASCII simple, sin
 -- ninguno de los casos feos que prueba lib/huella/jcs.test.ts—, es la forma más corta de
 -- dar de alta versiones que el disparador fn_sellar_version_nota() (T-005) acepte, con las
--- doce claves exactas y en el orden alfabético que exige la comprobación 6.1. `p_cuerpo`
--- ya viene como jsonb de una sola clave en todos los usos del banco, así que su orden
--- interno no importa.
+-- diecisiete claves exactas de la era 4 y en el orden alfabético que exige la
+-- comprobación 6.1. `p_cuerpo` ya viene como jsonb de una sola clave en todos los usos
+-- del banco, así que su orden interno no importa.
 -- T-012a: p_alcance nuevo, al final para no romper las llamadas posicionales ya
 -- existentes en el banco; default 'individual' porque es el valor por defecto de la
 -- columna homónima (ADR-057).
+-- T-012c: p_nota_id primero y sin valor por defecto. paciente_id, episodio_id,
+-- fecha_sesion y coprofesional_id se leen de la cabecera notas_clinicas (por eso es
+-- `stable`); sin `into strict`: para una nota inexistente salen a null, que es lo que
+-- necesita C.perm de 14 (el paso 0 o las 6.12-6.16 lo rechazan igual). Se llama como
+-- `postgres`: bajo `authenticated` la RLS de notas_clinicas decidiría qué cabecera ve.
 create or replace function pg_temp.sobre_prueba(
+  p_nota_id                  uuid,
   p_autor_id                 uuid,
   p_creada_en                timestamptz,
   p_cuerpo                   jsonb,
@@ -190,6 +214,7 @@ create or replace function pg_temp.sobre_prueba(
   p_alcance                  text default 'individual'
 ) returns text
 language sql
+stable
 as $$
   select
     '{' ||
@@ -198,14 +223,19 @@ as $$
     '"anotaciones_reservadas":' || coalesce(to_json(p_anotaciones_reservadas)::text, 'null') || ',' ||
     '"autor_id":"' || lower(p_autor_id::text) || '",' ||
     '"cita_id":' || coalesce(to_json(p_cita_id::text)::text, 'null') || ',' ||
+    '"coprofesional_id":' || coalesce(to_json((select n.coprofesional_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"cuerpo":' || p_cuerpo::text || ',' ||
-    '"esquema_version":3,' ||
+    '"episodio_id":' || coalesce(to_json((select n.episodio_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
+    '"esquema_version":4,' ||
+    '"fecha_sesion":' || coalesce(to_json((select to_char(n.fecha_sesion, 'YYYY-MM-DD') from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
     '"margen_sesion_minutos":' || coalesce(p_margen_sesion_minutos::text, 'null') || ',' ||
     '"motivo_cambio":' || coalesce(to_json(p_motivo_cambio)::text, 'null') || ',' ||
+    '"nota_id":"' || lower(p_nota_id::text) || '",' ||
+    '"paciente_id":' || coalesce(to_json((select n.paciente_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
     '"redactada_en_sesion":' || p_redactada_en_sesion::text ||
     '}';
 $$;
 
-\echo '00-ayudantes: assert, assert_lanza, contar, como() y sobre_prueba() definidos.'
+\echo '00-ayudantes: assert, assert_lanza, assert_no_lanza, contar, como() y sobre_prueba() definidos.'

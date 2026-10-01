@@ -122,16 +122,22 @@ insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) value
 -- T-012a: el sobre lleva `alcance` (comprobación 6.10) y debe coincidir con la columna
 -- homónima, o fn_sellar_version_nota() rechaza el INSERT con 23514 — y con él, TODA la
 -- siembra del banco que depende de este fichero.
-insert into public.notas_clinicas_versiones
-  (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
-  (:NCONJ, '{"t":"conjunta"}',
-   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:00+00', '{"t":"conjunta"}'::jsonb,
-                         p_alcance => 'conjunta'),
-   'conjunta', :PRO1, timestamptz '2026-08-29 09:20:00+00');
+-- T-012c: la primera firma del banco va envuelta en assert_no_lanza para que, si el sobre
+-- no es el de la era vigente, el banco se pare AQUÍ con un rótulo que lo diga (criterio 2)
+-- y no con un error suelto. Las variables de psql van como argumentos de format().
+select pg_temp.assert_no_lanza(format($f$
+  insert into public.notas_clinicas_versiones
+    (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
+    (%L, '{"t":"conjunta"}', %L, 'conjunta', %L, timestamptz '2026-08-29 09:20:00+00')$f$,
+  :NCONJ,
+  pg_temp.sobre_prueba(:NCONJ, :PRO1, timestamptz '2026-08-29 09:20:00+00', '{"t":"conjunta"}'::jsonb,
+                        p_alcance => 'conjunta'),
+  :PRO1),
+  'T-012c · NCONJ (primera firma de la fijación) se sella con un sobre de la era 4');
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
   (:NIND, '{"t":"individual"}',
-   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:20:01+00', '{"t":"individual"}'::jsonb,
+   pg_temp.sobre_prueba(:NIND, :PRO1, timestamptz '2026-08-29 09:20:01+00', '{"t":"individual"}'::jsonb,
                          p_alcance => 'individual'),
    'individual', :PRO1, timestamptz '2026-08-29 09:20:01+00');
 
@@ -146,12 +152,12 @@ insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) value
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, motivo_cambio, autor_id, creada_en) values
   (:NCORR, '{"t":"v1"}',
-   pg_temp.sobre_prueba(:PRO2, timestamptz '2026-08-29 09:21:00+00', '{"t":"v1"}'::jsonb),
+   pg_temp.sobre_prueba(:NCORR, :PRO2, timestamptz '2026-08-29 09:21:00+00', '{"t":"v1"}'::jsonb),
    null, :PRO2, timestamptz '2026-08-29 09:21:00+00');
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, motivo_cambio, autor_id, creada_en) values
   (:NCORR, '{"t":"v2"}',
-   pg_temp.sobre_prueba(:PRO2, timestamptz '2026-08-29 09:21:01+00', '{"t":"v2"}'::jsonb, null, 'Corrección de fecha'),
+   pg_temp.sobre_prueba(:NCORR, :PRO2, timestamptz '2026-08-29 09:21:01+00', '{"t":"v2"}'::jsonb, null, 'Corrección de fecha'),
    'Corrección de fecha', :PRO2, timestamptz '2026-08-29 09:21:01+00');
 
 -- Un borrador sin firmar, sobre P2.
