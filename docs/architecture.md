@@ -237,6 +237,12 @@ fila leída — que daría un registro ilegible y una escritura en cada render.
 **Entrar, seguir siendo tú, y seguir delante del teclado** son tres cosas distintas:
 contraseña, **TOTP** (ADR-039 — nunca SMS, para los tres roles) y **PIN** (ADR-026). El
 administrador puede reponer un TOTP perdido, auditado y con aviso; un PIN, jamás.
+**Modo local (T-033)**: con `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo`, el inicio de sesión
+supera él mismo el TOTP, en servidor (`lib/cuentas/modo-desarrollo.ts`, variable sin
+`NEXT_PUBLIC_`), y solo para factores cuyo secreto está en `supabase/seed-completo.sql`; la
+sesión llega a `aal2` real y ni la guardia ni la base cambian. Exige Supabase en
+`http://127.0.0.1`/`localhost`, que ninguna instancia de producción (Supabase en la nube,
+§Topología) cumple: mal puesto, el servidor no arranca (`instrumentation.ts`).
 
 ## RLS
 
