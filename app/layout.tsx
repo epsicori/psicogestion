@@ -1,5 +1,10 @@
 import type { Metadata, Viewport } from 'next';
 import { DM_Serif_Display, Geist, Geist_Mono } from 'next/font/google';
+import { Suspense } from 'react';
+
+// T-033: franja del modo local del segundo factor. Hueco dinámico dentro de <Suspense>
+// (Cache Components): el resto del documento sigue prerenderizándose.
+import { AvisoModoLocal } from './aviso-modo-local';
 
 import './globals.css';
 
@@ -46,7 +51,12 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       className={`${geistSans.variable} ${geistMono.variable} ${dmSerif.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="bg-background text-foreground flex min-h-full flex-col">{children}</body>
+      <body className="bg-background text-foreground flex min-h-full flex-col">
+        <Suspense fallback={null}>
+          <AvisoModoLocal />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }
