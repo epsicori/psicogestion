@@ -37,6 +37,7 @@
   no en runtime; (c) franja dentro `<Suspense>` no da 500 en headers (capa 2 intacta en acción).
 - **T-034 SQL-H2** (MEDIA): Reabrir episodio esquiva D6. Regla en ticket que cierre.
 - **T-011c** (MEDIA → ALTA): Ordinal deducido de último evento; falta gemela 4.º = último.
-- **Para T-012c**: `20260915130000_…:161-163` falso; no copiar.
+- **H27 (T-012c)**: `cita_id` del sobre no se coteja con la cabecera; código en T-036 (ADR-073.4).
+  `t001`/`t002` (fuera de CI, territorio ajeno) crean notas sin episodio y quizá sobres de la era 3.
 - **Para T-014**: Zod `.omit()/.pick()` + `refine` fallan. Validar `?semana=`. T-030 H10: zona `null`.
 - **T-031/T-032** (MEDIA). Anteriores 13-09: `estado-hasta-2026-09-13.md`.

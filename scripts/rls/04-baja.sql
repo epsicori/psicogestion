@@ -30,7 +30,7 @@ insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) value
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
   ('f0030001-0000-4000-8000-000000000004', '{"t":"baja"}',
-   pg_temp.sobre_prueba(:PROBAJA, timestamptz '2026-08-29 09:22:00+00', '{"t":"baja"}'::jsonb),
+   pg_temp.sobre_prueba('f0030001-0000-4000-8000-000000000004', :PROBAJA, timestamptz '2026-08-29 09:22:00+00', '{"t":"baja"}'::jsonb),
    :PROBAJA, timestamptz '2026-08-29 09:22:00+00');
 insert into public.accesos_historia (perfil_id, paciente_id, tipo, pestana) values
   (:PROBAJA, :PBAJA, 'apertura', 'notas_clinicas');

@@ -440,7 +440,7 @@ call pg_temp.reset_sesion();
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
   (:NCO, '{"t":"coterapia"}',
-   pg_temp.sobre_prueba(:PRO1, timestamptz '2026-08-29 09:30:00+00', '{"t":"coterapia"}'::jsonb,
+   pg_temp.sobre_prueba(:NCO, :PRO1, timestamptz '2026-08-29 09:30:00+00', '{"t":"coterapia"}'::jsonb,
                          p_alcance => 'individual'),
    'individual', :PRO1, timestamptz '2026-08-29 09:30:00+00');
 call pg_temp.como(:PRO1);
