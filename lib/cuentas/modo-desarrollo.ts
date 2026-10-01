@@ -156,15 +156,13 @@ export async function superarSegundoFactorSembrado(
     return 'fallo';
   }
 
+  // El filtro por `FACTORES_SEMBRADOS.has` ES la capa 3: nunca «el primer factor verificado».
   const factor = (data?.totp ?? []).find((f) => FACTORES_SEMBRADOS.has(f.id));
   if (!factor) return 'sin_factor_sembrado';
 
-  const secreto = FACTORES_SEMBRADOS.get(factor.id);
-  if (secreto === undefined) return 'sin_factor_sembrado';
-
   const { error: errorVerificacion } = await supabase.auth.mfa.challengeAndVerify({
     factorId: factor.id,
-    code: codigoTotp(secreto, Date.now()),
+    code: codigoTotp(FACTORES_SEMBRADOS.get(factor.id)!, Date.now()),
   });
   if (errorVerificacion) {
     console.warn(
