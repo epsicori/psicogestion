@@ -18,6 +18,7 @@ territorio:
   - scripts/rls/01-fijacion.sql
   - scripts/rls/04-baja.sql
   - scripts/rls/14-cadena-huellas.sql
+  - scripts/rls/19-nota-en-episodio.sql   # solo la llamada de 19.41 (ADR-073.3)
   - scripts/rls/README.md
   - scripts/t005-concurrencia.sql
   - docs/architecture.md
