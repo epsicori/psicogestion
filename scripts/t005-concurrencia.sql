@@ -214,6 +214,17 @@ $$;
 \set NOTA36R '\'e0360006-0000-4000-8000-000000000002\''
 \set ANAJWT '\'{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","aal":"aal2"}\''
 
+-- Residuos de una ejecución anterior que murió a mitad (con ON_ERROR_STOP=1 psql sale en el primer
+-- error y el `drop` del final no llega a correr): se borran al empezar. Antes del resto, porque
+-- cambiar la firma de una función dejaría la vieja en `public`.
+drop function if exists public.t036_firmar_en_segundo_plano(text, text, boolean);
+drop function if exists public.t036_esperar_bloqueo(text, text);
+drop function if exists public.t036_esperar_bloqueo(text);
+drop function if exists public.t036_esperar_resultado(text);
+drop function if exists public.t036_sobre_prueba(uuid, uuid, timestamptz, jsonb, timestamptz, text);
+drop table if exists public.t036_sobres;
+drop table if exists public.t036_original;
+
 -- La gemela de t005_sobre_prueba con abierta_en y motivo_cambio (la de T-005 no se toca: la
 -- usan las firmas de T-005). Se borra al final.
 create or replace function public.t036_sobre_prueba(
@@ -248,6 +259,10 @@ as $$
     '"redactada_en_sesion":false' ||
     '}';
 $$;
+-- Ninguna de las funciones t036_* es para anon ni authenticated: si el guion muriera a mitad y
+-- quedaran en public, PostgREST no las expondría.
+revoke execute on function public.t036_sobre_prueba(uuid, uuid, timestamptz, jsonb, timestamptz, text)
+  from public, anon, authenticated;
 
 -- Los sobres que «leyó firmarNota», preparados como postgres: el JSON se lee de aquí dentro de
 -- la función de T2, así que no pasa por el shell.
@@ -317,7 +332,8 @@ revoke execute on function public.t036_firmar_en_segundo_plano(text, text, boole
 -- El sondeo de T1: hasta 10 s esperando que la conexión `p_etiqueta` esté bloqueada en un cerrojo.
 -- Cada vuelta limpia la instantánea de pg_stat_activity (T1 sigue en su transacción y, si no, ve
 -- siempre la misma foto).
-create or replace function public.t036_esperar_bloqueo(p_etiqueta text)
+create or replace function public.t036_esperar_bloqueo(
+  p_etiqueta text, p_quien text default 'el cerrojo de la cabecera')
 returns void
 language plpgsql
 as $$
@@ -335,10 +351,11 @@ begin
   end loop;
   select string_agg(coalesce(a.state, '?') || '/' || coalesce(a.wait_event_type, '-') || ':' || coalesce(a.wait_event, '-'), ', ')
     into v_vista from pg_stat_activity a where a.application_name = p_etiqueta;
-  raise exception 'FALLO: la firma % no llegó a esperar el cerrojo del guardado: sin espera no hay carrera (vista: %)',
-    p_etiqueta, coalesce(v_vista, 'no hay ninguna conexión con esa etiqueta');
+  raise exception 'FALLO: la firma % no llegó a esperar %: sin espera no hay carrera (vista: %)',
+    p_etiqueta, p_quien, coalesce(v_vista, 'no hay ninguna conexión con esa etiqueta');
 end;
 $$;
+revoke execute on function public.t036_esperar_bloqueo(text, text) from public, anon, authenticated;
 
 -- La espera del resultado de T2: hasta 30 s.
 create or replace function public.t036_esperar_resultado(p_etiqueta text)
@@ -355,6 +372,7 @@ begin
   raise exception 'FALLO: la firma % no dejó ningún resultado en t005_resultado (¿falló la propia conexión secundaria?)', p_etiqueta;
 end;
 $$;
+revoke execute on function public.t036_esperar_resultado(text) from public, anon, authenticated;
 
 -- =========================================================================
 -- §1.4 · Dos firmas de la v2 a la vez: la segunda muere en 6.17
@@ -403,7 +421,7 @@ reset role;
 \echo '--- T2 (segunda conexión) firma la misma v2 mientras T1 no confirma: debe esperar y morir en 6.17 ---'
 \! PGAPPNAME=t036_t2 psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select public.t036_firmar_en_segundo_plano('t036_t2','t2',false)" >/dev/null 2>&1 &
 
-select public.t036_esperar_bloqueo('t036_t2');
+select public.t036_esperar_bloqueo('t036_t2', 'el insert de la v2 de T1, una firma que no ha confirmado');
 commit;
 select public.t036_esperar_resultado('t036_t2');
 
@@ -482,7 +500,7 @@ reset role;
 \echo '--- T2 firma el sobre de X en segundo plano: espera el cerrojo del guardado ---'
 \! PGAPPNAME=t036_r psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select public.t036_firmar_en_segundo_plano('t036_r','r1',false)" >/dev/null 2>&1 &
 
-select public.t036_esperar_bloqueo('t036_r');
+select public.t036_esperar_bloqueo('t036_r', 'el guardado del borrador Y de T1, que no ha confirmado');
 commit;
 select public.t036_esperar_resultado('t036_r');
 
@@ -567,7 +585,7 @@ reset role;
 
 \! PGAPPNAME=t036_m psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select public.t036_firmar_en_segundo_plano('t036_m','r2',true)" >/dev/null 2>&1 &
 
-select public.t036_esperar_bloqueo('t036_m');
+select public.t036_esperar_bloqueo('t036_m', 'el guardado del borrador Z de T1, que no ha confirmado');
 commit;
 select public.t036_esperar_resultado('t036_m');
 
@@ -598,7 +616,7 @@ end;
 $$;
 
 drop function public.t036_firmar_en_segundo_plano(text, text, boolean);
-drop function public.t036_esperar_bloqueo(text);
+drop function public.t036_esperar_bloqueo(text, text);
 drop function public.t036_esperar_resultado(text);
 drop function public.t036_sobre_prueba(uuid, uuid, timestamptz, jsonb, timestamptz, text);
 drop table public.t036_sobres;

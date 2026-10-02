@@ -656,6 +656,11 @@ comment on function public.verificar_cadena_huellas(uuid) is
   'cotejar valores no es reserializar (ADR-035). Una fila por versión divergente, no por '
   'columna.';
 
+-- No se concede a `authenticated`: recorrer todas las cadenas revela cuántas
+-- versiones tiene cada paciente, saltándose la RLS. Es una herramienta de
+-- operación y la ejecuta `postgres`. `create or replace` conserva los permisos
+-- de la definición original, así que este `revoke` es redundante — se deja
+-- escrito junto a la función para que la invariante quede explícita aquí también.
 revoke all on function public.verificar_cadena_huellas(uuid) from public, anon, authenticated, service_role;
 
 
