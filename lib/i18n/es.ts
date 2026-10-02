@@ -895,7 +895,7 @@ export const es = {
       },
       motivos: {
         peticion_paciente: 'Petición del paciente',
-        requerimiento_judicial_o_inspeccion: 'Requerimiento judicial o de inspección',
+        requerimiento_judicial_o_inspeccion: 'Requerimiento judicial o inspección',
         traspaso_caso: 'Traspaso del caso',
       },
     },

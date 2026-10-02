@@ -56,6 +56,10 @@ describe('esquemaRespuestaExportar', () => {
     // Y los literales del esquema son los de constantes.ts (el banco 24 §A fija los mismos en SQL).
     expect([FORMATO_VERSION, ALGORITMO, KDF]).toEqual([1, 'argon2id-aes-256-gcm', { m: 65536, t: 3, p: 1, longitud: 32 }]);
     expect(MOTIVOS).toEqual(['peticion_paciente', 'requerimiento_judicial_o_inspeccion', 'traspaso_caso']);
+    // A-H8: la misma etiqueta que `etiqueta_motivo_exportacion` en SQL (§1.1), sin «de».
+    expect(t('exportaciones.copia.motivos.requerimiento_judicial_o_inspeccion')).toBe(
+      'Requerimiento judicial o inspección',
+    );
   });
 
   it('rechaza una zona que no es IANA y una proyección incoherente con el motivo', () => {
