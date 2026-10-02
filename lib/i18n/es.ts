@@ -854,4 +854,69 @@ export const es = {
       sinDatos: '—',
     },
   },
+  // T-040 · La copia cifrada de una nota (ADR-076). `copia.*` va DENTRO de la carga cifrada;
+  // `visor.*` son los textos genéricos que van en claro en el fichero: ninguno lleva datos.
+  exportaciones: {
+    copia: {
+      titulo: 'Copia de una nota clínica',
+      paciente: 'Paciente',
+      fechaSesion: 'Fecha de la sesión',
+      modalidad: 'Modalidad',
+      proyeccion: 'Tipo de copia',
+      motivo: 'Motivo',
+      referencia: 'Referencia',
+      generadaEn: 'Generada el',
+      zona: 'Zona horaria',
+      version: 'Versión {numero}',
+      alcance: 'Alcance',
+      autor: 'Autor',
+      firmadaEn: 'Firmada el',
+      sello: 'Sello',
+      huella: 'Huella (SHA-256)',
+      huellaAnterior: 'Huella anterior',
+      motivoCambio: 'Motivo del cambio',
+      texto: 'Nota',
+      textoVacio: 'Sin texto',
+      reservadas: 'Anotaciones reservadas (art. 18.3, Ley 41/2002)',
+      sinReservadas: 'Sin anotaciones reservadas',
+      contenidoCanonico: 'Contenido firmado (canónico)',
+      participantes: 'Asistentes',
+      formulaTitulo: 'Cómo se comprueba la huella',
+      formula: 'huella = SHA-256( UTF-8(contenido_canonico) ‖ huella_anterior )',
+      notaHuellaAnterior:
+        'La huella anterior es el eslabón anterior de la historia del paciente, no necesariamente la versión anterior de esta nota.',
+      exclusion:
+        'Esta copia no incluye las anotaciones reservadas del profesional (art. 18.3 de la Ley 41/2002).',
+      conjunta:
+        'De las sesiones conjuntas se entregan la fecha, los asistentes y el tipo de sesión. Su contenido se refiere también a otras personas y no se incluye.',
+      proyecciones: {
+        profesional: 'Copia profesional',
+        paciente: 'Copia para el paciente',
+      },
+      motivos: {
+        peticion_paciente: 'Petición del paciente',
+        requerimiento_judicial_o_inspeccion: 'Requerimiento judicial o de inspección',
+        traspaso_caso: 'Traspaso del caso',
+      },
+    },
+    marca: {
+      copiaProfesional: 'Copia profesional',
+    },
+    visor: {
+      tituloDocumento: 'Copia cifrada de una nota clínica',
+      titulo: 'Copia cifrada',
+      explicacion:
+        'Este fichero está cifrado. Escribe la contraseña que se eligió al descargarlo. Se abre en este ordenador, sin conexión.',
+      contrasena: 'Contraseña',
+      abrir: 'Abrir',
+      abriendo: 'Abriendo… puede tardar unos segundos.',
+      error: 'Contraseña incorrecta o fichero dañado.',
+      danado: 'El fichero está dañado o no es una copia de Psicogestión.',
+      sinCrypto: 'Este navegador no puede abrir la copia.',
+      sinJs: 'Para abrir esta copia hay que activar JavaScript en el navegador.',
+      marcaLinea: 'Copia {codigo} · exportada por {quien} ({rol}) el {fecha} · {motivo}',
+      avisoImpresion:
+        'Lo que se imprima o se guarde desde esta pantalla queda sin cifrar, y es responsabilidad de quien lo haga.',
+    },
+  },
 } as const;
