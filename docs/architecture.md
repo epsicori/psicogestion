@@ -181,10 +181,28 @@ es el bug: la serie creada en enero se corre una hora en julio.
 | Alergias y medicación | Solo los suyos | Sus pacientes | Sin acceso (ADR-061, ADR-063) |
 | Nivel de riesgo | Solo los suyos | Sus pacientes | Solo indicador binario |
 | Notas clínicas | Solo las suyas (+ emergencia) | Autor o asignado | Sin acceso |
-| Agenda | Todas | La suya | Todas, sin tipo de terapia |
+| Agenda | Todas | La suya | Todas, sin tipo de terapia; lo elige al dar la cita, solo por las funciones de alta (ADR-074) |
 | Facturación | Total | Lo suyo | Cobros, sin dato clínico |
 | Usuarios y ajustes de empresa | Total | Sin acceso | Sin acceso |
 | Auditoría | Lectura | Sus propios registros | Sin acceso |
+
+**Puertas del técnico en agenda (ADR-074, T-028a).** El técnico administrativo agenda, pero no
+ve ni fija el tipo de terapia por la tabla: lo hace por `agenda_crear_cita()` y
+`agenda_crear_serie()` (definer), que devuelven fechas e ids y nunca el tipo. Tres puertas
+quedaron cerradas por política, recreada con el mismo nombre: **H16** (`citas_alta` ya no tiene
+rama del técnico), **H23** (`citas_modificacion` tampoco: un `UPDATE` sin `WHERE` y con `SET`
+constante no aplica la política de lectura, y la rama del técnico le dejaba reescribir la nota
+y el tipo de todas las citas de su centro) y **H24** (`series_cita_lectura`, que lleva el tipo).
+La rama del profesional exige además el rol `profesional_sanitario`, así que un técnico que
+figure como `profesional_id` de una cita no la modifica por ahí. Una función de alta rechaza
+con 22023 un profesional que no sea profesional sanitario o administrador activo. **Sigue
+abierta H25**: el técnico lee el tipo en sus filas de `auditoria` (ticket aparte). **Puerta
+conocida y aceptada (R2-H1, decisión del propietario del 02-10-2026)**: el técnico deduce el tipo
+de una cita por su duración, porque la duración es la del tipo (D1), lee el catálogo
+(`tipos_terapia_lectura`) y ve `inicio` y `fin` en `citas_agenda`. Sin cambio de base: ADR-074.2
+se lee como «no ve el campo tipo», no como «no puede deducirlo». Residuo
+anotado: la cita C18TEC del banco 18 (`profesional_id` = un técnico) sigue legible por él
+(`citas_lectura`, 18 R1b) aunque ya no pueda modificarla.
 
 **El secreto profesional es del profesional, no del cargo.** Ser administrador no da
 acceso a notas ajenas: existe un **acceso de emergencia** que exige justificación

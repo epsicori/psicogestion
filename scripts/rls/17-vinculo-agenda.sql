@@ -14,7 +14,6 @@
 
 \set TT4 '\'a1200001-0000-4000-8000-000000000001\''
 \set C29OK  '\'a1200002-0000-4000-8000-000000000001\''
-\set C29TEC  '\'a1200002-0000-4000-8000-000000000002\''
 \set C29ADM  '\'a1200002-0000-4000-8000-000000000003\''
 \set C29PRO2  '\'a1200002-0000-4000-8000-000000000004\''
 \set S29  '\'a1200003-0000-4000-8000-000000000001\''
@@ -114,17 +113,15 @@ select pg_temp.assert(
 
 -- El técnico administrativo SÍ cita a cualquier paciente de su centro. P1 es de PRO1 y
 -- TEC1 no lo tiene asignado —no tiene pacientes: no es profesional—, y aun así puede.
+-- T-028a (H16): el técnico ya no inserta por la tabla; cita por la función de alta, que es
+-- su camino (ADR-074). La decisión de ADR-055 no cambia: cualquier paciente de su centro.
 call pg_temp.como(:TEC1);
-insert into public.citas (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria)
-values (:C29TEC, :P1, :PRO1, :CA, :TT4,
-        (:'f29'::date + time '13:00') at time zone 'Europe/Madrid',
-        (:'f29'::date + time '13:50') at time zone 'Europe/Madrid',
-        'Europe/Madrid');
+select public.agenda_crear_cita(:P1, :PRO1, :CA, :TT4, :'f29'::date, time '13:00') as c29tec \gset
 call pg_temp.reset_sesion();
 
 select pg_temp.assert(
-  (select count(*) from public.citas where id = :C29TEC) = 1,
-  'ADR-055: el técnico administrativo SIGUE citando a cualquier paciente de su centro — es su trabajo y no ve la historia'
+  (select count(*) from public.citas where id = (:'c29tec')::uuid) = 1,
+  'ADR-055: el técnico administrativo SIGUE citando a cualquier paciente de su centro, por la función de alta — es su trabajo y no ve la historia'
 );
 
 -- Y el administrador, para cualquiera.
