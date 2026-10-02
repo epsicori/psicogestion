@@ -13,6 +13,8 @@ territorio:
   - scripts/rls/README.md
   - lib/supabase/tipos-bd.ts
   - docs/architecture.md
+  - lib/notas/coprofesional.ts        # ampliado por el propietario el 02-10-2026 (diseño, P1)
+  - lib/notas/coprofesional.test.ts
 ---
 
 # Contexto
