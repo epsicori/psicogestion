@@ -4,9 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type Browser } from '@playwright/test';
 
 import { codigoTotp } from '../lib/cuentas/codigo-totp';
+import { contenedorDelProyecto } from '../lib/cuentas/contenedor-proyecto';
 import { ejecutarSql } from '../scripts/psql.mjs';
-
-import { contenedorDelProyecto } from './contenedor-proyecto';
 
 /**
  * T-037 · CA2 contra GoTrue y la base reales, lo que jsdom no puede: una entrada posterior
