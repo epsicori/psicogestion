@@ -979,9 +979,21 @@ select pg_temp.assert(pg_get_functiondef('public.fn_exigir_episodio_en_nota_conj
 call pg_temp.como(:PRO1);
 select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
   'C.perm · PRO1 desbloquea su historia para firmar N067E');
+-- T-036 (E.6): desde 6.17-6.24 un `authenticated` solo firma el borrador vigente de su nota, fechado
+-- con el reloj de la base. El borrador lo deja postgres (como el guardado de la aplicación) y el
+-- sobre se construye con su `abierta_en` y con `creada_en` = el reloj de la base (constante en el banco).
+call pg_temp.reset_sesion();
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"firma","reservadas":""}', borrador_autor_id = :PRO1
+ where id = :N067E;
+select date_trunc('milliseconds', now()) as t0_perm,
+       pg_temp.sobre_prueba(:N067E, :PRO1, date_trunc('milliseconds', now()), '{"texto":"firma"}'::jsonb,
+         p_abierta_en => (select borrador_abierta_en from public.notas_clinicas where id = :N067E)) as sobre_e36
+\gset
+call pg_temp.como(:PRO1);
 select pg_temp.assert_no_lanza(
   format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en)
-    values (%L, '{"t":"firma"}', %L, 'individual', %L, timestamptz '2026-08-29 09:37:01+00')$sql$, :N067E, :'sobre_e', :PRO1),
+    values (%L, '{"texto":"firma"}', %L, 'individual', %L, %L)$sql$, :N067E, :'sobre_e36', :PRO1, :'t0_perm'),
   'C.perm · GEMELA POSITIVA: PRO1, autor de N067E con la historia desbloqueada, SÍ firma su propia nota como authenticated');
 call pg_temp.reset_sesion();
 
@@ -1782,6 +1794,921 @@ select pg_temp.assert(
   ),
   'F.11 · la fila de PDEMO, insertada con el disparador de sellado apagado, también sale como sobre_no_coincide_con_fila'
 );
+
+
+-- =========================================================================
+-- G · T-036 · La firma no se fía del cliente: cita, borrador y reloj, cotejados con la base
+-- =========================================================================
+-- Diseño: tickets/T-036/diseno.md (§1.2, enmienda E.1-E.5 y decisiones del propietario del
+-- 02-10-2026: A para todos los roles, P3 solo en la v1, ±1 minuto fijo).
+--
+-- Reglas de la sección:
+--   · Toda firma `authenticated` la construye pg_temp.t036_q() como la aplicación: borrador
+--     vivo `{"texto":"X","reservadas":""}`, cuerpo `{"texto":"X"}` en la columna y en el sobre,
+--     reservadas nulas, `abierta_en` de la cabecera y `creada_en = :'t0'` (el reloj de la base:
+--     now() es constante dentro de la transacción del banco, así que t0 cae dentro de ±1 min).
+--   · Un escenario, un savepoint (s036): cita, nota y firma se deshacen con `rollback to
+--     savepoint`. Nunca hay dos citas del mismo profesional solapadas (rango bloqueante).
+--   · Toda negativa lleva código y fragmento exactos y su gemela positiva en el mismo escenario,
+--     con el mismo perfil y la misma nota, ejecutada después.
+--   · Los mutantes (X1-X12) reejecutan la definición guardada con UNA condición apagada, comprueban
+--     que la negativa deja de lanzar y que, deshecho el mutante, la función es idéntica.
+
+\set N36   '\'f0360001-0000-4000-8000-000000000001\''
+\set N36B  '\'f0360001-0000-4000-8000-000000000002\''
+\set K36   '\'a0360001-0000-4000-8000-000000000001\''
+\set K36B  '\'a0360001-0000-4000-8000-000000000002\''
+\set KX36  '\'a0360001-0000-4000-8000-000000000003\''
+\set KY36  '\'a0360001-0000-4000-8000-000000000004\''
+\set CM20  '\'c0360001-0000-4000-8000-000000000020\''
+\set CMNULO '\'c0360001-0000-4000-8000-000000000021\''
+\set CX    '\'{"texto":"X"}\''
+
+call pg_temp.reset_sesion();
+
+-- El reloj de la base, al milisegundo (now() es constante en la transacción del banco): la
+-- `creada_en` de toda firma de esta sección, que 6.20 coteja con ±1 minuto.
+select date_trunc('milliseconds', now()) as t0 \gset
+
+-- Las definiciones vigentes, para los mutantes (propias de esta sección: no dependen de las de C).
+select pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) as sellar_original_036,
+       pg_get_functiondef('public.verificar_cadena_huellas(uuid)'::regprocedure) as verif_original_036
+\gset
+
+-- Fijar el estado, no suponerlo: el margen de la organización, un centro con 20 y otro sin margen.
+update public.organizacion set margen_sesion_minutos = 15;
+insert into public.centros (id, nombre, margen_sesion_minutos) values
+  (:CM20,   'T-036 margen 20',   20),
+  (:CMNULO, 'T-036 margen nulo', null);
+select pg_temp.assert(
+  (select margen_sesion_minutos from public.organizacion) = 15
+  and (select margen_sesion_minutos from public.centros where id = :CM20) = 20
+  and (select margen_sesion_minutos from public.centros where id = :CMNULO) is null,
+  'T036 · estado fijado: organización 15, CM20 con 20, CMNULO sin margen');
+
+-- La compatibilidad de NFC que 6.24 necesita: NFD y NFC del mismo texto son cadenas distintas.
+select pg_temp.assert(normalize(U&'o\0301', NFC) = U&'\00F3',
+  'T036 · normalize(…, NFC) de la base compone o + acento en ó');
+
+-- El PIN y el desbloqueo de PRO1, fijados aquí (no se suponen los de otro módulo).
+call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  'T036 · PRO1 desbloquea su historia para firmar');
+call pg_temp.reset_sesion();
+
+-- ---- Ayudantes de la sección (pg_temp) -----------------------------------
+
+-- Una cita de prueba, como postgres.
+create or replace function pg_temp.t036_cita(
+  p_id uuid, p_paciente uuid, p_prof uuid, p_centro uuid, p_inicio timestamptz, p_fin timestamptz)
+returns void
+language sql
+as $$
+  insert into public.citas (id, paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+  values (p_id, p_paciente, p_prof, p_centro, p_inicio, p_fin, 'Europe/Madrid');
+$$;
+
+-- Una nota de PRO1 en EPI067A (P067) con o sin borrador vivo y con o sin cita, como postgres.
+-- El borrador lo abre fn_tocar_borrador(): borrador_abierta_en = now().
+create or replace function pg_temp.t036_nota(p_id uuid, p_borrador jsonb, p_cita uuid default null)
+returns void
+language sql
+as $$
+  insert into public.notas_clinicas
+    (id, paciente_id, episodio_id, autor_id, fecha_sesion, cita_id, borrador_contenido, borrador_autor_id)
+  values (p_id, 'd0670001-0000-4000-8000-000000000001', 'e0670001-0000-4000-8000-000000000001',
+          'b0030001-0000-4000-8000-000000000002', date '2026-10-02', p_cita, p_borrador,
+          case when p_borrador is not null then 'b0030001-0000-4000-8000-000000000002'::uuid end);
+$$;
+
+-- Fija a mano borrador_abierta_en (criterios C, D): se apaga el disparador que lo conserva.
+-- El check notas_clinicas_borrador_abierta_ck sigue en pie: solo se fija con el borrador vivo.
+create or replace function pg_temp.t036_abierta(p_nota uuid, p_abierta timestamptz)
+returns void
+language plpgsql
+as $$
+begin
+  alter table public.notas_clinicas disable trigger tocar_borrador;
+  update public.notas_clinicas set borrador_abierta_en = p_abierta where id = p_nota;
+  alter table public.notas_clinicas enable trigger tocar_borrador;
+end;
+$$;
+
+-- El instante en la forma de toISOString(): milisegundos truncados y «Z».
+create or replace function pg_temp.t036_iso(p_ts timestamptz)
+returns text
+language sql
+immutable
+as $$
+  select to_char(p_ts at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+$$;
+
+-- {"abierta_en": <borrador_abierta_en de la cabecera + p_delta, en ISO>}: para el sobre que
+-- se aparta un milisegundo del instante real. Definer: lee la cabecera sin RLS.
+create or replace function pg_temp.t036_ab(p_nota uuid, p_delta interval)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select jsonb_build_object('abierta_en',
+    pg_temp.t036_iso((select n.borrador_abierta_en from public.notas_clinicas n where n.id = p_nota) + p_delta));
+$$;
+
+-- El INSERT de la firma, como lo haría la aplicación. Definer: sobre_prueba() lee la cabecera
+-- y bajo `authenticated` la RLS decidiría qué cabecera ve; la sentencia que devuelve, en cambio,
+-- se EJECUTA como quien la llama.
+create or replace function pg_temp.t036_q(
+  p_nota uuid, p_cuerpo jsonb, p_creada timestamptz,
+  p_cita uuid default null, p_margen integer default null, p_redactada boolean default false,
+  p_motivo text default null, p_reservadas text default null, p_cambio jsonb default '{}'::jsonb,
+  p_autor uuid default 'b0030001-0000-4000-8000-000000000002')
+returns text
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select format(
+    $f$insert into public.notas_clinicas_versiones
+         (nota_id, cuerpo, anotaciones_reservadas, motivo_cambio, contenido_canonico, alcance, autor_id, creada_en)
+       values (%L, %L, %L, %L, %L, 'individual', %L, %L)$f$,
+    p_nota, p_cuerpo::text, p_reservadas, p_motivo,
+    (pg_temp.sobre_prueba(p_nota, p_autor, p_creada, p_cuerpo, p_reservadas, p_motivo, p_cita,
+       p_margen, p_redactada,
+       (select n.borrador_abierta_en from public.notas_clinicas n where n.id = p_nota))::jsonb
+     || p_cambio)::text,
+    p_autor, p_creada);
+$$;
+
+-- Negativa y gemela: 23514 con el fragmento exacto / no lanza.
+create or replace function pg_temp.t036_neg(
+  p_frag text, p_rot text, p_nota uuid, p_cuerpo jsonb, p_creada timestamptz,
+  p_cita uuid default null, p_margen integer default null, p_redactada boolean default false,
+  p_motivo text default null, p_reservadas text default null, p_cambio jsonb default '{}'::jsonb)
+returns void
+language sql
+as $$
+  select pg_temp.assert_lanza_codigo_msg(
+    pg_temp.t036_q(p_nota, p_cuerpo, p_creada, p_cita, p_margen, p_redactada, p_motivo, p_reservadas, p_cambio),
+    '23514', p_frag, p_rot);
+$$;
+
+create or replace function pg_temp.t036_pos(
+  p_rot text, p_nota uuid, p_cuerpo jsonb, p_creada timestamptz,
+  p_cita uuid default null, p_margen integer default null, p_redactada boolean default false,
+  p_motivo text default null, p_reservadas text default null, p_cambio jsonb default '{}'::jsonb)
+returns void
+language sql
+as $$
+  select pg_temp.assert_no_lanza(
+    pg_temp.t036_q(p_nota, p_cuerpo, p_creada, p_cita, p_margen, p_redactada, p_motivo, p_reservadas, p_cambio),
+    p_rot);
+$$;
+
+-- El estado de cada familia de escenarios, como postgres. Ids fijos: K36 (cita en curso:
+-- ±30 min de t0), K36B (t0 + 3 h), KX36 (otro paciente), KY36 (otro profesional), N36 y N36B.
+create or replace function pg_temp.t036_prep(
+  p_fam text, p_t0 timestamptz, p_borr jsonb default '{"texto":"X","reservadas":""}'::jsonb)
+returns void
+language plpgsql
+as $$
+declare
+  c_pac   constant uuid := 'd0670001-0000-4000-8000-000000000001';
+  c_cad   constant uuid := 'd0050001-0000-4000-8000-000000000001';
+  c_pro1  constant uuid := 'b0030001-0000-4000-8000-000000000002';
+  c_pro2  constant uuid := 'b0030001-0000-4000-8000-000000000003';
+  c_cm20  constant uuid := 'c0360001-0000-4000-8000-000000000020';
+  c_cmnul constant uuid := 'c0360001-0000-4000-8000-000000000021';
+  n1      constant uuid := 'f0360001-0000-4000-8000-000000000001';
+  n2      constant uuid := 'f0360001-0000-4000-8000-000000000002';
+  k1      constant uuid := 'a0360001-0000-4000-8000-000000000001';
+  k2      constant uuid := 'a0360001-0000-4000-8000-000000000002';
+  kx      constant uuid := 'a0360001-0000-4000-8000-000000000003';
+  ky      constant uuid := 'a0360001-0000-4000-8000-000000000004';
+  v_ab    timestamptz;
+begin
+  case p_fam
+    when 'A' then            -- cita propia en curso, otra cita propia, y una nota sin cita
+      perform pg_temp.t036_cita(k1, c_pac, c_pro1, c_cmnul, p_t0 - interval '30 minutes', p_t0 + interval '30 minutes');
+      perform pg_temp.t036_cita(k2, c_pac, c_pro1, c_cmnul, p_t0 + interval '3 hours', p_t0 + interval '4 hours');
+      perform pg_temp.t036_nota(n1, p_borr, k1);
+      perform pg_temp.t036_nota(n2, p_borr, null);
+    when 'B' then            -- n1 con borrador vivo, n2 sin borrador; ninguna con cita
+      perform pg_temp.t036_nota(n1, p_borr, null);
+      perform pg_temp.t036_nota(n2, null, null);
+    when 'C1', 'C2' then     -- borrador_abierta_en fijado: .345000 (C1) o .345999 (C2)
+      v_ab := date_trunc('second', p_t0) - interval '10 seconds'
+              + case p_fam when 'C1' then interval '345 milliseconds' else interval '345999 microseconds' end;
+      perform pg_temp.t036_nota(n1, p_borr, null);
+      perform pg_temp.t036_abierta(n1, v_ab);
+    when 'P2' then           -- abierta dos días antes, sin cita (para que no intervenga D)
+      perform pg_temp.t036_nota(n1, p_borr, null);
+      perform pg_temp.t036_abierta(n1, p_t0 - interval '2 days');
+    when 'P3a' then          -- cabecera con una cita de OTRO paciente (del mismo profesional)
+      perform pg_temp.t036_cita(kx, c_cad, c_pro1, c_cmnul, p_t0 - interval '30 minutes', p_t0 + interval '30 minutes');
+      perform pg_temp.t036_nota(n1, p_borr, kx);
+    when 'P3b' then          -- cabecera con una cita del MISMO paciente pero de otro profesional
+      perform pg_temp.t036_cita(ky, c_pac, c_pro2, c_cmnul, p_t0 - interval '30 minutes', p_t0 + interval '30 minutes');
+      perform pg_temp.t036_nota(n1, p_borr, ky);
+    when 'P3v2' then         -- cita propia en curso y otra cita de otro paciente (a las 3 h, sin solape)
+      perform pg_temp.t036_cita(k1, c_pac, c_pro1, c_cmnul, p_t0 - interval '30 minutes', p_t0 + interval '30 minutes');
+      perform pg_temp.t036_cita(kx, c_cad, c_pro1, c_cmnul, p_t0 + interval '3 hours', p_t0 + interval '4 hours');
+      perform pg_temp.t036_nota(n1, p_borr, k1);
+    when 'M20' then          -- cita en curso en un centro con margen 20
+      perform pg_temp.t036_cita(k1, c_pac, c_pro1, c_cm20, p_t0 - interval '30 minutes', p_t0 + interval '30 minutes');
+      perform pg_temp.t036_nota(n1, p_borr, k1);
+    when 'Msc' then          -- cita en curso sin centro
+      perform pg_temp.t036_cita(k1, c_pac, c_pro1, null, p_t0 - interval '30 minutes', p_t0 + interval '30 minutes');
+      perform pg_temp.t036_nota(n1, p_borr, k1);
+    when 'Mnul' then         -- cita en curso en un centro sin margen propio
+      perform pg_temp.t036_cita(k1, c_pac, c_pro1, c_cmnul, p_t0 - interval '30 minutes', p_t0 + interval '30 minutes');
+      perform pg_temp.t036_nota(n1, p_borr, k1);
+    when 'Da' then           -- cita de ayer
+      perform pg_temp.t036_cita(k1, c_pac, c_pro1, c_cmnul, p_t0 - interval '1 day', p_t0 - interval '1 day' + interval '50 minutes');
+      perform pg_temp.t036_nota(n1, p_borr, k1);
+    when 'D5', 'D6', 'D7' then   -- borrador abierto 1 h antes; la cita acaba de caber (D5) o no (D6, D7)
+      v_ab := p_t0 - interval '1 hour';
+      perform pg_temp.t036_cita(k1, c_pac, c_pro1, c_cmnul,
+        v_ab + interval '15 minutes' + case p_fam when 'D6' then interval '1 millisecond' else interval '0' end,
+        p_t0 - interval '15 minutes' - case p_fam when 'D7' then interval '1 millisecond' else interval '0' end);
+      perform pg_temp.t036_nota(n1, p_borr, k1);
+      perform pg_temp.t036_abierta(n1, v_ab);
+    when 'E1' then           -- nota sin borrador (la siembra y t005 firman así, como postgres)
+      perform pg_temp.t036_nota(n1, null, null);
+    when 'R' then            -- una nota sin cita, con el borrador que pida el caso
+      perform pg_temp.t036_nota(n1, p_borr, null);
+    when 'R9' then           -- dos notas sin cita: borrador Y con reservadas vacías, y X con «mías»
+      perform pg_temp.t036_nota(n1, '{"texto":"Y","reservadas":""}'::jsonb, null);
+      perform pg_temp.t036_nota(n2, '{"texto":"X","reservadas":"mías"}'::jsonb, null);
+    else
+      raise exception 'T036: familia de escenario desconocida: %', p_fam;
+  end case;
+end;
+$$;
+
+savepoint s036;
+
+-- ---- A · cita_id del sobre = cita de la cabecera (6.19, TODOS los roles) -----
+-- Cuatro sobres que no son la cita de la cabecera (otra cita propia, null, la misma en MAYÚSCULAS
+-- y una nota sin cita con sobre que dice K), todos con margen y «en sesión» coherentes con la
+-- cita, para que mueran por A y no por 6.22/6.23. Gemela: la cita de la cabecera, con la
+-- redactada que da la fórmula (cita en curso: true).
+select pg_temp.t036_prep('A', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es la cita de la cabecera', 'T036.A1 · el sobre dice OTRA cita propia: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36B, p_margen => 15, p_redactada => true);
+select pg_temp.t036_neg('no es la cita de la cabecera', 'T036.A2 · el sobre dice cita null y la cabecera tiene cita: 23514',
+  :N36, :CX::jsonb, :'t0');
+select pg_temp.t036_neg('no es la cita de la cabecera', 'T036.A3 · el sobre dice la cita de la cabecera en MAYÚSCULAS: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true,
+  p_cambio => jsonb_build_object('cita_id', upper(:K36::text)));
+select pg_temp.t036_neg('no es la cita de la cabecera', 'T036.A4 · una nota SIN cita con un sobre que dice K: 23514',
+  :N36B, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+select pg_temp.t036_pos('T036.A · GEMELA: la cita de la cabecera, margen 15 y en sesión, entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select numero_version from public.notas_clinicas_versiones where nota_id = :N36) = 1
+  and (select count(*) from public.verificar_cadena_huellas(:P067)) = 0,
+  'T036.A5 · partida: la gemela de A es la v1 de N36 y la cadena de P067 está sana');
+
+-- A5 · la cita de la cabecera cambia tras firmar (como postgres, con el congelador apagado):
+-- el verificador la señala, y solo con la línea 6.19.
+alter table public.notas_clinicas disable trigger congelar_cabecera_sellada;
+update public.notas_clinicas set cita_id = :K36B where id = :N36;
+alter table public.notas_clinicas enable trigger congelar_cabecera_sellada;
+select pg_temp.assert(
+  (select count(*) from public.verificar_cadena_huellas(:P067)) = 1
+  and (select motivo from public.verificar_cadena_huellas(:P067)) = 'sobre_no_coincide_con_fila'
+  and (select version_id from public.verificar_cadena_huellas(:P067))
+        = (select id from public.notas_clinicas_versiones where nota_id = :N36),
+  'T036.A5 · con la cita de la cabecera cambiada, verificar_cadena_huellas señala exactamente esa versión (sobre_no_coincide_con_fila)');
+select pg_temp.t012c_mutar(:'verif_original_036',
+  $f$or (c.sobre -> 'cita_id') is distinct from coalesce(to_jsonb(c.cab_cita_id::text), 'null'::jsonb)   -- 6.19$f$, '');
+select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 0,
+  'T036.A5 · MUTANTE del verificador sin la línea 6.19: ya no señala el cambio de cita');
+select pg_temp.t012c_restaurar(:'verif_original_036', 'public.verificar_cadena_huellas(uuid)'::regprocedure,
+  'T036.A5 · deshecho el mutante, verificar_cadena_huellas() es idéntica a la guardada');
+select pg_temp.assert((select count(*) from public.verificar_cadena_huellas(:P067)) = 1,
+  'T036.A5 · restaurado, el verificador vuelve a señalar el cambio de cita');
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- A6 · 6.19 vale para TODOS los roles: como postgres (sin como()), con K36 en la cabecera, un sobre
+-- que dice K36B o null muere por A; la gemela con K36 entra. Si 6.19 volviera al bloque de
+-- authenticated/anon, estas negativas dejarían de lanzar.
+select pg_temp.t036_prep('A', :'t0');
+select pg_temp.t036_neg('no es la cita de la cabecera', 'T036.A6 · como postgres, cabecera K36 y sobre K36B: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36B, p_margen => 15, p_redactada => true);
+select pg_temp.t036_neg('no es la cita de la cabecera', 'T036.A7 · como postgres, cabecera K36 y sobre con cita null: 23514',
+  :N36, :CX::jsonb, :'t0');
+select pg_temp.t036_pos('T036.A6 · GEMELA como postgres: el sobre dice la cita de la cabecera y entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- ---- B · borrador vivo (6.17) -----------------------------------------------
+select pg_temp.t036_prep('B', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.B1 · GEMELA: PRO1 firma la v1 de su nota con borrador vivo',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select borrador_contenido is null and borrador_abierta_en is null from public.notas_clinicas where id = :N36),
+  'T036.B1 · firmar vació el borrador y su abierta_en');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('No hay borrador vivo que firmar', 'T036.B1 · otra versión sin reabrir el borrador: 23514',
+  :N36, '{"texto":"v2"}'::jsonb, :'t0', p_motivo => 'sin reabrir');
+-- B2 · lo que hace empezarModificacion: el autor reabre el borrador, y la v2 entra.
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"v2","reservadas":""}', borrador_autor_id = :PRO1
+ where id = :N36;
+select pg_temp.t036_pos('T036.B2 · reabierto el borrador, la v2 con motivo entra',
+  :N36, '{"texto":"v2"}'::jsonb, :'t0', p_motivo => 'reabierta');
+select pg_temp.t036_neg('No hay borrador vivo que firmar', 'T036.B3 · nota creada SIN borrador: 23514',
+  :N36B, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select max(numero_version) from public.notas_clinicas_versiones where nota_id = :N36) = 2,
+  'T036.B2 · la v2 de N36 tiene numero_version = 2');
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- B4 · permisos antes que cotejo (ADR-071.5): contra la nota SIN borrador, quien no puede firmar
+-- (PRO2, que no es el autor; PRO1 con la ventana caducada) recibe el 42501 del paso 0, el MISMO
+-- texto que en C.perm, y no el «No hay borrador vivo» que delataría que la nota existe y está vacía.
+select pg_temp.t036_prep('B', :'t0');
+call pg_temp.como(:PRO2);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+  'T036.B4 · PRO2 desbloquea su historia');
+select pg_temp.t012c_error(pg_temp.t036_q(:N36B, :CX::jsonb, :'t0', p_autor => :PRO2)) as err_b4a \gset
+call pg_temp.reset_sesion();
+update public.desbloqueos_historia
+   set concedido_en = now() - interval '1 hour',
+       caduca_en    = now() - interval '1 minute'
+ where perfil_id = :PRO1 and revocado_en is null;
+call pg_temp.como(:PRO1);
+select pg_temp.t012c_error(pg_temp.t036_q(:N36B, :CX::jsonb, :'t0')) as err_b4b \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(:'err_b4a' = :'err_b' and :'err_b4b' = :'err_b',
+  'T036.B4 · contra la nota sin borrador, PRO2 (no autor) y PRO1 (ventana caducada) reciben el MISMO error que en C.perm (' || :'err_b4a' || ' / ' || :'err_b4b' || ')');
+-- Con el paso 0 apagado, PRO1 con la ventana caducada llega a 6.17: el paso 0 es lo que lo tapa.
+select pg_temp.t012c_mutar(:'sellar_original_036', 'if not coalesce(', 'if false and coalesce(');
+call pg_temp.como(:PRO1);
+select pg_temp.t012c_error(pg_temp.t036_q(:N36B, :CX::jsonb, :'t0')) as err_b4c \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(:'err_b4c' like '23514 · No hay borrador vivo que firmar%',
+  'T036.B4 · SIN el paso 0, PRO1 con la ventana caducada recibe «No hay borrador vivo» (' || :'err_b4c' || '): el paso 0 es lo que lo iguala');
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.B4 · deshecho el mutante del paso 0, fn_sellar_version_nota() es idéntica a la guardada');
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  'T036.B4 · PRO1 vuelve a desbloquear su historia');
+call pg_temp.reset_sesion();
+
+-- ---- C · abierta_en = borrador_abierta_en de la cabecera, truncado (6.18) -----
+select pg_temp.t036_prep('C1', :'t0');
+-- El dato de partida, leído como postgres (PRO1 podría no ver la cabecera y leer null): .345000.
+select pg_temp.assert(
+  (select extract(microseconds from borrador_abierta_en)::bigint % 1000000 from public.notas_clinicas where id = :N36) = 345000,
+  'T036.C · partida de C1: la apertura de la cabecera está exactamente en .345000');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el instante en que la base abrió el borrador', 'T036.C1 · el sobre dice .344Z y la base abrió en .345: 23514',
+  :N36, :CX::jsonb, :'t0', p_cambio => pg_temp.t036_ab(:N36, interval '-1 millisecond'));
+select pg_temp.t036_neg('no es el instante en que la base abrió el borrador', 'T036.C2 · el sobre dice .346Z y la base abrió en .345: 23514',
+  :N36, :CX::jsonb, :'t0', p_cambio => pg_temp.t036_ab(:N36, interval '1 millisecond'));
+select pg_temp.t036_pos('T036.C3 · GEMELA: el sobre dice .345Z, el instante exacto, y entra',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('C2', :'t0');
+-- El dato de partida, leído como postgres y sin escapatoria: si la cabecera no queda en .345999,
+-- C4 y C5 no distinguen truncar de redondear (con µs = 0 dan lo mismo).
+select pg_temp.assert(
+  (select extract(microseconds from borrador_abierta_en)::bigint % 1000000 from public.notas_clinicas where id = :N36) = 345999,
+  'T036.C · partida de C2: la apertura de la cabecera está exactamente en .345999');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el instante en que la base abrió el borrador', 'T036.C5 · el sobre REDONDEA .345999 a .346Z: 23514',
+  :N36, :CX::jsonb, :'t0', p_cambio => pg_temp.t036_ab(:N36, interval '1 millisecond'));
+select pg_temp.t036_pos('T036.C4 · GEMELA: el sobre TRUNCA .345999 a .345Z y entra',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- ---- P2 · la firma se fecha con el reloj de la base, ±1 minuto (6.20) -----------
+select pg_temp.t036_prep('P2', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('del reloj de la base', 'T036.P2a · firmada_en un día antes que la base: 23514',
+  :N36, :CX::jsonb, :'t0'::timestamptz - interval '1 day');
+select pg_temp.t036_neg('del reloj de la base', 'T036.P2b · firmada_en un día después que la base: 23514',
+  :N36, :CX::jsonb, :'t0'::timestamptz + interval '1 day');
+select pg_temp.t036_neg('del reloj de la base', 'T036.P2c · firmada_en 61 s antes que la base: 23514',
+  :N36, :CX::jsonb, :'t0'::timestamptz - interval '61 seconds');
+select pg_temp.t036_neg('del reloj de la base', 'T036.P2d · firmada_en 61 s después que la base: 23514',
+  :N36, :CX::jsonb, :'t0'::timestamptz + interval '61 seconds');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+select pg_temp.t036_prep('P2', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.P2e · GEMELA: firmada_en 59 s antes que la base entra (la tolerancia es de ±1 minuto)',
+  :N36, :CX::jsonb, :'t0'::timestamptz - interval '59 seconds');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+select pg_temp.t036_prep('P2', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.P2f · GEMELA: firmada_en 59 s después que la base entra',
+  :N36, :CX::jsonb, :'t0'::timestamptz + interval '59 seconds');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+select pg_temp.t036_prep('P2', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.P2 · GEMELA: firmada_en = reloj de la base entra',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- ---- P3 · la cita es de esta nota: mismo paciente y su autor, SOLO en la v1 (6.21) -----
+select pg_temp.t036_prep('P3a', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no pertenece a esta nota', 'T036.P3a · la cabecera apunta a una cita de OTRO paciente: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :KX36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+select pg_temp.t036_cita(:K36B, :P067, :PRO1, :CMNULO, :'t0'::timestamptz + interval '3 hours', :'t0'::timestamptz + interval '4 hours');
+update public.notas_clinicas set cita_id = :K36B where id = :N36;
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.P3a · GEMELA: con la cita propia (mismo paciente y autor) la v1 entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36B, p_margen => 15, p_redactada => false);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('P3b', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no pertenece a esta nota', 'T036.P3b · la cabecera apunta a una cita del mismo paciente pero de OTRO profesional: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :KY36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+select pg_temp.t036_cita(:K36B, :P067, :PRO1, :CMNULO, :'t0'::timestamptz + interval '3 hours', :'t0'::timestamptz + interval '4 hours');
+update public.notas_clinicas set cita_id = :K36B where id = :N36;
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.P3b · GEMELA: con la cita propia la v1 entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36B, p_margen => 15, p_redactada => false);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- P3 solo en la v1 (decisión del propietario): tras la v1 se reasigna la cita (como postgres, con el
+-- congelador apagado) a una de OTRO paciente, se reabre el borrador y la v2 ENTRA.
+select pg_temp.t036_prep('P3v2', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.P3v2 · la v1 con la cita propia entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+alter table public.notas_clinicas disable trigger congelar_cabecera_sellada;
+update public.notas_clinicas set cita_id = :KX36 where id = :N36;
+alter table public.notas_clinicas enable trigger congelar_cabecera_sellada;
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"v2","reservadas":""}', borrador_autor_id = :PRO1
+ where id = :N36;
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.P3v2 · GEMELA de la v1: con la cita de la cabecera ya de otro paciente, la v2 ENTRA (P3 solo en la v1)',
+  :N36, '{"texto":"v2"}'::jsonb, :'t0', p_motivo => 'reasignada', p_cita => :KX36, p_margen => 15, p_redactada => false);
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select max(numero_version) from public.notas_clinicas_versiones where nota_id = :N36) = 2,
+  'T036.P3v2 · la versión que entró es la 2');
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- ---- M · margen efectivo (6.22) ------------------------------------------------
+select pg_temp.t036_prep('M20', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el margen efectivo', 'T036.M1 · cita en el centro de 20 y el sobre dice 15: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+select pg_temp.t036_neg('no es el margen efectivo', 'T036.M2 · cita en el centro de 20 y el sobre dice margen null: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_redactada => true);
+select pg_temp.t036_pos('T036.M · GEMELA: el sobre dice 20, el margen del centro, y entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 20, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('Msc', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.M3 · GEMELA: cita SIN centro, margen 15 (el de la organización), entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('Mnul', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.M4 · GEMELA: cita en un centro SIN margen propio, margen 15 (el de la organización), entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- ---- D · «redactada en sesión» lo recalcula la base (6.23) ----------------------
+select pg_temp.t036_prep('Da', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el que recalcula la base', 'T036.D1 · cita de ayer: la firma es de hoy, y el sobre dice true: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+select pg_temp.t036_pos('T036.D2 · GEMELA: cita de ayer, el sobre dice false, entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => false);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('Mnul', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el que recalcula la base', 'T036.D3 · cita en curso y el sobre dice false: 23514',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => false);
+select pg_temp.t036_pos('T036.D4 · GEMELA: cita en curso, el sobre dice true, entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- Los bordes, al milisegundo: el borrador se abrió 1 h antes de t0; la cita empieza a abierta + 15 min
+-- y acaba 15 min antes de t0. D5: los dos bordes exactos, incluidos: true entra. D6: la apertura queda
+-- 1 ms antes del borde: true falla. D7: la firma queda 1 ms después del borde: true falla.
+select pg_temp.t036_prep('D5', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.D5 · los dos bordes exactos (apertura = inicio - margen, firma = fin + margen) cuentan como en sesión: true entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('D6', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el que recalcula la base', 'T036.D6 · la apertura queda 1 ms antes del borde: true falla',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+select pg_temp.t036_pos('T036.D6 · GEMELA: en ese caso el sobre dice false y entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => false);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('D7', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el que recalcula la base', 'T036.D7 · la firma queda 1 ms después del borde: true falla',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+select pg_temp.t036_pos('T036.D7 · GEMELA: en ese caso el sobre dice false y entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => false);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- ---- E1 · P1: postgres está exento de 6.17-6.18 y 6.20-6.24 --------------------
+-- Retrofechada y sin borrador, como firman la siembra, la fijación y t005. Si esta prueba falla,
+-- alguien extendió 6.17-6.24 a todos los roles.
+select pg_temp.t036_prep('E1', :'t0');
+select pg_temp.assert_no_lanza(
+  pg_temp.t036_q(:N36, :CX::jsonb, timestamptz '2026-01-01 00:00:00+00'),
+  'T036.E1 · P1: la exención de postgres es una decisión del 01-10-2026; si esta prueba falla, alguien extendió 6.17-6.24 a todos los roles');
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- ---- R · 6.24: lo que se sella es el borrador vigente (R2-H1) --------------------
+-- R1 · lo que hace guardarBorrador entre la lectura de firmarNota y el insert: PRO1 cambia el
+-- borrador de X a Y con el testigo leído; la firma construida con X no entra. La gemela con Y, sí.
+select pg_temp.t036_prep('R', :'t0');
+select pg_temp.t036_q(:N36, :CX::jsonb, :'t0') as qx \gset
+select borrador_actualizado_en as testigo from public.notas_clinicas where id = :N36 \gset
+call pg_temp.como(:PRO1);
+with u as (
+  update public.notas_clinicas
+     set borrador_contenido = '{"texto":"Y","reservadas":""}', borrador_autor_id = :PRO1
+   where id = :N36 and borrador_actualizado_en = :'testigo'
+  returning 1)
+select pg_temp.assert((select count(*) from u) = 1, 'T036.R1 · PRO1 guardó el borrador Y con el testigo leído: tocó una fila');
+select pg_temp.assert_lanza_codigo_msg(:'qx', '23514', 'no es el borrador vigente',
+  'T036.R1 · firmar con el sobre de X cuando el borrador vigente es Y: 23514');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select borrador_contenido ->> 'texto' from public.notas_clinicas where id = :N36) = 'Y'
+  and (select count(*) from public.notas_clinicas_versiones where nota_id = :N36) = 0,
+  'T036.R1 · tras la negativa el borrador sigue siendo Y y la nota sigue sin versiones');
+select pg_temp.t036_q(:N36, '{"texto":"Y"}'::jsonb, :'t0') as qy \gset
+call pg_temp.como(:PRO1);
+select pg_temp.assert_no_lanza(:'qy', 'T036.R1 · GEMELA: el sobre de Y, el borrador vigente, entra');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select borrador_contenido is null from public.notas_clinicas where id = :N36),
+  'T036.R1 · la gemela dejó el borrador vacío');
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- R2a · el borrador lleva reservadas «mías» y el sobre null.
+select pg_temp.t036_prep('R', :'t0', '{"texto":"X","reservadas":"mías"}'::jsonb);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.R2a · borrador con reservadas «mías» y sobre con reservadas null: 23514',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- R2b · el borrador sin reservadas y el sobre con «mías» (la columna también, para que pase 6.4).
+select pg_temp.t036_prep('R', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.R2b · borrador sin reservadas y sobre con «mías»: 23514',
+  :N36, :CX::jsonb, :'t0', p_reservadas => 'mías');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- R2c · gemela: «mías» en el borrador, en el sobre y en la columna.
+select pg_temp.t036_prep('R', :'t0', '{"texto":"X","reservadas":"mías"}'::jsonb);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.R2c · GEMELA: reservadas «mías» en el borrador, el sobre y la columna entran',
+  :N36, :CX::jsonb, :'t0', p_reservadas => 'mías');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- R3 · lo que hace la aplicación: reservadas '' en el borrador y null en el sobre; y la clave ausente.
+select pg_temp.t036_prep('R', :'t0');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.R3 · borrador con "reservadas":"" y sobre con reservadas null entran',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+select pg_temp.t036_prep('R', :'t0', '{"texto":"X"}'::jsonb);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.R3 · borrador SIN la clave reservadas y sobre con reservadas null entran',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- R4 · NFD en el borrador, NFC en el sobre (el cliente normaliza antes de firmar): entra.
+select pg_temp.assert(
+  convert_to(U&'sesi\006F\0301n', 'UTF8') <> convert_to(U&'sesi\00F3n', 'UTF8'),
+  'T036.R4 · partida: las dos formas de «sesión» son cadenas distintas byte a byte');
+select pg_temp.t036_prep('R', :'t0', jsonb_build_object('texto', U&'sesi\006F\0301n', 'reservadas', ''));
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.R4 · borrador en NFD y sobre en NFC: el mismo texto, entra',
+  :N36, jsonb_build_object('texto', U&'sesi\00F3n'), :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- R5 · un texto ausente en los dos lados no coincide.
+select pg_temp.t036_prep('R', :'t0', '{"t":"x","reservadas":""}'::jsonb);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.R5 · sin clave texto en el borrador ni en el cuerpo: 23514',
+  :N36, '{"t":"x"}'::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+
+-- T · ningún mensaje de 6.17-6.24 contiene abierta_en: firmarNota traduce a conflicto lo que no
+-- lo lleva (servidor.ts) y a error lo que sí. Solo los tres de 6.8.
+select pg_temp.assert(
+  (select count(*) from regexp_matches(
+     pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure), 'raise exception ''[^'']*abierta_en', 'g')) = 3,
+  'T036.T · solo los tres mensajes de 6.8 contienen abierta_en; firmarNota traduce a conflicto todo lo demás (servidor.ts)');
+
+-- ---- X · mutantes: cada comprobación, apagada, deja de lanzar -------------------
+-- X1 (corregido, E.5) · sin 6.17 (B) la segunda barrera, 6.24, sigue parando la firma sin borrador.
+select pg_temp.t036_prep('B', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036', 'if not v_borrador_vivo then', 'if false then');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.X1 · sin 6.17, la nota sin borrador sigue sin poder firmarse: lo para 6.24',
+  :N36B, :CX::jsonb, :'t0');
+select pg_temp.t036_pos('T036.X1 · sin 6.17, la v1 de la nota con borrador entra', :N36, :CX::jsonb, :'t0');
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.X1 · sin 6.17, una versión sin reabrir el borrador la para 6.24',
+  :N36, '{"texto":"v2"}'::jsonb, :'t0', p_motivo => 'sin reabrir');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X1 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X2 · sin 6.18 (C): el sobre con .344Z entra.
+select pg_temp.t036_prep('C1', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$if (v_contenido -> 'abierta_en') is distinct from to_jsonb(to_char(v_borrador_abierta_en$f$,
+  $f$if false and (v_contenido -> 'abierta_en') is distinct from to_jsonb(to_char(v_borrador_abierta_en$f$);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X2 · sin 6.18, el sobre con otro instante de apertura entra',
+  :N36, :CX::jsonb, :'t0', p_cambio => pg_temp.t036_ab(:N36, interval '-1 millisecond'));
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X2 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X3 · sin 6.19 (A): el sobre que dice otra cita propia entra.
+select pg_temp.t036_prep('A', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$if (v_contenido -> 'cita_id') is distinct from coalesce($f$,
+  $f$if false and (v_contenido -> 'cita_id') is distinct from coalesce($f$);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X3 · sin 6.19, el sobre con otra cita propia entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36B, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X3 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X4 · sin 6.20 (P2): la firma retrofechada entra.
+select pg_temp.t036_prep('P2', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036', 'if new.creada_en not between', 'if false and new.creada_en not between');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X4 · sin 6.20, la firma fechada un día antes entra',
+  :N36, :CX::jsonb, :'t0'::timestamptz - interval '1 day');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X4 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X5 · sin 6.21 (P3): la cita de otro paciente entra.
+select pg_temp.t036_prep('P3a', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  'if new.numero_version = 1 and (v_cita_paciente is distinct from v_paciente_id or v_cita_profesional is distinct from v_autor_cabecera) then',
+  'if false then');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X5 · sin 6.21, la cita de otro paciente entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :KX36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X5 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X6 · sin 6.22 (margen): el sobre con 15 en el centro de 20 entra.
+select pg_temp.t036_prep('M20', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$if (v_contenido -> 'margen_sesion_minutos') is distinct from to_jsonb(v_margen) then$f$, 'if false then');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X6 · sin 6.22, el sobre con margen 15 en el centro de 20 entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X6 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X7 · sin 6.23 (D): el true de la cita de ayer entra.
+select pg_temp.t036_prep('Da', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$if (v_contenido -> 'redactada_en_sesion') is distinct from to_jsonb(v_en_sesion) then$f$, 'if false then');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X7 · sin 6.23, redactada true sobre una cita de ayer entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X7 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X8-X10 · las condiciones de 6.24 son independientes. N36: borrador Y, sobre X (la forma de R1);
+-- N36B: borrador X con reservadas «mías», sobre X con reservadas null (la forma de R2a).
+-- X8 · sin 6.24 entera.
+select pg_temp.t036_prep('R9', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036', 'if not (v_mismo_texto and v_mismas_reservadas) then', 'if false then');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X8 · sin 6.24, el sobre de X sobre el borrador Y entra (forma de R1)', :N36, :CX::jsonb, :'t0');
+select pg_temp.t036_pos('T036.X8 · sin 6.24, el sobre sin reservadas sobre el borrador con «mías» entra (forma de R2a)', :N36B, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X8 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X9 · sin la condición del texto: R1 entra, R2a sigue lanzando.
+select pg_temp.t036_prep('R9', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036', 'v_mismo_texto := ', 'v_mismo_texto := true or ');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X9 · sin la condición del texto, la forma de R1 entra', :N36, :CX::jsonb, :'t0');
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.X9 · sin la condición del texto, la forma de R2a SIGUE lanzando: las dos condiciones son independientes',
+  :N36B, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X9 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X10 · sin la condición de las reservadas: R2a entra, R1 sigue lanzando.
+select pg_temp.t036_prep('R9', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036', 'v_mismas_reservadas := ', 'v_mismas_reservadas := true or ');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X10 · sin la condición de las reservadas, la forma de R2a entra', :N36B, :CX::jsonb, :'t0');
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.X10 · sin la condición de las reservadas, la forma de R1 SIGUE lanzando',
+  :N36, :CX::jsonb, :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X10 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X11 · sin la NFC del lado del borrador: la gemela de R4 (NFD en el borrador, NFC en el sobre) pasa a lanzar.
+select pg_temp.t036_prep('R', :'t0', jsonb_build_object('texto', U&'sesi\006F\0301n', 'reservadas', ''));
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$normalize(v_borrador_contenido ->> 'texto', NFC)$f$, $f$(v_borrador_contenido ->> 'texto')$f$);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el borrador vigente', 'T036.X11 · sin la NFC del lado del borrador, el NFD frente al NFC lanza: la NFC hace falta',
+  :N36, jsonb_build_object('texto', U&'sesi\00F3n'), :'t0');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X11 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X12 · P3 solo en la v1: si el mutante quita la condición de versión, la v2 de la gemela de P3 lanza.
+select pg_temp.t036_prep('P3v2', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036', 'new.numero_version = 1 and (v_cita_paciente', '(v_cita_paciente');
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X12 · la v1 con la cita propia entra',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36, p_margen => 15, p_redactada => true);
+call pg_temp.reset_sesion();
+alter table public.notas_clinicas disable trigger congelar_cabecera_sellada;
+update public.notas_clinicas set cita_id = :KX36 where id = :N36;
+alter table public.notas_clinicas enable trigger congelar_cabecera_sellada;
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"v2","reservadas":""}', borrador_autor_id = :PRO1
+ where id = :N36;
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no pertenece a esta nota', 'T036.X12 · sin la condición de versión, la v2 con la cita ya de otro paciente lanza: la condición hace falta',
+  :N36, '{"texto":"v2"}'::jsonb, :'t0', p_motivo => 'reasignada', p_cita => :KX36, p_margen => 15, p_redactada => false);
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X12 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X13 · 6.19 devuelta al bloque de authenticated/anon (la posición anterior a la decisión del
+-- 02-10-2026): la negativa A6, como postgres, deja de lanzar.
+select pg_temp.t036_prep('A', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$if (v_contenido -> 'cita_id') is distinct from coalesce(to_jsonb(v_cita_cabecera::text), 'null'::jsonb) then$f$,
+  $f$if current_setting('role', true) in ('authenticated', 'anon') and (v_contenido -> 'cita_id') is distinct from coalesce(to_jsonb(v_cita_cabecera::text), 'null'::jsonb) then$f$);
+select pg_temp.t036_pos('T036.X13 · con 6.19 solo para authenticated/anon, el sobre con OTRA cita entra como postgres',
+  :N36, :CX::jsonb, :'t0', p_cita => :K36B, p_margen => 15, p_redactada => true);
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X13 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X14 · 6.18 que REDONDEA en vez de truncar: con la apertura en .345999, el sobre que trunca (.345Z)
+-- lanza y el que redondea (.346Z) entra.
+select pg_temp.t036_prep('C2', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$to_char(v_borrador_abierta_en at time zone 'UTC'$f$,
+  $f$to_char((v_borrador_abierta_en + interval '500 microseconds') at time zone 'UTC'$f$);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_neg('no es el instante en que la base abrió el borrador', 'T036.X14 · con 6.18 que redondea, el sobre que TRUNCA (.345Z) lanza: truncar hace falta',
+  :N36, :CX::jsonb, :'t0');
+select pg_temp.t036_pos('T036.X14 · con 6.18 que redondea, el sobre que redondea (.346Z) entra',
+  :N36, :CX::jsonb, :'t0', p_cambio => pg_temp.t036_ab(:N36, interval '1 millisecond'));
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X14 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+-- X15 · tolerancia de 6.20 ensanchada de 1 minuto a 23 horas: las negativas a ±61 s (P2c, P2d) entran.
+select pg_temp.t036_prep('P2', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$now() - interval '1 minute' and now() + interval '1 minute'$f$,
+  $f$now() - interval '23 hours' and now() + interval '23 hours'$f$);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X15 · con tolerancia de 23 h, firmada_en 61 s antes entra: el minuto hace falta',
+  :N36, :CX::jsonb, :'t0'::timestamptz - interval '61 seconds');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.t036_prep('P2', :'t0');
+select pg_temp.t012c_mutar(:'sellar_original_036',
+  $f$now() - interval '1 minute' and now() + interval '1 minute'$f$,
+  $f$now() - interval '23 hours' and now() + interval '23 hours'$f$);
+call pg_temp.como(:PRO1);
+select pg_temp.t036_pos('T036.X15 · con tolerancia de 23 h, firmada_en 61 s después entra',
+  :N36, :CX::jsonb, :'t0'::timestamptz + interval '61 seconds');
+call pg_temp.reset_sesion();
+rollback to savepoint s036;
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
+  'T036.X15 · deshecho el mutante, fn_sellar_version_nota() es idéntica a la guardada');
+
+release savepoint s036;
+call pg_temp.reset_sesion();
 
 \echo '14-cadena-huellas: completa.'
 

@@ -194,6 +194,435 @@ begin
 end;
 $$;
 
+
+-- =========================================================================
+-- T-036 · La modificación concurrente y el guardado mientras se firma
+-- =========================================================================
+-- Diseño: tickets/T-036/diseno.md §1.4 y E.4. Confirma filas, como el resto del guion.
+--   · 1.4 (§1.4): dos firmas de la v2 de una misma nota a la vez. La segunda espera el
+--     cerrojo de la cabecera, relee la fila confirmada (borrador ya vacío) y muere en 6.17.
+--   · E.4.2: lo que hace guardarBorrador entre la lectura de firmarNota y su insert: T1 guarda
+--     el borrador Y y no confirma; T2 firma el sobre de X. Al confirmar T1, T2 relee el
+--     borrador vigente y 6.24 la rechaza (R2-H1).
+--   · E.4.3: el control mutante. Con 6.24 apagada dentro de la transacción de T2, la misma
+--     carrera la deja ganar: sin eso la carrera de arriba no probaría el cotejo.
+--
+-- T2 vive en una FUNCIÓN (public.t036_firmar_en_segundo_plano), no en el `-c "..."`: sin `$`
+-- ni JSON que pase por /bin/sh. Es plpgsql INVOKER (`set role` está prohibido en un definer).
+
+\set NOTA36  '\'e0360006-0000-4000-8000-000000000001\''
+\set NOTA36R '\'e0360006-0000-4000-8000-000000000002\''
+\set ANAJWT '\'{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","aal":"aal2"}\''
+
+-- Residuos de una ejecución anterior que murió a mitad (con ON_ERROR_STOP=1 psql sale en el primer
+-- error y el `drop` del final no llega a correr): se borran al empezar. Antes del resto, porque
+-- cambiar la firma de una función dejaría la vieja en `public`.
+drop function if exists public.t036_firmar_en_segundo_plano(text, text, boolean);
+drop function if exists public.t036_esperar_bloqueo(text, text);
+drop function if exists public.t036_esperar_bloqueo(text);
+drop function if exists public.t036_esperar_resultado(text);
+drop function if exists public.t036_sobre_prueba(uuid, uuid, timestamptz, jsonb, timestamptz, text);
+drop table if exists public.t036_sobres;
+drop table if exists public.t036_original;
+
+-- La gemela de t005_sobre_prueba con abierta_en y motivo_cambio (la de T-005 no se toca: la
+-- usan las firmas de T-005). Se borra al final.
+create or replace function public.t036_sobre_prueba(
+  p_nota_id   uuid,
+  p_autor_id  uuid,
+  p_creada_en timestamptz,
+  p_cuerpo    jsonb,
+  p_abierta_en timestamptz default null,
+  p_motivo_cambio text default null
+) returns text
+language sql
+stable
+as $$
+  select
+    '{' ||
+    '"abierta_en":' || to_json(to_char(coalesce(p_abierta_en, p_creada_en) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"alcance":"individual",' ||
+    '"anotaciones_reservadas":null,' ||
+    '"autor_id":"' || lower(p_autor_id::text) || '",' ||
+    '"cita_id":null,' ||
+    '"coprofesional_id":' || coalesce(to_json((select n.coprofesional_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
+    '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"cuerpo":' || p_cuerpo::text || ',' ||
+    '"episodio_id":' || coalesce(to_json((select n.episodio_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
+    '"esquema_version":4,' ||
+    '"fecha_sesion":' || coalesce(to_json((select to_char(n.fecha_sesion, 'YYYY-MM-DD') from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
+    '"firmada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"margen_sesion_minutos":null,' ||
+    '"motivo_cambio":' || coalesce(to_json(p_motivo_cambio)::text, 'null') || ',' ||
+    '"nota_id":"' || lower(p_nota_id::text) || '",' ||
+    '"paciente_id":' || coalesce(to_json((select n.paciente_id::text from public.notas_clinicas n where n.id = p_nota_id))::text, 'null') || ',' ||
+    '"redactada_en_sesion":false' ||
+    '}';
+$$;
+-- Ninguna de las funciones t036_* es para anon ni authenticated: si el guion muriera a mitad y
+-- quedaran en public, PostgREST no las expondría.
+revoke execute on function public.t036_sobre_prueba(uuid, uuid, timestamptz, jsonb, timestamptz, text)
+  from public, anon, authenticated;
+
+-- Los sobres que «leyó firmarNota», preparados como postgres: el JSON se lee de aquí dentro de
+-- la función de T2, así que no pasa por el shell.
+drop table if exists public.t036_sobres;
+create table public.t036_sobres (
+  clave     text primary key,
+  contenido text not null,
+  creada_en timestamptz not null
+);
+
+-- T2: firma como Ana (authenticated) el sobre `p_clave_sobre`, en una transacción propia, y deja
+-- el resultado en t005_resultado. Con p_mutar apaga 6.24 DENTRO del sub-bloque, firma, y deshace
+-- las dos cosas con una excepción: el mutante nunca se confirma.
+create or replace function public.t036_firmar_en_segundo_plano(
+  p_etiqueta text, p_clave_sobre text, p_mutar boolean)
+returns void
+language plpgsql
+as $f$
+declare
+  c_ana   constant uuid := '11111111-1111-4111-8111-111111111111';
+  c_frag  constant text := 'if not (v_mismo_texto and v_mismas_reservadas) then';
+  v_contenido text;
+  v_creada    timestamptz;
+  v_def       text;
+  v_exito     boolean := false;
+  v_sqlstate  text;
+  v_mensaje   text;
+begin
+  perform set_config('lock_timeout', '30s', true);
+  select s.contenido, s.creada_en into strict v_contenido, v_creada
+    from public.t036_sobres s where s.clave = p_clave_sobre;
+  begin
+    if p_mutar then
+      v_def := pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure);
+      if (length(v_def) - length(replace(v_def, c_frag, ''))) <> length(c_frag) then
+        raise exception 't036: el fragmento a mutar no aparece exactamente una vez';
+      end if;
+      execute replace(v_def, c_frag, 'if false then');
+    end if;
+    perform set_config('request.jwt.claims',
+      '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","aal":"aal2"}', true);
+    execute 'set local role authenticated';
+    insert into public.notas_clinicas_versiones
+      (nota_id, cuerpo, motivo_cambio, contenido_canonico, autor_id, creada_en)
+    values ((v_contenido::jsonb ->> 'nota_id')::uuid,
+            (v_contenido::jsonb -> 'cuerpo')::text,
+            v_contenido::jsonb ->> 'motivo_cambio',
+            v_contenido, c_ana, v_creada);
+    v_exito := true;
+    if p_mutar then
+      raise exception using errcode = 'P0001', message = 't036: deshacer el mutante';
+    end if;
+  exception when others then
+    if not v_exito then
+      v_sqlstate := sqlstate;
+      v_mensaje  := sqlerrm;
+    end if;
+  end;
+  execute 'reset role';
+  insert into public.t005_resultado (etiqueta, exito, sqlstate_code, mensaje)
+  values (p_etiqueta, v_exito, v_sqlstate, v_mensaje);
+end;
+$f$;
+revoke execute on function public.t036_firmar_en_segundo_plano(text, text, boolean)
+  from public, anon, authenticated;
+
+-- El sondeo de T1: hasta 10 s esperando que la conexión `p_etiqueta` esté bloqueada en un cerrojo.
+-- Cada vuelta limpia la instantánea de pg_stat_activity (T1 sigue en su transacción y, si no, ve
+-- siempre la misma foto).
+create or replace function public.t036_esperar_bloqueo(
+  p_etiqueta text, p_quien text default 'el cerrojo de la cabecera')
+returns void
+language plpgsql
+as $$
+declare
+  v_vista text;
+begin
+  for i in 1..100 loop
+    perform pg_stat_clear_snapshot();
+    if exists (select 1 from pg_stat_activity a
+                where a.application_name = p_etiqueta and a.wait_event_type = 'Lock') then
+      raise notice 'OK: la conexión % está esperando un cerrojo', p_etiqueta;
+      return;
+    end if;
+    perform pg_sleep(0.1);
+  end loop;
+  select string_agg(coalesce(a.state, '?') || '/' || coalesce(a.wait_event_type, '-') || ':' || coalesce(a.wait_event, '-'), ', ')
+    into v_vista from pg_stat_activity a where a.application_name = p_etiqueta;
+  raise exception 'FALLO: la firma % no llegó a esperar %: sin espera no hay carrera (vista: %)',
+    p_etiqueta, p_quien, coalesce(v_vista, 'no hay ninguna conexión con esa etiqueta');
+end;
+$$;
+revoke execute on function public.t036_esperar_bloqueo(text, text) from public, anon, authenticated;
+
+-- La espera del resultado de T2: hasta 30 s.
+create or replace function public.t036_esperar_resultado(p_etiqueta text)
+returns void
+language plpgsql
+as $$
+begin
+  for i in 1..300 loop
+    if exists (select 1 from public.t005_resultado r where r.etiqueta = p_etiqueta) then
+      return;
+    end if;
+    perform pg_sleep(0.1);
+  end loop;
+  raise exception 'FALLO: la firma % no dejó ningún resultado en t005_resultado (¿falló la propia conexión secundaria?)', p_etiqueta;
+end;
+$$;
+revoke execute on function public.t036_esperar_resultado(text) from public, anon, authenticated;
+
+-- =========================================================================
+-- §1.4 · Dos firmas de la v2 a la vez: la segunda muere en 6.17
+-- =========================================================================
+\echo ''
+\echo '=== T-036 · §1.4 · la doble firma concurrente de una modificación ==='
+
+-- Montaje como postgres: NOTA36 de Ana, sin cita, v1 firmada como postgres (exenta, P1) y un
+-- desbloqueo vigente de la historia de Ana.
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, fecha_sesion) values
+  (:NOTA36, :'pconc_id', :EPICONC, :ANA, date '2026-10-02');
+insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
+  (:NOTA36, '{"t":"v1"}',
+   public.t005_sobre_prueba(:NOTA36, :ANA, timestamptz '2026-01-01 00:00:03+00', '{"t":"v1"}'::jsonb),
+   :ANA, timestamptz '2026-01-01 00:00:03+00');
+insert into public.desbloqueos_historia (perfil_id, caduca_en) values (:ANA, now() + interval '1 hour');
+
+-- Reabrir como Ana: lo que hace empezarModificacion.
+begin;
+set local role authenticated;
+set local request.jwt.claims = :ANAJWT;
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"v2","reservadas":""}', borrador_autor_id = :ANA
+ where id = :NOTA36;
+commit;
+
+select borrador_abierta_en as ab_36 from public.notas_clinicas where id = :NOTA36 \gset
+
+-- Los dos sobres de la v2, con el mismo cuerpo, motivo y abierta_en y su propio reloj.
+insert into public.t036_sobres (clave, contenido, creada_en)
+select 't1', public.t036_sobre_prueba(:NOTA36, :ANA, c, '{"texto":"v2"}'::jsonb, :'ab_36'::timestamptz, 'concurrente'), c
+  from (select date_trunc('milliseconds', clock_timestamp()) as c) x;
+insert into public.t036_sobres (clave, contenido, creada_en)
+select 't2', public.t036_sobre_prueba(:NOTA36, :ANA, c, '{"texto":"v2"}'::jsonb, :'ab_36'::timestamptz, 'concurrente'), c
+  from (select date_trunc('milliseconds', clock_timestamp()) as c) x;
+select contenido as s_t1, creada_en as c_t1 from public.t036_sobres where clave = 't1' \gset
+
+\echo '--- T1 firma la v2 como Ana y NO confirma: toma el cerrojo de la cabecera ---'
+begin;
+set local role authenticated;
+set local request.jwt.claims = :ANAJWT;
+insert into public.notas_clinicas_versiones (nota_id, cuerpo, motivo_cambio, contenido_canonico, autor_id, creada_en) values
+  (:NOTA36, '{"texto":"v2"}', 'concurrente', :'s_t1', :ANA, :'c_t1');
+reset role;
+
+\echo '--- T2 (segunda conexión) firma la misma v2 mientras T1 no confirma: debe esperar y morir en 6.17 ---'
+\! PGAPPNAME=t036_t2 psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select public.t036_firmar_en_segundo_plano('t036_t2','t2',false)" >/dev/null 2>&1 &
+
+select public.t036_esperar_bloqueo('t036_t2', 'el insert de la v2 de T1, una firma que no ha confirmado');
+commit;
+select public.t036_esperar_resultado('t036_t2');
+
+\echo '--- Aserción 5 (T-036): T2 esperó, releyó el borrador vacío y murió en 23514 «No hay borrador vivo» ---'
+do $$
+declare
+  v_fila public.t005_resultado%rowtype;
+  v_n integer;
+  v_filas integer;
+begin
+  select * into v_fila from public.t005_resultado where etiqueta = 't036_t2';
+  if v_fila.exito or v_fila.sqlstate_code is distinct from '23514'
+     or v_fila.mensaje not like '%No hay borrador vivo que firmar%' then
+    raise exception 'FALLO: T2 debía morir con 23514 «No hay borrador vivo que firmar». exito=%, sqlstate=%, mensaje=%',
+      v_fila.exito, v_fila.sqlstate_code, v_fila.mensaje;
+  end if;
+  select count(*) into v_n from public.notas_clinicas_versiones
+   where nota_id = 'e0360006-0000-4000-8000-000000000001';
+  if v_n <> 2 then
+    raise exception 'FALLO: NOTA36 debía tener 2 versiones (la v1 de postgres y la v2 de T1) y tiene %', v_n;
+  end if;
+  select count(*) into v_filas from public.verificar_cadena_huellas(
+    (select id from public.pacientes where profesional_id = '11111111-1111-4111-8111-111111111111'::uuid order by id limit 1));
+  if v_filas <> 0 then
+    raise exception 'FALLO: verificar_cadena_huellas() encontró % anomalía(s) tras la doble firma', v_filas;
+  end if;
+  raise notice 'OK: la segunda firma concurrente esperó el cerrojo y murió en 6.17; NOTA36 tiene 2 versiones y la cadena está sana (mensaje: %)', v_fila.mensaje;
+end;
+$$;
+
+-- =========================================================================
+-- E.4.2 · Guardar mientras se firma: la firma de X no sella el borrador Y (R2-H1)
+-- =========================================================================
+\echo ''
+\echo '=== T-036 · E.4.2 · guardar mientras se firma ==='
+
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, fecha_sesion, borrador_contenido, borrador_autor_id) values
+  (:NOTA36R, :'pconc_id', :EPICONC, :ANA, date '2026-10-02', '{"texto":"X","reservadas":""}', :ANA);
+select borrador_abierta_en as ab_r from public.notas_clinicas where id = :NOTA36R \gset
+select set_config('t036.ab_r', :'ab_r', false);
+
+do $$
+begin
+  if not exists (select 1 from public.desbloqueos_historia d
+                  where d.perfil_id = '11111111-1111-4111-8111-111111111111'::uuid
+                    and d.revocado_en is null and d.caduca_en > now() + interval '5 minutes') then
+    raise exception 'FALLO: el desbloqueo de Ana de §1.4 ya no está vigente: la carrera de E.4.2 no podría firmar';
+  end if;
+end;
+$$;
+
+-- El sobre que leyó firmarNota: cuerpo X, la apertura de la base, v1 sin motivo.
+insert into public.t036_sobres (clave, contenido, creada_en)
+select 'r1', public.t036_sobre_prueba(:NOTA36R, :ANA, c, '{"texto":"X"}'::jsonb, :'ab_r'::timestamptz, null), c
+  from (select date_trunc('milliseconds', clock_timestamp()) as c) x;
+select borrador_actualizado_en as testigo_r from public.notas_clinicas where id = :NOTA36R \gset
+
+\echo '--- T1 guarda el borrador Y con el testigo leído y NO confirma ---'
+begin;
+set local role authenticated;
+set local request.jwt.claims = :ANAJWT;
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"Y","reservadas":""}', borrador_autor_id = :ANA
+ where id = :NOTA36R and paciente_id = :'pconc_id' and borrador_actualizado_en = :'testigo_r';
+do $$
+begin
+  if not exists (select 1 from public.notas_clinicas
+                  where id = 'e0360006-0000-4000-8000-000000000002'
+                    and borrador_contenido ->> 'texto' = 'Y') then
+    raise exception 'FALLO: T1 no guardó el borrador Y (el update de guardarBorrador no tocó la fila)';
+  end if;
+end;
+$$;
+reset role;
+
+\echo '--- T2 firma el sobre de X en segundo plano: espera el cerrojo del guardado ---'
+\! PGAPPNAME=t036_r psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select public.t036_firmar_en_segundo_plano('t036_r','r1',false)" >/dev/null 2>&1 &
+
+select public.t036_esperar_bloqueo('t036_r', 'el guardado del borrador Y de T1, que no ha confirmado');
+commit;
+select public.t036_esperar_resultado('t036_r');
+
+do $$
+declare
+  v_fila public.t005_resultado%rowtype;
+  v_n integer;
+  v_borr jsonb;
+  v_ab timestamptz;
+  v_filas integer;
+begin
+  select * into v_fila from public.t005_resultado where etiqueta = 't036_r';
+  if v_fila.exito or v_fila.sqlstate_code is distinct from '23514'
+     or v_fila.mensaje not like '%no es el borrador vigente%' then
+    raise exception 'FALLO: la firma selló un borrador que otra sesión había cambiado (R2-H1): exito=%, sqlstate=%, mensaje=%',
+      v_fila.exito, v_fila.sqlstate_code, v_fila.mensaje;
+  end if;
+  select count(*) into v_n from public.notas_clinicas_versiones
+   where nota_id = 'e0360006-0000-4000-8000-000000000002';
+  if v_n <> 0 then
+    raise exception 'FALLO: NOTA36R tiene % versión(es) y no debía tener ninguna', v_n;
+  end if;
+  select n.borrador_contenido, n.borrador_abierta_en into v_borr, v_ab
+    from public.notas_clinicas n where n.id = 'e0360006-0000-4000-8000-000000000002';
+  if v_borr is null or v_borr ->> 'texto' is distinct from 'Y' then
+    raise exception 'FALLO: el borrador de NOTA36R debía seguir vivo con texto Y y es %', v_borr;
+  end if;
+  if v_ab is distinct from current_setting('t036.ab_r')::timestamptz then
+    raise exception 'FALLO: borrador_abierta_en cambió (%, era %): la causa del rechazo no puede ser 6.18', v_ab, current_setting('t036.ab_r');
+  end if;
+  select count(*) into v_filas from public.verificar_cadena_huellas(
+    (select id from public.pacientes where profesional_id = '11111111-1111-4111-8111-111111111111'::uuid order by id limit 1));
+  if v_filas <> 0 then
+    raise exception 'FALLO: verificar_cadena_huellas() encontró % anomalía(s)', v_filas;
+  end if;
+  raise notice 'OK: la firma de X sobre el borrador Y murió en 23514 «no es el borrador vigente»; el guardado de T1 se conservó y la cadena sigue sana (mensaje: %)', v_fila.mensaje;
+end;
+$$;
+
+-- =========================================================================
+-- E.4.3 · Control mutante: sin 6.24 la misma carrera deja ganar a la firma
+-- =========================================================================
+\echo ''
+\echo '=== T-036 · E.4.3 · control mutante de la carrera ==='
+
+drop table if exists public.t036_original;
+create table public.t036_original (definicion text not null);
+do $$
+declare
+  v_def text := pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure);
+  c_frag constant text := 'if not (v_mismo_texto and v_mismas_reservadas) then';
+begin
+  if (length(v_def) - length(replace(v_def, c_frag, ''))) <> length(c_frag) then
+    raise exception 'FALLO: el fragmento de 6.24 a mutar no aparece exactamente una vez en fn_sellar_version_nota()';
+  end if;
+  insert into public.t036_original (definicion) values (v_def);
+end;
+$$;
+
+-- r2: el sobre de lo vigente (Y); T1 guardará Z; con 6.24 apagada la firma de Y entra.
+insert into public.t036_sobres (clave, contenido, creada_en)
+select 'r2', public.t036_sobre_prueba(:NOTA36R, :ANA, c, '{"texto":"Y"}'::jsonb, :'ab_r'::timestamptz, null), c
+  from (select date_trunc('milliseconds', clock_timestamp()) as c) x;
+select borrador_actualizado_en as testigo_m from public.notas_clinicas where id = :NOTA36R \gset
+
+begin;
+set local role authenticated;
+set local request.jwt.claims = :ANAJWT;
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"Z","reservadas":""}', borrador_autor_id = :ANA
+ where id = :NOTA36R and paciente_id = :'pconc_id' and borrador_actualizado_en = :'testigo_m';
+do $$
+begin
+  if not exists (select 1 from public.notas_clinicas
+                  where id = 'e0360006-0000-4000-8000-000000000002'
+                    and borrador_contenido ->> 'texto' = 'Z') then
+    raise exception 'FALLO: T1 no guardó el borrador Z';
+  end if;
+end;
+$$;
+reset role;
+
+\! PGAPPNAME=t036_m psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select public.t036_firmar_en_segundo_plano('t036_m','r2',true)" >/dev/null 2>&1 &
+
+select public.t036_esperar_bloqueo('t036_m', 'el guardado del borrador Z de T1, que no ha confirmado');
+commit;
+select public.t036_esperar_resultado('t036_m');
+
+do $$
+declare
+  v_fila public.t005_resultado%rowtype;
+  v_n integer;
+  v_borr jsonb;
+begin
+  select * into v_fila from public.t005_resultado where etiqueta = 't036_m';
+  if not v_fila.exito then
+    raise exception 'FALLO: sin el cotejo 6.24 la firma tenía que ganar la carrera; si no la gana, la carrera de E.4.2 no prueba el cotejo: exito=%, sqlstate=%, mensaje=%',
+      v_fila.exito, v_fila.sqlstate_code, v_fila.mensaje;
+  end if;
+  select count(*) into v_n from public.notas_clinicas_versiones
+   where nota_id = 'e0360006-0000-4000-8000-000000000002';
+  select n.borrador_contenido into v_borr from public.notas_clinicas n
+   where n.id = 'e0360006-0000-4000-8000-000000000002';
+  if v_n <> 0 or v_borr ->> 'texto' is distinct from 'Z' then
+    raise exception 'FALLO: el sub-bloque debía deshacer la firma del mutante: versiones=%, borrador=%', v_n, v_borr;
+  end if;
+  if pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure)
+       is distinct from (select definicion from public.t036_original) then
+    raise exception 'FALLO: el mutante quedó confirmado; npx supabase db reset antes de nada';
+  end if;
+  raise notice 'OK: con 6.24 apagada la firma de Y sobre el borrador Z ganó la carrera (la prueba de E.4.2 sí prueba el cotejo); el mutante se deshizo con la firma';
+end;
+$$;
+
+drop function public.t036_firmar_en_segundo_plano(text, text, boolean);
+drop function public.t036_esperar_bloqueo(text, text);
+drop function public.t036_esperar_resultado(text);
+drop function public.t036_sobre_prueba(uuid, uuid, timestamptz, jsonb, timestamptz, text);
+drop table public.t036_sobres;
+drop table public.t036_original;
+
+
 drop function public.t005_sobre_prueba(uuid, uuid, timestamptz, jsonb, text);
 drop table public.t005_resultado;
 
