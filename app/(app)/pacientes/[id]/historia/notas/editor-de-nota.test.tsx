@@ -845,6 +845,56 @@ describe('EditorDeNota', () => {
       expect(screen.queryByText('Texto base')).toBeNull();
     });
 
+    it('con dos versiones, «Comparar versiones» está en la sección de la vigente', async () => {
+      await montar(modelo({ estado: 'modificada', borrador: null, versiones: [version(1), version(2)] }));
+      const seccion = screen.getByRole('region', { name: 'Versión vigente' });
+      expect(within(seccion).getByRole('button', { name: 'Comparar versiones' })).toBeInTheDocument();
+    });
+
+    it('al llegar una versión nueva, la comparación vuelve a empezar: cerrada y de la penúltima a la vigente', async () => {
+      firmarNota.mockResolvedValue({
+        ok: true,
+        nota: modelo({ estado: 'modificada', borrador: null, versiones: [version(1), version(2), version(3)] }),
+        caducaEn: null,
+      });
+      await montar(modelo({ estado: 'firmada_con_cambios', versiones: [version(1), version(2)] }));
+      fireEvent.click(screen.getByRole('button', { name: 'Comparar versiones' }));
+      expect(screen.getByRole('region', { name: 'De la versión 1 a la 2' })).toBeInTheDocument();
+      const dialogo = await abrirDialogoDeFirma();
+      fireEvent.change(within(dialogo).getByLabelText('Motivo del cambio'), { target: { value: 'Corrijo la fecha' } });
+      await confirmar(dialogo);
+      const boton = screen.getByRole('button', { name: 'Comparar versiones' });
+      expect(boton).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(boton);
+      expect(screen.getByRole('region', { name: 'De la versión 2 a la 3' })).toBeInTheDocument();
+    });
+
+    it('gemela: con una sola versión no hay «Comparar versiones»', async () => {
+      await montar(modelo({ estado: 'firmada', borrador: null, versiones: [version(1)] }));
+      expect(screen.queryByRole('button', { name: 'Comparar versiones' })).toBeNull();
+    });
+
+    it('la comparación cae con el candado: al caducar no queda ningún fragmento comparado', async () => {
+      await montar(
+        modelo({
+          estado: 'modificada',
+          borrador: null,
+          versiones: [
+            version(1, { texto: 'El paciente refiere ansiedad leve.' }),
+            version(2, { texto: 'El paciente refiere ansiedad moderada y insomnio.' }),
+          ],
+        }),
+        enMinutos(1),
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Comparar versiones' }));
+      expect(document.querySelector('ins')?.textContent).toContain('moderada');
+      await avanzar(60_000);
+      expect(screen.getByRole('heading', { name: 'Esta historia está cerrada' })).toBeInTheDocument();
+      expect(document.querySelector('ins, del')).toBeNull();
+      expect(screen.queryByText(/moderada/)).toBeNull();
+      expect(screen.queryByText(/leve\./)).toBeNull();
+    });
+
     it('quien no es el autor y la nota sigue en borrador: ve el borrador ajeno en solo lectura', async () => {
       await montar(modelo({ soyAutor: false, estado: 'borrador', versiones: [] }));
       expect(screen.getByText('Su autor tiene cambios sin firmar.')).toBeInTheDocument();
@@ -939,7 +989,7 @@ describe('EditorDeNota', () => {
       expect(document.activeElement).toBe(titulo);
     });
 
-    it('«Abrir el editor» → abierta sin nada que leer ni escribir: el foco va a un botón con nombre', async () => {
+    it('B2-H2 · «Abrir el editor» → borrador oculto sin versiones: el foco va al grupo «Hay un borrador en curso.»', async () => {
       abrirEditorDeNota.mockResolvedValue({
         estado: 'abierta',
         caducaEn: enMinutos(30),
@@ -947,7 +997,50 @@ describe('EditorDeNota', () => {
       });
       render(<EditorDeNota pacienteId={PACIENTE} citaId={CITA} notaId={null} />);
       await disparar(abrirBoton());
-      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cerrar la historia' }));
+      expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Hay un borrador en curso.' }));
+    });
+
+    it('B2-H2 · «Abrir el editor» → borrador ajeno legible sin versiones: el foco va a su encabezado', async () => {
+      abrirEditorDeNota.mockResolvedValue({
+        estado: 'abierta',
+        caducaEn: enMinutos(30),
+        nota: modelo({ soyAutor: false, versiones: [] }),
+      });
+      render(<EditorDeNota pacienteId={PACIENTE} citaId={CITA} notaId={null} />);
+      await disparar(abrirBoton());
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Su autor tiene cambios sin firmar.' }));
+    });
+
+    it('B2-H2 · «Abrir el editor» → nada que leer: el foco va al grupo del estado vacío', async () => {
+      abrirEditorDeNota.mockResolvedValue({
+        estado: 'abierta',
+        caducaEn: enMinutos(30),
+        nota: modelo({ soyAutor: false, borrador: null, borradorOculto: false, versiones: [] }),
+      });
+      render(<EditorDeNota pacienteId={PACIENTE} citaId={CITA} notaId={null} />);
+      await disparar(abrirBoton());
+      expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Esta nota no está disponible.' }));
+    });
+
+    it.each([
+      [false, 'Versión vigente'],
+      [true, 'Última versión conjunta'],
+    ])('B2-H2 · gemela: borrador oculto CON versiones (lectura conjunta %s) → el encabezado «%s»', async (lecturaConjunta, nombre) => {
+      abrirEditorDeNota.mockResolvedValue({
+        estado: 'abierta',
+        caducaEn: enMinutos(30),
+        nota: modelo({
+          soyAutor: false,
+          estado: 'firmada_con_cambios',
+          borrador: null,
+          borradorOculto: true,
+          lecturaConjunta,
+          versiones: [version(1, { alcance: lecturaConjunta ? 'conjunta' : 'individual' })],
+        }),
+      });
+      render(<EditorDeNota pacienteId={PACIENTE} citaId={CITA} notaId={null} />);
+      await disparar(abrirBoton());
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: nombre }));
     });
 
     it('«Abrir el editor» → error: el foco va a «Volver a intentarlo»', async () => {
@@ -1043,6 +1136,72 @@ describe('EditorDeNota', () => {
       expect(document.activeElement).toBe(cargar);
     });
 
+    describe('B2-H1 · una recarga que falla en el camino del aviso', () => {
+      async function firmarSinRecarga() {
+        firmarNota.mockResolvedValue({ ok: true, nota: null, caducaEn: null });
+        await montar();
+        const dialogo = await abrirDialogoDeFirma();
+        await confirmar(dialogo);
+        return screen.getByRole('button', { name: 'Recargar' });
+      }
+
+      async function firmarYaFirmada() {
+        firmarNota.mockResolvedValue({ ok: false, motivo: 'ya_firmada' });
+        await montar();
+        const dialogo = await abrirDialogoDeFirma();
+        await confirmar(dialogo);
+        return screen.getByRole('button', { name: 'Cargar lo guardado' });
+      }
+
+      it.each([
+        ['firmada sin recargar → «Recargar»', firmarSinRecarga],
+        ['ya firmada → «Cargar lo guardado»', firmarYaFirmada],
+      ])('(a/b) %s → error: «No se pudo recargar la nota.», foco en «Volver a intentarlo», sigue de solo lectura', async (_n, preparar) => {
+        const boton = await preparar();
+        abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
+        await disparar(boton);
+        expect(screen.getByText('No se pudo recargar la nota.')).toBeInTheDocument();
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(cuerpo().readOnly).toBe(true);
+      });
+
+      it('(a2) el foco vuelve al aviso aunque se haya ido durante la recarga (no depende de que React conserve el botón)', async () => {
+        const boton = await firmarSinRecarga();
+        abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
+        boton.focus();
+        fireEvent.click(boton);
+        boton.blur();
+        expect(document.activeElement).toBe(document.body);
+        await vaciar();
+        await vaciar();
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+      });
+
+      it('(c) «Volver a intentarlo» con apertura abierta recarga y lleva el foco a la vigente', async () => {
+        const boton = await firmarSinRecarga();
+        abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
+        await disparar(boton);
+        abrirEditorDeNota.mockResolvedValue({
+          estado: 'abierta',
+          caducaEn: enMinutos(30),
+          nota: modelo({ estado: 'firmada', borrador: null, versiones: [version(1)] }),
+        });
+        await disparar(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(screen.getByText('Texto firmado 1')).toBeInTheDocument();
+        expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Versión vigente' }));
+      });
+
+      it('(d) la recarga da no_disponible: el foco va al grupo con el nombre del aviso, que no tiene botón', async () => {
+        const boton = await firmarSinRecarga();
+        abrirEditorDeNota.mockResolvedValue({ estado: 'no_disponible' });
+        await disparar(boton);
+        const grupo = screen.getByRole('group', { name: 'Esta nota no está disponible.' });
+        expect(within(grupo).queryByRole('button')).toBeNull();
+        expect(document.activeElement).toBe(grupo);
+        expect(cuerpo().readOnly).toBe(true);
+      });
+    });
+
     describe('firma rechazada (B1-H3): el foco no cae en body', () => {
       async function firmarRechazada(motivo: string) {
         firmarNota.mockResolvedValue({ ok: false, motivo });
@@ -1106,6 +1265,30 @@ describe('EditorDeNota', () => {
           expect(alerta).toHaveTextContent(texto);
           expect(alerta.id).not.toBe('');
           expect(confirma.getAttribute('aria-describedby')).toBe(alerta.id);
+        });
+
+        it('B3-H1 · un repintado sin cambios no mueve el foco: tras el error, «Cancelar» lo conserva al pasar el reloj', async () => {
+          const dialogo = await firmarYRechazar({ ok: false, motivo: 'error' });
+          const cancelar = within(dialogo).getByRole('button', { name: 'Cancelar' });
+          cancelar.focus();
+          expect(document.activeElement).toBe(cancelar);
+          // El reloj de los minutos repinta el editor cada 30 s.
+          await avanzar(30_000);
+          await avanzar(30_000);
+          expect(screen.getByRole('dialog')).toBe(dialogo);
+          expect(document.activeElement).toBe(cancelar);
+        });
+
+        it('B3-H2 · al abrir la firma de una modificación, el foco inicial va al motivo, no a «Firmar»', async () => {
+          await montar(modelo({ estado: 'firmada_con_cambios', versiones: [version(1)] }));
+          const dialogo = await abrirDialogoDeFirma();
+          expect(document.activeElement).toBe(within(dialogo).getByRole('textbox', { name: 'Motivo del cambio' }));
+        });
+
+        it('B3-H2 · gemela: sin versiones, el foco inicial va a «Firmar»', async () => {
+          await montar();
+          const dialogo = await abrirDialogoDeFirma();
+          expect(document.activeElement).toBe(within(dialogo).getByRole('button', { name: 'Firmar' }));
         });
 
         it('sin error, «Firmar» no lleva aria-describedby', async () => {

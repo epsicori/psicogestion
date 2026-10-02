@@ -38,6 +38,7 @@ import { minutosRestantes } from '../../presentacion';
 import { abrirEditorDeNota, empezarModificacion, firmarNota, fijarCoprofesional, guardarBorrador } from './acciones';
 import { AvisoReservadas } from './aviso-reservadas';
 import { BarraDeAcciones } from './barra-de-acciones';
+import { Comparador } from './comparador';
 import { EsqueletoEditor } from './esqueleto-editor';
 import { esquemaFirma } from './esquemas';
 import { PildoraDeEstado } from './estado-de-nota';
@@ -73,7 +74,8 @@ type ClaveDeAviso =
   | 'coprofesionalInvalido'
   | 'yaFirmadaCoprofesional'
   | 'firmadaSinRecargar'
-  | 'hechoSinRecargar';
+  | 'hechoSinRecargar'
+  | 'noSeRecargo';
 
 const AVISOS = {
   yaFirmada: 'notas.aviso.yaFirmada',
@@ -84,10 +86,17 @@ const AVISOS = {
   yaFirmadaCoprofesional: 'notas.aviso.yaFirmadaCoprofesional',
   firmadaSinRecargar: 'notas.aviso.firmadaSinRecargar',
   hechoSinRecargar: 'notas.aviso.hechoSinRecargar',
+  noSeRecargo: 'notas.aviso.noSeRecargo',
 } as const satisfies Record<ClaveDeAviso, ClaveDeCatalogo>;
 
 /** Avisos tras los que lo que hay en pantalla ya no se puede guardar ni firmar. */
 const AVISOS_DE_SOLO_LECTURA: ClaveDeAviso[] = ['yaFirmada', 'noAutor', 'firmadaSinRecargar'];
+
+/**
+ * Avisos que llevan un botón para recargar la nota. Si esa recarga falla, el aviso sigue en este
+ * camino (`noSeRecargo`, con su reintento) en vez de quedarse sin salida (B2-H1).
+ */
+const AVISOS_CON_RECARGA: ClaveDeAviso[] = ['yaFirmada', 'firmadaSinRecargar', 'noSeRecargo'];
 
 type Guardado = 'guardado' | 'guardando' | 'sin_guardar' | 'fallo';
 
@@ -107,6 +116,8 @@ type Abierta = {
   soloLectura: boolean;
   /** Sube cada vez que la pantalla debe llevar el foco al encabezado de la versión vigente. */
   enfoqueVigente: number;
+  /** Sube cada vez que la pantalla debe llevar el foco al aviso (su botón o, sin él, el grupo). */
+  enfoqueAviso: number;
 };
 
 type Estado =
@@ -155,7 +166,16 @@ function abiertaDesdeNota(nota: ModeloDeNota, caducaEn: string, previo: number):
     conflicto: false,
     soloLectura: false,
     enfoqueVigente: previo,
+    enfoqueAviso: 0,
   };
+}
+
+/**
+ * La apertura que acaba de fallar la pidió el botón de un aviso con recarga, no el conflicto (que
+ * tiene su propio camino y no debe perder el foco ni el texto).
+ */
+function enCaminoDeRecarga(estado: Abierta): boolean {
+  return !estado.conflicto && estado.aviso !== null && AVISOS_CON_RECARGA.includes(estado.aviso);
 }
 
 function reducir(estado: Estado, accion: Accion): Estado {
@@ -179,10 +199,17 @@ function reducir(estado: Estado, accion: Accion): Estado {
         case 'elegir_episodio':
           return { fase: 'elegir_episodio', episodios: r.episodios };
         case 'no_disponible':
-          return estado.fase === 'abierta' ? { ...estado, aviso: 'noDisponible' } : { fase: 'no_disponible' };
+          if (estado.fase !== 'abierta') return { fase: 'no_disponible' };
+          return enCaminoDeRecarga(estado)
+            ? { ...estado, aviso: 'noDisponible', enfoqueAviso: estado.enfoqueAviso + 1 }
+            : { ...estado, aviso: 'noDisponible' };
         case 'error':
           // Quien recarga para copiar lo suyo no pierde su texto por un fallo de red.
-          return estado.fase === 'abierta' ? { ...estado, aviso: 'noSeAbrio' } : { fase: 'error' };
+          if (estado.fase !== 'abierta') return { fase: 'error' };
+          // B2-H1: si la recarga venía de un aviso con botón, el aviso conserva su salida.
+          return enCaminoDeRecarga(estado)
+            ? { ...estado, aviso: 'noSeRecargo', enfoqueAviso: estado.enfoqueAviso + 1 }
+            : { ...estado, aviso: 'noSeAbrio' };
       }
       return estado;
     }
@@ -225,6 +252,7 @@ function reducir(estado: Estado, accion: Accion): Estado {
       return {
         ...abiertaDesdeNota(accion.nota, accion.caducaEn ?? estado.caducaEn, estado.enfoqueVigente),
         enfoqueVigente: estado.enfoqueVigente + (accion.enfocar ? 1 : 0),
+        enfoqueAviso: estado.enfoqueAviso,
       };
     case 'solo_modelo':
       // El texto que se está tecleando no se pisa: la cabecera y los candidatos sí se refrescan.
@@ -235,6 +263,7 @@ function reducir(estado: Estado, accion: Accion): Estado {
         caducaEn: accion.caducaEn ?? estado.caducaEn,
         aviso: accion.clave,
         soloLectura: estado.soloLectura || accion.clave === 'firmadaSinRecargar',
+        enfoqueAviso: estado.enfoqueAviso + (accion.clave === 'firmadaSinRecargar' ? 1 : 0),
       };
   }
 }
@@ -481,10 +510,12 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
     if (conflicto) refConflicto.current?.querySelector('button')?.focus();
   }, [conflicto]);
 
-  const firmadaSinRecargar = abierta?.aviso === 'firmadaSinRecargar';
+  // Un contador, no un booleano: el aviso puede pasar de «firmada sin recargar» a «no se pudo
+  // recargar» y el foco debe volver a moverse (B2-H1). Sin botón, el foco va al propio grupo.
+  const enfoqueAviso = abierta?.enfoqueAviso ?? 0;
   useEffect(() => {
-    if (firmadaSinRecargar) refAviso.current?.querySelector('button')?.focus();
-  }, [firmadaSinRecargar]);
+    if (enfoqueAviso > 0) (refAviso.current?.querySelector('button') ?? refAviso.current)?.focus();
+  }, [enfoqueAviso]);
 
   const enfocarBloqueada = estado.fase === 'bloqueada' ? estado.enfocar : null;
   useEffect(() => {
@@ -819,14 +850,24 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
       )}
 
       {estado.aviso !== null && (
-        <div ref={refAviso}>
+        <div
+          ref={refAviso}
+          role="group"
+          tabIndex={-1}
+          aria-label={t(AVISOS[estado.aviso])}
+          className="outline-none"
+        >
         <AvisoDeError
           mensaje={t(AVISOS[estado.aviso])}
           accion={
-            estado.aviso === 'yaFirmada' || estado.aviso === 'firmadaSinRecargar' ? (
+            AVISOS_CON_RECARGA.includes(estado.aviso) ? (
               <Button variante="contorno" onClick={() => void abrir({ reabrir: modelo.notaId })}>
                 {t(
-                  estado.aviso === 'yaFirmada' ? 'notas.aviso.cargarLoGuardado' : 'notas.aviso.recargar',
+                  estado.aviso === 'yaFirmada'
+                    ? 'notas.aviso.cargarLoGuardado'
+                    : estado.aviso === 'firmadaSinRecargar'
+                      ? 'notas.aviso.recargar'
+                      : 'notas.aviso.reintentar',
                 )}
               </Button>
             ) : undefined
@@ -880,11 +921,18 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
       )}
 
       {modelo.borrador !== null && !modelo.soyAutor && <BorradorAjeno borrador={modelo.borrador} />}
+      {/* B2-H2: grupos enfocables con nombre, para que el foco al abrir no salte al pie. */}
       {modelo.borradorOculto && !modelo.soyAutor && (
-        <p className="text-muted-foreground text-sm">{t('notas.editor.borradorOculto')}</p>
+        <div role="group" tabIndex={-1} aria-label={t('notas.editor.borradorOculto')} className="outline-none">
+          <p className="text-muted-foreground text-sm">{t('notas.editor.borradorOculto')}</p>
+        </div>
       )}
 
-      {modelo.borrador === null && !modelo.borradorOculto && vigente === null && <EstadoVacio frase={t('notas.aviso.noDisponible')} />}
+      {modelo.borrador === null && !modelo.borradorOculto && vigente === null && (
+        <div role="group" tabIndex={-1} aria-label={t('notas.aviso.noDisponible')} className="outline-none">
+          <EstadoVacio frase={t('notas.aviso.noDisponible')} />
+        </div>
+      )}
 
       <div className="flex-1" />
 
@@ -1100,6 +1148,8 @@ function VistaVigente({
           />
         ))}
       </ol>
+      {/* La clave reinicia la elección de versiones cuando llega una versión nueva. */}
+      <Comparador key={versiones.length} versiones={versiones} />
     </section>
   );
 }
@@ -1114,7 +1164,7 @@ function BorradorAjeno({ borrador }: { borrador: { texto: string; reservadas: st
     <section aria-labelledby={idTitulo} className="border-border flex flex-col gap-2 rounded-lg border border-dashed p-3">
       <div className="flex flex-wrap items-center gap-2">
         <PildoraDeEstado estado="borrador" />
-        <h2 id={idTitulo} className="text-sm font-medium">
+        <h2 id={idTitulo} tabIndex={-1} className="text-sm font-medium outline-none">
           {t('notas.editor.borradorAjeno')}
         </h2>
       </div>
