@@ -232,6 +232,7 @@ export type Database = {
           direccion: string | null
           id: string
           localidad: string | null
+          margen_sesion_minutos: number | null
           nombre: string
           provincia: string | null
           telefono: string | null
@@ -244,6 +245,7 @@ export type Database = {
           direccion?: string | null
           id?: string
           localidad?: string | null
+          margen_sesion_minutos?: number | null
           nombre: string
           provincia?: string | null
           telefono?: string | null
@@ -256,6 +258,7 @@ export type Database = {
           direccion?: string | null
           id?: string
           localidad?: string | null
+          margen_sesion_minutos?: number | null
           nombre?: string
           provincia?: string | null
           telefono?: string | null
@@ -1138,6 +1141,7 @@ export type Database = {
       notas_clinicas: {
         Row: {
           autor_id: string
+          borrador_abierta_en: string | null
           borrador_actualizado_en: string | null
           borrador_autor_id: string | null
           borrador_contenido: Json | null
@@ -1151,6 +1155,7 @@ export type Database = {
         }
         Insert: {
           autor_id: string
+          borrador_abierta_en?: string | null
           borrador_actualizado_en?: string | null
           borrador_autor_id?: string | null
           borrador_contenido?: Json | null
@@ -1164,6 +1169,7 @@ export type Database = {
         }
         Update: {
           autor_id?: string
+          borrador_abierta_en?: string | null
           borrador_actualizado_en?: string | null
           borrador_autor_id?: string | null
           borrador_contenido?: Json | null
@@ -1377,6 +1383,7 @@ export type Database = {
           direccion: string | null
           fila_unica: boolean
           id: string
+          margen_sesion_minutos: number
           minutos_desbloqueo_historia: number
           nif: string
           razon_social: string
@@ -1390,6 +1397,7 @@ export type Database = {
           direccion?: string | null
           fila_unica?: boolean
           id?: string
+          margen_sesion_minutos?: number
           minutos_desbloqueo_historia?: number
           nif: string
           razon_social: string
@@ -1403,6 +1411,7 @@ export type Database = {
           direccion?: string | null
           fila_unica?: boolean
           id?: string
+          margen_sesion_minutos?: number
           minutos_desbloqueo_historia?: number
           nif?: string
           razon_social?: string
