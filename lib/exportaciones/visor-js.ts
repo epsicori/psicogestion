@@ -200,8 +200,19 @@ export const VISOR_JS: string = `(function () {
     giro.style.height = '200%';
     giro.style.transform = 'rotate(-30deg)';
     var frase = [texto(marca.codigo), texto(marca.quien), texto(marca.fecha)].join(' · ');
-    for (var i = 0; i < 40; i++) {
-      var fila = el('div', null, frase + '     ' + frase + '     ' + frase);
+    // A-H3: el bloque girado mide el doble de la ventana y la contiene girada; cada fila tiene que
+    // llegar de un borde a otro de ese bloque, a cualquier ancho. Se dimensiona para el lado mayor
+    // de la pantalla (no solo de la ventana: puede agrandarse), con 1920 de suelo, y la frase se
+    // estima a 6 px por carácter (a 14 px mide más), así que sobra.
+    var lado = Math.max(1920, window.innerWidth || 0, window.innerHeight || 0,
+      window.screen ? Math.max(window.screen.width || 0, window.screen.height || 0) : 0);
+    var porFila = Math.ceil((2 * lado) / (Math.max(frase.length, 20) * 6)) + 1;
+    var filas = Math.ceil((2 * lado) / 72) + 2;
+    var trozos = [];
+    for (var r = 0; r < porFila; r++) trozos.push(frase);
+    var linea = trozos.join('     ');
+    for (var i = 0; i < filas; i++) {
+      var fila = el('div', null, linea);
       fila.style.whiteSpace = 'nowrap';
       fila.style.fontSize = '14px';
       fila.style.lineHeight = '72px';

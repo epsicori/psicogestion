@@ -323,6 +323,18 @@ describe('VISOR_JS · la marca de agua', () => {
     expect(capa.querySelectorAll('*').length).toBeGreaterThan(10); // filas repetidas
   }, 120_000);
 
+  it('A-H3: las filas cubren el bloque girado de una pantalla de 1920 o más (la cobertura se mide en Chromium)', async () => {
+    const copia = proyectar(respuestaProfesional());
+    const doc = await abrirCon(cargar(await fichero(copia)), CONTRASENA);
+    const filas = Array.from(doc.querySelector('.marca-capa')!.firstElementChild!.children);
+    const frase = [copia.marca.codigo, copia.marca.quien, copia.marca.fecha].join(' · ');
+    // El bloque mide 2 × 1920 de ancho y de alto como mínimo: filas de 72 px y frases de más de 6 px por carácter.
+    expect(filas.length).toBeGreaterThanOrEqual(Math.ceil((2 * 1920) / 72));
+    for (const fila of filas) {
+      expect(fila.textContent!.split(frase).length - 1).toBeGreaterThanOrEqual(Math.ceil((2 * 1920) / (frase.length * 6)));
+    }
+  }, 120_000);
+
   it('al imprimir, la capa sigue fija (sale en cada página)', async () => {
     const html = await fichero(proyectar(respuestaProfesional()));
     expect(html).toMatch(/@media print\{[^}]*\}?[^@]*\.marca-capa\{position:fixed!important;\}/);
