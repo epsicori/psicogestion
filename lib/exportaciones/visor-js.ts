@@ -199,6 +199,13 @@ export const VISOR_JS: string = `(function () {
     giro.style.width = '200%';
     giro.style.height = '200%';
     giro.style.transform = 'rotate(-30deg)';
+    // R2-H2: las filas van centradas en el bloque girado (que gira sobre el centro de la ventana),
+    // en los dos ejes y desbordando por igual a cada lado. Si después la ventana crece, el centro
+    // sigue siendo el mismo y las filas siguen cruzándolo: sin oyente de resize.
+    giro.style.display = 'flex';
+    giro.style.flexDirection = 'column';
+    giro.style.justifyContent = 'center';
+    giro.style.alignItems = 'center';
     var frase = [texto(marca.codigo), texto(marca.quien), texto(marca.fecha)].join(' · ');
     // A-H3: el bloque girado mide el doble de la ventana y la contiene girada; cada fila tiene que
     // llegar de un borde a otro de ese bloque, a cualquier ancho. Se dimensiona para el lado mayor

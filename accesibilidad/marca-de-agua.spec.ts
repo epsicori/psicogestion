@@ -16,11 +16,13 @@ import { t } from '@/lib/i18n';
  *
  * Criterio del diseño: a 1920×1080, 1366×768 y 390×844, al menos el 80 % del área de `<main>` queda
  * bajo alguna fila de la marca. jsdom no maqueta ni gira, así que esto solo se puede medir aquí.
+ * Se exige además el 80 % de la ventana entera: la capa es fija sobre toda la página, y una captura de
+ * cualquier trozo (también del margen junto a la nota) tiene que llevar el código.
  *
  * Se mide con PÍXELES REALES, no con la fórmula del visor: cada fila pasa a tener de ancho su texto
  * (`max-content`) y fondo negro, la capa opacidad 1 y `<main>` invisible (conserva su caja). Se cuenta
- * qué parte de la caja visible de `<main>` sale negra en una captura. El giro, la fuente y cualquier
- * `transform` que se cuele cuentan tal como los pinta Chromium.
+ * qué parte sale negra en una captura. El giro, la fuente y cualquier `transform` que se cuele cuentan
+ * tal como los pinta Chromium.
  *
  * La copia se genera aquí, con el código de `lib/exportaciones/`, en un directorio temporal propio, y
  * se abre por `file://`: esta spec no usa el servidor web de `playwright.config.ts`.
@@ -64,9 +66,16 @@ async function abrir(page: Page) {
   await page.locator('.marca-linea').waitFor({ timeout: 120_000 });
 }
 
-/** La fracción de la caja visible de `<main>` que queda bajo alguna fila de la marca, en píxeles. */
-async function cobertura(page: Page): Promise<number> {
-  const caja = await page.evaluate(() => {
+interface Caja {
+  x: number;
+  y: number;
+  x1: number;
+  y1: number;
+}
+
+/** Qué fracción de la caja visible de `<main>` y de la ventana queda bajo alguna fila, en píxeles. */
+async function cobertura(page: Page): Promise<{ main: number; ventana: number }> {
+  const cajas = await page.evaluate(() => {
     const capa = document.querySelector<HTMLElement>('.marca-capa');
     if (!capa || !capa.firstElementChild) throw new Error('no hay capa de marca');
     capa.style.opacity = '1';
@@ -80,21 +89,24 @@ async function cobertura(page: Page): Promise<number> {
     document.body.style.background = '#fff';
     const r = main.getBoundingClientRect();
     return {
-      x: Math.max(0, r.left),
-      y: Math.max(0, r.top),
-      x1: Math.min(window.innerWidth, r.right),
-      y1: Math.min(window.innerHeight, r.bottom),
+      main: {
+        x: Math.max(0, r.left),
+        y: Math.max(0, r.top),
+        x1: Math.min(window.innerWidth, r.right),
+        y1: Math.min(window.innerHeight, r.bottom),
+      },
+      ventana: { x: 0, y: 0, x1: window.innerWidth, y1: window.innerHeight },
     };
   });
-  expect(caja.x1 - caja.x, 'la caja visible de <main> no tiene ancho').toBeGreaterThan(0);
-  expect(caja.y1 - caja.y, 'la caja visible de <main> no tiene alto').toBeGreaterThan(0);
+  expect(cajas.main.x1 - cajas.main.x, 'la caja visible de <main> no tiene ancho').toBeGreaterThan(0);
+  expect(cajas.main.y1 - cajas.main.y, 'la caja visible de <main> no tiene alto').toBeGreaterThan(0);
 
   const captura = await page.screenshot();
   // La captura se decodifica en una página en blanco, con un canvas: sin dependencias nuevas.
   const lienzo = await page.context().newPage();
   try {
     return await lienzo.evaluate(
-      async ({ b64, caja }) => {
+      async ({ b64, cajas }) => {
         const img = new Image();
         img.src = 'data:image/png;base64,' + b64;
         await img.decode();
@@ -104,22 +116,34 @@ async function cobertura(page: Page): Promise<number> {
         const g = c.getContext('2d')!;
         g.drawImage(img, 0, 0);
         const d = g.getImageData(0, 0, c.width, c.height).data;
-        let negros = 0;
-        let total = 0;
-        for (let y = Math.ceil(caja.y); y < caja.y1; y += 2) {
-          for (let x = Math.ceil(caja.x); x < caja.x1; x += 2) {
-            const i = (y * c.width + x) * 4;
-            total++;
-            if (d[i] < 64 && d[i + 1] < 64 && d[i + 2] < 64) negros++;
+        const fraccion = (caja: Caja) => {
+          let negros = 0;
+          let total = 0;
+          for (let y = Math.ceil(caja.y); y < caja.y1; y += 2) {
+            for (let x = Math.ceil(caja.x); x < caja.x1; x += 2) {
+              const i = (y * c.width + x) * 4;
+              total++;
+              if (d[i] < 64 && d[i + 1] < 64 && d[i + 2] < 64) negros++;
+            }
           }
-        }
-        return negros / total;
+          return negros / total;
+        };
+        return { main: fraccion(cajas.main), ventana: fraccion(cajas.ventana) };
       },
-      { b64: captura.toString('base64'), caja },
+      { b64: captura.toString('base64'), cajas },
     );
   } finally {
     await lienzo.close();
   }
+}
+
+/** Mide y exige el 80 % en `<main>` y en la ventana entera. */
+async function exigirCobertura(page: Page, caso: string) {
+  const r = await cobertura(page);
+  const pc = (x: number) => (100 * x).toFixed(1) + ' %';
+  console.info(`[T-040] marca ${caso}: <main> ${pc(r.main)} · ventana ${pc(r.ventana)}`);
+  expect(r.main, `${caso}: ${pc(r.main)} de <main> bajo la marca`).toBeGreaterThanOrEqual(MINIMO);
+  expect(r.ventana, `${caso}: ${pc(r.ventana)} de la ventana bajo la marca`).toBeGreaterThanOrEqual(MINIMO);
 }
 
 test.describe('T-040 · la marca de agua cubre <main> (píxeles reales)', () => {
@@ -134,9 +158,15 @@ test.describe('T-040 · la marca de agua cubre <main> (píxeles reales)', () => 
     test(`a ${ancho}×${alto}, al menos el 80 % de <main> queda bajo la marca`, async ({ page }) => {
       await page.setViewportSize({ width: ancho, height: alto });
       await abrir(page);
-      const r = await cobertura(page);
-      console.info(`[T-040] marca a ${ancho}×${alto}: ${(100 * r).toFixed(1)} % de <main>`);
-      expect(r, `${ancho}×${alto}: ${(100 * r).toFixed(1)} % de <main> bajo la marca`).toBeGreaterThanOrEqual(MINIMO);
+      await exigirCobertura(page, `a ${ancho}×${alto}`);
     });
   }
+
+  test('R2-H2: abierta a 1366×768 y llevada después a 5120×1440, sigue cubriendo el 80 %', async ({ page }) => {
+    // La ventana se arrastra a un monitor ultrapanorámico y se maximiza DESPUÉS de abrir la copia.
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await abrir(page);
+    await page.setViewportSize({ width: 5120, height: 1440 });
+    await exigirCobertura(page, 'de 1366×768 a 5120×1440');
+  });
 });
