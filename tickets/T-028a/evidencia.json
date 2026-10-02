@@ -1,147 +1,162 @@
 {
-  "ticket": "T-028a",
-  "resumen": "Ronda de correcciones, HEAD c60f057: 20 PASA, 0 FALLA. Mutante 1 (plan_alta_serie con v_fechas en vez de v_todas: la alternativa puede caer en fecha excluida) muerto en O2 (R1-H1). Mutante 2 (quitar estado activo de alta_exigir_profesional) muerto, pero por la asercion D de profesional en baja, que va antes que O4: O4 no se midio aislada. Los criterios 3-18 se cierran con las aserciones nominales del banco 21 (114 OK) y los bancos 15/16/17. Main restaurado con reset y seed.",
-  "criterios": [
-    {
-      "id": 1,
-      "texto": "db reset, seed, test:rls, lint:migraciones, npm test, build, territorio en verde",
-      "veredicto": "PASA",
-      "comando": "supabase db reset; test:rls (vacia); seed; test:rls (sembrada); lint:migraciones; npm test; npm run lint; npx next build --webpack; verificar:huellas; territorio.mjs T-028a",
-      "evidencia": "RLS vacia exit 0 (1108 OK), sembrada exit 0 (1108 OK); lint-migraciones: 23 limpias; vitest 121 files/1525 tests passed; eslint 0 errores (2 warnings preexistentes); next build --webpack exit 0; verificar:huellas: cadena integra, cero anomalias; territorio: 10 ficheros, todos dentro. Se uso build --webpack segun peticion, no el npm run build por defecto."
-    },
-    {
-      "id": 2,
-      "texto": "La negativa muerde sin la migracion",
-      "veredicto": "PASA",
-      "comando": "mv migracion fuera; db reset; npm run test:rls",
-      "evidencia": "exit 3. Primera asercion fallida: ASERCION FALLIDA: H23 (T-028a): como tecnico, UPDATE citas SET nota_operativa sin WHERE no cambia ninguna cita (cambio 5) (banco 15-agenda J, nueva)."
-    },
-    {
-      "id": 3,
-      "texto": "Cinco bloques libres 09-13, ninguno a las 14",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion B",
-      "evidencia": "OK: B franja 09-14, sesion de 50 y descanso de 10: cinco bloques libres a las 09, 10, 11, 12 y 13 (ninguno a las 14:00, ni a las 09:50)"
-    },
-    {
-      "id": 4,
-      "texto": "Cita en B bloquea en A; siguiente libre al final del rango_bloqueante; solo 5 columnas",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 secciones A y C",
-      "evidencia": "OK: C una cita de PRO1 en CB (10:00-11:05, rango hasta 11:15) bloquea el 10:00 de CA y el siguiente libre es a las 11:15; OK: A agenda_bloques_profesional devuelve exactamente (fecha, hora_local, inicio, fin, estado)"
-    },
-    {
-      "id": 5,
-      "texto": "Festivo sin bloques, 62 dias, tecnico de B 42501",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion D",
-      "evidencia": "OK: D festivo de dia entero no da bloques (+gemela); 63 dias: 22023 como mucho 62 dias (+gemela 62); tecnico de CB: 42501 No autorizado para ver esta agenda"
-    },
-    {
-      "id": 6,
-      "texto": "Previsualizar no escribe; coherencia con crear_serie",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion E",
-      "evidencia": "OK: E previsualizar no escribe: citas, series_cita y propuestas_cita iguales; COHERENCIA fechas, propuestas, alternativas (inicio/fin) y citas creadas = plan"
-    },
-    {
-      "id": 7,
-      "texto": "Hora de verano y festivo con alternativa",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion F",
-      "evidencia": "OK: F cuatro martes 12:00 a ambos lados de marzo normales; 02:30 marzo inexistente; 02:30 octubre ambigua; festivo con alternativa entre 1 y 7 dias"
-    },
-    {
-      "id": 8,
-      "texto": "Ocho sesiones con una excluida: siete citas, ultima en ordinal 8",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion G (+O2)",
-      "evidencia": "OK: G ocho sesiones con la 3.a excluida: siete citas, sin la excluida, la ultima es el 8.o ordinal (desde + 49); excluir no crea propuestas"
-    },
-    {
-      "id": 9,
-      "texto": "Estricta con 1.a ocupada: 23P01 y cero filas",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion H (+O3)",
-      "evidencia": "OK (lanzo 23P01 La primera sesion choca); OK: los dos rechazos estrictos no dejan NADA: ni citas, ni series, ni propuestas; gemela entra"
-    },
-    {
-      "id": 10,
-      "texto": "sala y nota quedan; tecnico con nota 42501 en serie y cita",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion I",
-      "evidencia": "OK: sala y nota en serie y en cita suelta; tecnico con nota en crear_cita y crear_serie: 42501 no escribe la nota operativa; gemela sin nota entra"
-    },
-    {
-      "id": 11,
-      "texto": "agenda_crear_cita: normal, 02:30 marzo desviada, festivo/pasada 22023, ocupado 23P01, otro centro 42501, sin vinculo",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion J",
-      "evidencia": "OK J: hora normal sin serie 50 min; 02:30 marzo desviada con anomalia_horaria; festivo 22023; ayer y hoy 00:01 22023; 23P01 solape; tecnico CB 42501; PRO1 con paciente de PRO2 42501 citar no crea el vinculo"
-    },
-    {
-      "id": 12,
-      "texto": "Tipo obligatorio y vivo",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion K",
-      "evidencia": "OK K: sin tipo 22023 Falta el tipo; inexistente 22023 no existe en el catalogo; inactivo 22023 dado de baja (cita y serie estricta); gemelas entran"
-    },
-    {
-      "id": 13,
-      "texto": "La cita dura lo que dice su tipo",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion K",
-      "evidencia": "OK K: crear_cita y crear_serie de 50 min con tipo de 90: 22023 no es la del tipo de terapia (se rechaza); gemela con nulo crea 90; ninguna cita del tipo de 90 dura otra cosa (>=4 filas)"
-    },
-    {
-      "id": 14,
-      "texto": "Tecnico escribe el tipo por la funcion y no se le devuelve",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion L",
-      "evidencia": "OK L: cita y serie del tecnico con el tipo elegido (visto como postgres); lo que las funciones devuelven no contiene el tipo"
-    },
-    {
-      "id": 15,
-      "texto": "H16: insert directo del tecnico falla; ADR-055 por funcion",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion H16 + 17-C",
-      "evidencia": "OK (42501 row-level security): H16 tecnico NO inserta citas por la tabla; OK: ADR-055 el tecnico SIGUE citando a cualquier paciente de su centro por la funcion; gemelas profesional/admin insertan por tabla"
-    },
-    {
-      "id": 16,
-      "texto": "H23: UPDATE sin WHERE del tecnico no cambia nada",
-      "veredicto": "PASA",
-      "comando": "test:rls 15-agenda J y banco 21 seccion M",
-      "evidencia": "OK: H23 UPDATE nota sin WHERE no cambia ninguna cita; UPDATE tipo sin WHERE, tampoco; huella de todas las citas igual; gemelas agenda_actualizar_cita en verde"
-    },
-    {
-      "id": 17,
-      "texto": "H24: tecnico no lee series_cita",
-      "veredicto": "PASA",
-      "comando": "test:rls banco 21 seccion N",
-      "evidencia": "OK N: el tecnico lee CERO filas de series_cita; GEMELA admin lee la serie; la asercion de 15 sobre citas_agenda sin tipo ni nota sigue en verde"
-    },
-    {
-      "id": 18,
-      "texto": "Los demas roles no pierden nada",
-      "veredicto": "PASA",
-      "comando": "test:rls 15, 16, 17; git diff main...HEAD de esos bancos",
-      "evidencia": "Exit 0. En 15/16/17 solo lineas anadidas, salvo la seccion C de 17 (C29TEC y su asercion, reescrita por el contrato). Gemelas de admin/profesional en verde."
-    },
-    {
-      "id": 19,
-      "texto": "Siembra: franjas, festivo, 6 citas martes, sin citas, tipos",
-      "veredicto": "PASA",
-      "comando": "psql tras db reset + seed (consultas propias)",
-      "evidencia": "franjas=20 (Ana 10/5 dias, Bruno 10/5 dias); festivo futuro 1: 2026-10-20, martes, con franjas de Ana ese dia; Lucia: 6 citas, 6 martes 12:00 locales pasadas, 6 realizadas; alertas nota_sin_firmar de Lucia = 6 abiertas; Diego 0 citas; tipos activos 3 con 3 duraciones distintas; inactivos 1; verificar:huellas cadena integra."
-    },
-    {
-      "id": 20,
-      "texto": "ADR-074 en architecture.md",
-      "veredicto": "PASA",
-      "comando": "grep -n ADR-074 docs/architecture.md",
-      "evidencia": "184: fila Agenda (solo por las funciones de alta (ADR-074)); 189: parrafo Puertas del tecnico en agenda (ADR-074, T-028a); 202 mas."
-    }
-  ],
-  "regresiones": []
+ "ticket": "T-028a",
+ "resumen": "Ronda RD2-H1/RD2-H2, HEAD 47f356f: 22 criterios PASA, 0 FALLA. Lote completo en verde sobre base vacia y sembrada (test:rls exit 0 en ambas, 1112 OK, 0 aserciones fallidas), lint:migraciones 23 limpias, vitest 1525/1525, eslint 0 errores, next build --webpack ok, verificar:huellas integra, territorio dentro. Mutante RD2-H1 (order by d.id) muerto 6/6 en la asercion F. Mutante RD2-H2 (sin el raise) muerto en O5. Deadlock: 0 apariciones en 3 test:rls sin mutar y 7 mutados. Main restaurado con reset y seed.",
+ "criterios": [
+  {
+   "id": 1,
+   "texto": "db reset, seed, test:rls, lint:migraciones, npm test, build, territorio en verde",
+   "veredicto": "PASA",
+   "comando": "db reset (worktree); test:rls (vacia); seed; test:rls (sembrada); verificar:huellas; lint:migraciones; npm test; npm run lint; npx next build --webpack; territorio.mjs T-028a",
+   "evidencia": "RLS vacia exit 0 (1112 OK, 0 ASERCION FALLIDA); sembrada exit 0 (1112 OK); verificar:huellas: cadena integra, cero anomalias; lint-migraciones: 23 limpias; vitest 121 files/1525 tests passed; eslint 0 errores (2 warnings preexistentes); next build --webpack completo; territorio: 9 ficheros, todos dentro."
+  },
+  {
+   "id": 2,
+   "texto": "La negativa muerde sin la migracion",
+   "veredicto": "PASA",
+   "comando": "mv migracion fuera; db reset; npm run test:rls",
+   "evidencia": "exit 3. Primera asercion fallida: ASERCION FALLIDA: H23 (T-028a): como tecnico, UPDATE citas SET nota_operativa sin WHERE no cambia ninguna cita (cambio 5) (banco 15-agenda J, nueva). | No repetido en esta ronda; el diff de la ronda solo anade aserciones y un raise, sin tocar el criterio."
+  },
+  {
+   "id": 3,
+   "texto": "Cinco bloques libres 09-13, ninguno a las 14",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion B",
+   "evidencia": "OK: B franja 09-14, sesion de 50 y descanso de 10: cinco bloques libres a las 09, 10, 11, 12 y 13 (ninguno a las 14:00, ni a las 09:50) | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 4,
+   "texto": "Cita en B bloquea en A; siguiente libre al final del rango_bloqueante; solo 5 columnas",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 secciones A y C",
+   "evidencia": "OK: C una cita de PRO1 en CB (10:00-11:05, rango hasta 11:15) bloquea el 10:00 de CA y el siguiente libre es a las 11:15; OK: A agenda_bloques_profesional devuelve exactamente (fecha, hora_local, inicio, fin, estado) | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 5,
+   "texto": "Festivo sin bloques, 62 dias, tecnico de B 42501",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion D",
+   "evidencia": "OK: D festivo de dia entero no da bloques (+gemela); 63 dias: 22023 como mucho 62 dias (+gemela 62); tecnico de CB: 42501 No autorizado para ver esta agenda | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 6,
+   "texto": "Previsualizar no escribe; coherencia con crear_serie",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion E",
+   "evidencia": "OK: E previsualizar no escribe: citas, series_cita y propuestas_cita iguales; COHERENCIA fechas, propuestas, alternativas (inicio/fin) y citas creadas = plan | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 7,
+   "texto": "Hora de verano y festivo con alternativa",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion F",
+   "evidencia": "OK: F cuatro martes 12:00 a ambos lados de marzo normales; 02:30 marzo inexistente; 02:30 octubre ambigua; festivo con alternativa entre 1 y 7 dias | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 8,
+   "texto": "Ocho sesiones con una excluida: siete citas, ultima en ordinal 8",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion G (+O2)",
+   "evidencia": "OK: G ocho sesiones con la 3.a excluida: siete citas, sin la excluida, la ultima es el 8.o ordinal (desde + 49); excluir no crea propuestas | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 9,
+   "texto": "Estricta con 1.a ocupada: 23P01 y cero filas",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion H (+O3)",
+   "evidencia": "OK (lanzo 23P01 La primera sesion choca); OK: los dos rechazos estrictos no dejan NADA: ni citas, ni series, ni propuestas; gemela entra | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 10,
+   "texto": "sala y nota quedan; tecnico con nota 42501 en serie y cita",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion I",
+   "evidencia": "OK: sala y nota en serie y en cita suelta; tecnico con nota en crear_cita y crear_serie: 42501 no escribe la nota operativa; gemela sin nota entra | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 11,
+   "texto": "agenda_crear_cita: normal, 02:30 marzo desviada, festivo/pasada 22023, ocupado 23P01, otro centro 42501, sin vinculo",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion J",
+   "evidencia": "OK J: hora normal sin serie 50 min; 02:30 marzo desviada con anomalia_horaria; festivo 22023; ayer y hoy 00:01 22023; 23P01 solape; tecnico CB 42501; PRO1 con paciente de PRO2 42501 citar no crea el vinculo | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 12,
+   "texto": "Tipo obligatorio y vivo",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion K",
+   "evidencia": "OK K: sin tipo 22023 Falta el tipo; inexistente 22023 no existe en el catalogo; inactivo 22023 dado de baja (cita y serie estricta); gemelas entran | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 13,
+   "texto": "La cita dura lo que dice su tipo",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion K",
+   "evidencia": "OK K: crear_cita y crear_serie de 50 min con tipo de 90: 22023 no es la del tipo de terapia (se rechaza); gemela con nulo crea 90; ninguna cita del tipo de 90 dura otra cosa (>=4 filas) | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 14,
+   "texto": "Tecnico escribe el tipo por la funcion y no se le devuelve",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion L",
+   "evidencia": "OK L: cita y serie del tecnico con el tipo elegido (visto como postgres); lo que las funciones devuelven no contiene el tipo | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 15,
+   "texto": "H16: insert directo del tecnico falla; ADR-055 por funcion",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion H16 + 17-C",
+   "evidencia": "OK (42501 row-level security): H16 tecnico NO inserta citas por la tabla; OK: ADR-055 el tecnico SIGUE citando a cualquier paciente de su centro por la funcion; gemelas profesional/admin insertan por tabla | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 16,
+   "texto": "H23: UPDATE sin WHERE del tecnico no cambia nada",
+   "veredicto": "PASA",
+   "comando": "test:rls 15-agenda J y banco 21 seccion M",
+   "evidencia": "OK: H23 UPDATE nota sin WHERE no cambia ninguna cita; UPDATE tipo sin WHERE, tampoco; huella de todas las citas igual; gemelas agenda_actualizar_cita en verde | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 17,
+   "texto": "H24: tecnico no lee series_cita",
+   "veredicto": "PASA",
+   "comando": "test:rls banco 21 seccion N",
+   "evidencia": "OK N: el tecnico lee CERO filas de series_cita; GEMELA admin lee la serie; la asercion de 15 sobre citas_agenda sin tipo ni nota sigue en verde | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 18,
+   "texto": "Los demas roles no pierden nada",
+   "veredicto": "PASA",
+   "comando": "test:rls 15, 16, 17; git diff main...HEAD de esos bancos",
+   "evidencia": "Exit 0. En 15/16/17 solo lineas anadidas, salvo la seccion C de 17 (C29TEC y su asercion, reescrita por el contrato). Gemelas de admin/profesional en verde. | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 19,
+   "texto": "Siembra: franjas, festivo, 6 citas martes, sin citas, tipos",
+   "veredicto": "PASA",
+   "comando": "psql tras db reset + seed (consultas propias)",
+   "evidencia": "franjas=20 (Ana 10/5 dias, Bruno 10/5 dias); festivo futuro 1: 2026-10-20, martes, con franjas de Ana ese dia; Lucia: 6 citas, 6 martes 12:00 locales pasadas, 6 realizadas; alertas nota_sin_firmar de Lucia = 6 abiertas; Diego 0 citas; tipos activos 3 con 3 duraciones distintas; inactivos 1; verificar:huellas cadena integra. | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": 20,
+   "texto": "ADR-074 en architecture.md",
+   "veredicto": "PASA",
+   "comando": "grep -n ADR-074 docs/architecture.md",
+   "evidencia": "184: fila Agenda (solo por las funciones de alta (ADR-074)); 189: parrafo Puertas del tecnico en agenda (ADR-074, T-028a); 202 mas. | Reverificado en 47f356f: test:rls completo exit 0 en vacia y sembrada con el banco 21 ('21-alta-de-cita: completa.')."
+  },
+  {
+   "id": "RD2-H1",
+   "texto": "Mutante order by d.id en alta_bloqueo_disponibilidad muere siempre en la seccion F del banco 21",
+   "veredicto": "PASA",
+   "comando": "create or replace de alta_bloqueo_disponibilidad con 'order by d.id' via docker psql; 6 x npm run test:rls; restaurada la original",
+   "evidencia": "6 de 6 ejecuciones exit 3, siempre: ERROR: ASERCION FALLIDA: F · festivo y ausencia el mismo dia: gana el festivo (determinista) y, con la semana entera ausente, la alternativa es nula. Con la original restaurada, exit 0."
+  },
+  {
+   "id": "RD2-H2",
+   "texto": "agenda_previsualizar_alta con cero sesiones da 22023 con el mismo texto que crear; el mutante sin ese raise muere",
+   "veredicto": "PASA",
+   "comando": "grep del texto en la migracion (lineas 449 y 592 identicas); mutante sin el bloque if/raise en agenda_previsualizar_alta; npm run test:rls",
+   "evidencia": "Mismo texto 'La serie no tiene ninguna sesion entre su inicio y su final.' en previsualizar y crear_serie, errcode 22023. Mutante: exit 3, ASERCION FALLIDA (debia lanzar 22023 y no lanzo nada): O5 (RD2-H2) · previsualizar con cero sesiones. Con la original, exit 0 incluida la gemela con una sesion."
+  }
+ ],
+ "regresiones": [],
+ "deadlock": "No visto: 0 apariciones de 'deadlock' en 3 test:rls sin mutar (vacia, sembrada, control) ni en 7 mutados."
 }

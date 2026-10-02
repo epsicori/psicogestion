@@ -1,4 +1,4 @@
-Sin hallazgos ALTA en la ronda 2 (0 ALTA, 0 MEDIA, 2 BAJA; los once de la ronda 1, cerrados). Ronda 1: 0 ALTA, 1 MEDIA, 10 BAJA.
+Sin hallazgos ALTA en la ronda 3 (0 ALTA, 0 MEDIA, 0 BAJA; RD2-H1 y RD2-H2, cerrados). Ronda 2: 0 ALTA, 0 MEDIA, 2 BAJA (los once de la ronda 1, cerrados). Ronda 1: 0 ALTA, 1 MEDIA, 10 BAJA.
 
 # Revisión de T-028a: base del alta de cita
 
@@ -218,3 +218,42 @@ Gate de la ronda 2: **sin ALTA** (0 ALTA, 0 MEDIA, 2 BAJA).
   - el plan no mira franjas.
 - O4 restaura PRO2 a `activo`, y la gemela lo usa. El disparador de `perfiles` que salta con el cambio de estado (`impedir_baja_ultimo_administrador`) solo protege al último administrador y no toca las altas en centros de PRO2.
 - La siembra del festivo sigue siendo idempotente (`insert … select … on conflict (id)`).
+
+## Ronda 3: RD2-H1 y RD2-H2 (un revisor)
+
+Rama `worktree-agent-a41ddb5cb986deef8`, HEAD 47f356f. Delta: `git diff c60f057..47f356f` (un commit: el banco 21 y la migración). Contexto: `git diff main...HEAD`. Los mutantes se han medido leyendo, sin tocar la base (la usaba un verificador).
+
+Gate de la ronda 3: **sin ALTA** (0 ALTA, 0 MEDIA, 0 BAJA). RD2-H1 y RD2-H2, cerrados.
+
+### Los dos de la ronda 2
+
+| Hallazgo | Cierre | El mutante muere, y por qué |
+|---|---|---|
+| RD2-H1 | Banco 21 :502-510. La ausencia lleva el id `21f00000-0000-4000-8000-000000000001` y el festivo `…0002`, en dos sentencias. | `uuid` se ordena byte a byte: …01 < …02. Con el mutante `order by d.id` (migración :168 sin la prioridad del festivo), `limit 1` devuelve la ausencia y la aserción de F (`bloqueo = 'festivo'`) cae siempre, no la mitad de las veces. Con el código real gana el festivo. Quitar el `order by` entero sigue muriendo por el orden físico (R1-H6). `order by d.tipo` también muere: el enum es `('franja', 'ausencia', 'festivo')` (`20260906120000_agenda_esquema.sql:57`), así que ascendente sale la ausencia. |
+| RD2-H2 | Migración :446-449: el mismo `raise` 22023 con el mismo texto que crear (:592), justo después de calcular `v_fechas` y antes del plan. Banco 21 O5 :1185-1196 con su gemela. | Sin la guarda, `sql_prev(..., 0)` devuelve `{"sesiones": []}` sin error y `assert_lanza_codigo_msg` cae. El fragmento «no tiene ninguna sesión» solo lo producen esta línea y la de crear: ningún otro `raise` de la previsualización lo contiene. La gemela (una sesión, longitud 1) mata un mutante que endurezca la condición (`<= 1`). |
+
+### Lo que el orquestador pidió mirar
+
+**Los ids fijos no chocan con nada.**
+- `21f0` solo aparece en esas dos líneas de todo el repositorio (sql, mjs, ts). La siembra usa `e028…`, el banco 16 `a110…`.
+- Todo `test:rls` corre en un `begin … rollback` único y F se ejecuta una sola vez, así que una segunda pasada no choca con la primera.
+- Ninguna otra fila de `disponibilidad` de PRO1 cubre l091 (año + 3): los festivos del banco 21 son l014, l042, l175, l280 y l294, y las ausencias l281-l286 y l295-l300. Los del banco 16 cuelgan de `domingo_marzo` y, además, tienen ids `a110…` > `21f0…`: aunque cayeran en l091, el mutante `order by d.id` seguiría eligiendo la ausencia. El festivo sembrado es un martes y l091 es lunes.
+
+**La firma de `agenda_previsualizar_alta` no cambia.**
+- El diff solo añade cuatro líneas en el cuerpo. La migración no está en `main`, así que editarla no rompe la regla de «solo hacia delante», y `lib/supabase/tipos-bd.ts` sigue valiendo.
+- El `raise` va después de la autorización (:400-414) y de `alta_exigir_profesional`. No abre un oráculo: quien no puede previsualizar recibe el 42501 antes.
+
+**No hay otro camino que devuelva un plan vacío.**
+- Una suelta siempre es `array[p_desde]`.
+- En una serie, `ocurrencias_serie` (`20260925120000_editar_serie_desde_la_cita.sql:1057`, la última definición) solo devuelve el conjunto vacío si `p_sesiones` ≤ 0. Lo demás lanza 22023: día fuera de rango, sin fecha, o sesiones y final a la vez nulos (este último caso ya lo para la línea de «una serie necesita el número de sesiones»). La previsualización no acepta `p_fin_el`, así que el otro borde de crear («un final anterior a la primera fecha») no existe aquí.
+- Con un `v_fechas` no vacío, `plan_alta_serie` devuelve un elemento por fecha.
+
+### Regresiones
+
+Ninguna. La ronda solo toca dos ficheros. El final de O5 (`n21() = n_antes_o5`) sigue valiendo: la previsualización no escribe. `main` no ha traído ninguna migración nueva desde la base de la rama (la última es `20261004120000`), y ningún fichero de la rama se cruza con lo que ha entrado en `main` desde entonces.
+
+### Observaciones (sin severidad)
+
+- **El mutante simétrico sigue vivo.** `order by d.id desc` (sin la prioridad) elige …02, el festivo, y F sigue verde. Unos ids fijos solo pueden matar uno de los dos sentidos del desempate. Matar los dos pediría una gemela con los ids al revés. No lo cuento como hallazgo: es un mutante menos verosímil que el de RD2-H1, porque «desc» sobre un uuid aleatorio no significa nada.
+- **Sin medir contra la base.** Que O5 y F den verde con 47f356f lo dice el verificador. Esta revisión no ha ejecutado `test:rls`.
+- La nota de RD2-H2 para el corte B (Zod con sesiones ≥ 1) ya no hace falta para la coherencia, pero sigue siendo útil: evita un viaje a la base.

@@ -1,32 +1,15 @@
 {
   "ticket": "T-028a",
-  "ronda": 2,
+  "ronda": 3,
   "altas": 0,
   "medias": 0,
-  "bajas": 2,
-  "hallazgos": [
-    {
-      "id": "RD2-H1",
-      "severidad": "BAJA",
-      "archivo": "scripts/rls/21-alta-de-cita.sql",
-      "linea": 503,
-      "descripcion": "R1-H6 solo mata el mutante que quita el order by entero; el que deja order by d.id (sin la prioridad del festivo) sobrevive la mitad de las veces, porque los ids de disponibilidad son gen_random_uuid() y el banco no los fija.",
-      "escenario": "Mutante en la migración :168: order by d.id en vez de order by (d.tipo = 'festivo') desc, d.id → en las ejecuciones en que el uuid del festivo es menor que el de la ausencia (~50 %) sale festivo y F sigue verde; en producción, un día con festivo y ausencia da bloqueo/motivo ausencia o festivo según el azar del id. Arreglo: ids fijos, el de la ausencia menor."
-    },
-    {
-      "id": "RD2-H2",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
-      "linea": 443,
-      "descripcion": "El arreglo de R1-H7 está solo en agenda_crear_serie: con cero ocurrencias agenda_previsualizar_alta devuelve un plan vacío sin error, y crear con la misma entrada da 22023; lo que se ve y lo que se crea divergen en ese borde (criterio 6, sección E).",
-      "escenario": "agenda_previsualizar_alta(P, PRO, C, 'semanal', 1, '10:00', 50, <lunes futuro>, 0) → {\"sesiones\": []} sin error; agenda_crear_serie con p_sesiones_totales => 0 → 22023 «La serie no tiene ninguna sesión…». Una pantalla de T-028 que previsualice al teclear enseña una serie vacía con «Crear» activo y al pulsar sale «Los datos enviados no son válidos». Basta el mismo raise en la previsualización, o Zod con sesiones ≥ 1 en corte B."
-    }
+  "bajas": 0,
+  "hallazgos": [],
+  "cerrados_de_la_ronda_2": [
+    "RD2-H1",
+    "RD2-H2"
   ],
-  "notas_para_corte_b": [
-    "agenda_previsualizar_alta sin p_excluir no es hallazgo: tras R1-H1 previsualizar y crear calculan el plan sobre la misma lista completa de ocurrencias, así que cada fila coincide; la pantalla oculta las excluidas. La previsualización tampoco acepta p_fin_el: una serie «hasta el día X» no se previsualiza tal cual.",
-    "22023 frente a 23514 con cero ocurrencias no es hallazgo: mapearErrorCitas deja 23514 en desconocido y lleva 22023 a parametro_invalido; el check series_cita_sesiones_ck sigue de última guarda. Si se quiere texto propio, fragmento «no tiene ninguna sesión» en FRAGMENTOS_DE_RECHAZO."
-  ],
-  "cerrados_de_la_ronda_1": [
+  "cerrados_de_rondas_anteriores": [
     "R1-H1",
     "R1-H2",
     "R1-H3",
@@ -39,7 +22,44 @@
     "R2-H3",
     "R2-H4"
   ],
+  "observaciones": [
+    "Mutante simétrico order by d.id desc (sin la prioridad del festivo) sigue vivo en F: con los ids fijos elige …02, el festivo. Unos ids fijos solo matan un sentido del desempate; no se cuenta como hallazgo.",
+    "Revisión leída, sin ejecutar test:rls (la base la usaba un verificador): el verde de O5 y F con 47f356f lo da la evidencia."
+  ],
+  "notas_para_corte_b": [
+    "agenda_previsualizar_alta sin p_excluir no es hallazgo: tras R1-H1 previsualizar y crear calculan el plan sobre la misma lista completa de ocurrencias, así que cada fila coincide; la pantalla oculta las excluidas. La previsualización tampoco acepta p_fin_el: una serie «hasta el día X» no se previsualiza tal cual.",
+    "22023 frente a 23514 con cero ocurrencias no es hallazgo: mapearErrorCitas deja 23514 en desconocido y lleva 22023 a parametro_invalido; el check series_cita_sesiones_ck sigue de última guarda. Si se quiere texto propio, fragmento «no tiene ninguna sesión» en FRAGMENTOS_DE_RECHAZO."
+  ],
   "rondas_anteriores": [
+    {
+      "ronda": 2,
+      "ticket": "T-028a",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 2,
+      "hallazgos": [
+        {
+          "id": "RD2-H1",
+          "severidad": "BAJA",
+          "archivo": "scripts/rls/21-alta-de-cita.sql",
+          "linea": 503,
+          "descripcion": "R1-H6 solo mata el mutante que quita el order by entero; el que deja order by d.id (sin la prioridad del festivo) sobrevive la mitad de las veces, porque los ids de disponibilidad son gen_random_uuid() y el banco no los fija.",
+          "escenario": "Mutante en la migración :168: order by d.id en vez de order by (d.tipo = 'festivo') desc, d.id → en las ejecuciones en que el uuid del festivo es menor que el de la ausencia (~50 %) sale festivo y F sigue verde; en producción, un día con festivo y ausencia da bloqueo/motivo ausencia o festivo según el azar del id. Arreglo: ids fijos, el de la ausencia menor."
+        },
+        {
+          "id": "RD2-H2",
+          "severidad": "BAJA",
+          "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
+          "linea": 443,
+          "descripcion": "El arreglo de R1-H7 está solo en agenda_crear_serie: con cero ocurrencias agenda_previsualizar_alta devuelve un plan vacío sin error, y crear con la misma entrada da 22023; lo que se ve y lo que se crea divergen en ese borde (criterio 6, sección E).",
+          "escenario": "agenda_previsualizar_alta(P, PRO, C, 'semanal', 1, '10:00', 50, <lunes futuro>, 0) → {\"sesiones\": []} sin error; agenda_crear_serie con p_sesiones_totales => 0 → 22023 «La serie no tiene ninguna sesión…». Una pantalla de T-028 que previsualice al teclear enseña una serie vacía con «Crear» activo y al pulsar sale «Los datos enviados no son válidos». Basta el mismo raise en la previsualización, o Zod con sesiones ≥ 1 en corte B."
+        }
+      ],
+      "notas_para_corte_b": [
+        "agenda_previsualizar_alta sin p_excluir no es hallazgo: tras R1-H1 previsualizar y crear calculan el plan sobre la misma lista completa de ocurrencias, así que cada fila coincide; la pantalla oculta las excluidas. La previsualización tampoco acepta p_fin_el: una serie «hasta el día X» no se previsualiza tal cual.",
+        "22023 frente a 23514 con cero ocurrencias no es hallazgo: mapearErrorCitas deja 23514 en desconocido y lleva 22023 a parametro_invalido; el check series_cita_sesiones_ck sigue de última guarda. Si se quiere texto propio, fragmento «no tiene ninguna sesión» en FRAGMENTOS_DE_RECHAZO."
+      ]
+    },
     {
       "ronda": 1,
       "ticket": "T-028a",
