@@ -11,7 +11,12 @@ import { crearClienteNavegador } from '@/lib/supabase/navegador';
 import { generarCodigos } from './acciones';
 
 type Props = {
-  /** Id del factor TOTP ya verificado, o `null` si el usuario aún no tiene ninguno. */
+  /**
+   * Id del factor TOTP ya verificado, o `null` si el usuario aún no tiene ninguno. Lo
+   * fija el servidor (`page.tsx`, `listFactors()`) y es contractual: no nulo ⇒ entrada
+   * con un factor ya activo (no se generan códigos); nulo ⇒ activación (se enrola, se
+   * verifica y se generan los códigos una vez).
+   */
   factorVerificadoId: string | null;
 };
 
@@ -29,9 +34,10 @@ type Enrolamiento = { factorId: string; qr: string; secreto: string };
  *   Enrolar de nuevo a quien ya tiene su aplicación configurada sería pedirle que
  *   la reconfigure sin motivo.
  *
- * En los dos casos, al superarlo se generan los códigos de recuperación **y se
- * enseñan una sola vez**: no hay forma de volver a consultarlos, y la pantalla lo
- * dice antes de que el usuario siga.
+ * Solo en la activación se generan los códigos de recuperación y se enseñan una sola
+ * vez (ADR-039): no hay forma de volver a consultarlos, y la pantalla lo dice antes de
+ * que el usuario siga. Al entrar con un factor ya activo, superarlo solo refresca: el
+ * lote vigente no se toca (T-037).
  */
 export function SegundoFactor({ factorVerificadoId }: Props) {
   const router = useRouter();
@@ -100,6 +106,12 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
       if (error) {
         setMensaje(t('primeraVez.totp.codigoNoValido'));
         setCodigo('');
+        return;
+      }
+
+      if (factorVerificadoId !== null) {
+        // Entrada con un factor ya activo: el lote vigente no se toca (ADR-039, T-037).
+        router.refresh();
         return;
       }
 
