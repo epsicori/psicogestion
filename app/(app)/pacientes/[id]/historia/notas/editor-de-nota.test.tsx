@@ -1070,6 +1070,51 @@ describe('EditorDeNota', () => {
         expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Firmar' }));
       });
 
+      describe('el error se queda dentro del diálogo (ronda 3)', () => {
+        /** Como un navegador: al deshabilitarse el botón con el foco, el foco cae a body. */
+        async function firmarYRechazar(resultado: unknown) {
+          let terminar: (v: unknown) => void = () => {};
+          firmarNota.mockReturnValue(new Promise((r) => (terminar = r)));
+          await montar();
+          const dialogo = await abrirDialogoDeFirma();
+          const confirma = within(dialogo).getByRole('button', { name: 'Firmar' });
+          confirma.focus();
+          fireEvent.click(confirma);
+          await vaciar();
+          expect(within(dialogo).getByRole('button', { name: 'Firmando…' })).toBeDisabled();
+          // jsdom no suelta el foco de un botón deshabilitado: se imita lo que hace el navegador.
+          const activo = document.activeElement as HTMLElement;
+          activo.removeAttribute('disabled');
+          activo.blur();
+          activo.setAttribute('disabled', '');
+          expect(document.activeElement).toBe(document.body);
+          terminar(resultado);
+          await vaciar();
+          await vaciar();
+          return screen.getByRole('dialog');
+        }
+
+        it.each([
+          ['vacia', { ok: false, motivo: 'vacia' }, 'No se firma una nota vacía.'],
+          ['noSeFirmo', { ok: false, motivo: 'error' }, 'No se pudo firmar. Vuelve a intentarlo.'],
+        ])('%s → el foco vuelve a «Firmar» del diálogo y el error lo describe', async (_n, resultado, texto) => {
+          const dialogo = await firmarYRechazar(resultado);
+          const confirma = within(dialogo).getByRole('button', { name: 'Firmar' });
+          expect(confirma).toBeEnabled();
+          expect(document.activeElement).toBe(confirma);
+          const alerta = within(dialogo).getByRole('alert');
+          expect(alerta).toHaveTextContent(texto);
+          expect(alerta.id).not.toBe('');
+          expect(confirma.getAttribute('aria-describedby')).toBe(alerta.id);
+        });
+
+        it('sin error, «Firmar» no lleva aria-describedby', async () => {
+          await montar();
+          const dialogo = await abrirDialogoDeFirma();
+          expect(within(dialogo).getByRole('button', { name: 'Firmar' }).hasAttribute('aria-describedby')).toBe(false);
+        });
+      });
+
       it('cancelar sigue devolviendo el foco a «Firmar» (no se rompe lo que ya iba)', async () => {
         await montar();
         const firmar = screen.getByRole('button', { name: 'Firmar' });

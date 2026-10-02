@@ -1182,6 +1182,19 @@ function DialogoDeFirma({
     return handleSubmit((datos) => alConfirmar({ alcance: datos.alcance, motivo: conVersiones ? datos.motivo : null }))(evento);
   };
 
+  // El error de la petición (no el del motivo, que ya lo lleva su campo) se anuncia como alerta y
+  // describe al botón: al volver el foco a «Firmar» se lee el motivo del rechazo.
+  const idError = `${prefijo}-error`;
+  const errorDePeticion = error === 'vacia' || error === 'noSeFirmo';
+
+  // La petición deshabilita «Firmar» y el navegador suelta el foco a body. Al rehabilitarse con un
+  // error y el diálogo aún abierto, el foco vuelve: al motivo si es lo que falta, si no al botón.
+  useEffect(() => {
+    if (pendiente || error === null) return;
+    if (error === 'faltaMotivo' && refMotivo.current) refMotivo.current.focus();
+    else refConfirmar.current?.focus();
+  }, [pendiente, error]);
+
   const mensajeMotivo = errors.motivo?.message ?? (error === 'faltaMotivo' ? t('notas.aviso.faltaMotivo') : undefined);
 
   return (
@@ -1230,12 +1243,12 @@ function DialogoDeFirma({
         )}
 
         {error === 'vacia' && (
-          <p role="alert" className="text-destructive text-sm">
+          <p id={idError} role="alert" className="text-destructive text-sm">
             {t('notas.aviso.vacia')}
           </p>
         )}
         {error === 'noSeFirmo' && (
-          <p role="alert" className="text-destructive text-sm">
+          <p id={idError} role="alert" className="text-destructive text-sm">
             {t('notas.aviso.noSeFirmo')}
           </p>
         )}
@@ -1244,7 +1257,12 @@ function DialogoDeFirma({
           <Button variante="contorno" onClick={alCancelar} disabled={pendiente}>
             {t('comunes.cancelar')}
           </Button>
-          <Button type="submit" ref={refConfirmar} disabled={pendiente}>
+          <Button
+            type="submit"
+            ref={refConfirmar}
+            disabled={pendiente}
+            aria-describedby={errorDePeticion ? idError : undefined}
+          >
             {pendiente ? t('notas.firma.firmando') : t('notas.firma.confirmar')}
           </Button>
         </div>
