@@ -5,7 +5,7 @@
 // Esta función no recibe el tipo de terapia ni la modalidad, así que ningún
 // motivo puede nombrarlos (D8). Tampoco produce cifras: `n` y `dias` se
 // escriben con palabras en la interfaz.
-import { diasEntre, sumarDias } from '@/lib/fechas/calendario';
+import { diasEntre, esFechaDeCalendario, sumarDias } from '@/lib/fechas/calendario';
 
 export type DiaSemana = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -35,7 +35,7 @@ export type ResultadoSugerencias = {
 };
 
 const MAXIMO = 3;
-const MINIMO_PASADAS = 3;
+const MAXIMO_PASADAS = 6;
 const FRECUENCIA_MINIMA = 2;
 
 /**
@@ -59,15 +59,31 @@ function moda<T extends number | string>(valores: T[]): T | undefined {
 
 const clave = (fecha: string, horaLocal: string) => `${fecha}T${horaLocal}`;
 
+// Fecha y después hora, sobre cadenas (`AAAA-MM-DD` y `HH:MM` ordenan como texto).
+const compararFechaHora = (
+  x: { fecha: string; horaLocal: string },
+  y: { fecha: string; horaLocal: string },
+) => {
+  if (x.fecha !== y.fecha) return x.fecha < y.fecha ? -1 : 1;
+  if (x.horaLocal !== y.horaLocal) return x.horaLocal < y.horaLocal ? -1 : 1;
+  return 0;
+};
+
 export function sugerirHuecos(entrada: {
-  pasadas: CitaPasada[]; // las ≤ 6 últimas, sin canceladas, orden ascendente
-  libres: BloqueLibre[]; // orden ascendente, en la zona del centro
-  hoy: string; // AAAA-MM-DD en la zona del centro
+  pasadas: CitaPasada[]; // cualquier orden y longitud, sin canceladas: se ordena y se usan las 6 más recientes
+  libres: BloqueLibre[]; // cualquier orden, en la zona del centro
+  hoy: string; // AAAA-MM-DD válida en la zona del centro, o lanza
   excluir?: string[]; // `${fecha}T${hora}`
 }): ResultadoSugerencias {
-  const { pasadas, hoy } = entrada;
+  const { hoy } = entrada;
+  if (!esFechaDeCalendario(hoy)) {
+    throw new Error(`sugerirHuecos: 'hoy' no es una fecha AAAA-MM-DD válida (recibido: ${hoy})`);
+  }
+  // La única normalización de la entrada: copias, sin mutar al llamante.
+  const pasadas = [...entrada.pasadas].sort(compararFechaHora).slice(-MAXIMO_PASADAS);
+  const libres = [...entrada.libres].sort(compararFechaHora);
   const excluidos = new Set(entrada.excluir ?? []);
-  const candidatos = entrada.libres.filter(
+  const candidatos = libres.filter(
     (b) => b.fecha > hoy && !excluidos.has(clave(b.fecha, b.horaLocal)),
   );
 
@@ -88,7 +104,9 @@ export function sugerirHuecos(entrada: {
   // 1. Modas.
   const intervalos: number[] = [];
   for (let i = 1; i < pasadas.length; i++) {
-    intervalos.push(diasEntre(pasadas[i - 1].fecha, pasadas[i].fecha));
+    // Dos citas el mismo día no tienen distancia: no son un intervalo.
+    const d = diasEntre(pasadas[i - 1].fecha, pasadas[i].fecha);
+    if (d > 0) intervalos.push(d);
   }
   const intervaloModa = moda(intervalos);
   const diaHabitual = moda(pasadas.map((p) => p.diaSemana));
@@ -98,8 +116,9 @@ export function sugerirHuecos(entrada: {
       : moda(pasadas.filter((p) => p.diaSemana === diaHabitual).map((p) => p.horaLocal));
 
   // 2. Habitual o en frío.
+  // No hay umbral sobre `pasadas.length`: una moda de intervalo con frecuencia ≥ 2 sobre
+  // intervalos > 0 exige dos intervalos positivos, o sea tres fechas distintas.
   const habitual =
-    pasadas.length >= MINIMO_PASADAS &&
     intervaloModa !== undefined &&
     intervaloModa > 0 &&
     diaHabitual !== undefined &&
@@ -129,9 +148,11 @@ export function sugerirHuecos(entrada: {
     );
   }
 
-  // (b) el siguiente bloque libre en el día habitual a la hora habitual.
+  // (b) el siguiente bloque libre en el día habitual a la hora habitual, a partir del
+  // objetivo: la cadencia fija cuándo y el día y la franja fijan qué hueco (E12).
   const enDiaHabitual = candidatos.find(
     (b) =>
+      b.fecha >= objetivo &&
       b.diaSemana === diaHabitual &&
       b.horaLocal === horaHabitual &&
       !usados.has(clave(b.fecha, b.horaLocal)),

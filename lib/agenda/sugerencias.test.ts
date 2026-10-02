@@ -414,3 +414,213 @@ describe('sugerirHuecos · habitual', () => {
     ]);
   });
 });
+
+describe('sugerirHuecos · ronda 1 del corte A (E12-E15, H1, H2, H6)', () => {
+  const MENSUAL = ['2026-06-09', '2026-07-07', '2026-08-04', '2026-09-01', '2026-09-29'];
+
+  it('H2 · (a) toma la hora habitual aunque haya un hueco más temprano ese mismo día', () => {
+    const r = sugerirHuecos({
+      pasadas: pasadas(SEIS_MARTES),
+      libres: [bloque('2026-10-06', '09:00'), bloque('2026-10-06', '12:00')],
+      hoy: HOY,
+    });
+    expect(r.sugerencias[0]).toEqual({
+      fecha: '2026-10-06',
+      horaLocal: '12:00',
+      motivo: { tipo: 'comoLasUltimas', n: 6 },
+    });
+    expect(r.sugerencias[1]).toEqual({
+      fecha: '2026-10-06',
+      horaLocal: '09:00',
+      motivo: { tipo: 'primerHueco' },
+    });
+  });
+
+  it('H6 · intervalo quincenal: el objetivo avanza de 14 en 14 hasta ser posterior a hoy', () => {
+    // objetivos 09-15, 09-29, 10-13: con +7 caería en 10-06
+    const r = sugerirHuecos({
+      pasadas: pasadas(['2026-08-04', '2026-08-18', '2026-09-01']),
+      libres: [bloque('2026-10-06'), bloque('2026-10-13')],
+      hoy: HOY,
+    });
+    expect(r.sugerencias[0]).toEqual({
+      fecha: '2026-10-13',
+      horaLocal: '12:00',
+      motivo: { tipo: 'comoLasUltimas', n: 3 },
+    });
+  });
+
+  it('H6 · cadaIntervalo lleva el intervalo modal, no un 7 fijo', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-07-21'),
+        pasada('2026-08-04'),
+        pasada('2026-08-18'),
+        pasada('2026-09-01', '13:00'),
+      ],
+      libres: [bloque('2026-10-13')],
+      hoy: HOY,
+    });
+    expect(r.sugerencias[0]).toEqual({
+      fecha: '2026-10-13',
+      horaLocal: '12:00',
+      motivo: { tipo: 'cadaIntervalo', dias: 14 },
+    });
+  });
+
+  it('E12 · (b) mensual con el objetivo ocupado: el día habitual se busca a partir del objetivo', () => {
+    // intervalos de 28; objetivo 2026-10-27
+    const r = sugerirHuecos({
+      pasadas: pasadas(MENSUAL),
+      libres: [
+        bloque('2026-10-06'),
+        bloque('2026-10-13'),
+        bloque('2026-10-27', '09:00'),
+        bloque('2026-11-03'),
+      ],
+      hoy: HOY,
+    });
+    expect(r.sugerencias).toEqual([
+      {
+        fecha: '2026-11-03',
+        horaLocal: '12:00',
+        motivo: { tipo: 'diaHabitual', diaSemana: 2, hora: '12:00' },
+      },
+      { fecha: '2026-10-06', horaLocal: '12:00', motivo: { tipo: 'primerHueco' } },
+      { fecha: '2026-10-13', horaLocal: '12:00', motivo: { tipo: 'primerHueco' } },
+    ]);
+  });
+
+  it('E12 · (b) mensual con el objetivo libre', () => {
+    const r = sugerirHuecos({
+      pasadas: pasadas(MENSUAL),
+      libres: [bloque('2026-10-06'), bloque('2026-10-27'), bloque('2026-11-03')],
+      hoy: HOY,
+    });
+    expect(r.sugerencias).toEqual([
+      { fecha: '2026-10-27', horaLocal: '12:00', motivo: { tipo: 'comoLasUltimas', n: 5 } },
+      {
+        fecha: '2026-11-03',
+        horaLocal: '12:00',
+        motivo: { tipo: 'diaHabitual', diaSemana: 2, hora: '12:00' },
+      },
+      { fecha: '2026-10-06', horaLocal: '12:00', motivo: { tipo: 'primerHueco' } },
+    ]);
+  });
+
+  it('E13 · sesión doble semanal: los intervalos 0 no cuentan, el paciente es habitual', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-09-15', '12:00'),
+        pasada('2026-09-15', '13:00'),
+        pasada('2026-09-22', '12:00'),
+        pasada('2026-09-22', '13:00'),
+        pasada('2026-09-29', '12:00'),
+        pasada('2026-09-29', '13:00'),
+      ],
+      libres: [bloque('2026-10-06', '12:00'), bloque('2026-10-06', '13:00'), bloque('2026-10-13')],
+      hoy: HOY,
+    });
+    expect(r).toEqual({
+      modo: 'habitual',
+      sugerencias: [
+        { fecha: '2026-10-06', horaLocal: '12:00', motivo: { tipo: 'cadaIntervalo', dias: 7 } },
+        {
+          fecha: '2026-10-13',
+          horaLocal: '12:00',
+          motivo: { tipo: 'diaHabitual', diaSemana: 2, hora: '12:00' },
+        },
+        { fecha: '2026-10-06', horaLocal: '13:00', motivo: { tipo: 'primerHueco' } },
+      ],
+    });
+  });
+
+  // Si se quitan a la vez el filtro `> 0` y la guarda `intervaloModa > 0`, el `while` del
+  // objetivo no termina: vitest no corta un bucle síncrono, es un rojo por cuelgue.
+  it('E13 · tres citas el mismo día: en frío', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-09-29', '10:00'),
+        pasada('2026-09-29', '11:00'),
+        pasada('2026-09-29', '12:00'),
+      ],
+      libres: [bloque('2026-10-06'), bloque('2026-10-07', '10:00')],
+      hoy: HOY,
+    });
+    expect(r.modo).toBe('enFrio');
+    expect(r.sugerencias.every((s) => s.motivo.tipo === 'primerHueco')).toBe(true);
+  });
+
+  it('E14 · dos días distintos con sesión doble: en frío (un solo intervalo de 7, frecuencia 1)', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-09-22', '12:00'),
+        pasada('2026-09-22', '13:00'),
+        pasada('2026-09-29', '12:00'),
+        pasada('2026-09-29', '13:00'),
+      ],
+      libres: [bloque('2026-10-06')],
+      hoy: HOY,
+    });
+    expect(r.modo).toBe('enFrio');
+  });
+
+  const LIBRES_CENTRAL = [
+    bloque('2026-10-05', '09:00'),
+    bloque('2026-10-06', '12:00'),
+    bloque('2026-10-13', '12:00'),
+    bloque('2026-10-20', '12:00'),
+  ];
+
+  it('E15 · pasadas en orden descendente: mismo resultado que en ascendente, sin mutar la entrada', () => {
+    const ascendente = sugerirHuecos({
+      pasadas: pasadas(SEIS_MARTES),
+      libres: LIBRES_CENTRAL,
+      hoy: HOY,
+    });
+    const descendente = pasadas([...SEIS_MARTES].reverse());
+    const copia = descendente.map((p) => ({ ...p }));
+    const r = sugerirHuecos({ pasadas: descendente, libres: LIBRES_CENTRAL, hoy: HOY });
+    expect(r).toEqual(ascendente);
+    expect(r.modo).toBe('habitual');
+    expect(descendente).toEqual(copia);
+  });
+
+  it('E15 · más de seis pasadas: cuenta las seis más recientes', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-08-13', '10:00'),
+        pasada('2026-08-20', '10:00'),
+        ...pasadas(SEIS_MARTES),
+      ],
+      libres: [bloque('2026-10-06')],
+      hoy: HOY,
+    });
+    expect(r.sugerencias[0]).toEqual({
+      fecha: '2026-10-06',
+      horaLocal: '12:00',
+      motivo: { tipo: 'comoLasUltimas', n: 6 },
+    });
+  });
+
+  it('E15 · hoy mal formado: lanza', () => {
+    for (const hoy of ['2026-10-2', '2026-02-30']) {
+      expect(() =>
+        sugerirHuecos({ pasadas: pasadas(SEIS_MARTES), libres: LIBRES_CENTRAL, hoy }),
+      ).toThrow(/hoy/);
+    }
+  });
+
+  it('E15 · libres desordenados: en frío, los tres primeros por fecha y hora; no muta la entrada', () => {
+    const libres = [
+      bloque('2026-10-13', '12:00'),
+      bloque('2026-10-06', '13:00'),
+      bloque('2026-10-06', '09:00'),
+      bloque('2026-10-07', '10:00'),
+    ];
+    const copia = libres.map((b) => ({ ...b }));
+    const r = sugerirHuecos({ pasadas: [], libres, hoy: HOY });
+    expect(claves(r)).toEqual(['2026-10-06T09:00', '2026-10-06T13:00', '2026-10-07T10:00']);
+    expect(libres).toEqual(copia);
+  });
+});
