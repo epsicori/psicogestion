@@ -1,0 +1,112 @@
+{
+  "ticket": "T-040",
+  "hallazgos": [
+    {
+      "id": "A-H1",
+      "severidad": "MEDIA",
+      "archivo": "lib/exportaciones/formato.ts",
+      "linea": 45,
+      "descripcion": "Los campos que §1.2 marca «sí» por rama (cuerpo y contenido_canonico en la profesional; cuerpo en la individual del paciente; participantes en la conjunta) son todos .optional() y el esquema no es estricto: si la base no los manda, o los manda con otra clave, la copia sale con el texto vacío y nadie se entera.",
+      "escenario": "Medido en una copia aparte: respuestaProfesional() con cuerpo→cuerpo_texto y sin contenido_canonico pasa safeParse, y proyectar da texto \"\" y contenidoCanonico \"\" en las dos versiones. Una conjunta sin participantes pasa con []. En el corte B, un alias mal escrito en el jsonb_build_object produce una copia para un juzgado con huellas y sello correctos y las notas en blanco. Arreglo: un refine por rama que exija los campos presentes (o un discriminatedUnion por proyección y alcance)."
+    },
+    {
+      "id": "A-H2",
+      "severidad": "MEDIA",
+      "archivo": "lib/exportaciones/formato.ts",
+      "linea": 120,
+      "descripcion": "El contrato de la marca exige exportada_por.apellidos, pero perfiles solo tiene nombre_completo (20260815192424_…:28-33). El esquema lo pide como z.string() obligatorio y el hallazgo vive solo en un comentario, no en el diseño ni en docs/state.md.",
+      "escenario": "En el corte B, quien escriba exportar_nota siguiendo el diseño ('apellidos', p.apellidos) choca con una columna inexistente; si lo arregla con 'apellidos', null u omitiéndolo, safeParse falla (medido: apellidos null → false; sin la clave → false) y TODAS las exportaciones devuelven error. Hay que anotar la decisión (nombre_completo en nombre, apellidos '') en state.md §Hallazgos o en el diseño para que el corte B la herede."
+    },
+    {
+      "id": "A-H3",
+      "severidad": "MEDIA",
+      "archivo": "lib/exportaciones/visor-js.ts",
+      "linea": 187,
+      "descripcion": "La capa de marca no cubre el contenido en una pantalla de escritorio: cada fila es la frase tres veces (unos 1364 px) alineada a la izquierda dentro de un bloque girado del 200 % del ancho, así que en pantallas anchas la marca se queda en el margen izquierdo.",
+      "escenario": "Medido con Chromium sobre el fichero de muestra (contraseña de la prueba): a 1920×1080 la columna <main> tiene un 0,3 % de su área bajo la marca (la captura lo confirma: ninguna marca sobre el texto); a 1366×768, la mitad; a 390×844, toda. Una captura recortada a la nota en un portátil de escritorio no lleva el código, contra el contrato («una capa sobre el contenido») y contra ADR-076 («cada copia impresa o capturada lleva el código»). Las pruebas solo miran que la capa exista y lleve el código. Arreglo: repetir la frase hasta cubrir el ancho del giro (o centrar las filas)."
+    },
+    {
+      "id": "A-H4",
+      "severidad": "MEDIA",
+      "archivo": "lib/exportaciones/visor-js.ts",
+      "linea": 125,
+      "descripcion": "La normalización NFC del lado del visor no tiene prueba: el diseño (§5 «Por la contraseña») exige NFC en los dos lados, pero la contraseña de visor-js.test.ts no lleva ningún carácter descompuesto y el caso «dos lados» de cifrar.test.ts descifra con un ayudante propio que ya normaliza.",
+      "escenario": "Mutante medido en una copia aparte: quitar .normalize('NFC') de VISOR_JS deja verdes visor-js.test.ts y cifrar.test.ts (26/26). En producción, una copia cifrada desde Windows con «contraseña» (ñ compuesta) y tecleada en macOS (ñ descompuesta) diría «Contraseña incorrecta» para siempre. Falta una prueba que cifre con NFC y abra el visor con la contraseña en NFD."
+    },
+    {
+      "id": "A-H5",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/visor-js.ts",
+      "linea": 238,
+      "descripcion": "La línea visible de la marca se inserta antes del h1, y el foco va al h1 (línea 269): quien usa lector de pantalla y lee hacia delante desde el foco nunca oye la marca.",
+      "escenario": "Usuario de NVDA abre la copia → el foco cae en «Copia de una nota clínica» → lee la ficha y las versiones sin oír «Copia … exportada por … el …». El contrato pide una línea «no oculta a lectores de pantalla»: no está oculta, pero queda detrás del punto de entrada. Arreglo: ponerla después del h1 o enfocar la línea."
+    },
+    {
+      "id": "A-H6",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/visor-js.ts",
+      "linea": 114,
+      "descripcion": "Con el visor bloqueado (sin crypto.subtle o con la cabecera dañada) el aviso se escribe en la región role=alert al cargar y al pulsar «Abrir» se reescribe con el mismo texto y sin mover el foco, así que no se anuncia.",
+      "escenario": "Fichero abierto como file:// en un navegador sin SubtleCrypto → el alert ya tiene el texto en la carga (no se anuncia) → el usuario de lector teclea la contraseña y pulsa «Abrir» → el campo se vacía y no oye nada. Arreglo: vaciar la región y escribir en el siguiente tick, o mover el foco al aviso."
+    },
+    {
+      "id": "A-H7",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/visor-js.ts",
+      "linea": 126,
+      "descripcion": "Cualquier excepción de Argon2 (por ejemplo, un RangeError al reservar los 64 MiB del Uint32Array) se muestra como «Contraseña incorrecta o fichero dañado».",
+      "escenario": "Móvil antiguo o pestaña con poca memoria → new Uint32Array falla → el visor dice «Contraseña incorrecta» → el destinatario reintenta con la contraseña correcta, falla siempre igual y pide otra copia (otro acceso y otra fila de auditoría). Arreglo: un texto propio para el fallo de memoria."
+    },
+    {
+      "id": "A-H8",
+      "severidad": "BAJA",
+      "archivo": "lib/i18n/es.ts",
+      "linea": 898,
+      "descripcion": "La etiqueta del motivo en i18n («Requerimiento judicial o de inspección») no coincide con la que el diseño fija para etiqueta_motivo_exportacion en SQL («Requerimiento judicial o inspección», diseño §1.1).",
+      "escenario": "La marca y la copia dicen «… o de inspección», y accesos_historia.justificacion y el aviso al titular dirán «… o inspección». Quien coteje la copia con el registro de accesos ve dos textos para el mismo motivo. Hay que fijar una de las dos antes del corte B."
+    },
+    {
+      "id": "B-H1",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/fichero.ts",
+      "linea": 17,
+      "descripcion": "El base64 por trozos (contrato del diseño §1.3) nunca se prueba con más de un trozo: ninguna carga de las pruebas pasa de 32 KiB, así que el bucle solo da una vuelta.",
+      "escenario": "Medido: el mutante `bytes.subarray(i, TROZO)` (que para i ≥ 32768 da un trozo vacío) deja 80/80 verde. La proyección profesional repite cada versión dos veces (texto y canónico), así que una nota de tres versiones de unos 6 KB ya pasa de 32 KiB. Con esa regresión, la carga se trunca, el fichero no abre nunca («Contraseña incorrecta o fichero dañado») y su huella ya se habría registrado. El código actual es correcto; falta una prueba de ida y vuelta con una carga de más de 64 KiB."
+    },
+    {
+      "id": "B-H2",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/nucleo-js.test.ts",
+      "linea": 89,
+      "descripcion": "Los seis cotejos de Argon2id con crypto.argon2Sync usan todos un m múltiplo de 4 y una sal de 16 bytes, así que tres desvíos del RFC 9106 sobreviven.",
+      "escenario": "Medido con los mismos seis casos: sobreviven `columnas = m` (sin el redondeo m′ = 4·⌊m/4⌋), H0 con m′ en vez de m, y `le32(16)` fijo en vez de `le32(sal.length)`. Con m = 10 o una sal de 32 bytes darían otra clave. En v1 son equivalentes (m = 65536 y sal de 16, fijados por el visor), pero la mitigación del riesgo 3 del diseño («una implementación que pase esas cinco con m distintos es Argon2id») no se cumple. Comprobé que el núcleo actual SÍ coincide con Node en m = 10, 1027 y 4099, sales de 8, 32 y 300 bytes, contraseña vacía y de 1024 bytes, y longitudes 4…1024. Bastaría con añadir dos de esos casos."
+    },
+    {
+      "id": "B-H3",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/nucleo-js.ts",
+      "linea": 265,
+      "descripcion": "De los lanzamientos del núcleo solo se prueba p = 2. Ni t ∈ [1, 64], ni m ≥ 8, ni la longitud, ni la sal corta, ni las cotas de m y t del visor (visor-js.ts:60) tienen una prueba.",
+      "escenario": "Medido: sin la guarda `entero(t, 1, 64)`, argon2id con t = 0 devuelve la MISMA clave para cualquier contraseña y sal (7636809c… para «contraseña uno» con sal 01… y para «otra distinta» con sal 09…). Si no hay pasadas, la memoria solo tiene los dos primeros bloques, y el último bloque, que es cero, da la clave. La única barrera en el camino del Worker (derivarEnTrabajador) es esa guarda, y quitarla deja la suite verde. Quitar las cotas `entero(k.m…)`/`entero(k.t…)` del visor también deja 80/80 verde."
+    },
+    {
+      "id": "B-H4",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/cifrar.ts",
+      "linea": 37,
+      "descripcion": "La longitud de la contraseña se mide en unidades UTF-16 (`.length`), no en caracteres como dicen el ADR-076 §7 y el mensaje de ErrorContrasena.",
+      "escenario": "`cifrarCopia(copia, '🔐'.repeat(6), …)` se acepta: son 6 caracteres y miden 12 unidades. Una contraseña de 200 emojis (200 caracteres) se rechaza, porque mide 400 unidades. Hay que contar con `Array.from(normalizada).length`, o el ADR tiene que decir «unidades»."
+    },
+    {
+      "id": "B-H5",
+      "severidad": "BAJA",
+      "archivo": "lib/exportaciones/visor-js.ts",
+      "linea": 122,
+      "descripcion": "`setTimeout(…, 0)` no garantiza que el navegador pinte «Abriendo…» antes de los segundos de Argon2id en el hilo principal.",
+      "escenario": "No está medido en un navegador; jsdom no pinta. El temporizador de 0 ms suele correr antes de la siguiente oportunidad de renderizado (~16 ms). Entonces el role=\"status\" y el botón deshabilitado no se ven ni se anuncian hasta que termina la derivación, y la página parece colgada de 2 a 5 s. La forma habitual de evitarlo es `requestAnimationFrame(() => setTimeout(f, 0))`. Conviene mirarlo en la prueba manual C7."
+    }
+  ],
+  "altas": 0,
+  "medias": 4,
+  "bajas": 9
+}

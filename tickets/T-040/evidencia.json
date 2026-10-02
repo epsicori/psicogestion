@@ -1,0 +1,87 @@
+{
+  "ticket": "T-040",
+  "resumen": "Corte A (sin base) verificado en la rama worktree-agent-a57d63ed182caa785 (HEAD 2a6daaf). npm test 128 ficheros / 1605 pruebas verdes; lint 0 errores (2 avisos preexistentes en lib/cuentas/accesos.test.ts, fuera del diff); next build --webpack limpio. Los criterios de base, RLS e interfaz son del corte B. Hallazgo menor: la muestra de dos versiones usa numero_version 1 y 3 (fixture), no 1 y 2; no afecta al contrato.",
+  "criterios": [
+    {
+      "id": "C1",
+      "texto": "Autor y asignado exportan; sin asignación, técnico y lector conjunto reciben error desde la base",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "NO_VERIFICABLE · corte B: exige migración, exportar_nota y banco 24; el corte A no toca la base."
+    },
+    {
+      "id": "C2",
+      "texto": "Administrador sin motivo da error; con petición del paciente la copia no contiene reservadas",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/exportaciones (formato.test.ts, cifrar.test.ts, visor-js.test.ts) + mutante en formato.ts",
+      "evidencia": "PASA solo la parte de Vitest: 'proyectar · la copia del paciente vuelve a recortar aunque la base entregue de más' OK, 'cifrarCopia > la carga de una copia del paciente no contiene ninguna reservada (C2)' OK, 'la copia del paciente no pinta reservadas' OK. Mutante (la proyección del paciente individual devuelve reservadas y canónico): 3 pruebas fallan (formato 'no contiene ninguna reservada', cifrar C2, visor paciente). La parte de base (error sin motivo, position() en SQL) es corte B."
+    },
+    {
+      "id": "C3",
+      "texto": "Cada exportación deja fila en exportaciones y accesos_historia; update/delete como postgres fallan",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "NO_VERIFICABLE · corte B: tablas, banco 24 §B y §E."
+    },
+    {
+      "id": "C4",
+      "texto": "La copia lleva todas las versiones en orden y la huella de cada una coincide (parte Vitest)",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/exportaciones --reporter=verbose",
+      "evidencia": "OK cifrarCopia > ida y vuelta: la carga descifrada es la copia, entera y en orden (C4); OK proyectar conserva el orden, el número real y las huellas en hexadecimal (profesional y paciente); OK esquemaRespuestaExportar rechaza versiones fuera de orden, huella mal formada y lista vacía. 7 ficheros, 80/80. Mutante sin AAD (quitar additionalData en cifrar.ts): 10 pruebas fallan, incluida 'la cabecera son los datos asociados: cambiar solo un espacio impide abrir'. Con el visor real en Chromium, la copia descifrada muestra versiones 1 y 3 con huellas aaaa/bbbb y huella anterior. La comparación contra notas_clinicas_versiones es del corte B (banco §G y guion t040)."
+    },
+    {
+      "id": "C5",
+      "texto": "Ni la contraseña ni el fichero en claro quedan en base, Storage ni registros (parte Vitest)",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/exportaciones/cifrar.test.ts lib/exportaciones/fuente.test.ts lib/exportaciones/derivar-en-trabajador.test.ts",
+      "evidencia": "OK cifrarCopia > fuera del cifrado no hay ningún dato de la copia; OK fuente.test.ts: cifrar, constantes, derivar-en-trabajador, fichero, formato, nucleo-js y visor-js no usan .storage, writeFile, localStorage, sessionStorage ni indexedDB; OK derivarEnTrabajador no guarda la copia. Playwright offline: la única petición es file://; 0 errores de consola. La parte de base, Storage y logs del servidor es del corte B (banco §A, servidor.test.ts, guion t040). Nota: la prueba de muestra de cifrar.test.ts sí escribe un fichero en %TEMP%, pero es el fichero ya cifrado."
+    },
+    {
+      "id": "C6",
+      "texto": "La exportación del administrador crea aviso para el titular",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "NO_VERIFICABLE · corte B: notificaciones y banco 24 §F."
+    },
+    {
+      "id": "C7",
+      "texto": "Manual: abrir una nota con dos versiones con la herramienta del ADR (parte del corte A)",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/exportaciones/cifrar.test.ts (escribe %TEMP%/psicogestion-T-040-copia-de-muestra.html); node scratchpad/abrir.cjs (Playwright chromium, context offline:true, file://)",
+      "evidencia": "Antes de abrir: solo el formulario ('Este fichero está cifrado… Se abre en este ordenador, sin conexión'). Contraseña mala: role=alert 'Contraseña incorrecta o fichero dañado.' en 1051 ms, foco devuelto al input password. Contraseña 'muestra-de-T-040': 1049 ms de derivación Argon2id (m=65536, t=3) en la página; aparecen 'Versión 1' y 'Versión 3' con reservadas, sello, huella y huella anterior, y la línea 'Copia 0b6f3f0e-… · exportada por Ana Martín (Profesional sanitario) el 02/10/2026 10:15 · Copia profesional'. Red: solo la petición file://; errores: []. Solo Chromium; Edge y Firefox, que pide el guion, quedan para el corte B o una persona."
+    },
+    {
+      "id": "C8",
+      "texto": "Manual: el botón solo para quien la tabla deja",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "NO_VERIFICABLE · corte B: la interfaz (historia/notas) no entra en el corte A."
+    },
+    {
+      "id": "C9",
+      "texto": "lint y build limpios, test:rls verde (parte sin base)",
+      "veredicto": "PASA",
+      "comando": "npm test ; npm run lint ; npx next build --webpack",
+      "evidencia": "npm test: Test Files 128 passed (128), Tests 1605 passed (1605). lint: 0 errors, 2 warnings en lib/cuentas/accesos.test.ts (no está en el diff). build --webpack: termina con la tabla de rutas sin error. test:rls y lint:migraciones no ejecutados: son del corte B."
+    },
+    {
+      "id": "N1",
+      "texto": "Argon2id propio frente a crypto.argon2Sync, sin saltarse la prueba",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/exportaciones/nucleo-js.test.ts --reporter=verbose ; node -v",
+      "evidencia": "Node v24.14.1. 'crypto.argon2Sync existe en este Node (si no, la prueba falla, no se salta)' OK; coincide byte a byte con m=65536,t=3 (1817 ms), m=8,t=1, t=4, contraseña con ñ y emoji, sal de ceros, y clave de 64 bytes; p=2 lanza; BLAKE2b RFC 7693 'abc' y vacía. Ninguna prueba omitida."
+    },
+    {
+      "id": "N2",
+      "texto": "Contrato de la marca de agua",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/exportaciones/visor-js.test.ts ; node scratchpad/abrir.cjs ; PDF por page.pdf con emulateMedia print, inspeccionado con pymupdf",
+      "evidencia": "OK línea visible y capa, ambas con el código; OK capa aria-hidden, fija, sin eventos; OK al imprimir sigue fija; OK VISOR_JS sin innerHTML/outerHTML/insertAdjacentHTML/document.write; OK proyectar arma marca desde la respuesta. Chromium: capa con position fixed, pointer-events none, texto 'codigo · quien · fecha' repetido. PDF de 2 páginas (A4): el texto 'Ana Martín' de la marca aparece 31 veces en la página 1 y 28 en la 2, y la imagen de la página 2 muestra las filas oblicuas también en el tramo vacío. Salidas en el scratchpad: copia.pdf, pantalla.png, pdf-p2.png."
+    },
+    {
+      "id": "N3",
+      "texto": "Territorio contra §6 del diseño",
+      "veredicto": "PASA",
+      "comando": "git diff --stat main...HEAD",
+      "evidencia": "19 ficheros: lib/exportaciones/** (16), lib/i18n/es.ts, docs/decisions.md, docs/decisions/ADR-076.md, docs/decisions/INDEX.md; todos están en §6. Sin cambios en package.json, supabase/, app/ ni components/. Árbol limpio tras los mutantes."
+    }
+  ],
+  "regresiones": []
+}

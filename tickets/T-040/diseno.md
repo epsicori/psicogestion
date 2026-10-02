@@ -824,3 +824,17 @@ La alternativa elegida es la **trazabilidad**.
   - No ocupa la cola de `supabase/`.
 - **Corte B, con base y en su turno de la cola**: el resto, que incluye la migración, el banco 24,
   `servidor.ts`, la interfaz, el guion `t040`, `architecture.md` y la accesibilidad.
+
+### Decisiones tras la revisión del corte A (02-10-2026)
+
+- **A-H2 · quien exporta se nombra con `perfiles.nombre_completo`.** `perfiles` no tiene `apellidos`
+  (`20260815192424_…:28-33`). §1.2 y el contrato de la marca quedan así:
+  `"exportada_por": {"nombre_completo": "…", "rol": "profesional_sanitario" | "administrador"}`, y `marca.quien` es
+  `nombre_completo`. En SQL (corte B): `jsonb_build_object('nombre_completo', p.nombre_completo, 'rol', p.rol)`. No se añade
+  columna. Al paciente y a los participantes no les afecta: `pacientes` sí tiene `nombre` y `apellidos`.
+- **A-H8 · la etiqueta del motivo es la de §1.1, «Requerimiento judicial o inspección»**, sin «de». Una sola etiqueta en
+  `lib/i18n/es.ts`, en `etiqueta_motivo_exportacion` (SQL) y en la marca.
+- **A-H3 · la marca cubre el contenido a cualquier ancho.** El criterio es medible: a 1920×1080, 1366×768 y 390×844, al menos el
+  80 % del área de `<main>` queda bajo alguna fila de la marca. Lo mide una prueba de Playwright sobre el fichero de muestra.
+  El método (rejilla repetida, filas centradas o `repeating` por CSS) lo elige el implementador; la capa sigue siendo
+  `aria-hidden`, sin eventos, fija y presente al imprimir.
