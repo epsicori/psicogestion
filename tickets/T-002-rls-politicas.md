@@ -5,7 +5,7 @@ modelo: opus
 fase: 0
 prioridad: alta
 depende_de: [T-001]
-estado: en_curso
+estado: hecho
 notas: Migracion, enmienda multicentro (ADR-051) y revision con Opus INTEGRADAS en main. Queda solo el punto 3 del guion manual en navegador (un perfil suspendido deja de ver /pacientes), que no se ha ejecutado nunca.
 ---
 

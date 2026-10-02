@@ -5,7 +5,8 @@ modelo: opus
 fase: 1
 prioridad: alta
 depende_de: [T-011, T-011b, T-007]
-estado: pendiente
+estado: hecho
+completado: 2026-10-02
 territorio:
   - supabase/migrations/*_agenda_citas_rango.sql
   - lib/supabase/tipos-bd.ts

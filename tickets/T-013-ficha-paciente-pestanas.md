@@ -5,7 +5,7 @@ modelo: sonnet
 fase: 1
 prioridad: alta
 depende_de: [T-006, T-007]
-estado: en_curso
+estado: hecho
 ---
 
 # Contexto

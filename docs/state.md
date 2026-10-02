@@ -3,25 +3,25 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 01-10-2026 · T-014 integrado en `main` (c6b0cf8)
+**Actualizado**: 02-10-2026 · T-014 cerrado (bitácora); T-012 corte A y diseño de T-036 en marcha
 
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-014, T-011b, T-012b, T-012c, T-016–T-020, T-029–T-034.
   Autenticación, ficha cifrada, series editables, dinero, toda nota en episodio (era 4) y el
   calendario (semana, mes, estados, ficha de cita, «Por confirmar»).
-- `main` al integrar T-014: `npm test` 1150/1150, build exit 0. **Falta en `main`**: `db reset` +
-  `seed` + `test:rls` y playwright (`SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo`, `--workers=1`);
-  en la rama pasaron los dos.
+- `main` (02-10): `npm test` 1150/1150, build, `db reset` + `seed` + `test:rls` (19 suites) y
+  playwright 7/7 (`SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo`, `--workers=1`).
 
 ## En curso
 
-- **T-014 sin cerrar la memoria**: falta el documentalista (frontmatter a hecho, bitácora). Limpiar
-  los worktrees de T-014 (`.claude/worktrees/agent-*`; sin junction, node_modules propio).
-- **T-036** (firma cotejada, prioridad alta): el arquitecto agotó los turnos **sin escribir**
-  `tickets/T-036/diseno.md`. Relanzar.
-- **T-012** (notas): diseñado y piezas de MiniMax entregadas y revisadas (`minimax/respuestas` y
-  `revisiones/T-012*`; copias corregidas y `catalogo.diff` en `minimax/correcciones/T-012/`). Aviso: `scripts/t012-nota.ts` no es idempotente.
+- **T-012 corte A** (base, acciones, banco 20, guion): implementador en la rama `T-012-corte-a`.
+  Territorio del diseño §6 ya en el frontmatter. Piezas P1-P8 de MiniMax para el corte B en
+  `minimax/respuestas` y `minimax/correcciones/T-012/`. Aviso: `scripts/t012-nota.ts` no es idempotente.
+- **T-036** (firma cotejada, prioridad alta): arquitecto escribiendo `tickets/T-036/diseno.md`.
+- **Worktrees de T-014** por quitar: `agent-a5cb7c…`, `agent-a09e76…`, `../Psicogestion-T014a`
+  (integrados). `agent-a08093…` (`T-014-correcciones`) está superado por `main` y no queda nada que
+  rescatar; **su `node_modules` es junction**: `cmd /c rmdir` antes de `git worktree remove`.
 
 ## Bloqueos
 
@@ -30,10 +30,9 @@
 
 ## Siguiente paso
 
-1. Comprobaciones de BD en `main` y documentalista de T-014.
-2. T-012 (implementación, cortes A, B y C) y en paralelo el diseño de T-036. `supabase/` en orden:
+1. T-012 (implementación, cortes A, B y C) y en paralelo el diseño de T-036. `supabase/` en orden:
    T-012 → T-036 → T-035; nunca dos a la vez.
-3. T-015 (incluye la RLS de `alertas_documentacion` para el técnico), T-035, T-011c, T-037, T-028.
+2. T-015 (incluye la RLS de `alertas_documentacion` para el técnico), T-035, T-011c, T-037, T-028.
 
 ## Hallazgos anotados (abiertos)
 
@@ -64,6 +63,9 @@
   lee todas las alertas sin mirar el rol (`pacientes/[id]/datos.ts:320`, `PanelResumen`, `PanelDocumentos`).
 - **T-014** (sin FALLA): en la vista mes, el panel de la última fila rebasa el recuadro del calendario
   (queda entero en pantalla); el contrato dice «se recorta a los límites del calendario».
+- **T-014** (BAJA, de la rama abandonada `T-014-correcciones`): si la cita de un panel abierto sale
+  de la vista (movida a otra semana), `calendario.tsx:312-315` sigue pintando la copia vieja; esa
+  rama cerraba el panel. El servidor revalida al reprogramar: sin daño en datos.
 - **T-014, B3 (BAJA, aceptadas al integrar)**: B3-1 el foco cae a `body` si la cita cambia de día
   con el foco en su fila del panel del día; B3-2 `dialogo === null` sin prueba; B3-3 «Por confirmar»
   roba el foco desde el Confirmar de otra propuesta; B3-4 pico dibujado con el panel centrado;
@@ -72,6 +74,5 @@
 - **Armazón** (fuera de T-014): objetivos < 44 px (abrir menú 36, cerrar menú y sesión 32, selector de
   centro 40). Tras entrar, el login lleva a `/pacientes` y no a `/agenda`. Sin ticket.
 - **T-031/T-032** (MEDIA). T-011 sin transiciones ADR-045.
-- **Memoria desfasada**: T-002, T-006 y T-013 dicen `estado: en_curso` en su frontmatter, pero están
-  integrados. `docs/interfaz.md:67` dice «Lista y alta, sin ficha» y `/pacientes/[id]` existe.
+- **Memoria desfasada**: `docs/interfaz.md:67` dice «Lista y alta, sin ficha» y `/pacientes/[id]` existe.
 - Anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md`.
