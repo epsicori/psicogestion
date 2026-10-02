@@ -2,8 +2,8 @@
 
 **Fecha**: 15-09-2026 · **Actualizado**: 01-10-2026, con el código de `main` después de T-012c, T-033
 y T-034, y con T-014 a punto de integrarse; y el mismo 01-10-2026, con las tres respuestas del
-propietario a las preguntas abiertas (§D) · **Riesgo**: alto (`modelo: opus`) · **Arquitecto**:
-fábrica (Opus 5.5)
+propietario a las preguntas abiertas (§D) · **Enmendado**: 02-10-2026, con la cuarta frase del
+sello (§E) · **Riesgo**: alto (`modelo: opus`) · **Arquitecto**: fábrica (Opus 5.5)
 
 Leído para escribir esto: el contrato entero; `docs/architecture.md` §Invariantes 1-3 y
 §Reserva de anotaciones subjetivas; ADR 026, 027, 030, 035, 036, 043, 044, 046, 056, 057, 058,
@@ -79,6 +79,29 @@ Para que D1 y D3 queden cerrados donde ha decidido el propietario, el contrato d
 ampliarse con esos tres puntos antes de diseñarlo. T-012 no edita T-036 (no es su territorio): lo
 eleva en el informe del diseño, y la bitácora de T-012 lo deja en `docs/state.md` §Hallazgos junto
 con D3.
+
+---
+
+## E · Enmienda del 02-10-2026: la cuarta frase del sello (R2-H12)
+
+**Decisión del propietario, 02-10-2026**, sobre el hallazgo R2-H12 de `tickets/T-012/revision.md`
+(ronda 2, TypeScript): una nota **sin cita** abierta un día y firmada otro decía «Escrita el 01/09 ·
+01/09 10:00–15/09 18:00», que se lee como escrita el 01/09. Lo que prueba el sobre es un intervalo.
+
+| Caso | Clave | Frase |
+|---|---|---|
+| Sin cita, `abierta_en` y `firmada_en` en el **mismo** día local | `notas.sello.sinCita` (sin cambio) | «Escrita el {fecha} · {desde}–{hasta}» |
+| Sin cita, `abierta_en` y `firmada_en` en días locales **distintos** | `notas.sello.sinCitaVariosDias` (**nueva**) | «Escrita entre el {desde} y el {hasta}» |
+| Con cita (en sesión o fuera) | `enSesion` / `fueraDeSesion` (sin cambio) | sin cambio |
+
+En la frase nueva, `{desde}` y `{hasta}` llevan **fecha y hora** cada uno (`dd/MM HH:mm`), y las
+dos fechas llevan año (`dd/MM/yyyy`) si cruzan de año. «Día local» se mide en la zona que recibe
+`fraseDelSello(s, zona)` (§1.3), la misma de las otras frases. Las notas con cita no cambian: allí «la sesión del {fecha}» nombra la
+sesión, no el día en que se escribió.
+
+Queda marcada en §2.13, en la ficha P2 de §7 y en el corte B de §8. El corte A ya la implementa
+(rama `T-012-corte-a`: `lib/notas/sello.ts` y `lib/i18n/es.ts`, revisión ronda 3, R2-H12
+cerrado con los mutantes M1-M3). Lo de arriba de este bloque queda como estaba.
 
 ---
 
@@ -636,6 +659,15 @@ cita es un dato mutable de otra tabla. Las tres formas son:
 Si `abierta` y `firmada` caen en días locales distintos, cada hora va con su `dd/MM`. Un sobre
 ilegible se pinta como «Sello no legible», nunca como `false`.
 
+*(Enmienda del 02-10-2026, decisión del propietario sobre R2-H12; ver §E.)* Hay una **cuarta
+forma**, y la tercera se acota al mismo día:
+- sin cita y el mismo día local: «Escrita el {fecha} · {abierta}–{firmada}» (`notas.sello.sinCita`);
+- sin cita y días locales distintos: «Escrita entre el {abierta} y el {firmada}»
+  (`notas.sello.sinCitaVariosDias`), con fecha y hora en cada extremo, y año en los dos si cruzan
+  de año.
+
+Las dos formas con cita no cambian.
+
 **2.14 · El margen se lee directamente.** *(Nueva el 01-10.)* Descartada la función `definer`
 `margen_sesion_de_cita`: `centros` y `organizacion` ya se pueden leer, y una función con
 privilegios que no hace falta es superficie de ataque sin uso.
@@ -945,6 +977,10 @@ MiniMax, que trabaja por API y sin repo.)*
   - `notas.sello.sinCita:'Escrita el {fecha} · {desde}–{hasta}'`
   - `notas.sello.ilegible:'Sello no legible'`
   - `notas.sello.margen:'Margen aplicado: {minutos} min'`
+- *(Enmienda del 02-10-2026, R2-H12; ver §E.)* Hay una sexta clave, que **no** está en el encargo
+  de MiniMax y no se le pide: `notas.sello.sinCitaVariosDias:'Escrita entre el {desde} y el {hasta}'`.
+  La pone la fábrica; ya está en `lib/i18n/es.ts` de la rama `T-012-corte-a`. A P2 no le cambia
+  nada: la frase le llega compuesta.
 - Pruebas: pinta la frase; el icono tiene `aria-hidden="true"` en los tres casos; no hay ningún
   `role` añadido.
 
@@ -1038,6 +1074,16 @@ MiniMax, que trabaja por API y sin repo.)*
 | **A** `riesgo: alto` | Migración de §1.2, `lib/huella/firmar.ts`, `lib/notas/{cuerpo,estado,fecha,coprofesional,sello,servidor}.ts`, banco 20 y guion `t012-nota.ts`. Sin pantalla. | 1-7, 12 y A |
 | **B** `riesgo: medio` | Ruta y armazón, editor, barra táctil, firma desde la pantalla, lista en la ficha, activación de `RUTA_NOTAS_DISPONIBLE`, piezas P1-P8. | 8, 10, 11, B, M4 de T-014 |
 | **C** `riesgo: medio` | `comparar.ts` y el comparador, «modificada el · por», `exportar.ts` y la descarga. | 9 y la tarea de descarga |
+
+**Nota para el corte B** *(enmienda del 02-10-2026, R2-H12; ver §E).* La pieza P2 de MiniMax
+(`minimax/encargos/T-012b1.md`, línea ~205) entrega `notas.sello` con cinco claves (`enSesion`,
+`fueraDeSesion`, `sinCita`, `ilegible`, `margen`) y **sin `sinCitaVariosDias`**. El encargo no se
+edita. Al integrar la rama de MiniMax en `lib/i18n/es.ts`, el bloque `notas.sello` resultante es
+la **unión** de las dos ramas: se conserva `sinCitaVariosDias` del corte A y se añade `margen` de P2.
+Si la integración toma el bloque de P2 tal cual, `fraseDelSello` deja de compilar (la clave es
+literal en `lib/notas/sello.ts`). Comprobación del revisor del corte B:
+`git grep -n "sinCitaVariosDias" -- lib/i18n/es.ts lib/notas/sello.ts` da una línea en cada fichero, y
+`npx tsc --noEmit` sale 0.
 
 Orden de integración: **T-014 → T-012 → T-035/T-036**, en serie, porque los cuatro tocan
 `supabase/`. T-035 cambia `ROLES_COPROFESIONAL`. T-036 recoge §4.4 y §4.5 por decisión del
