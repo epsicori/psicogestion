@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { BarraDeAcciones } from './barra-de-acciones';
 
@@ -68,5 +68,21 @@ describe('BarraDeAcciones', () => {
   it('no lleva Comparar ni Descargar (llegan con el corte C)', () => {
     render(<BarraDeAcciones {...base} puedeGuardar puedeFirmar puedeModificar />);
     expect(screen.getAllByRole('button')).toHaveLength(3);
+  });
+  describe('el cursor no queda bajo la barra (criterio 10)', () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+    afterEach(() => {
+      if (original) Object.defineProperty(HTMLElement.prototype, 'offsetHeight', original);
+      document.documentElement.style.scrollPaddingBottom = '';
+    });
+
+    it('reserva el alto de la barra como scroll-padding-bottom mientras existe, y lo devuelve al irse', () => {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 57 });
+      document.documentElement.style.scrollPaddingBottom = '3px';
+      const { unmount } = render(<BarraDeAcciones {...base} puedeGuardar />);
+      expect(document.documentElement.style.scrollPaddingBottom).toBe('57px');
+      unmount();
+      expect(document.documentElement.style.scrollPaddingBottom).toBe('3px');
+    });
   });
 });
