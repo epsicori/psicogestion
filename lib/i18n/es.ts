@@ -503,12 +503,19 @@ export const es = {
 
   // T-012 · La nota clínica: borrador, firma y versión sellada
   notas: {
+    estado: {
+      borrador: 'Borrador',
+      firmada: 'Firmada',
+      modificada: 'Modificada',
+      firmadaConCambios: 'Firmada · con cambios sin firmar',
+    },
     sello: {
       enSesion: 'Escrita durante la sesión del {fecha} · {desde}–{hasta}',
       fueraDeSesion: 'Escrita fuera de la sesión del {fecha} · {desde}–{hasta}',
       sinCita: 'Escrita el {fecha} · {desde}–{hasta}',
       sinCitaVariosDias: 'Escrita entre el {desde} y el {hasta}',
       ilegible: 'Sello no legible',
+      margen: 'Margen aplicado: {minutos} min',
     },
     // La etiqueta del episodio en la cabecera de la nota y en el selector «¿en cuál?».
     episodio: '{modalidad} · desde el {fecha}',
@@ -517,6 +524,31 @@ export const es = {
       pareja: 'Pareja',
       familiar: 'Familiar',
       grupo: 'Grupo',
+    },
+    version: {
+      titulo: 'Versión {numero}',
+      vigente: 'vigente',
+      firmadaPor: 'Firmada el {fecha} por {autor}',
+      motivo: 'Motivo del cambio: {motivo}',
+      conjunta: 'Nota conjunta del episodio',
+      huella: 'Huella {huella}…',
+    },
+    modificadaPor: 'Modificada el {fecha} · por {autor}',
+    reservadas: {
+      titulo: 'Anotaciones reservadas (art. 18.3, Ley 41/2002)',
+      excluye: 'Se excluyen de las copias que se entregan al paciente.',
+      noOculta: 'No se ocultan al profesional que herede el caso.',
+      noOpone: 'No se pueden oponer a un requerimiento judicial.',
+    },
+    lista: {
+      vacia: 'Todavía no hay notas',
+      vaciaExplicacion: 'Las notas se escriben desde la cita en la agenda.',
+      versiones: '{n} versiones',
+      noSePudoLeer: 'No se pudieron leer las notas. Vuelve a abrir la pestaña.',
+    },
+    cabecera: {
+      volver: 'Volver a la ficha',
+      titulo: 'Nota de {paciente}',
     },
   },
 
