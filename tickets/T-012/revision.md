@@ -548,3 +548,104 @@ Los dos mutantes que he añadido yo demuestran dos cosas:
 Es el efecto de R2-H2(b), que entra por la otra puerta: la de la pantalla.
 
 **Arreglo.** Una prueba por guarda, como las que ya tiene `firmarNota`.
+
+## Corte B · ronda 0
+
+**Ninguna ALTA en el corte B, ronda 0.** Hay 3 MEDIA y 4 BAJA.
+
+Rama `worktree-agent-a37e2c20869f2b71f`, de `a3b8d92` a `6cdaa19`. Diff leído con `git diff main...HEAD`; lo que viene de `tickets/T-035` no se mira. No he usado la base local. Rutas cortas:
+- `E` = `app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx`
+- `ET` = `editor-de-nota.test.tsx`, en la misma carpeta
+
+Mutantes y sondas medidos en una copia de la rama en el scratchpad. El worktree del implementador no se ha tocado.
+
+### B.5, punto por punto
+
+| # | Qué se pedía | Resultado |
+|---|---|---|
+| 2 | R4-H1 | Cerrado. `denegado` da `bloqueada`; cualquier otro motivo da `error`. |
+| 4 | `caducaEn` | El código está bien: en `abierta` el tipo es `string`, `null` da `error`, y todas las asignaciones del reductor llevan `?? estado.caducaEn`. Dos de esas cuatro líneas no tienen prueba que las mate (B0-H5). |
+| 5 | T-036 | Bien. Las dos cadenas 23514 de la prueba son las de la migración, letra a letra (ver la nota del final). `conflicto` deja `readOnly`, para el autoguardado y «Cargar lo guardado» pasa por `abrirEditorDeNota`. |
+| 6 | Conflicto | El foco va a un contenedor sin rol ni nombre (B0-H6). |
+| 7 | Doble pulsación | `enVuelo` es un `useRef` y los dos botones llevan `disabled={pendiente}`. Pero la prueba B no demuestra la guarda (B0-H4). |
+| 8 | Lista | Bien: `href` siempre con `?nota=`, el `select` no trae texto clínico y `null` no se confunde con `[]`. |
+| 9 | Borrador ajeno (P-1) | Ningún control de escritura en la pantalla. En el servidor rechazan al que no es autor tanto la RLS de update (`autor_id = auth.uid()`) como la comprobación explícita de `firmarNota`. Queda abierto el lector que solo ve la versión conjunta (B0-H3). |
+| 10 | Armazón | Sin `notas_clinicas`, sin `lib/notas/servidor` y sin `use cache`. |
+| es.ts | Catálogo | Un solo bloque `notas`, con las seis claves de `sello`. `notasEnPreparacion` ya no está. |
+| P-2 | Ficha | Hecho, y con sus pruebas gemelas. |
+
+### MEDIA
+
+**B0-H1 · `E:630-645`, `E:425-428` y `E:744-757`. La lección de T-037 no se aplica a todas las vistas que sustituyen a la que tiene el foco: el foco cae en `body`.**
+
+En tres casos el foco queda en `body`. Lo he medido con una sonda en `ET` que lee `document.activeElement`.
+
+1. **El reloj vence** (prueba `ET:326`). El `textarea` donde se escribía se desmonta y aparece la vista del candado. El aviso `ficha.seCerroSola` va en un `<p>` que no es región viva, y el formulario del PIN no recibe el foco. Medido: `BODY`.
+2. **Un guardado devuelve `bloqueada`** (prueba `ET:397`). Pasa lo mismo. Medido: `BODY`.
+3. **La firma devuelve `ok` con `nota: null`** (prueba `ET:607`). El diálogo se cierra y `useDevolucionDeFoco` devuelve el foco al botón «Firmar» de la barra. Pero ese botón se ha desmontado, porque la vista pasa a solo lectura. Medido: `BODY`. El mismo camino tienen `sin_borrador`, `no_autor` y `no_disponible` al firmar: el diálogo se cierra y queda un aviso en lugar de la barra.
+
+Escenario: un profesional dicta con lector de pantalla y vence el plazo. Sigue tecleando y no pasa nada: el texto ha desaparecido y nadie se lo anuncia. En el tercer caso, el `role="alert"` de `AvisoDeError` sí se anuncia, pero el foco se ha perdido y Tab empieza desde el principio de la página.
+
+`docs/bitacora/T-037.md` lo dejó escrito: cada vista que sustituye a otra tras una mutación se mide con `activeElement`, y el elemento enfocado tiene nombre y rol. El diseño solo fijó el foco para dos casos, la firma que acaba en `ok` con nota y el conflicto. El cierre por reloj no es un gesto (ADR-047), así que puede bastar con una región `role="status"` que exista antes del cambio. Lo que no basta es un `<p>` sin región viva.
+
+**B0-H2 · `E:693` y `E:981`; `lib/notas/servidor.ts:909-920`. Para quien solo ve las versiones conjuntas, la pantalla llama «Versión vigente» a una que ya no lo es, y la lista cuenta mal.**
+
+La RLS `notas_clinicas_versiones_lectura` solo enseña al profesional del episodio las versiones con `alcance = 'conjunta'`. Pero `vigente` es la última versión que recibe el modelo, no la última de la nota.
+
+Escenario:
+1. La v1 se firma conjunta.
+2. El autor pulsa «Modificar» y firma la v2 como individual. `firmarNota` lo permite, porque el alcance se elige en cada firma.
+3. El coprofesional del episodio abre la nota y ve la v1 bajo el encabezado «Versión vigente», sin ningún aviso de que existe una versión posterior.
+
+La lista tampoco cuadra para él: dice «1 versión» y marca la nota como conjunta.
+
+Una decisión clínica tomada sobre texto ya corregido. ADR-030 no dice qué tiene que ver ese lector. Decide el arquitecto: una frase como «hay versiones posteriores que no puedes ver» o no llamarla «vigente».
+
+**B0-H3 · `E:802` y `lib/notas/servidor.ts:357-364`. El borrador ajeno (P-1) se salta el recorte por alcance: quien solo puede leer versiones conjuntas lee el borrador de una modificación que puede acabar siendo individual.**
+
+Escenario:
+1. Es una nota de pareja con la v1 conjunta.
+2. El autor abre «Modificar» y escribe en el borrador lo que uno de los dos contó en una sesión individual. Su intención es firmarla como individual.
+3. El coprofesional del episodio abre la nota. La RLS le da la cabecera (`nota_tiene_version_conjunta`) y, con ella, `borrador_contenido`. `BorradorAjeno` le pinta el texto y las anotaciones reservadas.
+4. El autor firma la v2 individual. Desde ese momento, la RLS le oculta a ese mismo lector el texto que ya ha leído.
+
+El propietario decidió que «solo lo leen quienes RLS ya deja leer la nota». A la letra se cumple. Pero esa RLS recorta las versiones por alcance y la cabecera no se recorta, y la pantalla es la que convierte ese hueco en lectura. Es «la guarda tiene otra puerta» y lo decide el propietario: o el borrador ajeno solo se pinta a quien puede leer versiones individuales, o se acepta. La columna ya se puede leer con un `select` directo desde antes de este diff, pero ahora es la pantalla la que lo enseña.
+
+### BAJA
+
+**B0-H4 · `ET:465-488` (prueba B) frente a `E:550`. La prueba de la doble pulsación sigue verde sin la guarda `enVuelo`.**
+
+Medido: con `if (enVuelo.current) return;` quitado, `ET` da 51/51 en verde. La cola (`encolar`) pone los clics siguientes detrás de la firma pendiente, y la prueba nunca resuelve esa firma antes de contar.
+
+Añadí `expect(firmarNota).toHaveBeenCalledTimes(1)` después de `terminar({ok:false, motivo:'error'})` y de tres `vaciar()`. Con el mutante falla con **4 llamadas**; con el código original pasa.
+
+Escenario de la regresión que no se vería: una firma acaba en `error` y, sin que el usuario haga nada, se lanzan otras tres llamadas a `firmarNota`.
+
+Arreglo: añadir esa aserción.
+
+**B0-H5 · `E:230` y `E:234`. Hay dos de las cuatro asignaciones `caducaEn ?? estado.caducaEn` que ninguna prueba mata.**
+
+Son la de `solo_modelo` (tras elegir coprofesional) y la de `sin_recargar` (`hechoSinRecargar` / `firmadaSinRecargar`).
+
+Medido: cambiando cada `??` por `accion.caducaEn as string`, `ET` sigue 51/51. Los mutantes de `modelo` (`E:225`) y de `caducaEn` (`E:222`) sí caen.
+
+Escenario de la regresión: si se pierde el `??`, al elegir coprofesional con `caducaEn: null` el plazo pasa a `null`. Entonces el reloj no arranca (`E:422`: `if (caducaEn === null) return`) y el editor ya no se cierra solo. El servidor rechazaría las escrituras, pero en pantalla la nota sigue abierta.
+
+Es justo lo que B.5.4 pide vigilar. Arreglo: una prueba gemela de `ET:326` para cada uno de los dos caminos.
+
+**B0-H6 · `E:732` y `ET:408`. En el conflicto el foco va a un `div tabIndex={-1}` sin rol ni nombre, y la prueba solo comprueba `activeElement.contains(aviso)`.**
+
+Es el T-037 R3-H1 repetido, y la letra del diseño lo pedía así.
+
+Escenario: con lector de pantalla, el foco llega a un grupo anónimo. Lo que de verdad anuncia el conflicto es el `role="alert"` de dentro. Si alguien quita ese rol de `AvisoDeError`, la prueba sigue verde.
+
+Arreglo: enfocar el propio aviso o darle nombre al contenedor, y comprobarlo con `toHaveAccessibleName`. Decide el arquitecto, como en T-037.
+
+**B0-H7 · `app/(app)/pacientes/[id]/historia/notas/page.tsx:56-62`. El armazón lee la cita sin mirar `error`, y un fallo pasajero se convierte en un 404.**
+
+Escenario: el profesional entra desde la agenda en `?cita=<uuid>` y la lectura de `citas` falla por un tiempo agotado. `data` llega `null`, se llama a `notFound()` y aparece «no existe» para una cita que sí existe. Es la clase del error tragado como ausencia, esta vez en una lectura no clínica. Arreglo: si hay `error`, lanzarlo para que salga el `error.tsx`, no el 404.
+
+### Notas para el orquestador (no son hallazgos)
+
+- Si `cerrarHistoriaDelPaciente` lanza, `cerrar` (`E:444-445`) se lo traga sin decir nada. La franja sigue mostrando la historia abierta, así que no engaña a nadie. Lo anoto por si se quiere avisar.
+- B.5.5. Las dos cadenas de `lib/notas/servidor.test.ts:1249-1255` coinciden letra a letra con los `raise` de `supabase/migrations/20261003120000_firma_cotejada_con_borrador_y_cita.sql:435` y `:444`. El 23514 que contiene `abierta_en` sigue dando `error` (`servidor.test.ts:661`). Lo he comprobado leyendo el código, no ejecutándolo.

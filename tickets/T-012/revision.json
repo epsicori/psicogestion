@@ -1,24 +1,64 @@
 {
   "ticket": "T-012",
   "altas": 0,
-  "medias": 0,
-  "bajas": 2,
+  "medias": 3,
+  "bajas": 4,
   "hallazgos": [
     {
-      "id": "R4-H1",
-      "severidad": "BAJA",
-      "archivo": "lib/notas/servidor.ts",
-      "linea": 417,
-      "descripcion": "abrirEditorDeNota responde estado 'bloqueada' ante cualquier !acceso.ok. Junta el motivo 'denegado' (42501, candado o paciente ajeno) con el motivo 'error' (tiempo agotado, red, ninguna fila) de registrarAccesoHistoria. Es la clase que R3-H1 cerró en la firma, viva en la primera puerta de la apertura. El diseño §1.3 lo dice así a la letra; decide el arquitecto.",
-      "escenario": "Historia desbloqueada; rpc('registrar_acceso_historia') devuelve {code:'57014'}. abrirEditorDeNota(…, {citaId: C, notaId: null}) devuelve {estado:'bloqueada'} (medido con una sonda) y el corte B lleva a la pantalla del PIN con la ventana abierta, en vez de «vuelve a intentarlo»."
+      "id": "B0-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 630,
+      "descripcion": "Las vistas que sustituyen a la que tiene el foco lo dejan en body: el candado tras vencer el reloj (425-428) o tras un guardado bloqueada, y los avisos tras la firma (744-757). El seCerroSola va en un <p> que no es región viva. Es la lección de T-037 sin aplicar.",
+      "escenario": "Medido con una sonda sobre activeElement en las pruebas 326, 397 y 607: BODY en los tres. Un profesional con lector de pantalla teclea cuando vence el plazo: el textarea desaparece, no se anuncia nada y lo que escribe ya no llega a ningún sitio. Tras una firma ok con nota null, el foco vuelve al botón Firmar, que se ha desmontado, y cae en body."
     },
     {
-      "id": "R4-H2",
+      "id": "B0-H2",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 693,
+      "descripcion": "vigente es la última versión visible y no la última de la nota. El profesional del episodio solo ve por RLS las versiones conjuntas, y la pantalla le enseña como «Versión vigente» una ya sustituida. La lista (lib/notas/servidor.ts:909-920) le cuenta 1 versión y marca la nota como conjunta.",
+      "escenario": "Se firma la v1 como conjunta y después la v2 como individual (firmarNota deja elegir el alcance en cada firma). El coprofesional del episodio abre la nota y ve la v1 bajo «Versión vigente», sin ningún aviso de que existe una versión posterior."
+    },
+    {
+      "id": "B0-H3",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 802,
+      "descripcion": "BorradorAjeno (P-1) enseña el borrador de la cabecera a quien solo puede leer versiones conjuntas. Así se salta el recorte por alcance de notas_clinicas_versiones_lectura.",
+      "escenario": "Una nota de pareja tiene la v1 conjunta. El autor abre Modificar y escribe lo que un miembro contó en una sesión individual, con la intención de firmarlo como individual. El coprofesional del episodio abre la nota y lee ese texto y las reservadas. Cuando se firma la v2 individual, la RLS le oculta un texto que ya ha leído."
+    },
+    {
+      "id": "B0-H4",
       "severidad": "BAJA",
-      "archivo": "lib/notas/servidor.ts",
-      "linea": 401,
-      "descripcion": "La traducción 'sin_causa' → 'error' del envoltorio nuevo diagnosticarCeroFilas no tiene ninguna prueba. Con el mutante 'sin_causa' → 'bloqueada' las 113 pruebas de lib/notas siguen en verde.",
-      "escenario": "guardarBorrador con el testigo vigente: el update da 0 filas y la relectura devuelve la cabecera propia, de este paciente y con el mismo testigo. Con el mutante C4 devuelve {ok:false, motivo:'bloqueada'} (pide el PIN) en vez de 'error', y ninguna prueba cae."
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.test.tsx",
+      "linea": 485,
+      "descripcion": "La prueba B de la doble pulsación sigue verde sin la guarda enVuelo (editor-de-nota.tsx:550). La cola pone en espera los clics siguientes, y la prueba nunca resuelve la firma antes de contar las llamadas.",
+      "escenario": "Medido. Al quitar 'if (enVuelo.current) return;' el fichero sigue 51/51. Con expect(firmarNota).toHaveBeenCalledTimes(1) después de terminar({ok:false,motivo:'error'}), el mutante cae con 4 llamadas: una firma fallida dispara otras tres sin que el usuario haga nada."
+    },
+    {
+      "id": "B0-H5",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 230,
+      "descripcion": "Ninguna prueba mata el '?? estado.caducaEn' en solo_modelo (230) ni en sin_recargar (234). Los de modelo (225) y caducaEn (222) sí caen.",
+      "escenario": "Medido: cambiando cada ?? por 'accion.caducaEn as string' el fichero sigue 51/51. Si se pierde, elegir coprofesional con caducaEn null deja el plazo en null. El reloj no arranca (línea 422) y el editor ya no se cierra solo al vencer el plazo."
+    },
+    {
+      "id": "B0-H6",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 732,
+      "descripcion": "En el conflicto, el foco va a un div con tabIndex -1 sin rol ni nombre, y la prueba (editor-de-nota.test.tsx:408) solo comprueba activeElement.contains(aviso). Es el R3-H1 de T-037 repetido; el diseño lo pedía así a la letra.",
+      "escenario": "Si alguien quita role=alert de AvisoDeError, la prueba sigue verde. El lector de pantalla llega a un grupo sin nombre y no anuncia el conflicto."
+    },
+    {
+      "id": "B0-H7",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/page.tsx",
+      "linea": 56,
+      "descripcion": "El armazón lee la cita sin desestructurar error. Un fallo pasajero llega como data null y acaba en notFound().",
+      "escenario": "El profesional entra desde la agenda en ?cita=<uuid> y la lectura de citas agota el tiempo. Le sale un 404, «no existe», para una cita que sí existe, en lugar de la página de error con su reintento."
     }
   ]
 }

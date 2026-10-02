@@ -1,21 +1,109 @@
 {
   "ticket": "T-012",
-  "resumen": "Corte A (rama T-012-corte-a, HEAD 2300531). db reset + seed OK; test:rls exit 0 (846 OK, 0 FAIL); scripts/t012-nota.ts todos los pasos verdes; npm test 105 ficheros / 1267 tests OK; lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts, ajenos); build exit 0. Criterios 8-11 y B son de otros cortes.",
+  "resumen": "Corte B (pantalla de la nota), verificacion 1, rama worktree-agent-a37e2c20869f2b71f (HEAD 6cdaa19), diff a tres puntos de 35 ficheros, todos en territorio. npm test 121 ficheros / 1480 tests OK; lint 0 errores (2 avisos preexistentes en lib/cuentas/accesos.test.ts); next build --webpack exit 0; db reset + seed + test:rls exit 0; scripts/t012-nota.ts todos los pasos verdes; verificar:huellas 'cadena integra: cero anomalias'; playwright --workers=1 8/8 (no cubre la pantalla de la nota: el contrato no trae E2E, se ejerció con Playwright ad hoc contra next start en :3100 porque 'next dev' falla aqui: Turbopack no resuelve la junction de node_modules y webpack-dev falla por node:crypto en instrumentation). FALLA el criterio 10: a 360 px con el area visible reducida (equivalente al teclado virtual con resizes-content) el cursor al final de un texto largo queda tapado por la barra sticky Guardar/Firmar. Hallazgos menores: perdida de foco al abrir el PIN desde 'Abrir el editor' con teclado. Mutantes: 14 probados, 12 caen; 2 sobreviven por ser equivalentes (defensa en profundidad), no por prueba floja. Base local dejada con db reset + seed; servidor :3100 parado; el :3000 del propietario intacto.",
   "criterios": [
-    {"id": 1, "texto": "Primera firma: numero_version=1, huella no nula, huella_anterior 32 ceros", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 1 · v1: numero_version 1, huella no nula, huella_anterior de 32 ceros, posicion_cadena 1"},
-    {"id": 2, "texto": "sha256 del contenido_canonico releido = huella", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 2 · sha256(contenido_canonico || huella_anterior) = huella, y verificar:huellas --paciente sale 0"},
-    {"id": 3, "texto": "redactada_en_sesion true en ventana / false al día siguiente; alterarlo rompe la huella", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 3a · cita en curso: redactada_en_sesion = true, y invertirlo cambia la huella; ✓ criterio 3b · cita de ayer: redactada_en_sesion = false"},
-    {"id": 4, "texto": "update/delete/truncate sobre versiones fallan como postgres", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 4 · update, delete y truncate de la v1 fallan, también como postgres, y la fila no cambió"},
-    {"id": 5, "texto": "Modificar sin motivo falla; con motivo v2 encadenada a v1", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 5 · sin motivo: falta_motivo y el recuento no cambia; con motivo: v2 con huella_anterior = huella de v1"},
-    {"id": 6, "texto": "NFC: acento compuesto y precompuesto dan la misma huella", "veredicto": "PASA", "comando": "npx vitest run lib/huella lib/notas", "evidencia": "13 ficheros, 216 tests passed; incluye lib/huella/sobre.test.ts 'normaliza a NFC el cuerpo y las anotaciones reservadas' y lib/notas/servidor.test.ts 'el mismo borrador en NFD y en NFC produce el mismo contenido_canonico (criterio 6)'; lib/huella/nfc.test.ts"},
-    {"id": 7, "texto": "anotaciones_reservadas entra en el cómputo", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 7 · cambiar solo las reservadas: mismo cuerpo, sobre y huella distintos"},
-    {"id": 8, "texto": "Manual: candado cerrado, HTML sin borrador", "veredicto": "NO_VERIFICABLE", "motivo": "Corte posterior (pantalla del editor); fuera del corte A. Requiere E2E de navegador en el corte de interfaz."},
-    {"id": 9, "texto": "Manual: comparación v1/v2 sin depender del color", "veredicto": "NO_VERIFICABLE", "motivo": "Corte posterior (UI de comparación); requiere E2E de navegador."},
-    {"id": 10, "texto": "Manual: 360 px con teclado virtual", "veredicto": "NO_VERIFICABLE", "motivo": "Corte posterior (editor táctil); requiere navegador/dispositivo."},
-    {"id": 11, "texto": "Manual: disponible:true no aplica", "veredicto": "NO_VERIFICABLE", "motivo": "Criterio de otro corte; no corresponde al corte A."},
-    {"id": 12, "texto": "npm run lint && npm run build limpios", "veredicto": "PASA", "comando": "npm run lint; npm run build; npm test", "evidencia": "lint: 0 errors, 2 warnings (no-unused-vars en lib/cuentas/accesos.test.ts, fichero ajeno al ticket); build exitcode 0; npm test: 105 files, 1267 tests passed"},
-    {"id": "A", "texto": "Al firmar, la alerta nota_sin_firmar queda resuelta sin tocar resuelta_en de v1 al firmar v2", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts; npm run test:rls", "evidencia": "✓ criterio A · al firmar, la alerta nota_sin_firmar de su cita queda resuelta con resuelta_en; ✓ R2-H11; test:rls: 20-nota-borrador: completa, exit 0, 0 FAIL"},
-    {"id": "B", "texto": "Criterio B (otro corte)", "veredicto": "NO_VERIFICABLE", "motivo": "Pertenece a otro corte según diseno.md §8."}
+    {
+      "id": 1,
+      "texto": "Primera firma: numero_version=1, huella no nula, huella_anterior 32 ceros",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t012-nota.ts (sobre db reset + seed)",
+      "evidencia": "criterio 1 · v1: numero_version 1, huella no nula, huella_anterior de 32 ceros, posicion_cadena 1. Ademas, firmando por la UI (Ana, cita en curso) el registro nuevo trae huella_anterior = huella de la ultima version de la cadena."
+    },
+    {
+      "id": 2,
+      "texto": "sha256 del contenido_canonico releido = huella",
+      "veredicto": "PASA",
+      "comando": "psql: select encode(sha256(convert_to(contenido_canonico,'utf8')||huella_anterior),'hex') from notas_clinicas_versiones; npm run verificar:huellas",
+      "evidencia": "la columna recomputed coincide con huella en las 6 filas (incluida la firmada desde la pantalla: ae18dd84eb47...); 'verificar:huellas — cadena integra: cero anomalias.'"
+    },
+    {
+      "id": 3,
+      "texto": "redactada_en_sesion true en ventana / false fuera; alterarlo rompe la huella",
+      "veredicto": "PASA",
+      "comando": "UI: firmar cita en curso y cita de ayer; npx tsx scripts/t012-nota.ts",
+      "evidencia": "contenido_canonico de la firma por UI en cita en curso: redactada_en_sesion true, margen_sesion_minutos 15; cita de ayer: false. Script: 'criterio 3a ... invertirlo cambia la huella', 'criterio 3b · cita de ayer: redactada_en_sesion = false'. El campo no es casilla del formulario (el sello lo calcula el servidor)."
+    },
+    {
+      "id": 4,
+      "texto": "update/delete/truncate sobre versiones fallan como postgres",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t012-nota.ts; npm run test:rls",
+      "evidencia": "criterio 4 · update, delete y truncate de la v1 fallan, tambien como postgres, y la fila no cambio. test:rls exit 0 (961 lineas OK, 0 FAIL)."
+    },
+    {
+      "id": 5,
+      "texto": "Modificar sin motivo falla; con motivo v2 encadenada a v1",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t012-nota.ts",
+      "evidencia": "criterio 5 · sin motivo: falta_motivo y el recuento no cambia; con motivo: v2 con huella_anterior = huella de v1. (La UI de modificar/comparar es del corte C: la pantalla solo ofrece el boton Modificar en una nota firmada.)"
+    },
+    {
+      "id": 6,
+      "texto": "NFC: acento compuesto y precompuesto dan la misma huella",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/huella",
+      "evidencia": "7 ficheros / 103 tests OK, incluido lib/huella/nfc.test.ts. Por la UI, el texto con 'e' + U+0301 se selló como 'é' (canonico: \"Texto clinico VERIF-UNO con acento é\"). No se re-ejecutó un guion SQL propio."
+    },
+    {
+      "id": 7,
+      "texto": "anotaciones_reservadas entra en el computo",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t012-nota.ts",
+      "evidencia": "criterio 7 · cambiar solo las reservadas: mismo cuerpo, sobre y huella distintos. Por la UI el sobre firmado lleva \"anotaciones_reservadas\":\"Reservada VERIF-RES\"."
+    },
+    {
+      "id": 8,
+      "texto": "Manual: con el candado cerrado la ruta muestra bloqueo y el HTML no contiene el borrador; abrir exige PIN",
+      "veredicto": "PASA",
+      "comando": "Playwright ad hoc (sesion Ana, next start :3100) + request.get con la cookie de sesion y grep -c",
+      "evidencia": "GET ?cita=<uuid>: 200, grep 'Pendiente de repasar' = 0, 'Sesión 4' = 0; GET ?nota=<f0080001-...01>: 0 y 0; sin query: 0. Tras 'Cerrar la historia', recarga y GET crudo: 0 otra vez. Con el candado cerrado, 'Abrir el editor' muestra 'Esta historia está cerrada ... Escríbelo para verlo' y el campo PIN; PIN 000000 -> 'El PIN no es correcto.' y 0 textareas; PIN 123456 -> editor con el borrador. Con el candado abierto el GET crudo tambien da 0 (el texto llega por accion tras abrir, y deja registro). Mutante: añadir 'notas_clinicas' a page.tsx -> page.test.ts cae."
+    },
+    {
+      "id": 9,
+      "texto": "Manual: comparacion v1/v2 sin depender del color",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Es del corte C (comparacion entre versiones). La pantalla de este corte solo lista 'Versión 1 (vigente)' con huella y ofrece 'Modificar'. Guion: en una nota con 2 versiones (p. ej. f0080001-...03 del seed) abrir ?nota= y comparar v1/v2 comprobando que añadido y retirado se distinguen en escala de grises."
+    },
+    {
+      "id": 10,
+      "texto": "Manual: a 360 px, con el teclado virtual abierto, el cursor sigue visible y la barra alcanzable",
+      "veredicto": "FALLA",
+      "reproduccion": "Playwright, viewport 360x740, Ana, abrir ?nota=f0080001-0000-4000-8000-000000000001 (paciente d0080001-...03), textarea.fill con 40 lineas; page.setViewportSize({width:360,height:330}) (emula resizes-content con teclado abierto); focus en el textarea, Control+End y teclear 'XFINALX'. Medida: textarea top 139 / bottom 331, barra sticky top 273 / bottom 330, taScrollTop 617 de 626: el cursor queda en la linea 40, bajo la barra. La captura muestra el texto hasta 'Linea 36' y ni 'XFINALX' ni las lineas 37-39 visibles. Sin desbordamiento horizontal a 360 px (0) y la barra mide 44 px de alto (alcanzable). El textarea no deja scroll-padding/scroll-margin inferior para la barra sticky (barra-de-acciones.tsx:32 'sticky bottom-0'; ninguna referencia a scroll-padding, scroll-margin ni visualViewport en el editor). No se pudo probar un teclado real de movil: la emulacion es por redimensionado de ventana."
+    },
+    {
+      "id": 11,
+      "texto": "Manual: disponible:true no aplica / no se toca el armazon; boton Notas de la agenda activo",
+      "veredicto": "PASA",
+      "comando": "Playwright: /agenda, clic en la cita 'Lucía M.' y en 'Notas'",
+      "evidencia": "El panel de la cita trae 'Notas', no deshabilitado, href /pacientes/d0080001-...01/historia/notas?cita=ca000000-...02, y al pulsarlo se llega a esa URL con el editor. Mutante RUTA_NOTAS_DISPONIBLE=false -> app/(app)/agenda/notas.test.ts cae ('está encendida: T-012 creó la ruta (D8)'). Solo uuids en la URL."
+    },
+    {
+      "id": 12,
+      "texto": "npm run lint && npm run build limpios",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npx next build --webpack; npm test",
+      "evidencia": "lint: 0 errores, 2 avisos preexistentes (lib/cuentas/accesos.test.ts); next build --webpack exit 0 con la ruta /pacientes/[id]/historia/notas; npm test: Test Files 121 passed, Tests 1480 passed. (npm run build con Turbopack no se ejecutó: falla en este entorno por la junction.)"
+    },
+    {
+      "id": "A",
+      "texto": "Al firmar, la alerta nota_sin_firmar queda resuelta sin tocar resuelta_en de v1 al firmar v2",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t012-nota.ts; npm run test:rls",
+      "evidencia": "criterio A · al firmar, la alerta nota_sin_firmar de su cita queda resuelta con resuelta_en; R2-H11 · firmar una v2 deja intacto el resuelta_en de la alerta ya resuelta; 20.A3/20.A4 OK en test:rls."
+    },
+    {
+      "id": "B",
+      "texto": "Pantalla de la nota: guardar, firmar, sello, borrador ajeno en solo lectura, lista de la ficha, boton de agenda, foco y teclado, conflicto de firma (T-036), notas.sello con seis claves, plazo nulo de la ficha",
+      "veredicto": "PASA",
+      "comando": "Playwright ad hoc contra next start :3100 + psql + vitest con mutantes",
+      "evidencia": "GUARDAR: tras escribir en los dos cuerpos, el indicador pasa a 'Guardado' y la BD trae borrador {texto,reservadas} (3 s de autoguardado). FIRMAR: dialogo role=dialog aria-modal con foco inicial en 'Firmar', Tab queda atrapado (Cancelar/Firmar/cerrar), Esc cierra y devuelve el foco al boton 'Firmar'; al confirmar, vista 'Versión vigente · Firmada · Escrita durante la sesión del 02/10 · 14:43–14:45 · Margen aplicado: 15 min', sin textareas ni Guardar/Firmar. Fuera de sesion (cita de ayer): 'Escrita fuera de la sesión del 01/10 · 02/10 14:45–02/10 14:46', sin reproche. CONFLICTO (T-036): borrador cambiado por SQL entre abrir y firmar -> aviso 'La nota ha cambiado desde otro sitio y no se ha guardado ni firmado lo de esta pantalla. Tu texto sigue aquí para que lo copies', textarea conserva 'LOCAL-TEXTO-SIN-GUARDAR-CONFLICTO-2' (readOnly), boton 'Cargar lo guardado', foco movido al aviso, 0 versiones y borrador intacto ('OTRO-DISPOSITIVO') tras 6 s: sin reintento ni autoguardado; 'Cargar lo guardado' trae 'CARGADO-OK | r' y firma bien. BORRADOR AJENO: borrador de Bruno sobre paciente de Ana abierto por Ana: 'Esta nota solo la corrige quien la escribió', 'Borrador · Su autor tiene cambios sin firmar', texto y reservadas visibles, 0 textareas, botones solo 'Cerrar la historia'; GET crudo con grep BORRADOR-DE-BRUNO = 0. LISTA DE LA FICHA: Historia clínica > Notas clínicas lista 5 notas con enlace a /historia/notas?nota=<uuid> (incluye 'Borrador Bruno Ferrer' y 'Modificada 2 versiones'); el clic navega a ?nota=. SELLO: git grep sinCitaVariosDias -> lib/i18n/es.ts:514 y lib/notas/sello.ts:82; notas.sello tiene seis claves (enSesion, fueraDeSesion, sinCita, sinCitaVariosDias, ilegible, margen). MUTANTES (todos caen en vitest): conflicto sin dispatch -> 3 fallos; conflicto con texto editable -> 3; reintento tras conflicto -> 1; firmar ofrecido en conflicto -> 1; guardable sin soyAutor -> 1; cuerpos editables para ajeno -> 2; borrador ajeno sin pintar -> 2; enlace de la lista alterado -> 1; plazo nulo se pisa al ampliar -> 1 (P-2); apertura sin plazo tomada por abierta -> 1 (P-2); sinCitaVariosDias colapsada -> 4; boton Notas apagado -> 1; page.tsx con notas_clinicas -> 1. Sobreviven dos mutantes equivalentes (quitar solo '!abierta.conflicto' de guardable, o solo 'soyAutor' del bloque del coprofesional): otra guarda los cubre (s.escribe en guardarYa; los cuerpos ya exigen soyAutor)."
+    }
   ],
-  "regresiones": ["Aviso preexistente de lint: lib/cuentas/accesos.test.ts importa SupabaseClient y Database sin usarlos (2 warnings, ajeno a T-012)."]
+  "regresiones": [
+    "Foco perdido al abrir el editor con teclado (BAJA/MEDIA, a11y): en /historia/notas con candado cerrado, Enter sobre 'Abrir el editor' hace que el boton desaparezca y aparezca el campo PIN con document.activeElement = BODY (no #pin-historia). Un usuario de teclado o lector pierde el sitio. Tras un PIN malo el foco si vuelve al campo.",
+    "Maquetacion (BAJA): con el editor abierto, la barra Guardar/Firmar queda pegada al borde del recuadro de 'Anotaciones reservadas' sin separacion visible.",
+    "Entorno: 'next dev' no arranca desde el worktree (Turbopack: 'Could not find the Next.js package' por la junction; webpack: UnhandledSchemeError node:crypto desde lib/cuentas/codigo-totp.ts via instrumentation). Se verifico con 'next build --webpack' + 'next start -p 3100'. No es del ticket.",
+    "El contrato no trae E2E para la pantalla de la nota (accesibilidad/ solo cubre login, /pacientes y codigos de recuperacion): los criterios 8, 10 y 11 salieron sin banco automatico; el ticket queda mal cortado en ese punto.",
+    "scripts/t012-nota.ts falla si ya hay una cita en curso de Ana solapada (citas_sin_solape_profesional): necesita db reset previo (ajeno al corte B, comportamiento conocido de la siembra)."
+  ]
 }
