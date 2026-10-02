@@ -1,0 +1,21 @@
+{
+  "ticket": "T-012",
+  "resumen": "Corte A (rama T-012-corte-a, HEAD 2300531). db reset + seed OK; test:rls exit 0 (846 OK, 0 FAIL); scripts/t012-nota.ts todos los pasos verdes; npm test 105 ficheros / 1267 tests OK; lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts, ajenos); build exit 0. Criterios 8-11 y B son de otros cortes.",
+  "criterios": [
+    {"id": 1, "texto": "Primera firma: numero_version=1, huella no nula, huella_anterior 32 ceros", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 1 · v1: numero_version 1, huella no nula, huella_anterior de 32 ceros, posicion_cadena 1"},
+    {"id": 2, "texto": "sha256 del contenido_canonico releido = huella", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 2 · sha256(contenido_canonico || huella_anterior) = huella, y verificar:huellas --paciente sale 0"},
+    {"id": 3, "texto": "redactada_en_sesion true en ventana / false al día siguiente; alterarlo rompe la huella", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 3a · cita en curso: redactada_en_sesion = true, y invertirlo cambia la huella; ✓ criterio 3b · cita de ayer: redactada_en_sesion = false"},
+    {"id": 4, "texto": "update/delete/truncate sobre versiones fallan como postgres", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 4 · update, delete y truncate de la v1 fallan, también como postgres, y la fila no cambió"},
+    {"id": 5, "texto": "Modificar sin motivo falla; con motivo v2 encadenada a v1", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 5 · sin motivo: falta_motivo y el recuento no cambia; con motivo: v2 con huella_anterior = huella de v1"},
+    {"id": 6, "texto": "NFC: acento compuesto y precompuesto dan la misma huella", "veredicto": "PASA", "comando": "npx vitest run lib/huella lib/notas", "evidencia": "13 ficheros, 216 tests passed; incluye lib/huella/sobre.test.ts 'normaliza a NFC el cuerpo y las anotaciones reservadas' y lib/notas/servidor.test.ts 'el mismo borrador en NFD y en NFC produce el mismo contenido_canonico (criterio 6)'; lib/huella/nfc.test.ts"},
+    {"id": 7, "texto": "anotaciones_reservadas entra en el cómputo", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts", "evidencia": "✓ criterio 7 · cambiar solo las reservadas: mismo cuerpo, sobre y huella distintos"},
+    {"id": 8, "texto": "Manual: candado cerrado, HTML sin borrador", "veredicto": "NO_VERIFICABLE", "motivo": "Corte posterior (pantalla del editor); fuera del corte A. Requiere E2E de navegador en el corte de interfaz."},
+    {"id": 9, "texto": "Manual: comparación v1/v2 sin depender del color", "veredicto": "NO_VERIFICABLE", "motivo": "Corte posterior (UI de comparación); requiere E2E de navegador."},
+    {"id": 10, "texto": "Manual: 360 px con teclado virtual", "veredicto": "NO_VERIFICABLE", "motivo": "Corte posterior (editor táctil); requiere navegador/dispositivo."},
+    {"id": 11, "texto": "Manual: disponible:true no aplica", "veredicto": "NO_VERIFICABLE", "motivo": "Criterio de otro corte; no corresponde al corte A."},
+    {"id": 12, "texto": "npm run lint && npm run build limpios", "veredicto": "PASA", "comando": "npm run lint; npm run build; npm test", "evidencia": "lint: 0 errors, 2 warnings (no-unused-vars en lib/cuentas/accesos.test.ts, fichero ajeno al ticket); build exitcode 0; npm test: 105 files, 1267 tests passed"},
+    {"id": "A", "texto": "Al firmar, la alerta nota_sin_firmar queda resuelta sin tocar resuelta_en de v1 al firmar v2", "veredicto": "PASA", "comando": "npx tsx scripts/t012-nota.ts; npm run test:rls", "evidencia": "✓ criterio A · al firmar, la alerta nota_sin_firmar de su cita queda resuelta con resuelta_en; ✓ R2-H11; test:rls: 20-nota-borrador: completa, exit 0, 0 FAIL"},
+    {"id": "B", "texto": "Criterio B (otro corte)", "veredicto": "NO_VERIFICABLE", "motivo": "Pertenece a otro corte según diseno.md §8."}
+  ],
+  "regresiones": ["Aviso preexistente de lint: lib/cuentas/accesos.test.ts importa SupabaseClient y Database sin usarlos (2 warnings, ajeno a T-012)."]
+}

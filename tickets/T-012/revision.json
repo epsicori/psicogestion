@@ -1,0 +1,24 @@
+{
+  "ticket": "T-012",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "R4-H1",
+      "severidad": "BAJA",
+      "archivo": "lib/notas/servidor.ts",
+      "linea": 417,
+      "descripcion": "abrirEditorDeNota responde estado 'bloqueada' ante cualquier !acceso.ok. Junta el motivo 'denegado' (42501, candado o paciente ajeno) con el motivo 'error' (tiempo agotado, red, ninguna fila) de registrarAccesoHistoria. Es la clase que R3-H1 cerró en la firma, viva en la primera puerta de la apertura. El diseño §1.3 lo dice así a la letra; decide el arquitecto.",
+      "escenario": "Historia desbloqueada; rpc('registrar_acceso_historia') devuelve {code:'57014'}. abrirEditorDeNota(…, {citaId: C, notaId: null}) devuelve {estado:'bloqueada'} (medido con una sonda) y el corte B lleva a la pantalla del PIN con la ventana abierta, en vez de «vuelve a intentarlo»."
+    },
+    {
+      "id": "R4-H2",
+      "severidad": "BAJA",
+      "archivo": "lib/notas/servidor.ts",
+      "linea": 401,
+      "descripcion": "La traducción 'sin_causa' → 'error' del envoltorio nuevo diagnosticarCeroFilas no tiene ninguna prueba. Con el mutante 'sin_causa' → 'bloqueada' las 113 pruebas de lib/notas siguen en verde.",
+      "escenario": "guardarBorrador con el testigo vigente: el update da 0 filas y la relectura devuelve la cabecera propia, de este paciente y con el mismo testigo. Con el mutante C4 devuelve {ok:false, motivo:'bloqueada'} (pide el PIN) en vez de 'error', y ninguna prueba cae."
+    }
+  ]
+}
