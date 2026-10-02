@@ -2557,6 +2557,22 @@ export type Database = {
         }
         Returns: string
       }
+      agenda_bloques_profesional: {
+        Args: {
+          p_centro_id: string
+          p_desde: string
+          p_duracion_minutos: number
+          p_hasta: string
+          p_profesional_id: string
+        }
+        Returns: {
+          estado: string
+          fecha: string
+          fin: string
+          hora_local: string
+          inicio: string
+        }[]
+      }
       agenda_cancelar_cita: {
         Args: {
           p_alcance: Database["public"]["Enums"]["alcance_cambio_serie"]
@@ -2595,17 +2611,35 @@ export type Database = {
         Args: { p_propuesta_id: string }
         Returns: string
       }
+      agenda_crear_cita: {
+        Args: {
+          p_centro_id: string
+          p_duracion_minutos?: number
+          p_fecha: string
+          p_hora_local: string
+          p_nota_operativa?: string
+          p_paciente_id: string
+          p_profesional_id: string
+          p_sala?: string
+          p_tipo_terapia_id: string
+        }
+        Returns: string
+      }
       agenda_crear_serie: {
         Args: {
           p_centro_id: string
           p_desde: string
           p_dia_semana: number
           p_duracion_minutos: number
+          p_estricta_primera?: boolean
+          p_excluir?: string[]
           p_fin_el?: string
           p_hora_local: string
+          p_nota_operativa?: string
           p_paciente_id: string
           p_periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
           p_profesional_id: string
+          p_sala?: string
           p_sesiones_totales?: number
           p_tipo_terapia_id: string
         }
@@ -2631,6 +2665,20 @@ export type Database = {
         }
         Returns: Json
       }
+      agenda_previsualizar_alta: {
+        Args: {
+          p_centro_id: string
+          p_desde: string
+          p_dia_semana: number
+          p_duracion_minutos: number
+          p_hora_local: string
+          p_paciente_id: string
+          p_periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
+          p_profesional_id: string
+          p_sesiones_totales: number
+        }
+        Returns: Json
+      }
       agenda_previsualizar_edicion_serie: {
         Args: {
           p_cita_id: string
@@ -2645,6 +2693,25 @@ export type Database = {
       agenda_propuestas_de_evento: {
         Args: { p_evento_id: string }
         Returns: Json
+      }
+      alta_bloqueo_disponibilidad: {
+        Args: {
+          p_centro_id: string
+          p_fecha: string
+          p_fin: string
+          p_inicio: string
+          p_profesional_id: string
+        }
+        Returns: Database["public"]["Enums"]["tipo_disponibilidad"]
+      }
+      alta_descanso: { Args: { p_profesional_id: string }; Returns: string }
+      alta_exigir_profesional: {
+        Args: { p_profesional_id: string }
+        Returns: undefined
+      }
+      alta_hueco_ocupado: {
+        Args: { p_fin: string; p_inicio: string; p_profesional_id: string }
+        Returns: boolean
       }
       alta_paciente: {
         Args: {
@@ -2667,6 +2734,10 @@ export type Database = {
           p_tipo_documento?: string
         }
         Returns: string
+      }
+      alta_resolver_tipo: {
+        Args: { p_duracion_minutos: number; p_tipo_terapia_id: string }
+        Returns: number
       }
       bloquear_historia: { Args: never; Returns: number }
       calcular_propuesta_de_evento: {
@@ -2824,6 +2895,17 @@ export type Database = {
           p_sesiones: number
         }
         Returns: string[]
+      }
+      plan_alta_serie: {
+        Args: {
+          p_centro_id: string
+          p_duracion_minutos: number
+          p_fechas: string[]
+          p_hora_local: string
+          p_profesional_id: string
+          p_zona_horaria: string
+        }
+        Returns: Json
       }
       plan_edicion_serie: {
         Args: {
