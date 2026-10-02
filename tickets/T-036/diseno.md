@@ -611,7 +611,19 @@ Un solo implementador (Opus), en este orden y con un commit por corte:
 - **Congelar `citas.inicio`, `fin` y `profesional_id` tras firmar.** El sello guarda lo que valía
   al firmar, y la agenda tiene que poder reprogramar.
 
-## Preguntas abiertas para el propietario (no bloquean)
+## Decisiones del propietario (02-10-2026) — mandan sobre §1-§5
+
+- **(a) Sí: A para todos los roles.** La línea 6.19 sale del bloque `if role in
+  ('authenticated','anon')` y va detrás de 6.16 para cualquier rol. E1 sigue fijando que
+  `postgres` está exento de las otras seis, no de A. Si algún banco firma como `postgres` con un
+  `cita_id` distinto del de la cabecera, se corrige el banco y no la comprobación.
+- **(b) P3 solo en la v1** (`numero_version = 1`). Las v2 y siguientes heredan una cita que ya
+  se comprobó y que está congelada. P3a-b se prueban sobre la v1, con una gemela que reasigna la
+  cita tras la v1 y firma una v2 **con éxito**. Se mantiene un mutante que quita la condición de
+  versión.
+- **(c) ±1 minuto**, fijo en el disparador.
+
+## Preguntas abiertas para el propietario (respondidas arriba)
 
 - **(a) ¿A para todos los roles?** 6.19 es coherencia pura, como 6.11-6.16, que valen para
   `postgres`. El verificador ya marca una fila de `postgres` con la cita equivocada. El contrato
