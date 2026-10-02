@@ -19,8 +19,7 @@
   en `T-012-corte-a` (todas menos R2-H1). Piezas P1-P8 de MiniMax para el corte B en `minimax/`.
 - **T-036**: diseño hecho, (a)-(c) decididas; R2-H1 de T-012 (guardar mientras se firma) entra aquí
   y el arquitecto concreta el cotejo. Espera a T-012 en `main` (gate §0.B).
-- **T-037**: diseño hecho; P-3 = spec Playwright (territorio + `accesibilidad/**`): el arquitecto
-  rehace CA2. **T-028**: diseño hecho; corte A (`lib/agenda/sugerencias.ts`) libre; B y C esperan.
+- **T-037**: P-3 = spec Playwright en `accesibilidad/**`; el arquitecto rehace CA2. **T-028**: corte A libre.
 - **Tickets por escribir** (arquitecto): T-028a (base del alta, cierra H16, ADR-074), cita↔episodio
   y presencial/online (ADR-075), «regenerar mis códigos» desde el perfil (T-037 P-1).
 - **Worktrees de T-014** por quitar (integrados): `agent-a5cb7c…`, `agent-a09e76…`, `agent-a08093…`
