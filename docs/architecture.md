@@ -385,9 +385,12 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
   del episodio del AUTOR y del mismo paciente o de un participante (la base lo impone con
   `exigir_episodio_coherente_en_nota`). Una nota nueva no cuelga de un episodio cerrado, y
   ninguna nota se mueve a uno cerrado. Si es de coterapia, la nota lleva un `coprofesional_id`
-  opcional (profesional sanitario distinto del autor, con alta vigente en el centro del
-  episodio) que no da acceso a nada —ninguna política lo lee— y se congela con la primera
-  versión (ADR-072). Un episodio con notas no cambia de paciente ni de profesional, y un
+  opcional (quien puede ser autor de notas —profesional sanitario o administrador, el director
+  sanitario del ADR-065—, activo, distinto del autor, con alta vigente en el centro del
+  episodio; la lista de roles es cerrada y el director administrativo no entra, ADR-073) que no
+  da acceso a nada —ninguna política lo lee— y se congela con la primera
+  versión (ADR-072). Un episodio con notas no cambia de paciente, de profesional ni de centro
+  (ADR-073), y un
   participante con notas no se mueve ni se borra. La aplicación obtiene el episodio con
   `episodio_para_nota()`: abre uno individual si no hay ninguno abierto propio, reutiliza el
   único y exige elegir (`EP001`) si hay varios. El centro del episodio nuevo sale de la cita
