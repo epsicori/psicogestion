@@ -52,6 +52,7 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue.
   const [falloCodigos, setFalloCodigos] = useState<string | null>(null);
   const [trabajando, iniciarTransicion] = useTransition();
+  const vistaFallo = useRef<HTMLDivElement>(null);
 
   const factorId = factorVerificadoId ?? enrolamiento?.factorId ?? null;
 
@@ -81,6 +82,13 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
       });
     })();
   }, [factorVerificadoId, supabase]);
+
+  // Al aparecer el aviso el botón «Verificar» desaparece y el foco cae en BODY: se lleva a
+  // la vista para que el lector de pantalla la lea antes de que se pulse «Aceptar»
+  // (mismo patrón que zona-por-confirmar: contenedor con tabIndex -1 y foco explícito).
+  useEffect(() => {
+    if (falloCodigos !== null) vistaFallo.current?.focus();
+  }, [falloCodigos]);
 
   const verificar = () => {
     if (!factorId) return;
@@ -133,7 +141,7 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
 
   if (falloCodigos !== null) {
     return (
-      <div className="flex flex-col gap-4">
+      <div ref={vistaFallo} tabIndex={-1} className="flex flex-col gap-4 outline-none">
         <h2 className="font-serif text-xl font-semibold tracking-tight">
           {t('primeraVez.totp.titulo')}
         </h2>

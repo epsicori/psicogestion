@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -114,8 +114,46 @@ describe('SegundoFactor (T-037)', () => {
     expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByText('Tus códigos de recuperación')).toBeNull();
 
+    // R2-H1: el foco se lleva a la vista del aviso (si no, cae en BODY y el lector de
+    // pantalla no lo oye antes de que se pulse «Aceptar»).
+    const activo = document.activeElement;
+    expect(activo).not.toBe(document.body);
+    expect(activo?.contains(screen.getByText('FALLO-CODIGOS'))).toBe(true);
+
     await userEvent.setup().click(screen.getByRole('button', { name: 'Aceptar' }));
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Tus códigos de recuperación')).toBeNull();
+  });
+
+  it('el refresh espera al usuario: no ocurre solo por mucho que pase el tiempo (R2-H2)', async () => {
+    enroll.mockResolvedValue({
+      data: {
+        id: 'factor-nuevo',
+        totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'SECRETO' },
+      },
+      error: null,
+    });
+    generarCodigos.mockResolvedValue({ ok: false, mensaje: 'FALLO-CODIGOS' });
+    // Reloj falso desde el principio, para que un temporizador sembrado al aparecer el
+    // aviso (p. ej. `setTimeout(router.refresh, 3000)`) quede bajo su control.
+    // `shouldAdvanceTime` deja que el resto de la prueba (userEvent, waitFor) fluya.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<SegundoFactor factorVerificadoId={null} />);
+      await screen.findByAltText('Código QR para configurar la verificación en dos pasos');
+      await teclearYVerificar();
+      expect(await screen.findByText('FALLO-CODIGOS')).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(refresh).not.toHaveBeenCalled();
+      expect(screen.getByText('FALLO-CODIGOS')).toBeInTheDocument();
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Aceptar' }));
+      expect(refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
