@@ -1,11 +1,45 @@
 ---
 id: T-015
 titulo: Avisos — sesión en curso, notificaciones y escalado de la nota pendiente
-modelo: sonnet
+modelo: opus   # subido el 02-10-2026: migración con RLS, disparadores y pg_cron = riesgo alto
 fase: 1
 prioridad: alta
 depende_de: [T-010, T-014]
 estado: pendiente
+riesgo: alto
+territorio:   # del diseño §6 (02-10-2026), con P1 y P4 decididas
+  - supabase/migrations/20261006120000_avisos_y_escalado.sql
+  - lib/supabase/tipos-bd.ts
+  - lib/citas/avisos.ts
+  - lib/citas/agenda.ts
+  - lib/agenda/avisos.ts
+  - lib/agenda/avisos.test.ts
+  - lib/i18n/es.ts
+  - components/armazon/armazon.tsx
+  - components/armazon/armazon-cliente.tsx
+  - components/armazon/aviso-sesion.tsx
+  - components/armazon/aviso-sesion.test.tsx
+  - components/armazon/aviso-notas.tsx
+  - components/armazon/campana.tsx
+  - components/armazon/campana.test.tsx
+  - components/armazon/acciones-avisos.ts
+  - components/armazon/acciones-avisos.test.ts
+  - components/armazon/avisos-constantes.ts
+  - app/(app)/agenda/bloques.ts
+  - app/(app)/agenda/bloques.test.ts
+  - app/(app)/agenda/documentacion.tsx
+  - app/(app)/agenda/documentacion.test.tsx
+  - app/(app)/agenda/esquema-alertas.ts
+  - app/(app)/agenda/acciones-alertas.ts
+  - app/(app)/agenda/acciones-alertas.test.ts
+  - app/(app)/agenda/resolver-alerta.tsx
+  - scripts/rls/22-avisos.sql
+  - scripts/rls/README.md
+  - scripts/rls/11-cobertura.sql        # solo si hay que declarar algo nuevo
+  - accesibilidad/avisos.spec.ts
+  - docs/bitacora/T-015.md
+  - docs/state.md
+  - docs/interfaz.md                    # solo §Armazón: la campana y los avisos ya existen
 ---
 
 # Contexto

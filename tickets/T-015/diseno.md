@@ -137,7 +137,14 @@ La migración va por bloques, en este orden.
    - Lanza 42501 si cambia `paciente_id`, `profesional_id`, `centro_id`, `tipo`, `origen_tabla`,
      `origen_id`, `fecha_referencia`, `referencia_en` o `creada_en`.
    - Si `old.tipo = 'nota_sin_firmar'` y cambia `estado` o `resuelta_en`, lanza 42501 con
-     «Una nota pendiente solo se cierra firmando la nota.» (P1).
+     «Una nota pendiente solo se cierra firmando la nota.» (E2; decisión P1).
+   - Para los demás tipos (decisión P1, ver bloque J):
+     - `old.estado = 'resuelta'` y cualquier cambio de `estado` o `resuelta_en`: 42501, con
+       «Una alerta resuelta no se reabre.»;
+     - `old.estado = 'abierta' and new.estado = 'resuelta'`: `new.resuelta_en := now()`. El
+       reloj lo pone la base; el valor del cliente se ignora;
+     - `old.estado = 'abierta' and new.estado = 'abierta'` con `resuelta_en` distinto de null:
+       42501. El check de la tabla también lo impide, pero así el error es el mismo.
 
 **C. Umbrales por centro**
 
@@ -224,9 +231,27 @@ create function public.escalar_notas_pendientes()
 
 1. Una sola sentencia:
    `insert into public.notificaciones (perfil_id, tipo, titulo, detalle, origen_tabla, origen_id)`.
-   Inserta una fila por cada **administrador activo** (`perfiles.rol = 'administrador' and
-   estado = 'activo'`) y cada alerta que cumpla `estado = 'abierta' and tipo = 'nota_sin_firmar'`
-   y `nivel_nota_pendiente(referencia_en, centro_id) = 3`.
+   Inserta una fila por cada **destinatario** y cada alerta que cumpla
+   `estado = 'abierta' and tipo = 'nota_sin_firmar'` y `nivel_nota_pendiente(referencia_en, centro_id) = 3`.
+   Los destinatarios salen de dos CTE (decisión P4):
+   ```sql
+   with designado as (
+     select p.id from public.organizacion o
+       join public.perfiles p on p.id = o.administrador_avisos_id
+      where p.rol = 'administrador' and p.estado = 'activo'),
+   destinatarios as (
+     select id from designado
+     union all
+     select p.id from public.perfiles p
+      where p.rol = 'administrador' and p.estado = 'activo'
+        and not exists (select 1 from designado))
+   ```
+   - Si hay un designado y es administrador activo, va **solo a él**.
+   - Si la columna está vacía, o la persona ya no es administrador activo, va a **todos los
+     administradores activos**. El aviso nunca se pierde.
+   - Si cambia el designado con una alerta todavía abierta, el nuevo la recibe en la siguiente
+     pasada y el anterior conserva la suya. El índice de idempotencia es por destinatario.
+     Se acepta: mejor dos avisos que ninguno.
    - `tipo = 'nota_pendiente_escalada'`.
    - `titulo = 'Nota sin firmar'`.
    - `detalle = format('%s tiene sin firmar la nota de la sesión del %s.', pr.nombre_completo,
@@ -246,6 +271,52 @@ create function public.escalar_notas_pendientes()
   confirmar».
 - `select cron.schedule('escalar-notas-pendientes', '*/15 * * * *', $$select public.escalar_notas_pendientes()$$);`
 - El retraso máximo es de 15 minutos sobre el umbral de 72 h. Se acepta.
+
+**I. Administrador designado (decisión P4)**
+
+1. Columna:
+   ```sql
+   alter table public.organizacion
+     add column administrador_avisos_id uuid references public.perfiles (id) on delete set null;
+   ```
+   Es nula y no tiene valor por defecto: nula significa «todos los administradores activos».
+2. Quién la escribe:
+   - la política vigente `organizacion_modificacion_administrador` (solo el administrador;
+     `20260822160000_rls_funciones_y_politicas.sql:773`). Sin política nueva;
+   - mientras Ajustes no tenga pantalla, se fija por SQL. No hay acción ni control en la interfaz.
+3. `fn_validar_administrador_avisos()`: definer, `search_path = ''`, en un disparador
+   `before insert or update of administrador_avisos_id on public.organizacion`. Si el valor
+   nuevo no es nulo y no es un perfil con `rol = 'administrador' and estado = 'activo'`, lanza
+   23514 con «El administrador de avisos debe ser un administrador activo.». Se valida donde
+   se escribe. Si esa persona pasa después a baja, no se toca la columna: el respaldo de G lo
+   absorbe.
+4. Comentario en la columna: «Destinatario del nivel 3 de la nota pendiente (T-015). Nula, o
+   persona que ya no es administrador activo: se avisa a todos los administradores activos.»
+5. La organización está auditada (T-004), así que el cambio de designado queda en `auditoria`.
+   El implementador comprueba que `organizacion` está en el bucle de T-004; si no lo está, es
+   un hallazgo, no se añade aquí.
+
+**J. Resolver una alerta (decisión P1)**
+
+No hace falta una función ni una política nuevas. Ya existen las cuatro piezas:
+
+- **La política `alertas_documentacion_modificacion`** (H11) decide quién: el administrador,
+  el profesional titular de la alerta (`profesional_id = uid`) y el profesional asignado al
+  paciente. El técnico **no** tiene política de `update`.
+  - Es lo que dice `docs/architecture.md` §Roles: la matriz no tiene fila propia para
+    `alertas_documentacion`, que es tabla de Agenda. Lo que la matriz sí fija es que la
+    documentación clínica del paciente es del profesional («Sus pacientes», «Autor o
+    asignado») y que el administrador lo ve todo en Agenda.
+  - Dar el `update` al técnico sobre `consentimiento_pendiente` sería una ampliación de
+    permisos que la matriz no recoge. No entra (ver «Lo que no entra»).
+  - Para el administrador y el profesional, el conjunto que puede leer es el mismo que puede
+    modificar. Así que el botón nunca aparece sobre una alerta que la base le negaría.
+- **El disparador de B.4**: congela la identidad, prohíbe cerrar una `nota_sin_firmar` y
+  prohíbe reabrir, y fija `resuelta_en = now()`.
+- **El check vigente** `estado = 'resuelta' ⇔ resuelta_en is not null`.
+- **La auditoría**: el disparador genérico de T-004 en `alertas_documentacion` (H9) escribe el
+  `UPDATE` con `actor_id = auth.uid()` (`20260829150000_auditoria_y_solo_adicion.sql`,
+  cuerpo de `fn_auditar`).
 
 **Lo que la migración no toca:**
 - `fn_alertar_nota_sin_firmar` ni `fn_resolver_alerta_nota_sin_firmar`;
@@ -331,7 +402,55 @@ export async function marcarTodasLeidas(): Promise<{ ok: boolean }>;
   da igual, porque la base lo sustituye por `now()`. Después, `revalidatePath('/', 'layout')`.
 - **`marcarTodasLeidas`** hace lo mismo con `.eq('perfil_id', usuario.id).is('leida_en', null)`.
   Después, `revalidatePath('/', 'layout')`.
-- **Resolver una alerta: no se construye** (P1). Ver §2-D6.
+- **Resolver una alerta** va en su propio fichero, porque es de Agenda y no del armazón. Ver §1.5b.
+
+### 1.5b Resolver una alerta (decisión P1)
+
+**`app/(app)/agenda/esquema-alertas.ts`** (sin `'use server'`; lo usan el formulario y la acción):
+```ts
+export const esquemaResolverAlerta = z.object({ alertaId: z.uuid() });
+export type ResolverAlerta = z.infer<typeof esquemaResolverAlerta>;
+```
+
+**`app/(app)/agenda/acciones-alertas.ts`** (`'use server'`):
+```ts
+export type EstadoResolver = { ok: true } | { ok: false; error: 'invalida' | 'no_permitida' | 'fallo' } | null;
+export async function resolverAlerta(_previo: EstadoResolver, datos: FormData): Promise<EstadoResolver>;
+```
+1. `exigirSesion()`.
+2. `esquemaResolverAlerta.safeParse({ alertaId: datos.get('alertaId') })`. Si falla, devuelve
+   `{ ok: false, error: 'invalida' }` sin llamar a Supabase.
+3. Hace `update({ estado: 'resuelta', resuelta_en: new Date().toISOString() }).eq('id', id)
+   .eq('estado', 'abierta').neq('tipo', 'nota_sin_firmar').select('id')`.
+   - El `neq` es cinturón. La garantía es el disparador.
+   - El valor de `resuelta_en` da igual, porque la base pone `now()`.
+4. Resultados:
+   - error con código 42501: `no_permitida`;
+   - cero filas (alerta ajena, ya resuelta, inexistente o de tipo `nota_sin_firmar`):
+     `no_permitida`. No se distingue cuál, para no hacer de oráculo;
+   - otro error: `console.error` y `fallo`.
+5. Si va bien: `revalidatePath('/agenda')` y `revalidatePath('/', 'layout')`. Devuelve `{ ok: true }`.
+
+**`app/(app)/agenda/bloques.ts`** añade una función pura:
+```ts
+export function puedeResolverAlerta(rol: Rol | null, tipo: TipoAlerta): boolean;
+// true solo si tipo !== 'nota_sin_firmar' y rol es 'administrador' o 'profesional_sanitario'
+```
+
+**Dónde se pinta:** `app/(app)/agenda/resolver-alerta.tsx` (`'use client'`), en cada
+elemento del bloque «Documentación pendiente» (`documentacion.tsx`) **solo si**
+`puedeResolverAlerta(rol, alerta.tipo)`.
+- Es un `<form action={…}>` con `useActionState(resolverAlerta, null)`, un
+  `<input type="hidden" name="alertaId">` y un botón secundario «Marcar como resuelta».
+- El nombre accesible incluye el tipo: «Marcar como resuelta: {etiqueta del tipo}».
+- Mientras va, el botón está deshabilitado y su texto es «Guardando…».
+- Si devuelve error, un `AvisoDeError` (de `components/ui/piezas.tsx`) con `role="status"`
+  junto al botón, con «No se ha podido marcar como resuelta.».
+- Sin modal de confirmación: resolver no borra nada y queda auditado.
+- **Hoy nadie genera alertas de otro tipo**, así que el botón no aparece en ninguna pantalla
+  real hasta que exista su generador. Se prueba con fixtures (Vitest) y en el banco.
+- La ficha del paciente (`app/(app)/pacientes/**`) **no** lleva el botón en este ticket
+  (ver «Lo que no entra»).
 
 ### 1.6 Armazón
 
@@ -454,6 +573,10 @@ Los textos, con ADR-054 (frase corta, verbo activo, sin jerga):
 | `notificaciones.tipos.otro` | `Aviso` |
 | `agenda.documentacion.nivel2` | `Atrasada` |
 | `agenda.documentacion.nivel3` | `Muy atrasada` |
+| `agenda.documentacion.resolver` | `Marcar como resuelta` |
+| `agenda.documentacion.resolverEtiqueta` | `Marcar como resuelta: {tipo}` |
+| `agenda.documentacion.resolviendo` | `Guardando…` |
+| `agenda.documentacion.errorResolver` | `No se ha podido marcar como resuelta.` |
 
 La forma exacta de plurales e interpolación es la que ya use `lib/i18n/index.ts`; no se inventa
 una nueva.
@@ -493,8 +616,19 @@ Si la vista o las funciones nuevas obligan a declarar algo, se declara ahí.
   - un id que no es UUID se rechaza sin llamar a Supabase;
   - la cookie se escribe sin `maxAge` ni `expires`;
   - `revalidatePath('/', 'layout')` se llama en las dos de marcar.
-- `app/(app)/agenda/documentacion.test.tsx` (o la prueba que ya exista de ese bloque): la
-  píldora sale de `nivel` y no de los días.
+- `app/(app)/agenda/documentacion.test.tsx` (o la prueba que ya exista de ese bloque):
+  - la píldora sale de `nivel` y no de los días;
+  - con una alerta `consentimiento_pendiente` y rol profesional, aparece «Marcar como resuelta»;
+  - con `nota_sin_firmar`, no aparece;
+  - con rol técnico, no aparece en ningún tipo.
+- `app/(app)/agenda/bloques.test.ts`: la tabla completa de `puedeResolverAlerta` (3 roles
+  más null, por 5 tipos).
+- `app/(app)/agenda/acciones-alertas.test.ts` (con `exigirSesion` y Supabase simulados):
+  - un `alertaId` que no es UUID devuelve `invalida` sin tocar Supabase;
+  - cero filas devuelve `no_permitida`, y 42501 también;
+  - si va bien, devuelve `ok` y llama a `revalidatePath('/agenda')` y
+    `revalidatePath('/', 'layout')`;
+  - la consulta lleva `.eq('estado','abierta')` y `.neq('tipo','nota_sin_firmar')`.
 
 **Accesibilidad:** `accesibilidad/avisos.spec.ts` revisa con axe la cabecera, con la campana
 abierta y con la franja a 360 px. El inicio de sesión se hace como lo haga la spec de T-012
@@ -511,14 +645,14 @@ corte B si ya está en `main`; si no, ver «Por confirmar».
 | D3 | El escalado vive **solo** en una función de Postgres programada con pg_cron. | Que lo calcule el consumidor del outbox: ese consumidor no existe, y el contrato prohíbe que el escalado esté en dos sitios. Cron de Vercel: añade una ruta con secreto y una clave de servicio en el servidor, para algo que la base hace sola. |
 | D4 | El nivel se calcula en la base (`nivel_nota_pendiente` y la vista invoker) a partir de `referencia_en` = `citas.fin`. | Días de calendario en TypeScript (`nivelDeAntiguedad`): son dos fuentes de verdad, y además no cuadran con «a las 24 h». Leer `citas.fin` con un join en la vista: la RLS de `citas` podría dejar el nivel nulo según el rol. `fecha_referencia`: es una fecha en UTC, demasiado gruesa para 24 h. |
 | D5 | El recuento de la cabecera son **mis** notas: `profesional_id = uid`, para todos los roles, incluido el admin. Se destacan los niveles 2 y 3. | Contar todo lo que deja ver la RLS: el coasignado y el admin verían notas que no tienen que firmar, y el criterio 8 lo prohíbe expresamente. El admin se entera de las ajenas por el nivel 3. Es coherente con `criterioDocumentacion` de T-014 (el admin ve solo lo propio). |
-| D6 | No hay acción «resolver alerta», y la base impide cerrar una `nota_sin_firmar` a mano (P1). | Construirla: la única alerta que hoy se genera es `nota_sin_firmar`, y cerrarla sin firmar desactiva el escalado. Las demás alertas no las genera nadie, así que sería un control sin acción real detrás (`CLAUDE.md`). |
+| D6 | **Decisión P1.** «Resolver alerta» se construye solo para los tipos distintos de `nota_sin_firmar`. Usa la política de update vigente más el disparador de B.4: sin función ni política nuevas. El botón solo se pinta donde `puedeResolverAlerta` es cierta. Una `nota_sin_firmar` solo la cierra la firma (E2). | Una función definer `resolver_alerta()`: duplicaría la decisión de quién puede, que ya toma la RLS. Dar el update al técnico sobre `consentimiento_pendiente`: la matriz no lo recoge. Dejar reabrir: rompería el escalado y la lectura de la auditoría. |
 | D7 | Los umbrales siguen el patrón de herencia: organización `not null default`, centro nulo y una función efectiva que nunca da nulo. | Ponerlos en `preferencias_usuario` o en una tabla aparte: el contrato pide «por centro» y que herede como `retencion_efectiva()`. |
 | D8 | Un disparador invoker protege las columnas de identidad y `referencia_en` de la alerta. | Confiar en la política de update: deja mover `profesional_id`, `tipo` o el instante, y con eso se esquiva el escalado. Un disparador definer: no vería `current_user = authenticated`. |
 | D9 | La franja va en el flujo, debajo de la cabecera, y no es fija. | `fixed` o `sticky` abajo: a 360 px tapa la acción primaria y el teclado virtual (criterio 9). |
 | D10 | El descarte se guarda en una cookie de sesión, `httpOnly`, escrita por una Server Action y leída en el layout. | `sessionStorage`: el servidor no la ve, así que la franja aparecería un instante en cada recarga, y se pierde al abrir otra pestaña. Una tabla: persiste más allá de la sesión del navegador, y el contrato pide lo contrario. |
 | D11 | El reloj del cliente es `ahoraServidor + (performance.now() - t0)`, con un `setTimeout` al próximo cambio. | `new Date()` en el cliente: el contrato lo prohíbe para el primer pintado, y un reloj del navegador desajustado desplazaría la franja. Un `setInterval` de 1 s: es trabajo inútil y no da más precisión que ir al próximo cambio. |
 | D12 | Los datos de avisos se leen en el layout y se refrescan con `revalidatePath('/', 'layout')` desde las acciones. | Un sondeo con una Server Action periódica: una acción es una mutación y no se usa para leer. Realtime de Supabase: está fuera de alcance (ver «Lo que no entra»). |
-| D13 | Las notificaciones de nivel 3 van a **todos los administradores activos**, y su `detalle` es «{profesional} tiene sin firmar la nota de la sesión del {dd/mm}.». | Que vayan al admin del centro: hoy los administradores son de toda la organización. Que lleven el paciente: lo prohíben la decisión 5 y ADR-038. |
+| D13 | **Decisión P4.** El nivel 3 va al administrador designado en `organizacion.administrador_avisos_id` (uuid, FK a `perfiles` con `on delete set null`, nula). Si está vacía o esa persona ya no es administrador activo, va a todos los administradores activos. El `detalle` es «{profesional} tiene sin firmar la nota de la sesión del {dd/mm}.». | Una tabla de destinatarios: el propietario pidió una persona. Un admin por centro: hoy los administradores no tienen centro. Fallar o no avisar si el designado no vale: el aviso no puede perderse. Que el `detalle` lleve el paciente: lo prohíben la decisión 5 y ADR-038. |
 | D14 | Se añade `rol_actual() is not null` a las dos políticas de `notificaciones`. | Dejarlas como están: serían las únicas del esquema sin el corte por baja de ADR-032. |
 | D15 | `leida_en` lo fija la base (`now()`) y, una vez puesto, no cambia. | Aceptar el valor del cliente: permitiría fechar la lectura hacia atrás, y volver a no leída rompería la auditoría. |
 
@@ -536,7 +670,7 @@ al final del módulo como hace el 20.
 | C2 | **Manual.** Al descartar y navegar, el ancla sigue y la franja no vuelve. | El guion, paso 3. En Vitest: descartar y avanzar los temporizadores. Tras recargar, la cookie la oculta. | El ancla desaparece al pasar el `fin`. | Que el ancla dependa de `!descartada`: falla el Vitest. |
 | C3 | **Manual.** El lector de pantalla la anuncia una vez. | NVDA o VoiceOver. En Vitest: `role="status"` y `aria-live="polite"` existen antes que el contenido, y no hay `role="alert"`. | — | Cambiar a `role="alert"`: falla el Vitest. |
 | C4 | **Automático.** Una cita `realizada` de ayer sin firmar da nivel 2 y sube el recuento. | En el banco: (a) como PRO1, `r0 := recuento_notas_pendientes().nivel2`; (b) como postgres, cita de PRO1 y P1 con `fin = now() - interval '25 hours'`, que se pasa a `realizada`; (c) como PRO1, `nivel = 2` en `alertas_documentacion_nivel` para esa cita, y el `nivel2` del recuento es `r0 + 1`. | Una cita con `fin = now() - 2 h` da `nivel = 1` y no suma a `nivel2`. Otra con `fin = now() - 73 h` da `nivel = 3`. Con `centros.escalado_nivel2_horas = 48` en el centro A, la de 25 h baja a nivel 1 (umbral por centro). Con el umbral del centro a null, vuelve a 2 (herencia que nunca da nulo). | Fijar `umbrales_escalado` a 72/24 o quitar el `coalesce`: falla C4 o su gemela de herencia. Comprobar `referencia_en` con `now()` en vez de `citas.fin`: falla `nivel = 2`. |
-| C5 | **Automático.** A las 72 h hay **una** fila para el admin, y su `cuerpo` no lleva paciente. | Como postgres, sobre la cita de 73 h: `select public.escalar_notas_pendientes()` **dos veces**. Después: `count(*) = 1` en `notificaciones` con `perfil_id = ADM` y `origen_id = alerta`; el `detalle` no contiene `P1.nombre` ni `P1.apellidos` (`position(... in detalle) = 0` para cada uno) ni el texto de ninguna nota; contiene `nombre_completo` de PRO1. | La alerta de nivel 2 no genera ninguna fila. Un admin con `estado = 'baja'` no recibe nada. Si la alerta está resuelta (vía firma, o como postgres), escalar no crea nada nuevo. | Quitar el `on conflict`: la segunda llamada falla con 23505. Quitar el predicado del índice en el `on conflict`: error 42P10. Meter `p.nombre` en el `format`: falla `position = 0`. |
+| C5 | **Automático.** A las 72 h hay **una** fila para el admin, y su `cuerpo` no lleva paciente. | Como postgres, sobre la cita de 73 h: `select public.escalar_notas_pendientes()` **dos veces**. Después: `count(*) = 1` en `notificaciones` con `perfil_id = ADM` y `origen_id = alerta`; el `detalle` no contiene `P1.nombre` ni `P1.apellidos` (`position(... in detalle) = 0` para cada uno) ni el texto de ninguna nota; contiene `nombre_completo` de PRO1. | La alerta de nivel 2 no genera ninguna fila. Si la alerta está resuelta (vía firma, o como postgres), escalar no crea nada nuevo. **Destinatarios (P4)**, con un segundo administrador ADM2 propio del módulo 22 y una alerta de 73 h nueva por escenario (las aserciones se hacen sobre el `origen_id` de ese escenario, antes de pasar al siguiente): (i) designado ADM2 activo: ADM2 = 1, ADM = 0 y total = 1; (ii) columna nula: ADM = 1, ADM2 = 1, y el total es igual al número de administradores activos; (iii) designado ADM2 y después `estado = 'baja'` en ADM2: ADM = 1 y ADM2 = 0. Además, designar a PRO1 lanza 23514, y designar a ADM2 activo entra. | Quitar el `on conflict`: la segunda llamada falla con 23505. Quitar el predicado del índice en el `on conflict`: error 42P10. Meter `p.nombre` en el `format`: falla `position = 0`. Quitar el `not exists (designado)`: falla (i), porque ADM recibe. Quitar el filtro de rol y estado en `designado`: falla (iii), porque ADM2 de baja recibe y ADM no. Ir siempre a todos: falla (i). |
 | C6 | **Automático.** Como `profesional_sanitario`, cero notificaciones ajenas. | Se inserta como postgres una notificación para PRO2 y otra para PRO1. Como PRO1: `count(*) where perfil_id = PRO2 = 0`, y un `update` sobre la de PRO2 afecta a 0 filas. | Como PRO1, `count(*) where perfil_id = PRO1 = 1`. Como PROBAJA, ve 0 de las suyas (D14). | Quitar `perfil_id = uid` de la política: PRO1 ve 1. Quitar `rol_actual() is not null`: PROBAJA ve la suya. |
 | C7 | **Automático.** `update … set titulo = 'x'` falla y marcar `leida_en` entra. | Como PRO1, sobre su propia fila: `assert_lanza('update … set titulo = ''x''', '42501')`, y lo mismo para `detalle`, `tipo`, `origen_id` e `id`. | Sobre la misma fila, `update set leida_en = '2000-01-01'` entra, y queda `leida_en` ≈ `now()`, **no** el año 2000. Después, `set leida_en = null` lanza 42501. | Quitar `titulo` de la lista congelada del disparador: el `update` entra y la aserción falla. |
 | C8 | **Automático.** El recuento de un profesional no incluye alertas de otro. | Se asigna PRO2 a P1 (es coasignado y la RLS le deja ver la alerta de PRO1). Como PRO2: la alerta de 25 h de PRO1 **es visible** en la vista (`count = 1`), pero `recuento_notas_pendientes()` no la cuenta. | Como PRO1, el mismo recuento sí la cuenta. | Quitar `profesional_id = auth.uid()` de la función: PRO2 la cuenta. |
@@ -553,6 +687,9 @@ Aserciones que el contrato no pide pero que este diseño necesita:
 | E3 | El instante no se mueve. | Como PRO1, `set referencia_en = now()` lanza 42501, y `set profesional_id = PRO2` y `set tipo = 'consentimiento_pendiente'` también. | Como postgres, el `update` de relleno entra, porque el disparador solo actúa con `authenticated`. |
 | E4 | El insert no fija el instante. | Como PRO1, insertar una alerta con `origen_tabla = 'citas'` y `referencia_en = '2000-01-01'` hace que la fila quede con `referencia_en = citas.fin`. | — |
 | E5 | Están los permisos y el cron. | `has_function_privilege('authenticated', 'public.escalar_notas_pendientes()', 'execute') = false`, y lo mismo para `anon` en las cuatro funciones nuevas. `has_table_privilege('authenticated', 'public.notificaciones', 'insert') = false`. | `select count(*) from cron.job where jobname = 'escalar-notas-pendientes' = 1`. |
+| E6 | Resolver (P1): quién. Con una `consentimiento_pendiente` de P1 (PRO1, centro A, `origen_tabla = 'consentimientos'`), insertada como postgres. | Como TEC1: la ve (`select` = 1) pero `update … set estado='resuelta' … returning id` afecta a 0 filas. Como PRO2 sin asignar a P1: 0 filas. | Como PRO1: 1 fila, `estado = 'resuelta'`, y en `auditoria` hay una fila `UPDATE` de `alertas_documentacion` con `registro_id` = esa alerta y `actor_id = PRO1`. Como ADM, sobre otra igual: 1 fila. Mutante: añadir una rama de técnico a la política hace que TEC1 afecte a 1 fila. |
+| E7 | Resolver (P1): el reloj y la vuelta atrás. | Como PRO1, `set estado = 'resuelta', resuelta_en = '2000-01-01'`: queda `resuelta_en` ≈ `now()`. Después, `set estado = 'abierta', resuelta_en = null` lanza 42501. | La gemela de la vuelta atrás es la propia resolución de E6. Mutante: quitar `new.resuelta_en := now()` deja el año 2000. Quitar la guarda de reabrir hace que el update entre. |
+| E8 | Resolver no abre la puerta a `nota_sin_firmar`. | Es E2: ni PRO1 ni ADM la cierran por `update` (42501). | La firma la cierra (módulo 20 en verde). |
 
 ---
 
@@ -597,6 +734,15 @@ Aserciones que el contrato no pide pero que este diseño necesita:
 - El `insert` y el `update` directos sobre `alertas_documentacion`: `referencia_en` lo fija la
   base; la identidad, `tipo` y el instante no se mueven; una `nota_sin_firmar` no se cierra.
 
+- `resolverAlerta(alertaId)` (P1): con un UUID cualquiera, la RLS decide. El técnico nunca
+  modifica nada, porque no tiene política de update. Una `nota_sin_firmar` lanza 42501 desde
+  el disparador. Una alerta resuelta no se reabre. Comprueba que la acción no hace de oráculo:
+  ajena, inexistente o ya resuelta dan la misma respuesta.
+- `organizacion.administrador_avisos_id` (P4): solo la escribe el administrador (política
+  vigente) o el propietario de la base. Comprueba que el disparador rechaza a un no
+  administrador o a un administrador inactivo, y que el escalado **no** confía en la columna
+  sin volver a comprobar el rol y el estado en el momento de enviar (escenario iii).
+
 **Pruebas que deben fallar, y por qué motivo exacto:**
 - C7 debe fallar con **42501 y el mensaje del disparador**. Si falla con 42703, la columna
   `titulo` no existe y la prueba no prueba nada.
@@ -627,6 +773,11 @@ Aserciones que el contrato no pide pero que este diseño necesita:
 - **Reloj:** ningún `new Date()` sin argumentos en `aviso-sesion.tsx` ni en `lib/agenda/avisos.ts`.
 - **Foco:** nada de `autoFocus`, `.focus()` al aparecer, `role="alert"`, `alertdialog` ni
   `<dialog>` en los avisos. El único `.focus()` permitido es el del ancla, tras descartar.
+- **Botón sin acción:** «Marcar como resuelta» nunca se pinta para el técnico ni sobre una
+  `nota_sin_firmar` (`puedeResolverAlerta`). Para el administrador y el profesional, lo que
+  ven es lo que pueden modificar. Si alguien amplía la lectura sin ampliar el update, esto
+  deja de ser cierto.
+- **Designado borrado:** `on delete set null` hace que se avise a todos, nunca a nadie.
 - **Contenido clínico:** el `detalle` de `nota_pendiente_escalada` lleva solo el nombre del
   profesional y la fecha. El `titulo` es fijo.
 
@@ -656,6 +807,10 @@ app/(app)/agenda/bloques.ts
 app/(app)/agenda/bloques.test.ts
 app/(app)/agenda/documentacion.tsx
 app/(app)/agenda/documentacion.test.tsx
+app/(app)/agenda/esquema-alertas.ts
+app/(app)/agenda/acciones-alertas.ts
+app/(app)/agenda/acciones-alertas.test.ts
+app/(app)/agenda/resolver-alerta.tsx
 scripts/rls/22-avisos.sql
 scripts/rls/README.md
 scripts/rls/11-cobertura.sql        # solo si hay que declarar algo nuevo
@@ -686,10 +841,10 @@ las Server Actions, la migración ni el banco.
 
 | # | Pregunta | Recomendación |
 |---|---|---|
-| P1 | El contrato pide la Server Action «resolver una alerta». ¿La construimos? | **No.** Solo firmar cierra una `nota_sin_firmar`, y la base lo impone (E2). Hoy ningún otro tipo de alerta se genera, así que el botón no tendría ninguna acción real detrás. Volverá con el ticket que genere `consentimiento_pendiente`. |
+| P1 | El contrato pide la Server Action «resolver una alerta». ¿La construimos? | **Resuelta (02-10-2026): sí, solo para tipos distintos de `nota_sin_firmar`.** Diseño en §1.1 J, §1.5b, D6 y E6-E8. |
 | P2 | ¿El recuento destacado de la cabecera cuenta el nivel 1? | **No**: solo los niveles 2 y 3. El nivel 1 es la presencia discreta en Agenda y en la ficha de la cita. Encender la cabecera nada más acabar cada sesión sería la alerta que deja de leerse. |
 | P3 | ¿El nivel 2 crea también una notificación `nota_pendiente` al profesional? | **No.** La cabecera ya lo destaca. El tipo queda en el catálogo, pero ninguna función lo genera. |
-| P4 | ¿Qué administradores reciben el nivel 3? | **Todos los activos.** Hoy los administradores no tienen centro. |
+| P4 | ¿Qué administradores reciben el nivel 3? | **Resuelta (02-10-2026): un administrador designado** (`organizacion.administrador_avisos_id`), con respaldo a todos los activos. Diseño en §1.1 G e I, D13 y C5. |
 | P5 | La pregunta heredada de T-011a sobre qué significa «entregado» en el outbox. | **Se aplaza al ticket que escriba el consumidor del outbox.** T-015 no lo escribe (D3), así que no hay barrido que pueda saltarse eventos. |
 | P6 | ¿pg_cron o cron de Vercel? | **pg_cron** (ADR-024 admite los dos). |
 | P7 | ¿Columna `titulo` o etiqueta derivada del tipo? | **Las dos.** La columna existe y la escribe quien genera; si es nula, se usa la etiqueta del tipo (D2). |
@@ -716,6 +871,13 @@ las Server Actions, la migración ni el banco.
 7. **Plurales en `lib/i18n/index.ts`**: usa el mecanismo que exista. Si no hay plurales, dos
    claves (`…uno` y `…varios`).
 8. **`Sesion`**: si `lib/supabase/sesion.ts` exporta ya el tipo, se usa ese.
+9. **Auditoría de `alertas_documentacion` y de `organizacion`**: comprueba en
+   `20260829150000_auditoria_y_solo_adicion.sql` que las dos están en el bucle de T-004. E6
+   depende de la primera.
+10. **`Rol` y `TipoAlerta`**: usa los tipos que ya existan en `lib/supabase/tipos-bd.ts` o en
+    `bloques.ts`. No crees otros.
+11. **ADM2 en el banco**: se crea en el módulo 22 con el molde de `01-fijacion.sql`
+    (`auth.users` más `perfiles`), con un UUID propio del módulo.
 
 ---
 
@@ -736,6 +898,13 @@ las Server Actions, la migración ni el banco.
   centro, no una pantalla. Se fijan por SQL hasta que la configuración del centro tenga la
   suya.
 - **La ficha del paciente**: se cierra con la RLS (F), sin tocar `app/(app)/pacientes/**`.
+  Por eso tampoco lleva el botón «Marcar como resuelta». Si el propietario lo quiere ahí, es
+  una ampliación de territorio.
+- **Que el técnico resuelva `consentimiento_pendiente`**: la matriz de `docs/architecture.md`
+  no le da escritura sobre la documentación del paciente. Si se quiere, es una pregunta al
+  propietario con su ADR, no una política de este ticket.
+- **La pantalla de Ajustes para elegir el administrador designado**: se fija por SQL hasta
+  que Ajustes la tenga (decisión P4).
 - **Correo o push**: ADR-038, nunca.
 
 ---
