@@ -139,6 +139,50 @@ describe('Comparador', () => {
     expect(region().querySelector('del')!.textContent).toContain('leve.');
   });
 
+  describe('C1-H2 · otro par que el de partida, con tres versiones', () => {
+    const T1 = version(1, { texto: 'Ánimo leve.', reservadas: 'Reserva uno' });
+    const T2 = version(2, { texto: 'Ánimo moderado.', reservadas: 'Reserva dos' });
+    const T3 = version(3, { texto: 'Ánimo grave.', reservadas: 'Reserva tres' });
+
+    function bloque(nombre: 'Nota' | 'Anotaciones reservadas') {
+      return within(region()).getByRole('heading', { name: nombre }).parentElement!;
+    }
+
+    function cambios(nombre: 'Nota' | 'Anotaciones reservadas') {
+      const b = bloque(nombre);
+      return {
+        retirado: Array.from(b.querySelectorAll('del')).map((d) => textoVisible(d)).join('|'),
+        anadido: Array.from(b.querySelectorAll('ins')).map((d) => textoVisible(d)).join('|'),
+      };
+    }
+
+    it('por defecto, de la 2 a la 3', () => {
+      render(<Comparador versiones={[T1, T2, T3]} />);
+      abrir();
+      expect(cambios('Nota')).toEqual({ retirado: '−moderado.', anadido: '+grave.' });
+      expect(cambios('Anotaciones reservadas')).toEqual({ retirado: '−dos', anadido: '+tres' });
+    });
+
+    it('«Desde: Versión 1» compara la 1 con la 3, en la nota y en las reservadas', () => {
+      render(<Comparador versiones={[T1, T2, T3]} />);
+      abrir();
+      elegir('Desde', 'Versión 1');
+      expect(region()).toHaveAccessibleName('De la versión 1 a la 3');
+      expect(cambios('Nota')).toEqual({ retirado: '−leve.', anadido: '+grave.' });
+      expect(cambios('Anotaciones reservadas')).toEqual({ retirado: '−uno', anadido: '+tres' });
+    });
+
+    it('«Desde: Versión 1» y «Hasta: Versión 2» compara la 1 con la 2, no con la vigente', () => {
+      render(<Comparador versiones={[T1, T2, T3]} />);
+      abrir();
+      elegir('Desde', 'Versión 1');
+      elegir('Hasta', 'Versión 2');
+      expect(region()).toHaveAccessibleName('De la versión 1 a la 2');
+      expect(cambios('Nota')).toEqual({ retirado: '−leve.', anadido: '+moderado.' });
+      expect(cambios('Anotaciones reservadas')).toEqual({ retirado: '−uno', anadido: '+dos' });
+    });
+  });
+
   it('reservadas: sin bloque si las dos están vacías', () => {
     render(<Comparador versiones={[V1, { ...V2, reservadas: '' }]} />);
     abrir();
@@ -161,6 +205,14 @@ describe('Comparador', () => {
     abrir();
     expect(screen.getByRole('status')).toHaveTextContent('Sin cambios entre estas dos versiones.');
     expect(region().querySelector('ins, del')).toBeNull();
+  });
+
+  it('C1-H1 · mismo texto y reservadas distintas: no dice «Sin cambios» y el bloque de reservadas lo enseña', () => {
+    render(<Comparador versiones={[V1, { ...V2, texto: V1.texto, reservadas: 'Hipótesis de trabajo' }]} />);
+    abrir();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText('Sin cambios entre estas dos versiones.')).toBeNull();
+    expect(region().querySelector('ins')!.textContent).toContain('Hipótesis de trabajo');
   });
 
   it('gemela: con cambios no hay «Sin cambios»', () => {
