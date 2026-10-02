@@ -44,6 +44,10 @@ export type VersionDeVista = {
   reservadas: string | null;
   /** La frase de §2.13, leída del sobre sellado. */
   sello: string;
+  /** `null` si el sello no se puede leer: ni «en sesión» ni «fuera» (la pieza pinta un signo de duda). */
+  enSesion: boolean | null;
+  /** «Margen aplicado: N min». Solo si el sello es legible, lleva cita y el margen no es nulo. */
+  margen: string | null;
   /** Doce hexadecimales de la huella. */
   huellaCorta: string;
 };
@@ -59,6 +63,16 @@ export type ModeloDeNota = {
     coprofesional: { id: string; nombre: string } | null;
   };
   borrador: { texto: string; reservadas: string; testigo: string } | null;
+  /**
+   * Hay un borrador que este lector NO puede leer (B0-H3): solo se sabe que existe. Ni el texto,
+   * ni las reservadas, ni el testigo viajan.
+   */
+  borradorOculto: boolean;
+  /**
+   * El lector solo ve las versiones conjuntas (B0-H2): coprofesional que no es autor ni
+   * profesional asignado. La pantalla no debe sugerir que existan versiones individuales.
+   */
+  lecturaConjunta: boolean;
   versiones: VersionDeVista[];
   candidatosCoprofesional: { id: string; nombre: string }[];
   puedeSerConjunta: boolean;
@@ -83,13 +97,23 @@ export type ResultadoApertura =
   | { estado: 'no_disponible' }
   | { estado: 'error' }
   | { estado: 'elegir_episodio'; episodios: { id: string; etiqueta: string }[] }
-  | { estado: 'abierta'; caducaEn: string | null; nota: ModeloDeNota };
+  | { estado: 'abierta'; caducaEn: string; nota: ModeloDeNota };
 
+/**
+ * `caducaEn: null` = no se sabe (fallo o carrera con un cierre). La operación ya se hizo bajo RLS,
+ * así que la ventana estaba abierta: la pantalla conserva el plazo que tenía y **nunca lo amplía
+ * sin confirmación**.
+ */
 export type ResultadoGuardado =
   | { ok: true; testigo: string; caducaEn: string | null }
   | { ok: false; motivo: MotivoFallo };
 
-/** `nota` es `null` solo si la versión SE SELLÓ pero la relectura posterior falló. */
+/**
+ * `nota` es `null` solo si la versión SE SELLÓ pero la relectura posterior falló. `caducaEn: null`
+ * = no se sabe (fallo o carrera con un cierre). La operación ya se hizo bajo RLS, así que la
+ * ventana estaba abierta: la pantalla conserva el plazo que tenía y **nunca lo amplía sin
+ * confirmación**.
+ */
 export type ResultadoDeNota =
   | { ok: true; nota: ModeloDeNota | null; caducaEn: string | null }
   | { ok: false; motivo: MotivoFallo };
@@ -136,7 +160,7 @@ type Episodio = { modalidad: string; centroId: string | null; abiertoEn: string 
  * «no hay dato» (`valor: null`, sin error) y «no se pudo leer» (`ok: false`). Lo que se sella o
  * se pinta nunca se decide con un error tomado por «no hay dato».
  */
-type Leida<T> = { ok: true; valor: T } | { ok: false };
+export type Leida<T> = { ok: true; valor: T } | { ok: false };
 
 async function leerEpisodio(supabase: Supabase, episodioId: string): Promise<Leida<Episodio | null>> {
   const { data, error } = await supabase
@@ -266,6 +290,27 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
   const hayBorrador = cab.borrador_contenido !== null && cab.borrador_contenido !== undefined;
   const parseado = hayBorrador ? esquemaBorrador.safeParse(cab.borrador_contenido) : null;
 
+  // B0-H3 · El borrador ajeno se recorta por alcance, aquí y no en la pantalla: lo que no se lee
+  // no viaja. Un borrador aún no tiene alcance (se elige al firmar), así que se lee lo que la
+  // cabecera sí dice: quien lee todas las versiones firmadas por RLS (profesional asignado) lo
+  // lee. B1-H1: el `coprofesional_id` de la cabecera no cuenta (se congela en la v1 y no dice nada
+  // del alcance de la versión en curso). Cualquier otro lector sabe que existe y nada más.
+  let puedeLeerBorrador = soyAutor;
+  let lecturaConjunta = false;
+  if (!soyAutor) {
+    const { data: asignado, error: errorAsignado } = await supabase.rpc('es_profesional_asignado', {
+      p_paciente_id: cab.paciente_id,
+    });
+    // Un fallo no es «no es asignado»: se leería el recorte equivocado sin decirlo.
+    if (errorAsignado) {
+      console.error('notas: no se pudo saber si es profesional asignado', errorAsignado);
+      return { ok: false };
+    }
+    puedeLeerBorrador = asignado === true;
+    // Quien no es autor ni asignado solo lee lo que RLS le deja: las versiones conjuntas.
+    lecturaConjunta = asignado !== true;
+  }
+
   // Candidatos a coprofesional: la misma regla que el disparador de T-034, que es quien manda.
   let candidatos: { id: string; nombre: string }[] = [];
   if (soyAutor && versiones.length === 0 && episodio?.centroId) {
@@ -302,7 +347,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
   ]);
   if (!nombres) return { ok: false };
 
-  const vista: VersionDeVista[] = versiones.map((v) => {
+  const vista: VersionDeVista[] = versiones.map((v, posicion) => {
     let texto = '';
     try {
       texto = (JSON.parse(v.cuerpo) as { texto?: string }).texto ?? '';
@@ -310,15 +355,24 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
       texto = '';
     }
     const firmada = new Date(v.creada_en);
+    // El sello se lee UNA vez por versión: la frase, «en sesión» y el margen salen del mismo sobre.
+    const s = leerSello(v.contenido_canonico);
     return {
-      numero: v.numero_version,
+      // B1-H4 · Quien solo lee las conjuntas no ve los huecos de las individuales: se numera por
+      // posición en lo visible y el número real no viaja.
+      numero: lecturaConjunta ? posicion + 1 : v.numero_version,
       autor: nombres.get(v.autor_id) ?? '',
       firmadaEn: `${formatearFechaCorta(firmada, zona)} ${formatearHora(firmada, zona)}`,
       motivo: v.motivo_cambio,
       alcance: v.alcance,
       texto,
       reservadas: v.anotaciones_reservadas,
-      sello: fraseDelSello(leerSello(v.contenido_canonico), zona),
+      sello: fraseDelSello(s, zona),
+      enSesion: s === null ? null : s.redactadaEnSesion,
+      margen:
+        s?.citaId && s.margenMinutos !== null
+          ? tCon('notas.sello.margen', { minutos: s.margenMinutos })
+          : null,
       huellaCorta: hexDeBytea(v.huella).slice(0, 12),
     };
   });
@@ -335,8 +389,10 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
         ? { id: cab.coprofesional_id, nombre: nombres.get(cab.coprofesional_id) ?? '' }
         : null,
     },
+    borradorOculto: hayBorrador && !puedeLeerBorrador,
+    lecturaConjunta,
     borrador:
-      hayBorrador && cab.borrador_actualizado_en && parseado?.success
+      hayBorrador && puedeLeerBorrador && cab.borrador_actualizado_en && parseado?.success
         ? {
             texto: parseado.data.texto,
             reservadas: parseado.data.reservadas,
@@ -414,7 +470,9 @@ export async function abrirEditorDeNota(
 
   // 1 · El acceso se registra ANTES de tocar ninguna tabla clínica (ADR-058.2).
   const acceso = await registrarAccesoHistoria(sesion, entrada.pacienteId, 'notas_clinicas', contexto);
-  if (!acceso.ok) return { estado: 'bloqueada' };
+  // `denegado` (42501) es el candado cerrado o un paciente ajeno, indistinguibles a propósito. Todo
+  // lo demás es un fallo pasajero: pedir el PIN con la ventana abierta sería culpar al usuario (R4-H1).
+  if (!acceso.ok) return acceso.motivo === 'denegado' ? { estado: 'bloqueada' } : { estado: 'error' };
 
   // Cita XOR nota. Con `notaId` se ABRE cualquier nota visible, también las que no tienen cita
   // (las sembradas); lo que no se puede desde aquí es CREAR una nota sin cita: no hay de dónde
@@ -426,7 +484,9 @@ export async function abrirEditorDeNota(
     // Una lectura que falló es «vuelve a intentarlo», no «no está disponible» (R2-H14).
     if (!leido.ok) return { estado: 'error' };
     if (!leido.valor) return { estado: 'no_disponible' };
+    // Sin plazo no se enseña lo que no se sabe cuándo esconder (B.2.3).
     const caducaEn = await prolongarDesbloqueo(sesion);
+    if (caducaEn === null) return { estado: 'error' };
     return { estado: 'abierta', caducaEn, nota: leido.valor };
   };
 
@@ -822,4 +882,80 @@ export async function firmarNota(
   // ocurrieron en la misma transacción.
   const caducaEn = await prolongarDesbloqueo(sesion);
   return { ok: true, nota: await refrescarModelo(sesion, entrada.notaId), caducaEn };
+}
+
+// ---------------------------------------------------------------------------------------
+// La lista de la ficha (corte B)
+// ---------------------------------------------------------------------------------------
+
+export type ResumenDeNota = {
+  id: string;
+  fechaSesion: string;
+  estado: EstadoNota;
+  versiones: number;
+  autor: string;
+  conjunta: boolean;
+  href: string;
+};
+
+/**
+ * Las notas de un paciente para la pestaña de la ficha. Dos consultas por `paciente_id` y NINGUNA
+ * columna de texto clínico: la lista sabe que hay borrador por `borrador_abierta_en` (el check
+ * `notas_clinicas_borrador_abierta_ck` lo liga a `borrador_contenido`), sin traerlo.
+ *
+ * No registra acceso ni prolonga el desbloqueo: la llama `abrirPestanaDeHistoria` DESPUÉS de
+ * registrar. Y un fallo de lectura es `{ ok: false }`, nunca una lista vacía: «no se pudo leer» no
+ * puede pintarse como «todavía no hay notas».
+ */
+export async function listarNotasDelPaciente(
+  sesion: Sesion,
+  pacienteId: string,
+): Promise<Leida<ResumenDeNota[]>> {
+  const { supabase } = sesion;
+  const [notas, versiones] = await Promise.all([
+    supabase
+      .from('notas_clinicas')
+      .select('id, autor_id, fecha_sesion, borrador_abierta_en')
+      .eq('paciente_id', pacienteId)
+      .order('fecha_sesion', { ascending: false }),
+    supabase
+      .from('notas_clinicas_versiones')
+      .select('nota_id, numero_version, alcance')
+      .eq('paciente_id', pacienteId),
+  ]);
+  if (notas.error || versiones.error) {
+    console.error('notas: no se pudo leer la lista', notas.error ?? versiones.error);
+    return { ok: false };
+  }
+  const filas = notas.data ?? [];
+  const nombres = await nombresDe(supabase, [...new Set(filas.map((f) => f.autor_id))]);
+  if (!nombres) return { ok: false };
+
+  const porNota = new Map<string, { numero_version: number; alcance: string }[]>();
+  for (const v of versiones.data ?? []) {
+    const de = porNota.get(v.nota_id) ?? [];
+    de.push(v);
+    porNota.set(v.nota_id, de);
+  }
+
+  return {
+    ok: true,
+    valor: filas.map((f) => {
+      const suyas = porNota.get(f.id) ?? [];
+      const vigente = suyas.reduce<{ numero_version: number; alcance: string } | null>(
+        (mayor, v) => (mayor === null || v.numero_version > mayor.numero_version ? v : mayor),
+        null,
+      );
+      return {
+        id: f.id,
+        fechaSesion: fechaLegible(f.fecha_sesion),
+        estado: estadoDeNota({ versiones: suyas.length, hayBorrador: f.borrador_abierta_en !== null }),
+        versiones: suyas.length,
+        autor: nombres.get(f.autor_id) ?? '',
+        conjunta: vigente?.alcance === 'conjunta',
+        // Siempre `?nota=`: `?cita=` es la puerta de CREACIÓN de la agenda (B.2.7).
+        href: `/pacientes/${pacienteId}/historia/notas?nota=${f.id}`,
+      };
+    }),
+  };
 }

@@ -6,8 +6,10 @@ import { z } from 'zod';
 import { registrarAccesoHistoria, type PestanaHistoria } from '@/lib/cuentas/accesos';
 import { bloquearHistoria, estadoDeCuenta, prolongarDesbloqueo } from '@/lib/cuentas/candado';
 import { t } from '@/lib/i18n';
+import { listarNotasDelPaciente, type ResumenDeNota } from '@/lib/notas/servidor';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
+import { ipDeLaPeticion } from './peticion';
 import { agruparPorEpisodio, type EpisodioDeVista, type NivelDeRiesgo } from './presentacion';
 
 /**
@@ -60,22 +62,13 @@ export type ResultadoDeApertura =
       vistas: number;
       /** `historial_clinico` trae contenido; las otras tres todavía no tienen suyo. */
       historial: ContenidoDelHistorial | null;
+      /**
+       * Solo en `notas_clinicas`: el resumen de cada nota, sin texto. `null` es «no se pudo leer»
+       * (o no es esa pestaña): nunca se pinta como «todavía no hay notas».
+       */
+      notas: ResumenDeNota[] | null;
     }
   | { abierta: false; mensaje: string };
-
-/**
- * `x-forwarded-for` puede traer una cadena de proxies y cualquier cosa que alguien meta a
- * mano: solo se pasa a la base lo que tiene forma de IP, porque la columna es `inet` y un
- * valor sucio la haría lanzar 22P02 — es decir, dejaría la historia sin abrir por culpa de
- * una cabecera.
- */
-function ipDeLaPeticion(cabeceras: Headers): string | null {
-  const bruta = cabeceras.get('x-forwarded-for')?.split(',')[0]?.trim();
-  if (!bruta) return null;
-  const esIpv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(bruta);
-  const esIpv6 = /^[0-9a-fA-F:]+$/.test(bruta) && bruta.includes(':');
-  return esIpv4 || esIpv6 ? bruta : null;
-}
 
 export async function abrirPestanaDeHistoria(
   pacienteId: string,
@@ -108,7 +101,20 @@ export async function abrirPestanaDeHistoria(
       validado.data.pestana === 'historial_clinico'
         ? await leerHistorial(sesion.supabase, validado.data.pacienteId)
         : null,
+    // Después del registro, como el historial: la lista sale de la misma puerta.
+    notas:
+      validado.data.pestana === 'notas_clinicas'
+        ? await leerNotas(sesion, validado.data.pacienteId)
+        : null,
   };
+}
+
+async function leerNotas(
+  sesion: Awaited<ReturnType<typeof exigirSesion>>,
+  pacienteId: string,
+): Promise<ResumenDeNota[] | null> {
+  const lectura = await listarNotasDelPaciente(sesion, pacienteId);
+  return lectura.ok ? lectura.valor : null;
 }
 
 type Cliente = Awaited<ReturnType<typeof exigirSesion>>['supabase'];
