@@ -59,7 +59,13 @@ export type AlertaPendiente = {
   pacienteNombre: string | null;
   tipo: Database['public']['Enums']['tipo_alerta_documentacion'];
   fechaReferencia: string | null;
+  /** Nivel de la nota pendiente, calculado en la base (`alertas_documentacion_nivel`, T-015). */
+  nivel: 1 | 2 | 3 | null;
 };
+
+function aNivel(valor: number | null): 1 | 2 | 3 | null {
+  return valor === 1 || valor === 2 || valor === 3 ? valor : null;
+}
 
 function fallo(error: Parameters<typeof mapearErrorCitas>[0]) {
   const motivo = mapearErrorCitas(error);
@@ -205,14 +211,17 @@ export async function zonaDeCentro(
  * `soloPropias`: la política de lectura da al administrador todas las alertas de la
  * organización, y la bandeja no puede ser global (choque 2 de interfaz.md: el secreto
  * profesional es del profesional, no del cargo). Con él, solo las del profesional de la sesión.
+ *
+ * Se lee de la vista invoker `alertas_documentacion_nivel` (T-015): misma RLS que la tabla,
+ * más el `nivel`, que se calcula allí y en ningún otro sitio.
  */
 export async function leerAlertasNotaPendiente(
   sesion: Sesion,
   { soloPropias = false, tipos }: { soloPropias?: boolean; tipos?: readonly AlertaPendiente['tipo'][] } = {},
 ): Promise<ResultadoCitas<{ alertas: AlertaPendiente[] }>> {
   let consulta = sesion.supabase
-    .from('alertas_documentacion')
-    .select('id, paciente_id, tipo, fecha_referencia, creada_en')
+    .from('alertas_documentacion_nivel')
+    .select('id, paciente_id, tipo, fecha_referencia, creada_en, nivel')
     .eq('estado', 'abierta');
   if (soloPropias) consulta = consulta.eq('profesional_id', sesion.usuario.id);
   if (tipos) consulta = consulta.in('tipo', [...tipos]);
@@ -221,11 +230,16 @@ export async function leerAlertasNotaPendiente(
     .order('creada_en', { ascending: true });
 
   if (error) {
-    console.error('leerAlertasNotaPendiente: fallo al leer alertas_documentacion', error);
+    console.error('leerAlertasNotaPendiente: fallo al leer alertas_documentacion_nivel', error);
     return fallo(error);
   }
 
-  const filas = data ?? [];
+  // Las columnas de una vista llegan nulables en los tipos generados; la tabla base no lo es.
+  const filas = (data ?? []).flatMap((fila) =>
+    fila.id && fila.paciente_id && fila.tipo
+      ? [{ ...fila, id: fila.id, paciente_id: fila.paciente_id, tipo: fila.tipo }]
+      : [],
+  );
   const ids = [...new Set(filas.map((fila) => fila.paciente_id))];
   const nombres = new Map<string, string>();
 
@@ -248,6 +262,7 @@ export async function leerAlertasNotaPendiente(
       pacienteNombre: nombres.get(fila.paciente_id) ?? null,
       tipo: fila.tipo,
       fechaReferencia: fila.fecha_referencia,
+      nivel: aNivel(fila.nivel),
     })),
   };
 }
