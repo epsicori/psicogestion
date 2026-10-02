@@ -855,8 +855,12 @@ export const es = {
         sinFecha: 'pendiente',
       },
       fila: '{tipo} · {desde}',
-      mas24: 'Más de 24 h',
-      mas72: 'Más de 72 h',
+      nivel2: 'Atrasada',
+      nivel3: 'Muy atrasada',
+      resolver: 'Marcar como resuelta',
+      resolverEtiqueta: 'Marcar como resuelta: {tipo}',
+      resolviendo: 'Guardando…',
+      errorResolver: 'No se ha podido marcar como resuelta.',
       vacio: 'No hay documentación pendiente',
       vacioExplicacion: 'Cuando falte una nota por firmar, aparecerá aquí.',
     },
@@ -867,6 +871,44 @@ export const es = {
       matiz: 'Del día 1 hasta ahora, sobre {n} citas cerradas',
       porcentaje: '{n} %',
       sinDatos: '—',
+    },
+  },
+
+  // Avisos del armazón (T-015). Los plurales, con la convención del catálogo: `una` / `varias`.
+  avisos: {
+    sesion: {
+      franja: 'Sesión en curso · {paciente} · {desde}–{hasta}',
+      notas: 'Notas',
+      descartar: 'Descartar aviso',
+      ancla: 'En sesión',
+    },
+    notas: {
+      etiqueta: {
+        una: '{n} nota sin firmar desde hace más de un día',
+        varias: '{n} notas sin firmar desde hace más de un día',
+      },
+    },
+  },
+
+  // Notificaciones (T-015). `tipos` es EL sitio de las etiquetas por tipo: T-038 las reutiliza.
+  notificaciones: {
+    boton: {
+      sinLeer: 'Notificaciones, {n} sin leer',
+      todas: 'Notificaciones',
+    },
+    titulo: 'Notificaciones',
+    vacio: 'No tienes notificaciones.',
+    marcarLeida: 'Marcar como leída',
+    marcarTodas: 'Marcar todas como leídas',
+    tipos: {
+      nota_pendiente: 'Falta firmar una nota',
+      nota_pendiente_escalada: 'Nota sin firmar',
+      acceso_emergencia: 'Acceso de emergencia a una historia',
+      pin_bloqueado: 'PIN bloqueado',
+      totp_repuesto: 'Segundo factor repuesto',
+      codigos_regenerados: 'Códigos de recuperación nuevos',
+      regeneracion_codigos_bloqueada: 'Regeneración de códigos bloqueada',
+      otro: 'Aviso',
     },
   },
 } as const;

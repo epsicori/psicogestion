@@ -9,7 +9,7 @@ import {
   hoyEn,
   metricasDelMes,
   leerRol,
-  nivelDeAntiguedad,
+  puedeResolverAlerta,
   puedeVerCuadro,
   rangoDeProximas,
   resolverCentro,
@@ -148,14 +148,36 @@ describe('antigüedad de la documentación pendiente', () => {
     expect(diasPendiente('2026-09-20', '2026-09-26')).toBe(6);
     expect(diasPendiente(null, '2026-09-26')).toBeNull();
   });
+});
 
-  it('0 días sin píldora; 1 y 2, «más de 24 h»; 3 o más, «más de 72 h»', () => {
-    expect(nivelDeAntiguedad(null)).toBeNull();
-    expect(nivelDeAntiguedad(0)).toBeNull();
-    expect(nivelDeAntiguedad(1)).toBe('mas24');
-    expect(nivelDeAntiguedad(2)).toBe('mas24');
-    expect(nivelDeAntiguedad(3)).toBe('mas72');
-    expect(nivelDeAntiguedad(40)).toBe('mas72');
+// T-015, decisión P1: «Marcar como resuelta» solo donde el update de la RLS lo deja, y nunca
+// sobre una nota sin firmar (esa solo la cierra la firma). Tabla completa: 3 roles + null × 5 tipos.
+describe('puedeResolverAlerta', () => {
+  const tipos = [
+    'nota_sin_firmar',
+    'borrador_abandonado',
+    'consentimiento_pendiente',
+    'informe_pendiente',
+    'evaluacion_sin_corregir',
+  ] as const;
+  const roles = ['administrador', 'profesional_sanitario', 'tecnico_administrativo', null] as const;
+
+  const casos = roles.flatMap((rol) =>
+    tipos.map((tipo) => ({
+      rol,
+      tipo,
+      esperado:
+        tipo !== 'nota_sin_firmar' && (rol === 'administrador' || rol === 'profesional_sanitario'),
+    })),
+  );
+
+  it.each(casos)('$rol sobre $tipo → $esperado', ({ rol, tipo, esperado }) => {
+    expect(puedeResolverAlerta(rol, tipo)).toBe(esperado);
+  });
+
+  it('la tabla tiene las 20 combinaciones y 8 positivas', () => {
+    expect(casos).toHaveLength(20);
+    expect(casos.filter((c) => c.esperado)).toHaveLength(8);
   });
 });
 

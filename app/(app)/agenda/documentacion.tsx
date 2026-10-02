@@ -5,10 +5,11 @@ import { AvisoDeError, Pildora } from '@/components/ui/piezas';
 import { leerAlertasNotaPendiente } from '@/lib/citas/agenda';
 import { t, tCon } from '@/lib/i18n';
 
-import { criterioDocumentacion, diasPendiente, nivelDeAntiguedad } from './bloques';
+import { criterioDocumentacion, diasPendiente, puedeResolverAlerta } from './bloques';
 import { cargarContexto } from './datos';
 import { EstadoVacio } from './estado-vacio';
 import { MarcoBloque } from './marco';
+import { ResolverAlerta } from './resolver-alerta';
 
 function textoDesde(dias: number | null): string {
   if (dias === null) return t('agenda.documentacion.desde.sinFecha');
@@ -67,7 +68,14 @@ export async function Documentacion({ centroParametro }: { centroParametro: stri
       <ul className="divide-border flex flex-col divide-y">
         {r.alertas.map((alerta) => {
           const dias = diasPendiente(alerta.fechaReferencia, contexto.hoy);
-          const nivel = nivelDeAntiguedad(dias);
+          // El nivel lo calcula la base (T-015 §1.7); el nivel 1 es la presencia discreta en la lista.
+          const pildora =
+            alerta.nivel === 3
+              ? t('agenda.documentacion.nivel3')
+              : alerta.nivel === 2
+                ? t('agenda.documentacion.nivel2')
+                : null;
+          const etiquetaTipo = t(`agenda.documentacion.tipos.${alerta.tipo}`);
           return (
             <li key={alerta.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
               <Link
@@ -78,11 +86,14 @@ export async function Documentacion({ centroParametro }: { centroParametro: stri
               </Link>
               <span className="text-muted-foreground">
                 {tCon('agenda.documentacion.fila', {
-                  tipo: t(`agenda.documentacion.tipos.${alerta.tipo}`),
+                  tipo: etiquetaTipo,
                   desde: textoDesde(dias),
                 })}
               </span>
-              {nivel && <Pildora tono="warning">{t(`agenda.documentacion.${nivel}`)}</Pildora>}
+              {pildora && <Pildora tono="warning">{pildora}</Pildora>}
+              {puedeResolverAlerta(contexto.rol, alerta.tipo) && (
+                <ResolverAlerta alertaId={alerta.id} etiquetaTipo={etiquetaTipo} />
+              )}
             </li>
           );
         })}

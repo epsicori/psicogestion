@@ -156,13 +156,13 @@ export function diasPendiente(fechaReferencia: string | null, hoy: string): numb
 }
 
 /**
- * Los tres tramos de `interfaz.md` (0, 24 y 72 h), en días de calendario (D10): el mismo día,
- * sin píldora; uno o dos días, «más de 24 h»; tres o más, «más de 72 h». No es el escalado real
- * (eso es T-015): solo cuánto lleva esperando.
+ * ¿Pinta «Marcar como resuelta»? (T-015, decisión P1). Solo administrador y profesional, que son
+ * los que tienen update en `alertas_documentacion`, y nunca sobre una nota sin firmar: esa la
+ * cierra la firma, y la base lo impide aunque se intente. Sin rol conocido, no.
  */
-export function nivelDeAntiguedad(dias: number | null): 'mas24' | 'mas72' | null {
-  if (dias === null || dias < 1) return null;
-  return dias < 3 ? 'mas24' : 'mas72';
+export function puedeResolverAlerta(rol: RolUsuario | null, tipo: TipoAlerta): boolean {
+  if (tipo === 'nota_sin_firmar') return false;
+  return rol === 'administrador' || rol === 'profesional_sanitario';
 }
 
 /**
