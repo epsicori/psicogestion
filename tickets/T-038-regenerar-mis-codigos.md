@@ -19,6 +19,7 @@ territorio:
   - components/armazon/**             # el enlace desde el bloque de usuario (o `modulos.ts`, según P-1)
   - accesibilidad/**
   - docs/interfaz.md
+  - next.config.ts                    # solo `logging.serverFunctions: false` (diseño Q2, decidido el 02-10-2026)
 ---
 
 # Contexto

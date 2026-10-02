@@ -20,6 +20,7 @@ territorio:
   - app/(app)/pacientes/[id]/**
   - app/(app)/agenda/notas.ts
   - app/(app)/agenda/notas.test.ts
+  - accesibilidad/nota-clinica.spec.ts   # ampliado el 02-10-2026: el criterio 10 solo se mide con Playwright
 ---
 
 # Contexto

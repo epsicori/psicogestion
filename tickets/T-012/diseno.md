@@ -1636,3 +1636,12 @@ Mandan sobre B.1-B.7 donde choquen.
 - Prueba y gemela:
   - coprofesional con borrador individual → sin texto;
   - coprofesional con borrador conjunto → texto en solo lectura.
+
+### Regla aplicada para B0-H3 (ronda de arreglos 1, 02-10-2026)
+
+- Un borrador no guarda su alcance, porque el alcance se elige al firmar. El sustituto es el `coprofesional_id` de la cabecera: es la señal de que el autor quiere la nota conjunta.
+- Leen el texto del borrador ajeno:
+  - el profesional asignado, que ya lee todas las versiones por RLS;
+  - quien figura como `coprofesional_id` de esa nota.
+- Cualquier otro coprofesional del episodio ve solo «Hay un borrador en curso».
+- La fábrica lo da por bueno: es la lectura más estrecha de la decisión del propietario.
