@@ -1,139 +1,100 @@
 {
   "ticket": "T-012",
-  "resumen": "Corte B, verificacion 4, rama worktree-agent-a50633aa7d7148c4d (HEAD 0c6fac2). db reset + seed + test:rls exit 0 ('20-nota-borrador: completa.'); npm test 121/1524 OK; lint 0 errores (2 avisos preexistentes); next build --webpack OK; territorio.mjs T-012: 36 ficheros dentro de territorio; t012-nota.ts todos los pasos verdes; playwright --workers=1 PUERTO=3100: 10/10. Criterio B (foco de la firma rechazada con error en el dialogo): PASA en navegador, por clic y por Enter. Sin FALLA. Los criterios 8, 9, 11, B1-H1 y B1-H4 se conservan de la verificacion 3 (marcados). Limpieza: servidor 3100 parado por PID (24432), el 3000 (PID 29484) intacto, db reset + seed desde la raiz, worktree limpio.",
+  "resumen": "Corte C, verificacion sobre T-012-corte-c (HEAD 47aa00d). db reset + seed antes (worktree) y despues (raiz). npm test 123 ficheros / 1578 tests OK; lint 0 errores (2 avisos preexistentes en lib/cuentas/accesos.test.ts); next build --webpack OK; test:rls exit 0 ('20-nota-borrador: completa.'); verificar:huellas: cadena integra, cero anomalias; territorio.mjs T-012: 10 ficheros dentro de territorio; playwright accesibilidad/nota-clinica.spec.ts PUERTO=3100 con SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo: 2/2. Comparador ejercido en Chromium real (firma v1, modificacion con motivo v2, Comparar versiones) en color, achromatopsia emulada y grises: lo anadido (subrayado + '+', 'Anadido:') y lo retirado (tachado + '-', 'Retirado:') se distinguen sin color. NVDA: MANUAL_PENDIENTE. Servidor 3100 parado por PID (19308); 3000 (PID 29484) intacto.",
   "criterios": [
     {
       "id": 1,
-      "texto": "Primera firma: numero_version=1, huella no nula, huella_anterior 32 ceros",
+      "texto": "Automatico: primera firma numero_version=1, huella no nula, huella_anterior 32 ceros; sha256 del contenido_canonico releido = huella; redactada_en_sesion; UPDATE/DELETE/TRUNCATE fallan; modificar sin motivo falla y con motivo crea v2 encadenada; NFC; reservadas entran en la huella",
       "veredicto": "PASA",
-      "comando": "npx tsx scripts/t012-nota.ts",
-      "evidencia": "criterio 1 · v1: numero_version 1, huella no nula, huella_anterior de 32 ceros, posicion_cadena 1",
-      "verificacion": "4 (scripts/t012-nota.ts re-ejecutado, verde)"
-    },
-    {
-      "id": 2,
-      "texto": "sha256 del contenido_canonico releido = huella",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t012-nota.ts; npm run verificar:huellas",
-      "evidencia": "criterio 2 · sha256(contenido_canonico || huella_anterior) = huella, y verificar:huellas --paciente sale 0; verificar:huellas — cadena íntegra: cero anomalías.",
-      "verificacion": "4 (scripts/t012-nota.ts re-ejecutado, verde)"
-    },
-    {
-      "id": 3,
-      "texto": "redactada_en_sesion true en ventana / false fuera; alterarlo rompe la huella",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t012-nota.ts",
-      "evidencia": "criterio 3a · cita en curso: redactada_en_sesion = true, y invertirlo cambia la huella; criterio 3b · cita de ayer: redactada_en_sesion = false",
-      "verificacion": "4 (scripts/t012-nota.ts re-ejecutado, verde)"
-    },
-    {
-      "id": 4,
-      "texto": "update/delete/truncate sobre versiones fallan como postgres",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t012-nota.ts; npm run test:rls; ademas insert/update como postgres sobre notas_clinicas_versiones: 'permission denied for table notas_clinicas_versiones'",
-      "evidencia": "criterio 4 · update, delete y truncate de la v1 fallan, también como postgres, y la fila no cambió; test:rls termina con '20-nota-borrador: completa.' exit 0",
-      "verificacion": "4 (scripts/t012-nota.ts re-ejecutado, verde)"
-    },
-    {
-      "id": 5,
-      "texto": "Modificar sin motivo falla; con motivo v2 encadenada a v1",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t012-nota.ts",
-      "evidencia": "criterio 5 · sin motivo: falta_motivo y el recuento no cambia; con motivo: v2 con huella_anterior = huella de v1. En pantalla: dialogo de Modificar, Firmar sin motivo -> 'hace falta un motivo' y el foco se queda en el boton Firmar del dialogo.",
-      "verificacion": "4 (scripts/t012-nota.ts re-ejecutado, verde)"
-    },
-    {
-      "id": 6,
-      "texto": "NFC: acento compuesto y precompuesto dan la misma huella",
-      "veredicto": "PASA",
-      "comando": "npm test (lib/huella/nfc.test.ts)",
-      "evidencia": "npm test: Test Files 121 passed (121), Tests 1524 passed (1524)",
-      "verificacion": 4
-    },
-    {
-      "id": 7,
-      "texto": "anotaciones_reservadas entra en el computo",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t012-nota.ts",
-      "evidencia": "criterio 7 · cambiar solo las reservadas: mismo cuerpo, sobre y huella distintos",
-      "verificacion": "4 (scripts/t012-nota.ts re-ejecutado, verde)"
+      "comando": "npm run test:rls; npm run verificar:huellas; npm test",
+      "evidencia": "test:rls exit 0, '20-nota-borrador: completa.'; verificar:huellas: 'cadena integra: cero anomalias'; npm test: Test Files 123 passed, Tests 1578 passed. En el navegador, v1 firmada con 'Huella c1dadb4a2c87...' y v2 'Huella fe1840868e39...' con 'Motivo del cambio: Ajuste tras la sesion del 02/10' (el corte C no toca SQL ni lib/huella)."
     },
     {
       "id": 8,
-      "texto": "Manual: con el candado cerrado la ruta muestra bloqueo y el HTML no contiene el borrador; abrir exige PIN",
+      "texto": "Manual: con el candado cerrado, el HTML recibido no contiene el borrador (el corte C toca el editor)",
       "veredicto": "PASA",
-      "comando": "Playwright ad hoc (Ana, next start :3100): borrador sembrado con MARCA-CANDADO-BORRADOR/RESERVADAS; page.request.get crudo",
-      "evidencia": "con historia abierta el DOM del editor contiene la marca x2; tras 'Cerrar la historia': DOM x0 y 'Esta historia está cerrada'; GET crudo con candado cerrado: marca x0, pantalla de bloqueo presente; tras recargar, 'Abrir el editor' muestra el campo PIN (Abrir exige PIN) y el DOM sigue con marca x0. [verificacion 3, 3a3c564, no re-ejecutado]",
-      "verificacion": 3
+      "comando": "Playwright request.get con sesion de Ana, sin desbloquear, sobre /pacientes/<uuid>/historia/notas?nota=<uuid> en el 3100 (nota con v1 'ansiedad leve', v2 'moderada y insomnio', reservadas 'Tension en la cita previa')",
+      "evidencia": "200 len 29851 ansiedad: false Tension: false insomnio: false Abrir el editor: true Descargar: false"
     },
     {
       "id": 9,
-      "texto": "Manual: comparacion v1/v2 sin depender del color",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Es del corte C (comparacion entre versiones); no aplica a este corte. Guion: en una nota con 2 versiones (f0080001-0000-4000-8000-000000000003 del seed) abrir ?nota= y comparar v1/v2 comprobando que añadido y retirado se distinguen en escala de grises.",
-      "verificacion": 3
+      "texto": "Manual: comparacion entre la version 1 y la 2, con lo anadido y lo retirado distinguibles sin depender del color",
+      "veredicto": "PASA",
+      "comando": "Chromium real (playwright-core) en el 3100: firmar v1, Modificar, firmar v2 con motivo, 'Comparar versiones'; capturas en color, con CDP Emulation.setEmulatedVisionDeficiency=achromatopsia y con filter:grayscale(1)",
+      "evidencia": "aria-expanded false->true; titulo 'De la version 1 a la 2'; leyenda 'Lo anadido va subrayado y con +; lo retirado, tachado y con -'. DOM: <del> text-decoration-line line-through, texto '-Retirado: leve. Fin del cambio.'; <ins> underline, texto '+Anadido: moderada y insomnio. Fin del cambio.'; ambos con el mismo color computado oklch(0.25 0.035 165) y sin fondo: el color no distingue nada. Capturas en C:\\Users\\Usuario\\AppData\\Local\\Temp\\claude\\C--Users-Usuario-Desktop-01-Proyectos-Psicogestion\\616baba4-4439-43ef-ae0d-372bc3edcd39\\scratchpad: cmp-color.png, cmp-achromatopsia.png, cmp-grises.png. En achromatopsia y grises se ve 'leve.' tachado con '-' y 'moderada y insomnio.' subrayado con '+'. Observacion menor: el '-' es pequeno junto al tachado; sigue legible y el texto accesible 'Retirado:' lo refuerza."
     },
     {
       "id": 10,
-      "texto": "Manual: a 360 px, con el teclado virtual abierto, el cursor sigue visible y la barra alcanzable",
+      "texto": "Indicador 'modificada el - por' y acceso a comparar en la vista de la version vigente",
       "veredicto": "PASA",
-      "comando": "PUERTO=3100 npx playwright test --workers=1",
-      "evidencia": "PUERTO=3100 npx playwright test --workers=1: ✓ 9 nota-clinica.spec.ts:16 (360x330 cursor sobre la barra, 1.4s); ✓ 10 nota-clinica.spec.ts:88 (976ms); 10 passed (20.9s). Limite: teclado emulado por redimensionado.",
-      "verificacion": 4
+      "comando": "Chromium real tras firmar v2 (mismo guion del criterio 9); npx vitest run notas",
+      "evidencia": "Pantalla: 'Version vigente / Modificada', 'Modificada el 02/10/2026 23:49 - por Ana Marquez', lista 'Version 2 (vigente)', 'Version 1' y boton 'Comparar versiones'. Gemela 'con una sola version no hay Comparar versiones' pasa. vitest notas: 20 ficheros, 355 tests OK."
     },
     {
       "id": 11,
-      "texto": "Manual: disponible:true no aplica / no se toca el armazon; boton Notas de la agenda activo",
+      "texto": "Manual: a 360 px con el teclado virtual abierto el cursor sigue visible y la barra alcanzable (corte B; el C toca editor-de-nota)",
       "veredicto": "PASA",
-      "comando": "Playwright ad hoc: /agenda, abrir una cita, clic en 'Notas'; npm test",
-      "evidencia": "Tras abrir la cita aparece el enlace 'Notas' (Notas: 1); al pulsarlo la URL es /pacientes/9631ce75-.../historia/notas?cita=70261709-... y se ve 'Nota de Paciente De Prueba T-012 ...' con 'Abrir el editor'. [verificacion 3, 3a3c564, no re-ejecutado]",
-      "verificacion": 3
+      "comando": "SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo PUERTO=3100 npx playwright test accesibilidad/nota-clinica.spec.ts --workers=1",
+      "evidencia": "OK 1 a 360x330 el cursor al final de un texto largo queda por encima de la barra de acciones (1.8s); OK 2 a 1280 la barra de acciones se separa del contenido (1.4s); 2 passed (5.0s)"
+    },
+    {
+      "id": "B2-H1",
+      "texto": "Si falla la recarga en el camino del aviso (firmadaSinRecargar o ya_firmada), el aviso conserva una accion de reintento y el foco va a ella; no_disponible lleva el foco al grupo del aviso",
+      "veredicto": "PASA",
+      "comando": "npx vitest run 'app/(app)/pacientes/[id]/historia/notas' lib/notas --reporter=verbose",
+      "evidencia": "OK editor-de-nota.test.tsx > B2-H1 (a/b) firmada sin recargar; (a/b) ya firmada; (a2); (c) Volver a intentar; (d) no_disponible; (e) C1-H3 cada reintento fallido se anuncia; (f) C2-H1 dos fallos; (g) C2-H2 contador a cero tras recargar bien. Test Files 20 passed, Tests 355 passed."
+    },
+    {
+      "id": "B2-H2",
+      "texto": "Quien no es autor abre una nota sin versiones con borrador oculto: el foco va al aviso 'Hay un borrador en curso', no a 'Cerrar la historia'",
+      "veredicto": "PASA",
+      "comando": "npx vitest run 'app/(app)/pacientes/[id]/historia/notas' --reporter=verbose",
+      "evidencia": "OK B2-H2: borrador oculto sin versiones; borrador ajeno legible sin versiones; nada que leer; gemelas con versiones (lectura conjunta false y true). 355 tests OK."
+    },
+    {
+      "id": "B2-H3",
+      "texto": "En lectura conjunta la primera version visible no muestra motivo_cambio; el asignado si ve el de su v2",
+      "veredicto": "PASA",
+      "comando": "npx vitest run lib/notas --reporter=verbose",
+      "evidencia": "OK servidor.test.ts > B2-H3 lectura conjunta: la primera version visible (v2 real) no...; OK B2-H3 la gemela: el asignado sigue recibiendo el motivo. 355 tests OK."
+    },
+    {
+      "id": "B3-H1",
+      "texto": "Un repintado sin cambios no mueve el foco tras el error",
+      "veredicto": "PASA",
+      "comando": "npx vitest run 'app/(app)/pacientes/[id]/historia/notas' --reporter=verbose",
+      "evidencia": "OK editor-de-nota.test.tsx:1332 B3-H1 un repintado sin cambios no mueve el foco: tras el error, Cancelar lo conserva al pasar el reloj. 355 tests OK."
+    },
+    {
+      "id": "B3-H2",
+      "texto": "Al abrir la firma de una modificacion el foco inicial va al motivo; sin versiones, a Firmar",
+      "veredicto": "PASA",
+      "comando": "npx vitest run 'app/(app)/pacientes/[id]/historia/notas' --reporter=verbose; Chromium real",
+      "evidencia": "OK B3-H2 foco al motivo (:1344) y gemela sin versiones a Firmar (:1350). En el navegador el dialogo de la modificacion mostro 'Motivo del cambio'. 355 tests OK."
+    },
+    {
+      "id": "avisos-recarga-NVDA",
+      "texto": "Los avisos de recarga y la comparacion se anuncian con NVDA (role=alert cambiante)",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "MANUAL_PENDIENTE para el propietario: no se puede ejercer un lector de pantalla desde aqui (el DOM y las pruebas de role/alert si pasan). Guion: 1) npm run dev, entrar como Ana, abrir /pacientes/<Carmen>/historia/notas?nota=<uuid> con NVDA activo y desbloquear con el PIN. 2) Con la red cortada en DevTools (Offline), provocar una recarga fallida (Recargar o Cargar lo guardado en el aviso de nota firmada). 3) Comprobar que NVDA lee 'No se pudo recargar la nota.' y que el foco queda en 'Volver a intentarlo'. 4) Pulsar el boton de nuevo, aun offline: NVDA debe anunciar otra vez el fallo con el numero de intento (C1-H3). 5) Reponer la red y pulsar el boton: la nota se recarga y el foco va al encabezado de la version vigente. 6) En la comparacion abierta, recorrer con flechas y comprobar que NVDA lee 'Anadido: ... Fin del cambio.' y 'Retirado: ... Fin del cambio.'."
     },
     {
       "id": 12,
-      "texto": "npm run lint && npm run build limpios",
+      "texto": "Automatico: npm run lint && npm run build limpios",
       "veredicto": "PASA",
-      "comando": "npm run lint; npx next build --webpack; npm test",
-      "evidencia": "lint: 0 errores, 2 avisos preexistentes (lib/cuentas/accesos.test.ts); next build --webpack OK; npm test 121 ficheros / 1524 tests OK",
-      "verificacion": 4
+      "comando": "npm run lint; npx next build --webpack",
+      "evidencia": "lint: 0 errors, 2 warnings (SupabaseClient y Database sin usar en lib/cuentas/accesos.test.ts, preexistentes y fuera del corte). build: compila y lista las rutas sin error."
     },
     {
-      "id": "A",
-      "texto": "Al firmar, la alerta nota_sin_firmar queda resuelta sin tocar resuelta_en de v1 al firmar v2",
+      "id": 13,
+      "texto": "Territorio: node ~/.claude/pipeline/territorio.mjs T-012",
       "veredicto": "PASA",
-      "comando": "npx tsx scripts/t012-nota.ts; npm run test:rls",
-      "evidencia": "criterio A · al firmar, la alerta nota_sin_firmar de su cita queda resuelta con resuelta_en; R2-H11 · firmar una v2 deja intacto el resuelta_en de la alerta ya resuelta",
-      "verificacion": "4 (scripts/t012-nota.ts re-ejecutado, verde)"
-    },
-    {
-      "id": "B1-H1",
-      "texto": "El borrador ajeno solo lo leen el autor y el profesional asignado; los demas ven 'Hay un borrador en curso' y el HTML no contiene el texto",
-      "veredicto": "PASA",
-      "comando": "Playwright (Ana asignada pero no autora, Bruno autor) + script tsx sobre lib/notas/servidor con sesiones reales de Ana y Bruno (RLS real; solo se sustituyo la RPC registrar_acceso_historia para Bruno)",
-      "evidencia": "Ana, asignada y no autora de un borrador de Bruno: en pantalla se ve 'Borrador | Su autor tiene cambios sin firmar. | BORRADOR-DE-BRUNO-VISTO-POR-ASIGNADA'. Bruno (profesional del episodio conjunto, ni autor ni asignado de Sofia) sobre nota con v1 individual, v2 conjunta y borrador v3 de Ana: 'BRUNO estado abierta; borradorOculto true borrador null lecturaConjunta true; JSON contiene BORRADOR-V3-SECRETO: false RESERVADAS-V3: false'. Ana autora: borrador 'BORRADOR-V3-SECRETO', oculto false. [verificacion 3, 3a3c564, no re-ejecutado]",
-      "nota": "Limite: el mensaje 'Hay un borrador en curso' en el HTML de un tercero no se pudo ver en navegador, porque la ruta exige ver al paciente (ser asignado) y entonces ya se lee el borrador; lo cubre vitest (editor-de-nota.test.tsx, servidor.test.ts) dentro de npm test. Un intento por GET con paciente de Bruno y nota de Sofia da 'Esta nota no está disponible'.",
-      "verificacion": 3
-    },
-    {
-      "id": "B1-H4",
-      "texto": "En lectura conjunta las versiones se numeran por posicion, sin huecos",
-      "veredicto": "PASA",
-      "comando": "script tsx: Ana firma v1 individual y v2 conjunta en el episodio conjunto e0080001-...01; Bruno abre la nota",
-      "evidencia": "SQL: '1|individual ; 2|conjunta'. Bruno (lecturaConjunta true): versiones numeradas [[1,\"v2 conjunta\"]] (el numero real 2 no viaja, sin hueco). [verificacion 3, 3a3c564, no re-ejecutado]",
-      "verificacion": 3
-    },
-    {
-      "id": "B",
-      "texto": "Foco: tras Abrir, Modificar, Recargar, Cargar lo guardado y tras una firma rechazada no cae en body",
-      "veredicto": "PASA",
-      "comando": "node foco.cjs / foco2.cjs / foco4.cjs (Playwright ad hoc, Ana, next start :3100, sondeo de document.activeElement)",
-      "evidencia": "Repro exacta de v3 (nota vacia, esperar 1,5 s, Firmar, Firmar en el dialogo): por clic +100ms BODY transitorio (boton deshabilitado durante la peticion), +500/+1500/+3000 ms: BUTTON 'Firmar' dentro del dialogo, aria-describedby='_r_3_-error' -> role=alert 'No se firma una nota vacía.', texto visible en pantalla. Por Enter: +100/+500/+1500/+3000 BUTTON Firmar dentro del dialogo con el mismo aria-describedby. Regresion de foco, todos pasan: Abrir con historia cerrada -> INPUT#pin-historia; PIN malo con Enter -> INPUT#pin-historia; PIN bueno -> TEXTAREA; Abrir con historia abierta -> TEXTAREA; firma rechazada por conflicto -> BUTTON 'Cargar lo guardado' (aviso, no body); Cargar lo guardado -> TEXTAREA con el texto guardado; firma sin motivo en modificacion -> BUTTON Firmar dentro del dialogo con el texto 'hace falta un motivo'; Escape -> BUTTON Firmar. Recargar (firmadaSinRecargar) sigue sin poder provocarse en navegador.",
-      "verificacion": 4,
-      "nota": "Observacion: con clic, durante ~100 ms (peticion en vuelo) el foco esta en BODY; se recupera solo antes de 500 ms. Fuera del corte: PIN malo con clic en Abrir (formulario del candado, otro territorio) no se re-verifica; observacion, no FALLA."
+      "comando": "node ~/.claude/pipeline/territorio.mjs T-012",
+      "evidencia": "T-012: 10 fichero(s) tocado(s), todos dentro de supabase/migrations/2026100*_nota_clinica_borrador_firma.sql, scripts/rls/20-nota-borrador.sql, ..., accesibilidad/nota-clinica.spec.ts."
     }
   ],
   "regresiones": [
-    "Observacion (no FALLA, fuera de territorio): FormularioPinHistoria pierde el foco en BODY tras un PIN malo enviado con clic en 'Abrir' (verificacion 3; no re-verificado en la 4).",
-    "Recargar (firmadaSinRecargar) no se puede provocar en navegador contra la base local; solo lo cubre vitest."
+    "Ninguna del corte C. Aviso de entorno: los specs de Playwright exigen SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo (no esta en el .env.local del worktree); sin ella el login cae en /primera-vez y los dos tests expiran por timeout.",
+    "Observacion: tras npm run seed en la raiz, docs/state.md aparece modificado (la siembra reescribe su tabla de credenciales); no es del corte."
   ]
 }
