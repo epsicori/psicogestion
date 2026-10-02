@@ -12,4 +12,4 @@ export {
   type Sobre,
   type EntradaFirma,
 } from './sobre';
-export { firmarVersionNota, type ResultadoFirma } from './firmar';
+export { firmarVersionNota, ErrorFirmaVersion, type ResultadoFirma } from './firmar';

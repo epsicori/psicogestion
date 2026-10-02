@@ -501,6 +501,16 @@ export const es = {
     desdeEl: 'Desde el {fecha}',
   },
 
+  // T-012 · La nota clínica: borrador, firma y versión sellada
+  notas: {
+    sello: {
+      enSesion: 'Escrita durante la sesión del {fecha} · {desde}–{hasta}',
+      fueraDeSesion: 'Escrita fuera de la sesión del {fecha} · {desde}–{hasta}',
+      sinCita: 'Escrita el {fecha} · {desde}–{hasta}',
+      ilegible: 'Sello no legible',
+    },
+  },
+
   agenda: {
     // Los cinco del enum `estado_cita` y «en curso», que se calcula (ADR-045). Las claves
     // son el valor del estado, por eso van con guion bajo.
