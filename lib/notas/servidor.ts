@@ -63,6 +63,11 @@ export type ModeloDeNota = {
     coprofesional: { id: string; nombre: string } | null;
   };
   borrador: { texto: string; reservadas: string; testigo: string } | null;
+  /**
+   * Hay un borrador que este lector NO puede leer (B0-H3): solo se sabe que existe. Ni el texto,
+   * ni las reservadas, ni el testigo viajan.
+   */
+  borradorOculto: boolean;
   versiones: VersionDeVista[];
   candidatosCoprofesional: { id: string; nombre: string }[];
   puedeSerConjunta: boolean;
@@ -280,6 +285,24 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
   const hayBorrador = cab.borrador_contenido !== null && cab.borrador_contenido !== undefined;
   const parseado = hayBorrador ? esquemaBorrador.safeParse(cab.borrador_contenido) : null;
 
+  // B0-H3 · El borrador ajeno se recorta por alcance, aquí y no en la pantalla: lo que no se lee
+  // no viaja. Un borrador aún no tiene alcance (se elige al firmar), así que se lee lo que la
+  // cabecera sí dice: quien lee todas las versiones firmadas por RLS (profesional asignado) lo
+  // lee; el coprofesional del episodio solo si el autor lo nombró coprofesional de la nota, que
+  // es la señal de que la quiere conjunta. Cualquier otro lector sabe que existe y nada más.
+  let puedeLeerBorrador = soyAutor;
+  if (!soyAutor && hayBorrador) {
+    const { data: asignado, error: errorAsignado } = await supabase.rpc('es_profesional_asignado', {
+      p_paciente_id: cab.paciente_id,
+    });
+    // Un fallo no es «no es asignado»: se leería el recorte equivocado sin decirlo.
+    if (errorAsignado) {
+      console.error('notas: no se pudo saber si es profesional asignado', errorAsignado);
+      return { ok: false };
+    }
+    puedeLeerBorrador = asignado === true || cab.coprofesional_id === usuario.id;
+  }
+
   // Candidatos a coprofesional: la misma regla que el disparador de T-034, que es quien manda.
   let candidatos: { id: string; nombre: string }[] = [];
   if (soyAutor && versiones.length === 0 && episodio?.centroId) {
@@ -356,8 +379,9 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
         ? { id: cab.coprofesional_id, nombre: nombres.get(cab.coprofesional_id) ?? '' }
         : null,
     },
+    borradorOculto: hayBorrador && !puedeLeerBorrador,
     borrador:
-      hayBorrador && cab.borrador_actualizado_en && parseado?.success
+      hayBorrador && puedeLeerBorrador && cab.borrador_actualizado_en && parseado?.success
         ? {
             texto: parseado.data.texto,
             reservadas: parseado.data.reservadas,

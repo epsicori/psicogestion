@@ -569,6 +569,7 @@ export const es = {
       elegirEpisodio: 'Esta cita puede ir en más de un episodio. Elige en cuál se escribe la nota.',
       sinEpisodios: 'No tienes ningún episodio abierto con este paciente.',
       borradorAjeno: 'Su autor tiene cambios sin firmar.',
+      borradorOculto: 'Hay un borrador en curso.',
     },
     firma: {
       titulo: 'Firmar la nota',

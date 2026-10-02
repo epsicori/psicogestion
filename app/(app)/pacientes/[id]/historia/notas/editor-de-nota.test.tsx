@@ -37,6 +37,7 @@ function modelo(extra: Partial<ModeloDeNota> = {}): ModeloDeNota {
     estado: 'borrador',
     cabecera: { fechaSesion: '1 de octubre', horario: null, episodio: 'Individual', coprofesional: null },
     borrador: { texto: 'Texto base', reservadas: '', testigo: 'T0' },
+    borradorOculto: false,
     versiones: [],
     candidatosCoprofesional: [],
     puedeSerConjunta: false,
@@ -772,6 +773,23 @@ describe('EditorDeNota', () => {
       expect(firmado.compareDocumentPosition(ajeno) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       await avanzar(10_000);
       expect(guardarBorrador).not.toHaveBeenCalled();
+    });
+
+    it('B0-H3 · borrador ajeno que no puede leer: solo «Hay un borrador en curso», sin texto ni controles', async () => {
+      await montar(
+        modelo({
+          soyAutor: false,
+          estado: 'firmada_con_cambios',
+          versiones: [version(1)],
+          borrador: null,
+          borradorOculto: true,
+        }),
+      );
+      expect(screen.getByText('Hay un borrador en curso.')).toBeInTheDocument();
+      expect(screen.queryByText('Su autor tiene cambios sin firmar.')).toBeNull();
+      expect(screen.getByText('Texto firmado 1')).toBeInTheDocument();
+      expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+      expect(screen.queryByText('Texto base')).toBeNull();
     });
 
     it('quien no es el autor y la nota sigue en borrador: ve el borrador ajeno en solo lectura', async () => {

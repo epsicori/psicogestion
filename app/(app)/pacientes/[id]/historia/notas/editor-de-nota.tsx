@@ -800,8 +800,11 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
       )}
 
       {modelo.borrador !== null && !modelo.soyAutor && <BorradorAjeno borrador={modelo.borrador} />}
+      {modelo.borradorOculto && !modelo.soyAutor && (
+        <p className="text-muted-foreground text-sm">{t('notas.editor.borradorOculto')}</p>
+      )}
 
-      {modelo.borrador === null && vigente === null && <EstadoVacio frase={t('notas.aviso.noDisponible')} />}
+      {modelo.borrador === null && !modelo.borradorOculto && vigente === null && <EstadoVacio frase={t('notas.aviso.noDisponible')} />}
 
       <div className="flex-1" />
 
