@@ -77,7 +77,21 @@ select (:'lunes_21'::date +   7)::text as l007,
        (:'lunes_21'::date + 270)::text as l270,
        (:'lunes_21'::date + 271)::text as l271,
        (:'lunes_21'::date + 272)::text as l272,
-       (:'lunes_21'::date + 273)::text as l273 \gset
+       (:'lunes_21'::date + 273)::text as l273,
+       (:'lunes_21'::date + 280)::text as l280,
+       (:'lunes_21'::date + 281)::text as l281,
+       (:'lunes_21'::date + 286)::text as l286,
+       (:'lunes_21'::date + 287)::text as l287,
+       (:'lunes_21'::date + 294)::text as l294,
+       (:'lunes_21'::date + 295)::text as l295,
+       (:'lunes_21'::date + 300)::text as l300,
+       (:'lunes_21'::date + 301)::text as l301,
+       (:'lunes_21'::date + 308)::text as l308,
+       (:'lunes_21'::date + 315)::text as l315,
+       (:'lunes_21'::date + 322)::text as l322,
+       (:'lunes_21'::date + 330)::text as l330,
+       (:'lunes_21'::date + 335)::text as l335,
+       (:'lunes_21'::date + 343)::text as l343 \gset
 
 -- Una franja de PRO1: lunes de 09:00 a 14:00 en CA, durante diez semanas.
 insert into public.disponibilidad
@@ -175,6 +189,23 @@ select pg_temp.assert(
     or has_function_privilege('authenticated', 'public.alta_hueco_ocupado(uuid,timestamptz,timestamptz)'::regprocedure, 'execute')
     or has_function_privilege('anon', 'public.alta_hueco_ocupado(uuid,timestamptz,timestamptz)'::regprocedure, 'execute')),
   'A · plan_alta_serie y los tres ayudantes son internos: ni authenticated ni anon los ejecutan'
+);
+
+-- R2-H4 · Los otros dos ayudantes internos. Una recreación (T-039 prevé drop + create) que
+-- olvide el revoke los deja ejecutables por PostgREST: esto lo caza.
+select pg_temp.assert(
+  not (has_function_privilege('authenticated', 'public.alta_exigir_profesional(uuid)'::regprocedure, 'execute')
+    or has_function_privilege('anon', 'public.alta_exigir_profesional(uuid)'::regprocedure, 'execute')
+    or has_function_privilege('authenticated', 'public.alta_resolver_tipo(uuid,smallint)'::regprocedure, 'execute')
+    or has_function_privilege('anon', 'public.alta_resolver_tipo(uuid,smallint)'::regprocedure, 'execute')),
+  'A · alta_exigir_profesional y alta_resolver_tipo son internas: ni authenticated ni anon las ejecutan'
+);
+
+-- R1-H5 · D5: el tipo se lee `for share`, para que nadie lo dé de baja entre la comprobación y
+-- el insert. Una carrera no se reproduce en una sola conexión: se guarda el texto.
+select pg_temp.assert(
+  pg_get_functiondef('public.alta_resolver_tipo(uuid,smallint)'::regprocedure) ~* 'for\s+share',
+  'A · alta_resolver_tipo lee la fila del tipo con for share (D5)'
 );
 
 -- =========================================================================
@@ -466,9 +497,12 @@ select pg_temp.assert(
 call pg_temp.reset_sesion();
 
 -- Festivo sin alternativa: festivo el +91 y una ausencia de +91 a +98 que cubre los siete días.
+-- R1-H6 · La ausencia se inserta ANTES, en otra sentencia: sin el `order by` que da prioridad al
+-- festivo, el orden físico devolvería la ausencia y la aserción de abajo caería.
 insert into public.disponibilidad (perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
-  (:PRO1, null, 'festivo',  :'l091'::date, :'l091'::date, 'Europe/Madrid', 'Festivo sin alternativa'),
   (:PRO1, null, 'ausencia', :'l091'::date, :'l098'::date, 'Europe/Madrid', 'Ausencia de una semana');
+insert into public.disponibilidad (perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
+  (:PRO1, null, 'festivo',  :'l091'::date, :'l091'::date, 'Europe/Madrid', 'Festivo sin alternativa');
 
 call pg_temp.como(:PRO1);
 select pg_temp.assert(
@@ -967,5 +1001,187 @@ select pg_temp.assert(
   'N · GEMELA: el profesional dueño sí lee la serie'
 );
 call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- O · Lo que la revisión de T-028a encontró sin prueba que muerda
+--
+-- Anclas a partir de +280 (pueden pasar al año + 4: ningún banco llega ahí).
+-- =========================================================================
+
+-- O1 · R1-H2 · D10: la alternativa nunca es otra sesión de la misma serie. Festivo en el lunes
+-- de la 1.ª sesión y ausencia de martes a domingo: el único día libre de los siete siguientes
+-- es el lunes de la 2.ª sesión. Sin D10, el plan lo propondría.
+insert into public.disponibilidad (perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
+  (:PRO1, null, 'festivo',  :'l280'::date, :'l280'::date, 'Europe/Madrid', 'R1-H2 festivo'),
+  (:PRO1, null, 'ausencia', :'l281'::date, :'l286'::date, 'Europe/Madrid', 'R1-H2 ausencia mar-dom');
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  (select s->>'bloqueo' = 'festivo' and s->'alternativa' = 'null'::jsonb
+     from jsonb_array_elements(
+            public.agenda_previsualizar_alta(:P1, :PRO1, :CA, 'semanal', 1::smallint, time '10:00', 50::smallint,
+                                             :'l280'::date, 2::smallint) -> 'sesiones') s
+    where (s->>'fecha')::date = :'l280'::date),
+  'O1 (R1-H2) · D10: con la semana ocupada salvo el lunes de la 2.ª sesión, la 1.ª no propone la 2.ª: alternativa nula'
+);
+select pg_temp.assert(
+  (select s->>'bloqueo' is null
+     from jsonb_array_elements(
+            public.agenda_previsualizar_alta(:P1, :PRO1, :CA, null, null, time '10:00', 50::smallint,
+                                             :'l287'::date, null) -> 'sesiones') s),
+  'O1 (R1-H2) · GEMELA: ese lunes de la 2.ª sesión está libre: lo único que lo descarta como alternativa es D10'
+);
+call pg_temp.reset_sesion();
+
+-- O2 · R1-H1 · La alternativa tampoco es una fecha EXCLUIDA. Mismo dibujo, y la 2.ª sesión
+-- excluida (vacaciones del paciente): la propuesta de la 1.ª no puede caer en ella.
+insert into public.disponibilidad (perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
+  (:PRO1, null, 'festivo',  :'l294'::date, :'l294'::date, 'Europe/Madrid', 'R1-H1 festivo'),
+  (:PRO1, null, 'ausencia', :'l295'::date, :'l300'::date, 'Europe/Madrid', 'R1-H1 ausencia mar-dom');
+
+call pg_temp.como(:PRO1);
+select public.agenda_crear_serie(
+  :P1, :PRO1, :CA, :TT21A, 'semanal', 1::smallint, time '10:00', 50::smallint, :'l294'::date, 3::smallint, null,
+  p_excluir => array[:'l301'::date]
+)::text as ser_o2 \gset
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(pc.fecha_prevista = :'l294'::date and pc.inicio_propuesto is null
+                                    and pc.fin_propuesto is null and pc.motivo = 'festivo')
+     from public.propuestas_cita pc where pc.serie_id = ((:'ser_o2'::jsonb)->>'serie_id')::uuid),
+  'O2 (R1-H1) · la propuesta del festivo NO cae en el lunes excluido: sin alternativa, fecha prevista la suya'
+);
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and((c.inicio at time zone 'Europe/Madrid')::date = :'l308'::date)
+     from public.citas c where c.serie_id = ((:'ser_o2'::jsonb)->>'serie_id')::uuid),
+  'O2 (R1-H1) · la serie deja una sola cita, la de la 3.ª sesión; nada en la excluida'
+);
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  (select s->>'bloqueo' is null
+     from jsonb_array_elements(
+            public.agenda_previsualizar_alta(:P1, :PRO1, :CA, null, null, time '10:00', 50::smallint,
+                                             :'l301'::date, null) -> 'sesiones') s),
+  'O2 (R1-H1) · GEMELA: el lunes excluido está libre: lo único que lo descarta como alternativa es la exclusión'
+);
+call pg_temp.reset_sesion();
+
+-- O3 · R1-H3 · M9: la 1.ª sesión estricta va SIN bloque de excepción. La carrera entre el plan
+-- y el insert se simula con un disparador que rechaza con 23P01 una sala marcada: el plan la ve
+-- libre, así que el 23P01 solo puede venir del insert (el fragmento lo demuestra).
+create function public.t028a_banco_carrera() returns trigger
+language plpgsql
+as $$
+begin
+  if new.sala = 'R1-H3 carrera' then
+    raise exception 'carrera simulada (banco 21, R1-H3)' using errcode = '23P01';
+  end if;
+  return new;
+end;
+$$;
+create trigger t028a_banco_carrera before insert on public.citas
+  for each row execute function public.t028a_banco_carrera();
+
+select pg_temp.n21() as n_antes_o3 \gset
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sql_serie(:P1, :PRO1, :CA, :TT21A, :'l315'::date, 2, 50,
+                    ', p_sala => ''R1-H3 carrera'', p_estricta_primera => true'),
+  '23P01', 'carrera simulada',
+  'O3 (R1-H3) · estricta y la 1.ª sesión pierde la carrera en el insert: 23P01 del insert, no propuesta'
+);
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  pg_temp.n21() = :'n_antes_o3',
+  'O3 (R1-H3) · el 23P01 de la carrera deshace TODO: ni serie, ni citas, ni propuestas'
+);
+
+call pg_temp.como(:PRO1);
+select public.agenda_crear_serie(
+  :P1, :PRO1, :CA, :TT21A, 'semanal', 1::smallint, time '10:00', 50::smallint, :'l315'::date, 2::smallint, null,
+  p_sala => 'R1-H3 carrera'
+)::text as ser_o3 \gset
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select count(*) = 2 and bool_and(pc.motivo = 'ocupada' and pc.inicio_propuesto is null)
+     from public.propuestas_cita pc where pc.serie_id = ((:'ser_o3'::jsonb)->>'serie_id')::uuid)
+  and (select count(*) = 0 from public.citas c where c.serie_id = ((:'ser_o3'::jsonb)->>'serie_id')::uuid),
+  'O3 (R1-H3) · GEMELA: sin estricta, la misma carrera vuelve cada sesión una propuesta ocupada sin hora'
+);
+
+drop trigger t028a_banco_carrera on public.citas;
+drop function public.t028a_banco_carrera();
+
+-- O4 · R1-H4 · Decisión D con el TERCER estado: un profesional suspendido tampoco puede ser el
+-- profesional de una cita. PRO2 se suspende como postgres y se restaura al final.
+update public.perfiles set estado = 'suspendido' where id = :PRO2;
+
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(
+  format('select * from public.agenda_bloques_profesional(%L, %L, %L::date, %L::date, 50::smallint)',
+         :PRO2, :CB, :'l343', :'l343'),
+  '22023', 'no es un profesional sanitario ni un administrador activo',
+  'O4 (R1-H4) · los bloques de un profesional SUSPENDIDO: 22023'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sql_prev(:P2, :PRO2, :CB, 'semanal', 1, time '10:00', 50, :'l343'::date, 2),
+  '22023', 'no es un profesional sanitario ni un administrador activo',
+  'O4 (R1-H4) · previsualizar con un profesional SUSPENDIDO: 22023'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sql_cita(:P2, :PRO2, :CB, :TT21A, :'l343'::date, time '09:00'),
+  '22023', 'no es un profesional sanitario ni un administrador activo',
+  'O4 (R1-H4) · crear_cita para un profesional SUSPENDIDO: 22023'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sql_serie(:P2, :PRO2, :CB, :TT21A, :'l343'::date, 2),
+  '22023', 'no es un profesional sanitario ni un administrador activo',
+  'O4 (R1-H4) · crear_serie para un profesional SUSPENDIDO: 22023'
+);
+call pg_temp.reset_sesion();
+
+update public.perfiles set estado = 'activo' where id = :PRO2;
+
+call pg_temp.como(:ADM);
+select public.agenda_crear_cita(:P2, :PRO2, :CB, :TT21A, :'l343'::date, time '09:00')::text as cita_o4 \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select count(*) = 1 from public.citas c where c.id = (:'cita_o4')::uuid),
+  'O4 (R1-H4) · GEMELA: el mismo profesional, otra vez activo, sí recibe la cita'
+);
+
+-- O5 · R1-H7 · Cero ocurrencias sin excluir nada no es «excluir todas». Ni por número de
+-- sesiones (0) ni por un final anterior a la primera fecha.
+select pg_temp.n21() as n_antes_o5 \gset
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sql_serie(:P1, :PRO1, :CA, :TT21A, :'l330'::date, 0),
+  '22023', 'no tiene ninguna sesión',
+  'O5 (R1-H7) · cero sesiones: 22023 con «no tiene ninguna sesión», no «Excluir todas»'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  format($f$select public.agenda_crear_serie(%L, %L, %L, %L, 'semanal', 1::smallint, time '10:00',
+                50::smallint, %L::date, null, %L::date)$f$,
+         :P1, :PRO1, :CA, :TT21A, :'l330', :'l335'),
+  '22023', 'no tiene ninguna sesión',
+  'O5 (R1-H7) · un final (domingo) anterior al primer lunes: 22023 con «no tiene ninguna sesión»'
+);
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sql_serie(:P1, :PRO1, :CA, :TT21A, :'l330'::date, 1, 50,
+                    ', p_excluir => array[date ''' || (:'l330'::date + 6) || ''']'),
+  '22023', 'sin sesiones',
+  'O5 (R1-H7) · GEMELA: excluir la única sesión sigue diciendo «sin sesiones»'
+);
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  pg_temp.n21() = :'n_antes_o5',
+  'O5 (R1-H7) · ninguno de los tres rechazos deja nada'
+);
 
 \echo '21-alta-de-cita: completa.'

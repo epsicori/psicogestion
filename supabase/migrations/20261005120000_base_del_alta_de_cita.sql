@@ -328,7 +328,8 @@ begin
     if v_bloqueo is not null then
       -- La alternativa: el primer día de los siete siguientes, a la misma hora local, sin
       -- festivo ni ausencia, no ocupado (con el descanso de la cita nueva) y que no sea otra
-      -- sesión de esta misma serie.
+      -- sesión de esta misma serie (D10). agenda_crear_serie pasa también las fechas excluidas,
+      -- así que tampoco es una de ellas (R1-H1).
       for v_d in 1 .. 7 loop
         v_fecha2 := v_fecha + v_d;
         continue when v_fecha2 = any (p_fechas);
@@ -581,11 +582,25 @@ begin
      where p_excluir is null or o.f <> all (p_excluir)
      order by o.n
   );
+  -- R1-H7 · Sin ninguna ocurrencia (cero sesiones, o un final anterior a la primera fecha) no
+  -- se ha excluido nada: el mensaje dice la causa verdadera.
+  if coalesce(array_length(v_todas, 1), 0) = 0 then
+    raise exception 'La serie no tiene ninguna sesión entre su inicio y su final.' using errcode = '22023';
+  end if;
   if coalesce(array_length(v_fechas, 1), 0) = 0 then
     raise exception 'Excluir todas las fechas deja la serie sin sesiones.' using errcode = '22023';
   end if;
 
-  v_plan := public.plan_alta_serie(p_profesional_id, p_centro_id, v_zona, v_fechas, p_hora_local, v_duracion);
+  -- R1-H1 · El plan se calcula sobre TODAS las fechas, excluidas incluidas, para que D10 (la
+  -- alternativa no es ninguna fecha de la serie) tampoco proponga una fecha excluida. Después
+  -- se quitan las excluidas, en su orden: lo que se materializa es el plan de v_fechas.
+  v_plan := (
+    select coalesce(jsonb_agg(s.e order by s.n), '[]'::jsonb)
+      from jsonb_array_elements(
+             public.plan_alta_serie(p_profesional_id, p_centro_id, v_zona, v_todas, p_hora_local, v_duracion)
+           ) with ordinality s(e, n)
+     where (s.e ->> 'fecha')::date = any (v_fechas)
+  );
 
   -- Estricta: la primera sesión no se convierte en propuesta, se rechaza y no queda nada.
   if p_estricta_primera then
