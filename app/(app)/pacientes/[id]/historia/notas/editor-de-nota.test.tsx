@@ -1204,6 +1204,41 @@ describe('EditorDeNota', () => {
         expect(cuerpo().readOnly).toBe(true);
       });
 
+      it('(f) C2-H1 · dos fallos y luego no_disponible: dice «no disponible», no «Tampoco… (intento 2)»', async () => {
+        const boton = await firmarSinRecarga();
+        abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
+        await disparar(boton);
+        await disparar(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('Tampoco se pudo recargar la nota (intento 2).');
+
+        abrirEditorDeNota.mockResolvedValue({ estado: 'no_disponible' });
+        await disparar(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('Esta nota no está disponible.');
+        expect(screen.queryByText(/Tampoco se pudo recargar/)).toBeNull();
+        expect(screen.getByRole('group', { name: 'Esta nota no está disponible.' })).toBeInTheDocument();
+      });
+
+      it('(g) C2-H2 · tras una recarga buena, el primer fallo del ciclo nuevo no lleva número de intento', async () => {
+        const boton = await firmarSinRecarga();
+        abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
+        await disparar(boton);
+        await disparar(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('Tampoco se pudo recargar la nota (intento 2).');
+
+        // La recarga sale bien y trae un borrador abierto: se puede volver a firmar.
+        abrirEditorDeNota.mockResolvedValue({ estado: 'abierta', caducaEn: enMinutos(30), nota: modelo() });
+        await disparar(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(screen.queryByRole('alert')).toBeNull();
+        expect(cuerpo().readOnly).toBe(false);
+
+        // Se firma otra vez sin nota de vuelta, y la recarga falla: es el primer fallo del ciclo.
+        await confirmar(await abrirDialogoDeFirma());
+        abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
+        await disparar(screen.getByRole('button', { name: 'Recargar' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('No se pudo recargar la nota.');
+        expect(screen.queryByText(/Tampoco se pudo recargar|intento/)).toBeNull();
+      });
+
       it('(c) «Volver a intentarlo» con apertura abierta recarga y lleva el foco a la vigente', async () => {
         const boton = await firmarSinRecarga();
         abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
