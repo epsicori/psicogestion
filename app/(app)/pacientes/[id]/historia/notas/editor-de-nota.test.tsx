@@ -685,6 +685,16 @@ describe('EditorDeNota', () => {
       expect(screen.getByLabelText('PIN')).toBeInTheDocument();
     });
 
+    it('B0-H5 · la firma que no trae la nota (sin_recargar) con caducaEn null no borra el plazo: al llegar T se cierra sola', async () => {
+      firmarNota.mockResolvedValue({ ok: true, nota: null, caducaEn: null });
+      await montar(modelo(), enMinutos(5));
+      const dialogo = await abrirDialogoDeFirma();
+      await confirmar(dialogo);
+      expect(screen.getByText('Firmada. No se pudo recargar la nota.')).toBeInTheDocument();
+      await avanzar(5 * 60_000);
+      expect(screen.getByText(/La historia se ha cerrado sola/)).toBeInTheDocument();
+    });
+
     it('la firma con caducaEn null no toca el plazo', async () => {
       firmarNota.mockResolvedValue({
         ok: true,
@@ -925,6 +935,21 @@ describe('EditorDeNota', () => {
       fireEvent.click(screen.getByRole('option', { name: 'Sin coprofesional' }));
       await vaciar();
       expect(fijarCoprofesional).toHaveBeenLastCalledWith({ pacienteId: PACIENTE, notaId: NOTA, coprofesionalId: null });
+    });
+
+    it('B0-H5 · elegir coprofesional con caducaEn null (solo_modelo) NO borra el plazo: al llegar T se cierra sola', async () => {
+      fijarCoprofesional.mockResolvedValue({
+        ok: true,
+        nota: modelo({ candidatosCoprofesional: candidatos }),
+        caducaEn: null,
+      });
+      await montar(modelo({ candidatosCoprofesional: candidatos }), enMinutos(5));
+      fireEvent.click(screen.getByRole('combobox', { name: 'Coprofesional' }));
+      fireEvent.click(screen.getByRole('option', { name: 'Luis Gómez' }));
+      await vaciar();
+      expect(fijarCoprofesional).toHaveBeenCalledTimes(1);
+      await avanzar(5 * 60_000);
+      expect(screen.getByText(/La historia se ha cerrado sola/)).toBeInTheDocument();
     });
 
     it('con versiones, o sin ser autor, no hay desplegable', async () => {
