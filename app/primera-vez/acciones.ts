@@ -13,6 +13,10 @@ import { exigirSesion } from '@/lib/supabase/sesion';
  * Genera los códigos de recuperación del propio usuario. Se llama **después** de
  * verificar el TOTP y no antes: `generar_codigos_recuperacion()` exige segundo
  * factor reciente (T-006·a), así que pedirlos antes falla por diseño.
+ *
+ * La pantalla la llama **solo al activar** el factor (T-037). No es una barrera: el
+ * titular puede regenerar su lote llamando al RPC con su propio JWT, y la base lo
+ * permite con un reto TOTP reciente.
  */
 export async function generarCodigos(): Promise<
   { ok: true; codigos: string[] } | { ok: false; mensaje: string }

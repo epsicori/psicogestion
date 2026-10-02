@@ -11,7 +11,12 @@ import { crearClienteNavegador } from '@/lib/supabase/navegador';
 import { generarCodigos } from './acciones';
 
 type Props = {
-  /** Id del factor TOTP ya verificado, o `null` si el usuario aún no tiene ninguno. */
+  /**
+   * Id del factor TOTP ya verificado, o `null` si el usuario aún no tiene ninguno. Lo
+   * fija el servidor (`page.tsx`, `listFactors()`) y es contractual: no nulo ⇒ entrada
+   * con un factor ya activo (no se generan códigos); nulo ⇒ activación (se enrola, se
+   * verifica y se generan los códigos una vez).
+   */
   factorVerificadoId: string | null;
 };
 
@@ -29,9 +34,10 @@ type Enrolamiento = { factorId: string; qr: string; secreto: string };
  *   Enrolar de nuevo a quien ya tiene su aplicación configurada sería pedirle que
  *   la reconfigure sin motivo.
  *
- * En los dos casos, al superarlo se generan los códigos de recuperación **y se
- * enseñan una sola vez**: no hay forma de volver a consultarlos, y la pantalla lo
- * dice antes de que el usuario siga.
+ * Solo en la activación se generan los códigos de recuperación y se enseñan una sola
+ * vez (ADR-039): no hay forma de volver a consultarlos, y la pantalla lo dice antes de
+ * que el usuario siga. Al entrar con un factor ya activo, superarlo solo refresca: el
+ * lote vigente no se toca (T-037).
  */
 export function SegundoFactor({ factorVerificadoId }: Props) {
   const router = useRouter();
@@ -43,7 +49,10 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   const [codigo, setCodigo] = useState('');
   const [codigos, setCodigos] = useState<string[] | null>(null);
   const [mensaje, setMensaje] = useState('');
+  // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue.
+  const [falloCodigos, setFalloCodigos] = useState<string | null>(null);
   const [trabajando, iniciarTransicion] = useTransition();
+  const vistaFallo = useRef<HTMLDivElement>(null);
 
   const factorId = factorVerificadoId ?? enrolamiento?.factorId ?? null;
 
@@ -74,6 +83,13 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
     })();
   }, [factorVerificadoId, supabase]);
 
+  // Al aparecer el aviso el botón «Verificar» desaparece y el foco cae en BODY: se lleva a
+  // la vista para que el lector de pantalla la lea antes de que se pulse «Aceptar»
+  // (mismo patrón que zona-por-confirmar: contenedor con tabIndex -1 y foco explícito).
+  useEffect(() => {
+    if (falloCodigos !== null) vistaFallo.current?.focus();
+  }, [falloCodigos]);
+
   const verificar = () => {
     if (!factorId) return;
     setMensaje('');
@@ -103,19 +119,39 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
         return;
       }
 
+      if (factorVerificadoId !== null) {
+        // Entrada con un factor ya activo: el lote vigente no se toca (ADR-039, T-037).
+        router.refresh();
+        return;
+      }
+
       const resultado = await generarCodigos();
 
       if (!resultado.ok) {
         // El factor ya está verificado: el paso está superado aunque los códigos
-        // fallen. Se avisa, y se deja seguir en vez de dejarlo a medias.
-        setMensaje(resultado.mensaje);
-        router.refresh();
+        // fallen. Se avisa y se espera: refrescar aquí desmontaría el aviso sin que
+        // se viera (D8, «avisa y deja seguir»); seguir es cosa del usuario.
+        setFalloCodigos(resultado.mensaje);
         return;
       }
 
       setCodigos(resultado.codigos);
     });
   };
+
+  if (falloCodigos !== null) {
+    return (
+      <div ref={vistaFallo} tabIndex={-1} className="flex flex-col gap-4 outline-none">
+        <h2 className="font-serif text-xl font-semibold tracking-tight">
+          {t('primeraVez.totp.titulo')}
+        </h2>
+        <p role="status" className="text-destructive text-sm">
+          {falloCodigos}
+        </p>
+        <Button onClick={() => router.refresh()}>{t('comunes.aceptar')}</Button>
+      </div>
+    );
+  }
 
   if (codigos) {
     return (

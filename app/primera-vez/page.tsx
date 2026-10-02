@@ -33,7 +33,8 @@ async function PasoPendiente() {
   if (paso === 'totp') {
     // Con un factor verificado ya enrolado, lo que falta es superarlo hoy; sin
     // factor, hay que crearlo. La pantalla lo distingue porque es quien puede
-    // listar los factores; la guardia no necesita saberlo.
+    // listar los factores; la guardia no necesita saberlo. Esta lectura es la que
+    // decide si superar el factor genera códigos (activación) o no (entrada): T-037.
     const { data: factores } = await sesion.supabase.auth.mfa.listFactors();
     const verificado = factores?.totp?.find((factor) => factor.status === 'verified') ?? null;
 
