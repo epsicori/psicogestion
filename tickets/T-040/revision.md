@@ -1,4 +1,4 @@
-Sin hallazgos ALTA. Gate combinado (A+B): 0 ALTA, 4 MEDIA, 9 BAJA (revision.json).
+Ronda 2: sin hallazgos ALTA. Gate de la ronda 2: 0 ALTA, 1 MEDIA, 4 BAJA; se cierran los 13 de la ronda 1 (revision.json). Ronda 1: 0 ALTA, 4 MEDIA, 9 BAJA.
 
 # T-040 · Revisión del corte A
 
@@ -128,3 +128,81 @@ La longitud de la contraseña se mide en unidades UTF-16 (`.length`), no en cara
 `setTimeout(…, 0)` no garantiza que el navegador pinte «Abriendo…» antes de los segundos de Argon2id en el hilo principal.
 
 **Escenario:** No está medido en un navegador; jsdom no pinta. El temporizador de 0 ms suele correr antes de la siguiente oportunidad de renderizado (~16 ms). Entonces el role="status" y el botón deshabilitado no se ven ni se anuncian hasta que termina la derivación, y la página parece colgada de 2 a 5 s. La forma habitual de evitarlo es `requestAnimationFrame(() => setTimeout(f, 0))`. Conviene mirarlo en la prueba manual C7.
+
+## Ronda 2 · corte A (revisor único, 03-10-2026)
+
+Rama `worktree-agent-a57d63ed182caa785`, HEAD `b483b47`. Diff de la ronda `2a6daaf..b483b47`, con el contexto de `main...HEAD`.
+Se miden los mutantes en una copia aparte (`git archive` al scratchpad, con una unión de `node_modules` que ya está quitada).
+La marca y el visor se miden en Chromium (Playwright) sobre `%TEMP%\psicogestion-T-040-copia-de-muestra.html`, regenerado desde `b483b47`.
+
+**Comandos en el worktree:**
+- `npm test`: 128 ficheros y 1621 pruebas, todo verde.
+- `npm run lint`: 0 errores. Hay 2 avisos en `lib/cuentas/accesos.test.ts`, fuera del diff.
+- `npx next build --webpack`: «Compiled successfully», salida 0.
+
+**Sin ALTA. 1 MEDIA, 4 BAJA. Los 13 hallazgos de la ronda 1 quedan cerrados en el código.**
+
+### Cierre de la ronda 1 (mutante medido → resultado)
+
+| id | cierre | mutante (copia aparte) |
+|---|---|---|
+| A-H1 | `superRefine` con los campos «sí» de §1.2 por rama y alcance. La profesional conjunta no exige `participantes`, como dice la tabla. | Sin `superRefine` → **muere** (2 rojas). Paciente individual sin `motivo_cambio` → **muere**. |
+| A-H2 | `{nombre_completo, rol}`, como en las decisiones del diseño. Ya no queda `apellidos` en `lib/exportaciones`. | Aceptar la forma vieja → **muere**. Quitar `.trim()` → **sobrevive** (R2-H5). |
+| A-H3 | Filas dimensionadas al lado mayor (suelo 1920). Medido con píxeles reales en Chromium: 99,8 % de `<main>` a 1920×1080, 1366×768, 390×844 y 2560×1440. El guion del implementador da 100 % en las tres. | 40 filas, 3 frases por fila, sin el suelo de 1920 → **mueren**. Las mutaciones de CSS sobreviven (R2-H1). Queda el caso de la ventana que se agranda (R2-H2). |
+| A-H4 | Prueba NFC → NFD de punta a punta en el visor. | Quitar `.normalize('NFC')` de VISOR_JS → **muere**. |
+| A-H5 | La línea de la marca va tras el h1, que es donde cae el foco. | La línea antes del h1 → **muere**. |
+| A-H6 | `avisarDeNuevo`: vacía la región y escribe el aviso en el siguiente tick. | Escribir directamente → **muere**. |
+| A-H7 | Texto propio `sinMemoria`. | Volver a `tx('error')` → **muere**. Ver R2-H4. |
+| A-H8 | «Requerimiento judicial o inspección», fijado en una prueba. No queda otra variante en el repo. | Con «de» → **muere**. |
+| B-H1 | Ida y vuelta con más de 3 × 32 KiB. | `subarray(i, TROZO)` → **muere**. |
+| B-H2 | m = 10, 1027 y 4099, y sales de 8, 32 y 300 bytes. | `columnas = m` → **muere** (3 rojas). `le32(16)` → **muere** (3 rojas). |
+| B-H3 | Lanzamientos del núcleo y cotas del visor. | En el núcleo mueren todos: sin guarda de t, de sal, de m o de longitud, y sin el tope de m o de t. En el visor, `t ≥ 0` y el tope de m a 4 GiB → **mueren**. |
+| B-H4 | `[...normalizada].length` (puntos de código). | Volver a `.length` → **muere**. |
+| B-H5 | Doble `requestAnimationFrame`, con `setTimeout` si no hay rAF. En Chromium hay 2 fotogramas (17-31 ms) entre «Abrir» y Argon2id. | `setTimeout` siempre → **muere**. **Un solo rAF → sobrevive** (R2-H3). |
+
+**Lo que se preguntó:**
+- **La capa grande (A-H3): ¿pesa en el rendimiento o en la impresión?** No. Lo medido en Chromium:
+  - Tamaño: a 1920 son 56 filas y 44 688 caracteres; con una pantalla de 3840 (o al abrir en una de 1366 con `screen` 3840), 109 filas y 158 595 caracteres.
+  - Pintado: reinsertar la capa y forzar la composición cuesta 1,3 ms a 1920 y 4,3 ms a 3840.
+  - Desplazamiento: entre fotogramas, la mediana es de 16,6 ms con capa y sin ella. El p95 es de 17,6 ms frente a 17,6 ms a 1920, y de 18,0 ms frente a 17,7 ms a 3840. El peor caso es de 25 ms frente a 18 ms a 3840.
+  - Impresión: el PDF A4 tarda 150-200 ms más con la capa (7-23 ms sin ella) y pesa 13 KB más. Una nota alargada a 13 páginas pesa 95,6 KB con la capa y 72,0 KB sin ella. Al imprimir, la capa sigue en `display:block; position:fixed`.
+- **A-H7: ¿«sin memoria» esconde una contraseña mala o un fichero dañado?**
+  - La contraseña, no: solo entra en H0 por BLAKE2b.
+  - El fichero dañado, sí, en un caso medido: una cabecera con `m` alterado dentro de la cota del visor. Está en R2-H4.
+  - Fuera de eso, la excepción solo puede venir de la reserva de memoria o de un fallo del propio núcleo.
+- **B-H5: ¿se queda colgado en segundo plano?** No.
+  - El rAF solo se aplaza mientras el documento está oculto. La retrollamada queda en cola y corre al volver a la pestaña, con `ocupado` y el botón deshabilitado mientras tanto. La ventana para que eso pase es de dos fotogramas (unos 33 ms) después de «Abrir». Pasados esos dos fotogramas, Argon2id corre de forma síncrona, y AES y `pintar` siguen por promesas, que no dependen de rAF.
+  - Playwright no deja medir el caso de la pestaña oculta. Con las banderas anti-throttling quitadas, en headless y con ventana, y con la ventana minimizada por CDP, `visibilityState` sigue `visible`. Minimizada, rAF siguió corriendo frenado (37 fotogramas en 4,8 s) y la copia se abrió.
+  - Lo anterior queda razonado, no medido en una pestaña oculta de verdad.
+
+### MEDIA
+
+- **R2-H1** `lib/exportaciones/visor-js.test.ts:326`. La decisión del diseño sobre A-H3 dice «lo mide una prueba de Playwright sobre el fichero de muestra», y no hay tal prueba en la rama. La prueba de vitest repite la fórmula del código: 6 px por carácter y filas de 72 px, contadas en jsdom, que no maqueta. El guion del implementador, fuera del repo, no mide el giro real: lo modela, porque quita `transform` y aplica −30° a mano.
+  *Escenario:* medido en Chromium sobre el fichero de muestra.
+  - Con `giro.style.transform = 'rotate(-30deg) translateX(40%)'`, toda la suite sigue verde y el guion del implementador da «PASA, 100 %» en los tres tamaños. Con píxeles reales (filas con fondo negro y anchura `max-content`, `<main>` invisible, captura), `<main>` queda cubierto al 67,8 % a 390×844 y al 87,5 % a 1366×768.
+  - Con `fontSize` a `6px`, toda la suite sigue verde y el guion da 80,4 % a 1920. Con píxeles reales queda en 71,7 % a 2560×1440.
+  - Una regresión de estilo deja de nuevo la nota sin marca en una captura, y nada lo para.
+  - La infraestructura ya existe (`playwright.config.ts`, `accesibilidad/`). Falta la prueba que pide la decisión, y tiene que medir píxeles o geometría con la transformación real.
+
+### BAJA
+
+- **R2-H2** `lib/exportaciones/visor-js.ts:207`. `lado` se calcula una sola vez, al pintar, con la pantalla de ese momento. Si después la ventana pasa a una pantalla mucho más ancha, las filas, alineadas a la izquierda del bloque girado, ya no llegan al centro.
+  *Escenario:* medido con píxeles reales. La copia se abre en un portátil de 1366×768 o 1920×1080 y luego la ventana se arrastra a un monitor ultrapanorámico de 5120×1440 al 100 % y se maximiza. Entonces solo queda bajo la marca el **35,5 %** de `<main>`, y una captura de la parte derecha de la nota sale sin el código. Abriendo directamente en 5120×1440 se cubre el 99,8 %. Alejar el zoom a 50 % o 33 % después de abrir da 99,8 %, y a 25 %, 0 %, aunque a esa escala el texto ya no se lee. Arreglo: recalcular en `resize` o centrar las filas en el bloque girado.
+- **R2-H3** `lib/exportaciones/visor-js.test.ts:269`. La prueba de B-H5 no distingue uno de dos fotogramas. Ejecuta los fotogramas en bucle y solo comprueba que no se deriva antes del primero.
+  *Escenario:* el mutante `window.requestAnimationFrame(f)`, con un solo rAF, deja la suite verde. Con un solo rAF, Argon2id corre en la retrollamada del fotograma, antes de que ese fotograma se pinte, así que «Abriendo…» no se ve ni se anuncia durante 1-5 s. Ese es justo el fallo de B-H5, y el comentario del código («un fotograma y el siguiente garantizan que el navegador ya pintó») queda sin guarda. Basta con ejecutar un solo fotograma y exigir `derivaciones === 0`.
+- **R2-H4** `lib/exportaciones/visor-js.ts:60` y `:141`. Ahora cualquier excepción de Argon2id se atribuye a la memoria. El visor admite m hasta 1 GiB y t hasta 16, aunque v1 siempre escribe m = 65536 y t = 3, y el servidor los exige como literales. Por eso una cabecera dañada en `m` se presenta como un problema del dispositivo.
+  *Escenario:* medido en Chromium con la contraseña correcta y `"m":65536` cambiado a `"m":655360` (un dígito de más) o a `"m":1048576`.
+  - En un dispositivo que no puede reservar más de 256 MiB (simulado), el visor dice a los 70 ms: «Este dispositivo no tiene memoria libre suficiente… ábrela en otro ordenador».
+  - En un ordenador que sí puede, tarda 9,5 s o 15 s y dice: «Contraseña incorrecta o fichero dañado».
+  - Al destinatario se le manda cambiar de equipo por un fichero que está dañado. En la ronda 1, ese mismo caso daba el mensaje correcto.
+  - Arreglo: que el visor de v1 exija los literales `m = 65536` y `t = 3` y dé por dañado lo demás. Así la excepción sí solo puede ser de memoria.
+- **R2-H5** `lib/exportaciones/formato.ts:93`. El `.trim()` de `nombre_completo` no tiene prueba. `perfiles.nombre_completo` es `text not null` sin un check de blancos (`20260815192424_…:30`), y `esquemaCopiaV1` solo se aplica en las pruebas.
+  *Escenario:* el mutante `z.string().min(1)`, sin `.trim()`, deja verde `formato.test.ts`. Con esa regresión, un perfil con `nombre_completo = '  '` pasa el esquema. `proyectar` da `quien: ''` y la copia sale «exportada por  (Profesional sanitario)», con la capa sin autor. La prueba de `sinNombre` solo usa `''`; falta el caso `'   '`.
+
+### Comprobado sin hallazgo
+
+- `camposExigidos` sigue la tabla de §1.2 al pie de la letra. `null` en las columnas que lo admiten sigue valiendo, y ausente no vale; lo prueban las dos ramas.
+- `proyectar` usa `nombre_completo.trim()`. En el diff no queda `unirNombre` para quien exporta, y el comentario de «hallazgo» de la ronda 1 ya no está.
+- `trasPintar`: hasta la derivación, `ocupado` y `boton.disabled` siguen como estaban. La rama sin rAF es la que recorren las demás pruebas en jsdom, que no trae rAF.
+- `avisarDeNuevo`: con dos pulsaciones seguidas, el último `setTimeout` escribe el mismo texto, y no se anuncia dos veces.
+- Los textos nuevos salen de `t()` (`sinMemoria`). No hay `innerHTML` ni `console.*` nuevos, y la ronda no toca ni docs ni ADR.
