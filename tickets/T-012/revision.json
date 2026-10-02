@@ -1,10 +1,9 @@
 {
   "ticket": "T-012",
-  "ronda": "corte B · ronda 2 (bbeaf5e..3a3c564)",
+  "ronda": "corte B · ronda 3 (0c6fac2, rama worktree-agent-a50633aa7d7148c4d)",
   "altas": 0,
   "medias": 0,
-  "bajas": 4,
-  "cerrados_de_la_ronda_1": ["B1-H1", "B1-H2", "B1-H3", "B1-H4", "B1-H5", "B1-H6", "B1-H7", "B0-H1"],
+  "bajas": 6,
   "hallazgos": [
     {
       "id": "B2-H1",
@@ -37,6 +36,46 @@
       "linea": 0,
       "descripcion": "Arrastrado de la ronda 1 y abierto a propósito, porque está fuera del territorio. cargarPaciente se traga el error y devuelve null, y page.tsx responde con notFound(). Sigue sin anotar en docs/state.md §Hallazgos.",
       "escenario": "La lectura de pacientes agota el tiempo y el profesional ve «no existe» para un paciente que sí existe."
+    },
+    {
+      "id": "B3-H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 1196,
+      "descripcion": "Ninguna prueba fija que un re-render sin cambio no mueva el foco: con el efecto de foco sin array de dependencias (mutante M6), las 82 pruebas de editor-de-nota.test.tsx siguen en verde.",
+      "escenario": "Con M6, la firma se rechaza con noSeFirmo y el profesional pasa con Tab a «Cancelar». A los 30 s, el setTic del reloj vuelve a pintar el diálogo, el efecto corre y el foco salta a «Firmar»: con Intro firmaría en vez de cancelar."
+    },
+    {
+      "id": "B3-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 1193,
+      "descripcion": "Ninguna prueba fija el foco inicial del diálogo con versiones: sin la guarda error === null (mutante M3), el efecto nuevo corre al montar después del focoInicial de Dialogo (hijo) y lo pisa, y las pruebas siguen en verde.",
+      "escenario": "Con M3, el profesional modifica una nota firmada y abre el diálogo. El foco cae en «Firmar» en vez de en «Motivo del cambio». Si pulsa Intro creyendo que está en el campo, el formulario se envía y vuelve con «hace falta un motivo»."
     }
+  ],
+  "rondas_anteriores": [
+    {
+      "ronda": "corte B · ronda 2 (bbeaf5e..3a3c564)",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 4,
+      "cerrados_de_la_ronda_1": [
+        "B1-H1",
+        "B1-H2",
+        "B1-H3",
+        "B1-H4",
+        "B1-H5",
+        "B1-H6",
+        "B1-H7",
+        "B0-H1"
+      ]
+    }
+  ],
+  "abiertos_sin_cambios_en_esta_ronda": [
+    "B2-H1",
+    "B2-H2",
+    "B2-H3",
+    "B1-H8"
   ]
 }
