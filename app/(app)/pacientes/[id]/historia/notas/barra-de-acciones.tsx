@@ -55,7 +55,7 @@ export function BarraDeAcciones({
       ref={ref}
       role="toolbar"
       aria-label={t('notas.editor.acciones')}
-      className="border-border bg-background sticky bottom-0 flex flex-wrap justify-end gap-2 border-t px-4 pt-3 pb-[env(safe-area-inset-bottom)]"
+      className="border-border bg-background sticky bottom-0 flex flex-wrap justify-end gap-2 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-6px_10px_-6px_rgb(0_0_0/0.14)]"
     >
       {puedeGuardar && (
         <Button variante="contorno" onClick={alGuardar} disabled={pendiente}>

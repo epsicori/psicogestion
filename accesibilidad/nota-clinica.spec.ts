@@ -84,3 +84,31 @@ test('a 360×330 el cursor al final de un texto largo queda por encima de la bar
     `el cursor queda tapado por la barra: ${JSON.stringify(medida)}`,
   ).toBeLessThanOrEqual(medida.barraTop);
 });
+
+test('a 1280 la barra de acciones se separa del contenido que pasa por debajo: sombra superior y aire propio', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/login');
+  await page.getByLabel('Correo').fill('ana@psicogestion.test');
+  await page.getByLabel('Contraseña').fill('psico1234');
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await page.waitForURL('**/pacientes');
+
+  await page.goto(`/pacientes/${PACIENTE}/historia/notas?nota=${NOTA}`);
+  await page.getByRole('button', { name: 'Abrir el editor' }).click();
+  const campoPin = page.getByLabel('PIN');
+  const area = page.getByRole('textbox', { name: 'Nota', exact: true });
+  await expect(campoPin.or(area)).toBeVisible();
+  if (await campoPin.isVisible()) {
+    await campoPin.fill('123456');
+    await page.getByRole('button', { name: 'Abrir', exact: true }).click();
+  }
+  await expect(area).toBeVisible();
+
+  const barra = await page.getByRole('toolbar').evaluate((el) => {
+    const e = getComputedStyle(el);
+    return { sombra: e.boxShadow, aireInferior: parseFloat(e.paddingBottom), aireSuperior: parseFloat(e.paddingTop) };
+  });
+  expect(barra.sombra, 'sin sombra, la barra se pega al cuadro que queda debajo').not.toBe('none');
+  expect(barra.aireSuperior).toBeGreaterThanOrEqual(12);
+  expect(barra.aireInferior).toBeGreaterThanOrEqual(12);
+});
