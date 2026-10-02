@@ -95,4 +95,27 @@ describe('SegundoFactor (T-037)', () => {
     expect(generarCodigos).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it('si generar los códigos falla al activar, el aviso se queda hasta que el usuario sigue', async () => {
+    enroll.mockResolvedValue({
+      data: {
+        id: 'factor-nuevo',
+        totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'SECRETO' },
+      },
+      error: null,
+    });
+    generarCodigos.mockResolvedValue({ ok: false, mensaje: 'FALLO-CODIGOS' });
+    render(<SegundoFactor factorVerificadoId={null} />);
+    await screen.findByAltText('Código QR para configurar la verificación en dos pasos');
+    await teclearYVerificar();
+
+    expect(await screen.findByText('FALLO-CODIGOS')).toBeInTheDocument();
+    expect(generarCodigos).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByText('Tus códigos de recuperación')).toBeNull();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Aceptar' }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Tus códigos de recuperación')).toBeNull();
+  });
 });

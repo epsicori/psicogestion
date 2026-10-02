@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type Browser } from '@playwright/test';
 
 import { codigoTotp } from '../lib/cuentas/codigo-totp';
-import { ejecutarSql, localizarContenedor } from '../scripts/psql.mjs';
+import { ejecutarSql } from '../scripts/psql.mjs';
+
+import { contenedorDelProyecto } from './contenedor-proyecto';
 
 /**
  * T-037 · CA2 contra GoTrue y la base reales, lo que jsdom no puede: una entrada posterior
@@ -135,7 +137,7 @@ test('una segunda entrada con TOTP no cambia el lote de códigos de recuperació
   let L1!: Lote;
 
   await test.step('S0 · Usuario propio', async () => {
-    contenedor = localizarContenedor();
+    contenedor = contenedorDelProyecto();
     id = randomUUID();
     correo = `t037-${id}@psicogestion.test`;
     crearUsuario(contenedor, id, correo);

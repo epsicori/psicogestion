@@ -49,6 +49,8 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   const [codigo, setCodigo] = useState('');
   const [codigos, setCodigos] = useState<string[] | null>(null);
   const [mensaje, setMensaje] = useState('');
+  // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue.
+  const [falloCodigos, setFalloCodigos] = useState<string | null>(null);
   const [trabajando, iniciarTransicion] = useTransition();
 
   const factorId = factorVerificadoId ?? enrolamiento?.factorId ?? null;
@@ -119,15 +121,29 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
 
       if (!resultado.ok) {
         // El factor ya está verificado: el paso está superado aunque los códigos
-        // fallen. Se avisa, y se deja seguir en vez de dejarlo a medias.
-        setMensaje(resultado.mensaje);
-        router.refresh();
+        // fallen. Se avisa y se espera: refrescar aquí desmontaría el aviso sin que
+        // se viera (D8, «avisa y deja seguir»); seguir es cosa del usuario.
+        setFalloCodigos(resultado.mensaje);
         return;
       }
 
       setCodigos(resultado.codigos);
     });
   };
+
+  if (falloCodigos !== null) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h2 className="font-serif text-xl font-semibold tracking-tight">
+          {t('primeraVez.totp.titulo')}
+        </h2>
+        <p role="status" className="text-destructive text-sm">
+          {falloCodigos}
+        </p>
+        <Button onClick={() => router.refresh()}>{t('comunes.aceptar')}</Button>
+      </div>
+    );
+  }
 
   if (codigos) {
     return (
