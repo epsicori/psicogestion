@@ -414,17 +414,23 @@ export async function abrirEditorDeNota(
 
   // 3 · Con cita: tiene que ser de este paciente y de este profesional.
   const citaId = entrada.citaId!;
-  const { data: cita } = await supabase
+  const { data: cita, error: errorCita } = await supabase
     .from('citas')
     .select('id, paciente_id, profesional_id, inicio, fin, zona_horaria')
     .eq('id', citaId)
     .maybeSingle();
+  // Una lectura que falla es «vuelve a intentarlo», no «no está disponible» (R3-H2).
+  if (errorCita) {
+    console.error('notas: no se pudo leer la cita', errorCita);
+    return { estado: 'error' };
+  }
   if (!cita || cita.paciente_id !== entrada.pacienteId || cita.profesional_id !== usuario.id) {
     return { estado: 'no_disponible' };
   }
 
-  const buscarPorCita = async () => {
-    const { data } = await supabase
+  // Un error no es «no hay nota»: seguir llevaría a crear una segunda cabecera.
+  const buscarPorCita = async (): Promise<Leida<string | null>> => {
+    const { data, error } = await supabase
       .from('notas_clinicas')
       .select('id')
       .eq('cita_id', citaId)
@@ -433,11 +439,16 @@ export async function abrirEditorDeNota(
       // (H27 sigue abierto) registraría el acceso a nombre de uno y devolvería la de otro (R2-H8).
       .eq('paciente_id', entrada.pacienteId)
       .maybeSingle();
-    return data?.id ?? null;
+    if (error) {
+      console.error('notas: no se pudo buscar la nota de la cita', error);
+      return { ok: false };
+    }
+    return { ok: true, valor: data?.id ?? null };
   };
 
   const existente = await buscarPorCita();
-  if (existente) return devolver(existente);
+  if (!existente.ok) return { estado: 'error' };
+  if (existente.valor) return devolver(existente.valor);
 
   // 4 · Sin cabecera: el episodio lo decide la base.
   const { data: episodioId, error: errorEpisodio } = await supabase.rpc('episodio_para_nota', {
@@ -518,7 +529,7 @@ export async function abrirEditorDeNota(
     // 23505: otra apertura de la misma cita entró primero (índice cita+autor). Se relee.
     if (errorAlta.code === '23505') {
       const id = await buscarPorCita();
-      return id ? devolver(id) : { estado: 'error' };
+      return id.ok && id.valor ? devolver(id.valor) : { estado: 'error' };
     }
     console.error('notas: no se pudo crear la cabecera', errorAlta);
     return { estado: 'error' };
