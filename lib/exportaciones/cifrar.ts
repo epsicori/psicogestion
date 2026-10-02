@@ -34,7 +34,9 @@ export async function cifrarCopia(
   aleatorio: (n: number) => Uint8Array = aleatorioDelSistema,
 ): Promise<{ html: string; huellaHex: string }> {
   const normalizada = contrasena.normalize('NFC');
-  if (normalizada.length < CONTRASENA_MIN || normalizada.length > CONTRASENA_MAX) {
+  // En caracteres (puntos de código), como dice ADR-076 §7: no en unidades UTF-16.
+  const caracteres = [...normalizada].length;
+  if (caracteres < CONTRASENA_MIN || caracteres > CONTRASENA_MAX) {
     throw new ErrorContrasena();
   }
 

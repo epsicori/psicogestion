@@ -171,6 +171,29 @@ describe('cifrarCopia', () => {
     await expect(cifrarCopia(copia, 'a'.repeat(CONTRASENA_MIN), espia)).resolves.toBeTruthy();
     await expect(cifrarCopia(copia, 'a'.repeat(CONTRASENA_MAX), espia)).resolves.toBeTruthy();
   });
+
+  it('B-H4: mide en caracteres (puntos de código tras NFC), no en unidades UTF-16: emojis', async () => {
+    const copia = proyectar(respuestaProfesional());
+    const espia = vi.fn(derivarNativo);
+    // Seis caracteres que en UTF-16 son doce unidades: no llega al mínimo.
+    await expect(cifrarCopia(copia, '🔐'.repeat(6), espia)).rejects.toBeInstanceOf(ErrorContrasena);
+    await expect(cifrarCopia(copia, '🔐'.repeat(CONTRASENA_MAX + 1), espia)).rejects.toBeInstanceOf(ErrorContrasena);
+    expect(espia).not.toHaveBeenCalled();
+    // Doce y doscientos caracteres valen, aunque midan 24 y 400 unidades.
+    await expect(cifrarCopia(copia, '🔐'.repeat(CONTRASENA_MIN), espia)).resolves.toBeTruthy();
+    await expect(cifrarCopia(copia, '🔐'.repeat(200), espia)).resolves.toBeTruthy();
+    await expect(cifrarCopia(copia, '🔐'.repeat(CONTRASENA_MAX), espia)).resolves.toBeTruthy();
+  });
+
+  it('B-H1: ida y vuelta con una carga de varios trozos de base64 (más de 3 × 32 KiB)', async () => {
+    const r = respuestaProfesional();
+    const largo = Array.from({ length: 12_000 }, (_, i) => `línea ${i};`).join(' ');
+    r.versiones[0].cuerpo = JSON.stringify({ texto: largo });
+    const copia = proyectar(r);
+    const { html } = await cifrarCopia(copia, CONTRASENA, derivarNativo);
+    expect(Buffer.from(partes(html).carga, 'base64').length).toBeGreaterThan(3 * 0x8000);
+    expect(await descifrar(html, CONTRASENA)).toEqual(copia);
+  });
 });
 
 describe('fichero de muestra para la comprobación manual (C7)', () => {
