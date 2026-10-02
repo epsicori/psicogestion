@@ -27,6 +27,9 @@
 \set N2    '\'f0120001-0000-4000-8000-000000000002\''
 \set N3    '\'f0120001-0000-4000-8000-000000000003\''
 \set N5    '\'f0120001-0000-4000-8000-000000000005\''
+\set NA    '\'f0120001-0000-4000-8000-0000000000a0\''
+\set EP2   '\'e0120001-0000-4000-8000-000000000003\''
+\set NP2   '\'f0120001-0000-4000-8000-0000000000d2\''
 
 -- ---------------------------------------------------------------------------
 -- Fijación (como postgres)
@@ -126,6 +129,56 @@ select pg_temp.assert(
      from public.notas_clinicas where id = :NB),
   '20.B5 Al firmar, las cuatro columnas del borrador quedan vacías, abierta_en incluida');
 
+-- 20.B6 · Reabrir tras firmar: abierta_en vuelve a ser now(), no lo que mande el cliente (R1-H2).
+--         La rama «reabrir» de fn_tocar_borrador es la de UPDATE con old.borrador_abierta_en nulo:
+--         es la que un coalesce(new.borrador_abierta_en, …) dejaría abierta a la casilla del cliente.
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"c"}', borrador_autor_id = :PRO1,
+       borrador_abierta_en = timestamptz '2003-01-01 00:00:00+00'
+ where id = :NB;
+select pg_temp.assert(
+  (select borrador_abierta_en = now() and borrador_actualizado_en = now()
+     from public.notas_clinicas where id = :NB),
+  '20.B6 Reabrir un borrador tras firmar: abierta_en = now(); el 2003-01-01 del cliente se ignora');
+
+-- 20.B7 · B1 y B3 como el usuario real (R1-H4): el disparador es invoker y corre igual bajo
+--         `authenticated` con la historia desbloqueada. Un atajo «si auth.uid() no es nulo, salir»
+--         dejaría pasar la casilla del cliente justo por el camino que usa la aplicación.
+call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  '20.B7 (preparación) PRO1 desbloquea su historia');
+insert into public.notas_clinicas
+  (id, paciente_id, episodio_id, autor_id, borrador_contenido, borrador_autor_id,
+   borrador_actualizado_en, borrador_abierta_en)
+values
+  (:NA, :P20, :E20, :PRO1, '{"texto":"a"}', :PRO1,
+   timestamptz '2000-01-01 00:00:00+00', timestamptz '2000-01-01 00:00:00+00');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select borrador_abierta_en = now() and borrador_actualizado_en = now()
+     from public.notas_clinicas where id = :NA),
+  '20.B7 Como authenticated, en el INSERT la base fija abierta_en y el testigo (el 2000 del cliente se ignora)');
+alter table public.notas_clinicas disable trigger tocar_borrador;
+update public.notas_clinicas
+   set borrador_abierta_en = now() - interval '1 day',
+       borrador_actualizado_en = now() - interval '1 hour'
+ where id = :NA;
+alter table public.notas_clinicas enable trigger tocar_borrador;
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  '20.B7 (preparación) PRO1 sigue desbloqueado');
+update public.notas_clinicas
+   set borrador_contenido = '{"texto":"a"}',
+       borrador_actualizado_en = timestamptz '2002-01-01 00:00:00+00',
+       borrador_abierta_en = timestamptz '2001-01-01 00:00:00+00'
+ where id = :NA;
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select borrador_actualizado_en = now() - interval '1 hour' and borrador_abierta_en = now() - interval '1 day'
+     from public.notas_clinicas where id = :NA),
+  '20.B7 Como authenticated, sin cambio de contenido el testigo y abierta_en no se mueven (el 2002 y el 2001 se ignoran)');
+
 -- ---------------------------------------------------------------------------
 -- U · Un borrador por cita y autor
 -- ---------------------------------------------------------------------------
@@ -141,6 +194,15 @@ select pg_temp.assert_lanza_codigo_msg(
   '20.U1 Segunda cabecera para la misma cita y el mismo autor: 23505 por el índice único');
 rollback to savepoint s20_u;
 -- Gemelas: otro autor con la misma cita, y el mismo autor sin cita (varias), sí entran.
+-- 20.U3 · PRO2, con su propio episodio de P20, abre SU nota de la misma cita C5 (R1-H3): el
+--         índice es (cita_id, autor_id). Reducido a (cita_id) esta sentencia daría 23505.
+insert into public.episodios_asistenciales
+  (id, paciente_id, profesional_id, centro_id, modalidad_relacional, abierto_en) values
+  (:EP2, :P20, :PRO2, :CA, 'individual', current_date - 10);
+select pg_temp.assert_no_lanza(
+  format('insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, cita_id) values (%L, %L, %L, %L, %L)',
+         :NP2, :P20, :EP2, :PRO2, :C5),
+  '20.U3 Otro autor con la MISMA cita entra: el índice único es (cita_id, autor_id), no (cita_id)');
 select pg_temp.assert_no_lanza(
   format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id) values (%L, %L, %L), (%L, %L, %L)',
          :P20, :E20, :PRO1, :P20, :E20, :PRO1),
@@ -250,9 +312,16 @@ select pg_temp.assert(
   '20.A3 C2, C3 y C4 siguen abiertas (la de otro paciente, la de otro profesional y la de la cita sin nota)');
 
 -- 20.A4 · La v2 no mueve el resuelta_en que dejó la v1.
+-- now() es constante en la transacción: sin envejecer la alerta, la v1 y la v2 escribirían el mismo
+-- instante y «no se movió» sería indistinguible de «se reescribió» (R1-H1).
+update public.alertas_documentacion
+   set resuelta_en = now() - interval '1 day'
+ where origen_tabla = 'citas' and origen_id = :C1 and tipo = 'nota_sin_firmar';
 select resuelta_en as resuelta_v1
   from public.alertas_documentacion
  where origen_tabla = 'citas' and origen_id = :C1 and tipo = 'nota_sin_firmar' \gset
+select pg_temp.assert(:'resuelta_v1'::timestamptz = now() - interval '1 day',
+  '20.A4 (preparación) la alerta resuelta de C1 tiene un resuelta_en de ayer');
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en, motivo_cambio) values
   (:N1, '{"texto":"v2"}',
@@ -264,7 +333,7 @@ select pg_temp.assert(
   and (select resuelta_en = :'resuelta_v1'::timestamptz
          from public.alertas_documentacion
         where origen_tabla = 'citas' and origen_id = :C1 and tipo = 'nota_sin_firmar'),
-  '20.A4 La versión 2 entra y deja intacto el resuelta_en de la versión 1');
+  '20.A4 La versión 2 entra y deja intacto el resuelta_en (de ayer, no now()) de la versión 1');
 
 -- ---------------------------------------------------------------------------
 -- Demostraciones de mutante (con el disparador apagado la prueba cambia)
@@ -298,5 +367,21 @@ select pg_temp.assert(
      from public.notas_clinicas where id = 'f0120001-0000-4000-8000-0000000000b1'),
   '20.MUT2 Con tocar_borrador apagado el 2000-01-01 del cliente persiste: la 20.B1 lo discrimina');
 alter table public.notas_clinicas enable trigger tocar_borrador;
+
+-- ---------------------------------------------------------------------------
+-- Mutantes de FUNCIÓN e ÍNDICE verificados a mano (02-10-2026, ronda de correcciones de T-012)
+-- ---------------------------------------------------------------------------
+-- Sustituyendo el objeto en la base viva (create or replace / drop index + create) y corriendo el
+-- banco, cada prueba se pone en rojo; con el objeto original, en verde:
+--   · 20.A4 — fn_resolver_alerta_nota_sin_firmar() SIN `and estado = 'abierta'`.
+--             ERROR: ASERCIÓN FALLIDA: 20.A4 La versión 2 entra y deja intacto el resuelta_en ...
+--   · 20.B6 — fn_tocar_borrador() con `coalesce(old…, new.borrador_abierta_en, now())` al reabrir.
+--             ERROR: ASERCIÓN FALLIDA: 20.B6 Reabrir un borrador tras firmar ...
+--   · 20.B7 — fn_tocar_borrador() con `if auth.uid() is not null then return new; end if;` al
+--             principio (las 20.B1-B6 corren como postgres y NO lo ven; solo la 20.B7 sí).
+--             ERROR: ASERCIÓN FALLIDA: 20.B7 Como authenticated, en el INSERT ...
+--   · 20.U3 — índice notas_clinicas_cita_autor_uidx reducido a (cita_id).
+--             ERROR: FALLO: 20.U3 Otro autor con la MISMA cita entra ... (lanzó 23505)
+-- Los dos mutantes de disparador apagado (MUT1, MUT2, arriba) cubren otras guardas.
 
 \echo '20-nota-borrador: completa.'
