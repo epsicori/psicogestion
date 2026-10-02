@@ -514,15 +514,24 @@ begin
    cross join (values (1, time '09:00', time '14:00'), (2, time '16:00', time '20:00')) as t(ord, ini, fin)
   on conflict (id) do nothing;
 
+  -- El festivo cae en el primer MARTES entre hoy + 14 y hoy + 20 (R2-H3): un día con franjas
+  -- de Ana sea cual sea el día de la semana en que se siembra, y dentro de los 56 días que
+  -- enseña el alta. Con `current_date + 14` a secas, sembrar en fin de semana lo dejaba en
+  -- un día sin franjas, donde no se ve.
   insert into public.disponibilidad
     (id, perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo)
-  values
-    ('e0280003-0000-4000-8000-000000000001', k_ana, k_c_madrid, 'festivo',
-     current_date + 14, current_date + 14, 'Europe/Madrid', 'Festivo local')
+  select 'e0280003-0000-4000-8000-000000000001', k_ana, k_c_madrid, 'festivo',
+         f.dia, f.dia, 'Europe/Madrid', 'Festivo local'
+    from (select current_date + 14
+                 + ((2 - extract(isodow from current_date + 14)::int + 7) % 7) as dia) f
   on conflict (id) do nothing;
 
   -- Lucía (de Ana): seis martes pasados de 12:00 a 12:50, el último estrictamente
-  -- anterior a hoy. Realizadas: el historial real de a qué hora viene.
+  -- anterior a hoy. Realizadas: el historial real de a qué hora viene. Entran como
+  -- PROGRAMADAS y pasan a realizadas con un update (R2-H2), como lo haría la aplicación:
+  -- así el disparador alertar_nota_sin_firmar abre las seis alertas «nota sin firmar» y
+  -- marcada_realizada_en/_por quedan rellenos. El update solo toca las que siguen
+  -- programadas, así que resembrar no lo repite.
   insert into public.citas
     (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria,
      estado, creada_por)
@@ -531,10 +540,16 @@ begin
          'e0280001-0000-4000-8000-000000000001',
          ((m.martes - 7 * k) + time '12:00') at time zone 'Europe/Madrid',
          ((m.martes - 7 * k) + time '12:50') at time zone 'Europe/Madrid',
-         'Europe/Madrid', 'realizada', k_ana
+         'Europe/Madrid', 'programada', k_ana
     from (select current_date - (((extract(isodow from current_date)::int - 2 + 6) % 7) + 1) as martes) m
    cross join generate_series(0, 5) as k
   on conflict (id) do nothing;
+
+  update public.citas c
+     set estado = 'realizada', marcada_realizada_en = c.fin, marcada_realizada_por = k_ana
+   where c.id in (select format('e0280004-0000-4000-8000-%s', lpad(k::text, 12, '0'))::uuid
+                    from generate_series(1, 6) as k)
+     and c.estado = 'programada';
 
   -- -----------------------------------------------------------------------
   -- 9 · Y AHORA la baja, no antes
