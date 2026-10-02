@@ -9,11 +9,12 @@ import { ALGORITMO, FORMATO, FORMATO_VERSION, KDF, MOTIVOS } from './constantes'
 import {
   H,
   ID_EXPORTACION,
+  respuestaPacienteMinima,
   respuestaPacienteQueTraeDeMas,
   respuestaProfesional,
   sello,
 } from './fixtures-de-prueba';
-import { esquemaCopiaV1, esquemaRespuestaExportar, proyectar } from './formato';
+import { esquemaCopiaV1, esquemaRespuestaExportar, proyectar, type RespuestaExportar } from './formato';
 
 describe('esquemaRespuestaExportar', () => {
   it('acepta la respuesta del §1.2 con `exportada_por`', () => {
@@ -21,17 +22,25 @@ describe('esquemaRespuestaExportar', () => {
     expect(esquemaRespuestaExportar.safeParse(respuestaPacienteQueTraeDeMas()).success).toBe(true);
   });
 
-  it('exige `exportada_por` (la marca de agua sale de ahí)', () => {
+  it('exige `exportada_por` con `nombre_completo` y rol (la marca de agua sale de ahí)', () => {
     const sin: Record<string, unknown> = { ...respuestaProfesional() };
     delete sin.exportada_por;
     expect(esquemaRespuestaExportar.safeParse(sin).success).toBe(false);
-    const sinNombre = { ...respuestaProfesional(), exportada_por: { nombre: '', apellidos: 'X', rol: 'administrador' } };
+    const sinNombre = { ...respuestaProfesional(), exportada_por: { nombre_completo: '', rol: 'administrador' } };
     expect(esquemaRespuestaExportar.safeParse(sinNombre).success).toBe(false);
     const otroRol = {
       ...respuestaProfesional(),
-      exportada_por: { nombre: 'T', apellidos: '', rol: 'tecnico_administrativo' },
+      exportada_por: { nombre_completo: 'T', rol: 'tecnico_administrativo' },
     };
     expect(esquemaRespuestaExportar.safeParse(otroRol).success).toBe(false);
+  });
+
+  it('A-H2: `perfiles` no tiene apellidos; la forma {nombre, apellidos} ya no vale', () => {
+    const vieja = {
+      ...respuestaProfesional(),
+      exportada_por: { nombre: 'Ana', apellidos: 'Martín', rol: 'profesional_sanitario' },
+    };
+    expect(esquemaRespuestaExportar.safeParse(vieja).success).toBe(false);
   });
 
   it('valida `cifrado` con literales iguales a constantes.ts: si la base discrepa, no hay copia', () => {
@@ -74,6 +83,34 @@ describe('esquemaRespuestaExportar', () => {
       esquemaRespuestaExportar.safeParse({ ...r, versiones: [{ ...r.versiones[0], huella: 'AB' }] }).success,
     ).toBe(false);
     expect(esquemaRespuestaExportar.safeParse({ ...r, versiones: [] }).success).toBe(false);
+  });
+
+  // A-H1: lo que §1.2 marca «sí» en cada rama tiene que llegar. Un alias mal escrito en el
+  // `jsonb_build_object` daría una copia con huellas correctas y las notas en blanco.
+  const sinCampo = (r: RespuestaExportar, i: number, campo: string, renombrar?: string) => {
+    const v: Record<string, unknown> = { ...r.versiones[i] };
+    if (renombrar) v[renombrar] = v[campo];
+    delete v[campo];
+    return { ...r, versiones: r.versiones.map((x, j) => (j === i ? v : x)) };
+  };
+
+  it('A-H1 · profesional: exige cuerpo, motivo del cambio, reservadas y canónico en cada versión', () => {
+    const r = respuestaProfesional();
+    expect(esquemaRespuestaExportar.safeParse(sinCampo(r, 0, 'cuerpo', 'cuerpo_texto')).success).toBe(false);
+    expect(esquemaRespuestaExportar.safeParse(sinCampo(r, 1, 'contenido_canonico')).success).toBe(false);
+    expect(esquemaRespuestaExportar.safeParse(sinCampo(r, 0, 'anotaciones_reservadas')).success).toBe(false);
+    expect(esquemaRespuestaExportar.safeParse(sinCampo(r, 0, 'motivo_cambio')).success).toBe(false);
+    // `null` en las que admiten null no es lo mismo que ausente.
+    r.versiones[0].anotaciones_reservadas = null;
+    expect(esquemaRespuestaExportar.safeParse(r).success).toBe(true);
+  });
+
+  it('A-H1 · paciente: la individual exige cuerpo y motivo del cambio; la conjunta, participantes', () => {
+    const r = respuestaPacienteMinima();
+    expect(esquemaRespuestaExportar.safeParse(r).success).toBe(true);
+    expect(esquemaRespuestaExportar.safeParse(sinCampo(r, 0, 'cuerpo', 'texto')).success).toBe(false);
+    expect(esquemaRespuestaExportar.safeParse(sinCampo(r, 0, 'motivo_cambio')).success).toBe(false);
+    expect(esquemaRespuestaExportar.safeParse(sinCampo(r, 1, 'participantes')).success).toBe(false);
   });
 });
 
@@ -190,9 +227,9 @@ describe('proyectar · la copia del paciente vuelve a recortar aunque la base en
     expect(esquemaCopiaV1.safeParse(copia).success).toBe(true);
   });
 
-  it('`apellidos` vacío no deja un espacio colgando en `quien`', () => {
+  it('`quien` es `nombre_completo` tal cual, sin espacios colgando', () => {
     const r = respuestaPacienteQueTraeDeMas();
-    r.exportada_por = { nombre: 'Berta Ruiz', apellidos: '', rol: 'administrador' };
-    expect(proyectar(r).marca.quien).toBe('Berta Ruiz');
+    r.exportada_por = { nombre_completo: '  Berta Ruiz Sanz ', rol: 'administrador' };
+    expect(proyectar(r).marca.quien).toBe('Berta Ruiz Sanz');
   });
 });

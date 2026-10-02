@@ -34,7 +34,7 @@ export function respuestaProfesional(): RespuestaExportar {
     cifrado: { formato_version: 1, algoritmo: ALGORITMO, kdf: { m: 65536, t: 3, p: 1, longitud: 32 } },
     paciente: { id: ID_PACIENTE, nombre: 'Lucía', apellidos: 'Pérez Gómez' },
     nota: { id: ID_NOTA, fecha_sesion: '2026-03-10', modalidad: 'individual' },
-    exportada_por: { nombre: 'Ana', apellidos: 'Martín', rol: 'profesional_sanitario' },
+    exportada_por: { nombre_completo: 'Ana Martín', rol: 'profesional_sanitario' },
     versiones: [
       {
         numero_version: 1,
@@ -77,10 +77,45 @@ export function respuestaPacienteQueTraeDeMas(): RespuestaExportar {
     proyeccion: 'paciente',
     motivo: 'peticion_paciente',
     referencia: 'Solicitud por escrito 2026/14',
-    exportada_por: { nombre: 'Berta', apellidos: 'Ruiz', rol: 'administrador' },
+    exportada_por: { nombre_completo: 'Berta Ruiz', rol: 'administrador' },
     versiones: r.versiones.map((v) => ({
       ...v,
       participantes: [{ nombre: 'Luis', apellidos: 'Pérez', papel: 'pareja' }],
     })),
+  };
+}
+
+/**
+ * Lo que la base entrega de verdad en la proyección del paciente (§1.2): la individual con
+ * cuerpo y motivo del cambio; la conjunta solo con participantes.
+ */
+export function respuestaPacienteMinima(): RespuestaExportar {
+  const r = respuestaPacienteQueTraeDeMas();
+  const [v1, v3] = r.versiones;
+  return {
+    ...r,
+    versiones: [
+      {
+        numero_version: v1.numero_version,
+        alcance: v1.alcance,
+        autor_nombre: v1.autor_nombre,
+        creada_en: v1.creada_en,
+        huella: v1.huella,
+        huella_anterior: v1.huella_anterior,
+        sello: v1.sello,
+        motivo_cambio: v1.motivo_cambio,
+        cuerpo: v1.cuerpo,
+      },
+      {
+        numero_version: v3.numero_version,
+        alcance: v3.alcance,
+        autor_nombre: v3.autor_nombre,
+        creada_en: v3.creada_en,
+        huella: v3.huella,
+        huella_anterior: v3.huella_anterior,
+        sello: v3.sello,
+        participantes: [{ nombre: 'Luis', apellidos: 'Pérez', papel: 'pareja' }],
+      },
+    ],
   };
 }

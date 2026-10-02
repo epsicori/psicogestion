@@ -50,6 +50,19 @@ const esquemaVersionRespuesta = z.object({
     .optional(),
 });
 
+type CampoDeRama = 'motivo_cambio' | 'cuerpo' | 'anotaciones_reservadas' | 'contenido_canonico' | 'participantes';
+
+/** Los campos que la tabla de §1.2 marca «sí» para cada rama de la proyección. */
+function camposExigidos(
+  proyeccion: ProyeccionExportacion,
+  alcance: (typeof ALCANCES)[number],
+): readonly CampoDeRama[] {
+  if (proyeccion === 'profesional') {
+    return ['motivo_cambio', 'cuerpo', 'anotaciones_reservadas', 'contenido_canonico'];
+  }
+  return alcance === 'individual' ? ['motivo_cambio', 'cuerpo'] : ['participantes'];
+}
+
 /**
  * La respuesta de `exportar_nota` (§1.2). `z.object` y no estricto a propósito: si la base trae
  * de más, `proyectar` lo vuelve a quitar (D9) en vez de tumbar la copia.
@@ -75,11 +88,9 @@ export const esquemaRespuestaExportar = z
     }),
     paciente: z.object({ id: z.uuid(), nombre: z.string(), apellidos: z.string() }),
     nota: z.object({ id: z.uuid(), fecha_sesion: fechaIso, modalidad: z.enum(MODALIDADES) }),
+    // `perfiles` solo tiene `nombre_completo` (diseño, decisiones tras la revisión del corte A).
     exportada_por: z.object({
-      nombre: z.string().min(1),
-      // `perfiles` solo tiene `nombre_completo`: la base puede mandarlo entero en `nombre` y
-      // `apellidos` vacío (hallazgo del corte A).
-      apellidos: z.string(),
+      nombre_completo: z.string().trim().min(1),
       rol: z.enum(ROLES),
     }),
     versiones: z.array(esquemaVersionRespuesta).min(1),
@@ -95,7 +106,22 @@ export const esquemaRespuestaExportar = z
   .refine(
     (r) => r.versiones.every((v, i) => i === 0 || v.numero_version > r.versiones[i - 1].numero_version),
     { message: 'Las versiones van en orden estrictamente creciente', path: ['versiones'] },
-  );
+  )
+  // A-H1: lo que §1.2 marca «sí» en la rama tiene que venir (aunque sea `null` donde se admite).
+  // Si falta, un alias mal escrito en la base daría una copia con las notas en blanco.
+  .superRefine((r, ctx) => {
+    r.versiones.forEach((v, i) => {
+      for (const campo of camposExigidos(r.proyeccion, v.alcance)) {
+        if (v[campo] === undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Falta «${campo}» en la versión ${v.numero_version} (§1.2)`,
+            path: ['versiones', i, campo],
+          });
+        }
+      }
+    });
+  });
 
 export type RespuestaExportar = z.infer<typeof esquemaRespuestaExportar>;
 type VersionRespuesta = RespuestaExportar['versiones'][number];
@@ -316,7 +342,7 @@ export function proyectar(r: RespuestaExportar): CopiaV1 {
     formato_version: FORMATO_VERSION,
     marca: {
       codigo: r.exportacion_id,
-      quien: unirNombre(r.exportada_por.nombre, r.exportada_por.apellidos),
+      quien: r.exportada_por.nombre_completo.trim(),
       rol: t(ETIQUETA_ROL[r.exportada_por.rol]),
       fecha: generadaEn,
       motivo: motivoEtiqueta ?? t('exportaciones.marca.copiaProfesional'),
