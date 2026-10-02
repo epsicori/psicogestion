@@ -18,6 +18,21 @@ import type { Database } from '@/lib/supabase/tipos-bd';
 import { canonizar } from './jcs';
 import { construirSobre, type EntradaFirma } from './sobre';
 
+/**
+ * T-012 · El fallo de la base con su SQLSTATE. Un `Error` a secas perdía el código, y la
+ * Server Action no podía distinguir un 42501 (candado o permiso) de un 23514 (la cabecera
+ * cambió entre leerla y firmar) ni de un 23505 (otra firma entró antes).
+ */
+export class ErrorFirmaVersion extends Error {
+  override name = 'ErrorFirmaVersion';
+  constructor(
+    mensaje: string,
+    readonly codigo: string | null,
+  ) {
+    super(mensaje);
+  }
+}
+
 export interface ResultadoFirma {
   id: string;
   numeroVersion: number;
@@ -67,7 +82,10 @@ export async function firmarVersionNota(
     .single();
 
   if (error) {
-    throw new Error(`No se pudo firmar la versión de la nota: ${error.message}`);
+    throw new ErrorFirmaVersion(
+      `No se pudo firmar la versión de la nota: ${error.message}`,
+      error.code ?? null,
+    );
   }
 
   return {
