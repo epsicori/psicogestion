@@ -1655,3 +1655,23 @@ Mandan sobre B.1-B.7 donde choquen.
 - Cualquier otro lector ve «Hay un borrador en curso».
 - La prueba gemela que daba por buena la lectura del coprofesional nombrado se invierte.
 - La puerta por `select` directo a PostgREST sobre la cabecera es de `supabase/**`. Va a `docs/state.md` §Hallazgos, para el día en que el coprofesional pueda abrir la historia.
+
+---
+
+## Ronda B-2 (02-10-2026): las tres BAJA nuevas pasan al corte C
+
+La ronda B-2 cierra todo lo de la ronda 1 con mutantes y deja 0 ALTA · 0 MEDIA · 4 BAJA. No se
+abre una ronda 3 del corte B. Las tres nuevas entran en el contrato del corte C, que vuelve a
+tocar la lista de versiones y el editor:
+
+- **B2-H3 (regla de la fábrica).** En lectura conjunta, la primera versión visible **no muestra
+  `motivo_cambio`**. Se numera por posición (B1-H4), y un motivo en la «Versión 1» delataría
+  una v1 individual oculta (la tabla exige motivo a toda versión > 1). Gemela: el asignado sigue
+  viendo el motivo de su v2. Prueba con la primera fila visible con `numero_version > 1`.
+- **B2-H1.** Cuando falla la recarga en el camino del aviso (`firmadaSinRecargar` o
+  `ya_firmada`), el aviso que la sustituye conserva una acción de reintento y el foco va a ella,
+  no a `body`.
+- **B2-H2.** Si quien no es autor abre una nota sin versiones y con el borrador oculto, el foco va
+  al aviso «Hay un borrador en curso» (grupo con nombre y `tabIndex=-1`), nunca a «Cerrar la
+  historia».
+- B1-H8 (`cargarPaciente` → 404) sigue fuera del territorio: `docs/state.md` §Hallazgos.

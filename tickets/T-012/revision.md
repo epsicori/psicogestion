@@ -786,3 +786,105 @@ Clasificación de lo que el implementador dejó a propósito: BAJA y fuera del t
 - `aria-describedby` del encabezado del candado no lo fija ninguna prueba: el mutante que lo quita sobrevive. Lo que se lee al llegar el foco depende de él, porque el `role="status"` se monta a la vez que su texto. Si se toca B1-H2, conviene fijarlo en la misma pasada.
 - Cambiar `asignado === true` por `Boolean(asignado)` sobrevive, pero es un mutante equivalente: la RPC devuelve un booleano.
 - La sonda que mide el foco tras la firma tiene que poner antes el foco en «Firmar». `fireEvent.click` no mueve el foco, y sin eso `useDevolucionDeFoco` guarda `body` y cualquier caso sale en `BODY` por el motivo equivocado.
+
+## Corte B · ronda 2
+
+**Ninguna ALTA en el corte B, ronda 2.** Hay 0 MEDIA y 4 BAJA. Tres de las BAJA son nuevas. La cuarta es B1-H8, que sigue abierta a propósito.
+
+Rama `worktree-agent-a569a13c061c1d353`. Lo nuevo de la ronda son los cuatro commits de `git diff bbeaf5e..3a3c564`. El corte entero se ha leído con `git diff main...worktree-agent-a569a13c061c1d353`, que solo toca `app/`, `lib/` y `accesibilidad/` (nada de `tickets/`, `docs/` ni `supabase/`).
+
+Cómo lo he medido:
+- No he usado la base local, ni Playwright, ni el puerto 3000.
+- He trabajado sobre una copia de `3a3c564` en mi scratchpad (`git archive`), con `node_modules` enlazado. El worktree no se ha tocado.
+- Línea base de la copia: 18 ficheros y 299 pruebas en verde (`lib/notas` y `historia/notas`). `eslint` limpio en los seis ficheros del diff.
+- Cada mutante se ejecuta contra su fichero de pruebas y el fuente se restaura después.
+
+Rutas cortas:
+- `E` = `editor-de-nota.tsx` y `ET` = `editor-de-nota.test.tsx`
+- `B` = `barra-de-acciones.tsx` y `BT` = `barra-de-acciones.test.tsx`
+- los cuatro anteriores están en `app/(app)/pacientes/[id]/historia/notas/`
+- `S` = `lib/notas/servidor.ts` y `ST` = `lib/notas/servidor.test.ts`
+
+### Estado de los hallazgos de la ronda 1
+
+| Hallazgo | Estado | Mutante y resultado |
+|---|---|---|
+| B1-H1 | **Cerrado.** `puedeLeerBorrador = asignado === true` (`S:309`). Cumple la decisión «solo el autor y el asignado» (diseño §B1-H1). La gemela se ha invertido y hay prueba con `coprofesional_id` de una tercera persona. | Muere: volver a poner `\|\| cab.coprofesional_id === usuario.id` (cae la gemela invertida). |
+| B1-H6 | **Cerrado.** El simulador solo contesta `true` si `p_paciente_id === P`, y una prueba fija el argumento exacto. | Muere: `p_paciente_id: usuario.id` (fallan 3 pruebas, incluida la nueva). |
+| B1-H2 | **Cerrado en los siete casos medidos, más `sin_acceso`.** Lo nuevo que trae el arreglo son H1 y H2, más abajo. | Muere: anular el efecto de `pedirFoco` (fallan 10). Muere: quitar `pedirFoco = true` en `aplicarRecarga` (falla «Modificar»). Muere: `h2` antes que `textarea` en los selectores. Muere: quitar `tabIndex` del grupo de `sin_acceso` y del de `no_disponible`. Muere: `sigueLaVista = false`. Muere: quitar la excepción de `bloqueada` (cae «foco al PIN»). **Sobrevive**: `sigueLaVista` solo con `error`, sin `no_disponible` (ver H1). |
+| B1-H3 | **Cerrado.** Medido con el foco puesto antes en «Firmar»: `ya_firmada` y `sin_borrador` van a «Cargar lo guardado», `no_autor` va al cuerpo de solo lectura y `no_disponible` va a «Firmar», ya activo. | Muere: anular el rescate (fallan 4). Muere: no esperar a `pendiente` (cae `no_disponible`). Muere: quitar `data-accion="firmar"`. Muere: quitar la rama `botonAviso` (fallan 2). Muere: no mirar `activeElement` antes de rescatar (fallan 3 que ya existían: conflicto, firma `ok` con nota y `bloqueada`). |
+| B1-H4 | **Cerrado en el número, no en la promesa.** En lectura conjunta se numera por posición y el número real no viaja. Pero el motivo de cambio de la primera versión visible delata la versión oculta (H3). | Muere: `numero: v.numero_version`. **Sobrevive**: `numero: posicion + 1` siempre. La prueba «el asignado conserva el número real» usa v1, v2 y v3 consecutivas, y en ese caso los dos cálculos coinciden. En la práctica es equivalente: el asignado lee todas las versiones, así que no hay huecos. Ver las notas. |
+| B1-H5 | **Cerrado.** Ahora es `queryByText(/vigente/)`. | Muere: `vigente={v.numero === vigente.numero}` sin `!lecturaConjunta`. |
+| B0-H1 (`aria-describedby`) | **Cerrado.** `toHaveAccessibleDescription(/La historia se ha cerrado sola/)`. | Muere: quitar `aria-describedby="mensaje-bloqueada"`. |
+| B1-H7 | **Cerrado.** Un `ResizeObserver` falso comprueba `observe(toolbar)`, que el cambio de alto llega al `scroll-padding` y que `disconnect` se llama una sola vez y solo al desmontar. La limpieza va en `finally` y en `afterEach`. | Muere: quitar `observador?.disconnect()`. Muere: quitar `observador?.observe(barra)`. |
+| B1-H8 | **Abierto a propósito.** Está fuera del territorio y el encargo lo excluye. Sigue sin anotar en `docs/state.md` §Hallazgos (ver las notas). | — |
+
+### BAJA
+
+**H1 · `E:377` (`sigueLaVista`), con `E:181-185` y `E:826`. Si «Recargar» o «Cargar lo guardado» fallan por el camino del aviso, el foco cae en `body` y el botón de reintentar desaparece.**
+
+El camino del aviso son dos casos:
+- «Recargar» tras `firmadaSinRecargar`;
+- «Cargar lo guardado» tras una firma rechazada con `ya_firmada` o `sin_borrador`.
+
+Si la recarga falla con `error` o `no_disponible`, el comentario de `E:376` dice que «un fallo al recargar deja la vista y su botón donde estaban». Eso solo es verdad por el camino del conflicto, donde el botón vive en el bloque de `estado.conflicto`, que sigue en `true`.
+
+Por el camino del aviso pasa esto:
+1. El reductor sustituye `aviso` por `noSeAbrio` o `noDisponible` (`E:181-185`).
+2. Esos avisos no llevan acción (`E:826`), así que el botón que tenía el foco se desmonta.
+3. Como `sigueLaVista` es `true`, `pedirFoco` queda en `false` y nadie rescata el foco.
+
+Lo he medido con una sonda en `ET`, con el foco puesto antes en el disparador. Son cuatro casos:
+- `firmadaSinRecargar` → «Recargar» → `error`;
+- `firmadaSinRecargar` → «Recargar» → `no_disponible`;
+- `ya_firmada` → «Cargar lo guardado» → `error`;
+- `ya_firmada` → «Cargar lo guardado» → `no_disponible`.
+
+En los cuatro, `document.activeElement` es `BODY` y el único botón que queda es «Cerrar la historia». En el camino del conflicto el foco se queda bien en «Cargar lo guardado»: es lo que cubre la prueba de `ET` «un "Recargar" que falla no roba el foco», y solo eso.
+
+Escenario: el profesional firma, la relectura falla y sale «Firmada; recarga para verla». Pulsa «Recargar» con el teclado y la red vuelve a fallar. El aviso pasa a «No se pudo abrir» y el foco queda en `body`. Ya no queda ningún control para reintentar, salvo recargar la página o cerrar la historia.
+
+La desaparición del botón ya ocurría antes de esta ronda. Lo nuevo es el comentario, que lo da por imposible. Es BAJA porque hacen falta dos fallos seguidos.
+
+**H2 · `E:516` y `ET:950`. Tras «Abrir el editor», quien no es autor y no tiene nada que leer recibe el foco en «Cerrar la historia», y la prueba lo fija como correcto.**
+
+El caso es una nota sin versiones y con el borrador oculto. En esa vista no hay `textarea`, ni `h2[tabindex=-1]`, ni grupo. `enfocarPrimero` cae en el primer `button:not([disabled])`, que es «Cerrar la historia», o «Ampliar el tiempo» si quedan 2 minutos o menos. Lo que la vista tiene que decir está en dos `<p>` sin foco: `notas.aviso.noAutor` y `notas.editor.borradorOculto`.
+
+Escenario: el administrador que participa en el episodio, que no es asignado, pulsa «Abrir el editor» con lector de pantalla.
+- Oye «Cerrar la historia, botón». No oye «Hay un borrador en curso» ni que la nota no es suya.
+- Si pulsa Intro creyendo que es el paso siguiente, cierra su ventana de PIN y tiene que volver a desbloquear.
+
+Es la clase de «foco a un control que no es el contenido». Arreglo: un encabezado o un grupo con nombre para esa vista, como ya tienen `sin_acceso` y `no_disponible`.
+
+**H3 · `S:366` (`motivo: v.motivo_cambio`) y `fila-de-version.tsx:35-39`. En lectura conjunta, si la v1 es individual, la primera versión visible sale como «Versión 1» pero con «Motivo: …». Una v1 real nunca lleva motivo, así que delata que hay una versión anterior oculta.**
+
+La base de datos obliga a que toda versión mayor que 1 lleve motivo: `check (numero_version = 1 or (motivo_cambio is not null …))`, en `supabase/migrations/20260822094547_…sql:670`. Y dos sitios prometen lo contrario de lo que pasa:
+- el comentario de `ModeloDeNota.lecturaConjunta` (`S:72-73`): «la pantalla no debe sugerir que existan versiones individuales»;
+- el título de `ET:809`: «ninguna pista».
+
+Escenario:
+1. La v1 de una nota de pareja se firma individual.
+2. La v2 se firma conjunta, con el motivo «Se amplía para la sesión conjunta».
+3. El administrador que participa en el episodio ve una sola fila: «Versión 1 · Motivo: Se amplía para la sesión conjunta».
+4. Así sabe que hay una versión anterior que no le enseñan.
+
+La prueba de B1-H4 (`ST:1449`) no lo ve porque su primera fila visible es una v1 real.
+
+Revela que la versión existe, no lo que dice: misma clase y misma severidad que B1-H4. Arreglo: no enviar el motivo de la primera versión visible cuando `lecturaConjunta` y su número real no es 1, o quitar la promesa del comentario y de la prueba. Decide el arquitecto.
+
+**H4 · `app/(app)/pacientes/[id]/datos.ts` (`cargarPaciente`). Es B1-H8 y sigue abierto: un error al leer el paciente se convierte en 404.**
+
+No ha cambiado desde la ronda 1. Está fuera del territorio y el encargo de esta ronda lo excluye. No figura en `docs/state.md` §Hallazgos.
+
+### Notas para el orquestador (no son hallazgos)
+
+- Hay dos anotaciones que el diseño manda a `docs/state.md` §Hallazgos y que no están. La rama no toca `docs/`, así que le tocan al orquestador:
+  - la puerta del `select` directo a PostgREST sobre `notas_clinicas.borrador_contenido` (diseño §B1-H1, último punto);
+  - B1-H8.
+- El mutante `numero: posicion + 1` siempre sobrevive. Es equivalente mientras el asignado lea todas las versiones. Para que la prueba «conserva el número real» muerda haría falta un hueco que el asignado viera, y hoy no existe. Basta con no prometerlo en el título.
+- Los grupos de `sin_acceso` y `no_disponible` llevan en `aria-label` la misma frase que el `AvisoDeError` (`role="alert"`) que contienen, así que un lector de pantalla puede leerla dos veces. No lo cuento como hallazgo: no rompe nada.
+- Cómo reproducir la sonda de H1:
+  1. `firmarNota` devuelve `{ ok: true, nota: null }`.
+  2. Se pone el foco en «Recargar» y se pulsa.
+  3. `abrirEditorDeNota` devuelve `{ estado: 'error' }`.
+  4. Se miden `activeElement` y `queryAllByRole('button')`.

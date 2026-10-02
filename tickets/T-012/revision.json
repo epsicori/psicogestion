@@ -1,72 +1,42 @@
 {
   "ticket": "T-012",
+  "ronda": "corte B · ronda 2 (bbeaf5e..3a3c564)",
   "altas": 0,
-  "medias": 2,
-  "bajas": 6,
+  "medias": 0,
+  "bajas": 4,
+  "cerrados_de_la_ronda_1": ["B1-H1", "B1-H2", "B1-H3", "B1-H4", "B1-H5", "B1-H6", "B1-H7", "B0-H1"],
   "hallazgos": [
     {
-      "id": "B1-H1",
-      "severidad": "MEDIA",
+      "id": "B2-H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 377,
+      "descripcion": "sigueLaVista supone que un fallo al recargar deja el botón montado, pero eso solo pasa en el camino del conflicto. Por el camino del aviso (firmadaSinRecargar, o yaFirmada tras ya_firmada o sin_borrador), el reductor cambia el aviso por noSeAbrio o noDisponible, que no llevan acción. El botón se desmonta y nadie rescata el foco.",
+      "escenario": "La firma sale bien pero la relectura falla. El profesional pulsa «Recargar» con el teclado y abrirEditorDeNota devuelve error. Medido con sonda: activeElement=BODY y el único botón que queda es «Cerrar la historia». Pasa lo mismo con no_disponible y con «Cargar lo guardado» tras ya_firmada."
+    },
+    {
+      "id": "B2-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 516,
+      "descripcion": "Tras «Abrir el editor», quien no es autor, en una nota sin versiones y con el borrador oculto, recibe el foco en «Cerrar la historia». Es el primer button:not([disabled]). editor-de-nota.test.tsx:950 lo fija como correcto. Los avisos noAutor y borradorOculto no tienen foco.",
+      "escenario": "El administrador que participa en el episodio abre la nota con un lector de pantalla. Oye «Cerrar la historia, botón» y no oye «Hay un borrador en curso». Si pulsa Intro creyendo que es el paso siguiente, cierra la ventana de PIN y tiene que volver a desbloquear."
+    },
+    {
+      "id": "B2-H3",
+      "severidad": "BAJA",
       "archivo": "lib/notas/servidor.ts",
-      "linea": 309,
-      "descripcion": "La regla aplicada a B0-H3 usa coprofesional_id como señal de alcance, pero fn_congelar_cabecera_sellada lo congela desde la v1. En una modificación, que es el único borrador que un no asignado puede ver, no dice nada de la v2. La gemela servidor.test.ts:1391 fija como correcto lo que la decisión del propietario prohíbe.",
-      "escenario": "La v1 se firma conjunta con A como coprofesional. El autor pulsa Modificar y escribe lo que un miembro contó a solas, para firmarlo individual; no puede quitar a A. cargarModelo da a A puedeLeerBorrador=true. Hoy A no llega desde la app (404 y registro denegado), pero la rama queda escrita y se activa el día que el coprofesional pueda abrir la historia. Decide el propietario."
-    },
-    {
-      "id": "B1-H2",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 352,
-      "descripcion": "Tras «Abrir el editor» (abierta, error, no_disponible, elegir_episodio; sin_acceso por lectura de código), tras Modificar con éxito, tras Recargar y tras «Cargar lo guardado», el disparador se desmonta y el foco cae en body. Incluye las cuatro vistas tras la carga que el implementador dejó a propósito.",
-      "escenario": "Medido con una sonda sobre activeElement, con el foco puesto antes en el disparador: BODY en los siete casos. Un profesional con teclado pulsa «Abrir el editor»: aparece el textarea, pero Tab empieza desde la cabecera de la aplicación y el lector de pantalla no anuncia nada."
-    },
-    {
-      "id": "B1-H3",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 613,
-      "descripcion": "B0-H1 está a medias: tras una firma rechazada con ya_firmada, sin_borrador o no_autor, la barra se desmonta. Con no_disponible el diálogo se desmonta mientras «Firmar» tiene disabled={pendiente} (barra-de-acciones.tsx:71). En los dos casos la devolución del foco no tiene a dónde ir.",
-      "escenario": "Otra pestaña firma la nota con el diálogo abierto. Al confirmar sale el aviso yaFirmada (role=alert), pero activeElement es BODY. Con no_disponible también es BODY, y quitando disabled de Firmar en la copia el foco vuelve a Firmar."
-    },
-    {
-      "id": "B1-H4",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/fila-de-version.tsx",
-      "linea": 25,
-      "descripcion": "En lectura conjunta, el título «Versión {numero}» con huecos revela que hay versiones individuales, contra lo que prometen el comentario de lecturaConjunta y el título de la prueba (editor-de-nota.test.tsx:809, que usa v1 y v2 consecutivas).",
-      "escenario": "La v1 se firma conjunta, la v2 individual y la v3 conjunta. El administrador del episodio, que no es asignado, ve «Versión 1» y «Versión 3»: sabe que existe una v2 que no le enseñan, y entre qué fechas se hizo."
-    },
-    {
-      "id": "B1-H5",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.test.tsx",
-      "linea": 822,
-      "descripcion": "queryByText('vigente') es vacua: FilaDeVersion pinta ' (vigente)' con paréntesis, así que nunca encuentra nada.",
-      "escenario": "Medido: con vigente={v.numero === vigente.numero} (sin !lecturaConjunta, editor-de-nota.tsx:1046), las pruebas siguen en verde. El lector conjunto volvería a ver «(vigente)» sobre una versión ya sustituida sin que nada falle."
-    },
-    {
-      "id": "B1-H6",
-      "severidad": "BAJA",
-      "archivo": "lib/notas/servidor.test.ts",
-      "linea": 1356,
-      "descripcion": "El simulador responde a rpc:es_profesional_asignado sin mirar los argumentos.",
-      "escenario": "Medido: con p_paciente_id: usuario.id en servidor.ts:302, servidor.test.ts sigue en verde. La RPC devolvería false a todos: el profesional asignado perdería el borrador de su colega y vería «Última versión conjunta» aunque lee todas las versiones."
-    },
-    {
-      "id": "B1-H7",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/barra-de-acciones.test.tsx",
-      "linea": 79,
-      "descripcion": "La prueba del scroll-padding no cubre el ResizeObserver, que jsdom no trae. Quitar observador?.disconnect() la deja en verde.",
-      "escenario": "Sin disconnect, en un navegador el observador avisa cuando la barra sale del DOM. reservar escribe 0px después de que la limpieza haya restaurado previo, y la siguiente ruta hereda un scroll-padding-bottom en línea que nadie pidió."
+      "linea": 366,
+      "descripcion": "En lectura conjunta se numera por posición, pero el motivo de cambio viaja igual. Una «Versión 1» con motivo delata una versión anterior oculta, porque el check de la tabla obliga a que toda versión mayor que 1 tenga motivo y la v1 real nunca lo tiene. Contradice el comentario de lecturaConjunta (servidor.ts:72-73).",
+      "escenario": "La v1 se firma individual y la v2 conjunta, con el motivo «Se amplía para la sesión conjunta». El administrador del episodio, que no es asignado, ve «Versión 1 · Motivo: Se amplía para la sesión conjunta» y sabe que hay una versión anterior que no le enseñan. La prueba servidor.test.ts:1449 no lo ve porque su primera fila visible es una v1 real."
     },
     {
       "id": "B1-H8",
       "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/datos.ts",
-      "linea": 53,
-      "descripcion": "cargarPaciente se traga el error y devuelve null, y page.tsx:52-53 hace notFound(). Es B0-H7 un paso antes, fuera del territorio: va a docs/state.md §Hallazgos.",
-      "escenario": "La lectura de pacientes agota el tiempo y el profesional ve un 404 de un paciente que existe, antes de llegar a la lectura de la cita que B0-H7 ya protege."
+      "linea": 0,
+      "descripcion": "Arrastrado de la ronda 1 y abierto a propósito, porque está fuera del territorio. cargarPaciente se traga el error y devuelve null, y page.tsx responde con notFound(). Sigue sin anotar en docs/state.md §Hallazgos.",
+      "escenario": "La lectura de pacientes agota el tiempo y el profesional ve «no existe» para un paciente que sí existe."
     }
   ]
 }
