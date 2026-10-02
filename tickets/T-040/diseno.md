@@ -782,3 +782,45 @@ La alternativa elegida es la **trazabilidad**.
   y que no se pinta con `innerHTML`.
 - **Criterio manual nuevo:** al imprimir, la marca de agua sale en cada página.
 - La marca disuade y rastrea; **no impide** copiar. El ADR lo dice así, sin prometer más.
+
+### Contrato de la marca de agua (fábrica, 02-10-2026; desarrolla P1)
+
+- **§1.2 gana un campo**: `"exportada_por": {"nombre": "…", "apellidos": "…", "rol": "profesional_sanitario" | "administrador"}`,
+  que la base saca del perfil de `auth.uid()` en el mismo acto. `esquemaRespuestaExportar` lo exige.
+- **`CopiaV1` gana `marca`**: `{codigo, quien, rol, fecha, motivo}`.
+  - `codigo` es `exportacion_id`;
+  - `quien` es nombre y apellidos;
+  - `rol` es la etiqueta con `t()`, reutilizando la clave de rol que ya exista en `lib/i18n/es.ts` (se
+    comprueba, no se inventa);
+  - `fecha` es `generada_en` formateada en `zona`;
+  - `motivo` es la etiqueta del motivo o `t('exportaciones.marca.copiaProfesional')`.
+- **Cabecera en claro**: no cambia; el código **no** va en ella. El formato v1 y su AAD quedan como
+  están, y la marca vive solo dentro de la parte cifrada.
+- **Visor**: tras descifrar y pintar, hace dos cosas.
+  - **Una línea visible y legible** al principio, no oculta a lectores de pantalla:
+    `t('exportaciones.visor.marcaLinea')` con los cinco datos.
+  - **Una capa `aria-hidden="true"`** sobre el contenido:
+    - `position: fixed; inset: 0; pointer-events: none; overflow: hidden`, y
+      `print-color-adjust: exact`;
+    - filas repetidas del texto `codigo · quien · fecha`, giradas unos −30°, con opacidad baja;
+    - construida con `createElement` y `textContent`;
+    - con `@media print` se mantiene fija, para que salga en cada página.
+- **Pruebas** (`visor-js.test.ts`):
+  - tras descifrar existen la línea y la capa, y las dos llevan el `codigo`;
+  - la capa es `aria-hidden` y no captura eventos;
+  - `VISOR_JS` no contiene `innerHTML`, `outerHTML`, `insertAdjacentHTML` ni `document.write`;
+  - `formato.test.ts` comprueba que `proyectar` arma `marca` desde la respuesta.
+
+### Cortes (fábrica, 02-10-2026)
+
+- **Corte A, sin base**:
+  - `lib/exportaciones/` salvo `servidor.ts`: `constantes`, `nucleo-js`, `visor-js` (con la marca),
+    `fichero`, `cifrar`, `formato` (con `esquemaRespuestaExportar`), `derivar-en-trabajador`;
+  - sus pruebas;
+  - las claves `exportaciones.copia.*`, `exportaciones.visor.*` y `exportaciones.marca.*` de `lib/i18n/es.ts`;
+  - el ADR de cifrado (texto de §A con la marca de agua), con `docs/decisions.md` y `docs/decisions/INDEX.md`.
+  - Cierra C4 (la parte de Vitest), C5 (la parte de Vitest), el criterio manual de abrir el fichero (con un
+    fichero de muestra que genera una prueba) y la marca.
+  - No ocupa la cola de `supabase/`.
+- **Corte B, con base y en su turno de la cola**: el resto, que incluye la migración, el banco 24,
+  `servidor.ts`, la interfaz, el guion `t040`, `architecture.md` y la accesibilidad.
