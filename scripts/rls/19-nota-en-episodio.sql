@@ -769,4 +769,200 @@ select pg_temp.assert_lanza_codigo_msg(
   '19.55 Volver a poner a PRO2 (alta cerrada) como coprofesional: 23514');
 call pg_temp.reset_sesion();
 
-\echo '19-nota-en-episodio: completa (19.1-19.55).'
+-- ---------------------------------------------------------------------------
+-- T-035 · ADR-073: el centro del episodio se congela con notas (19.60-19.61b) y el director
+-- sanitario puede ser coprofesional (19.56-19.59, 19.57b-c, 19.62-19.63). Fijación propia:
+-- centros, altas, pacientes y PIN de ADM; no se supone nada de la 19.54 ni de la 19.55.
+-- ---------------------------------------------------------------------------
+\set C35E '\'c0350001-0000-4000-8000-00000000000e\''
+\set C35F '\'c0350001-0000-4000-8000-00000000000f\''
+\set P35A '\'d0350001-0000-4000-8000-000000000001\''
+\set P35B '\'d0350001-0000-4000-8000-000000000002\''
+\set P35C '\'d0350001-0000-4000-8000-000000000003\''
+\set P35D '\'d0350001-0000-4000-8000-000000000004\''
+\set N35A '\'f0350001-0000-4000-8000-000000000001\''
+\set N35B '\'f0350001-0000-4000-8000-000000000002\''
+
+insert into public.centros (id, nombre) values
+  (:C35E, 'Centro E (T-035)'),
+  (:C35F, 'Centro F (T-035)');
+insert into public.perfiles_centros (perfil_id, centro_id, principal) values
+  (:PRO1,    :C35E, false),
+  (:ADM,     :C35E, false),
+  (:TEC1,    :C35E, false),
+  (:PROBAJA, :C35E, false),
+  (:PRO1,    :C35F, false);
+insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values
+  (:P35A, 'Ana',   'T035 A', :PRO1, :C35E),
+  (:P35B, 'Berta', 'T035 B', :ADM,  :C35E),
+  (:P35C, 'Clara', 'T035 C', :PRO1, :C35F),
+  (:P35D, 'Dora',  'T035 D', :PRO1, :C35E);
+-- PROBAJA ya está de baja si corrió el módulo 04; se asegura aquí (mismo update que el 04).
+update public.perfiles set estado = 'baja', estado_desde = now()
+ where id = :PROBAJA and estado <> 'baja';
+
+-- Controles: se fijan, no se suponen.
+select pg_temp.assert(
+  (select count(*) from public.perfiles_centros where perfil_id = :ADM and centro_id = :C35E and hasta is null) = 1
+  and (select count(*) from public.perfiles_centros where perfil_id = :TEC1 and centro_id = :C35E and hasta is null) = 1
+  and (select count(*) from public.perfiles_centros where perfil_id = :PROBAJA and centro_id = :C35E and hasta is null) = 1,
+  '19.56 Control: ADM, TEC1 y PROBAJA tienen alta vigente en C35E');
+select pg_temp.assert(
+  (select count(*) from public.perfiles_centros where perfil_id = :ADM and centro_id = :C35F and hasta is null) = 0,
+  '19.56 Control: ADM no tiene alta en C35F');
+select pg_temp.assert(
+  (select rol::text from public.perfiles where id = :ADM) = 'administrador'
+  and (select rol::text from public.perfiles where id = :TEC1) = 'tecnico_administrativo'
+  and (select rol::text from public.perfiles where id = :PROBAJA) = 'profesional_sanitario'
+  and (select estado::text from public.perfiles where id = :PROBAJA) = 'baja'
+  and (select estado::text from public.perfiles where id = :ADM) = 'activo',
+  '19.56 Control: roles de ADM, TEC1 y PROBAJA, y PROBAJA de baja');
+
+call pg_temp.como_con_2fa(:ADM); select public.fijar_pin_historia('333333'); call pg_temp.reset_sesion();
+
+-- Episodios por el camino de la aplicación (episodio_para_nota).
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+  'El PIN de PRO1 desbloquea la historia (T-035)');
+select public.episodio_para_nota(:P35A, null, null, :C35E) as e35a \gset
+select public.episodio_para_nota(:P35C, null, null, :C35F) as e35c \gset
+select public.episodio_para_nota(:P35D, null, null, :C35E) as e35d \gset
+call pg_temp.reset_sesion();
+call pg_temp.como(:ADM);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
+  'El PIN de ADM desbloquea la historia (T-035)');
+select public.episodio_para_nota(:P35B, null, null, :C35E) as e35b \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select centro_id from public.episodios_asistenciales where id = :'e35a') = :C35E
+  and (select centro_id from public.episodios_asistenciales where id = :'e35b') = :C35E
+  and (select centro_id from public.episodios_asistenciales where id = :'e35c') = :C35F
+  and (select centro_id from public.episodios_asistenciales where id = :'e35d') = :C35E,
+  '19.56 Control: los cuatro episodios tienen el centro pedido');
+
+-- 19.56 · Coterapia (criterio 3a): PRO1 autor, ADM coprofesional, los dos con alta en C35E.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_no_lanza(
+  format('insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, coprofesional_id) values (%L, %L, %L, %L, %L)',
+         :N35A, :P35A, :'e35a', :PRO1, :ADM),
+  '19.56 La nota de PRO1 con ADM (administrador, alta en C35E) como coprofesional entra');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select coprofesional_id from public.notas_clinicas where id = :N35A) = :ADM,
+  '19.56 ...y la cabecera guarda a ADM como coprofesional');
+
+-- 19.57 · Coterapia simétrica (criterio 3b): ADM autor, PRO1 coprofesional; por insert y por update.
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(
+  format('insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, coprofesional_id) values (%L, %L, %L, %L, %L)',
+         :N35B, :P35B, :'e35b', :ADM, :PRO1),
+  '19.57 La nota de ADM con PRO1 como coprofesional entra');
+update public.notas_clinicas set coprofesional_id = null where id = :N35B;
+select pg_temp.assert_no_lanza(
+  format('update public.notas_clinicas set coprofesional_id = %L where id = %L', :PRO1, :N35B),
+  '19.57 ...y quitarlo y volver a ponerlo (el camino de fijarCoprofesional) pasa');
+-- 19.57b · Con un administrador como AUTOR, el rol del coprofesional también se valida.
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.notas_clinicas set coprofesional_id = %L where id = %L', :TEC1, :N35B),
+  '23514', 'quien puede ser autor de notas',
+  '19.57b ADM autor, TEC1 (alta en C35E) coprofesional: 23514 por el rol (gemela: 19.57)');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select autor_id from public.notas_clinicas where id = :N35B) = :ADM
+  and (select coprofesional_id from public.notas_clinicas where id = :N35B) = :PRO1,
+  '19.57 Control: la nota de ADM queda con autor ADM y coprofesional PRO1');
+
+-- 19.57c · El coprofesional tiene que estar activo (decisión del propietario, 02-10-2026).
+--          PROBAJA es profesional sanitario con alta vigente en C35E: solo falla el estado.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id, coprofesional_id) values (%L, %L, %L, %L)',
+         :P35A, :'e35a', :PRO1, :PROBAJA),
+  '23514', 'está de baja',
+  '19.57c Coprofesional de baja (profesional sanitario con alta vigente en C35E): 23514 (gemela: 19.56, activo)');
+
+-- 19.58 · El técnico (con alta en C35E, mismo episodio que 19.56) sigue fuera: solo cambia el rol.
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id, coprofesional_id) values (%L, %L, %L, %L)',
+         :P35A, :'e35a', :PRO1, :TEC1),
+  '23514', 'quien puede ser autor de notas',
+  '19.58 Coprofesional técnico administrativo con alta en C35E: 23514 por el rol (gemela: 19.56)');
+
+-- 19.59 · ADM sin alta en el centro del episodio (C35F) sigue fuera: pasa el rol, falla 7c.
+select pg_temp.assert_lanza_codigo_msg(
+  format('insert into public.notas_clinicas (paciente_id, episodio_id, autor_id, coprofesional_id) values (%L, %L, %L, %L)',
+         :P35C, :'e35c', :PRO1, :ADM),
+  '23514', 'no tiene alta en el centro del episodio',
+  '19.59 Coprofesional administrador sin alta en C35F: 23514 por el centro (gemela: 19.56, ADM en C35E)');
+
+-- 19.60a · Control: la RLS deja a PRO1 escribir la fila; después, el centro no cambia con notas.
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.episodios_asistenciales where id = %L', :'e35a')) = 1,
+  '19.60a Control: PRO1 ve el episodio e35a');
+update public.episodios_asistenciales set motivo_consulta = 't035' where id = :'e35a';
+select pg_temp.assert(
+  (select motivo_consulta from public.episodios_asistenciales where id = :'e35a') = 't035',
+  '19.60a Control: la RLS deja a PRO1 actualizar la fila (el 42501 de abajo es del disparador)');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.episodios_asistenciales set centro_id = %L where id = %L', :C35F, :'e35a'),
+  '42501', 'y su centro no cambian',
+  '19.60a Un episodio con notas no cambia de centro (valor a otro valor)');
+-- 19.60b · Valor a nulo.
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.episodios_asistenciales set centro_id = null where id = %L', :'e35a'),
+  '42501', 'y su centro no cambian',
+  '19.60b Un episodio con notas no pierde su centro (valor a nulo)');
+
+-- 19.61 · Gemela: el episodio sin notas sí cambia de centro (PRO1 tiene alta en C35F).
+select pg_temp.assert(
+  pg_temp.contar(format('select * from public.notas_clinicas where episodio_id = %L', :'e35d')) = 0,
+  '19.61 Antes: el episodio e35d no tiene notas');
+update public.episodios_asistenciales set centro_id = :C35F where id = :'e35d';
+-- 19.61b · No-op sobre el episodio con notas: el centro no cambia, el resto sí se edita.
+update public.episodios_asistenciales set centro_id = centro_id, motivo_consulta = 't035b' where id = :'e35a';
+select pg_temp.assert(
+  (select motivo_consulta from public.episodios_asistenciales where id = :'e35a') = 't035b',
+  '19.61b Reescribir el mismo centro en un episodio con notas pasa (no es un cambio)');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select centro_id from public.episodios_asistenciales where id = :'e35d') = :C35F,
+  '19.61 Gemela: un episodio SIN notas sí cambia de centro');
+
+-- 19.60c · Como postgres (criterio 4: «también como postgres»), episodio de ADM con nota.
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.episodios_asistenciales set centro_id = %L where id = %L', :C35F, :'e35b'),
+  '42501', 'y su centro no cambian',
+  '19.60c Como postgres, un episodio con notas tampoco cambia de centro');
+-- 19.60d · Nulo a valor: ECN no tiene centro y tiene nota desde la 19.37.
+select pg_temp.assert(
+  (select centro_id from public.episodios_asistenciales where id = :ECN) is null
+  and pg_temp.contar(format('select * from public.notas_clinicas where episodio_id = %L', :ECN)) > 0,
+  '19.60d Control: ECN no tiene centro y tiene notas');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.episodios_asistenciales set centro_id = %L where id = %L', :CA, :ECN),
+  '42501', 'y su centro no cambian',
+  '19.60d Un episodio con notas y sin centro tampoco lo recibe (nulo a valor)');
+
+-- 19.62 · La lista de roles del coprofesional es CERRADA (catálogo): ningún mutante de
+--         comportamiento distingue «lista cerrada» de «todo salvo el técnico» con tres roles.
+select pg_temp.assert(
+  pg_get_functiondef('public.fn_exigir_episodio_coherente_en_nota()'::regprocedure)
+    ~* 'v_rol\s+not\s+in\s*\(\s*''profesional_sanitario''::public\.rol_usuario\s*,\s*''administrador''::public\.rol_usuario\s*\)',
+  '19.62 (i) 7b es una lista cerrada: v_rol not in (profesional_sanitario, administrador)');
+select pg_temp.assert(
+  pg_get_functiondef('public.fn_exigir_episodio_coherente_en_nota()'::regprocedure)
+    !~* 'tecnico_administrativo',
+  '19.62 (ii) 7b no nombra al técnico: no es una lista negativa');
+select pg_temp.assert(
+  pg_get_functiondef('public.fn_exigir_episodio_coherente_en_nota()'::regprocedure)
+    ~* 'from\s+public\.episodios_asistenciales\s+ea\s+where\s+ea\.id\s*=\s*new\.episodio_id\s+for\s+share',
+  '19.62 (iii) La re-emisión conserva el for share del paso 3 (19.48)');
+
+-- 19.63 · Alarma: un rol nuevo (ADR-065) obliga a decidir si puede ser autor de notas.
+select pg_temp.assert(
+  enum_range(null::public.rol_usuario)::text[] = array['administrador','profesional_sanitario','tecnico_administrativo'],
+  '19.63 ALARMA: hay un rol nuevo (ADR-065). Decide si puede ser autor de notas y revisa el paso 7b de fn_exigir_episodio_coherente_en_nota');
+
+call pg_temp.reset_sesion();
+
+\echo '19-nota-en-episodio: completa (19.1-19.63).'
