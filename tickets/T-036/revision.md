@@ -1,4 +1,4 @@
-**Gate T-036: sin hallazgos ALTA** (A + B: 0 ALTA · 3 MEDIA · 4 BAJA).
+**Gate T-036 (ronda 1): sin hallazgos ALTA** (A + B: 0 ALTA · 0 MEDIA · 1 BAJA; la ronda 0 tuvo 0 ALTA · 3 MEDIA · 4 BAJA, todas cerradas).
 
 ## Revisor A (seguridad e invariantes de base: SQL, cerrojos, cadena de huellas, RLS)
 
@@ -101,3 +101,137 @@ Arreglo:
 Escenario: si §1.4 deja de intercalar, el mensaje manda a buscar en `guardarBorrador` o `fn_vaciar`, cuando lo que falla es el `insert` de la versión.
 
 Arreglo: pasar el qué como parámetro, o usar un texto neutro como «el cerrojo de la cabecera».
+
+## Ronda 1 · Revisor B (lente de pruebas: bancos, mutantes y carrera)
+
+**Sin hallazgos de severidad ALTA (revisor B, ronda 1).** 0 ALTA · 0 MEDIA · 1 BAJA.
+
+Diff: `main...worktree-agent-a924f41815b576e9e`, commit de la ronda b9f0477. Revisado leyendo el SQL, sin tocar la base.
+
+### Hallazgos de la ronda 0, uno a uno
+
+- **B-H1 (y A-H1): cerrado.**
+  - Las dos partidas, C1 `= 345000` (14:2178-2180) y C2 `= 345999` (14:2195-2197), se comprueban ahora como `postgres`. Las dos van después de un `reset_sesion` y antes de `como(PRO1)`, y ya no llevan `or true`.
+  - `extract(microseconds)::bigint % 1000000` da los microsegundos dentro del segundo. `t036_prep` construye `date_trunc('second', t0) - 10 s + 345 ms` (o `+ 345999 µs`), así que la igualdad es exacta.
+  - Mutantes que caen:
+    - el de la fijación (que `t036_abierta` no surta efecto, o que cambie el literal): cae en la partida;
+    - el de 6.18 que redondea: X14 lo mata. Con `.345999 + 500 µs = .346499` el sobre truncado lanza, el redondeado entra, y C4 se pondría roja;
+    - el que trunca a segundos: C1 lo mata.
+- **B-H2: cerrado.**
+  - `t0 = date_trunc('milliseconds', now())` y `now()` es constante en el `begin…rollback` del banco, así que `now() - 1 ms < t0 ≤ now()`. Las cuatro desigualdades son deterministas y no dependen del reloj real:
+    - P2c: `t0 - 61 s < now() - 60 s`, lanza;
+    - P2d: `t0 + 61 s ≥ now() + 60,999 s`, lanza;
+    - P2e: `t0 - 59 s > now() - 60 s`, entra;
+    - P2f: `t0 + 59 s ≤ now() + 59 s`, entra.
+  - Cada gemela positiva va en su propio `rollback to savepoint` + `t036_prep('P2')`, porque la firma vacía el borrador. Sin eso, la siguiente moriría en 6.17.
+  - Mutantes que caen:
+    - ensanchar los dos lados (X15 con 23 h; también 2 min o 61 s): P2c o P2d;
+    - ensanchar un solo lado: P2c o P2d, cada una el suyo;
+    - estrechar a 30 s o a la igualdad: P2e, P2f o la gemela P2;
+    - quitar un lado del `between`: P2b o P2d.
+  - Solo sobrevive una tolerancia entre 59 s y 61 s. El borde exacto de 60 s no es alcanzable porque `creada_en` va al milisegundo y `now()` al microsegundo. Aceptable.
+  - La negativa muere por 6.20 y no por otra comprobación. P2 va sin cita, con el borrador vivo `X`, `abierta_en` exacto y dos días antes. El fragmento «del reloj de la base» solo aparece en el mensaje de 6.20 (migración:451).
+- **B-H3: cerrado.**
+  - A6 y A7 (14:2104-2110) se ejecutan como `postgres`: `reset_sesion` y ningún `como`.
+  - La fila no es incoherente en nada anterior a 6.19. A7 lleva margen null y redactada false, que es lo que pide 6.9 sin cita en el sobre.
+  - El fragmento «no es la cita de la cabecera» es único (migración:408).
+  - X13 aplica exactamente el mutante del escenario de la ronda 0, que guarda 6.19 con el rol, y comprueba que el sobre K36B entra como `postgres`.
+  - Las variantes razonables también caen en A6/A7, por ejemplo moverla físicamente dentro del bloque o añadir `service_role` a la lista.
+  - Ninguna de esas variantes está fuera de lo que A6 discrimina.
+- **Reaplicación de mutantes tras `rollback to savepoint`: correcta.**
+  - `t012c_mutar` parte siempre del texto capturado con `\gset`, `:'sellar_original_036`, y no de la definición viva, así que el segundo mutante de X15 no se apila sobre el primero.
+  - El `create or replace` es transaccional y lo deshace el `rollback to savepoint s036`, que conserva el savepoint.
+  - Tras X13, X14 y X15, la definición se compara byte a byte con la capturada.
+  - `t012c_mutar` falla si el fragmento no aparece exactamente una vez, así que un mutante que no muta no puede pasar por demostración.
+  - Las tres cadenas aparecen una sola vez en la migración (407, 443 y 450).
+- **B-H5: cerrado.** `p_quien` lleva el sujeto correcto en las tres llamadas, y en §1.4 dice «el insert de la v2 de T1, una firma». La firma vieja `(text)` también se borra.
+- **A-H2** (la lente de A, lo dictamina él): leído, el comentario del `revoke` del verificador queda repuesto (migración:659-663).
+
+### B-H4: dictamen sobre el cierre parcial
+
+**Basta, como BAJA residual, con una salvedad (R1-B-H1).**
+
+Las dos mitades que importaban quedan cerradas o no admiten arreglo dentro del territorio:
+- **Exposición a `anon`: cerrada.** Las cuatro funciones `t036_*` llevan `revoke … from public, anon, authenticated` justo después de crearse (t005:264, 329, 358 y 375). Aunque el guion muera a mitad, lo que quede en `public` no se puede ejecutar por PostgREST.
+- **La T2 superviviente que confirma una versión de NOTA36R: no se puede evitar sin un `finally`.**
+  - Con `ON_ERROR_STOP`, psql no lo tiene, y el que lanza el guion (`scripts/test-huellas.mjs`) está fuera del territorio.
+  - La versión la sella el disparador real, así que la cadena queda sana.
+  - El mutante de E.4.3 se deshace dentro del sub-bloque de T2 aunque T1 haya muerto, y nunca se confirma.
+  - El guion ya exige `db reset` (cabecera, líneas 7-13).
+  - Una segunda ejecución sin reset muere en rojo por los UUID repetidos, no en verde.
+  - El daño se queda en una base local que hay que resetear de todos modos.
+
+### BAJA
+
+**R1-B-H1 · `scripts/t005-concurrencia.sql:220-226`. Los `drop … if exists` «al empezar» no corren antes de nada en el único caso para el que existen.**
+- Están en la línea 220, detrás del montaje de T-005, que inserta con UUID fijos `EPICONC` (línea 45) y `NOTA1`/`NOTA2` (línea 48).
+- El comentario de 217-219 dice que los residuos de una ejecución que murió a mitad «se borran al empezar», y eso no es verdad.
+
+Escenario:
+- Una ejecución muere en `t036_esperar_bloqueo('t036_r', …)` (línea 503) y quedan en `public` `t036_sobres`, `t036_original` y las cuatro funciones.
+- Se vuelve a lanzar `npm run test:huellas` sin `db reset`, y psql muere con un 23505 en la línea 45, antes de llegar a la 220.
+- Los residuos siguen ahí hasta el `db reset`, que los habría borrado igual.
+
+Los `drop` nunca limpian nada que no limpie el reset. No hay fuga, porque las funciones ya tienen `revoke`, pero el comentario promete una limpieza que no ocurre.
+
+Arreglo, a elegir:
+- subir los siete `drop` por encima de la línea 45, al principio del guion;
+- o corregir el comentario para que diga que el `revoke` es la protección y el `db reset`, la limpieza.
+
+### Descartados
+- **El rótulo de la sección G sigue diciendo «Los mutantes (X1-X12)»** (14:1814) y ya hay X15. No hay escenario de fallo.
+- **El mutante `now()` → `clock_timestamp()` en 6.20** puede sobrevivir si el banco tarda menos de un segundo entre `t0` y P2. En producción, cada firma va en su propia transacción y los dos son prácticamente equivalentes. No es un hueco de prueba con consecuencia.
+
+## Ronda 1 · Revisor A (seguridad e invariantes de base: SQL, cerrojos, cadena de huellas, RLS)
+
+**Sin hallazgos de severidad ALTA (revisor A, ronda 1).** 0 ALTA · 0 MEDIA · 0 BAJA.
+
+Diff: `main...worktree-agent-a924f41815b576e9e`, commit de la ronda b9f0477. Revisado leyendo, sin tocar la base. `git diff 401e536 12b54cc -- scripts supabase docs/architecture.md` sale vacío, así que lo único nuevo frente a la ronda 0 es b9f0477.
+
+### La función de producción no cambia
+- En la migración `20261003120000_firma_cotejada_con_borrador_y_cita.sql`, b9f0477 solo añade cinco líneas de comentario `--` (659-663), entre el `comment on function` y el `revoke` del verificador.
+- No toca ni el cuerpo de `fn_sellar_version_nota` ni el de `verificar_cadena_huellas`, ni ningún `grant` o `revoke`.
+- La afirmación del comentario es cierta: `create or replace function` conserva el propietario y la ACL de la definición anterior, así que el `revoke` es redundante y no hace daño.
+
+### Hallazgos de la ronda 0
+- **A-H1: cerrado.**
+  - Las dos partidas se comprueban ahora como `postgres`, sin `or true`: C1 `= 345000` (14:2178-2180) y C2 `= 345999` (14:2194-2197).
+  - `pg_temp.assert` usa `is distinct from true` (00-ayudantes:16), así que un null por RLS o por un id equivocado también daría FALLO. `N36` es el `n1` de `t036_prep` (14:1817).
+  - X14 aplica exactamente el mutante de mi escenario, `+ 500 µs` antes del `to_char`. El fragmento aparece una sola vez (migración:443). Con `.345999` el sobre truncado lanza y el redondeado entra, así que C4 caza el redondeo.
+- **A-H2: cerrado.** El motivo del `revoke` vuelve a estar junto a la función (migración:659-663), con el mismo razonamiento que en 20261001120000:592-596: recorrer todas las cadenas revela cuántas versiones tiene cada paciente, saltándose la RLS.
+
+### Lo demás de b9f0477, con la lente de base
+- **6.19 para todos los roles (A6, A7 y X13).**
+  - A6 y A7 corren sin `como()`, así que `current_setting('role')` es `none`. El fragmento «no es la cita de la cabecera» solo sale de 6.19 (migración:408), y 6.19 está fuera del bloque P1 (migración:407 frente a 418).
+  - El fragmento que muta X13 es la línea 407 entera, única en la función.
+  - Cualquier regresión que vuelva a condicionar 6.19 por rol y deje fuera a `postgres` (incluido añadir `service_role` a la lista) cae en A6.
+- **6.20 (P2c-P2f y X15).**
+  - `t0 = date_trunc('milliseconds', now())` se toma dentro de la transacción del banco (14:1831), así que los bordes de ±59 s y ±61 s son deterministas.
+  - El fragmento de X15 es único (migración:450).
+  - Cada gemela positiva va en su propio `prep`, porque la firma vacía el borrador.
+- **Mutantes en general.** Los tres se deshacen con `rollback to savepoint s036` (el `create or replace` es transaccional) y se coteja la definición byte a byte con `:'sellar_original_036'`. `t012c_mutar` parte siempre del texto capturado, así que el segundo mutante de X15 no se apila sobre el primero.
+- **t005: cerrojos y mutante de E.4.3.** b9f0477 no cambia la lógica de la carrera, solo el texto del FALLO y los permisos. El mutante de 6.24 se aplica y se deshace dentro del sub-bloque de la propia T2 (t005:298-321):
+  - con `p_mutar` siempre termina en `raise`;
+  - si el `insert` lanza, el `exception when others` revierte también el `create or replace`.
+
+  Así que, aunque T1 muera, el mutante no se confirma: no hay escenario en el que la función de producción quede mutada.
+
+### B-H4: ¿basta el cierre parcial para riesgo alto?
+
+**Sí, basta.** No encuentro escenario que lo impida. Repaso lo que podría quedar si el guion muere a mitad:
+- **Las funciones `t036_*` en `public`.** Las cuatro llevan `revoke … from public, anon, authenticated` justo después de crearse (t005:264, 329, 358 y 375). PostgREST no las expone a la clave anónima ni a una sesión de usuario. Solo las conserva `service_role`, que ya tiene la clave de servicio y no gana nada.
+- **Las tablas `t036_sobres` y `t036_original`.**
+  - El guion las crea como `postgres`.
+  - El `alter default privileges in schema public revoke all on tables from anon, authenticated, service_role` (20260822094547:1593, repetido en 20260829150000:408) hace que nazcan sin privilegios para los roles del cliente.
+  - Contienen sobres de prueba de un paciente sintético y una definición de función, nada de un paciente real.
+- **La versión que confirma la T2 superviviente en NOTA36R.**
+  - La sella el disparador real, en una base local de pruebas que el guion ya exige resetear, así que la cadena queda íntegra.
+  - Una segunda ejecución sin reset muere en rojo por los UUID fijos, no en verde. La regla 6 de la constitución no se toca: es una fila añadida, no una modificación.
+- **La función de producción.** No puede quedar mutada (punto anterior).
+
+El `finally` imposible solo habría ahorrado residuo en una base que se resetea de todos modos.
+
+Sobre R1-B-H1, el comentario que promete «se borran al empezar»: estoy de acuerdo en que el comentario promete de más. Es un hallazgo de B y como BAJA no mueve el gate.
+
+### Descartados
+- **6.19 no se prueba como `service_role`.** Ninguna redacción verosímil de la guarda distingue a `service_role` de `postgres` sin caer en A6. Que alguien escriba a propósito «todos menos `service_role`» no es un escenario de regresión creíble.
