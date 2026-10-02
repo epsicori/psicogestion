@@ -32,6 +32,10 @@ const eslintConfig = defineConfig([
     // la raíz: no alcanza a los anidados. Sin esta línea, `npm run lint` audita el
     // build de cada agente y devuelve miles de problemas que no son del proyecto.
     ".claude/**",
+    // Encargos, respuestas y copias corregidas del CLI de volumen (MiniMax). Son
+    // material de referencia que la fábrica integra a mano en su sitio; compilarlos
+    // aquí rompe el build con claves i18n que aún no existen (e269038).
+    "minimax/**",
   ]),
 ]);
 

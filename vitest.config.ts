@@ -30,6 +30,8 @@ export default defineConfig({
       'app/prototipo/**',
       'diseño/**',
       '.claude/**',
+      // Encargos y copias de referencia del CLI de volumen: se integran a mano, no se ejecutan aquí.
+      'minimax/**',
       'supabase/.temp/**',
       'supabase/.branches/**',
     ],
