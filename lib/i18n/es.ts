@@ -586,6 +586,19 @@ export const es = {
       conjuntaEslabon: 'Es un solo eslabón de la cadena.',
       conjuntaAcceso: 'No se entregará entera en un acceso individual.',
     },
+    comparar: {
+      abrir: 'Comparar versiones',
+      titulo: 'De la versión {desde} a la {hasta}',
+      desde: 'Desde',
+      hasta: 'Hasta',
+      leyenda: 'Lo añadido va subrayado y con «+»; lo retirado, tachado y con «−».',
+      anadido: 'Añadido: ',
+      retirado: 'Retirado: ',
+      fin: ' Fin del cambio.',
+      sinCambios: 'Sin cambios entre estas dos versiones.',
+      resumida:
+        'Hay demasiados cambios para señalarlos palabra a palabra: se muestra completo lo retirado y lo añadido.',
+    },
     aviso: {
       sinAcceso: 'No se puede abrir la historia de este paciente.',
       noDisponible: 'Esta nota no está disponible.',
@@ -603,6 +616,7 @@ export const es = {
       yaFirmadaCoprofesional: 'Ya está firmada: el coprofesional no se cambia.',
       firmadaSinRecargar: 'Firmada. No se pudo recargar la nota.',
       hechoSinRecargar: 'Hecho. No se pudo recargar la nota.',
+      noSeRecargo: 'No se pudo recargar la nota.',
       recargar: 'Recargar',
     },
   },
