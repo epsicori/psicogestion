@@ -46,7 +46,6 @@ export const VISOR_JS: string = `(function () {
     return out;
   }
   var B64 = /^[A-Za-z0-9+/]*={0,2}$/;
-  function entero(x, min, max) { return typeof x === 'number' && x % 1 === 0 && x >= min && x <= max; }
 
   // La cabecera: se valida antes de derivar nada. Sus bytes son los datos asociados.
   function leerCabecera() {
@@ -57,7 +56,9 @@ export const VISOR_JS: string = `(function () {
     if (!v || v.formato !== 'psicogestion.copia-nota' || v.formato_version !== 1) return null;
     if (v.cifrado !== 'argon2id-aes-256-gcm' || !v.kdf) return null;
     var k = v.kdf;
-    if (k.p !== 1 || k.longitud !== 32 || !entero(k.m, 8, 1048576) || !entero(k.t, 1, 16)) return null;
+    // R2-H4: la v1 escribe siempre estos parámetros (constantes.ts, y la base los exige como
+    // literales). Otros no son de una copia v1: fichero dañado o no admitido, sin derivar nada.
+    if (k.m !== 65536 || k.t !== 3 || k.p !== 1 || k.longitud !== 32) return null;
     if (typeof k.sal !== 'string' || typeof v.nonce !== 'string' || !B64.test(k.sal) || !B64.test(v.nonce)) return null;
     var sal, nonce, cifrado;
     try { sal = deBase64(k.sal); nonce = deBase64(v.nonce); cifrado = deBase64(carga.valor); } catch (e) { return null; }
@@ -133,14 +134,26 @@ export const VISOR_JS: string = `(function () {
     alerta.textContent = '';
     estado.textContent = tx('abriendo');
     trasPintar(function () {
-      var bytesClave;
+      // R2-H4: «sin memoria» solo si falla la reserva misma (64 MiB); cualquier otro fallo de
+      // Argon2id no es del dispositivo.
+      var memoria;
       try {
-        bytesClave = Nucleo.argon2id(new TextEncoder().encode(contrasena.normalize('NFC')), cabecera.sal, cabecera.kdf);
+        memoria = new Uint32Array(4 * Math.floor(cabecera.kdf.m / 4) * 256);
       } catch (e) {
-        // La cabecera ya se validó: Argon2id no falla por la contraseña, sino por memoria.
+        contrasena = '';
         fallar(tx('sinMemoria'));
         return;
       }
+      var bytesClave;
+      try {
+        bytesClave = Nucleo.argon2id(new TextEncoder().encode(contrasena.normalize('NFC')), cabecera.sal, cabecera.kdf, memoria);
+      } catch (e) {
+        contrasena = '';
+        memoria = null;
+        fallar(tx('error'));
+        return;
+      }
+      memoria = null;
       contrasena = '';
       sutil.importKey('raw', bytesClave, { name: 'AES-GCM' }, false, ['decrypt'])
         .then(function (clave) {

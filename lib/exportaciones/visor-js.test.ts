@@ -149,12 +149,12 @@ describe('VISOR_JS · abrir la copia', () => {
     expect(doc.title).not.toBe('pwned');
   }, 120_000);
 
-  it('una cabecera alterada (otro m) no abre', async () => {
+  it('una cabecera alterada (otro m) no abre: la v1 solo admite m = 65536 (R2-H4)', async () => {
     const html = await fichero(proyectar(respuestaProfesional()));
     const alterado = html.replace('"m":65536', '"m":65537');
     expect(alterado).not.toBe(html);
     const doc = await abrirCon(cargar(alterado), CONTRASENA);
-    expect(doc.querySelector('[role=alert]')!.textContent).toBe(t('exportaciones.visor.error'));
+    expect(doc.querySelector('[role=alert]')!.textContent).toBe(t('exportaciones.visor.danado'));
     expect(doc.body.textContent).not.toContain('MARCA-CUERPO');
   }, 120_000);
 
@@ -207,6 +207,25 @@ const enviar = (dom: JSDOM, contrasena: string) => {
 };
 const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Un dispositivo que no puede reservar un `Uint32Array` de `limite` elementos o más: la reserva
+ * lanza el `RangeError` de V8. Devuelve cuántas reservas de ese tamaño se han intentado.
+ */
+function sinMemoriaPara(dom: JSDOM, limite: number) {
+  const w = dom.window as unknown as { Uint32Array: Uint32ArrayConstructor; RangeError: RangeErrorConstructor };
+  const Original = w.Uint32Array;
+  let grandes = 0;
+  const Falsa = function (this: unknown, ...args: unknown[]) {
+    if (typeof args[0] === 'number' && args[0] >= 65536 * 256) {
+      grandes++;
+      if (args[0] >= limite) throw new w.RangeError('Array buffer allocation failed');
+    }
+    return Reflect.construct(Original, args);
+  };
+  w.Uint32Array = Falsa as unknown as Uint32ArrayConstructor;
+  return () => grandes;
+}
+
 describe('VISOR_JS · revisión del corte A', () => {
   it('A-H4: cifrada con la contraseña en NFC, abre tecleándola en NFD (otro sistema operativo)', async () => {
     const nfc = 'contraseña del año, ñandú';
@@ -236,12 +255,9 @@ describe('VISOR_JS · revisión del corte A', () => {
     expect(dom.window.document.querySelector<HTMLInputElement>('input[type=password]')!.value).toBe('');
   });
 
-  it('A-H7: si derivar falla por memoria, no culpa a la contraseña', async () => {
+  it('A-H7 / R2-H4: si falla la reserva de la memoria de Argon2id, dice que falta memoria', async () => {
     const dom = cargar(await fichero(proyectar(respuestaProfesional())));
-    const w = ventanaDe(dom);
-    w.Nucleo.argon2id = () => {
-      throw new w.RangeError('Array buffer allocation failed');
-    };
+    sinMemoriaPara(dom, 65536 * 256);
     const doc = await abrirCon(dom, CONTRASENA);
     const aviso = doc.querySelector('[role=alert]')!.textContent;
     expect(aviso).toBe(t('exportaciones.visor.sinMemoria'));
@@ -250,6 +266,49 @@ describe('VISOR_JS · revisión del corte A', () => {
     expect(doc.activeElement).toBe(campo);
     expect(campo.value).toBe('');
   });
+
+  it('R2-H4 (gemela): con la memoria reservada y la contraseña mala, culpa a la contraseña', async () => {
+    const dom = cargar(await fichero(proyectar(respuestaProfesional())));
+    const reservas = sinMemoriaPara(dom, 65536 * 256 + 1); // la de 64 MiB sí cabe
+    const doc = await abrirCon(dom, CONTRASENA + 'x');
+    expect(reservas()).toBe(1); // una sola reserva de 64 MiB: el núcleo usa la del visor
+    expect(doc.querySelector('[role=alert]')!.textContent).toBe(t('exportaciones.visor.error'));
+  }, 120_000);
+
+  it('R2-H4: un fallo de Argon2id que no es la reserva no se atribuye a la memoria', async () => {
+    const dom = cargar(await fichero(proyectar(respuestaProfesional())));
+    const w = ventanaDe(dom);
+    w.Nucleo.argon2id = () => {
+      throw new w.RangeError('fallo del núcleo');
+    };
+    const doc = await abrirCon(dom, CONTRASENA);
+    expect(doc.querySelector('[role=alert]')!.textContent).toBe(t('exportaciones.visor.error'));
+    expect(doc.querySelector('.marca-linea')).toBeNull();
+  });
+
+  it('R2-H4: el visor v1 solo admite m = 65536, t = 3 y p = 1; lo demás es un fichero dañado, no falta de memoria', async () => {
+    const html = await fichero(proyectar(respuestaProfesional()));
+    for (const [de, a] of [
+      ['"m":65536', '"m":655360'],
+      ['"m":65536', '"m":1048576'],
+      ['"m":65536', '"m":65535'],
+      ['"t":3', '"t":4'],
+      ['"t":3', '"t":2'],
+      ['"p":1', '"p":2'],
+    ]) {
+      const alterado = html.replace(de, a);
+      expect(alterado, a).not.toBe(html);
+      const dom = cargar(alterado);
+      // En un dispositivo que no puede reservar más de 64 MiB: si llegara a derivar, diría «sin memoria».
+      sinMemoriaPara(dom, 65536 * 256 + 1);
+      const alerta = dom.window.document.querySelector('[role=alert]')!;
+      expect(alerta.textContent, a).toBe(t('exportaciones.visor.danado'));
+      await abrirCon(dom, CONTRASENA);
+      await pausa(50);
+      expect(alerta.textContent, a).toBe(t('exportaciones.visor.danado'));
+      expect(dom.window.document.querySelector('.marca-linea'), a).toBeNull();
+    }
+  }, 120_000);
 
   it('B-H3: una cabecera con m o t fuera de cota se da por dañada sin derivar nada', async () => {
     const html = await fichero(proyectar(respuestaProfesional()));

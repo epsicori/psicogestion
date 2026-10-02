@@ -12,7 +12,8 @@
 // - Argon2id (RFC 9106), versión 0x13, SOLO p = 1 (D14): con otro `p` lanza. Sin secreto ni
 //   datos asociados. Síncrono.
 //
-// Firma: argon2id(contrasena: Uint8Array, sal: Uint8Array, {m, t, p, longitud}) → Uint8Array.
+// Firma: argon2id(contrasena: Uint8Array, sal: Uint8Array, {m, t, p, longitud}, memoria?) → Uint8Array.
+// `memoria`, opcional: un Uint32Array de 256 × 4⌊m/4⌋ ya reservado; se usa y se deja a cero.
 
 export const NUCLEO_JS: string = `
 'use strict';
@@ -255,7 +256,7 @@ function entero(n, min, max) {
   return typeof n === 'number' && n === Math.floor(n) && n >= min && n <= max;
 }
 
-function argon2id(contrasena, sal, k) {
+function argon2id(contrasena, sal, k, memoriaPrevia) {
   if (!esBytes(contrasena) || !esBytes(sal)) {
     throw new Error('argon2id: la contraseña y la sal tienen que ser Uint8Array');
   }
@@ -275,7 +276,14 @@ function argon2id(contrasena, sal, k) {
 
   var columnas = 4 * Math.floor(m / 4);
   var segmento = columnas / 4;
-  var memoria = new Uint32Array(columnas * 256);
+  // La memoria puede venir ya reservada (el visor la reserva aparte para distinguir la falta de
+  // memoria de cualquier otro fallo); tiene que medir exactamente lo que pide m.
+  if (memoriaPrevia !== undefined) {
+    if (Object.prototype.toString.call(memoriaPrevia) !== '[object Uint32Array]' || memoriaPrevia.length !== columnas * 256) {
+      throw new Error('argon2id: la memoria reservada no mide lo que pide m');
+    }
+  }
+  var memoria = memoriaPrevia !== undefined ? memoriaPrevia : new Uint32Array(columnas * 256);
 
   var semilla = new Uint8Array(72);
   semilla.set(h0, 0);

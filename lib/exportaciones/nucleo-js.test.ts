@@ -27,6 +27,7 @@ interface Nucleo {
     contrasena: Uint8Array,
     sal: Uint8Array,
     k: { m: number; t: number; p: number; longitud: number },
+    memoria?: Uint32Array | Uint8Array,
   ) => Uint8Array;
   blake2b: (entrada: Uint8Array, longitud?: number) => Uint8Array;
 }
@@ -210,6 +211,23 @@ describe('NUCLEO_JS · Argon2id (RFC 9106) contra crypto.argon2Sync de Node', ()
     expect(() =>
       nucleo.argon2id(utf8('x'), new Uint8Array(16), { m: 64, t: 1, p: 2, longitud: 32 }),
     ).toThrow();
+  });
+
+  // R2-H4: el visor reserva la memoria aparte, para que «sin memoria» sea solo esa reserva.
+  it('con la memoria ya reservada da la misma clave, y la deja a cero', () => {
+    const k = { m: 64, t: 2, p: 1, longitud: 32 };
+    const sal = new Uint8Array(16).fill(3);
+    const memoria = new Uint32Array(64 * 256).fill(0xdeadbeef);
+    const con = nucleo.argon2id(utf8('memoria previa'), sal, k, memoria);
+    expect(hex(con)).toBe(hex(nucleo.argon2id(utf8('memoria previa'), sal, k)));
+    expect(memoria.every((x) => x === 0)).toBe(true);
+  });
+
+  it('una memoria reservada que no mide lo que pide m lanza', () => {
+    const k = { m: 64, t: 1, p: 1, longitud: 32 };
+    const sal = new Uint8Array(16);
+    expect(() => nucleo.argon2id(utf8('x'), sal, k, new Uint32Array(63 * 256))).toThrow();
+    expect(() => nucleo.argon2id(utf8('x'), sal, k, new Uint8Array(64 * 1024))).toThrow();
   });
 });
 
