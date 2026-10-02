@@ -1,0 +1,28 @@
+{
+  "ticket": "T-028",
+  "corte": "A",
+  "ronda": 2,
+  "diff": "ae73156..08af1e6",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 2,
+  "cerrados_de_la_ronda_1": ["H1", "H2", "H3", "H4", "H5", "H6", "H7"],
+  "hallazgos": [
+    {
+      "id": "H8",
+      "severidad": "BAJA",
+      "archivo": "lib/agenda/sugerencias.ts",
+      "linea": 83,
+      "descripcion": "Ninguna prueba pasa más de seis pasadas fuera de orden, así que sobreviven los mutantes «recorte antes de ordenar» y «pasadas ordenadas solo por fecha».",
+      "escenario": "Ocho pasadas descendentes (seis martes a las 12:00 y dos jueves a las 10:00): el código da 10-06 comoLasUltimas{n:6} y el mutante que recorta antes de ordenar da cadaIntervalo{dias:7}. Siete pasadas con el corte dentro del día doble 09-08, con las 13:00 antes que las 12:00 en la entrada: el código da 10-06 13:00 y el mutante cuyo comparador no mira la hora da 10-06 12:00. Con los dos mutantes, las 41 pruebas siguen en verde (medido)."
+    },
+    {
+      "id": "H9",
+      "severidad": "BAJA",
+      "archivo": "lib/agenda/sugerencias.ts",
+      "linea": 112,
+      "descripcion": "Ninguna prueba distingue que el día y la hora habituales se calculan sobre todas las pasadas (E16) y no sobre una por fecha.",
+      "escenario": "Lunes 09-07, jueves 09-10 doble, lunes 09-14, jueves 09-17 doble: el código da (b) = 10-08 diaHabitual{4} y el mutante que cuenta el día una vez por fecha da 10-12 diaHabitual{1}. 09-15 doble, 09-22 doble y 09-29 a las 13:00: el código da 10-06 13:00 y el mutante que cuenta la hora una vez por fecha da 10-06 12:00. Con los dos mutantes, las 41 pruebas siguen en verde (medido)."
+    }
+  ]
+}
