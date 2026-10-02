@@ -10,6 +10,7 @@ estado: pendiente
 territorio:
   - app/primera-vez/**
   - lib/cuentas/**
+  - accesibilidad/**
 ---
 
 # Contexto

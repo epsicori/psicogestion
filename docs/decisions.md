@@ -55,3 +55,5 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-071](decisions/ADR-071.md) | Toda nota clínica cuelga de un episodio, y el sobre de la era 4 lo sella junto con la fecha de sesión | aceptada | 29-09-2026 |
 | [ADR-072](decisions/ADR-072.md) | La coterapia se registra en la nota y se sella; no abre la historia a nadie | aceptada | 29-09-2026 |
 | [ADR-073](decisions/ADR-073.md) | El centro de un episodio con notas no cambia; el director sanitario puede ser coprofesional | aceptada | 01-10-2026 |
+| [ADR-074](decisions/ADR-074.md) | El técnico administrativo elige el tipo de terapia al dar la cita, y sigue sin verlo en la agenda | aceptada | 02-10-2026 |
+| [ADR-075](decisions/ADR-075.md) | La cita apunta a su episodio, y lleva si es presencial u online | aceptada | 02-10-2026 |

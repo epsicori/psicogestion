@@ -5,7 +5,7 @@ modelo: sonnet
 fase: 0
 prioridad: alta
 depende_de: [T-002]
-estado: en_curso
+estado: hecho
 notas: Los dos cortes INTEGRADOS en main (a el 06-09, b el 15-09). Codigo completo y los OCHO criterios automaticos cerrados con evidencia. Quedan solo los criterios 9 y 10, que son navegador; detalle en Estado de entrega.
 ---
 
