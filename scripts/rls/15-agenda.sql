@@ -403,6 +403,57 @@ call pg_temp.reset_sesion();
 -- el no tiene a proposito (choque 4). Media agenda rota y sin un solo error.
 -- =========================================================================
 
+-- H23 (T-028a): el UPDATE directo del tecnico SIN `where`. Sin where, Postgres no aplica
+-- la politica de SELECT a las filas (el SET no lee columnas), asi que la rama del tecnico
+-- de `citas_modificacion` dejaba a TEC1 reescribir la nota operativa y el tipo de TODAS las
+-- citas de su centro. La prueba exige `row_count = 0` SIN excepcion: un `UPDATE ... SET
+-- tipo_terapia_id` sobre una cita pasada LANZA 42501 por fn_proteger_cita_pasada aunque la
+-- politica deje pasar, y aceptar «lanza error» daria verde sin la migracion.
+-- La huella de `postgres` (todas las citas, nota y tipo) antes y despues prueba ademas que
+-- no se toco NADA, ni siquiera por debajo del row_count.
+select md5(string_agg(id::text || coalesce(nota_operativa, '') || coalesce(tipo_terapia_id::text, ''),
+                      ',' order by id)) as h23_antes from public.citas \gset
+
+call pg_temp.como(:TEC1);
+do $$
+declare v_n integer;
+begin
+  update public.citas set nota_operativa = 'h23-nota';
+  get diagnostics v_n = row_count;
+  if v_n <> 0 then
+    raise exception 'ASERCIÓN FALLIDA: H23 (T-028a): como técnico, UPDATE citas SET nota_operativa sin WHERE no cambia ninguna cita (cambió %)', v_n;
+  end if;
+  raise notice 'OK: H23 (T-028a): como técnico, UPDATE citas SET nota_operativa sin WHERE no cambia ninguna cita';
+end;
+$$;
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select md5(string_agg(id::text || coalesce(nota_operativa, '') || coalesce(tipo_terapia_id::text, ''),
+                         ',' order by id)) from public.citas) = :'h23_antes',
+  'H23 (T-028a): la huella de nota y tipo de TODAS las citas (como postgres) no cambia tras el UPDATE del técnico (nota)'
+);
+
+call pg_temp.como(:TEC1);
+do $$
+declare v_n integer;
+begin
+  update public.citas set tipo_terapia_id = 'a0100001-0000-4000-8000-000000000001';
+  get diagnostics v_n = row_count;
+  if v_n <> 0 then
+    raise exception 'ASERCIÓN FALLIDA: H23 (T-028a): como técnico, UPDATE citas SET tipo_terapia_id sin WHERE no cambia ninguna cita (cambió %)', v_n;
+  end if;
+  raise notice 'OK: H23 (T-028a): como técnico, UPDATE citas SET tipo_terapia_id sin WHERE no cambia ninguna cita';
+end;
+$$;
+call pg_temp.reset_sesion();
+
+select pg_temp.assert(
+  (select md5(string_agg(id::text || coalesce(nota_operativa, '') || coalesce(tipo_terapia_id::text, ''),
+                         ',' order by id)) from public.citas) = :'h23_antes',
+  'H23 (T-028a): la huella de nota y tipo de TODAS las citas (como postgres) no cambia tras el UPDATE del técnico (tipo)'
+);
+
 -- NEGATIVA: el UPDATE directo sigue sin tocar nada. No es un fallo, es el diseno:
 -- la fila se omite. Por eso existe la funcion.
 call pg_temp.como(:TEC1);
