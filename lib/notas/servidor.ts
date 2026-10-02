@@ -18,7 +18,7 @@ import { prolongarDesbloqueo } from '@/lib/cuentas/candado';
 import { registrarAccesoHistoria } from '@/lib/cuentas/accesos';
 import type { Sesion } from '@/lib/cuentas/tipos';
 import { formatearFechaCorta, formatearHora, formatearRango } from '@/lib/fechas';
-import { ErrorFirmaVersion, firmarVersionNota } from '@/lib/huella';
+import { ErrorFirmaVersion, firmarVersionNota } from '@/lib/huella/firmar';
 import { t, tCon, type ClaveDeCatalogo } from '@/lib/i18n';
 
 import { ROLES_COPROFESIONAL } from './coprofesional';
