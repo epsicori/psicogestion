@@ -28,6 +28,16 @@ describe('esquemaRespuestaExportar', () => {
     expect(esquemaRespuestaExportar.safeParse(sin).success).toBe(false);
     const sinNombre = { ...respuestaProfesional(), exportada_por: { nombre_completo: '', rol: 'administrador' } };
     expect(esquemaRespuestaExportar.safeParse(sinNombre).success).toBe(false);
+    // R2-H5: `perfiles.nombre_completo` no tiene check de blancos; solo espacios es una copia sin autor.
+    for (const blanco of ['   ', ' \t\n ']) {
+      const soloEspacios = { ...respuestaProfesional(), exportada_por: { nombre_completo: blanco, rol: 'administrador' } };
+      expect(esquemaRespuestaExportar.safeParse(soloEspacios).success, JSON.stringify(blanco)).toBe(false);
+    }
+    // Gemelas: un nombre de una letra, y uno con espacios alrededor, sí valen.
+    for (const nombre of ['B', '  Berta Ruiz  ']) {
+      const conNombre = { ...respuestaProfesional(), exportada_por: { nombre_completo: nombre, rol: 'administrador' } };
+      expect(esquemaRespuestaExportar.safeParse(conNombre).success, nombre).toBe(true);
+    }
     const otroRol = {
       ...respuestaProfesional(),
       exportada_por: { nombre_completo: 'T', rol: 'tecnico_administrativo' },
