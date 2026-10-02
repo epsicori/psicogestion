@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { z } from 'zod';
 
+import { AvisoDeError } from '@/components/ui/piezas';
 import { formatearFechaLarga, formatearRango } from '@/lib/fechas';
+import { t } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
 import { cargarPaciente } from '../../datos';
@@ -53,11 +55,25 @@ async function Armazon({ params, searchParams }: Parametros) {
   let sesion: string | null = null;
   if (cita !== undefined) {
     const { supabase } = await exigirSesion();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('citas')
       .select('inicio, fin, zona_horaria, paciente_id')
       .eq('id', cita)
       .maybeSingle();
+    // Un fallo de lectura no es «la cita no existe»: un 404 aquí mentiría sobre un fallo pasajero.
+    if (error) {
+      console.error('nota: no se pudo leer la cita', error);
+      return (
+        <div className="flex min-h-[100dvh] flex-col gap-4">
+          <CabeceraDeNota
+            paciente={`${paciente.nombre} ${paciente.apellidos}`}
+            sesion={null}
+            volverHref={`/pacientes/${paciente.id}`}
+          />
+          <AvisoDeError mensaje={t('notas.aviso.noSeAbrio')} />
+        </div>
+      );
+    }
     // Una cita de otro paciente, o que no se ve, es un 404: no se confirma que exista.
     if (!data || data.paciente_id !== paciente.id) notFound();
     const inicio = new Date(data.inicio);
