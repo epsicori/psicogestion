@@ -22,16 +22,20 @@ select public.fijar_pin_historia('333333');
 select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
   'El PIN de PROBAJA debe desbloquear la historia mientras sigue activo');
 
-insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) values
-  ('f0030001-0000-4000-8000-000000000004', :PBAJA, 'e0030001-0000-4000-8000-000000000003', :PROBAJA);
+-- T-036 (E.6): desde 6.17-6.24 un `authenticated` firma el borrador vivo de su nota, con el sobre
+-- que lleva su `abierta_en` y fechado con el reloj de la base (now() es constante en el banco).
+insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, borrador_contenido, borrador_autor_id) values
+  ('f0030001-0000-4000-8000-000000000004', :PBAJA, 'e0030001-0000-4000-8000-000000000003', :PROBAJA,
+   '{"texto":"baja","reservadas":""}', :PROBAJA);
 -- T-005: numero_version/huella/huella_anterior ya no se pueden mandar a mano; los calcula
 -- fn_sellar_version_nota(). Se inserta bajo la sesión de PROBAJA (arriba) para que la
 -- política notas_clinicas_versiones_alta se ejerza de verdad.
 insert into public.notas_clinicas_versiones
   (nota_id, cuerpo, contenido_canonico, autor_id, creada_en) values
-  ('f0030001-0000-4000-8000-000000000004', '{"t":"baja"}',
-   pg_temp.sobre_prueba('f0030001-0000-4000-8000-000000000004', :PROBAJA, timestamptz '2026-08-29 09:22:00+00', '{"t":"baja"}'::jsonb),
-   :PROBAJA, timestamptz '2026-08-29 09:22:00+00');
+  ('f0030001-0000-4000-8000-000000000004', '{"texto":"baja"}',
+   pg_temp.sobre_prueba('f0030001-0000-4000-8000-000000000004', :PROBAJA, date_trunc('milliseconds', now()), '{"texto":"baja"}'::jsonb,
+     p_abierta_en => (select borrador_abierta_en from public.notas_clinicas where id = 'f0030001-0000-4000-8000-000000000004')),
+   :PROBAJA, date_trunc('milliseconds', now()));
 insert into public.accesos_historia (perfil_id, paciente_id, tipo, pestana) values
   (:PROBAJA, :PBAJA, 'apertura', 'notas_clinicas');
 
