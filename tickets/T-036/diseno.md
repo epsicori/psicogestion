@@ -635,3 +635,13 @@ Un solo implementador (Opus), en este orden y con un commit por corte:
   cambio de una línea, pero debilita el criterio 12 para las v2.
 - **(c) La tolerancia de P2** es de ±1 minuto. Si el despliegue no garantiza NTP en el servidor de
   Node, convendría subirla. El diseño la deja fija en el disparador, sin configuración.
+
+## Decisión del propietario (02-10-2026, revisión de T-012 corte A): R2-H1 entra aquí
+
+`tickets/T-012/revision.md` R2-H1: el testigo del borrador se compara en TypeScript, varias consultas
+antes del `insert`. `fn_vaciar_borrador_al_firmar` vacía el borrador que haya en ese momento, y 6.17
+solo exige que haya uno. Una firma que leyó X sella X aunque entretanto otro guardado haya dejado Y,
+e Y se pierde sin `conflicto` (ADR-036). **T-036 lo cierra en la base:** lo que se sella tiene que
+corresponder al borrador vigente bajo el cerrojo del paso 2, y si no, 23514 de conflicto. **Pendiente:
+el arquitecto concreta el cotejo** (cuerpo frente a `borrador_contenido`, o un testigo que escribe
+solo `fn_tocar_borrador`), su prueba concurrente y su mutante, antes de implementar.

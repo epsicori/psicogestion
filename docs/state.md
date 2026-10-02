@@ -15,9 +15,10 @@
 
 ## En curso
 
-- **T-012 corte A** (base, acciones, banco 20, guion): entregado en `T-012-corte-a` (`ac7cfc9`);
-  verificación y dos revisores. Piezas P1-P8 de MiniMax para el corte B en `minimax/`.
-- **T-036**: diseño hecho, (a)-(c) decididas el 02-10; espera a T-012 en `main` (gate §0.B).
+- **T-012 corte A**: verificado (PASA) y revisado (0 ALTA · 7 MEDIA · 8 BAJA); ronda de correcciones
+  en `T-012-corte-a` (todas menos R2-H1). Piezas P1-P8 de MiniMax para el corte B en `minimax/`.
+- **T-036**: diseño hecho, (a)-(c) decididas; R2-H1 de T-012 (guardar mientras se firma) entra aquí
+  y el arquitecto concreta el cotejo. Espera a T-012 en `main` (gate §0.B).
 - **T-037**: diseño hecho; P-3 = spec Playwright (territorio + `accesibilidad/**`): el arquitecto
   rehace CA2. **T-028**: diseño hecho; corte A (`lib/agenda/sugerencias.ts`) libre; B y C esperan.
 - **Tickets por escribir** (arquitecto): T-028a (base del alta, cierra H16, ADR-074), cita↔episodio
