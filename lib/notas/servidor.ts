@@ -347,7 +347,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
   ]);
   if (!nombres) return { ok: false };
 
-  const vista: VersionDeVista[] = versiones.map((v) => {
+  const vista: VersionDeVista[] = versiones.map((v, posicion) => {
     let texto = '';
     try {
       texto = (JSON.parse(v.cuerpo) as { texto?: string }).texto ?? '';
@@ -358,7 +358,9 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
     // El sello se lee UNA vez por versión: la frase, «en sesión» y el margen salen del mismo sobre.
     const s = leerSello(v.contenido_canonico);
     return {
-      numero: v.numero_version,
+      // B1-H4 · Quien solo lee las conjuntas no ve los huecos de las individuales: se numera por
+      // posición en lo visible y el número real no viaja.
+      numero: lecturaConjunta ? posicion + 1 : v.numero_version,
       autor: nombres.get(v.autor_id) ?? '',
       firmadaEn: `${formatearFechaCorta(firmada, zona)} ${formatearHora(firmada, zona)}`,
       motivo: v.motivo_cambio,

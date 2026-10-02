@@ -1446,6 +1446,51 @@ describe('abrirEditorDeNota · el borrador de otro autor llega, para leerlo, sol
     });
   });
 
+  it('B1-H4 · lectura conjunta: v1 conjunta, v2 individual (invisible) y v3 conjunta se numeran 1 y 2, sin hueco', async () => {
+    const filas = [
+      { ...version, numero_version: 1, alcance: 'conjunta' },
+      { ...version, numero_version: 3, alcance: 'conjunta', motivo_cambio: 'Corrección' },
+    ];
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'rpc:es_profesional_asignado') return { data: false };
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera({ autor_id: B }) };
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return { data: filas };
+        }
+        return undefined;
+      }),
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { lecturaConjunta: true } });
+    const numeros = (r as { nota: { versiones: { numero: number }[] } }).nota.versiones.map((v) => v.numero);
+    expect(numeros).toEqual([1, 2]);
+    expect(JSON.stringify(r)).not.toMatch(/"numero":3/);
+  });
+
+  it('B1-H4 · quien lee todas las versiones (asignado) conserva el número real', async () => {
+    const filas = [
+      { ...version, numero_version: 1, alcance: 'conjunta' },
+      { ...version, numero_version: 2, alcance: 'individual' },
+      { ...version, numero_version: 3, alcance: 'conjunta' },
+    ];
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'rpc:es_profesional_asignado') return { data: true };
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera({ autor_id: B }) };
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return { data: filas };
+        }
+        return undefined;
+      }),
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    const numeros = (r as { nota: { versiones: { numero: number }[] } }).nota.versiones.map((v) => v.numero);
+    expect(numeros).toEqual([1, 2, 3]);
+  });
+
   it('B0-H3 · sin borrador no hay nada que ocultar: borradorOculto false', async () => {
     const { sesion } = abrir({ autor_id: B, borrador_contenido: null, borrador_actualizado_en: null }, true);
     const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
