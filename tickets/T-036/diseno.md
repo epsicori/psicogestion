@@ -3,6 +3,8 @@
 > Arquitecto, 02-10-2026. Diseñado sobre `main` (`43d327d`) **más lo que promete §1.2 del diseño
 > de T-012**, que aún no está integrado. Toda pieza marcada **[T-012]** no existe hoy en `main`;
 > el implementador la re-verifica contra `main` antes de escribir una línea (§0.B).
+>
+> **Enmienda del 02-10-2026 al final del documento** (R2-H1 y §0 revisado frente a `main` `39b2df0`, con T-012 corte A ya integrado): donde choque con lo anterior, manda la enmienda.
 
 ## 0 · Hechos verificados contra el código
 
@@ -642,6 +644,471 @@ Un solo implementador (Opus), en este orden y con un commit por corte:
 antes del `insert`. `fn_vaciar_borrador_al_firmar` vacía el borrador que haya en ese momento, y 6.17
 solo exige que haya uno. Una firma que leyó X sella X aunque entretanto otro guardado haya dejado Y,
 e Y se pierde sin `conflicto` (ADR-036). **T-036 lo cierra en la base:** lo que se sella tiene que
-corresponder al borrador vigente bajo el cerrojo del paso 2, y si no, 23514 de conflicto. **Pendiente:
-el arquitecto concreta el cotejo** (cuerpo frente a `borrador_contenido`, o un testigo que escribe
-solo `fn_tocar_borrador`), su prueba concurrente y su mutante, antes de implementar.
+corresponder al borrador vigente bajo el cerrojo del paso 2, y si no, 23514 de conflicto. Lo
+concreta la enmienda que sigue.
+
+## Enmienda del 02-10-2026 · R2-H1 y §0 revisado frente a `main` (`39b2df0`)
+
+> Arquitecto, 02-10-2026, con T-012 corte A ya integrado (merge `44d6d67`). **Si choca con §0-§8 o
+> con las decisiones del propietario de arriba, manda esta enmienda.** Solo retira de lo anterior
+> lo que dice expresamente.
+
+### E.0 · §0 revisado contra el código integrado
+
+| Id | Hecho (leído el 02-10-2026 en `39b2df0`) | Ruta | Efecto sobre el diseño |
+|---|---|---|---|
+| E0.1 | T-012 corte A está en `main`. La última migración es `20261002120000_nota_clinica_borrador_firma.sql`; T-035 no ha entrado. | `supabase/migrations/` | Gate 5 cumplido: la marca de T-036 tiene que ser mayor que `20261002120000`. La cabecera de este documento, que dice «aún no está integrado», queda superada. |
+| E0.2 | Lo prometido en §0.B existe con los nombres del diseño: <br>· `borrador_abierta_en`, con su relleno y su check `notas_clinicas_borrador_abierta_ck`; <br>· `fn_tocar_borrador` endurecida; <br>· `margen_sesion_minutos` en la organización (`not null default 15`) y en el centro (si es nulo, hereda). | `20261002120000:18-79` | Gates 1-3 cumplidos. |
+| E0.3 | El disparador se llama **`tocar_borrador`** y salta en `before insert or update`, sin lista de columnas. En un UPDATE **conserva** `borrador_abierta_en`. Solo escribe `borrador_actualizado_en := now()` si el contenido cambia; si no, deja el del `old`. | `20260822094547:1399-1402`, `20261002120000:37-63` | Gate 4: el nombre que necesita §1.2 es `tocar_borrador`. Un guardado concurrente no mueve `abierta_en`, así que C no lo detecta (E.1). |
+| E0.4 | T-012 **no** redefine `fn_sellar_version_nota`, `verificar_cadena_huellas` ni `fn_congelar_cabecera_sellada`. Su última definición sigue en `20261001120000`: <br>· el disparador, en `:46-399`; <br>· su paso 2, en `:118-122`; <br>· los únicos tres mensajes que contienen `abierta_en`, todos de 6.8, en `:290`, `:307` y `:312`. | `20261001120000_nota_id_en_el_sobre.sql` | §1.1 §2-§4 parte de esas definiciones. Ver E0.8. |
+| E0.5 | **Nuevo**: `notas_clinicas_cita_autor_uidx` es único sobre `(cita_id, autor_id)` con `where cita_id is not null`. | `20261002120000:83-85` | Banco 14: dentro de un mismo `savepoint`, ningún profesional puede tener dos notas con la misma cita. Lo respetan A1-A4, P3a-b y la gemela de (b) que reasigna la cita: cada nota con cita va en su propio `savepoint`, o se reutiliza la cabecera. |
+| E0.6 | Existen `fn_resolver_alerta_nota_sin_firmar()` (definer) y su disparador `resolver_alerta_nota_sin_firmar` (after insert), con la regla «mismo paciente; el profesional es el autor» (`:103-108`). | `20261002120000:90-133` | P3 copia esa regla, como decía §1.1. Confirmado. |
+| E0.7 | `firmarNota`: <br>· compara el testigo **en TypeScript** (`:714`); el `insert` llega en el paso 7, después de 4 a 6 consultas (cita, centro, organización, recuento, conjunta). Es la ventana de R2-H1. <br>· firma `cuerpo: { texto }` sin transformar y `anotacionesReservadas: reservadas === '' ? null : reservadas` (`:795-796`). <br>· `construirSobre` pasa el sobre entero a NFC. <br>· el borrador se guarda **crudo** en `guardarBorrador` (`:577`), en `empezarModificacion` (`:669`, `reservadas: vigente.anotaciones_reservadas ?? ''`) y al abrir (`:549`, `{texto:'',reservadas:''}`). | `lib/notas/servidor.ts`, `lib/huella/sobre.ts`, `lib/huella/nfc.ts` | De aquí sale la forma del cotejo de E.1: NFC, y en las reservadas `''` ≡ `null`. |
+| E0.8 | Traducción de errores (`:806-818`): <br>· 42501 → `no_disponible` o `bloqueada`; <br>· **23514 con un mensaje que contiene `abierta_en` → `'error'`**; <br>· el resto de 23514, y el 23505 → `'conflicto'`. | `lib/notas/servidor.ts:813-816` | **Corrige al contrato y a §1.1.** «Todas las negativas son 23514, así que T-012 las traduce a conflicto» es falso para 6.18 con el texto de §1.1, que contiene `abierta_en` dos veces: daría `'error'`. Se arregla en E.2. |
+| E0.9 | El banco 20 firma siempre como `postgres`: los `como(:PRO1)` de 20.B7 (`:147-176`) solo escriben cabeceras. Sus sobres llevan el `cita_id` de su cabecera (`:264`, `:276`, `:301`, `:329`, `:349`). | `scripts/rls/20-nota-borrador.sql` | **Corrige §1.3 y el riesgo 1**: el banco 20 **no se toca**. A, que con la decisión (a) vale para todos los roles, pasa; P1 no le aplica. El 19 sigue sin firmas `authenticated` (H18). |
+| E0.10 | Las dos firmas `authenticated` que ya existen usan un cuerpo sin `texto`: `04-baja.sql:32-33` lleva `{"t":"baja"}`, y la gemela N067E del 14 lleva `{"t":"firma"}` (`:892`, `:984`). | bancos | Con 6.24, las dos tienen que llevar `{"texto":…}` igual al borrador (E.6). |
+| E0.11 | Las columnas de `t005_resultado` son `etiqueta`, `exito`, `sqlstate_code` y `mensaje`. | `scripts/t005-concurrencia.sql:57-62` | **Corrige §1.4**, pasos 5 y 8: donde pone `clave`, va `etiqueta`. |
+| E0.12 | El guion ya escapa `\$do\$` en su `\!` (`:107-116`) porque `/bin/sh` expande `$do`. | `t005:107-116` | **Corrige el paso 5 de §1.4**: un `do $do$` dentro de `-c "…"` sin escapar se rompe. Se sustituye por una función (E.4.1). |
+| E0.13 | `pg_temp.como_con_2fa` pone los claims `{"sub","role":"authenticated","aal":"aal2"}` y exige un factor dado con `dar_segundo_factor`. `t005` no carga `00-ayudantes`. | `scripts/rls/00-ayudantes.sql:76-120` | El montaje de §1.4 copia esos claims y ese factor dentro del guion. |
+| E0.14 | `pg_temp.t012c_mutar` exige que el fragmento aparezca exactamente una vez; `t012c_restaurar` compara byte a byte. | `scripts/rls/14-cadena-huellas.sql:120-151` | X8-X11 (E.5) los usan igual que X1-X7. |
+| E0.15 | `04-baja`, `14`, `19`, `00-ayudantes`, `t005` y `docs/architecture.md` no han cambiado entre `43d327d` y `39b2df0`. | `git diff --stat 43d327d 39b2df0` | H13-H19 y H25 siguen en pie. |
+| E0.16 | ADR-074 y ADR-075 son nuevos y el contrato no los cita. | `docs/decisions.md` | No se han leído: no entran en T-036. |
+| E0.17 | **Corrección a X1 (mutante de B).** Con B mutado, B1 y B3 no «dejan de lanzar». En el diseño original caían en C, porque con `borrador_abierta_en` nulo `to_jsonb(null)` es distinto del sobre; con esta enmienda caen en 6.24. | §1.2, fila X1 | X1 pasa a esperar 23514 con `no es el borrador vigente` (E.5), no `assert_no_lanza`. |
+
+### E.1 · 6.24 · Lo que se sella es el borrador vigente (R2-H1)
+
+**Piezas, todas en §1.1 §2 (`fn_sellar_version_nota` re-emitida):**
+
+1. **`declare`**: tres variables más, que con las diez de antes suman trece.
+   ```sql
+   v_borrador_contenido  jsonb;
+   v_mismo_texto         boolean;
+   v_mismas_reservadas   boolean;
+   ```
+2. **Paso 2**: una columna más, en la **misma** sentencia bloqueante. El `where` y el
+   `for no key update` no cambian.
+   ```sql
+   select n.paciente_id, n.episodio_id, n.autor_id, n.fecha_sesion, n.coprofesional_id,
+          n.cita_id, n.borrador_contenido is not null, n.borrador_abierta_en, n.borrador_contenido
+     into strict v_paciente_id, v_episodio_id, v_autor_cabecera, v_fecha_sesion, v_coprofesional_id,
+          v_cita_cabecera, v_borrador_vivo, v_borrador_abierta_en, v_borrador_contenido
+     from public.notas_clinicas n
+    where n.id = new.nota_id
+      for no key update;
+   ```
+   Si un guardado tiene la fila bloqueada, este `select` espera. En READ COMMITTED, cuando el guardado
+   confirma, el `select` devuelve **la versión confirmada**, con el borrador nuevo. Esa es la garantía
+   que pide R2-H1, y por eso el borrador no se lee en otra sentencia.
+3. **Bloque nuevo, dentro del `if` de P1, justo después de 6.17 y antes de 6.18.** Se numera 6.24 para
+   no renumerar 6.18-6.23 ni sus mutantes X2-X7. Cada condición va en **una línea**, porque los mutantes
+   las buscan por fragmento.
+
+```sql
+    -- 6.24 · R2-H1 · Lo que se sella es el borrador VIGENTE, leído en el paso 2 bajo el cerrojo:
+    -- un guardado de otra sesión entre la lectura de firmarNota y este insert se detecta aquí
+    -- y no se pierde (ADR-036). Texto y reservadas en NFC a los dos lados: el borrador se guarda
+    -- crudo y el sobre llega en NFC (lib/huella/nfc.ts). Texto nulo o ausente en cualquiera de
+    -- los dos lados = no coincide. Reservadas: '' en el borrador ≡ null en el sobre (firmarNota).
+    v_mismo_texto := coalesce(normalize(v_contenido #>> '{cuerpo,texto}', NFC) = normalize(v_borrador_contenido ->> 'texto', NFC), false);
+    v_mismas_reservadas := normalize(nullif(v_contenido ->> 'anotaciones_reservadas', ''), NFC) is not distinct from normalize(nullif(v_borrador_contenido ->> 'reservadas', ''), NFC);
+    if not (v_mismo_texto and v_mismas_reservadas) then
+      raise exception 'Lo que se firma no es el borrador vigente de la cabecera: otra sesión lo cambió entretanto; hay que releerlo (T-036, R2-H1, ADR-036)'
+        using errcode = '23514';
+    end if;
+```
+
+**Por qué cada detalle:**
+- El texto se lee **del sobre** (`v_contenido`), no de `new.cuerpo`: 6.3 ya los iguala, y lo que se
+  sella es el sobre.
+- El texto usa `coalesce(… = …, false)`: si la comparación da nulo, porque falta en un lado o en los
+  dos, es «no coincide». Con `is not distinct from`, un sobre sin `texto` frente a un borrador sin
+  `texto` pasaría (lo prueba R5).
+- Las reservadas usan `nullif(…, '')` a los dos lados y `is not distinct from`. «Sin reservadas» llega
+  como `''` o como clave ausente desde el borrador, y como `null` desde el sobre (E0.7). Las tres
+  formas valen lo mismo.
+- `normalize(…, NFC)` existe en Postgres desde la 13; la base local es la 17, en UTF-8. Se aplica a
+  los dos lados para no depender de que Node y Postgres traigan la misma versión de Unicode sobre un
+  texto que ya está en NFC. **Antes de nada**, el implementador comprueba en la base que
+  `select normalize(U&'o\0301', NFC) = U&'\00F3'` da `true`.
+- Código **23514** y un mensaje **sin** `abierta_en`: `firmarNota` lo traduce a `'conflicto'`
+  (`servidor.ts:816`) sin tocar `lib/`.
+- El fragmento de la aserción es **`no es el borrador vigente`**, que no aparece en ningún otro
+  mensaje, viejo ni nuevo.
+- No se protege 6.24 frente a un borrador nulo, porque B (6.17) va antes y para. Si alguien quita B,
+  6.24 sigue parando la firma sin borrador: su texto nulo no coincide (E0.17).
+
+**Comentarios del paso 6**: donde §1.1 punto 3 dice «6.17-6.23», ahora dice «6.17-6.24».
+
+### E.2 · Ningún mensaje de 6.17-6.24 contiene `abierta_en`
+
+`firmarNota` decide entre `'error'` y `'conflicto'` buscando la subcadena `abierta_en` (E0.8). Hoy solo
+la llevan los tres mensajes de 6.8, que señalan un fallo de programación de la aplicación. En el
+camino de la aplicación, C (6.18) solo falla por concurrencia: alguien descarta y reabre el borrador
+entre la lectura y el `insert`. Su sitio es `'conflicto'`.
+
+- **Se sustituye el mensaje de 6.18.** Conserva el fragmento de la aserción:
+  `'El instante de apertura del sobre no es el instante en que la base abrió el borrador (columna de la cabecera, truncada a milisegundos) (T-036, ADR-046)'`.
+  El comentario de 6.18 puede seguir citando `borrador_abierta_en`, porque los comentarios no llegan
+  a `sqlerrm`.
+- **La regla la comprueba la máquina**, con una aserción nueva del banco 14, **T036.T**:
+  `(select count(*) from regexp_matches(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure), 'raise exception ''[^'']*abierta_en', 'g')) = 3`.
+  Rótulo: «solo los tres mensajes de 6.8 contienen abierta_en; firmarNota traduce a conflicto todo
+  lo demás (servidor.ts:813)».
+- 6.17 y 6.19-6.23, tal como están en §1.1, ya cumplen la regla.
+
+### E.3 · Banco 14: reglas que cambian y casos nuevos
+
+**Regla nueva para toda firma `authenticated` de la sección T-036, de A1 a D7, positivas y negativas.**
+- El borrador vivo es `{"texto":"<t>","reservadas":""}`.
+- La firma lleva `cuerpo = '{"texto":"<t>"}'` en la columna y en el sobre.
+- `anotaciones_reservadas` va nulo a los dos lados.
+
+Así cada negativa muere por su motivo y no por 6.24. B2 ya escribe
+`{"texto":"v2","reservadas":""}`, así que su sobre lleva `{"texto":"v2"}`.
+
+**Casos nuevos.** Rótulos `T036.R*`; `[R]` es la decisión del propietario del 02-10. Todos van sin
+cita, para que no intervenga D. Cada uno en su `savepoint`, como PRO1 y con `creada_en = :'t0'`.
+
+| Rótulo | Montaje | Esperado |
+|---|---|---|
+| T036.R1 [R] | Nota con borrador `{"texto":"X","reservadas":""}`. Se construye el sobre con X. Después, **como PRO1** (lo que hace `guardarBorrador`): `update notas_clinicas set borrador_contenido = '{"texto":"Y","reservadas":""}', borrador_autor_id = :PRO1 where id = … and borrador_actualizado_en = <testigo leído>`, con una aserción de que tocó una fila. Por último, la firma con el sobre X. | 23514 `no es el borrador vigente`. Después, el borrador sigue siendo Y y la nota sigue sin versiones. **Gemela**: el sobre con Y entra y deja el borrador vacío. |
+| T036.R2a [R] | Borrador `{"texto":"X","reservadas":"mías"}`; sobre con X y reservadas nulas. | 23514 `no es el borrador vigente`. |
+| T036.R2b [R] | Borrador `{"texto":"X","reservadas":""}`; sobre con X y `p_anotaciones_reservadas => 'mías'`, y la columna `anotaciones_reservadas = 'mías'`, para que pase 6.4. | 23514 `no es el borrador vigente`. **Gemela R2c**: borrador con `"mías"`, y sobre y columna con `'mías'`. Entra. |
+| T036.R3 [R] | Gemela explícita de la aplicación: borrador con `"reservadas":""`, sobre con reservadas nulas. Segunda gemela: borrador **sin** la clave `reservadas` (`{"texto":"X"}`). | Las dos entran. |
+| T036.R4 [R] | Borrador escrito como autor con `jsonb_build_object('texto', U&'sesi\006F\0301n', 'reservadas', '')` (NFD). Sobre con `jsonb_build_object('texto', U&'sesi\00F3n')` (NFC). Antes, una aserción de que las dos cadenas son distintas byte a byte, para que la gemela no sea vacía. | **Entra.** |
+| T036.R5 [R] | Como `postgres`, borrador `{"t":"x","reservadas":""}`. PRO1 firma con cuerpo `{"t":"x"}` en la columna y en el sobre. | 23514 `no es el borrador vigente`: un texto ausente en los dos lados no coincide. |
+| T036.T [R] | La aserción de E.2. | `count = 3`. |
+
+### E.4 · Concurrencia: guardar mientras se firma (`scripts/t005-concurrencia.sql`, §1.4.bis)
+
+**E.4.1 · Tres correcciones que valen también para §1.4**
+
+**(a) T2 vive en una función, no en el `-c "…"`.** Antes de las carreras, como `postgres`, se crea
+`public.t036_firmar_en_segundo_plano(p_etiqueta text, p_clave_sobre text, p_mutar boolean) returns void`:
+- plpgsql e **invoker**: `set role` está prohibido dentro de un definer;
+- con nombres cualificados y `revoke execute … from public, anon, authenticated`;
+- se borra al final.
+
+Su cuerpo, en orden:
+1. `perform set_config('lock_timeout', '30s', true)`.
+2. Lee `contenido` y `creada_en` de `public.t036_sobres where clave = p_clave_sobre`. Aún es `postgres`.
+3. Un sub-bloque `begin … exception when others then …` que hace:
+   - si `p_mutar`: `execute replace(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure), 'if not (v_mismo_texto and v_mismas_reservadas) then', 'if false then')`;
+   - `perform set_config('request.jwt.claims', '{"sub":"<Ana>","role":"authenticated","aal":"aal2"}', true)`
+     y después `set local role authenticated`;
+   - el `insert` en `notas_clinicas_versiones`: la nota del sobre, `cuerpo = contenido::jsonb -> 'cuerpo'`,
+     `contenido_canonico = contenido`, `autor_id` de Ana y el `creada_en` de la tabla;
+   - `v_exito := true`;
+   - si `p_mutar`: `raise exception using errcode = 'P0001', message = 't036: deshacer el mutante'`.
+
+   En el `exception`, si `not v_exito`, se guardan `sqlstate` y `sqlerrm`. Las variables de plpgsql no
+   se deshacen con el sub-bloque. **El sub-bloque deshace a la vez el mutante y la firma: el mutante
+   nunca se confirma.**
+4. Fuera del sub-bloque: `reset role` y el `insert` en `public.t005_resultado` (`etiqueta`, `exito`,
+   `sqlstate_code`, `mensaje`).
+
+La línea `\!` ya no lleva `$` ni JSON. No hace falta `sh -c`, porque `\!` ya pasa por `/bin/sh`:
+
+```
+\! PGAPPNAME=t036_r psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c "select public.t036_firmar_en_segundo_plano('t036_r','r1',false)" >/dev/null 2>&1 &
+```
+
+**(b) El sondeo limpia la instantánea en cada vuelta.** Dentro de una transacción, un backend lee
+`pg_stat_activity` una sola vez y conserva esa foto hasta el final de la transacción. T1 sondea
+**dentro** de la suya, que sigue abierta. Por eso cada vuelta hace `perform pg_stat_clear_snapshot();`
+y después consulta `pg_stat_activity where application_name = '<etiqueta>' and wait_event_type = 'Lock'`.
+
+Si en 10 s no la ve, el `FALLO` imprime lo que ve de esa etiqueta (estado y evento). Así se distingue
+«no conectó» de «no esperó».
+
+**(c) La columna es `etiqueta`** (E0.11).
+
+**Sobres y orden en el guion**
+- Los sobres se construyen con una gemela, `public.t036_sobre_prueba(p_nota_id, p_autor_id,
+  p_creada_en, p_cuerpo, p_abierta_en, p_motivo_cambio)`: es `t005_sobre_prueba` más esos dos
+  parámetros. `t005_sobre_prueba` **no se toca**, porque la usan las firmas de T-005. La gemela se
+  borra al final.
+- Todo lo nuevo va **antes** de los `drop` de `:196-197`, que siguen siendo lo último del guion.
+
+**E.4.2 · La carrera de verdad** (después del bloque de §1.4)
+
+1. **Montaje, como `postgres`.**
+   - Una nota `NOTA36R` (`e0360006-0000-4000-8000-000000000002`) de Ana, con su paciente y su episodio
+     (los de `NOTA36`) y **sin cita**.
+   - Su borrador es `'{"texto":"X","reservadas":""}'`, con `borrador_autor_id` de Ana.
+   - `\gset` guarda la `borrador_abierta_en` que resulta.
+   - Una aserción comprueba que el desbloqueo de Ana de §1.4 sigue vigente.
+2. **El sobre `r1`** en `public.t036_sobres` es lo que `firmarNota` leyó:
+   - cuerpo `{"texto":"X"}`;
+   - `abierta_en` = la del paso 1;
+   - `creada_en = date_trunc('milliseconds', clock_timestamp())`;
+   - sin motivo: es la v1.
+3. **T1, que guarda, en la conexión principal.**
+   - `begin; set local role authenticated; set local request.jwt.claims = '<Ana, aal2>';`.
+   - Un `do` que lee el testigo y hace
+     `update public.notas_clinicas set borrador_contenido = '{"texto":"Y","reservadas":""}', borrador_autor_id = <Ana> where id = <NOTA36R> and paciente_id = <paciente> and borrador_actualizado_en = <testigo>`.
+     Es el `update` de `guardarBorrador`. Exige `row_count = 1`.
+   - `reset role;`.
+   - **Sin commit**: así conserva el cerrojo de la fila.
+4. **T2, que firma, en segundo plano**, con la línea `\!` de E.4.1: etiqueta `t036_r`, sobre `r1` y
+   `p_mutar = false`. Su `insert` espera en el paso 2.
+5. **Sondeo**, como en E.4.1 (b). Si falla, `FALLO: la firma no llegó a esperar el cerrojo del
+   guardado`: sin espera no hay carrera.
+6. `commit;` de T1. Y queda confirmado.
+7. **Espera del resultado** de `t036_r` en `t005_resultado`, hasta 30 s. Si no aparece, `FALLO`.
+8. **Aserciones**, en un `do` con los UUID escritos a mano:
+   - `exito = false`, `sqlstate_code = '23514'` y `mensaje like '%no es el borrador vigente%'`. Si no,
+     `FALLO: la firma selló un borrador que otra sesión había cambiado (R2-H1): exito=%, sqlstate=%, mensaje=%`;
+   - `NOTA36R` tiene **0** versiones;
+   - su borrador sigue vivo, con `->> 'texto' = 'Y'`: el guardado no se perdió;
+   - su `borrador_abierta_en` es la del paso 1. La causa no fue C: `fn_tocar_borrador` conserva
+     `abierta_en` (E0.3);
+   - `verificar_cadena_huellas(<paciente>)` devuelve 0 filas.
+
+**E.4.3 · Control mutante** (automático: demuestra que la prueba cae sin el cotejo)
+
+1. Como `postgres`:
+   - una aserción de que `if not (v_mismo_texto and v_mismas_reservadas) then` aparece **exactamente
+     una vez** en `pg_get_functiondef`;
+   - se guarda la definición en `public.t036_original (definicion text)`.
+2. **El sobre `r2`**: cuerpo `{"texto":"Y"}` (lo vigente), la misma `abierta_en` y un `creada_en` nuevo.
+3. **T1**, como en el paso 3 de E.4.2, guardando `{"texto":"Z","reservadas":""}`. Sin commit.
+4. **T2**, con etiqueta `t036_m`, sobre `r2` y **`p_mutar = true`**. Después, sondeo, `commit` de T1 y
+   espera del resultado, igual que antes.
+5. **Aserciones**:
+   - `exito = true`. Si no: `FALLO: sin el cotejo 6.24 la firma tenía que ganar la carrera; si no la gana, la carrera de E.4.2 no prueba el cotejo: exito=%, sqlstate=%, mensaje=%`;
+   - `NOTA36R` sigue con **0** versiones, porque el sub-bloque deshizo la firma, y su borrador es Z;
+   - `pg_get_functiondef(...) = (select definicion from public.t036_original)`. Si no,
+     `FALLO: el mutante quedó confirmado; npx supabase db reset antes de nada`.
+
+**E.4.4 · Prueba manual, una sola vez, para la evidencia** (cumple al pie de la letra «la prueba cae
+si se quita el cotejo»)
+
+1. `npx supabase db reset`.
+2. Como `postgres`, con `docker exec -i <supabase_db_…> psql -U postgres -d postgres -v ON_ERROR_STOP=1`
+   y un heredoc, un `do` que comprueba que el fragmento aparece una sola vez y hace
+   `execute replace(pg_get_functiondef(...), 'if not (v_mismo_texto and v_mismas_reservadas) then', 'if false then')`.
+   El mutante queda **confirmado**.
+3. `npm run test:huellas`. Tiene que salir con un código distinto de 0 y mostrar
+   `FALLO: la firma selló un borrador que otra sesión había cambiado (R2-H1)`.
+4. `npx supabase db reset`.
+
+Las tres salidas se pegan en `tickets/T-036/evidencia`.
+
+### E.5 · Mutantes: los nuevos y la corrección
+
+Todos siguen el patrón de X1-X7: `savepoint`, `t012c_mutar(:'sellar_original_036', …)`, la negativa,
+`rollback to savepoint` y comparación con `:'sellar_original_036'`.
+
+| Id | Fragmento → reemplazo | Lo que se espera con el mutante |
+|---|---|---|
+| X8 | `if not (v_mismo_texto and v_mismas_reservadas) then` → `if false then` | R1 y R2a: `assert_no_lanza` |
+| X9 | `v_mismo_texto := ` → `v_mismo_texto := true or ` | R1: `assert_no_lanza`. R2a sigue lanzando `no es el borrador vigente`: las dos condiciones son independientes |
+| X10 | `v_mismas_reservadas := ` → `v_mismas_reservadas := true or ` | R2a: `assert_no_lanza`. R1 sigue lanzando `no es el borrador vigente` |
+| X11 | `normalize(v_borrador_contenido ->> 'texto', NFC)` → `(v_borrador_contenido ->> 'texto')` | La gemela R4 **pasa a lanzar** 23514 `no es el borrador vigente`: la NFC del lado del borrador hace falta |
+| X1 (corregido) | `if not v_borrador_vivo then` → `if false then` | B1 y B3 lanzan 23514 `no es el borrador vigente`, **no** `assert_no_lanza` (E0.17). B es la primera barrera y 6.24 la segunda |
+| control t005 | El de X8, dentro del sub-bloque de T2 | `exito = true` (E.4.3) |
+
+**Precedencia.** `true or <expr>` es `true` sea cual sea `<expr>`. `coalesce(…)` es una llamada a
+función, y `IS NOT DISTINCT FROM` ata más fuerte que `OR`. Ninguno de los tres reemplazos cambia cómo
+se analiza el resto de la línea.
+
+### E.6 · Otros bancos (corrige §1.3)
+
+- **`04-baja.sql:25-34`**:
+  - el `insert` de la nota añade `borrador_contenido = '{"texto":"baja","reservadas":""}'` y
+    `borrador_autor_id = :PROBAJA`;
+  - la firma pasa a `cuerpo = '{"texto":"baja"}'`, en la columna y en el sobre;
+  - `creada_en = date_trunc('milliseconds', now())`, en la columna y en `sobre_prueba`;
+  - `p_abierta_en => (select borrador_abierta_en from public.notas_clinicas where id = 'f0030001-0000-4000-8000-000000000004')`.
+
+  Ninguna aserción posterior de 04 lee el cuerpo (`:76` cuenta filas).
+- **N067E (14)**:
+  - en la fijación, como `postgres`, borrador `{"texto":"firma","reservadas":""}`;
+  - el sobre de la gemela (`:984`) **se recalcula justo antes de ella**, con `{"texto":"firma"}`,
+    `creada_en = :'t0'` y `p_abierta_en` de la cabecera;
+  - su columna `cuerpo` pasa a `{"texto":"firma"}`;
+  - el `sobre_e` de `:892` se queda como está para las negativas de C.perm, que mueren en el paso 0.
+- **`20-*.sql` y `19-*.sql`: no se tocan** (E0.9). El glob sigue en el territorio, con diff vacío
+  esperado.
+
+### E.7 · `docs/architecture.md` y README (amplía §1.5)
+
+- **`docs/architecture.md`**: la lista de §1.5 pasa a ser «6.17-6.24». Se añaden dos frases:
+  - «6.24: lo que se sella es el borrador vigente (texto y reservadas en NFC), leído bajo el cerrojo
+    de la cabecera; si otra sesión lo guardó entretanto, 23514 y la acción responde conflicto (R2-H1,
+    ADR-036)»;
+  - «ningún mensaje de estas comprobaciones contiene `abierta_en`: es la subcadena con la que la
+    acción distingue un error de programación de un conflicto».
+- **README**: la línea del módulo 14 pasa a decir «6.17-6.24».
+
+### E.8 · Decisiones y alternativas descartadas (R2-H1)
+
+1. **Se coteja el contenido, no un testigo.** El `insert` ya lleva lo que `firmarNota` leyó, que es
+   el sobre. La base lo compara con lo vigente en la misma sentencia que toma el cerrojo. No hace
+   falta ningún canal nuevo ni código de aplicación.
+
+   *Descartado*: el testigo. Para usarlo, el disparador necesita el testigo leído por el cliente, y
+   cualquier forma de hacérselo llegar se sale del contrato:
+   - (i) una columna en `notas_clinicas_versiones` cambia una tabla sellada y `lib/huella/firmar.ts`;
+   - (ii) una cabecera de petición (`request.headers`) cambia `firmarVersionNota`, que está en
+     `lib/huella/**`, excluido por el contrato;
+   - (iii) una RPC cambia `servidor.ts`.
+
+   Además, el testigo es un sustituto: rechazaría X→Y→X, donde no se pierde nada. El contenido mide
+   el invariante real: lo sellado es lo vigente.
+2. *Descartado*: comparar instantes (`borrador_actualizado_en ≤ creada_en`). `creada_en` lo elige el
+   cliente con ±1 min de holgura (P2), así que no ordena nada frente al `now()` de un guardado.
+3. **Enmienda al contrato.** En «Lo que no entra», el contrato excluía «cotejar el cuerpo firmado con
+   el borrador (no protege nada)». La decisión del propietario del 02-10 lo deja sin efecto.
+   - La exclusión era cierta frente al propio autor, que puede guardar lo que quiera y firmarlo.
+   - Lo que el cotejo protege es otra cosa: la actualización perdida entre dos sesiones, que es lo
+     que ADR-036 prohíbe («avisa en vez de pisar en silencio»).
+
+   No contradice ningún ADR: el bloqueo optimista por `borrador_actualizado_en` sigue mandando en el
+   guardado.
+4. **23514, y no 40001 ni P0001.** `firmarNota` solo traduce a `'conflicto'` el 23514 y el 23505. Los
+   otros dos caerían en `'error'`, y lo correcto para el usuario es «relee».
+5. **Dentro de P1.** `postgres` firma sin borrador: siembra, fijación y T-005.
+6. **Justo después de 6.17 y antes de C.** Así quedan juntas las tres comprobaciones del borrador:
+   que esté vivo, que sea el vigente y su apertura. Sin B, 6.24 sigue parando la firma sin borrador.
+7. **NFC a los dos lados, texto nulo cuenta como «no coincide», y `''` ≡ `null` en reservadas**
+   (E0.7). Lo prueban R3, R4, R5 y X11.
+8. **El mutante de la carrera va en un sub-bloque de T2 y nunca se confirma.**
+
+   *Descartado*: mutar con commit dentro de `t005`. Si el guion muere entre mutar y restaurar, la
+   base local se queda con una firma sin cotejo hasta el siguiente `db reset`, sin avisar. La prueba
+   manual de E.4.4 sí lo confirma, pero una sola vez y con el reset escrito en el procedimiento.
+9. **T2 dentro de una función**, para que ni `$` ni JSON pasen por el shell (E0.12). `dblink`, igual
+   que en §2.12, queda descartado.
+10. **Se reescribe el mensaje de 6.18 en vez de tocar `firmarNota`.** `lib/` está fuera del
+    territorio, y en el camino de la aplicación C solo falla por concurrencia.
+
+### E.9 · Cómo se cierra (R2-H1 no tiene número en el contrato: «[R]»)
+
+| Cierre | Comprobación |
+|---|---|
+| R-a · el cotejo y sus gemelas | `npm run test:rls`: `T036.R1`-`R5` y `T036.T` en verde |
+| R-b · mutantes del banco | `npm run test:rls`: `T036.X8`-`X11` y X1 corregido en verde, con la función idéntica después de cada uno |
+| R-c · la carrera | `npx supabase db reset && npm run test:huellas` sale con 0 y escribe los `OK` de E.4.2 |
+| R-d · control automático | La misma ejecución escribe el `OK` de E.4.3 |
+| R-e · la prueba cae sin el cotejo | E.4.4: código de salida distinto de 0 y el texto del `FALLO`, pegados en la evidencia |
+| R-f · la aplicación sigue firmando | Criterio 15: `scripts/t012-nota.ts` firma v1, v2 y v3 («solo reservadas») con `firmarNota`; es el camino positivo de 6.24 de principio a fin |
+| R-g · `lib/` y `app/` intactos | `git diff --stat main -- lib app` vacío |
+
+### E.10 · Riesgos nuevos, por probabilidad
+
+1. **Media: el sondeo no ve la espera**, porque la foto de `pg_stat_activity` dura lo que la
+   transacción.
+   - *Mitigación*: E.4.1 (b).
+   - El `FALLO` imprime lo que ve, así que no puede salir verde sin carrera.
+2. **Media: `set local role` dentro de la función de T2.**
+   - Está permitido en una función invoker.
+   - Si la versión local lo rechaza, se usa el equivalente `perform set_config('role',
+     'authenticated', true)` y se anota en la bitácora.
+3. **Media: al rehacer N067E se tocan también las negativas de C.perm.**
+   - *Regla*: solo cambia la gemela; `sobre_e` sigue sirviendo a las negativas.
+4. **Baja: tablas Unicode distintas en Node y en Postgres.**
+   - Pasaría con un carácter compuesto asignado después de la versión de Postgres: Node lo
+     descompone y Postgres no lo conoce.
+   - Daría un `conflicto` falso: siempre visible, nunca una pérdida silenciosa.
+   - No se mitiga más.
+5. **Baja: P2 y C también salen como `'conflicto'`.**
+   - Una deriva de reloj de más de un minuto se vería como conflictos repetidos (ya estaba en el
+     riesgo 6).
+   - Distinguirlo es cosa de `firmarNota`, en el corte B de T-012.
+6. **Baja: X→Y→X entre la lectura y el `insert` se firma sin conflicto.**
+   - Es lo que se busca: lo sellado es lo vigente.
+
+### E.11 · Qué revisar (se suma a §5)
+
+1. **Paso 2**: `v_borrador_contenido` sale de la **misma** sentencia `select … for no key update`, no
+   de otra.
+2. **Nulos**:
+   - borrador nulo: el texto queda nulo y no coincide (X1 corregido);
+   - sin `texto` en los dos lados: no coincide (R5);
+   - reservadas `''`, ausentes o `null`: son iguales (R3);
+   - reservadas `'a'` frente a `null`: son distintas (R2a y R2b).
+3. **Fragmentos**: la consulta de §5 punto 3 suma `no es el borrador vigente`,
+   `if not (v_mismo_texto and v_mismas_reservadas) then`, `v_mismo_texto := `,
+   `v_mismas_reservadas := ` y `normalize(v_borrador_contenido ->> 'texto', NFC)`. Cada fila tiene
+   que dar 1.
+4. **Mensajes**: T036.T da 3, y los tres son de 6.8. El nuevo 6.18 conserva
+   `no es el instante en que la base abrió el borrador`.
+5. **Carrera**:
+   - T1 toma el cerrojo con el `update` real del guardado, no con un `select for update`;
+   - T1 no hace commit hasta ver a T2 esperando;
+   - el resultado de T2 existe y es exactamente 23514 con su fragmento;
+   - quedan 0 versiones;
+   - el borrador es Y y luego Z;
+   - el control da `exito = true`;
+   - la definición es idéntica al final.
+6. **Qué puede elegir quien llama**: el texto y las reservadas del sobre. Ahora tienen que coincidir
+   con el borrador vigente, que el mismo autor puede reescribir por PostgREST. 6.24 no limita al
+   autor; impide sellar una lectura caducada.
+7. **Carrera al revés** (la firma toma el cerrojo primero y el guardado espera): el `update` del
+   guardado reevalúa `borrador_actualizado_en = testigo` sobre la fila ya vaciada y toca 0 filas, así
+   que `diagnosticarCeroFilas` responde `sin_borrador`. No es silenciosa, y T-036 no la cambia.
+8. **`lib/` y `app/` no cambian** (R-g).
+
+### E.12 · Territorio, delegable y cortes
+
+- **Territorio**: no cambia, basta el del contrato.
+  - Las funciones y tablas auxiliares de la carrera (`t036_*`) viven dentro de
+    `scripts/t005-concurrencia.sql` y se borran al final.
+  - `scripts/rls/19-*.sql` y `scripts/rls/20-*.sql` quedan con diff vacío (E0.9).
+- **Delegable**: sigue sin haber nada (§7).
+- **Cortes** (§8):
+  - corte 1: E.1, E.2, E.3 y E.5;
+  - corte 2: E.4 y E.6;
+  - corte 3: E.7.
+
+### E.13 · R4-H1: no es de T-036
+
+`servidor.ts:417` (`if (!acceso.ok) return { estado: 'bloqueada' }`) es código de aplicación en
+`lib/notas/`. Está fuera del territorio de T-036, y el contrato excluye `lib/` y `app/`. Además decide
+qué ve el usuario: la pantalla del PIN o «vuelve a intentarlo». Es del **corte B de T-012**, donde
+`docs/state.md` ya lo apunta junto a R4-H2. No se diseña aquí.
+
+### E.14 · Lo que no entra, y por qué (R2-H1)
+
+- **Que el verificador repita 6.24.** El borrador se vacía al firmar y después no queda con qué
+  cotejar.
+- **Probar la carrera al revés.** Es comportamiento de `guardarBorrador`, en `lib/`, y ya responde
+  `sin_borrador` (E.11.7).
+- **Que `firmarNota` distinga C o P2 de 6.24, o normalizar el borrador al guardar.** Las dos cosas
+  cambian `lib/`.
+- **Validar la forma del cuerpo** (que solo lleve `texto`). Es una regla del esquema del sobre, no
+  de R2-H1.
+
+### E.15 · Lo que el implementador lee, en este orden
+
+1. `tickets/T-036-cita-id-cotejado-con-la-cabecera.md`, hasta `## Anexos`.
+2. Este diseño entero. Donde choque, manda la enmienda E.
+3. `.claude/rules/supabase.md` y `.claude/rules/pipeline.md`.
+4. `supabase/migrations/20261001120000_nota_id_en_el_sobre.sql`:
+   - `:46-399`, el disparador; el paso 2 está en `:113-122`;
+   - `:442-634`, el verificador;
+   - la definición de `fn_congelar_cabecera_sellada`.
+5. `supabase/migrations/20261002120000_nota_clinica_borrador_firma.sql`, entera.
+6. `supabase/migrations/20260822094547_esquema_base_organizacion_paciente_historia.sql:1399-1402`, el
+   disparador `tocar_borrador`.
+7. `lib/notas/servidor.ts`, solo lectura:
+   - `:567-601`, `guardarBorrador`;
+   - `:635-690`, `empezarModificacion`;
+   - `:692-825`, `firmarNota` y su traducción de errores.
+8. `lib/huella/firmar.ts`, `lib/huella/sobre.ts` y `lib/huella/nfc.ts`, solo lectura.
+9. `scripts/rls/00-ayudantes.sql`:
+   - `:76-120`, claims y segundo factor;
+   - `:195-239`, `sobre_prueba`.
+10. `scripts/rls/14-cadena-huellas.sql`:
+    - `:120-151`, los mutantes;
+    - `:642-646`, las definiciones guardadas;
+    - `:885-995`, C.perm y N067E.
+11. `scripts/rls/04-baja.sql:15-40`.
+12. `scripts/rls/20-nota-borrador.sql:144-176` y `:250-350`, solo para confirmar E0.9.
+13. `scripts/t005-concurrencia.sql` entero; `scripts/test-huellas.mjs` y `scripts/psql.mjs` para ver
+    cómo se ejecuta el guion dentro del contenedor.
+14. `scripts/t012-nota.ts`, para el criterio 15 y R-f.
+15. `tickets/T-012/revision.md`, R2-H1 (`:219-237`).
+16. `docs/decisions/ADR-036.md`, `ADR-046.md`, `ADR-071.md` y `ADR-073.md`.
