@@ -282,7 +282,14 @@ describe('VISOR_JS · revisión del corte A', () => {
     expect(doc.querySelector('[role=status]')!.textContent).toBe(t('exportaciones.visor.abriendo'));
     await pausa(100);
     expect(derivaciones).toBe(0); // sin fotograma no hay pintado, y sin pintado no se deriva
-    for (let n = 0; fotogramas.length > 0 && n < 10; n++) {
+    // R2-H3: la retrollamada del primer fotograma corre ANTES de pintarlo. Derivar ahí bloquearía
+    // el hilo con «Abriendo…» aún sin pintar: tras un solo fotograma, todavía no se ha derivado.
+    expect(fotogramas).toHaveLength(1);
+    fotogramas.shift()!(0);
+    await pausa(100);
+    expect(derivaciones).toBe(0);
+    expect(fotogramas).toHaveLength(1); // pide el siguiente fotograma, y ahí deriva
+    for (let n = 1; fotogramas.length > 0 && n < 10; n++) {
       fotogramas.shift()!(n * 16);
       await pausa(10);
     }
