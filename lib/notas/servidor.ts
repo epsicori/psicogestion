@@ -293,8 +293,8 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
   // B0-H3 · El borrador ajeno se recorta por alcance, aquí y no en la pantalla: lo que no se lee
   // no viaja. Un borrador aún no tiene alcance (se elige al firmar), así que se lee lo que la
   // cabecera sí dice: quien lee todas las versiones firmadas por RLS (profesional asignado) lo
-  // lee; el coprofesional del episodio solo si el autor lo nombró coprofesional de la nota, que
-  // es la señal de que la quiere conjunta. Cualquier otro lector sabe que existe y nada más.
+  // lee. B1-H1: el `coprofesional_id` de la cabecera no cuenta (se congela en la v1 y no dice nada
+  // del alcance de la versión en curso). Cualquier otro lector sabe que existe y nada más.
   let puedeLeerBorrador = soyAutor;
   let lecturaConjunta = false;
   if (!soyAutor) {
@@ -306,7 +306,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
       console.error('notas: no se pudo saber si es profesional asignado', errorAsignado);
       return { ok: false };
     }
-    puedeLeerBorrador = asignado === true || cab.coprofesional_id === usuario.id;
+    puedeLeerBorrador = asignado === true;
     // Quien no es autor ni asignado solo lee lo que RLS le deja: las versiones conjuntas.
     lecturaConjunta = asignado !== true;
   }

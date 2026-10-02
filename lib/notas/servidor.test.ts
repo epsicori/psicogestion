@@ -1353,7 +1353,10 @@ describe('abrirEditorDeNota · el borrador de otro autor llega, para leerlo, sol
     clienteSimulado(
       firmaFeliz((l) => {
         if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
-        if (l.tabla === 'rpc:es_profesional_asignado') return { data: asignado };
+        // B1-H6 · el simulador mira el argumento: solo es asignado respecto del paciente de la nota.
+        if (l.tabla === 'rpc:es_profesional_asignado') {
+          return { data: asignado && (l.payload as { p_paciente_id?: string })?.p_paciente_id === P };
+        }
         if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera(cab) };
         if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
           return { data: conVersion ? [version] : [] };
@@ -1388,16 +1391,32 @@ describe('abrirEditorDeNota · el borrador de otro autor llega, para leerlo, sol
     expect(volcado).not.toContain(TESTIGO);
   });
 
-  it('B0-H3 · coprofesional con borrador conjunto (el autor lo nombró): lo recibe, para leerlo (la gemela)', async () => {
+  it('B1-H1 · coprofesional nombrado en la cabecera (el lector): tampoco recibe el borrador ajeno (la gemela invertida)', async () => {
     const { sesion } = abrir(
-      { autor_id: B, coprofesional_id: A, borrador_contenido: { texto: 'Texto conjunto', reservadas: '' } },
+      { autor_id: B, coprofesional_id: A, borrador_contenido: { texto: 'Texto de la v2', reservadas: '' } },
       true,
     );
     const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
-    expect(r).toMatchObject({
-      estado: 'abierta',
-      nota: { soyAutor: false, borrador: { texto: 'Texto conjunto' }, borradorOculto: false },
-    });
+    expect(r).toMatchObject({ estado: 'abierta', nota: { soyAutor: false, borrador: null, borradorOculto: true } });
+    expect(JSON.stringify(r)).not.toContain('Texto de la v2');
+  });
+
+  it('B1-H1 · borrador con coprofesional_id de una tercera persona (ni autor, ni lector): no viaja', async () => {
+    const { sesion } = abrir(
+      { autor_id: B, coprofesional_id: C, borrador_contenido: { texto: 'Texto de la v2', reservadas: '' } },
+      true,
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { borrador: null, borradorOculto: true } });
+    expect(JSON.stringify(r)).not.toContain('Texto de la v2');
+  });
+
+  it('B1-H6 · la RPC es_profesional_asignado recibe el id del paciente, no el del usuario', async () => {
+    const { sesion, llamadas } = abrir({ autor_id: B }, true, true);
+    await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    const rpc = llamadas.filter((l) => l.tabla === 'rpc:es_profesional_asignado');
+    expect(rpc).toHaveLength(1);
+    expect(rpc[0].payload).toEqual({ p_paciente_id: P });
   });
 
   it('B0-H3 · si falla la lectura de si es profesional asignado, es error y no se enseña el borrador', async () => {
