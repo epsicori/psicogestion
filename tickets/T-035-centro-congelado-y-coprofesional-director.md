@@ -6,7 +6,7 @@ riesgo: alto
 fase: 2
 prioridad: alta
 depende_de: [T-034]
-estado: pendiente
+estado: hecho
 territorio:
   - supabase/migrations/*_centro_congelado_y_coprofesional.sql
   - scripts/rls/19-nota-en-episodio.sql
