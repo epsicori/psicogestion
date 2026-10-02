@@ -45,7 +45,7 @@
 
 - **T-035 B-H1 (MEDIA, propietario)**: la coterapia con el administrador solo existe en el banco: 7c exige
   alta en `perfiles_centros` y nada se la da (ni siembra ni invitación; tampoco a un profesional invitado).
-  Decidir: altas de centro para el administrador o cambiar 7c. **H1**: un `suspendido` se rechaza con el texto
+  Decidido (02-10): altas de centro, **T-041** (contrato escrito). **H1**: un `suspendido` se rechaza con el texto
   «de baja» y sin prueba. **H2**: `architecture.md:390` da por excluido al director administrativo; solo es
   cierto si ADR-065 lo hace valor del enum, no marca de perfil.
 - **Foco del candado**: `app/(app)/candado/formulario-candado.tsx`: PIN malo con clic en «Abrir» deja el foco en
