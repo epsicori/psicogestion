@@ -888,3 +888,62 @@ No ha cambiado desde la ronda 1. Está fuera del territorio y el encargo de esta
   2. Se pone el foco en «Recargar» y se pulsa.
   3. `abrirEditorDeNota` devuelve `{ estado: 'error' }`.
   4. Se miden `activeElement` y `queryAllByRole('button')`.
+
+## Corte B · ronda 3
+
+**Ninguna ALTA en el corte B, ronda 3.** Hay 0 MEDIA y 2 BAJA nuevas. Las dos son pruebas que no muerden. El código del arreglo es correcto en todos los casos que he recorrido. Siguen abiertas las cuatro BAJA de la ronda 2 (B2-H1, B2-H2, B2-H3 y B1-H8): `0c6fac2` no las toca.
+
+Rama `worktree-agent-a50633aa7d7148c4d`. Lo nuevo de la ronda es `git show 0c6fac2`, que toca solo `editor-de-nota.tsx` (`E`) y `editor-de-nota.test.tsx` (`ET`). Los dos están en `app/(app)/pacientes/[id]/historia/notas/`.
+
+**La rama es la revisada más `0c6fac2`, y nada más.** `git diff worktree-agent-a569a13c061c1d353 worktree-agent-a50633aa7d7148c4d -- app lib scripts supabase accesibilidad` toca los mismos dos ficheros (+66 −3). Sus líneas `+`/`-` coinciden byte a byte con las de `git show 0c6fac2` (comparadas con `diff`). El cherry-pick del corte B no ha arrastrado nada.
+
+Cómo lo he medido:
+- No he usado la base local, ni Playwright, ni el puerto 3000.
+- Los mutantes se han aplicado en el propio worktree. Después de cada uno, `git checkout --` ha restaurado el fuente, y al acabar `git status` sale limpio. Lo hago constar porque la ronda 2 trabajó sobre una copia.
+- Línea base: `npx vitest run editor-de-nota`, 82/82 en verde. El filtro va por nombre: con la ruta, los corchetes de `[id]` no se escapan bien y vitest dice «No test files found».
+
+### Lo que pedía el encargo, punto por punto
+
+| Punto | Juicio | Cómo lo he comprobado |
+|---|---|---|
+| Diálogo cerrado | **No roba el foco.** El efecto vive en `DialogoDeFirma` (`E:1192-1196`) y se desmonta con él. Los caminos que cierran el diálogo no fijan ningún error: firma `ok`, `guardarYa` con conflicto o `bloqueada`, el `default` del `switch` y el reloj. Al reabrir, `alFirmar` pone `setErrorFirma(null)` en el mismo lote que `setDialogo(true)` (`E:899-900`), así que el diálogo monta con `error === null` y el efecto no hace nada. | Lectura de `E:610-667` y `E:891-918`. |
+| Error que no es de petición | **No existe ese caso.** `ErrorDeFirma` solo trae errores de la petición. La validación del cliente (motivo vacío) va por `setError` de react-hook-form (`E:1179`) y no toca la prop `error`. `faltaMotivo` lleva el foco al motivo, que es donde está su mensaje (`mensajeMotivo`). | Lectura. Esa rama no tiene prueba, pero no se alcanza desde la interfaz (ver las notas). |
+| Re-render sin cambio | **No roba el foco**, porque las dependencias `[pendiente, error]` lo impiden. Un segundo rechazo con el mismo error sí vuelve a enfocar, como debe: `confirmarFirma` pone antes `null` (`E:613`). | Lectura. Pero ninguna prueba fija las dependencias: B3-H1. |
+| Choque con los rescates de las rondas 1 y 2 | **No chocan.** El rescate del padre (`E:520-533`) solo actúa con `dialogo === false`. `pedirFoco` (`E:513-517`) solo se pone en `true` en `abrir` y en `aplicarRecarga` completa, y ningún camino de rechazo pasa por ahí. Los efectos `conflicto`, `firmadaSinRecargar` y `enfocarBloqueada` dependen de estados que el rechazo con el diálogo abierto no cambia. Al cancelar después del error, `useDevolucionDeFoco` devuelve el foco a «Firmar» de la barra, que ya está habilitado. | Lectura. «cancelar sigue devolviendo el foco» sigue en verde. |
+| `aria-describedby` solo con la alerta | **Correcto.** `errorDePeticion` (`E:1188`) y las dos `<p role="alert" id={idError}>` (`E:1245-1254`) usan la misma condición, y con `faltaMotivo` el botón no lleva el atributo. | Lectura. El mutante que lo pone con cualquier error sobrevive, pero es equivalente en la práctica (ver las notas). |
+| ¿Muerden las pruebas? | **El arreglo, sí. Las guardas, no.** | Ver la tabla siguiente. |
+
+| Mutante en `E` | Resultado |
+|---|---|
+| M1 · anular el efecto (`return` al principio) | **Muere**: fallan los 2 casos de `it.each` (`ET:1097`). |
+| M2 · quitar `pendiente \|\|` de la guarda | Sobrevive. **Es equivalente**: el `focus()` sobre un botón deshabilitado no hace nada, y el efecto vuelve a correr cuando `pendiente` pasa a `false`. No es hallazgo. |
+| M3 · quitar `error === null` de la guarda | **Sobrevive**: B3-H2. |
+| M4 · enfocar siempre `refConfirmar`, sin la rama de `faltaMotivo` | Sobrevive. Equivalente en la práctica (ver las notas). |
+| M5 · `aria-describedby={error ? idError : undefined}` | Sobrevive. Equivalente en la práctica (ver las notas). |
+| M6 · efecto sin array de dependencias | **Sobrevive**: B3-H1. |
+
+La prueba nueva imita bien al navegador: quita `disabled`, hace `blur()`, vuelve a ponerlo y comprueba `activeElement === body` antes de resolver. Por eso M1 muere por el motivo correcto, porque sin el efecto el foco se queda en `body`. La negativa «sin error, no lleva `aria-describedby`» (`ET:1111`) mata el mutante que pone siempre el atributo.
+
+### BAJA
+
+**B3-H1 · `E:1196` (`[pendiente, error]`) y `ET:1073-1116`. Ninguna prueba fija que un re-render sin cambio no mueva el foco. Sin dependencias (M6), las 82 pruebas siguen en verde.**
+
+Las dependencias son lo único que separa «enfocar al llegar el error» de «enfocar en cada render mientras haya error». Las pruebas de la ronda 3 solo miden el instante en que llega el error. Ninguna provoca después un re-render ajeno con el foco en otro control del diálogo.
+
+Escenario con M6: la firma se rechaza con `noSeFirmo`. El profesional pasa con Tab a «Cancelar» o a «Conjunta». A los 30 s, el `setTic` del reloj (`E:436`) vuelve a pintar el editor y el diálogo. El efecto corre y el foco salta a «Firmar», y con Intro firmaría en vez de cancelar.
+
+Arreglo de la prueba: después del rechazo, `focus()` en «Cancelar», `await avanzar(30_000)` y comprobar que el foco sigue en «Cancelar».
+
+**B3-H2 · `E:1193` (`error === null`). Ninguna prueba fija el foco inicial del diálogo con versiones. Sin esta guarda (M3), el efecto nuevo pisaría `focoInicial` y las pruebas siguen en verde.**
+
+`Dialogo` es hijo de `DialogoDeFirma`, así que su efecto de `focoInicial` (`components/ui/dialogo.tsx:31-41`) corre antes que el efecto nuevo del padre. Sin la guarda, el efecto nuevo corre al montar (`pendiente` es `false` y `error` es `null`) y se lleva el foco a «Firmar».
+
+Escenario con M3: el profesional modifica una nota firmada y abre el diálogo. El foco, que debía estar en «Motivo del cambio», cae en «Firmar». Si pulsa Intro creyendo que está en el campo, el formulario se envía y vuelve con «hace falta un motivo».
+
+Ninguna prueba de `ET` comprueba `activeElement` al abrir el diálogo con `versiones: [version(1)]`. Arreglo de la prueba: un caso con versiones que compruebe que el foco está en «Motivo del cambio» al abrir.
+
+### Notas para el orquestador (no son hallazgos)
+
+- **La rama `faltaMotivo` del efecto (`E:1194`) y su exclusión de `aria-describedby` (`E:1188`) no tienen prueba, pero tampoco se alcanzan desde la interfaz.** Con versiones, el cliente bloquea el motivo vacío con el mismo `trim()` que el servidor (`E:1177` y `lib/notas/servidor.ts:838`), así que el servidor nunca contesta `falta_motivo`. Sin versiones en el cliente y con alguna en la base, antes salta `sin_borrador` o `conflicto` (`lib/notas/servidor.ts:773-774`). Por eso M4 y M5 son equivalentes en la práctica. No lo cuento como hallazgo. Si se quiere fijar la intención, basta un caso con `firmarNota` resolviendo `{ ok: false, motivo: "falta_motivo" }` y versiones.
+- Con `faltaMotivo` y `conVersiones === false`, el foco cae en «Firmar» y no hay mensaje en ningún sitio. `mensajeMotivo` solo se pinta dentro del `AreaTexto`, que no existe sin versiones, y `errorDePeticion` excluye ese error. Antes de `0c6fac2` el foco caía en `body` con el mismo silencio, así que no es una regresión. Solo puede ocurrir si el modelo del cliente dice «sin versiones» y la base cuenta alguna (`lib/notas/servidor.ts:839`). Por lo de la nota anterior, no lo cuento como hallazgo.
+- Con `noSeFirmo` o `vacia`, el lector de pantalla puede leer el texto dos veces: una porque la alerta se monta y otra porque es la descripción del botón que recibe el foco. No rompe nada, y la verificación 4 lo da por bueno en el navegador.

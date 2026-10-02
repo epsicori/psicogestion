@@ -729,3 +729,9 @@ Mandan sobre lo de arriba donde choquen.
   - La previsualización y los bloques no escriben, pero devuelven el mismo error, para que lo que se ve y lo que se crea no diverjan.
   - No se añade una restricción de tabla ni se tocan filas existentes (C18TEC sigue en el banco 18), porque eso exigiría migrar datos. Si el diseño cree que hace falta una restricción, va como pregunta nueva.
   - Mutantes: quitar la comprobación de rol, y quitar la de estado.
+
+## Decisión del propietario sobre R2-H1 (02-10-2026)
+
+El técnico deduce el tipo de una cita por su duración (D1: la duración es la del tipo; lee el catálogo y
+`inicio`/`fin`). **Se acepta y se documenta**: `docs/architecture.md` lo apunta como puerta conocida junto
+a H25, y ADR-074.2 se lee como «no ve el campo tipo», no como «no puede deducirlo». Sin cambio de base.

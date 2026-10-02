@@ -16,6 +16,7 @@ import {
   fijarCoprofesional,
   firmarNota,
   guardarBorrador,
+  listarNotasDelPaciente,
 } from './servidor';
 
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; // el usuario
@@ -33,6 +34,8 @@ type Llamada = {
   filtros: [string, unknown][];
   payload?: unknown;
   opciones?: unknown;
+  /** Las columnas del `select`, tal cual: lo que se pide a la base es parte del contrato (B.1.1). */
+  columnas?: string;
 };
 type Respuesta = { data?: unknown; error?: { code?: string; message: string } | null; count?: number | null };
 type Responder = (l: Llamada) => Respuesta | undefined;
@@ -54,7 +57,8 @@ function clienteSimulado(responder: Responder) {
         return b;
       };
     };
-    encadenar('select', (_c, o) => {
+    encadenar('select', (c, o) => {
+      llamada.columnas = typeof c === 'string' ? c : undefined;
       llamada.opciones = o;
     });
     encadenar('insert', (p) => {
@@ -399,6 +403,8 @@ describe('guardarBorrador · el testigo es una cadena opaca', () => {
     ['otro paciente → no_disponible', { data: { id: N, paciente_id: B, autor_id: A, borrador_actualizado_en: TESTIGO } }, 'no_disponible'],
     ['sin borrador → sin_borrador', { data: { id: N, paciente_id: P, autor_id: A, borrador_actualizado_en: null } }, 'sin_borrador'],
     ['testigo distinto → conflicto', { data: { id: N, paciente_id: P, autor_id: A, borrador_actualizado_en: '2026-10-02T09:00:00.999999+00:00' } }, 'conflicto'],
+    // R4-H2: nada explica las cero filas. Mata el mutante `sin_causa → bloqueada`.
+    ['la fila se ve, propia y con el testigo igual → error', { data: { id: N, paciente_id: P, autor_id: A, borrador_actualizado_en: TESTIGO } }, 'error'],
   ])('cero filas, %s', async (_n, relectura, motivo) => {
     const { sesion } = clienteSimulado((l) => {
       if (l.op === 'update') return { data: [] };
@@ -443,6 +449,17 @@ describe('fijarCoprofesional', () => {
       return undefined;
     });
     expect(await fijarCoprofesional(sesion, entrada)).toEqual({ ok: false, motivo: 'no_autor' });
+  });
+
+  it('cero filas y la fila se ve, propia y de este paciente (sin testigo que cotejar) → error, no bloqueada (R4-H2)', async () => {
+    const { sesion } = clienteSimulado((l) => {
+      if (l.op === 'update') return { data: [] };
+      if (l.tabla === 'notas_clinicas') {
+        return { data: { id: N, paciente_id: P, autor_id: A, borrador_actualizado_en: TESTIGO } };
+      }
+      return undefined;
+    });
+    expect(await fijarCoprofesional(sesion, entrada)).toEqual({ ok: false, motivo: 'error' });
   });
 });
 
@@ -1157,5 +1174,422 @@ describe('un error de lectura no es ausencia (R3-H1, R3-H2 y el resto del ficher
     expect((r as { nota: { candidatosCoprofesional: unknown[] } }).nota.candidatosCoprofesional).toEqual([
       { id: B, nombre: 'Otra Persona' },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// Corte B (B.1.1): lo que la pantalla necesita del servidor
+// ---------------------------------------------------------------------------------------
+
+describe('abrirEditorDeNota · un registro que falla por otra causa no es un candado cerrado (R4-H1)', () => {
+  const porCita = { pacienteId: P, citaId: C, notaId: null, episodioId: null };
+  const soloElRegistro = (llamadas: Llamada[]) => llamadas.filter((l) => l.tabla !== 'rpc:registrar_acceso_historia');
+
+  it('57014 al registrar → error (no bloqueada) y ninguna llamada más', async () => {
+    const { sesion, llamadas } = clienteSimulado((l) =>
+      l.tabla === 'rpc:registrar_acceso_historia' ? { error: { code: '57014', message: 'tiempo agotado' } } : undefined,
+    );
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'error' });
+    expect(soloElRegistro(llamadas)).toHaveLength(0);
+  });
+
+  it('la función no devuelve fila → error y ninguna llamada más', async () => {
+    const { sesion, llamadas } = clienteSimulado((l) =>
+      l.tabla === 'rpc:registrar_acceso_historia' ? { data: [] } : undefined,
+    );
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'error' });
+    expect(soloElRegistro(llamadas)).toHaveLength(0);
+  });
+
+  it('42501 sigue siendo bloqueada (la gemela), también sin más llamadas', async () => {
+    const { sesion, llamadas } = clienteSimulado((l) =>
+      l.tabla === 'rpc:registrar_acceso_historia' ? { error: { code: '42501', message: 'sin desbloqueo' } } : undefined,
+    );
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'bloqueada' });
+    expect(soloElRegistro(llamadas)).toHaveLength(0);
+  });
+});
+
+describe('abrirEditorDeNota · la apertura exige un plazo (B.2.3)', () => {
+  const porNota = { pacienteId: P, citaId: null, notaId: N, episodioId: null };
+  const conProlongar = (respuesta: Respuesta): Responder =>
+    firmaFeliz((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'rpc:prolongar_desbloqueo') return respuesta;
+      return undefined;
+    });
+
+  it('con plazo, abre y lo devuelve como cadena', async () => {
+    const { sesion } = clienteSimulado(conProlongar({ data: '2026-10-02T10:00:00+00:00' }));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toMatchObject({
+      estado: 'abierta',
+      caducaEn: '2026-10-02T10:00:00+00:00',
+    });
+  });
+
+  it('prolongar_desbloqueo devuelve nulo → error, no una apertura de plazo desconocido', async () => {
+    const { sesion } = clienteSimulado(conProlongar({ data: null }));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('prolongar_desbloqueo falla → error', async () => {
+    const { sesion } = clienteSimulado(conProlongar({ error: { code: 'XX000', message: 'rota' } }));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+});
+
+describe('firmarNota · los mensajes de T-036 son conflicto (B0.5)', () => {
+  const entrada = { pacienteId: P, notaId: N, testigo: TESTIGO, alcance: 'individual' as const, motivo: null };
+  const fallaConMensaje = (message: string): Responder =>
+    firmaFeliz((l) =>
+      l.tabla === 'notas_clinicas_versiones' && l.op === 'insert' ? { error: { code: '23514', message } } : undefined,
+    );
+
+  it.each([
+    [
+      '6.24 · no es el borrador vigente',
+      'Lo que se firma no es el borrador vigente de la cabecera: otra sesión lo cambió entretanto; hay que releerlo (T-036, R2-H1, ADR-036)',
+    ],
+    [
+      '6.18 · el instante de apertura no es el de la base',
+      'El instante de apertura del sobre no es el instante en que la base abrió el borrador (columna de la cabecera, truncada a milisegundos) (T-036, ADR-046)',
+    ],
+  ])('23514 con %s → conflicto', async (_nombre, mensaje) => {
+    const { sesion } = clienteSimulado(fallaConMensaje(mensaje));
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'conflicto' });
+  });
+});
+
+describe('abrirEditorDeNota · lo que el sello le da a la pantalla (B.1.1.4)', () => {
+  const porNota = { pacienteId: P, citaId: null, notaId: N, episodioId: null };
+  const entrada = { pacienteId: P, notaId: N, testigo: TESTIGO, alcance: 'individual' as const, motivo: null };
+
+  /** El `contenido_canonico` REAL que sellaría `firmarNota`, a la hora que se diga. */
+  async function sobreFirmado(hora: string, cab: Record<string, unknown> = {}): Promise<string> {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) =>
+        l.tabla === 'notas_clinicas' && l.op === 'select' ? { data: cabecera(cab) } : undefined,
+      ),
+    );
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(hora));
+    try {
+      await firmarNota(sesion, entrada);
+    } finally {
+      vi.useRealTimers();
+    }
+    return (inserciones(llamadas)[0]!.payload as { contenido_canonico: string }).contenido_canonico;
+  }
+
+  const abrirConVersion = async (contenidoCanonico: string) => {
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return {
+            data: [
+              {
+                numero_version: 1,
+                cuerpo: '{"texto":"v"}',
+                anotaciones_reservadas: null,
+                autor_id: A,
+                creada_en: '2026-10-02T09:10:00Z',
+                motivo_cambio: null,
+                alcance: 'individual',
+                contenido_canonico: contenidoCanonico,
+                huella: '\\xabcdef0123456789abcdef',
+              },
+            ],
+          };
+        }
+        return undefined;
+      }),
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    if (r.estado !== 'abierta') throw new Error(`se esperaba abierta y salió ${r.estado}`);
+    return r.nota.versiones[0]!;
+  };
+
+  it('firmada dentro de la cita: enSesion true y «Margen aplicado: 15 min»', async () => {
+    const v = await abrirConVersion(await sobreFirmado('2026-10-02T09:10:00.000Z'));
+    expect(v.enSesion).toBe(true);
+    expect(v.margen).toBe('Margen aplicado: 15 min');
+  });
+
+  it('firmada al día siguiente: enSesion false, y el margen sigue constando (lleva cita)', async () => {
+    const v = await abrirConVersion(await sobreFirmado('2026-10-03T09:10:00.000Z'));
+    expect(v.enSesion).toBe(false);
+    expect(v.margen).toBe('Margen aplicado: 15 min');
+  });
+
+  it('sin cita: enSesion false y margen null (no se pinta un margen que no se aplicó)', async () => {
+    const v = await abrirConVersion(await sobreFirmado('2026-10-02T09:10:00.000Z', { cita_id: null }));
+    expect(v.enSesion).toBe(false);
+    expect(v.margen).toBeNull();
+  });
+
+  it('un canónico ilegible: enSesion null, margen null y la frase «Sello no legible»', async () => {
+    const v = await abrirConVersion('{}');
+    expect(v.enSesion).toBeNull();
+    expect(v.margen).toBeNull();
+    expect(v.sello).toBe('Sello no legible');
+  });
+});
+
+describe('abrirEditorDeNota · el borrador de otro autor llega, para leerlo, solo si el lector lo leería firmado (P-1, B0-H3)', () => {
+  const porNota = { pacienteId: P, citaId: null, notaId: N, episodioId: null };
+  const version = {
+    numero_version: 1,
+    cuerpo: '{"texto":"v"}',
+    anotaciones_reservadas: null,
+    autor_id: B,
+    creada_en: '2026-10-01T10:00:00Z',
+    motivo_cambio: null,
+    alcance: 'individual',
+    contenido_canonico: '{}',
+    huella: '\\xabcdef0123456789abcdef',
+  };
+  const abrir = (cab: Record<string, unknown>, conVersion: boolean, asignado = false) =>
+    clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        // B1-H6 · el simulador mira el argumento: solo es asignado respecto del paciente de la nota.
+        if (l.tabla === 'rpc:es_profesional_asignado') {
+          return { data: asignado && (l.payload as { p_paciente_id?: string })?.p_paciente_id === P };
+        }
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera(cab) };
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return { data: conVersion ? [version] : [] };
+        }
+        return undefined;
+      }),
+    );
+
+  it('quien lee todas las versiones por RLS (profesional asignado) recibe el borrador, y el modelo dice que no es suyo', async () => {
+    const { sesion } = abrir({ autor_id: B }, true, true);
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({
+      estado: 'abierta',
+      nota: {
+        soyAutor: false,
+        estado: 'firmada_con_cambios',
+        borrador: { texto: 'Se trabajó la ansiedad.', reservadas: '', testigo: TESTIGO },
+        borradorOculto: false,
+      },
+    });
+  });
+
+  it('B0-H3 · coprofesional con borrador individual (no figura como coprofesional): ni el texto ni las reservadas viajan', async () => {
+    const { sesion } = abrir(
+      { autor_id: B, coprofesional_id: null, borrador_contenido: { texto: 'Texto secreto', reservadas: 'Reservada secreta' } },
+      true,
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { soyAutor: false, borrador: null, borradorOculto: true } });
+    const volcado = JSON.stringify(r);
+    expect(volcado).not.toContain('secreto');
+    expect(volcado).not.toContain(TESTIGO);
+  });
+
+  it('B1-H1 · coprofesional nombrado en la cabecera (el lector): tampoco recibe el borrador ajeno (la gemela invertida)', async () => {
+    const { sesion } = abrir(
+      { autor_id: B, coprofesional_id: A, borrador_contenido: { texto: 'Texto de la v2', reservadas: '' } },
+      true,
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { soyAutor: false, borrador: null, borradorOculto: true } });
+    expect(JSON.stringify(r)).not.toContain('Texto de la v2');
+  });
+
+  it('B1-H1 · borrador con coprofesional_id de una tercera persona (ni autor, ni lector): no viaja', async () => {
+    const { sesion } = abrir(
+      { autor_id: B, coprofesional_id: C, borrador_contenido: { texto: 'Texto de la v2', reservadas: '' } },
+      true,
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { borrador: null, borradorOculto: true } });
+    expect(JSON.stringify(r)).not.toContain('Texto de la v2');
+  });
+
+  it('B1-H6 · la RPC es_profesional_asignado recibe el id del paciente, no el del usuario', async () => {
+    const { sesion, llamadas } = abrir({ autor_id: B }, true, true);
+    await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    const rpc = llamadas.filter((l) => l.tabla === 'rpc:es_profesional_asignado');
+    expect(rpc).toHaveLength(1);
+    expect(rpc[0].payload).toEqual({ p_paciente_id: P });
+  });
+
+  it('B0-H3 · si falla la lectura de si es profesional asignado, es error y no se enseña el borrador', async () => {
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'rpc:es_profesional_asignado') return ERROR_LECTURA;
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera({ autor_id: B }) };
+        return undefined;
+      }),
+    );
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('B0-H2 · quien solo lee como coprofesional: lecturaConjunta true; asignado y autor: false', async () => {
+    const copro = abrir({ autor_id: B, coprofesional_id: A }, true, false);
+    expect(await abrirEditorDeNota(copro.sesion, porNota, CONTEXTO)).toMatchObject({
+      nota: { lecturaConjunta: true },
+    });
+    const asignado = abrir({ autor_id: B }, true, true);
+    expect(await abrirEditorDeNota(asignado.sesion, porNota, CONTEXTO)).toMatchObject({
+      nota: { lecturaConjunta: false },
+    });
+    const autor = abrir({ autor_id: A }, true, false);
+    expect(await abrirEditorDeNota(autor.sesion, porNota, CONTEXTO)).toMatchObject({
+      nota: { lecturaConjunta: false },
+    });
+  });
+
+  it('B1-H4 · lectura conjunta: v1 conjunta, v2 individual (invisible) y v3 conjunta se numeran 1 y 2, sin hueco', async () => {
+    const filas = [
+      { ...version, numero_version: 1, alcance: 'conjunta' },
+      { ...version, numero_version: 3, alcance: 'conjunta', motivo_cambio: 'Corrección' },
+    ];
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'rpc:es_profesional_asignado') return { data: false };
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera({ autor_id: B }) };
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return { data: filas };
+        }
+        return undefined;
+      }),
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { lecturaConjunta: true } });
+    const numeros = (r as { nota: { versiones: { numero: number }[] } }).nota.versiones.map((v) => v.numero);
+    expect(numeros).toEqual([1, 2]);
+    expect(JSON.stringify(r)).not.toMatch(/"numero":3/);
+  });
+
+  it('B1-H4 · quien lee todas las versiones (asignado) conserva el número real', async () => {
+    const filas = [
+      { ...version, numero_version: 1, alcance: 'conjunta' },
+      { ...version, numero_version: 2, alcance: 'individual' },
+      { ...version, numero_version: 3, alcance: 'conjunta' },
+    ];
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'rpc:es_profesional_asignado') return { data: true };
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera({ autor_id: B }) };
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return { data: filas };
+        }
+        return undefined;
+      }),
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    const numeros = (r as { nota: { versiones: { numero: number }[] } }).nota.versiones.map((v) => v.numero);
+    expect(numeros).toEqual([1, 2, 3]);
+  });
+
+  it('B0-H3 · sin borrador no hay nada que ocultar: borradorOculto false', async () => {
+    const { sesion } = abrir({ autor_id: B, borrador_contenido: null, borrador_actualizado_en: null }, true);
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { borrador: null, borradorOculto: false } });
+  });
+
+  it('el autor sigue recibiendo su borrador y puede editarlo (la gemela)', async () => {
+    const { sesion } = abrir({ autor_id: A }, false);
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { soyAutor: true, estado: 'borrador', borrador: { testigo: TESTIGO }, borradorOculto: false } });
+  });
+
+  it('quien no ve la nota por RLS no recibe ni la cabecera ni el borrador: no_disponible', async () => {
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: null };
+        return undefined;
+      }),
+    );
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toEqual({ estado: 'no_disponible' });
+    expect(JSON.stringify(r)).not.toContain('ansiedad');
+  });
+});
+
+describe('listarNotasDelPaciente (B.1.1.6)', () => {
+  const N2 = '22222222-2222-4222-8222-222222222222';
+  const filasNotas = [
+    { id: N, autor_id: A, fecha_sesion: '2026-10-02', borrador_abierta_en: null },
+    { id: N2, autor_id: B, fecha_sesion: '2026-09-20', borrador_abierta_en: '2026-09-20T09:00:00+00:00' },
+  ];
+  const filasVersiones = [
+    { nota_id: N, numero_version: 1, alcance: 'individual' },
+    { nota_id: N, numero_version: 2, alcance: 'conjunta' },
+  ];
+  const lista = (extra: Responder = () => undefined) =>
+    clienteSimulado((l) => {
+      const propio = extra(l);
+      if (propio) return propio;
+      if (l.tabla === 'notas_clinicas') return { data: filasNotas };
+      if (l.tabla === 'notas_clinicas_versiones') return { data: filasVersiones };
+      if (l.tabla === 'directorio_perfiles') {
+        return { data: [{ id: A, nombre_completo: 'Ana Autora' }, { id: B, nombre_completo: 'Berta Autora' }] };
+      }
+      return undefined;
+    });
+
+  it('dos notas: la modificada (v2 conjunta) y la que solo tiene borrador, con href de ?nota=', async () => {
+    const { sesion } = lista();
+    const r = await listarNotasDelPaciente(sesion, P);
+    expect(r).toEqual({
+      ok: true,
+      valor: [
+        {
+          id: N,
+          fechaSesion: '02/10/2026',
+          estado: 'modificada',
+          versiones: 2,
+          autor: 'Ana Autora',
+          conjunta: true,
+          href: `/pacientes/${P}/historia/notas?nota=${N}`,
+        },
+        {
+          id: N2,
+          fechaSesion: '20/09/2026',
+          estado: 'borrador',
+          versiones: 0,
+          autor: 'Berta Autora',
+          conjunta: false,
+          href: `/pacientes/${P}/historia/notas?nota=${N2}`,
+        },
+      ],
+    });
+  });
+
+  it('consulta por paciente_id y no pide ni el borrador ni el cuerpo ni las reservadas', async () => {
+    const { sesion, llamadas } = lista();
+    await listarNotasDelPaciente(sesion, P);
+    const lecturas = llamadas.filter((l) => l.tabla === 'notas_clinicas' || l.tabla === 'notas_clinicas_versiones');
+    expect(lecturas).toHaveLength(2);
+    for (const l of lecturas) {
+      expect(l.filtros).toContainEqual(['eq:paciente_id', P]);
+      expect(l.columnas).toBeDefined();
+      expect(l.columnas).not.toMatch(/borrador_contenido|cuerpo|anotaciones_reservadas|contenido_canonico/);
+    }
+  });
+
+  it.each([
+    ['las notas', 'notas_clinicas'],
+    ['las versiones', 'notas_clinicas_versiones'],
+    ['los nombres', 'directorio_perfiles'],
+  ])('si falla la lectura de %s → {ok:false}, nunca una lista vacía', async (_n, tabla) => {
+    const { sesion } = lista((l) => (l.tabla === tabla ? ERROR_LECTURA : undefined));
+    expect(await listarNotasDelPaciente(sesion, P)).toEqual({ ok: false });
+  });
+
+  it('un paciente sin notas es ok con lista vacía (la gemela de las anteriores)', async () => {
+    const { sesion } = lista((l) => (l.tabla === 'notas_clinicas' ? { data: [] } : undefined));
+    expect(await listarNotasDelPaciente(sesion, P)).toEqual({ ok: true, valor: [] });
   });
 });

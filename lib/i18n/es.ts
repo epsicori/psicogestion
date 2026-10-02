@@ -359,8 +359,6 @@ export const es = {
 
     // Lo que todavía no está
     enPreparacion: 'Esta sección todavía no está',
-    notasEnPreparacion:
-      'Aquí irán las notas de cada sesión, con sus versiones. Se escriben en su propio ticket.',
     evaluacionesEnPreparacion:
       'Aquí irán las pruebas pasadas, su corrección y los archivos adjuntos.',
     informesEnPreparacion:
@@ -503,12 +501,19 @@ export const es = {
 
   // T-012 · La nota clínica: borrador, firma y versión sellada
   notas: {
+    estado: {
+      borrador: 'Borrador',
+      firmada: 'Firmada',
+      modificada: 'Modificada',
+      firmadaConCambios: 'Firmada · con cambios sin firmar',
+    },
     sello: {
       enSesion: 'Escrita durante la sesión del {fecha} · {desde}–{hasta}',
       fueraDeSesion: 'Escrita fuera de la sesión del {fecha} · {desde}–{hasta}',
       sinCita: 'Escrita el {fecha} · {desde}–{hasta}',
       sinCitaVariosDias: 'Escrita entre el {desde} y el {hasta}',
       ilegible: 'Sello no legible',
+      margen: 'Margen aplicado: {minutos} min',
     },
     // La etiqueta del episodio en la cabecera de la nota y en el selector «¿en cuál?».
     episodio: '{modalidad} · desde el {fecha}',
@@ -517,6 +522,88 @@ export const es = {
       pareja: 'Pareja',
       familiar: 'Familiar',
       grupo: 'Grupo',
+    },
+    version: {
+      titulo: 'Versión {numero}',
+      vigente: 'vigente',
+      firmadaPor: 'Firmada el {fecha} por {autor}',
+      motivo: 'Motivo del cambio: {motivo}',
+      conjunta: 'Nota conjunta del episodio',
+      huella: 'Huella {huella}…',
+    },
+    modificadaPor: 'Modificada el {fecha} · por {autor}',
+    reservadas: {
+      titulo: 'Anotaciones reservadas (art. 18.3, Ley 41/2002)',
+      excluye: 'Se excluyen de las copias que se entregan al paciente.',
+      noOculta: 'No se ocultan al profesional que herede el caso.',
+      noOpone: 'No se pueden oponer a un requerimiento judicial.',
+    },
+    lista: {
+      vacia: 'Todavía no hay notas',
+      vaciaExplicacion: 'Las notas se escriben desde la cita en la agenda.',
+      versiones: '{n} versiones',
+      noSePudoLeer: 'No se pudieron leer las notas. Vuelve a abrir la pestaña.',
+    },
+    cabecera: {
+      volver: 'Volver a la ficha',
+      titulo: 'Nota de {paciente}',
+    },
+    editor: {
+      abrir: 'Abrir el editor',
+      acciones: 'Acciones de la nota',
+      partes: 'Partes de la nota',
+      nota: 'Nota',
+      reservadas: 'Anotaciones reservadas',
+      vigente: 'Versión vigente',
+      ultimaConjunta: 'Última versión conjunta',
+      versionesConjuntas: 'Versiones conjuntas',
+      guardado: 'Guardado',
+      guardando: 'Guardando…',
+      sinGuardar: 'Sin guardar',
+      noSeGuardo: 'No se ha podido guardar. Se volverá a intentar al seguir escribiendo.',
+      guardar: 'Guardar',
+      firmar: 'Firmar',
+      modificar: 'Modificar',
+      coprofesional: 'Coprofesional',
+      sinCoprofesional: 'Sin coprofesional',
+      episodio: 'Episodio',
+      continuar: 'Continuar',
+      elegirEpisodio: 'Esta cita puede ir en más de un episodio. Elige en cuál se escribe la nota.',
+      sinEpisodios: 'No tienes ningún episodio abierto con este paciente.',
+      borradorAjeno: 'Su autor tiene cambios sin firmar.',
+      borradorOculto: 'Hay un borrador en curso.',
+    },
+    firma: {
+      titulo: 'Firmar la nota',
+      confirmar: 'Firmar',
+      firmando: 'Firmando…',
+      loGuardado: 'Se firma lo guardado. Lo firmado no se borra: cada cambio será una versión nueva.',
+      motivo: 'Motivo del cambio',
+      alcance: 'Alcance',
+      individual: 'Nota individual',
+      conjunta: 'Nota conjunta del episodio',
+      conjuntaLeeran: 'La leerán los profesionales del episodio.',
+      conjuntaEslabon: 'Es un solo eslabón de la cadena.',
+      conjuntaAcceso: 'No se entregará entera en un acceso individual.',
+    },
+    aviso: {
+      sinAcceso: 'No se puede abrir la historia de este paciente.',
+      noDisponible: 'Esta nota no está disponible.',
+      noSeAbrio: 'No se pudo abrir la nota. Vuelve a intentarlo.',
+      reintentar: 'Volver a intentarlo',
+      conflicto:
+        'La nota ha cambiado desde otro sitio y no se ha guardado ni firmado lo de esta pantalla. Tu texto sigue aquí para que lo copies; al cargar lo guardado se sustituye.',
+      cargarLoGuardado: 'Cargar lo guardado',
+      yaFirmada: 'Esta nota ya se ha firmado desde otro sitio.',
+      noAutor: 'Esta nota solo la corrige quien la escribió. Si llevas el caso, escribe una nota nueva.',
+      vacia: 'No se firma una nota vacía.',
+      faltaMotivo: 'Para modificar una nota firmada hace falta un motivo.',
+      noSeFirmo: 'No se pudo firmar. Vuelve a intentarlo.',
+      coprofesionalInvalido: 'Esa persona no puede figurar como coprofesional en este centro.',
+      yaFirmadaCoprofesional: 'Ya está firmada: el coprofesional no se cambia.',
+      firmadaSinRecargar: 'Firmada. No se pudo recargar la nota.',
+      hechoSinRecargar: 'Hecho. No se pudo recargar la nota.',
+      recargar: 'Recargar',
     },
   },
 
