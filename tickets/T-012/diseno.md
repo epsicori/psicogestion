@@ -2137,3 +2137,36 @@ Si Q-C1 sale D-b, el territorio **sí** crece, y eso lo decide un contrato nuevo
    - que la prueba `:942` se invierta;
    - que B2-H3 se recorte en servidor.
 8. **Hallazgo para `state.md`**: el ADR-049 y el ADR-032 dan por existente una capa de exportación cifrada que no está en el esquema ni en el plan.
+
+## Decisiones del propietario sobre el corte C (02-10-2026)
+
+| Pregunta | Respuesta | Qué cambia |
+|---|---|---|
+| **Q-C1** | **D-a**: ticket propio, T-040 «Capa de exportación clínica» (riesgo alto). | T-012 cierra con comparación y vista, **sin botón «Descargar»**. La tarea de la descarga del contrato pasa a T-040, con lo decidido en C.1.7 sobre el contenido. |
+| **Q-C2** | **Autor y asignado, libremente. El administrador, solo por motivo legal y auditado.** | Vale para T-040. No toca el corte C. |
+
+**Q-C2, en detalle.** El propietario empezó por «el administrador, porque los datos son de la clínica», y pidió revisar la ley antes de cerrar. Lo que dice:
+
+- **Ley 41/2002, art. 16.4**: «El personal de administración y gestión de los centros sanitarios sólo puede acceder a los datos relacionados con sus propias funciones». La AEPD (FAQ 1636) incluye expresamente en ese grupo a **los cargos de dirección del centro**.
+- **Ley 41/2002, art. 17**: el centro **custodia y conserva** la historia (17.1). Custodiar no es leer.
+- **Ley 41/2002, art. 16.3 y 16.5**: el acceso judicial y el de inspección están previstos, y cada uno con sus reglas.
+- **Ley 41/2002, art. 18.3**: el paciente no recibe las anotaciones subjetivas reservadas por el profesional.
+- **RGPD art. 9.3** y **CP art. 199.2**: el secreto lo debe quien trata los datos por su profesión.
+- **AEPD, guía para el sector sanitario**: separar la documentación clínica de la administrativa, porque el personal administrativo no necesita la historia.
+
+Con eso, el propietario eligió la opción que cumple el art. 16.4 y mantiene la **decisión fundacional 5** («acceso de emergencia con justificación, caducidad, auditoría destacada y aviso al titular»). **No hace falta ADR nuevo**: es una concreción de la decisión 5, no un cambio.
+
+Reglas para T-040:
+
+1. **Autor de la nota o profesional asignado**: copia profesional completa, con reservadas (ADR-027), sin motivo. Nunca en lectura conjunta (C.1.7).
+2. **Administrador**: solo eligiendo un **motivo cerrado**:
+   - **petición del paciente** (derecho de acceso): proyección del paciente, **sin reservadas** (art. 18.3) y con las conjuntas parciales (ADR-030);
+   - **requerimiento judicial o inspección** (art. 16.3 y 16.5): copia completa;
+   - **traspaso del caso** a otro profesional: copia completa.
+3. Cada copia del administrador escribe su fila en `accesos_historia` con el motivo, queda en la auditoría destacada y **avisa al profesional titular**.
+4. Queda abierto para el diseño de T-040 si el motivo lleva además texto libre, y si el aviso al titular sale por `notificaciones`.
+
+Fuentes:
+- [Ley 41/2002, texto consolidado (BOE)](https://www.boe.es/buscar/act.php?id=BOE-A-2002-22188)
+- [AEPD, FAQ 1636: acceso del personal administrativo a la historia clínica](https://www.aepd.es/preguntas-frecuentes/16-salud/2-profesionales-sanitarios/FAQ-1636-puede-el-personal-administrativo-del-centro-sanitario-acceder-a-la-historia-clinica)
+- [AEPD, guía para profesionales del sector sanitario](https://www.aepd.es/guias/guia-profesionales-sector-sanitario.pdf)

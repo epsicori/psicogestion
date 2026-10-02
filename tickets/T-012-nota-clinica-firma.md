@@ -65,8 +65,10 @@ editor necesita diseño táctil propio).
       La vista muestra por defecto la **versión vigente**, con un indicador «modificada el ·
       por» y acceso a la **comparación entre versiones**, resaltando lo añadido y lo
       retirado.
-- [ ] **La descarga incluye todas las versiones**, en orden, con sus autores y fechas. Es
-      la única representación honesta ante un juzgado.
+- [ ] ~~**La descarga incluye todas las versiones**, en orden, con sus autores y fechas. Es
+      la única representación honesta ante un juzgado.~~ **Pasa a T-040** (propietario,
+      02-10-2026, Q-C1 = D-a): sin la capa `exportaciones` cifrada, chocaría con la decisión
+      fundacional 4 y el ADR-049.
 - [ ] **El sello se enseña como un hecho, no como una insignia**: «Escrita durante la sesión
       del 26/08 · 17:05–17:52». Si la nota se escribió fuera, se dice igual de claro y sin
       reproche: es un dato, no una regañina.
