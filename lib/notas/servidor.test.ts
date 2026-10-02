@@ -727,6 +727,13 @@ describe('abrirEditorDeNota · la lista de episodios es la regla que obliga a el
       expect(l.filtros).toContainEqual(['eq:profesional_id', A]);
       expect(l.filtros).toContainEqual(['is:cerrado_en', null]);
     }
+    // R2-H13: la consulta de participaciones es del paciente que se abre y solo de las que siguen
+    // en alta. Sin el primer filtro la RLS devolvería las de todos los episodios del profesional;
+    // sin el segundo, la lista ofrecería un episodio del que el paciente ya salió.
+    const participaciones = llamadas.filter((x) => x.tabla === 'episodio_participantes');
+    expect(participaciones).toHaveLength(1);
+    expect(participaciones[0].filtros).toContainEqual(['eq:paciente_id', P]);
+    expect(participaciones[0].filtros).toContainEqual(['is:baja_en', null]);
   });
 
   it('si el paciente solo participa en dos episodios, la lista no llega vacía', async () => {
