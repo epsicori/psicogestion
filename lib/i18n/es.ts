@@ -617,6 +617,7 @@ export const es = {
       firmadaSinRecargar: 'Firmada. No se pudo recargar la nota.',
       hechoSinRecargar: 'Hecho. No se pudo recargar la nota.',
       noSeRecargo: 'No se pudo recargar la nota.',
+      noSeRecargoOtraVez: 'Tampoco se pudo recargar la nota (intento {intentos}).',
       recargar: 'Recargar',
     },
   },

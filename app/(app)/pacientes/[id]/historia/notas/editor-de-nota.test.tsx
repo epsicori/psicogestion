@@ -1175,6 +1175,33 @@ describe('EditorDeNota', () => {
         await vaciar();
         await vaciar();
         expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('No se pudo recargar la nota.');
+
+        // C1-H3: el segundo fallo no puede ser silencio; el foco vuelve y la alerta cambia.
+        const reintento = screen.getByRole('button', { name: 'Volver a intentarlo' });
+        fireEvent.click(reintento);
+        reintento.blur();
+        await vaciar();
+        await vaciar();
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('Tampoco se pudo recargar la nota (intento 2).');
+      });
+
+      it('(e) C1-H3 · cada reintento que vuelve a fallar cambia el texto de la alerta, para que se anuncie', async () => {
+        const boton = await firmarSinRecarga();
+        abrirEditorDeNota.mockResolvedValue({ estado: 'error' });
+        await disparar(boton);
+        const textoDeAlerta = () => within(screen.getByRole('group', { name: /recargar la nota/ })).getByRole('alert').textContent;
+        expect(textoDeAlerta()).toContain('No se pudo recargar la nota.');
+
+        await disparar(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(textoDeAlerta()).toContain('Tampoco se pudo recargar la nota (intento 2).');
+        expect(screen.getByRole('group', { name: 'Tampoco se pudo recargar la nota (intento 2).' })).toBeInTheDocument();
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+
+        await disparar(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+        expect(textoDeAlerta()).toContain('Tampoco se pudo recargar la nota (intento 3).');
+        expect(cuerpo().readOnly).toBe(true);
       });
 
       it('(c) «Volver a intentarlo» con apertura abierta recarga y lleva el foco a la vigente', async () => {

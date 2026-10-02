@@ -118,6 +118,11 @@ type Abierta = {
   enfoqueVigente: number;
   /** Sube cada vez que la pantalla debe llevar el foco al aviso (su botón o, sin él, el grupo). */
   enfoqueAviso: number;
+  /**
+   * Recargas seguidas que han fallado en el camino del aviso. Cada una cambia el texto de la
+   * alerta: si no cambiara, el lector de pantalla no anunciaría el segundo fallo (C1-H3).
+   */
+  fallosDeRecarga: number;
 };
 
 type Estado =
@@ -167,6 +172,7 @@ function abiertaDesdeNota(nota: ModeloDeNota, caducaEn: string, previo: number):
     soloLectura: false,
     enfoqueVigente: previo,
     enfoqueAviso: 0,
+    fallosDeRecarga: 0,
   };
 }
 
@@ -208,7 +214,12 @@ function reducir(estado: Estado, accion: Accion): Estado {
           if (estado.fase !== 'abierta') return { fase: 'error' };
           // B2-H1: si la recarga venía de un aviso con botón, el aviso conserva su salida.
           return enCaminoDeRecarga(estado)
-            ? { ...estado, aviso: 'noSeRecargo', enfoqueAviso: estado.enfoqueAviso + 1 }
+            ? {
+                ...estado,
+                aviso: 'noSeRecargo',
+                enfoqueAviso: estado.enfoqueAviso + 1,
+                fallosDeRecarga: estado.fallosDeRecarga + 1,
+              }
             : { ...estado, aviso: 'noSeAbrio' };
       }
       return estado;
@@ -800,6 +811,13 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
     modelo.soyAutor && modelo.versiones.length > 0 && modelo.borrador === null && !estado.conflicto && !estado.soloLectura;
   const vigente = modelo.versiones.length > 0 ? modelo.versiones[modelo.versiones.length - 1]! : null;
   const sinLo = modelo.versiones.length === 0;
+  // A partir del segundo fallo seguido, el texto lleva el intento: una alerta idéntica no se anuncia.
+  const textoDelAviso =
+    estado.aviso === null
+      ? ''
+      : estado.aviso === 'noSeRecargo' && estado.fallosDeRecarga > 1
+        ? tCon('notas.aviso.noSeRecargoOtraVez', { intentos: String(estado.fallosDeRecarga) })
+        : t(AVISOS[estado.aviso]);
 
   const indicador: Record<Guardado, ClaveDeCatalogo> = {
     guardado: 'notas.editor.guardado',
@@ -854,11 +872,11 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
           ref={refAviso}
           role="group"
           tabIndex={-1}
-          aria-label={t(AVISOS[estado.aviso])}
+          aria-label={textoDelAviso}
           className="outline-none"
         >
         <AvisoDeError
-          mensaje={t(AVISOS[estado.aviso])}
+          mensaje={textoDelAviso}
           accion={
             AVISOS_CON_RECARGA.includes(estado.aviso) ? (
               <Button variante="contorno" onClick={() => void abrir({ reabrir: modelo.notaId })}>
