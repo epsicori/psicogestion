@@ -1675,3 +1675,465 @@ tocar la lista de versiones y el editor:
   al aviso «Hay un borrador en curso» (grupo con nombre y `tabIndex=-1`), nunca a «Cerrar la
   historia».
 - B1-H8 (`cargarPaciente` → 404) sigue fuera del territorio: `docs/state.md` §Hallazgos.
+
+---
+
+## Corte C · Comparación entre versiones, foco pendiente (B2-H1..H3) y la descarga, bloqueada (02-10-2026)
+
+Diseñado contra la rama `worktree-agent-a569a13c061c1d353` en `3a3c564` (corte B sin integrar). **El
+corte B se integra antes de implementar este.** Esta sección no cambia las anteriores; donde choca
+con §1.3 (`exportar.ts`), §1.4 (`descargarNotaCompleta`) y §2.11 (descarga en texto plano), **manda
+esta** y aquellas quedan en suspenso hasta que se responda C.8 · Q-C1.
+
+### C.0 · Hechos verificados contra el código
+
+**La descarga choca con dos decisiones vigentes**, y esto cambia el corte:
+- `docs/decisions/fundacionales.md:14`, decisión 4: «Cifrado de exportaciones con clave del usuario · Argon2id + AES-256. La contraseña no se persiste jamás». El documento maestro (línea 725) lo aplica a «los documentos y copias descargables». §5.4 (líneas ~1460-1500) concreta:
+  - PDF o ZIP con AES-256;
+  - la interfaz avisa «si pierdes esta contraseña, este archivo no se podrá abrir nunca» y pide confirmación;
+  - entrega por URL firmada de vida corta;
+  - destrucción a las 24 h.
+- `docs/decisions/ADR-049.md:62-65`: «Toda exportación de datos clínicos sale por una capa propia con su formato versionado —`exportaciones` ya guarda alcance, filtros, algoritmo y huella—, nunca por un `select` incrustado en la pantalla que la pidió». Lo repite `docs/architecture.md:444-445`.
+- **La tabla `exportaciones` no existe.** `grep -rn exportaciones supabase/` da cero resultados. Ningún ticket ni `PLAN.md` construye esa capa.
+- `docs/decisions/ADR-032.md:75` da por hecha una «exportación cifrada con su propia clave (decisión 4)» para el profesional que se va. Tampoco existe en el código.
+- §2.11 de este diseño decidió un `.txt` sin cifrar servido por Server Action. **Contradice la decisión 4 y el ADR-049.** Ninguna revisión anterior lo vio.
+- **El contrato no tiene ningún criterio de aceptación sobre la descarga.** Solo la tarea «La descarga incluye todas las versiones…». Sacarla del ticket no deja un criterio sin cerrar.
+
+**La traza de la exportación** (por si se construye aquí; ver C.1.7):
+- El enum del `tipo` de `accesos_historia` ya incluye `exportacion`.
+- `registrar_acceso_historia()` es solo para `'apertura'`. Lo dice su comentario: exportación, informe y emergencia «tienen otro camino».
+- La política `accesos_historia_alta` admite `desbloqueo_id is null` y **en ese caso no mira el candado**: solo `perfil_id = auth.uid()` y administrador o `es_profesional_asignado`.
+- El índice `accesos_historia_ventana_idx`, sobre `(desbloqueo_id, paciente_id, pestana) nulls not distinct where desbloqueo_id is not null`, **no incluye `tipo`**. Una exportación con `desbloqueo_id` daría 23505 contra la apertura de la misma ventana. Por eso iría con `desbloqueo_id` nulo.
+- `desbloqueo_vigente()` está expuesta (`lib/supabase/tipos-bd.ts`: `Args: never; Returns: string`).
+- La huella es `digest(convert_to(contenido_canonico,'UTF8') || huella_anterior, 'sha256')` (`supabase/migrations/20260829210000_cadena_de_huellas.sql:450`). `contenido_canonico` es `text`; `huella` y `huella_anterior`, `bytea` (llegan como `\x…`).
+
+**Next 16** (`node_modules/next/dist/docs/01-app/`):
+- Las Server Functions solo se invocan por `POST` (`02-guides/server-actions.md`, `02-guides/data-security.md`).
+- Su valor de retorno se serializa al cliente (`server-actions.md:91`).
+- El límite de 1 MB (`bodySizeLimit`) es del **cuerpo de la petición**, no de la respuesta (`server-actions.md:83`).
+- El cliente las despacha **de una en una** (`server-actions.md:26-30`).
+- Un Route Handler `GET` con Cache Components corre en cada petición. Pero «Next.js uses POST requests to handle mutations. This prevents accidental side-effects from GET requests» (`data-security.md:567-601`), y registrar un acceso es una mutación. Además, el ADR-058 pide un ADR nuevo para cualquier ruta que sirva contenido clínico.
+
+**La pantalla en la rama** (`app/(app)/pacientes/[id]/historia/notas/` y `lib/notas/`):
+- **Versión vigente y «modificada el · por».** Ya los pinta el corte B: `VistaVigente` en `editor-de-nota.tsx`, y `ModificadaPor` cuando `vigente.numero > 1`. Los encabezados son «Versión vigente» y «Última versión conjunta». Debajo hay un `<ol>` del historial con `FilaDeVersion`.
+- **El modelo ya trae los textos de todas las versiones.** `modelo.versiones` lleva `texto` y `reservadas` de cada versión visible (`servidor.ts:350-378`). Viajan bajo el acceso de la apertura y caen al cerrarse: el estado `cerrada` sustituye al entero.
+- **Motivo en lectura conjunta.** En `servidor.ts:350-378`, con `lecturaConjunta`, se numera `posicion + 1` pero se manda `motivo: v.motivo_cambio` sin recorte. Es B2-H3.
+- **B2-H1, la recarga que falla.** Con el editor abierto, una apertura en `error` deja `aviso: 'noSeAbrio'` y `no_disponible` deja `'noDisponible'`. Ninguno de los dos lleva acción: solo `yaFirmada` (cargar lo guardado) y `firmadaSinRecargar` (recargar) la tienen. El botón que tenía el foco se desmonta y el foco cae en `body`.
+  - `pedirFoco` no ayuda: con `sigueLaVista` no se pide.
+  - El único efecto de foco sobre el aviso depende del booleano `firmadaSinRecargar` (`editor-de-nota.tsx:484-487`).
+- **B2-H2, el foco tras abrir.** Al abrir, `enfocarPrimero` busca `['textarea', 'h2[tabindex="-1"]', '[role="group"][tabindex="-1"]', 'button:not([disabled])']`. El párrafo «Hay un borrador en curso.» (`modelo.borradorOculto && !modelo.soyAutor`) no es grupo ni enfocable, así que el foco cae en «Cerrar la historia».
+  - **La prueba `editor-de-nota.test.tsx:942` fija hoy ese comportamiento** («abierta sin nada que leer ni escribir: el foco va a un botón con nombre»). Se invierte.
+  - **Misma clase, otra puerta:** `BorradorAjeno` tiene un `h2` sin `tabIndex`, y el `EstadoVacio` de cuando no hay nada que mostrar no tiene grupo.
+- **La prueba del conflicto.** `editor-de-nota.test.tsx:1035` («un Recargar que falla (error) no roba el foco del botón que sigue montado») fija que, en el camino del conflicto, el foco **se queda** en «Cargar lo guardado». B2-H1 no debe romperla.
+- **Piezas de la interfaz:**
+  - `AvisoDeError({mensaje, accion})` (`components/ui/piezas.tsx`) es un `div role="alert"`.
+  - `Desplegable({opciones, valor, alElegir, etiqueta, marcador})` está en `components/ui/`.
+  - `Button` tiene `min-h-11`.
+  - No hay `fast-check` ni librería de diff en `package.json`, y el contrato no nombra ninguna.
+- **i18n.** El bloque `notas` de `lib/i18n/es.ts` (líneas 503-608) tiene `version.titulo: 'Versión {numero}'`, `editor.nota`, `editor.reservadas`, `editor.borradorOculto`, `aviso.reintentar: 'Volver a intentarlo'`, `aviso.recargar`, `aviso.noDisponible` y `aviso.noSeAbrio`. No tiene bloque `comparar`.
+
+### C.1 · Piezas y contratos
+
+#### C.1.1 · `lib/notas/comparar.ts` (+ `comparar.test.ts`): pura, sin dependencias
+
+```ts
+export type Segmento = { tipo: 'igual' | 'anadido' | 'retirado'; texto: string };
+export type Comparacion = { segmentos: Segmento[]; /** false si se agotó el presupuesto */ completa: boolean };
+export const MAX_EDICIONES = 1000;
+export function compararTextos(antes: string, despues: string): Comparacion;
+```
+
+1. **Normalización.** Las dos entradas se pasan por `normalize('NFC')`, porque la huella las da por iguales (criterio NFC). Desde aquí, «antes» y «después» son las normalizadas.
+2. **Fichas.** `texto.match(/\s+|[^\s]+/gu) ?? []`: una palabra o una tirada de blancos, los saltos de línea incluidos. Se comparan por igualdad exacta.
+3. **Prefijo y sufijo.** Se recortan las fichas comunes del principio y del final, que salen como `igual`.
+4. **El tramo central.** Se compara con **Myers O(ND)**:
+   - se guarda una instantánea de `V` por cada `d`, en un `Int32Array` de `2d+1`;
+   - se reconstruye el camino hacia atrás;
+   - si `d` supera `MAX_EDICIONES`, el tramo central sale como **un** `retirado` seguido de **un** `anadido`, con `completa: false`.
+5. **Salida:**
+   - (a) sin segmentos vacíos;
+   - (b) sin dos contiguos del mismo tipo (se funden);
+   - (c) en cada bloque de cambio, `retirado` va antes que `anadido`;
+   - (d) si las entradas son iguales: `[{igual}]`, o `[]` si las dos están vacías.
+6. **Invariantes que la prueba fija:**
+   - **I1:** los `igual` y `retirado`, unidos, dan exactamente `antes`;
+   - **I2:** los `igual` y `anadido`, unidos, dan exactamente `despues`;
+   - **I3:** con `completa: true`, el número de fichas `igual` es la LCS de fichas.
+
+#### C.1.2 · `app/(app)/pacientes/[id]/historia/notas/comparador.tsx` (+ `comparador.test.tsx`): cliente
+
+`'use client'`. Tiene estado y vive dentro del editor, que ya es cliente. **No importa ni llama a ninguna acción.**
+
+```ts
+export function Comparador({ versiones }: { versiones: VersionDeVista[] }): JSX.Element | null;
+```
+
+- **Cuándo existe.** Con `versiones.length < 2` devuelve `null`: sin dos versiones no hay control.
+- **El disparador.** `Button` de contorno «Comparar versiones», con `aria-expanded` y `aria-controls` hacia la región. Abre y cierra; el foco se queda en el botón.
+- **La región** es un `section aria-labelledby` con:
+  1. un `h3` «De la versión {desde} a la {hasta}»;
+  2. dos `Desplegable`, «Desde» y «Hasta», con las opciones `Versión {v.numero}`. El número es **el que da el modelo**: posicional en lectura conjunta (B1-H4). El comparador no calcula números.
+  3. **Por defecto**: desde la penúltima, hasta la vigente.
+  4. **El orden se normaliza**: se compara siempre la de menor `numero` con la de mayor, se elija como se elija, y el título lo dice.
+  5. **La leyenda**, visible: «Lo añadido va subrayado y con «+»; lo retirado, tachado y con «−».»
+  6. **El bloque «Nota»**: `compararTextos(a.texto, b.texto)`.
+  7. **El bloque «Anotaciones reservadas»**, solo si alguna de las dos tiene reservadas no vacías. Lleva `AvisoReservadas` encima y usa `compararTextos(a.reservadas ?? '', b.reservadas ?? '')`.
+  8. **Sin cambios**: si no hay ni `anadido` ni `retirado` en ningún bloque, un `p role="status"` «Sin cambios entre estas dos versiones.»
+  9. **Comparación resumida**: con `completa: false`, la línea `notas.comparar.resumida`.
+- **Cómo se pinta un segmento**, dentro de un `p` con `whitespace-pre-wrap`:
+  - `igual`: texto llano.
+  - `anadido`: `<ins className="underline decoration-2 underline-offset-2">`. Dentro, `<span aria-hidden="true">+</span>`, `<span className="sr-only">Añadido: </span>`, el texto y `<span className="sr-only"> Fin del cambio.</span>`.
+  - `retirado`: lo mismo con `<del className="line-through decoration-2">`, «−» (U+2212) y «Retirado: ».
+  - **Las clases van explícitas**: no se confía en el estilo por defecto de `ins`/`del` ni en el preflight de Tailwind.
+  - Un fondo de color de los tokens del tema es opcional, **nunca la única señal**.
+- **Cálculo**: `useMemo` sobre (`a`, `b`).
+- **En 360 px**: los dos desplegables van en columna por debajo de `48rem` y en fila por encima.
+
+#### C.1.3 · `editor-de-nota.tsx`: dónde va el comparador, B2-H1 y B2-H2
+
+**El comparador:**
+- En `VistaVigente`, después del `<ol>` del historial: `<Comparador key={versiones.length} versiones={versiones} />`.
+- La `key` lo cierra y le recalcula los valores por defecto cuando llega una versión nueva.
+- La barra de acciones no cambia. Solo cambia su comentario (C.1.6).
+
+**B2-H1, la recarga que falla en el camino del aviso:**
+1. `ClaveDeAviso` gana `'noSeRecargo'`, y `AVISOS.noSeRecargo` apunta a `'notas.aviso.noSeRecargo'`.
+2. Se añade `const AVISOS_CON_RECARGA: ClaveDeAviso[] = ['yaFirmada', 'firmadaSinRecargar', 'noSeRecargo']`.
+3. El tipo `Abierta` gana `enfoqueAviso: number`, con el mismo patrón que `enfoqueVigente`:
+   - empieza en 0 al construir la abierta;
+   - se **conserva** en la acción `modelo`, tomando `estado.enfoqueAviso`.
+4. En `reducir`, caso `apertura`, con el editor abierto:
+   - `error` y `!estado.conflicto && AVISOS_CON_RECARGA.includes(estado.aviso)` → `{...estado, aviso: 'noSeRecargo', enfoqueAviso: +1}`. En cualquier otro caso, `'noSeAbrio'`, como hoy.
+   - `no_disponible`, con la misma condición → `{...estado, aviso: 'noDisponible', enfoqueAviso: +1}`. Si no, como hoy.
+   - `soloLectura` no se toca: ya era cierto por `yaFirmada` o `firmadaSinRecargar`.
+5. `sin_recargar` con `firmadaSinRecargar` también suma `enfoqueAviso: +1`.
+6. **El efecto de foco.** Se quita el efecto booleano de `firmadaSinRecargar` y se pone uno sobre `enfoqueAviso`: si es mayor que 0, `(refAviso.current?.querySelector('button') ?? refAviso.current)?.focus()`.
+7. **El contenedor del aviso** pasa a ser `<div ref={refAviso} role="group" tabIndex={-1} aria-label={t(AVISOS[estado.aviso])} className="outline-none">`.
+8. **La acción del aviso** sale si `AVISOS_CON_RECARGA.includes(estado.aviso)`:
+   - `yaFirmada` → «Cargar lo guardado»;
+   - `firmadaSinRecargar` → «Recargar»;
+   - `noSeRecargo` → «Volver a intentarlo».
+   
+   Las tres hacen la misma reapertura que hacen hoy las dos primeras.
+
+**B2-H2, y la misma clase por las otras dos puertas:**
+- **«Hay un borrador en curso.»** Su `p` se envuelve en `<div role="group" tabIndex={-1} aria-label={t('notas.editor.borradorOculto')} className="outline-none">`.
+- **`EstadoVacio` sin nada que mostrar.** Se envuelve igual, con `aria-label` del propio mensaje que pinta.
+- **`BorradorAjeno`.** Su `h2` gana `tabIndex={-1}` y `outline-none`.
+- **El orden de `enfocarPrimero` no cambia.** Con versiones, el `h2` de `VistaVigente` va antes en el DOM y gana. Sin versiones, gana el `h2` del borrador ajeno o el grupo.
+
+#### C.1.4 · `lib/notas/servidor.ts`: B2-H3
+
+- En `cargarModelo` (bloque de `servidor.ts:350-378`): `motivo: lecturaConjunta && posicion === 0 ? null : v.motivo_cambio`.
+- Lleva un comentario que cita B2-H3: un motivo en la «Versión 1» delataría una versión anterior individual oculta.
+- Nada más cambia en el servidor.
+
+#### C.1.5 · `lib/i18n/es.ts`: claves nuevas, en el bloque `notas` que ya existe
+
+Sin bloque duplicado.
+- `notas.comparar`:
+  - `abrir`: «Comparar versiones»;
+  - `titulo`: «De la versión {desde} a la {hasta}»;
+  - `desde`: «Desde»;
+  - `hasta`: «Hasta»;
+  - `leyenda`: «Lo añadido va subrayado y con «+»; lo retirado, tachado y con «−».»;
+  - `anadido`: «Añadido: »;
+  - `retirado`: «Retirado: »;
+  - `fin`: « Fin del cambio.»;
+  - `sinCambios`: «Sin cambios entre estas dos versiones.»;
+  - `resumida`: «Hay demasiados cambios para señalarlos palabra a palabra: se muestra completo lo retirado y lo añadido.»
+- `notas.aviso.noSeRecargo`: «No se pudo recargar la nota.»
+- Se reutilizan:
+  - `notas.version.titulo` para las opciones;
+  - `notas.editor.nota` y `notas.editor.reservadas` para los títulos de los bloques;
+  - `notas.aviso.reintentar` para la acción.
+
+#### C.1.6 · `barra-de-acciones.tsx`
+
+- Solo cambia el comentario «sin Comparar ni Descargar hasta el corte C».
+- Pasa a decir que la comparación vive junto al historial (C.2.2) y que la descarga espera a Q-C1.
+
+#### C.1.7 · La descarga: **BLOQUEO** (C.8 · Q-C1)
+
+**Lo que se puede decidir ya**, sin inventar, y vale para cualquier opción:
+- **Contenido.** Solo versiones **firmadas**, todas, por `numero_version` ascendente. El borrador no es la nota.
+- **Por versión:**
+  - el número real;
+  - el nombre del autor;
+  - la fecha y hora en la zona de la cita o de la organización (ADR-034);
+  - el alcance y el motivo;
+  - la frase del sello;
+  - los dos cuerpos;
+  - `huella` y `huella_anterior` en hexadecimal;
+  - `contenido_canonico` literal, con la fórmula de comprobación de C.0.
+- **Sin `posicion_cadena`.** No hace falta para comprobar el eslabón.
+- **Reservadas dentro.** Es la copia profesional o judicial: la reserva no «se opone a un juez» y «la exportación para uso judicial es otra salida, con su propia traza» (ADR-027).
+- **No es la salida del derecho de acceso.** Esa excluye las reservadas y no entrega entera una nota conjunta (ADR-027, ADR-030).
+- **Para quién.** La matriz dice «Notas clínicas — Profesional: autor o asignado; Administrador: solo las suyas (+ emergencia); Técnico: sin acceso» (`docs/architecture.md:174-186`), y de descargas no dice nada. **No hay descarga en `lecturaConjunta`**, por cuatro motivos:
+  - la copia sería parcial;
+  - estaría renumerada;
+  - el `contenido_canonico` literal lleva `motivo_cambio` y el número real, y rompería B2-H3 y B1-H4;
+  - «todas las versiones» sería falso.
+  
+  El servidor lo recalcula con `es_profesional_asignado` o con la autoría, y no se fía del cliente.
+- **Traza.** Una fila en `accesos_historia` con:
+  - `{tipo: 'exportacion', pestana: 'notas_clinicas', desbloqueo_id: null, ip, agente}`;
+  - insertada **antes** de leer;
+  - después de comprobar `desbloqueo_vigente()` no nulo, porque la política no mira el candado con `desbloqueo_id` nulo.
+
+**Lo bloqueado es el transporte.** La decisión 4 y el ADR-049 exigen tres cosas que no existen ni caben en el territorio de T-012:
+- cifrado con contraseña del usuario;
+- la capa `exportaciones`;
+- URL firmada con destrucción a las 24 h.
+
+Además, §5.4 del maestro parece no casar consigo mismo:
+- el PDF AES-256 estándar (ISO 32000-2, R6) y el ZIP AES de WinZip derivan la clave con su propio algoritmo;
+- no usan Argon2id;
+- un lector estándar no abriría un archivo cifrado con una clave sacada de Argon2id.
+
+Lo tiene que resolver un ADR del ticket que construya la capa, no este corte. Queda como hecho por comprobar allí, no como cerrado.
+
+**Si el propietario elige D-c** (texto plano en T-012 con un ADR nuevo que lo exima), el diseño de C.0 está listo sin otra ronda:
+1. La Server Action `descargarNotaCompleta` en `historia/notas/acciones.ts`, con `esquemaDescarga = {pacienteId, notaId}` (uuid). No es un Route Handler `GET`, por `data-security.md` y el ADR-058.
+2. `servidor.descargarNotaCompleta(sesion, entrada, contexto)` hace, por orden:
+   - `rpc('desbloqueo_vigente')`: si es `null`, `bloqueada`; si falla, `error`;
+   - inserta el acceso: un 42501 da `bloqueada` y cualquier otro fallo, `error`, y **no lee**;
+   - lee la cabecera: tiene que ser de este paciente;
+   - comprueba autor o asignado; si no, `no_disponible`;
+   - lee las versiones, con `huella_anterior`, y los nombres;
+   - compone con `lib/notas/exportar.ts`, que es pura.
+3. Devuelve `{ok: true, nombre: 'nota-<notaId>.txt', texto, caducaEn}`. El cliente lo baja con `Blob` + `URL.createObjectURL` + `a[download]` y revoca la URL.
+
+### C.2 · Decisiones y alternativas descartadas
+
+1. **La comparación se hace en el cliente, sobre `modelo.versiones`, sin acción nueva ni fila de acceso.**
+   - Esos textos ya están en el navegador bajo el acceso registrado al abrir y caen con el candado.
+   - *Descartado* `compararVersiones` como Server Action: relee lo que ya está en el cliente, no protege nada más y suma un viaje.
+   - *Descartado* registrar una «vista» por comparar: comparar no es abrir.
+2. **«Comparar versiones» va junto al historial, no en la barra.**
+   - Es lectura y la puede hacer quien no es autor. La barra solo se monta para quien escribe (`editable || puedeModificar`).
+   - *Descartado* meterla en la barra: obligaría a montarla para lectores, y la región quedaría lejos del texto que compara.
+3. **Diff por palabras con Myers O(ND), con presupuesto y salida honesta (`completa: false`).**
+   - *Descartada* la LCS O(n·m) de §1.3: con una nota larga (unas 20 000 fichas) son unos 10⁸ celdas en el navegador.
+   - *Descartado* el diff por caracteres: ilegible en prosa.
+   - *Descartada* una dependencia: el contrato no nombra ninguna (`pipeline.md` §package.json).
+4. **Tres señales sin color**: subrayado o tachado, el signo «+» o «−» visible y el texto `sr-only`, más una leyenda.
+   - Cierran el criterio manual 9 para quien ve en gris y para quien no ve.
+   - *Descartado* solo el color de fondo.
+5. **El orden de la comparación se normaliza** (menor → mayor).
+   - *Descartado* permitir «de la 3 a la 1»: invierte el sentido de «añadido» sin decirlo.
+6. **B2-H1 con un aviso propio (`noSeRecargo`) y su reintento**, solo en el camino del aviso.
+   - En el del conflicto, el botón «Cargar lo guardado» sigue montado y ya tiene el foco (prueba `:1035`).
+   - *Descartado* mantener el aviso anterior sin decir que falló: el usuario no sabría que no se recargó.
+7. **B2-H2 se cierra en las tres puertas** (borrador oculto, borrador ajeno legible y nada que leer). Son el mismo defecto.
+   - *Descartado* arreglar solo la que cita la ronda: el revisor la encontraría por la de al lado.
+8. **La descarga no se construye sin respuesta a Q-C1.**
+   - *Descartado* seguir con §2.11: una decisión fundacional y un ADR son ley, y el `.txt` sin cifrar con las reservadas es justo el fichero que la decisión 4 existe para proteger.
+
+### C.3 · Cómo se cierra cada criterio
+
+**Criterio manual 9: v1 frente a v2, sin depender del color.**
+- **`comparar.test.ts`:**
+  - Ejemplo fijo: «El paciente refiere ansiedad leve.» → «El paciente refiere ansiedad moderada y insomnio.» da `[igual 'El paciente refiere ansiedad ', retirado 'leve.', anadido 'moderada y insomnio.']`.
+  - **Propiedad** con un LCG sembrado (500 pares sobre un alfabeto de 6 palabras, espacios y `\n`): I1, I2, sin vacíos, sin contiguos iguales, `retirado` antes que `anadido`.
+  - **Minimalidad**: para entradas de 30 fichas o menos, las fichas `igual` son la LCS de una programación dinámica de referencia escrita en la propia prueba.
+  - **NFC**: «café» descompuesto frente a precompuesto da un solo `igual`.
+  - **Vacíos**: `('', '')` da `[]`; `('', 'x')` da `[anadido]`; `('x', '')` da `[retirado]`.
+  - **Presupuesto**: dos textos de 3000 palabras distintas con el prefijo común «A » dan `[igual 'A ', retirado, anadido]`, `completa: false` y menos de 1 s.
+- **Mutantes** (cada uno con la prueba que lo mata):
+  - quitar las fichas de blanco: I1 e I2;
+  - emitir `anadido` antes que `retirado`: el orden;
+  - no fundir segmentos: «sin contiguos»;
+  - **devolver siempre el bloque entero**: cumple I1 e I2, y por eso existe la prueba de minimalidad, que lo mata;
+  - quitar la normalización NFC: la prueba NFC.
+- **`comparador.test.tsx`:**
+  - **Una versión**: no hay botón «Comparar versiones». **Gemela**: con dos, sí.
+  - **Al abrir**: `aria-expanded="true"` y el título «De la versión 1 a la 2».
+  - **Lo añadido**: `ins` contiene «moderada», tiene la clase `underline` y el texto visible `+`, y su texto accesible empieza por «Añadido:».
+  - **Lo retirado**: `del` con «leve.», `line-through`, `−` y «Retirado:».
+  - **La leyenda** está presente.
+  - **Orden invertido** (desde la 2, hasta la 1): el título dice «De la versión 1 a la 2» y lo añadido sigue siendo «moderada».
+  - **Reservadas**: el bloque no está si las dos están vacías (gemela: está si una tiene texto).
+  - **Iguales**: «Sin cambios entre estas dos versiones.»
+  - **Números posicionales** (versiones con `numero` 1 y 2 aunque las reales sean 2 y 3): solo opciones «Versión 1» y «Versión 2».
+  - **Mutantes**:
+    - quitar el «+»: la prueba del texto visible;
+    - quitar el `sr-only`: la del texto accesible;
+    - `versiones.length < 1` como guarda: la de una versión;
+    - no normalizar el orden: la del orden invertido.
+- **`editor-de-nota.test.tsx`:**
+  - Con dos versiones, «Comparar versiones» está en la sección de la vigente.
+  - **Cae con el candado**: con el comparador abierto, `avanzar` hasta `caducaEn` → `queryByText('moderada')` es `null`.
+  - **Mutante** que guarda los segmentos fuera del árbol, en módulo o `ref` del editor: esta prueba.
+- **Manual** (guion, punto 5): DevTools → *Rendering* → *Emulate vision deficiencies: Achromatopsia*. Se distinguen el subrayado, el tachado y «+»/«−», y NVDA lee «Añadido: … Fin del cambio.»
+
+**Tarea «la vista muestra por defecto la vigente, con "modificada el · por" y acceso a comparar».**
+- La vigente y «modificada el · por» ya los cierra el corte B; sus pruebas siguen verdes.
+- El acceso a comparar lo cierran las pruebas de arriba.
+
+**B2-H3** (`lib/notas/servidor.test.ts`, junto a las de B1-H4, líneas ~1449-1492, con `clienteSimulado(firmaFeliz(...))`):
+- **Prueba**:
+  - Escenario: no asignado, autor de las conjuntas otro; filas v2 conjunta con motivo «Ajuste» y v3 conjunta con motivo «Corrección».
+  - Resultado: `versiones[0]` tiene `{numero: 1, motivo: null}` y `versiones[1]` tiene `{numero: 2, motivo: 'Corrección'}`. `JSON.stringify(r)` no contiene «Ajuste».
+- **Gemela**: el asignado, con v1 individual y v2 conjunta con «Ajuste», recibe `versiones[1].motivo === 'Ajuste'`.
+- **Mutantes**:
+  - quitar la condición: mata la prueba;
+  - anular todos los motivos: mata la segunda aserción y la gemela.
+- **Mutante equivalente, declarado**: quitar `lecturaConjunta` es equivalente con datos reales. Para quien lo ve todo, la posición 0 es la v1, cuyo motivo es nulo.
+
+**B2-H1** (`editor-de-nota.test.tsx`, junto a las de foco de `:884` y `:1057`):
+- **(a)** Firma con `nota: null` (firmadaSinRecargar) → «Recargar» → `abrirEditorDeNota` da `error`. Resultado: aviso «No se pudo recargar la nota.», `document.activeElement` es el botón «Volver a intentarlo» y `cuerpo().readOnly` sigue siendo `true`.
+- **(b)** Firma rechazada con `ya_firmada` → «Cargar lo guardado» → `error`. Mismo resultado.
+- **(c)** Pulsar «Volver a intentarlo» con apertura `abierta`: la nota se recarga y el foco va al encabezado de la vigente.
+- **(d)** Recarga que da `no_disponible` en el camino del aviso: el foco va al grupo con el nombre del aviso de no disponible.
+- **Gemela**: la prueba `:1035` (conflicto) sigue verde sin tocarla.
+- **Mutantes**:
+  - sin acción en `noSeRecargo`: mata (a) y (b);
+  - quitar el efecto o el `tabIndex` del contenedor: mata (d);
+  - aplicar `noSeRecargo` también con conflicto: rompe `:1035`.
+
+**B2-H2:**
+- **La prueba `:942` se invierte**: borrador oculto sin versiones → foco en el grupo «Hay un borrador en curso.».
+- **Nuevas:**
+  - asignado no autor, borrador ajeno legible sin versiones → foco en su `h2`;
+  - nada que leer → foco en el grupo del estado vacío.
+- **Gemela**: borrador oculto **con** versiones → `h2` «Versión vigente» (o «Última versión conjunta» si es lectura conjunta).
+- **Mutantes**:
+  - quitar `tabIndex` del grupo: el foco vuelve a «Cerrar la historia»;
+  - poner el grupo antes que el `h2` en `enfocarPrimero`: mata la gemela.
+
+**`npm run lint && npm run build`**: limpios.
+- `npm test` completo, sin regresiones sobre `main` más el corte B.
+- Sin cambios SQL, así que `test:rls` no se toca. No hace falta la base local.
+
+### C.4 · Riesgos, por probabilidad
+
+1. **Alta: B2-H1 rompe la prueba del conflicto (`:1035`)** si la condición olvida `!estado.conflicto`. Mitigación: la gemela es esa prueba, sin editar.
+2. **Media: que el foco «funcione» por reconciliación de React.** Al cambiar de `firmadaSinRecargar` a `noSeRecargo`, el `Button` puede ser el mismo nodo y conservar el foco sin el efecto. Las pruebas (a) y (b) pasarían con el efecto roto. Mitigación: la prueba (d), que no tiene botón, solo pasa con el efecto. El revisor lo comprueba quitando el efecto.
+3. **Media: rendimiento del diff en móvil** con notas largas muy cambiadas. Mitigación: el presupuesto y la prueba de 3000 palabras en menos de 1 s, más un `useMemo`.
+4. **Media: que el propietario no responda Q-C1 antes de cerrar.** T-012 no puede marcar la tarea de la descarga, aunque ningún criterio dependa de ella. Mitigación: Q-C1 propone moverla.
+5. **Baja: lectores de pantalla** que anuncian `ins`/`del` y, encima, el `sr-only`, repitiendo «insertado: Añadido:». Aceptable. Se comprueba con NVDA en el guion.
+6. **Baja: `useMemo` con `versiones` nuevas en cada recarga del modelo.** Se recalcula, y es barato con el presupuesto.
+
+### C.5 · Qué revisar
+
+1. **Que el comparador no hable con el servidor.** `grep` de imports de `./acciones` en `comparador.tsx`: cero. Si algún día lo hiciera, sería una lectura sin acceso registrado.
+2. **Que no quede texto clínico vivo tras `cerrada`.** Nada de segmentos en `ref`, en estado de módulo, en `sessionStorage` ni en la URL. Lo prueba el editor (C.3); el revisor mira además que no haya `useRef` con segmentos.
+3. **Que los números de versión salgan del modelo.** El comparador no puede leer otra cosa que `v.numero` (B1-H4). Que no se cuele un `numero_version`.
+4. **B2-H3, en lectura conjunta:**
+   - el motivo de la primera visible es `null` **en el servidor**, no escondido en la pantalla;
+   - `JSON.stringify` de la respuesta no lo contiene;
+   - el comparador no muestra ningún motivo.
+5. **Las tres señales sin color van en el marcado**, no solo en CSS: el signo visible y el `sr-only`. Las clases son explícitas.
+6. **Con `completa: false`, la pantalla lo dice.** Un bloque entero tachado y añadido sin la frase haría creer que se reescribió todo.
+7. **La prueba de minimalidad existe y discrimina**: sustituir el algoritmo por «todo retirado + todo añadido» la tiene que poner roja.
+8. **B2-H1:**
+   - `noSeRecargo` solo con `!conflicto` y un aviso de `AVISOS_CON_RECARGA`;
+   - `soloLectura` sigue siendo `true`: un fallo de recarga no reabre la escritura sobre una nota ya firmada;
+   - el contador `enfoqueAviso` se conserva en la acción `modelo`.
+9. **B2-H2:**
+   - las tres puertas;
+   - la prueba `:942` invertida, no borrada;
+   - el orden de `enfocarPrimero` sin tocar.
+10. **Ningún control sin acción:**
+    - no hay botón «Descargar» en ninguna parte;
+    - no hay «Comparar» con menos de dos versiones;
+    - el comentario de la barra está actualizado.
+11. **El bloque `notas` sigue siendo único en `es.ts`.**
+12. **Ningún fichero fuera del territorio.** `node ~/.claude/pipeline/territorio.mjs T-012`.
+
+### C.6 · Territorio
+
+Todo cabe en el del contrato. **No hace falta ampliarlo:**
+- `lib/notas/comparar.ts` y `lib/notas/comparar.test.ts`, en `lib/notas/**`;
+- `lib/notas/servidor.ts` y `servidor.test.ts`, en `lib/notas/**`;
+- `app/(app)/pacientes/[id]/historia/notas/comparador.tsx` y su `.test.tsx`, `editor-de-nota.tsx` y su `.test.tsx`, y `barra-de-acciones.tsx` (comentario), en `app/(app)/pacientes/[id]/**`;
+- `lib/i18n/es.ts`.
+
+**Fuera, y no se toca**:
+- `supabase/**`;
+- `lib/cuentas/**`;
+- `components/ui/**`;
+- `accesibilidad/nota-clinica.spec.ts`. No hace falta: el criterio 9 es manual y la prueba de Playwright necesitaría la base.
+
+Si Q-C1 sale D-b, el territorio **sí** crece, y eso lo decide un contrato nuevo.
+
+### C.7 · Delegable
+
+**Nada.**
+- `comparar.ts` es pura, pero las funciones puras son de la fábrica desde el 30-09-2026 (`pipeline.md`), y su prueba de minimalidad es la que discrimina.
+- El comparador lleva ARIA, foco y señales accesibles.
+- B2-H1 y B2-H2 son foco.
+
+### C.8 · Preguntas al propietario
+
+**Q-C1 · BLOQUEO de la descarga.** La tarea «La descarga incluye todas las versiones…» choca con la decisión fundacional 4 (copias descargables cifradas con tu contraseña) y con el ADR-049 (toda exportación clínica sale por la capa `exportaciones`). Esa capa no existe. ¿Qué hacemos?
+- **D-a (recomendada).** La descarga sale de T-012 a un ticket propio, «Capa de exportación clínica», de riesgo alto. Incluye:
+  - la tabla `exportaciones`;
+  - el cifrado y su ADR (que reconcilie Argon2id con lo que abre un lector estándar);
+  - la URL de vida corta;
+  - la traza `exportacion`;
+  - dos proyecciones: la profesional o judicial (con reservadas) y la del paciente (sin reservadas, conjuntas parciales).
+
+  T-012 cierra con comparación y vista, sin botón «Descargar». Lo decidido en C.1.7 sobre el contenido pasa a ese ticket. **Razón**: es lo único que cumple las dos decisiones sin convertir T-012 en otro ticket, y ningún criterio de aceptación depende de la descarga.
+- **D-b.** T-012 construye la capa mínima. Exige ampliar el territorio (`supabase/**`, Storage, una dependencia de cifrado), un ADR de cifrado y otra ronda de diseño. Es el doble del corte.
+- **D-c.** Texto plano ahora (§2.11 y la variante de C.1.7), con un ADR nuevo que exima esta salida de la decisión 4 y del ADR-049. **No recomendada**: el fichero más sensible del sistema, con reservadas, sería el único sin cifrar.
+
+**Q-C2 · Para quién es la copia completa** (vale para D-a o para D-c).
+- **Recomendación**:
+  - solo el autor de la nota o el profesional asignado, que es la matriz;
+  - **nunca en lectura conjunta**, por los cuatro motivos de C.1.7;
+  - el administrador, solo por acceso de emergencia, cuando exista.
+- **Queda abierto para el ticket de exportación**: si la cabecera de la copia identifica al paciente por nombre o solo por UUID. La matriz no lo dice; es una decisión de ese contrato.
+
+### C.9 · Por confirmar al implementar
+
+- **El orden:** integrar el corte B en `main` y crear el worktree de C desde ahí.
+- **Que `cuerpo` se guarde ya en NFC.** Si es así, la normalización de `compararTextos` no cambia nada; si no, la justifica. No cambia el diseño.
+- **El helper `version(n)`** de `editor-de-nota.test.tsx`: si acepta `texto` y `reservadas` por parámetro, y si no, ampliarlo. Es fichero del territorio.
+- **Que axe no se queje** de un `role="alert"` dentro de un `role="group"` con `aria-label`. Si se quejara, `aria-labelledby` hacia el `p` del aviso.
+- **`Desplegable`** con `valor` como cadena: las opciones son `String(v.numero)`, y se vuelve a número al elegir.
+- **El presupuesto de Myers**: `MAX_EDICIONES` = 1000 da del orden de 10⁶ entradas `Int32` en las instantáneas. Medirlo en la prueba de 3000 palabras; si fuese lento, bajar a 500, que es una constante y no un cambio de diseño.
+- **El comentario de `barra-de-acciones.tsx`**, y que su prueba no fije el texto del comentario.
+
+### C.10 · Lo que no entra, y por qué
+
+- **La descarga**: bloqueada por Q-C1 (C.1.7).
+- **Comparar borrador con vigente**: el contrato pide comparar «entre versiones», y el borrador no lo es.
+- **Diff por caracteres o con detección de movimientos**: no cambia el criterio 9 y cuesta más.
+- **La salida del derecho de acceso** (sin reservadas): es otra salida, de otro ticket.
+- **PDF e impresión**: dependen de Q-C1.
+- **Una fila de acceso por comparar**: comparar no es abrir (C.2.1).
+- **Llevar la elección de versiones a la URL**: no aporta, y nada clínico va en la URL.
+- **B1-H8 (`cargarPaciente` → 404)**: fuera del territorio; sigue en `docs/state.md` §Hallazgos.
+
+### C.11 · Lo que el implementador lee, en este orden
+
+1. Esta sección.
+2. «Ronda B-2» (justo encima).
+3. Los ficheros de la rama:
+   - `editor-de-nota.tsx`: `reducir`, el bloque de efectos de foco, el aviso y `VistaVigente`;
+   - `servidor.ts:350-378`;
+   - `editor-de-nota.test.tsx:884-1060`.
+4. `components/ui/desplegable.tsx` y `AvisoDeError` en `components/ui/piezas.tsx`.
+5. `node_modules/next/dist/docs/01-app/02-guides/server-actions.md`: no se escribe ninguna acción nueva, pero el editor sigue dependiendo del despacho en serie.
+
+### Resumen del corte C
+
+1. **Qué se construye:**
+   - `compararTextos`: diff por palabras, Myers con presupuesto, en `lib/notas/comparar.ts`;
+   - el `Comparador`: cliente, junto al historial, sin acción nueva;
+   - B2-H3: el motivo de la primera versión visible se oculta en lectura conjunta;
+   - B2-H1 y B2-H2: el foco ya no cae en `body` ni en «Cerrar la historia», ni al fallar una recarga ni al abrir sin versiones (por sus tres puertas).
+2. **Decisión 1**: la comparación trabaja sobre lo que la apertura ya trajo bajo su acceso registrado. Cae con el candado y no abre lecturas nuevas.
+3. **Decisión 2**: tres señales sin color en el marcado (subrayado o tachado, «+»/«−» visibles y `sr-only`), más una leyenda. El diff es mínimo y, cuando no puede serlo, lo dice.
+4. **Decisión 3**: la descarga **no se construye**. §2.11 contradice la decisión 4 y el ADR-049, y la capa `exportaciones` que el ADR da por hecha no existe. BLOQUEO Q-C1; se recomienda un ticket propio.
+5. **Para quién sería la copia**: autor o asignado, con reservadas (ADR-027), nunca en lectura conjunta (Q-C2).
+6. **Territorio**: dentro del contrato, sin `supabase/` ni la base. **Delegable**: nada.
+7. **Qué revisar con cuidado**:
+   - que el comparador no importe acciones ni guarde segmentos fuera del estado;
+   - que `noSeRecargo` excluya el conflicto (prueba `:1035`);
+   - que el foco de B2-H1 se pruebe también sin botón (reconciliación);
+   - que la prueba `:942` se invierta;
+   - que B2-H3 se recorte en servidor.
+8. **Hallazgo para `state.md`**: el ADR-049 y el ADR-032 dan por existente una capa de exportación cifrada que no está en el esquema ni en el plan.
