@@ -68,6 +68,11 @@ export type ModeloDeNota = {
    * ni las reservadas, ni el testigo viajan.
    */
   borradorOculto: boolean;
+  /**
+   * El lector solo ve las versiones conjuntas (B0-H2): coprofesional que no es autor ni
+   * profesional asignado. La pantalla no debe sugerir que existan versiones individuales.
+   */
+  lecturaConjunta: boolean;
   versiones: VersionDeVista[];
   candidatosCoprofesional: { id: string; nombre: string }[];
   puedeSerConjunta: boolean;
@@ -291,7 +296,8 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
   // lee; el coprofesional del episodio solo si el autor lo nombró coprofesional de la nota, que
   // es la señal de que la quiere conjunta. Cualquier otro lector sabe que existe y nada más.
   let puedeLeerBorrador = soyAutor;
-  if (!soyAutor && hayBorrador) {
+  let lecturaConjunta = false;
+  if (!soyAutor) {
     const { data: asignado, error: errorAsignado } = await supabase.rpc('es_profesional_asignado', {
       p_paciente_id: cab.paciente_id,
     });
@@ -301,6 +307,8 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
       return { ok: false };
     }
     puedeLeerBorrador = asignado === true || cab.coprofesional_id === usuario.id;
+    // Quien no es autor ni asignado solo lee lo que RLS le deja: las versiones conjuntas.
+    lecturaConjunta = asignado !== true;
   }
 
   // Candidatos a coprofesional: la misma regla que el disparador de T-034, que es quien manda.
@@ -380,6 +388,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
         : null,
     },
     borradorOculto: hayBorrador && !puedeLeerBorrador,
+    lecturaConjunta,
     borrador:
       hayBorrador && puedeLeerBorrador && cab.borrador_actualizado_en && parseado?.success
         ? {

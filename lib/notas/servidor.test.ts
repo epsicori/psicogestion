@@ -1412,6 +1412,21 @@ describe('abrirEditorDeNota · el borrador de otro autor llega, para leerlo, sol
     expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
   });
 
+  it('B0-H2 · quien solo lee como coprofesional: lecturaConjunta true; asignado y autor: false', async () => {
+    const copro = abrir({ autor_id: B, coprofesional_id: A }, true, false);
+    expect(await abrirEditorDeNota(copro.sesion, porNota, CONTEXTO)).toMatchObject({
+      nota: { lecturaConjunta: true },
+    });
+    const asignado = abrir({ autor_id: B }, true, true);
+    expect(await abrirEditorDeNota(asignado.sesion, porNota, CONTEXTO)).toMatchObject({
+      nota: { lecturaConjunta: false },
+    });
+    const autor = abrir({ autor_id: A }, true, false);
+    expect(await abrirEditorDeNota(autor.sesion, porNota, CONTEXTO)).toMatchObject({
+      nota: { lecturaConjunta: false },
+    });
+  });
+
   it('B0-H3 · sin borrador no hay nada que ocultar: borradorOculto false', async () => {
     const { sesion } = abrir({ autor_id: B, borrador_contenido: null, borrador_actualizado_en: null }, true);
     const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);

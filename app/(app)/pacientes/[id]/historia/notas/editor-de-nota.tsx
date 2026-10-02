@@ -795,6 +795,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
           estado={modelo.estado}
           versiones={modelo.versiones}
           vigente={vigente}
+          lecturaConjunta={modelo.lecturaConjunta}
           refTitulo={refVigente}
         />
       )}
@@ -970,18 +971,20 @@ function VistaVigente({
   estado,
   versiones,
   vigente,
+  lecturaConjunta,
   refTitulo,
 }: {
   estado: ModeloDeNota['estado'];
   versiones: VersionDeVista[];
   vigente: VersionDeVista;
+  lecturaConjunta: boolean;
   refTitulo: React.RefObject<HTMLHeadingElement | null>;
 }) {
   const idTitulo = useId();
   return (
     <section aria-labelledby={idTitulo} className="flex flex-col gap-3">
       <h2 id={idTitulo} ref={refTitulo} tabIndex={-1} className="font-serif text-lg outline-none">
-        {t('notas.editor.vigente')}
+        {t(lecturaConjunta ? 'notas.editor.ultimaConjunta' : 'notas.editor.vigente')}
       </h2>
       <div className="flex flex-wrap items-center gap-2">
         <PildoraDeEstado estado={estado} />
@@ -996,7 +999,10 @@ function VistaVigente({
           <p className="text-sm whitespace-pre-wrap">{vigente.reservadas}</p>
         </div>
       )}
-      <ol className="divide-border divide-y">
+      <ol
+        aria-label={lecturaConjunta ? t('notas.editor.versionesConjuntas') : undefined}
+        className="divide-border divide-y"
+      >
         {[...versiones].reverse().map((v) => (
           <FilaDeVersion
             key={v.numero}
@@ -1007,7 +1013,7 @@ function VistaVigente({
             conjunta={v.alcance === 'conjunta'}
             sello={v.sello}
             huellaCorta={v.huellaCorta}
-            vigente={v.numero === vigente.numero}
+            vigente={!lecturaConjunta && v.numero === vigente.numero}
           />
         ))}
       </ol>

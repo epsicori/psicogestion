@@ -38,6 +38,7 @@ function modelo(extra: Partial<ModeloDeNota> = {}): ModeloDeNota {
     cabecera: { fechaSesion: '1 de octubre', horario: null, episodio: 'Individual', coprofesional: null },
     borrador: { texto: 'Texto base', reservadas: '', testigo: 'T0' },
     borradorOculto: false,
+    lecturaConjunta: false,
     versiones: [],
     candidatosCoprofesional: [],
     puedeSerConjunta: false,
@@ -773,6 +774,28 @@ describe('EditorDeNota', () => {
       expect(firmado.compareDocumentPosition(ajeno) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       await avanzar(10_000);
       expect(guardarBorrador).not.toHaveBeenCalled();
+    });
+
+    it('B0-H2 · quien solo lee como coprofesional ve «Última versión conjunta» y ninguna pista de versiones individuales', async () => {
+      await montar(
+        modelo({
+          soyAutor: false,
+          estado: 'modificada',
+          borrador: null,
+          lecturaConjunta: true,
+          versiones: [version(1, { alcance: 'conjunta' }), version(2, { alcance: 'conjunta' })],
+        }),
+      );
+      expect(screen.getByRole('heading', { name: 'Última versión conjunta' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Versión vigente' })).toBeNull();
+      expect(screen.getByRole('list', { name: 'Versiones conjuntas' })).toBeInTheDocument();
+      expect(screen.queryByText('vigente')).toBeNull();
+    });
+
+    it('B0-H2 · el autor y el profesional asignado siguen viendo «Versión vigente»', async () => {
+      await montar(modelo({ soyAutor: false, estado: 'firmada', borrador: null, versiones: [version(1)] }));
+      expect(screen.getByRole('heading', { name: 'Versión vigente' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Última versión conjunta' })).toBeNull();
     });
 
     it('B0-H3 · borrador ajeno que no puede leer: solo «Hay un borrador en curso», sin texto ni controles', async () => {

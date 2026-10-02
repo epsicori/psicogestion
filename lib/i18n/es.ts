@@ -555,6 +555,8 @@ export const es = {
       nota: 'Nota',
       reservadas: 'Anotaciones reservadas',
       vigente: 'Versión vigente',
+      ultimaConjunta: 'Última versión conjunta',
+      versionesConjuntas: 'Versiones conjuntas',
       guardado: 'Guardado',
       guardando: 'Guardando…',
       sinGuardar: 'Sin guardar',
