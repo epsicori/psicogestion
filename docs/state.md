@@ -18,7 +18,8 @@
 - **T-012 corte A** (base, acciones, banco 20, guion): implementador en la rama `T-012-corte-a`.
   Territorio del diseño §6 ya en el frontmatter. Piezas P1-P8 de MiniMax para el corte B en
   `minimax/respuestas` y `minimax/correcciones/T-012/`. Aviso: `scripts/t012-nota.ts` no es idempotente.
-- **T-036** (firma cotejada, prioridad alta): arquitecto escribiendo `tickets/T-036/diseno.md`.
+- **T-036** (firma cotejada, prioridad alta): diseño hecho (`b4d4527`); espera a T-012 en `main`
+  (gate §0.B). Preguntas (a)-(c) del diseño al propietario. Diseños de T-037 y T-028 en marcha.
 - **Worktrees de T-014** por quitar: `agent-a5cb7c…`, `agent-a09e76…`, `../Psicogestion-T014a`
   (integrados). `agent-a08093…` (`T-014-correcciones`) está superado por `main` y no queda nada que
   rescatar; **su `node_modules` es junction**: `cmd /c rmdir` antes de `git worktree remove`.
