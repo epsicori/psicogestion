@@ -507,6 +507,7 @@ export const es = {
       enSesion: 'Escrita durante la sesión del {fecha} · {desde}–{hasta}',
       fueraDeSesion: 'Escrita fuera de la sesión del {fecha} · {desde}–{hasta}',
       sinCita: 'Escrita el {fecha} · {desde}–{hasta}',
+      sinCitaVariosDias: 'Escrita entre el {desde} y el {hasta}',
       ilegible: 'Sello no legible',
     },
     // La etiqueta del episodio en la cabecera de la nota y en el selector «¿en cuál?».

@@ -74,8 +74,12 @@ export function fraseDelSello(s: SelloLeido | null, zona: string): string {
     ? hora(s.firmadaEn, zona)
     : `${fechaCorta(diaFirmada, conAnio)} ${hora(s.firmadaEn, zona)}`;
 
+  // R2-H12: sin cita y con abierta/firmada en días distintos, «Escrita el {fecha}» afirmaría un
+  // solo día; lo que prueba el sobre es un intervalo.
   const clave = !conCita
-    ? 'notas.sello.sinCita'
+    ? diaAbierta === diaFirmada
+      ? 'notas.sello.sinCita'
+      : 'notas.sello.sinCitaVariosDias'
     : s.redactadaEnSesion
       ? 'notas.sello.enSesion'
       : 'notas.sello.fueraDeSesion';
