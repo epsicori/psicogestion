@@ -69,14 +69,19 @@ async function principal() {
       { encoding: 'utf8' },
     ).trim();
   }
-  /** Una sentencia que DEBE fallar: devuelve el mensaje de error, o falla el guion si no falló. */
-  function sqlFalla(consulta: string): string {
+  /**
+   * Una sentencia que DEBE fallar POR EL MOTIVO ESPERADO (R2-H10): `motivo` es un fragmento del
+   * mensaje de error. Sin él, cualquier error (una errata en el SQL, un permiso ajeno) pasaría por
+   * la guarda. Devuelve el mensaje, o falla el guion.
+   */
+  function sqlFalla(consulta: string, motivo: RegExp): string {
     const r = spawnSync(
       'docker',
       ['exec', '-i', contenedor, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-At', '-c', consulta],
       { encoding: 'utf8' },
     );
     assert(r.status !== 0, `debía fallar y no falló: ${consulta}`);
+    assert(motivo.test(`${r.stderr}`), `falló por otro motivo (esperaba ${motivo}): ${r.stderr}`);
     return `${r.stderr}`;
   }
 
@@ -187,11 +192,13 @@ async function principal() {
   );
   console.log('✓ criterio 3a · cita en curso: redactada_en_sesion = true, y invertirlo cambia la huella');
 
+  // Tres capas: el REVOKE (permission denied) y los disparadores de fila y de sentencia (solo adición).
+  const SOLO_ADICION = /permission denied for table notas_clinicas_versiones|notas_clinicas_versiones es de solo adición/;
   // Criterio 4: sobre la fila firmada no se puede UPDATE, DELETE ni TRUNCATE ni como postgres.
   const huellaV1 = fila(1, `encode(huella, 'hex')`);
-  sqlFalla(`update public.notas_clinicas_versiones set cuerpo = '{"texto":"otro"}' where nota_id = '${notaId}' and numero_version = 1`);
-  sqlFalla(`delete from public.notas_clinicas_versiones where nota_id = '${notaId}' and numero_version = 1`);
-  sqlFalla(`truncate public.notas_clinicas_versiones`);
+  sqlFalla(`update public.notas_clinicas_versiones set cuerpo = '{"texto":"otro"}' where nota_id = '${notaId}' and numero_version = 1`, SOLO_ADICION);
+  sqlFalla(`delete from public.notas_clinicas_versiones where nota_id = '${notaId}' and numero_version = 1`, SOLO_ADICION);
+  sqlFalla(`truncate public.notas_clinicas_versiones`, SOLO_ADICION);
   assert(fila(1, `encode(huella, 'hex')`) === huellaV1, 'la v1 cambió tras los intentos de modificarla');
   console.log('✓ criterio 4 · update, delete y truncate de la v1 fallan, también como postgres, y la fila no cambió');
 
@@ -275,6 +282,25 @@ async function principal() {
   ).split('|');
   assert(estadoAlerta === 'resuelta' && resueltaEn === 't', `la alerta de ayer debía quedar resuelta con resuelta_en (estado=${estadoAlerta})`);
   console.log('✓ criterio A · al firmar, la alerta nota_sin_firmar de su cita queda resuelta con resuelta_en');
+
+  // R2-H11: firmar una v2 no vuelve a resolver la alerta ya resuelta (resuelta_en no se mueve).
+  const consultaResuelta = `select resuelta_en::text from public.alertas_documentacion where origen_tabla = 'citas' and origen_id = '${citaAyer}' and tipo = 'nota_sin_firmar'`;
+  const resueltaAntes = sql(consultaResuelta);
+  assert(resueltaAntes !== '', 'la alerta de ayer debía tener resuelta_en antes de la v2');
+  const mAyer = await empezarModificacion(sesion, { pacienteId: paciente, notaId: notaAyer });
+  assert(mAyer.ok && mAyer.nota?.borrador, `empezarModificacion ayer: ${JSON.stringify(mAyer)}`);
+  const gAyer2 = await guardarBorrador(sesion, {
+    pacienteId: paciente,
+    notaId: notaAyer,
+    testigo: mAyer.nota.borrador.testigo,
+    texto: 'Nota de ayer, ampliada.',
+    reservadas: '',
+  });
+  assert(gAyer2.ok, `guardarBorrador ayer v2: ${JSON.stringify(gAyer2)}`);
+  const fAyer2 = await firmarNota(sesion, { pacienteId: paciente, notaId: notaAyer, testigo: gAyer2.testigo, alcance: 'individual', motivo: 'Ampliación' });
+  assert(fAyer2.ok, `firmarNota ayer v2: ${JSON.stringify(fAyer2)}`);
+  assert(sql(consultaResuelta) === resueltaAntes, 'firmar la v2 movió resuelta_en de una alerta ya resuelta');
+  console.log('✓ R2-H11 · firmar una v2 deja intacto el resuelta_en de la alerta ya resuelta');
 
   console.log('\n✓ T-012 corte A: todos los pasos del guion pasaron');
 }
