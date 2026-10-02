@@ -416,8 +416,8 @@ describe('EditorDeNota', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(cuerpo().value).toBe('Texto base');
       expect(cuerpo().readOnly).toBe(true);
-      const aviso = screen.getByText(/La nota ha cambiado desde otro sitio/);
-      expect(document.activeElement?.contains(aviso)).toBe(true);
+      // El foco va a un control con rol y nombre, no a un contenedor anónimo (B0-H6).
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cargar lo guardado' }));
 
       fireEvent.change(cuerpo(), { target: { value: 'Tecleo tras el conflicto' } });
       fireEvent.blur(cuerpo());
@@ -820,6 +820,54 @@ describe('EditorDeNota', () => {
       expect(screen.getByText('Su autor tiene cambios sin firmar.')).toBeInTheDocument();
       expect(screen.getByText('Texto base')).toBeInTheDocument();
       expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+    });
+  });
+
+  describe('foco al reemplazarse la vista (B0-H1, B0-H6)', () => {
+    const titulo = () => screen.getByRole('heading', { name: 'Esta historia está cerrada' });
+
+    it('el reloj caduca: el foco va al encabezado de «Esta historia está cerrada» y el aviso está en una región viva', async () => {
+      await montar(modelo(), enMinutos(1));
+      cuerpo().focus();
+      await avanzar(60_000);
+      expect(document.activeElement).toBe(titulo());
+      expect(screen.getByRole('status')).toHaveTextContent(/La historia se ha cerrado sola/);
+    });
+
+    it('un guardado «bloqueada» lleva el foco al encabezado', async () => {
+      guardarBorrador.mockResolvedValue({ ok: false, motivo: 'bloqueada' });
+      await montar();
+      escribir('Secreto');
+      cuerpo().focus();
+      await avanzar(3000);
+      expect(document.activeElement).toBe(titulo());
+    });
+
+    it('firmar y recibir «bloqueada» lleva el foco al encabezado', async () => {
+      firmarNota.mockResolvedValue({ ok: false, motivo: 'bloqueada' });
+      await montar();
+      const dialogo = await abrirDialogoDeFirma();
+      await confirmar(dialogo);
+      expect(document.activeElement).toBe(titulo());
+    });
+
+    it('la firma que sale bien pero no trae la nota lleva el foco al botón «Recargar»', async () => {
+      firmarNota.mockResolvedValue({ ok: true, nota: null, caducaEn: null });
+      await montar();
+      const dialogo = await abrirDialogoDeFirma();
+      await confirmar(dialogo);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Recargar' }));
+    });
+
+    it('«Abrir el editor» con el candado cerrado lleva el foco al campo del PIN', async () => {
+      abrirEditorDeNota.mockResolvedValue({ estado: 'bloqueada' });
+      render(<EditorDeNota pacienteId={PACIENTE} citaId={CITA} notaId={null} />);
+      const abrirBoton = screen.getByRole('button', { name: 'Abrir el editor' });
+      abrirBoton.focus();
+      fireEvent.click(abrirBoton);
+      await vaciar();
+      expect(document.activeElement).toBe(screen.getByLabelText('PIN'));
     });
   });
 

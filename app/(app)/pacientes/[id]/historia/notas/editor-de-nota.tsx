@@ -115,7 +115,8 @@ type Estado =
   | { fase: 'sin_acceso' }
   | { fase: 'no_disponible' }
   | { fase: 'error' }
-  | { fase: 'bloqueada'; mensaje: MensajeDeBloqueo }
+  /** `enfocar`: adónde va el foco al aparecer la vista (nunca se queda en `body`). */
+  | { fase: 'bloqueada'; mensaje: MensajeDeBloqueo; enfocar: 'pin' | 'titulo' }
   | { fase: 'elegir_episodio'; episodios: { id: string; etiqueta: string }[] }
   | Abierta;
 
@@ -163,7 +164,7 @@ function reducir(estado: Estado, accion: Accion): Estado {
       return { fase: 'cargando' };
     case 'cerrada':
       // Vacía modelo, texto y reservadas: lo que ya no se puede leer no se queda en memoria.
-      return { fase: 'bloqueada', mensaje: accion.mensaje };
+      return { fase: 'bloqueada', mensaje: accion.mensaje, enfocar: 'titulo' };
     case 'apertura': {
       const r = accion.resultado;
       switch (r.estado) {
@@ -174,7 +175,7 @@ function reducir(estado: Estado, accion: Accion): Estado {
           // se pintara el formulario, el usuario entraría en bucle (B.2.1).
           return accion.trasPin
             ? { fase: 'sin_acceso' }
-            : { fase: 'bloqueada', mensaje: 'ficha.historiaBloqueadaExplicacion' };
+            : { fase: 'bloqueada', mensaje: 'ficha.historiaBloqueadaExplicacion', enfocar: 'pin' };
         case 'elegir_episodio':
           return { fase: 'elegir_episodio', episodios: r.episodios };
         case 'no_disponible':
@@ -333,6 +334,9 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
   const abriendo = useRef(false);
   const enVuelo = useRef(false);
   const refConflicto = useRef<HTMLDivElement>(null);
+  const refAviso = useRef<HTMLDivElement>(null);
+  const refBloqueada = useRef<HTMLDivElement>(null);
+  const refTituloBloqueada = useRef<HTMLHeadingElement>(null);
   const refVigente = useRef<HTMLHeadingElement>(null);
 
   const abierta = estado.fase === 'abierta' ? estado : null;
@@ -462,10 +466,22 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
 
   // ---- foco -----------------------------------------------------------------------------
 
+  // Una vista que reemplaza a otra no deja el foco en `body`: va a un control con rol y nombre.
   const conflicto = abierta?.conflicto ?? false;
   useEffect(() => {
-    if (conflicto) refConflicto.current?.focus();
+    if (conflicto) refConflicto.current?.querySelector('button')?.focus();
   }, [conflicto]);
+
+  const firmadaSinRecargar = abierta?.aviso === 'firmadaSinRecargar';
+  useEffect(() => {
+    if (firmadaSinRecargar) refAviso.current?.querySelector('button')?.focus();
+  }, [firmadaSinRecargar]);
+
+  const enfocarBloqueada = estado.fase === 'bloqueada' ? estado.enfocar : null;
+  useEffect(() => {
+    if (enfocarBloqueada === 'pin') refBloqueada.current?.querySelector('input')?.focus();
+    else if (enfocarBloqueada === 'titulo') refTituloBloqueada.current?.focus();
+  }, [enfocarBloqueada]);
 
   const enfoqueVigente = abierta?.enfoqueVigente ?? 0;
   useEffect(() => {
@@ -630,12 +646,24 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
   if (estado.fase === 'bloqueada') {
     return (
       <Contenedor>
-        <div className="border-border bg-card flex flex-col items-center gap-3 rounded-xl border px-6 py-12 text-center">
+        <div
+          ref={refBloqueada}
+          className="border-border bg-card flex flex-col items-center gap-3 rounded-xl border px-6 py-12 text-center"
+        >
           <span className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-full">
             <Lock className="size-5" aria-hidden="true" />
           </span>
-          <p className="font-serif text-lg font-semibold">{t('ficha.historiaBloqueada')}</p>
-          <p className="text-muted-foreground max-w-sm text-sm">{t(estado.mensaje)}</p>
+          <h2
+            ref={refTituloBloqueada}
+            tabIndex={-1}
+            aria-describedby="mensaje-bloqueada"
+            className="font-serif text-lg font-semibold outline-none"
+          >
+            {t('ficha.historiaBloqueada')}
+          </h2>
+          <p id="mensaje-bloqueada" role="status" className="text-muted-foreground max-w-sm text-sm">
+            {t(estado.mensaje)}
+          </p>
           <div className="mt-2 w-full">
             <FormularioPinHistoria alAbrirse={() => void abrir({ trasPin: true })} />
           </div>
@@ -742,6 +770,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
       )}
 
       {estado.aviso !== null && (
+        <div ref={refAviso}>
         <AvisoDeError
           mensaje={t(AVISOS[estado.aviso])}
           accion={
@@ -754,6 +783,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
             ) : undefined
           }
         />
+        </div>
       )}
 
       {!modelo.soyAutor && (
