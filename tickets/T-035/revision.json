@@ -1,0 +1,32 @@
+{
+  "ticket": "T-035",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261004120000_centro_congelado_y_coprofesional.sql",
+      "linea": 133,
+      "descripcion": "7b' es lista cerrada (is distinct from 'activo') pero estado_perfil tiene tres valores: el mensaje dice 'está de baja' y 19.57c solo prueba baja; el mutante negativo v_estado = 'baja' sobrevive al banco.",
+      "escenario": "Coprofesional con estado 'suspendido' -> 23514 con el texto falso 'está de baja'; si alguien cambia la condición a v_estado = 'baja', el banco sigue verde y un perfil suspendido entra como coprofesional y se sella en la cadena."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "docs/architecture.md",
+      "linea": 390,
+      "descripcion": "La arquitectura afirma sin condición que el director administrativo no entra como coprofesional; la base solo lo garantiza si el ADR-065 lo guarda como valor nuevo del enum.",
+      "escenario": "El ticket del ADR-065 guarda al director administrativo como marca con rol='administrador' -> 19.63 no salta, la arquitectura dice que ya está fuera, nadie toca 7b y entra como coprofesional."
+    },
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/19-nota-en-episodio.sql",
+      "linea": 791,
+      "descripcion": "La coterapia simétrica solo existe en el banco: el administrador no tiene filas en perfiles_centros en ninguna instalación que la aplicación pueda crear, así que 7c lo rechaza y el selector no lo ofrece; el objetivo del ADR-073.2 no llega al producto.",
+      "escenario": "Siembra de demo (seed.sql: «el administrador NO lleva centro») o administrador invitado desde /ajustes/invitar (el formulario limpia centroId para todo rol que no sea técnico, y ninguna ruta de app/ escribe perfiles_centros). Ana abre una nota en un episodio de Madrid: candidatosCoprofesional no trae a Álvaro (lib/notas/servidor.ts lee perfiles_centros con hasta is null); forzado con fijarCoprofesional → 23514 «no tiene alta en el centro del episodio» → coprofesional_invalido. En sentido contrario, Álvaro (episodio abierto por su cita en Madrid) sí puede nombrar a Ana. La asimetría que el ADR-073 acepta «hasta que T-035 se integre» sigue igual tras integrarlo; 19.56 y 19.57 pasan porque el banco inserta (ADM, C35E) como postgres. No es de seguridad: decide el propietario (dar altas de centro al director sanitario por la interfaz o la siembra, o que 7c lo trate de otro modo) y se anota en docs/state.md §Hallazgos."
+    }
+  ]
+}

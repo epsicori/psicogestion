@@ -1,0 +1,13 @@
+{
+  "ticket": "T-035",
+  "resumen": "Los 6 criterios pasan en HEAD 410046e. Las 5 mutaciones ponen rojo el banco 19. Migraciones aplican en orden sobre main (main solo difiere en docs/tickets; ninguna migración nueva).",
+  "criterios": [
+    {"id": 1, "veredicto": "PASA", "comando": "npx supabase db reset; npm run seed", "evidencia": "Applying migration 20261004120000_centro_congelado_y_coprofesional.sql... Finished supabase db reset; seed: completado (exit 0). Última migración de main es 20261003, la de la rama 20261004: orden correcto."},
+    {"id": 2, "veredicto": "PASA", "comando": "npm run test:rls (exit 0) + 5 mutaciones aplicadas con psql y restauradas", "evidencia": "Exit 0; OK 19.56-19.63 (19.58 técnico 23514, 19.59 admin sin alta 23514, 19.60a/b/c/d 42501 incl. postgres, 19.61 gemelas, 19.62, 19.63). Mutaciones, todas exit 3: sin centro_id en el when del disparador -> 'ASERCIÓN FALLIDA 19.60a'; 7b desactivado -> falla 19.35 (el banco para en la primera rota; 19.58 va detrás); 7c desactivado -> falla 19.36 (19.59 detrás); 7b' activo desactivado -> falla 19.57c; congelación entera desactivada -> falla 19.28."},
+    {"id": 3, "veredicto": "PASA", "comando": "npm run test:rls", "evidencia": "OK: 19.56 La nota de PRO1 con ADM (administrador, alta en C35E) como coprofesional entra; OK: 19.57 La nota de ADM con PRO1 como coprofesional entra."},
+    {"id": 4, "veredicto": "PASA", "comando": "npm run test:rls", "evidencia": "OK (lanzó 42501 'y su centro no cambian'): 19.60a valor a otro valor, 19.60b a nulo, 19.60c como postgres, 19.60d nulo a valor; OK 19.61 Gemela: un episodio SIN notas sí cambia de centro; 19.61b mismo centro con notas pasa."},
+    {"id": 5, "veredicto": "PASA", "comando": "git diff main...HEAD -- supabase | grep -iE 'create policy|alter policy'", "evidencia": "Sin coincidencias."},
+    {"id": 6, "veredicto": "PASA", "comando": "npm run tipos; lint:migraciones; npm test; npm run lint; npx next build --webpack; verificar:huellas; territorio.mjs T-035", "evidencia": "tipos: sin diff de contenido (solo aviso LF/CRLF); lint:migraciones 22 limpias; npm test 108 ficheros / 1316 tests pasan; lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts); build exit 0; verificar:huellas cadena íntegra, cero anomalías; territorio: 6 ficheros dentro del territorio."}
+  ],
+  "regresiones": []
+}
