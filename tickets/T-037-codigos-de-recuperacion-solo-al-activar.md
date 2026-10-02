@@ -6,7 +6,7 @@ riesgo: alto
 fase: 1
 prioridad: media
 depende_de: [T-033]
-estado: pendiente
+estado: hecho
 territorio:
   - app/primera-vez/**
   - lib/cuentas/**

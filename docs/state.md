@@ -3,33 +3,29 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 02-10-2026 · T-028 corte A integrado; T-037 en ronda de arreglos; T-036 diseño listo
+**Actualizado**: 02-10-2026 · T-037 integrado; T-036 en implementación
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-014, T-011b, T-012b, T-012c, T-012 corte A, **T-028 corte A**,
+- **Integrado en `main`**: T-000–T-014, T-011b, T-012b, T-012c, T-012 corte A, T-028 corte A, **T-037**,
   T-016–T-020, T-029–T-034. Autenticación, ficha cifrada, series, dinero, toda nota en episodio (era 4), calendario,
   y la nota clínica en servidor: borrador, firma sellada y encadenada, resolución de la alerta.
-- `main` (02-10, a7a5628): `npm test` 1308/1308; en 44d6d67: lint 0 errores, build, `db reset` + `seed` +
+- `main` (02-10, d27aff3): `npm test` 1315/1315; en 44d6d67: lint 0 errores, build, `db reset` + `seed` +
   `test:rls` (20 suites, 846 OK) y playwright 7/7 (`SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo`, `--workers=1`).
 
 ## En curso
 
 - **T-012 cortes B y C**: B = pantalla (P1-P8 de MiniMax en `minimax/`) con R4-H1 y R4-H2 dentro; C después.
-- **T-036**: diseño enmendado (E.0-E.15, e02a4fd): cotejo del contenido firmado con el borrador bajo el
-  cerrojo (6.24, 23514). Falta implementador; primero en la cola de `supabase/`. R4-H1 no es suyo (corte B de T-012).
-- **T-037**: verificado y revisado (0/1/3). Ronda 1 en implementación: A-H1 MEDIA (si `generarCodigos` falla al
-  activar, el aviso se borra con el refresco), B-H1 su prueba, A-H2 `localizarContenedor` toma el primer
-  `supabase_db_*` (hay `cinfa-e2e` levantado). A-H3 → ticket «regenerar mis códigos» (avisar al titular).
+- **T-036**: en implementación (worktree propio; tiene la BD en exclusiva). Diseño E.0-E.15 (e02a4fd):
+  cotejo del contenido firmado con el borrador bajo el cerrojo (6.24, 23514). R4-H1 es del corte B de T-012.
 - **T-028** cortes B y C tras **T-028a** (contrato escrito; cierra H16, H23, H24). Al corte B: E15.3
   (`order desc limit 6` y su prueba), `hoy` inválido lanza → `agenda.alta.sugerencias.error` sin tumbar el
   render; H8 y H9 (BAJA, pruebas: recorte tras ordenar con > 6 desordenadas; día y hora sobre todas las pasadas).
 - **Tickets por escribir**: cita↔episodio y presencial/online (ADR-075); «regenerar mis códigos»
-  (T-037 P-1); auditoría alineada con la matriz (H25); Ajustes › Tipos de terapia (catálogo vacío).
+  (T-037 P-1, con A-H3, R2-H3, R3-H1, R3-H2: `docs/bitacora/T-037.md`); auditoría alineada con la matriz (H25); Ajustes › Tipos de terapia (catálogo vacío).
 - **Worktrees por quitar** (integrados; **`node_modules` junction**: `cmd /c rmdir` antes de
   `git worktree remove`): de T-014 `agent-a5cb7c…`, `agent-a09e76…`, `agent-a08093…`,
-  `../Psicogestion-T014a`; de T-012 `agent-aff9f2…`, `agent-a2f34b…`, `agent-a76728…`, `agent-a83fae…`;
-  de T-037 `agent-ac45cb…` (tras integrar).
+  `../Psicogestion-T014a`; de T-012 `agent-aff9f2…`, `agent-a2f34b…`, `agent-a76728…`, `agent-a83fae…`.
 
 ## Bloqueos
 
@@ -39,7 +35,7 @@
 ## Siguiente paso
 
 1. `supabase/` en orden, nunca dos a la vez: T-036 → T-035 → T-028a → cita↔episodio (ADR-075).
-2. T-012 corte B (arquitecto decide R4-H1 antes). Sin `supabase/`: integrar T-037; luego T-015, T-011c.
+2. T-012 corte B (arquitecto decide R4-H1 antes). Sin `supabase/`: T-015, T-011c.
 
 ## Hallazgos anotados (abiertos)
 
@@ -75,5 +71,7 @@
 - **H25** (T-028a Q1): el técnico lee el tipo de citas ajenas en sus filas de `auditoria` al reprogramar.
 - **CI nunca ha corrido** (`actions/runs` = 0); a `ci.yml` le faltan `NEXT_PUBLIC_SUPABASE_*` y
   `SEGUNDO_FACTOR_AUTOMATICO_LOCAL`. Sin ticket. `app/layout.tsx(45,50)` `LayoutProps` sin build previo en `tsc`.
+- **R2-H4 (T-037)**: `seed.mjs:29`, `test-huellas.mjs:19` toman el primer `supabase_db_*` (hay `cinfa-e2e`);
+  usar `contenedorDelProyecto()`. `acceso.spec.ts:138` falla ~1 de 4 en `test:a11y` en paralelo. Sin ticket.
 - **Memoria desfasada**: `docs/interfaz.md:67` dice «Lista y alta, sin ficha» y `/pacientes/[id]` existe.
 - Anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md`.
