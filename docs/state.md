@@ -3,7 +3,7 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 02-10-2026 · T-012 cerrado (corte C integrado); T-040 corte A en revisión ronda 2; T-015 a implementar
+**Actualizado**: 03-10-2026 · pausa del propietario. T-040 A pendiente de revisión ronda 3; T-015 a medias
 
 ## Dónde estamos
 
@@ -14,11 +14,16 @@
 
 ## En curso
 
-- **T-040 corte A** (`worktree-agent-a57d63ed182caa785`, b483b47; sin base): evidencia sellada (2a6daaf), ronda 1
-  0/4/9 corregida; revisión ronda 2 en marcha. Corte B (migración `20261009`, banco 24, `servidor.ts`, interfaz) en
-  su turno de la cola. Al corte B: `exportada_por = {nombre_completo, rol}`; la contraseña se cuenta en puntos de
-  código (`[...s.normalize('NFC')].length`) también en la interfaz; Edge y Firefox en C7.
-- **T-015** (avisos y escalado): diseño cerrado (P1, P4 del propietario). Siguiente en la cola de `supabase/`.
+- **T-040 corte A**: rama buena `worktree-agent-a3bc1f4d1b3e8ee02` (f8990c2, sobre b483b47), con R2-H1..H5 arreglados
+  (1626 tests, Playwright `marca-de-agua.spec.ts` 5/5 con `PUERTO=3101`). Revisión ronda 2 sellada (0/1/4). **Falta**:
+  revisión ronda 3 (diff `b483b47..f8990c2`; se paró sin escribir) → integrar. El worktree `a57d63ed…` (b483b47) sobra
+  tras integrar. Corte B (migración `20261009`, banco 24): `exportada_por = {nombre_completo, rol}`; contraseña en
+  puntos de código también en la interfaz; Edge y Firefox en C7. `territorio.mjs` no ve el §6 del diseño.
+- **T-015** (avisos y escalado): implementación **parada a medias** en `worktree-agent-ac7685e49ee4b37ec` (8cdd524:
+  migración + banco 22, funciones y lecturas, agenda y catálogo). Sin commitear allí: `lib/agenda/avisos*`,
+  `lib/citas/avisos.ts`, `aviso-sesion.tsx` y su prueba. Falta el armazón (campana, franja, aviso-notas) y el cierre.
+  Reanudar con implementador nuevo (memoria `reanudar-ticket-interrumpido`). **Antes: `db reset` + `seed`** (la base
+  puede tener la migración aplicada).
 - **T-039**: diseño cerrado. Precondición: T-028a integrado (hecho) y su §0 re-comprobado.
 - **T-028** cortes B y C, ya desbloqueados. Al corte B: E15.3 (`order desc limit 6` y su prueba), `hoy` inválido →
   `agenda.alta.sugerencias.error`; H8 y H9; previsualizar no recibe `p_excluir` ni `p_fin_el` (decidir); cero
@@ -33,7 +38,7 @@
 
 ## Siguiente paso
 
-1. Revisión ronda 2 de T-040 A → integrar el corte A.
+1. Revisión ronda 3 de T-040 A → integrar el corte A. Reanudar T-015.
 2. `supabase/` en orden, nunca dos a la vez: T-015 → T-039 → T-038 → T-040 B → T-041 (si migra) → T-028 B.
 3. Al implementador de T-038: reutilizar las etiquetas `notificaciones.tipos.*`.
 
