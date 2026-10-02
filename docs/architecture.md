@@ -96,7 +96,18 @@ mismo juego de cerrojos abriría interbloqueos nuevos. `esquema_version = 4` des
 (ADR-046 abrió la 2; versión 1 nunca existió). Antes de nada (paso 0) el disparador exige
 que quien firma como `authenticated` sea el autor de la nota y tenga la historia
 desbloqueada; cualquier otro caso —nota ajena, inexistente, sobre incoherente,
-conjunta— recibe el mismo 42501, sin pistas sobre si la nota existe ni de quién es. El verificador, `verificar_cadena_huellas(uuid)`, vive
+conjunta— recibe el mismo 42501, sin pistas sobre si la nota existe ni de quién es.
+Desde T-036 el disparador añade 6.17-6.24 (23514). La 6.19 (`cita_id` del sobre = el de la
+cabecera) vale para todos los roles. El resto va en la guarda P1, solo para
+`authenticated`/`anon` (la firma de `postgres`, que es la del importador y la de las pruebas,
+queda exenta): 6.17 exige borrador vivo; 6.24 coteja texto y reservadas, en NFC, con el
+borrador vigente releído bajo el cerrojo de la cabecera (R2-H1: guardar mientras se firma);
+6.18 coteja `abierta_en` con la apertura del borrador; 6.20 acota `creada_en` a ±1 minuto del
+reloj de la base. Con cita, 6.21 (solo en la v1), 6.22 (margen) y 6.23 (`redactada_en_sesion`).
+Ningún mensaje de 6.17-6.24 contiene la palabra `abierta_en`: `firmarNota` traduce a error
+los 23514 que la llevan y el resto a conflicto reintentable. El verificador no recalcula
+`redactada_en_sesion` ni coteja `abierta_en` con el borrador: la cita se reprograma (ADR-046)
+y el borrador se vacía al firmar, así que ambos darían falsos positivos. El verificador, `verificar_cadena_huellas(uuid)`, vive
 en SQL y no en Node —para que reserializar el objeto sea imposible por construcción, no
 solo por disciplina— y no se concede a `authenticated`. Desde T-012b también coteja, por
 valor y sin reserializar, las columnas que el sobre repite (`alcance`, `autor_id`,
@@ -104,7 +115,8 @@ valor y sin reserializar, las columnas que el sobre repite (`alcance`, `autor_id
 la fila que las guarda, con motivo `sobre_no_coincide_con_fila` (ADR-057): así se detecta
 un `update` con los cerrojos levantados que cambie una de ellas sin tocar el sobre. Desde
 T-012c coteja además `nota_id` y `paciente_id` con la fila, y `paciente_id`, `episodio_id`,
-`autor_id`, `fecha_sesion` y `coprofesional_id` con la **cabecera** de `notas_clinicas`.
+`autor_id`, `fecha_sesion` y `coprofesional_id` con la **cabecera** de `notas_clinicas`;
+desde T-036 también `cita_id` (6.19).
 Fuera del cotejo queda `numero_version`, sin decisión. Y sigue sin cubrir la reescritura completa de la ÚLTIMA versión de una
 cadena —columna, sobre y huella a la vez, sin eslabón siguiente que la delate—: ese riesgo
 lo acepta el diseño de T-012b y solo lo cierra un anclaje externo, fuera de alcance.
