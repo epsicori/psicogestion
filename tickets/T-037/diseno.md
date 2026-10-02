@@ -281,3 +281,14 @@ exacto, guardado), después P1 (verde), después P2/P3 (comentarios), después E
 - **P-3 · Evidencia del CA2**: ¿vale la consulta contra la base real hecha a mano y pegada en la
   evidencia (por defecto), o quieres un spec de Playwright comprometido? Lo segundo amplía el territorio a
   `accesibilidad/**`.
+
+## Decisiones del propietario (02-10-2026) — mandan sobre §1-§7
+
+- **P-1:** si el usuario se queda sin códigos, el administrador repone el TOTP. No hay aviso
+  `beforeunload` en este ticket. Se abre un ticket aparte para «regenerar mis códigos» desde el perfil.
+- **P-2:** ADR-039 prohíbe solo que la entrada normal regenere. `generar_codigos_recuperacion()` no
+  cambia.
+- **P-3: opción 2.** El criterio 2 se cierra con un spec de Playwright guardado en `accesibilidad/`,
+  no con una consulta a mano. El territorio se amplía a `accesibilidad/**`. **Pendiente: el
+  arquitecto rehace CA2 y §6 para el spec.** Usa un usuario propio o deja el sembrado como estaba,
+  para que no dependa del orden de los demás specs.

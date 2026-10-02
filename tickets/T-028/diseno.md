@@ -505,3 +505,18 @@ rejilla, `formulario-alta.tsx`, diálogo e interceptación, aviso de hueco raro.
 - **Aviso de sesión en curso, campana y `wa.me`**: T-015 y mensajería (contrato).
 - **Revocar el `insert` directo del técnico en `citas`** (H16): anotarlo en `docs/state.md`;
   cabe en T-028a si el propietario lo aprueba.
+
+## Decisiones del propietario (02-10-2026) — mandan sobre §1-§7
+
+- **B1 aprobado: T-028a** («Base del alta de cita», riesgo alto, `supabase/`) con el contrato de §1.A.
+  Va en la cola detrás de T-035: T-012 → T-036 → T-035 → T-028a. **H16 se cierra en T-028a.**
+- **P2 → ADR-074.** El técnico **elige** el tipo de terapia al dar la cita, porque lo informa el
+  paciente, y **no lo ve** en ninguna pantalla de lectura. El formulario del técnico incluye el
+  selector de tipo, que fija duración y tarifa. La agenda, la ficha de cita y la previsualización
+  siguen omitiéndolo para él. En T-028a: el técnico lee `tipos_terapia` (el catálogo) y escribe el
+  tipo solo a través de las funciones de alta. Se revisan §1, §5 y §6 con esto.
+- **P1 → ADR-075.** «Modalidad» sale de T-028 tal como está escrita en el contrato. La modalidad
+  relacional se hereda del episodio (`citas.episodio_id`), y presencial/online pasa a ser columna de
+  la cita. Las dos llegan con un ticket propio de `supabase/` detrás de T-028a. Hasta entonces T-028
+  no pinta modalidad.
+- **P3** (lectura del criterio de marzo): se acepta la del diseño.
