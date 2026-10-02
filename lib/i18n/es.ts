@@ -913,6 +913,8 @@ export const es = {
       error: 'Contraseña incorrecta o fichero dañado.',
       danado: 'El fichero está dañado o no es una copia de Psicogestión.',
       sinCrypto: 'Este navegador no puede abrir la copia.',
+      sinMemoria:
+        'Este dispositivo no tiene memoria libre suficiente para abrir la copia. Cierra otras pestañas o ábrela en otro ordenador.',
       sinJs: 'Para abrir esta copia hay que activar JavaScript en el navegador.',
       marcaLinea: 'Copia {codigo} · exportada por {quien} ({rol}) el {fecha} · {motivo}',
       avisoImpresion:

@@ -193,6 +193,105 @@ describe('VISOR_JS · abrir la copia', () => {
   }, 120_000);
 });
 
+type Derivacion = (c: Uint8Array, s: Uint8Array, k: unknown) => Uint8Array;
+interface VentanaDelVisor {
+  Nucleo: { argon2id: Derivacion };
+  requestAnimationFrame: (f: (t: number) => void) => number;
+  RangeError: RangeErrorConstructor;
+}
+const ventanaDe = (dom: JSDOM) => dom.window as unknown as VentanaDelVisor;
+const enviar = (dom: JSDOM, contrasena: string) => {
+  const doc = dom.window.document;
+  doc.querySelector<HTMLInputElement>('input[type=password]')!.value = contrasena;
+  doc.querySelector('form')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
+};
+const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+describe('VISOR_JS · revisión del corte A', () => {
+  it('A-H4: cifrada con la contraseña en NFC, abre tecleándola en NFD (otro sistema operativo)', async () => {
+    const nfc = 'contraseña del año, ñandú';
+    const nfd = nfc.normalize('NFD');
+    expect(nfd).not.toBe(nfc);
+    const { html } = await cifrarCopia(proyectar(respuestaProfesional()), nfc, derivarNativo);
+    const doc = await abrirCon(cargar(html), nfd);
+    expect(doc.querySelector('[role=alert]')?.textContent ?? '').toBe('');
+    expect(doc.querySelector('.marca-linea')).not.toBeNull();
+  }, 120_000);
+
+  it('A-H5: la línea de la marca va justo después del h1, que es donde cae el foco', async () => {
+    const doc = await abrirCon(cargar(await fichero(proyectar(respuestaProfesional()))), CONTRASENA);
+    const h1 = doc.querySelector('h1')!;
+    expect(doc.activeElement).toBe(h1);
+    expect(h1.nextElementSibling?.className).toBe('marca-linea');
+  }, 120_000);
+
+  it('A-H6: con el visor bloqueado, «Abrir» vacía el aviso y lo vuelve a escribir para que se anuncie', async () => {
+    const dom = cargar(await fichero(proyectar(respuestaProfesional())), { sinSubtle: true });
+    const alerta = dom.window.document.querySelector('[role=alert]')!;
+    expect(alerta.textContent).toBe(t('exportaciones.visor.sinCrypto'));
+    enviar(dom, CONTRASENA);
+    expect(alerta.textContent).toBe('');
+    await esperar(() => alerta.textContent !== '');
+    expect(alerta.textContent).toBe(t('exportaciones.visor.sinCrypto'));
+    expect(dom.window.document.querySelector<HTMLInputElement>('input[type=password]')!.value).toBe('');
+  });
+
+  it('A-H7: si derivar falla por memoria, no culpa a la contraseña', async () => {
+    const dom = cargar(await fichero(proyectar(respuestaProfesional())));
+    const w = ventanaDe(dom);
+    w.Nucleo.argon2id = () => {
+      throw new w.RangeError('Array buffer allocation failed');
+    };
+    const doc = await abrirCon(dom, CONTRASENA);
+    const aviso = doc.querySelector('[role=alert]')!.textContent;
+    expect(aviso).toBe(t('exportaciones.visor.sinMemoria'));
+    expect(aviso).not.toBe(t('exportaciones.visor.error'));
+    const campo = doc.querySelector<HTMLInputElement>('input[type=password]')!;
+    expect(doc.activeElement).toBe(campo);
+    expect(campo.value).toBe('');
+  });
+
+  it('B-H3: una cabecera con m o t fuera de cota se da por dañada sin derivar nada', async () => {
+    const html = await fichero(proyectar(respuestaProfesional()));
+    for (const [de, a] of [
+      ['"m":65536', '"m":7'],
+      ['"m":65536', '"m":1048577'],
+      ['"t":3', '"t":0'],
+      ['"t":3', '"t":17'],
+    ]) {
+      const alterado = html.replace(de, a);
+      expect(alterado, a).not.toBe(html);
+      const alerta = cargar(alterado).window.document.querySelector('[role=alert]')!;
+      expect(alerta.textContent, a).toBe(t('exportaciones.visor.danado'));
+    }
+  });
+
+  it('B-H5: «Abriendo…» se pinta antes de derivar: la derivación espera a que pase un fotograma', async () => {
+    const dom = cargar(await fichero(proyectar(respuestaProfesional())));
+    const w = ventanaDe(dom);
+    const fotogramas: ((t: number) => void)[] = [];
+    w.requestAnimationFrame = (f) => fotogramas.push(f);
+    const original = w.Nucleo.argon2id;
+    let derivaciones = 0;
+    w.Nucleo.argon2id = (c, s, k) => {
+      derivaciones++;
+      return original(c, s, k);
+    };
+    enviar(dom, CONTRASENA);
+    const doc = dom.window.document;
+    expect(doc.querySelector('[role=status]')!.textContent).toBe(t('exportaciones.visor.abriendo'));
+    await pausa(100);
+    expect(derivaciones).toBe(0); // sin fotograma no hay pintado, y sin pintado no se deriva
+    for (let n = 0; fotogramas.length > 0 && n < 10; n++) {
+      fotogramas.shift()!(n * 16);
+      await pausa(10);
+    }
+    await esperar(() => Boolean(doc.querySelector('.marca-linea')) || Boolean(doc.querySelector('[role=alert]')?.textContent));
+    expect(derivaciones).toBe(1);
+    expect(doc.querySelector('.marca-linea')).not.toBeNull();
+  }, 120_000);
+});
+
 describe('VISOR_JS · la marca de agua', () => {
   it('tras descifrar hay una línea visible y una capa, y las dos llevan el código de la copia', async () => {
     const copia = proyectar(respuestaPacienteQueTraeDeMas());

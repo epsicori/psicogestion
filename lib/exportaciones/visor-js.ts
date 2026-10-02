@@ -108,22 +108,39 @@ export const VISOR_JS: string = `(function () {
     campo.focus();
   }
 
+  // Un texto igual al que ya hay en role="alert" no se anuncia: se vacía y se escribe en el
+  // siguiente tick.
+  function avisarDeNuevo(mensaje) {
+    alerta.textContent = '';
+    setTimeout(function () { alerta.textContent = mensaje; }, 0);
+  }
+
+  // Argon2id bloquea el hilo segundos: primero tiene que pintarse «Abriendo…». Un fotograma
+  // y el siguiente garantizan que el navegador ya pintó; sin requestAnimationFrame, un tick.
+  function trasPintar(f) {
+    if (typeof window.requestAnimationFrame !== 'function') { setTimeout(f, 0); return; }
+    window.requestAnimationFrame(function () { window.requestAnimationFrame(f); });
+  }
+
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
     if (ocupado) return;
-    if (bloqueo) { alerta.textContent = bloqueo; campo.value = ''; return; }
+    if (bloqueo) { campo.value = ''; avisarDeNuevo(bloqueo); return; }
     var contrasena = campo.value;
     campo.value = '';
     ocupado = true;
     boton.disabled = true;
     alerta.textContent = '';
     estado.textContent = tx('abriendo');
-    // Un respiro para que el aviso se pinte antes de los segundos de Argon2id.
-    setTimeout(function () {
+    trasPintar(function () {
       var bytesClave;
       try {
         bytesClave = Nucleo.argon2id(new TextEncoder().encode(contrasena.normalize('NFC')), cabecera.sal, cabecera.kdf);
-      } catch (e) { fallar(tx('error')); return; }
+      } catch (e) {
+        // La cabecera ya se validó: Argon2id no falla por la contraseña, sino por memoria.
+        fallar(tx('sinMemoria'));
+        return;
+      }
       contrasena = '';
       sutil.importKey('raw', bytesClave, { name: 'AES-GCM' }, false, ['decrypt'])
         .then(function (clave) {
@@ -143,7 +160,7 @@ export const VISOR_JS: string = `(function () {
           }
           pintar(copia);
         }, function () { fallar(tx('error')); });
-    }, 0);
+    });
   });
 
   // --- La copia ----------------------------------------------------------------------------
@@ -235,12 +252,13 @@ export const VISOR_JS: string = `(function () {
     var E = copia.etiquetas || {};
     var m = copia.marca;
     vaciar(raiz);
-    raiz.appendChild(el('p', 'marca-linea', sustituir(tx('marcaLinea'), {
-      codigo: texto(m.codigo), quien: texto(m.quien), rol: texto(m.rol), fecha: texto(m.fecha), motivo: texto(m.motivo)
-    })));
     var h1 = el('h1', null, texto(copia.titulo));
     h1.tabIndex = -1;
     raiz.appendChild(h1);
+    // Justo después del h1, donde cae el foco: quien lee hacia delante la oye lo primero.
+    raiz.appendChild(el('p', 'marca-linea', sustituir(tx('marcaLinea'), {
+      codigo: texto(m.codigo), quien: texto(m.quien), rol: texto(m.rol), fecha: texto(m.fecha), motivo: texto(m.motivo)
+    })));
     var paciente = copia.paciente || {};
     var nota = copia.nota || {};
     raiz.appendChild(lista([
