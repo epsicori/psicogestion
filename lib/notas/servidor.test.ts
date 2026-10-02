@@ -944,3 +944,202 @@ describe('abrirEditorDeNota · apertura doble (R2-H5)', () => {
     expect(r).toEqual({ estado: 'error' });
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// Ronda 4 (R3-H1, R3-H2 y la misma clase): un error de lectura no es «no se ve» ni «no existe»
+// ---------------------------------------------------------------------------------------
+
+describe('un error de lectura no es ausencia (R3-H1, R3-H2 y el resto del fichero)', () => {
+  const entrada = { pacienteId: P, notaId: N, testigo: TESTIGO, alcance: 'individual' as const, motivo: null };
+  const porCita = { pacienteId: P, citaId: C, notaId: null, episodioId: null };
+  const porNota = { pacienteId: P, citaId: null, notaId: N, episodioId: null };
+  const sinHead = (l: Llamada) => !(l.opciones as { head?: boolean } | undefined)?.head;
+  const esCabecera = (l: Llamada) => l.tabla === 'notas_clinicas' && l.op === 'select';
+  const fallo42501 = (l: Llamada): Respuesta | undefined =>
+    l.tabla === 'notas_clinicas_versiones' && l.op === 'insert'
+      ? { error: { code: '42501', message: 'denegado' } }
+      : undefined;
+
+  // R3-H1 · firmarNota, paso 2.
+  it('firmarNota: si falla la relectura de la cabecera es error, no bloqueada, y no inserta', async () => {
+    const { sesion, llamadas } = clienteSimulado(firmaFeliz((l) => (esCabecera(l) ? ERROR_LECTURA : undefined)));
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'error' });
+    expect(inserciones(llamadas)).toHaveLength(0);
+  });
+
+  it('firmarNota: la cabecera que no se ve (sin error) sigue siendo bloqueada (la gemela)', async () => {
+    const { sesion } = clienteSimulado(firmaFeliz((l) => (esCabecera(l) ? { data: null } : undefined)));
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'bloqueada' });
+  });
+
+  // R3-H1 · firmarNota, relectura tras 42501.
+  it('firmarNota 42501: si falla la relectura de la cabecera es error, no bloqueada', async () => {
+    let lecturas = 0;
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (fallo42501(l)) return fallo42501(l);
+        if (esCabecera(l)) {
+          lecturas += 1;
+          return lecturas === 1 ? { data: cabecera() } : ERROR_LECTURA;
+        }
+        return undefined;
+      }),
+    );
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'error' });
+  });
+
+  it('firmarNota 42501: la cabecera que ya no se ve sigue siendo bloqueada y la que se ve, no_disponible (gemelas)', async () => {
+    let lecturas = 0;
+    const a = clienteSimulado(
+      firmaFeliz((l) => {
+        if (fallo42501(l)) return fallo42501(l);
+        if (esCabecera(l)) {
+          lecturas += 1;
+          return lecturas === 1 ? { data: cabecera() } : { data: null };
+        }
+        return undefined;
+      }),
+    );
+    expect(await firmarNota(a.sesion, entrada)).toEqual({ ok: false, motivo: 'bloqueada' });
+    const b = clienteSimulado(firmaFeliz(fallo42501));
+    expect(await firmarNota(b.sesion, entrada)).toEqual({ ok: false, motivo: 'no_disponible' });
+  });
+
+  // R3-H2 · abrir desde una cita.
+  it('abrir por cita: si falla la lectura de la cita es error, no no_disponible', async () => {
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'citas') return ERROR_LECTURA;
+        return undefined;
+      }),
+    );
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('abrir por cita: la cita que no se ve (sin error) sigue siendo no_disponible (la gemela)', async () => {
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'citas') return { data: null };
+        return undefined;
+      }),
+    );
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'no_disponible' });
+  });
+
+  // buscarPorCita: un error no es «no hay nota»; seguir llevaría a crear otra cabecera.
+  it('abrir por cita: si falla la búsqueda de la nota de la cita es error y no crea nada', async () => {
+    const { sesion, llamadas } = clienteSimulado((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (esCabecera(l) && l.filtros.some(([f]) => f === 'eq:cita_id')) return ERROR_LECTURA;
+      return firmaFeliz()(l);
+    });
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'error' });
+    expect(llamadas.some((l) => l.tabla === 'notas_clinicas' && l.op === 'insert')).toBe(false);
+    expect(llamadas.some((l) => l.tabla === 'rpc:episodio_para_nota')).toBe(false);
+  });
+
+  it('abrir por cita: la búsqueda que no encuentra nada (sin error) crea la cabecera (la gemela)', async () => {
+    const { sesion, llamadas } = clienteSimulado((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (l.tabla === 'rpc:episodio_para_nota') return { data: E };
+      if (l.tabla === 'notas_clinicas' && l.op === 'insert') return { data: { id: N } };
+      if (esCabecera(l)) return l.filtros.some(([f]) => f === 'eq:cita_id') ? { data: null } : { data: cabecera() };
+      return firmaFeliz()(l);
+    });
+    expect((await abrirEditorDeNota(sesion, porCita, CONTEXTO)).estado).toBe('abierta');
+    expect(llamadas.some((l) => l.tabla === 'notas_clinicas' && l.op === 'insert')).toBe(true);
+  });
+
+  it('23505: si la relectura de la búsqueda falla es error (y nunca abierta)', async () => {
+    let busquedas = 0;
+    const { sesion } = clienteSimulado((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (l.tabla === 'rpc:episodio_para_nota') return { data: E };
+      if (l.tabla === 'notas_clinicas' && l.op === 'insert') {
+        return { error: { code: '23505', message: 'duplicate key' } };
+      }
+      if (esCabecera(l) && l.filtros.some(([f]) => f === 'eq:cita_id')) {
+        busquedas += 1;
+        return busquedas === 1 ? { data: null } : ERROR_LECTURA;
+      }
+      return firmaFeliz()(l);
+    });
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  // diagnosticarCeroFilas.
+  it('cero filas + relectura que falla es error, no bloqueada (guardarBorrador y fijarCoprofesional)', async () => {
+    const { sesion } = clienteSimulado((l) => {
+      if (l.op === 'update') return { data: [] };
+      if (esCabecera(l)) return ERROR_LECTURA;
+      return undefined;
+    });
+    expect(
+      await guardarBorrador(sesion, { pacienteId: P, notaId: N, testigo: TESTIGO, texto: 'x', reservadas: '' }),
+    ).toEqual({ ok: false, motivo: 'error' });
+    expect(await fijarCoprofesional(sesion, { pacienteId: P, notaId: N, coprofesionalId: null })).toEqual({
+      ok: false,
+      motivo: 'error',
+    });
+  });
+
+  // empezarModificacion.
+  it('empezarModificacion: si falla la lectura de la versión vigente es error, no no_disponible', async () => {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) => (l.tabla === 'notas_clinicas_versiones' && sinHead(l) ? ERROR_LECTURA : undefined)),
+    );
+    expect(await empezarModificacion(sesion, { pacienteId: P, notaId: N })).toEqual({ ok: false, motivo: 'error' });
+    expect(llamadas.some((l) => l.op === 'update')).toBe(false);
+  });
+
+  it('empezarModificacion: sin versiones (sin error) sigue siendo no_disponible (la gemela)', async () => {
+    const { sesion } = clienteSimulado(firmaFeliz());
+    expect(await empezarModificacion(sesion, { pacienteId: P, notaId: N })).toEqual({
+      ok: false,
+      motivo: 'no_disponible',
+    });
+  });
+
+  // Candidatos a coprofesional.
+  const abrirConCandidatos = (extra: Responder) =>
+    clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        return extra(l);
+      }),
+    );
+
+  it('candidatos: si falla la lectura de perfiles_centros es error, no una lista vacía', async () => {
+    const { sesion } = abrirConCandidatos((l) => (l.tabla === 'perfiles_centros' ? ERROR_LECTURA : undefined));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('candidatos: si falla la lectura del directorio es error, no una lista vacía', async () => {
+    const { sesion } = abrirConCandidatos((l) => {
+      if (l.tabla === 'perfiles_centros') return { data: [{ perfil_id: B }] };
+      if (l.tabla === 'directorio_perfiles') return ERROR_LECTURA;
+      return undefined;
+    });
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('candidatos: sin error, la lista llega con quien corresponde (la gemela)', async () => {
+    const { sesion } = abrirConCandidatos((l) => {
+      if (l.tabla === 'perfiles_centros') return { data: [{ perfil_id: B }] };
+      if (l.tabla === 'directorio_perfiles') {
+        return { data: [{ id: B, nombre_completo: 'Otra Persona', rol: 'profesional', estado: 'activo' }] };
+      }
+      return undefined;
+    });
+    const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta' });
+    expect((r as { nota: { candidatosCoprofesional: unknown[] } }).nota.candidatosCoprofesional).toEqual([
+      { id: B, nombre: 'Otra Persona' },
+    ]);
+  });
+});
