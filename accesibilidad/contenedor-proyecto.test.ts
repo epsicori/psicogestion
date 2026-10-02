@@ -18,6 +18,6 @@ describe('contenedorDelProyecto (T-037, A-H2)', () => {
 
   it('falla con un mensaje claro si el de este proyecto no está, sin tomar otro', () => {
     execFileSync.mockReturnValue('supabase_db_cinfa-e2e\n');
-    expect(() => contenedorDelProyecto()).toThrow(/supabase_db_Psicogestion.*supabase start/s);
+    expect(() => contenedorDelProyecto()).toThrow(/supabase_db_Psicogestion[\s\S]*supabase start/);
   });
 });
