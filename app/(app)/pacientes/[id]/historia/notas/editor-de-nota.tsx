@@ -337,7 +337,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
 
   const abierta = estado.fase === 'abierta' ? estado : null;
 
-  const encolar = useCallback(<T,>(tarea: () => Promise<T>): Promise<T> => {
+  const encolar = useCallback(<T,>(tarea: { (): Promise<T> }) => {
     const siguiente = cola.current.then(tarea);
     cola.current = siguiente.catch(() => undefined);
     return siguiente;
@@ -745,13 +745,11 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
         <AvisoDeError
           mensaje={t(AVISOS[estado.aviso])}
           accion={
-            estado.aviso === 'yaFirmada' ? (
+            estado.aviso === 'yaFirmada' || estado.aviso === 'firmadaSinRecargar' ? (
               <Button variante="contorno" onClick={() => void abrir({ reabrir: modelo.notaId })}>
-                {t('notas.aviso.cargarLoGuardado')}
-              </Button>
-            ) : estado.aviso === 'firmadaSinRecargar' ? (
-              <Button variante="contorno" onClick={() => void abrir({ reabrir: modelo.notaId })}>
-                {t('notas.aviso.recargar')}
+                {t(
+                  estado.aviso === 'yaFirmada' ? 'notas.aviso.cargarLoGuardado' : 'notas.aviso.recargar',
+                )}
               </Button>
             ) : undefined
           }

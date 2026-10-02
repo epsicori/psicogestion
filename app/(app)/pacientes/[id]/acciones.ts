@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { registrarAccesoHistoria, type PestanaHistoria } from '@/lib/cuentas/accesos';
 import { bloquearHistoria, estadoDeCuenta, prolongarDesbloqueo } from '@/lib/cuentas/candado';
 import { t } from '@/lib/i18n';
+import { listarNotasDelPaciente, type ResumenDeNota } from '@/lib/notas/servidor';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
 import { ipDeLaPeticion } from './peticion';
@@ -61,6 +62,11 @@ export type ResultadoDeApertura =
       vistas: number;
       /** `historial_clinico` trae contenido; las otras tres todavía no tienen suyo. */
       historial: ContenidoDelHistorial | null;
+      /**
+       * Solo en `notas_clinicas`: el resumen de cada nota, sin texto. `null` es «no se pudo leer»
+       * (o no es esa pestaña): nunca se pinta como «todavía no hay notas».
+       */
+      notas: ResumenDeNota[] | null;
     }
   | { abierta: false; mensaje: string };
 
@@ -95,7 +101,20 @@ export async function abrirPestanaDeHistoria(
       validado.data.pestana === 'historial_clinico'
         ? await leerHistorial(sesion.supabase, validado.data.pacienteId)
         : null,
+    // Después del registro, como el historial: la lista sale de la misma puerta.
+    notas:
+      validado.data.pestana === 'notas_clinicas'
+        ? await leerNotas(sesion, validado.data.pacienteId)
+        : null,
   };
+}
+
+async function leerNotas(
+  sesion: Awaited<ReturnType<typeof exigirSesion>>,
+  pacienteId: string,
+): Promise<ResumenDeNota[] | null> {
+  const lectura = await listarNotasDelPaciente(sesion, pacienteId);
+  return lectura.ok ? lectura.valor : null;
 }
 
 type Cliente = Awaited<ReturnType<typeof exigirSesion>>['supabase'];

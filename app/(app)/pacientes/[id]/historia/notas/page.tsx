@@ -12,8 +12,8 @@ import { EditorDeNota } from './editor-de-nota';
 import { EsqueletoEditor } from './esqueleto-editor';
 
 /**
- * La nota clínica de un paciente: `/pacientes/<uuid>/historia/notas?cita=<uuid>` (la puerta de
- * creación, desde la agenda) o `?nota=<uuid>` (una nota que ya existe, desde la ficha).
+ * La nota clínica de un paciente: `/pacientes/:id/historia/notas` con `?cita=` seguido del uuid (la puerta de
+ * creación, desde la agenda) o con `?nota=` seguido del uuid (una nota que ya existe, desde la ficha).
  *
  * Este fichero es **solo el armazón**: no lee la tabla de las notas ni importa nada del
  * servidor de notas. Lo clínico llega cuando alguien pulsa «Abrir el editor» (ADR-058.3), porque cada

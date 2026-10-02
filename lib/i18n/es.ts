@@ -359,8 +359,6 @@ export const es = {
 
     // Lo que todavía no está
     enPreparacion: 'Esta sección todavía no está',
-    notasEnPreparacion:
-      'Aquí irán las notas de cada sesión, con sus versiones. Se escriben en su propio ticket.',
     evaluacionesEnPreparacion:
       'Aquí irán las pruebas pasadas, su corrección y los archivos adjuntos.',
     informesEnPreparacion:

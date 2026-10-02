@@ -34,12 +34,17 @@ const CONTENIDO = {
   valoraciones: [],
 };
 
-function abierta(minutos: number, vistas = 1): ResultadoDeApertura {
+function abierta(
+  minutos: number,
+  vistas = 1,
+  notas: Extract<ResultadoDeApertura, { abierta: true }>['notas'] = [],
+): ResultadoDeApertura {
   return {
     abierta: true,
     caducaEn: new Date(Date.now() + minutos * 60_000).toISOString(),
     vistas,
     historial: CONTENIDO,
+    notas,
   };
 }
 
@@ -128,7 +133,44 @@ describe('PanelHistoria', () => {
         'notas_clinicas',
       ),
     );
-    expect(await screen.findByText('Esta sección todavía no está')).toBeInTheDocument();
+    expect(await screen.findByText('Todavía no hay notas')).toBeInTheDocument();
+    expect(screen.queryByText('Esta sección todavía no está')).not.toBeInTheDocument();
+  });
+
+  it('notas null (la lectura falló) pinta el aviso y NO «todavía no hay notas»', async () => {
+    const usuario = userEvent.setup();
+    abrirPestanaDeHistoria.mockResolvedValue(abierta(15, 1, null));
+    render(<PanelHistoria pacienteId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Ansiedad ante exámenes');
+    await usuario.click(screen.getByRole('tab', { name: 'Notas clínicas' }));
+
+    expect(await screen.findByText(/No se pudieron leer las notas/)).toBeInTheDocument();
+    expect(screen.queryByText('Todavía no hay notas')).not.toBeInTheDocument();
+  });
+
+  it('con notas, la lista enlaza a cada una', async () => {
+    const usuario = userEvent.setup();
+    abrirPestanaDeHistoria.mockResolvedValue(
+      abierta(15, 1, [
+        {
+          id: 'n1',
+          fechaSesion: '1 oct 2026',
+          estado: 'firmada',
+          versiones: 1,
+          autor: 'Ana Pérez',
+          conjunta: false,
+          href: '/pacientes/11111111-1111-4111-8111-111111111111/historia/notas?nota=n1',
+        },
+      ]),
+    );
+    render(<PanelHistoria pacienteId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Ansiedad ante exámenes');
+    await usuario.click(screen.getByRole('tab', { name: 'Notas clínicas' }));
+
+    const enlace = await screen.findByRole('link', { name: /1 oct 2026/ });
+    expect(enlace).toHaveAttribute('href', expect.stringContaining('?nota=n1'));
   });
 
   it('las sub-pestañas son cuatro: los documentos viven fuera del candado (ADR-048)', async () => {
@@ -155,5 +197,50 @@ describe('PanelHistoria', () => {
     expect(aviso).toHaveTextContent('Se va a cerrar en breve');
     expect(aviso).toHaveAttribute('aria-live', 'polite');
     expect(document.body).toHaveFocus();
+  });
+
+  it('P-2 · ampliar con caducaEn null conserva el plazo: la historia se cierra a su hora', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    abrirPestanaDeHistoria.mockResolvedValue(abierta(2));
+    ampliarLaVentana.mockResolvedValue({ caducaEn: null });
+    render(<PanelHistoria pacienteId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Ansiedad ante exámenes');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Ampliar el tiempo' }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(ampliarLaVentana).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Ansiedad ante exámenes')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(121_000);
+    });
+    expect(screen.queryByText('Ansiedad ante exámenes')).not.toBeInTheDocument();
+  });
+
+  it('P-2 · gemela: ampliar con un plazo nuevo lo aplica y la historia sigue abierta', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    abrirPestanaDeHistoria.mockResolvedValue(abierta(2));
+    ampliarLaVentana.mockResolvedValue({ caducaEn: new Date(Date.now() + 20 * 60_000).toISOString() });
+    render(<PanelHistoria pacienteId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Ansiedad ante exámenes');
+    await act(async () => {
+      screen.getByRole('button', { name: 'Ampliar el tiempo' }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(121_000);
+    });
+    expect(screen.getByText('Ansiedad ante exámenes')).toBeInTheDocument();
+  });
+
+  it('P-2 · una apertura sin plazo (caducaEn null) es «no se pudo abrir», no una historia sin caducidad', async () => {
+    abrirPestanaDeHistoria.mockResolvedValue({ ...abierta(15), caducaEn: null });
+    render(<PanelHistoria pacienteId="11111111-1111-4111-8111-111111111111" />);
+
+    expect(await screen.findByText('No se pudo abrir esta historia.')).toBeInTheDocument();
+    expect(screen.queryByText('Ansiedad ante exámenes')).not.toBeInTheDocument();
   });
 });

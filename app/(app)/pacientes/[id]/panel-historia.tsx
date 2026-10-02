@@ -5,8 +5,9 @@ import { useEffect, useId, useRef, useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { PanelDePestana, Pestanas } from '@/components/ui/pestanas';
-import { Cargando } from '@/components/ui/piezas';
+import { AvisoDeError, Cargando } from '@/components/ui/piezas';
 import { t, tCon } from '@/lib/i18n';
+import type { ResumenDeNota } from '@/lib/notas/servidor';
 
 import {
   abrirPestanaDeHistoria,
@@ -16,6 +17,7 @@ import {
 } from './acciones';
 import { FormularioPinHistoria } from './formulario-pin-historia';
 import { HistorialClinico } from './historial-clinico';
+import { ListaDeNotas } from './lista-de-notas';
 import { minutosRestantes } from './presentacion';
 
 /**
@@ -45,6 +47,7 @@ type Apertura = {
   caducaEn: string | null;
   vistas: number;
   historial: ContenidoDelHistorial | null;
+  notas: ResumenDeNota[] | null;
 };
 
 export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
@@ -80,18 +83,20 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
       if (ultima.current !== token) return;
       setCargando(false);
 
-      if (resultado.abierta) {
+      // Una apertura sin plazo no es una historia sin caducidad: es una que no se pudo abrir.
+      if (resultado.abierta && resultado.caducaEn !== null) {
         setMensaje('');
         setApertura({
           caducaEn: resultado.caducaEn,
           vistas: resultado.vistas,
           historial: resultado.historial,
+          notas: resultado.notas,
         });
         return;
       }
 
       setApertura(null);
-      setMensaje(resultado.mensaje);
+      setMensaje(resultado.abierta ? t('ficha.noSePudoAbrir') : resultado.mensaje);
     });
   }, [pacienteId, subPestana, intento]);
 
@@ -126,7 +131,8 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
   const ampliar = () =>
     iniciarTransicion(async () => {
       const { caducaEn } = await ampliarLaVentana();
-      setApertura((previa) => (previa ? { ...previa, caducaEn } : previa));
+      // Un plazo nulo es «no se sabe»: se conserva el que había, no se borra.
+      setApertura((previa) => (previa ? { ...previa, caducaEn: caducaEn ?? previa.caducaEn } : previa));
     });
 
   const minutos = apertura?.caducaEn ? minutosRestantes(apertura.caducaEn) : null;
@@ -182,7 +188,11 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
               </p>
             )}
 
-            <Contenido subPestana={subPestana} historial={apertura.historial} />
+            <Contenido
+              subPestana={subPestana}
+              historial={apertura.historial}
+              notas={apertura.notas}
+            />
           </div>
         )}
 
@@ -211,20 +221,28 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
 function Contenido({
   subPestana,
   historial,
+  notas,
 }: {
   subPestana: SubPestana;
   historial: ContenidoDelHistorial | null;
+  notas: Apertura['notas'];
 }) {
   if (subPestana === 'historial_clinico') {
     return historial ? <HistorialClinico contenido={historial} /> : <Cargando filas={3} />;
   }
 
+  if (subPestana === 'notas_clinicas') {
+    return notas === null ? (
+      <AvisoDeError mensaje={t('notas.lista.noSePudoLeer')} />
+    ) : (
+      <ListaDeNotas notas={notas} />
+    );
+  }
+
   const explicacion =
-    subPestana === 'notas_clinicas'
-      ? t('ficha.notasEnPreparacion')
-      : subPestana === 'evaluaciones'
-        ? t('ficha.evaluacionesEnPreparacion')
-        : t('ficha.informesEnPreparacion');
+    subPestana === 'evaluaciones'
+      ? t('ficha.evaluacionesEnPreparacion')
+      : t('ficha.informesEnPreparacion');
 
   return <EnPreparacion explicacion={explicacion} />;
 }
