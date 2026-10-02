@@ -1491,6 +1491,44 @@ describe('abrirEditorDeNota · el borrador de otro autor llega, para leerlo, sol
     expect(numeros).toEqual([1, 2, 3]);
   });
 
+  /** Lee las versiones de `filas` con o sin ser profesional asignado (el autor de la cabecera es B). */
+  function abrirConVersiones(filas: Record<string, unknown>[], asignado: boolean) {
+    return clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+        if (l.tabla === 'rpc:es_profesional_asignado') return { data: asignado };
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera({ autor_id: B }) };
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return { data: filas };
+        }
+        return undefined;
+      }),
+    ).sesion;
+  }
+
+  it('B2-H3 · lectura conjunta: la primera versión visible (v2 real) no lleva motivo; la siguiente sí', async () => {
+    const filas = [
+      { ...version, numero_version: 2, alcance: 'conjunta', motivo_cambio: 'Ajuste' },
+      { ...version, numero_version: 3, alcance: 'conjunta', motivo_cambio: 'Corrección' },
+    ];
+    const r = await abrirEditorDeNota(abrirConVersiones(filas, false), porNota, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'abierta', nota: { lecturaConjunta: true } });
+    const versiones = (r as { nota: { versiones: { numero: number; motivo: string | null }[] } }).nota.versiones;
+    expect(versiones[0]).toMatchObject({ numero: 1, motivo: null });
+    expect(versiones[1]).toMatchObject({ numero: 2, motivo: 'Corrección' });
+    expect(JSON.stringify(r)).not.toContain('Ajuste');
+  });
+
+  it('B2-H3 · la gemela: el asignado, que lo ve todo, sigue recibiendo el motivo de su v2', async () => {
+    const filas = [
+      { ...version, numero_version: 1, alcance: 'individual', motivo_cambio: null },
+      { ...version, numero_version: 2, alcance: 'conjunta', motivo_cambio: 'Ajuste' },
+    ];
+    const r = await abrirEditorDeNota(abrirConVersiones(filas, true), porNota, CONTEXTO);
+    const versiones = (r as { nota: { versiones: { motivo: string | null }[] } }).nota.versiones;
+    expect(versiones[1]!.motivo).toBe('Ajuste');
+  });
+
   it('B0-H3 · sin borrador no hay nada que ocultar: borradorOculto false', async () => {
     const { sesion } = abrir({ autor_id: B, borrador_contenido: null, borrador_actualizado_en: null }, true);
     const r = await abrirEditorDeNota(sesion, porNota, CONTEXTO);
