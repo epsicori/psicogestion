@@ -3,9 +3,9 @@
 // agua). Se compone un fichero real con `cifrarCopia` y se abre en jsdom ejecutando SUS scripts:
 // el núcleo en JS deriva la clave y WebCrypto (el de Node, inyectado) descifra.
 import * as crypto from 'node:crypto';
+import { createRequire } from 'node:module';
 import { TextDecoder as TD, TextEncoder as TE } from 'node:util';
 
-import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 import { t } from '@/lib/i18n';
@@ -26,6 +26,20 @@ const derivarNativo: Derivar = async (c, s, k) => {
   return new Uint8Array(
     f('argon2id', { message: c, nonce: s, parallelism: k.p, tagLength: k.longitud, memory: k.m, passes: k.t }),
   );
+};
+
+// jsdom (ya instalado, lo usa Vitest) no trae tipos y el ticket no admite dependencias nuevas:
+// se carga con require y se tipa solo lo que la prueba usa.
+interface JSDOM {
+  window: Window & typeof globalThis;
+}
+interface OpcionesJsdom {
+  runScripts: 'dangerously';
+  pretendToBeVisual: boolean;
+  beforeParse(w: Window): void;
+}
+const { JSDOM } = createRequire(import.meta.url)('jsdom') as {
+  JSDOM: new (html: string, opciones: OpcionesJsdom) => JSDOM;
 };
 
 const CONTRASENA = 'contraseña del visor';
@@ -88,7 +102,7 @@ describe('VISOR_JS · abrir la copia', () => {
     const dom = cargar(await fichero(copia));
     const doc = await abrirCon(dom, CONTRASENA);
     expect(doc.querySelector('[role=alert]')?.textContent ?? '').toBe(''); // el formulario ya no está
-    const titulos = Array.from(doc.querySelectorAll('h2'), (h) => h.textContent);
+    const titulos = Array.from(doc.querySelectorAll('h2'), (h: Element) => h.textContent);
     expect(titulos.slice(0, 2)).toEqual(['Versión 1', 'Versión 3']);
     const visible = textoVisible(doc);
     for (const dato of [

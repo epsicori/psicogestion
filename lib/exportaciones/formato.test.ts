@@ -22,7 +22,8 @@ describe('esquemaRespuestaExportar', () => {
   });
 
   it('exige `exportada_por` (la marca de agua sale de ahí)', () => {
-    const { exportada_por: _, ...sin } = respuestaProfesional();
+    const sin: Record<string, unknown> = { ...respuestaProfesional() };
+    delete sin.exportada_por;
     expect(esquemaRespuestaExportar.safeParse(sin).success).toBe(false);
     const sinNombre = { ...respuestaProfesional(), exportada_por: { nombre: '', apellidos: 'X', rol: 'administrador' } };
     expect(esquemaRespuestaExportar.safeParse(sinNombre).success).toBe(false);
