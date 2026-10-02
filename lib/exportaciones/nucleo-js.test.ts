@@ -122,6 +122,29 @@ describe('NUCLEO_JS · Argon2id (RFC 9106) contra crypto.argon2Sync de Node', ()
       m: 64,
       t: 3,
     },
+    // B-H2: un m que no es múltiplo de 4 (m′ = 4·⌊m/4⌋ en la memoria; m, no m′, en H0) y sales
+    // de otro largo (H0 lleva el largo real de la sal, no un 16 fijo).
+    {
+      nombre: 'm = 10 y una sal de 8 bytes (la mínima)',
+      contrasena: 'diez kibibytes',
+      sal: new Uint8Array(8).map((_, i) => i + 40),
+      m: 10,
+      t: 1,
+    },
+    {
+      nombre: 'm = 4099 y una sal de 300 bytes',
+      contrasena: 'cuatro mil noventa y nueve',
+      sal: new Uint8Array(300).map((_, i) => (i * 37 + 11) & 0xff),
+      m: 4099,
+      t: 1,
+    },
+    {
+      nombre: 'm = 1027, t = 2 y una sal de 32 bytes',
+      contrasena: 'mil veintisiete',
+      sal: new Uint8Array(32).map((_, i) => (i * 5) & 0xff),
+      m: 1027,
+      t: 2,
+    },
   ];
 
   for (const caso of casos) {
@@ -162,6 +185,25 @@ describe('NUCLEO_JS · Argon2id (RFC 9106) contra crypto.argon2Sync de Node', ()
       longitud: 64,
     });
     expect(hex(obtenido)).toBe(esperado.toString('hex'));
+  });
+
+  // B-H3: sin pasadas, la clave sería la misma para cualquier contraseña y sal.
+  it('lanza con t, m, longitud o sal fuera de rango, sin derivar nada', () => {
+    const base = { m: 64, t: 1, p: 1, longitud: 32 };
+    const sal = new Uint8Array(16);
+    for (const k of [
+      { ...base, t: 0 },
+      { ...base, t: 65 },
+      { ...base, t: 1.5 },
+      { ...base, m: 7 },
+      { ...base, m: 4194305 },
+      { ...base, m: 64.5 },
+      { ...base, longitud: 3 },
+      { ...base, longitud: 1025 },
+    ]) {
+      expect(() => nucleo.argon2id(utf8('x'), sal, k), JSON.stringify(k)).toThrow();
+    }
+    expect(() => nucleo.argon2id(utf8('x'), new Uint8Array(7), base)).toThrow();
   });
 
   it('p = 2 lanza: el núcleo solo admite una vía (D14)', () => {
