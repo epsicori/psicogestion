@@ -714,3 +714,18 @@ o pruebas de permisos, y queda en la fábrica.
 - **Franjas solapadas.**
 - **Exigir franja en `crear_cita`.**
 - **Previsualizar una serie por `fin_el`**: el contrato solo pide sesiones.
+
+## Decisiones del propietario (02-10-2026)
+
+Mandan sobre lo de arriba donde choquen.
+
+- **A → se exige el rol.**
+  - En las tres políticas recreadas (`citas_alta`, `citas_modificacion`, `series_cita_lectura`), la rama `profesional_id = uid` gana `rol_actual() = 'profesional_sanitario'`. Enmienda la letra «las ramas del profesional no cambian» del contrato.
+  - 21-M prueba que TEC1 no modifica C18TEC. La gemela: el profesional sigue modificando la suya.
+- **B → se rechaza.** Si la 1.ª sesión estricta cae en festivo o ausencia, error 22023 con un fragmento propio, sin crear nada. Sigue la regla de `lib/citas/errores.ts`: no reutilizar fragmentos ya reconocidos.
+- **C → como hoy.** El tipo nulo se admite en una serie no estricta. Si el tipo viene, se valida siempre.
+- **D → se valida aquí** (el propietario se aparta de la recomendación).
+  - Las funciones de alta (cita suelta, serie y serie ampliada) rechazan con 22023 un `p_profesional_id` que no sea `profesional_sanitario` o `administrador` en estado `activo`. Lleva su fragmento propio y su prueba por rol y por estado (`baja`).
+  - La previsualización y los bloques no escriben, pero devuelven el mismo error, para que lo que se ve y lo que se crea no diverjan.
+  - No se añade una restricción de tabla ni se tocan filas existentes (C18TEC sigue en el banco 18), porque eso exigiría migrar datos. Si el diseño cree que hace falta una restricción, va como pregunta nueva.
+  - Mutantes: quitar la comprobación de rol, y quitar la de estado.
