@@ -4,9 +4,10 @@
 -- 01-fijacion.sql (ADM, PRO1 con alta en CA y CB, PRO2, TEC1 de CA, TEC2 de CB, PROBAJA ya en
 -- baja desde 04) y los pacientes P1 (de PRO1) y P2 (de PRO2).
 --
--- ANCLAS EN EL AÑO + 2. Ningún banco anterior siembra disponibilidad de tipo `franja`, y los
--- bancos 15-20 usan fechas de ahora o del año que viene (16 usa año + 1). Todo lo de aquí cae
--- en el año + 2, así que no se pisa con nada. Cada sección usa sus propios lunes (offsets
+-- ANCLAS EN EL AÑO + 3. Ningún banco anterior siembra disponibilidad de tipo `franja`, y los
+-- bancos 15-20 usan fechas de ahora o del año que viene (16 usa año + 1, y sus series llegan a
+-- mayo del año + 2: medido, PRO1 tenía una cita el primer lunes de mayo de ese año). Todo lo de
+-- aquí cae en el año + 3, así que no se pisa con nada. Cada sección usa sus propios lunes (offsets
 -- sobre `lunes_21`) porque las series que crea una sección ocupan el lunes a las 10:00 de
 -- PRO1 para las demás.
 --
@@ -33,14 +34,14 @@ insert into public.tipos_terapia (id, nombre, duracion_minutos, regimen, activo)
 -- Descanso explícito: lo que el banco mide depende de él (diez minutos por detrás).
 update public.perfiles set descanso_activo = true, descanso_minutos = 10 where id = :PRO1;
 
-select (extract(year from now())::int + 2) as anio_21 \gset
+select (extract(year from now())::int + 3) as anio_21 \gset
 
 select (make_date(:anio_21, 3, 31) - (extract(isodow from make_date(:anio_21, 3, 31))::int % 7))::text
   as domingo_marzo_21 \gset
 select (make_date(:anio_21, 10, 31) - (extract(isodow from make_date(:anio_21, 10, 31))::int % 7))::text
   as domingo_octubre_21 \gset
 
--- Primer lunes de mayo del año + 2.
+-- Primer lunes de mayo del año + 3.
 select (make_date(:anio_21, 5, 1) + ((8 - extract(isodow from make_date(:anio_21, 5, 1))::int) % 7))::text
   as lunes_21 \gset
 
