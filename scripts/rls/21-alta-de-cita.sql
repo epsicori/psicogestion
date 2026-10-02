@@ -499,10 +499,15 @@ call pg_temp.reset_sesion();
 -- Festivo sin alternativa: festivo el +91 y una ausencia de +91 a +98 que cubre los siete días.
 -- R1-H6 · La ausencia se inserta ANTES, en otra sentencia: sin el `order by` que da prioridad al
 -- festivo, el orden físico devolvería la ausencia y la aserción de abajo caería.
-insert into public.disponibilidad (perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
-  (:PRO1, null, 'ausencia', :'l091'::date, :'l098'::date, 'Europe/Madrid', 'Ausencia de una semana');
-insert into public.disponibilidad (perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
-  (:PRO1, null, 'festivo',  :'l091'::date, :'l091'::date, 'Europe/Madrid', 'Festivo sin alternativa');
+-- RD2-H1 · Ids FIJOS, el de la ausencia MENOR que el del festivo: con ids de gen_random_uuid()
+-- el mutante `order by d.id` (sin la prioridad del festivo) sobrevivía la mitad de las veces.
+-- Así el desempate por id elige siempre la ausencia, y solo la prioridad del festivo da verde.
+insert into public.disponibilidad (id, perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
+  ('21f00000-0000-4000-8000-000000000001', :PRO1, null, 'ausencia', :'l091'::date, :'l098'::date,
+   'Europe/Madrid', 'Ausencia de una semana');
+insert into public.disponibilidad (id, perfil_id, centro_id, tipo, desde, hasta, zona_horaria, motivo) values
+  ('21f00000-0000-4000-8000-000000000002', :PRO1, null, 'festivo',  :'l091'::date, :'l091'::date,
+   'Europe/Madrid', 'Festivo sin alternativa');
 
 call pg_temp.como(:PRO1);
 select pg_temp.assert(
@@ -1176,6 +1181,18 @@ select pg_temp.assert_lanza_codigo_msg(
                     ', p_excluir => array[date ''' || (:'l330'::date + 6) || ''']'),
   '22023', 'sin sesiones',
   'O5 (R1-H7) · GEMELA: excluir la única sesión sigue diciendo «sin sesiones»'
+);
+-- RD2-H2 · Previsualizar con la misma entrada dice lo mismo que crear, en vez de un plan vacío.
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sql_prev(:P1, :PRO1, :CA, 'semanal', 1, time '10:00', 50, :'l330'::date, 0),
+  '22023', 'no tiene ninguna sesión',
+  'O5 (RD2-H2) · previsualizar con cero sesiones: 22023 con «no tiene ninguna sesión», no {"sesiones": []}'
+);
+select pg_temp.assert(
+  jsonb_array_length(
+    public.agenda_previsualizar_alta(:P1, :PRO1, :CA, 'semanal', 1::smallint, time '10:00', 50::smallint,
+                                     :'l330'::date, 1::smallint) -> 'sesiones') = 1,
+  'O5 (RD2-H2) · GEMELA: previsualizar la misma serie con una sesión enseña esa sesión'
 );
 call pg_temp.reset_sesion();
 

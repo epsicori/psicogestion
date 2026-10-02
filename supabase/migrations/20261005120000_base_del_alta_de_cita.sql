@@ -444,6 +444,10 @@ begin
       select o from public.ocurrencias_serie(p_periodicidad, p_dia_semana, p_desde, p_sesiones_totales, null) o
     );
   end if;
+  -- RD2-H2 · La misma entrada que agenda_crear_serie rechaza no se enseña como un plan vacío.
+  if coalesce(array_length(v_fechas, 1), 0) = 0 then
+    raise exception 'La serie no tiene ninguna sesión entre su inicio y su final.' using errcode = '22023';
+  end if;
 
   return jsonb_build_object(
     'zona_horaria', v_zona,
