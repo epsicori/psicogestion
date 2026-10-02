@@ -1,0 +1,64 @@
+{
+  "ticket": "T-036",
+  "altas": 0,
+  "medias": 3,
+  "bajas": 4,
+  "hallazgos": [
+    {
+      "id": "A-H1",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 2179,
+      "descripcion": "La aserción que comprueba que la fijación de C2 deja borrador_abierta_en en .345999 lleva `or true` y no puede fallar: la partida de C4/C5 (criterio 7, truncar frente a redondear) no se verifica.",
+      "escenario": "Si t036_prep (línea 2004) pasa a fijar 345 ms o t036_abierta deja de escribir la columna, C4/C5 y la aserción siguen verdes con µs=0. Entonces un mutante de 6.18 que redondee en vez de truncar pasa el banco."
+    },
+    {
+      "id": "A-H2",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261003120000_firma_cotejada_con_borrador_y_cita.sql",
+      "linea": 659,
+      "descripcion": "El verificador reemitido pierde el comentario de 20261001120000:592-596 que explicaba por qué no se concede a authenticated (revela cuántas versiones tiene cada paciente, saltándose la RLS).",
+      "escenario": "La próxima reemisión copia este cuerpo vivo sin el motivo. Un ticket de «que el profesional verifique su cadena» cambia el revoke por un grant a authenticated, y con p_paciente_id null la función definer recorre todas las cadenas y deja ver el número de versiones de cada paciente."
+    },
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 2179,
+      "descripcion": "La aserción que fija la apertura en .345999 es tautológica (or true). Además corre como PRO1, que por RLS puede leer null. C1 no comprueba .345000. Nada demuestra el valor del que dependen C4 y C5. Coincide con A-H1; aquí sube a MEDIA por el agravante del rol.",
+      "escenario": "Si t036_abierta no surte efecto y la apertura queda con menos de 500 µs bajo el milisegundo, un mutante de 6.18 que redondee en vez de truncar deja C4 y C5 en verde. El criterio 7, «trunca y no redondea», queda sin probar."
+    },
+    {
+      "id": "B-H2",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 2191,
+      "descripcion": "6.20 (±1 minuto) solo tiene negativas a ±1 día (P2a, P2b y X4). No hay negativa a ±61 s ni gemela a ±59 s.",
+      "escenario": "El mutante que cambia «interval 1 minute» por «interval 23 hours» deja en verde P2a, P2b, la gemela y X4. Un cliente puede retrofechar firmada_en casi un día y burlar 6.23."
+    },
+    {
+      "id": "B-H3",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/14-cadena-huellas.sql",
+      "linea": 2061,
+      "descripcion": "6.19 vale para TODOS los roles (decisión (a)), pero solo se prueba como authenticated. E1 firma como postgres con la cita coherente y no la ejerce.",
+      "escenario": "Si se devuelve 6.19 al bloque «if role in (authenticated, anon)», A1-A4, X3 y E1 siguen en verde. postgres o service_role sellan sin error un sobre con cita_id K36B sobre una cabecera con K36."
+    },
+    {
+      "id": "B-H4",
+      "severidad": "BAJA",
+      "archivo": "scripts/t005-concurrencia.sql",
+      "linea": 600,
+      "descripcion": "Los drop de t036_* solo están al final. Con ON_ERROR_STOP, un FALLO intermedio los deja en public, y tres de las funciones no tienen revoke.",
+      "escenario": "t036_esperar_bloqueo(t036_r) lanza FALLO. Quedan t036_sobres, t036_original y cuatro funciones que anon puede ejecutar. T1 aborta y la T2 en segundo plano confirma una versión de NOTA36R."
+    },
+    {
+      "id": "B-H5",
+      "severidad": "BAJA",
+      "archivo": "scripts/t005-concurrencia.sql",
+      "linea": 338,
+      "descripcion": "El FALLO del sondeo dice «cerrojo del guardado» también en §1.4, donde el cerrojo lo tiene una firma (la v2 de T1).",
+      "escenario": "Si §1.4 deja de intercalar, el mensaje manda a depurar guardarBorrador o fn_vaciar, cuando lo que falla es el insert de la versión."
+    }
+  ]
+}
