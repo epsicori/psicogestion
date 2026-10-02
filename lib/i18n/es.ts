@@ -509,6 +509,14 @@ export const es = {
       sinCita: 'Escrita el {fecha} · {desde}–{hasta}',
       ilegible: 'Sello no legible',
     },
+    // La etiqueta del episodio en la cabecera de la nota y en el selector «¿en cuál?».
+    episodio: '{modalidad} · desde el {fecha}',
+    modalidad: {
+      individual: 'Individual',
+      pareja: 'Pareja',
+      familiar: 'Familiar',
+      grupo: 'Grupo',
+    },
   },
 
   agenda: {
