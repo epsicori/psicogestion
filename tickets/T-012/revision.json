@@ -1,64 +1,72 @@
 {
   "ticket": "T-012",
   "altas": 0,
-  "medias": 3,
-  "bajas": 4,
+  "medias": 2,
+  "bajas": 6,
   "hallazgos": [
     {
-      "id": "B0-H1",
+      "id": "B1-H1",
       "severidad": "MEDIA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 630,
-      "descripcion": "Las vistas que sustituyen a la que tiene el foco lo dejan en body: el candado tras vencer el reloj (425-428) o tras un guardado bloqueada, y los avisos tras la firma (744-757). El seCerroSola va en un <p> que no es región viva. Es la lección de T-037 sin aplicar.",
-      "escenario": "Medido con una sonda sobre activeElement en las pruebas 326, 397 y 607: BODY en los tres. Un profesional con lector de pantalla teclea cuando vence el plazo: el textarea desaparece, no se anuncia nada y lo que escribe ya no llega a ningún sitio. Tras una firma ok con nota null, el foco vuelve al botón Firmar, que se ha desmontado, y cae en body."
+      "archivo": "lib/notas/servidor.ts",
+      "linea": 309,
+      "descripcion": "La regla aplicada a B0-H3 usa coprofesional_id como señal de alcance, pero fn_congelar_cabecera_sellada lo congela desde la v1. En una modificación, que es el único borrador que un no asignado puede ver, no dice nada de la v2. La gemela servidor.test.ts:1391 fija como correcto lo que la decisión del propietario prohíbe.",
+      "escenario": "La v1 se firma conjunta con A como coprofesional. El autor pulsa Modificar y escribe lo que un miembro contó a solas, para firmarlo individual; no puede quitar a A. cargarModelo da a A puedeLeerBorrador=true. Hoy A no llega desde la app (404 y registro denegado), pero la rama queda escrita y se activa el día que el coprofesional pueda abrir la historia. Decide el propietario."
     },
     {
-      "id": "B0-H2",
+      "id": "B1-H2",
       "severidad": "MEDIA",
       "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 693,
-      "descripcion": "vigente es la última versión visible y no la última de la nota. El profesional del episodio solo ve por RLS las versiones conjuntas, y la pantalla le enseña como «Versión vigente» una ya sustituida. La lista (lib/notas/servidor.ts:909-920) le cuenta 1 versión y marca la nota como conjunta.",
-      "escenario": "Se firma la v1 como conjunta y después la v2 como individual (firmarNota deja elegir el alcance en cada firma). El coprofesional del episodio abre la nota y ve la v1 bajo «Versión vigente», sin ningún aviso de que existe una versión posterior."
+      "linea": 352,
+      "descripcion": "Tras «Abrir el editor» (abierta, error, no_disponible, elegir_episodio; sin_acceso por lectura de código), tras Modificar con éxito, tras Recargar y tras «Cargar lo guardado», el disparador se desmonta y el foco cae en body. Incluye las cuatro vistas tras la carga que el implementador dejó a propósito.",
+      "escenario": "Medido con una sonda sobre activeElement, con el foco puesto antes en el disparador: BODY en los siete casos. Un profesional con teclado pulsa «Abrir el editor»: aparece el textarea, pero Tab empieza desde la cabecera de la aplicación y el lector de pantalla no anuncia nada."
     },
     {
-      "id": "B0-H3",
-      "severidad": "MEDIA",
+      "id": "B1-H3",
+      "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 802,
-      "descripcion": "BorradorAjeno (P-1) enseña el borrador de la cabecera a quien solo puede leer versiones conjuntas. Así se salta el recorte por alcance de notas_clinicas_versiones_lectura.",
-      "escenario": "Una nota de pareja tiene la v1 conjunta. El autor abre Modificar y escribe lo que un miembro contó en una sesión individual, con la intención de firmarlo como individual. El coprofesional del episodio abre la nota y lee ese texto y las reservadas. Cuando se firma la v2 individual, la RLS le oculta un texto que ya ha leído."
+      "linea": 613,
+      "descripcion": "B0-H1 está a medias: tras una firma rechazada con ya_firmada, sin_borrador o no_autor, la barra se desmonta. Con no_disponible el diálogo se desmonta mientras «Firmar» tiene disabled={pendiente} (barra-de-acciones.tsx:71). En los dos casos la devolución del foco no tiene a dónde ir.",
+      "escenario": "Otra pestaña firma la nota con el diálogo abierto. Al confirmar sale el aviso yaFirmada (role=alert), pero activeElement es BODY. Con no_disponible también es BODY, y quitando disabled de Firmar en la copia el foco vuelve a Firmar."
     },
     {
-      "id": "B0-H4",
+      "id": "B1-H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/fila-de-version.tsx",
+      "linea": 25,
+      "descripcion": "En lectura conjunta, el título «Versión {numero}» con huecos revela que hay versiones individuales, contra lo que prometen el comentario de lecturaConjunta y el título de la prueba (editor-de-nota.test.tsx:809, que usa v1 y v2 consecutivas).",
+      "escenario": "La v1 se firma conjunta, la v2 individual y la v3 conjunta. El administrador del episodio, que no es asignado, ve «Versión 1» y «Versión 3»: sabe que existe una v2 que no le enseñan, y entre qué fechas se hizo."
+    },
+    {
+      "id": "B1-H5",
       "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.test.tsx",
-      "linea": 485,
-      "descripcion": "La prueba B de la doble pulsación sigue verde sin la guarda enVuelo (editor-de-nota.tsx:550). La cola pone en espera los clics siguientes, y la prueba nunca resuelve la firma antes de contar las llamadas.",
-      "escenario": "Medido. Al quitar 'if (enVuelo.current) return;' el fichero sigue 51/51. Con expect(firmarNota).toHaveBeenCalledTimes(1) después de terminar({ok:false,motivo:'error'}), el mutante cae con 4 llamadas: una firma fallida dispara otras tres sin que el usuario haga nada."
+      "linea": 822,
+      "descripcion": "queryByText('vigente') es vacua: FilaDeVersion pinta ' (vigente)' con paréntesis, así que nunca encuentra nada.",
+      "escenario": "Medido: con vigente={v.numero === vigente.numero} (sin !lecturaConjunta, editor-de-nota.tsx:1046), las pruebas siguen en verde. El lector conjunto volvería a ver «(vigente)» sobre una versión ya sustituida sin que nada falle."
     },
     {
-      "id": "B0-H5",
+      "id": "B1-H6",
       "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 230,
-      "descripcion": "Ninguna prueba mata el '?? estado.caducaEn' en solo_modelo (230) ni en sin_recargar (234). Los de modelo (225) y caducaEn (222) sí caen.",
-      "escenario": "Medido: cambiando cada ?? por 'accion.caducaEn as string' el fichero sigue 51/51. Si se pierde, elegir coprofesional con caducaEn null deja el plazo en null. El reloj no arranca (línea 422) y el editor ya no se cierra solo al vencer el plazo."
+      "archivo": "lib/notas/servidor.test.ts",
+      "linea": 1356,
+      "descripcion": "El simulador responde a rpc:es_profesional_asignado sin mirar los argumentos.",
+      "escenario": "Medido: con p_paciente_id: usuario.id en servidor.ts:302, servidor.test.ts sigue en verde. La RPC devolvería false a todos: el profesional asignado perdería el borrador de su colega y vería «Última versión conjunta» aunque lee todas las versiones."
     },
     {
-      "id": "B0-H6",
+      "id": "B1-H7",
       "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 732,
-      "descripcion": "En el conflicto, el foco va a un div con tabIndex -1 sin rol ni nombre, y la prueba (editor-de-nota.test.tsx:408) solo comprueba activeElement.contains(aviso). Es el R3-H1 de T-037 repetido; el diseño lo pedía así a la letra.",
-      "escenario": "Si alguien quita role=alert de AvisoDeError, la prueba sigue verde. El lector de pantalla llega a un grupo sin nombre y no anuncia el conflicto."
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/barra-de-acciones.test.tsx",
+      "linea": 79,
+      "descripcion": "La prueba del scroll-padding no cubre el ResizeObserver, que jsdom no trae. Quitar observador?.disconnect() la deja en verde.",
+      "escenario": "Sin disconnect, en un navegador el observador avisa cuando la barra sale del DOM. reservar escribe 0px después de que la limpieza haya restaurado previo, y la siguiente ruta hereda un scroll-padding-bottom en línea que nadie pidió."
     },
     {
-      "id": "B0-H7",
+      "id": "B1-H8",
       "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/page.tsx",
-      "linea": 56,
-      "descripcion": "El armazón lee la cita sin desestructurar error. Un fallo pasajero llega como data null y acaba en notFound().",
-      "escenario": "El profesional entra desde la agenda en ?cita=<uuid> y la lectura de citas agota el tiempo. Le sale un 404, «no existe», para una cita que sí existe, en lugar de la página de error con su reintento."
+      "archivo": "app/(app)/pacientes/[id]/datos.ts",
+      "linea": 53,
+      "descripcion": "cargarPaciente se traga el error y devuelve null, y page.tsx:52-53 hace notFound(). Es B0-H7 un paso antes, fuera del territorio: va a docs/state.md §Hallazgos.",
+      "escenario": "La lectura de pacientes agota el tiempo y el profesional ve un 404 de un paciente que existe, antes de llegar a la lectura de la cita que B0-H7 ya protege."
     }
   ]
 }

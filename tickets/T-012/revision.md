@@ -649,3 +649,140 @@ Escenario: el profesional entra desde la agenda en `?cita=<uuid>` y la lectura d
 
 - Si `cerrarHistoriaDelPaciente` lanza, `cerrar` (`E:444-445`) se lo traga sin decir nada. La franja sigue mostrando la historia abierta, así que no engaña a nadie. Lo anoto por si se quiere avisar.
 - B.5.5. Las dos cadenas de `lib/notas/servidor.test.ts:1249-1255` coinciden letra a letra con los `raise` de `supabase/migrations/20261003120000_firma_cotejada_con_borrador_y_cita.sql:435` y `:444`. El 23514 que contiene `abierta_en` sigue dando `error` (`servidor.test.ts:661`). Lo he comprobado leyendo el código, no ejecutándolo.
+
+
+## Corte B · ronda 1
+
+**Ninguna ALTA en el corte B, ronda 1.** Hay 2 MEDIA y 6 BAJA.
+
+Rama `worktree-agent-ad97d3e94e2e4ab53`: los 8 commits de arreglos sobre los 7 del corte B. Diff leído con `git diff main...worktree-agent-ad97d3e94e2e4ab53`.
+
+Cómo lo he medido:
+- No he usado la base local.
+- Los mutantes y las sondas corren en una copia de la rama en mi scratchpad (`git archive`); el worktree no se ha tocado.
+- Línea base de la copia: 19 ficheros y 289 pruebas en verde.
+- Cada mutante se ejecuta contra su fichero de pruebas y el fuente se restaura después.
+
+Rutas cortas:
+- `E` = `app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx`
+- `ET` = `editor-de-nota.test.tsx`, en la misma carpeta
+- `S` = `lib/notas/servidor.ts`
+- `ST` = `lib/notas/servidor.test.ts`
+
+### Estado de los hallazgos de la ronda 0
+
+| Hallazgo | Estado | Mutante y resultado |
+|---|---|---|
+| B0-H1 | **A medias.** Cerrados los tres casos medidos (reloj, guardado `bloqueada` y firma `ok` con nota `null`). El aviso va en `role="status"` y el encabezado lleva `aria-describedby`. Siguen en `body` los que el propio B0-H1 nombraba: la firma con `ya_firmada`, `sin_borrador`, `no_autor` y `no_disponible`. Ver B1-H3. | Muere: quitar el foco al título (3 pruebas). Muere: quitar el foco al PIN. Muere: quitar el foco a «Recargar». Muere: quitar `role="status"`. **Sobrevive**: quitar `aria-describedby` (no lo fija nada; menor). |
+| B0-H2 | **Cerrado en lo que se pidió:** el encabezado «Última versión conjunta» y la lista «Versiones conjuntas». Pero la numeración enseña huecos (B1-H4), y una de las aserciones nuevas es vacua (B1-H5). | Muere: `lecturaConjunta = false` en `S`. Muere: el título fijo. Muere: quitar el `aria-label`. **Sobrevive**: `vigente={v.numero === vigente.numero}`, sin `!lecturaConjunta`. |
+| B0-H3 | **Cerrado en la aplicación, no en la regla.** El recorte se hace en servidor. El texto, las reservadas y el testigo no viajan, y la longitud no va en ningún campo del modelo. Un fallo de la RPC da `error` y no abre el borrador. Pero la regla aplicada no cumple la decisión del propietario en el único caso en que importa (B1-H1). | Muere: `puedeLeerBorrador = true`. Muere: quitar la rama del coprofesional. Muere: quitar `asignado === true`. Muere: quitar `puedeLeerBorrador &&` del borrador. Muere: quitar `hayBorrador &&` de `borradorOculto`. Muere: `if (errorAsignado)` → `if (false)`. Muere: quitar la vista de `borradorOculto` en `E`. **Sobrevive**: `p_paciente_id: usuario.id` (B1-H6). |
+| B0-H4 | Cerrado. | Muere: quitar `if (enVuelo.current) return;` (la prueba de los dos envíos en el mismo tick). |
+| B0-H5 | Cerrado. | Mueren los dos: `?? estado.caducaEn` → `as string` en `solo_modelo` y en `sin_recargar`. |
+| B0-H6 | Cerrado. El foco va al botón «Cargar lo guardado», que tiene rol y nombre. | Muere: enfocar el contenedor en vez del botón. |
+| B0-H7 | Cerrado en `page.tsx`. Queda la misma clase un paso antes, en `cargarPaciente` (B1-H8). | Muere: `if (error)` → `if (false)` en `page.tsx`. |
+| scroll-padding | Bien. `previo` se guarda y se restaura en la limpieza, el observador se desconecta y nadie más escribe `scrollPaddingBottom` (`grep` en `app`, `components` y `lib`), así que no queda estado sucio entre rutas. | Muere: quitar la restauración. Muere: restaurar a `''`. **Sobrevive**: quitar `observador?.disconnect()` (B1-H7). |
+
+### MEDIA
+
+**B1-H1 · `S:309` y `ST:1391`. El sustituto de la regla (`coprofesional_id`) está congelado desde la v1, así que no dice nada del alcance de la v2. Justo en el escenario que motivó B0-H3, el coprofesional nombrado lee el borrador que el autor quiere firmar como individual.**
+
+La decisión del propietario dice que, sin ser el autor, el texto se ve «si podría leer esa nota una vez firmada con el mismo alcance». La prueba que pide para no ver nada es «coprofesional con borrador individual → sin texto». La regla aplicada lee el `coprofesional_id` de la cabecera como «señal de que el autor la quiere conjunta». Pero:
+
+1. `fn_congelar_cabecera_sellada` (`supabase/migrations/20261003120000_firma_cotejada_con_borrador_y_cita.sql:678`) rechaza con 42501 cualquier cambio de `coprofesional_id` en cuanto existe una versión.
+2. Un lector que no es ni autor ni asignado solo ve la cabecera si ya hay una versión conjunta (`notas_clinicas_lectura` → `nota_tiene_version_conjunta`). Así que el único borrador que puede llegar a leer es el de una **modificación**, y en una modificación `coprofesional_id` es el de la v1 y el autor no puede cambiarlo.
+
+Escenario, el mismo de B0-H3:
+1. La v1 de una nota de pareja se firma conjunta, con A como coprofesional.
+2. El autor pulsa «Modificar» y escribe en el borrador lo que un miembro contó a solas, con la intención de firmar la v2 como individual. No tiene ninguna forma de decirlo: no puede quitar a A.
+3. `cargarModelo` le da a A `puedeLeerBorrador = true`.
+4. La gemela `ST:1391` («coprofesional con borrador conjunto (el autor lo nombró): lo recibe») fija como correcto exactamente lo que la decisión quería impedir. «Borrador conjunto» no existe: un borrador no tiene alcance.
+
+Hoy no se llega desde la pantalla, y lo he comprobado por dos lados:
+- A es `profesional_sanitario` (7b), y si no es asignado del paciente, `cargarPaciente` le da 404 y `registrar_acceso_historia` le da 42501.
+- El único lector que llega a `cargarModelo` sin ser autor ni asignado es un administrador que participa en el episodio, y ese nunca puede ser `coprofesional_id`.
+
+La rama `cab.coprofesional_id === usuario.id` es, por tanto, inalcanzable desde la aplicación. A sigue pudiendo leer `borrador_contenido` con un `select` directo a PostgREST, pero esa puerta ya existía antes (se anotó en la ronda 0) y está en `supabase/**`, fuera del territorio.
+
+Por qué es MEDIA y no BAJA: el código y su prueba dejan escrita como regla lo contrario de la decisión. El día que el coprofesional pueda abrir la historia, la fuga se activa sin tocar este fichero.
+
+Decide el propietario. Opciones que caben en el territorio: que lean solo el autor y el asignado; o dejar la rama y documentar que es inalcanzable. Cumplir la letra exige guardar el alcance previsto en el borrador, o una vista con RLS, y eso es `supabase/**`, otro ticket.
+
+**B1-H2 · `E:352-375`, `E:556` y `E:842`. Tras «Abrir el editor» el foco cae en `body` con cualquier resultado, y lo mismo pasa tras «Modificar», «Recargar» y «Cargar lo guardado».**
+
+Lo he medido con una sonda en `ET`. Antes de pulsar, el foco está en el propio disparador (`b.focus()`). En los siete casos medidos, `document.activeElement` acaba en `BODY`:
+- «Abrir el editor» → `abierta`, `error`, `no_disponible` y `elegir_episodio`;
+- «Modificar» con éxito;
+- «Recargar» tras `firmadaSinRecargar`;
+- «Cargar lo guardado» tras un conflicto.
+
+`sin_acceso` no lo he medido, pero leyendo el código tiene el mismo camino: no hay ningún efecto de foco para esa fase.
+
+En todos el disparador se desmonta y la vista nueva no recibe el foco. Es la clase de B0-H1 en los gestos de cada día; en la ronda 0 no lo medí.
+
+Escenario: un profesional entra con teclado en la nota de la cita y pulsa «Abrir el editor». El `textarea` aparece, pero el foco está en `body`: la siguiente pulsación de Tab empieza por la cabecera de la aplicación, y con lector de pantalla no se anuncia nada (la franja `role="status"` se monta a la vez que su texto). Con «Modificar» pasa lo mismo justo cuando va a corregir.
+
+Clasificación de lo que el implementador dejó a propósito, que son las vistas `sin_acceso`, `no_disponible`, `error` y `elegir_episodio` tras la carga:
+- Solas serían BAJA: las tres primeras pintan un `AvisoDeError` con `role="alert"`, que sí se anuncia.
+- Van aquí porque salen del mismo clic que `abierta`, que es la que pesa.
+
+Arreglo: el `textarea` (o el encabezado de la vista) recibe el foco cuando la fase cambia por un gesto, y se comprueba con `activeElement` y `toHaveAccessibleName`, como en T-037.
+
+### BAJA
+
+**B1-H3 · `E:613-615` y `barra-de-acciones.tsx:71`. B0-H1 a medias: tras una firma rechazada con `ya_firmada`, `sin_borrador`, `no_autor` o `no_disponible`, el foco cae en `body`.**
+
+Medido con el foco puesto antes en «Firmar»: `BODY` en los cuatro. Hay dos mecanismos distintos:
+1. Con `ya_firmada`, `sin_borrador` y `no_autor`, la vista pasa a solo lectura y la barra se desmonta. `useDevolucionDeFoco` devuelve el foco a un botón que ya no existe.
+2. Con `no_disponible` la barra sigue montada, pero el diálogo se desmonta mientras la transición sigue pendiente, y en ese momento «Firmar» tiene `disabled={pendiente}`. `focus()` sobre un botón deshabilitado no hace nada.
+
+Prueba del segundo: quitando `disabled={pendiente}` de «Firmar» en la copia, el foco vuelve a «Firmar». Con «Cancelar» el foco vuelve bien, porque no hay nada pendiente.
+
+Escenario: otra pestaña firma la nota mientras el diálogo está abierto. Al confirmar, el aviso `yaFirmada` (con `role="alert"`) se anuncia, pero el foco está en `body`. Es BAJA porque son caminos raros y el aviso sí se anuncia.
+
+**B1-H4 · `app/(app)/pacientes/[id]/historia/notas/fila-de-version.tsx:25` y `ET:809`. Para quien lee en modo conjunto, la numeración con huecos revela que existen versiones individuales.**
+
+Escenario:
+1. La v1 se firma conjunta, la v2 individual y la v3 conjunta.
+2. El administrador que participa en el episodio (no es asignado) abre la nota. Ve «Versión 1» y «Versión 3» bajo «Versiones conjuntas»: sabe que hay una v2 que no le enseñan, y cuándo se hizo, entre las dos fechas.
+
+El comentario de `lecturaConjunta` y el título de la prueba dicen «ninguna pista de versiones individuales». La prueba no lo ve porque usa versiones 1 y 2, consecutivas.
+
+Revela que existe la versión, no su contenido. Arreglo: numerar por posición en lo visible cuando `lecturaConjunta`, o aceptarlo y quitar la promesa del comentario y de la prueba. Decide el arquitecto.
+
+**B1-H5 · `ET:822`. `expect(screen.queryByText('vigente')).toBeNull()` es vacua: nunca encuentra nada.**
+
+`FilaDeVersion` pinta `' (vigente)'`, con paréntesis, y `queryByText` exige el texto exacto. Medido: con `vigente={v.numero === vigente.numero}` (sin `!lecturaConjunta`, `E:1046`), `ET` sigue en verde.
+
+Escenario de la regresión que no se vería: alguien quita la guarda y el lector conjunto vuelve a ver «Versión 2 (vigente)» sobre una versión ya sustituida, que es justo lo que B0-H2 quería evitar.
+
+Arreglo: `queryByText(/vigente/)` o buscar el `span` por su texto completo.
+
+**B1-H6 · `ST:1356`. El simulador responde a `rpc:es_profesional_asignado` sin mirar los argumentos.**
+
+Medido: con `p_paciente_id: usuario.id` en `S:302`, `ST` sigue en verde.
+
+Escenario de la regresión que no se vería: la RPC recibe el id del usuario en lugar del del paciente, devuelve `false` para todos y el profesional asignado pierde el borrador de su colega. Además vería «Última versión conjunta» aunque lee todas las versiones. No es una fuga, pero B0-H3 quedaría roto en silencio.
+
+Es «el simulador sin filtros» otra vez. Arreglo: comprobar `{ p_paciente_id: P }` en la llamada.
+
+**B1-H7 · `app/(app)/pacientes/[id]/historia/notas/barra-de-acciones.test.tsx:79`. La prueba del `scroll-padding` no cubre el observador: quitar `observador?.disconnect()` la deja en verde.**
+
+jsdom no trae `ResizeObserver`, así que en la prueba `observador` es `null` y la línea no se ejecuta.
+
+Escenario de la regresión que no se vería: sin `disconnect`, en un navegador el observador avisa también cuando la barra sale del DOM. `reservar` escribe `0px` en `scrollPaddingBottom` después de que la limpieza haya restaurado `previo`. Al navegar a otra ruta queda un `scroll-padding-bottom: 0px` en línea que nadie pidió, que es el estado global sucio que se quería evitar.
+
+Arreglo: simular `ResizeObserver` en la prueba y comprobar que se llama a `disconnect`.
+
+**B1-H8 · `app/(app)/pacientes/[id]/datos.ts` (`cargarPaciente`, llamado en `page.tsx:52-53`). Un error al leer el paciente se convierte en 404: es B0-H7 un paso antes.**
+
+`cargarPaciente` se traga `error` y devuelve `null`, y `page.tsx` hace `notFound()`.
+
+Escenario: la lectura de `pacientes` agota el tiempo y el profesional ve «no existe» para un paciente que sí existe, antes de llegar a la cita que B0-H7 ya protege.
+
+Clasificación de lo que el implementador dejó a propósito: BAJA y fuera del territorio. `datos.ts` no es de B.6 y lo usa toda la ficha. Va a `docs/state.md` §Hallazgos, no se arregla en este ticket.
+
+### Notas para el orquestador (no son hallazgos)
+
+- `aria-describedby` del encabezado del candado no lo fija ninguna prueba: el mutante que lo quita sobrevive. Lo que se lee al llegar el foco depende de él, porque el `role="status"` se monta a la vez que su texto. Si se toca B1-H2, conviene fijarlo en la misma pasada.
+- Cambiar `asignado === true` por `Boolean(asignado)` sobrevive, pero es un mutante equivalente: la RPC devuelve un booleano.
+- La sonda que mide el foco tras la firma tiene que poner antes el foco en «Firmar». `fireEvent.click` no mueve el foco, y sin eso `useDevolucionDeFoco` guarda `body` y cualquier caso sale en `BODY` por el motivo equivocado.

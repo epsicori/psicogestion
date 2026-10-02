@@ -1645,3 +1645,13 @@ Mandan sobre B.1-B.7 donde choquen.
   - quien figura como `coprofesional_id` de esa nota.
 - Cualquier otro coprofesional del episodio ve solo «Hay un borrador en curso».
 - La fábrica lo da por bueno: es la lectura más estrecha de la decisión del propietario.
+
+### B1-H1: el borrador ajeno, solo el autor y el asignado (ronda de revisión B-1, 02-10-2026)
+
+- La regla anterior (`coprofesional_id` de la cabecera) no sirve. `fn_congelar_cabecera_sellada` congela ese campo desde la v1, así que no expresa lo que el autor quiere para la versión en curso.
+- Como el alcance del borrador no se conoce hasta la firma, la fábrica aplica la decisión del propietario («recortar por alcance») por el lado seguro. El texto del borrador lo leen solo:
+  - el autor;
+  - el profesional asignado, que ya lee todas las versiones firmadas.
+- Cualquier otro lector ve «Hay un borrador en curso».
+- La prueba gemela que daba por buena la lectura del coprofesional nombrado se invierte.
+- La puerta por `select` directo a PostgREST sobre la cabecera es de `supabase/**`. Va a `docs/state.md` §Hallazgos, para el día en que el coprofesional pueda abrir la historia.
