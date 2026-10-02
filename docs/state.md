@@ -23,12 +23,12 @@
   (comparador por palabras, B2-H1..H3; **sin descarga**). Se implementa tras integrar B. Sin base.
 - **T-040** «Capa de exportación clínica» (riesgo alto): contrato escrito; la descarga sale de T-012. El
   administrador exporta solo por motivo cerrado y auditado (Ley 41/2002 art. 16.4, decisión 5). Falta diseño.
-- **Diseñados, en la cola de `supabase/`**: T-028a, T-015 (avisos; sello `20261006120000`), T-038.
+- **T-028a** implementado en la rama `worktree-agent-a239aecd75381c8f5` (`20261005120000`, banco 21, siembra,
+  tipos; mutantes medidos). Falta verificar, revisar e integrar. Cola de `supabase/`: T-015 (`20261006120000`), T-038.
   **T-039** (cita en episodio y modalidad): el arquitecto lo está diseñando.
 - **T-028** cortes B y C tras T-028a. Al corte B: E15.3 (`order desc limit 6` y su prueba), `hoy` inválido →
   `agenda.alta.sugerencias.error`; H8 y H9 (BAJA, pruebas de recorte y de día y hora).
-- **Tickets por escribir**: auditoría alineada con la matriz (H25); Ajustes › Tipos de terapia; CI; ADR de
-  telepsicología; foco del formulario del candado (abajo).
+- **Por escribir**: auditoría y matriz (H25); Ajustes › Tipos; CI; ADR de telepsicología; foco del candado.
 
 ## Bloqueos
 
@@ -70,10 +70,10 @@
 - **T-014 → T-015**: la ficha (`pacientes/[id]/datos.ts:320`) lee todas las alertas sin mirar el rol; lo cierra la
   RLS de T-015. Duda futura: ¿el técnico resuelve `consentimiento_pendiente`?
 - **Armazón**: objetivos < 44 px; el login lleva a `/pacientes`. **T-031/T-032** (MEDIA). T-011 sin ADR-045.
-- **H25**: el técnico lee el tipo de citas ajenas en sus filas de `auditoria` al reprogramar.
+- **H25**: el técnico lee el tipo de citas ajenas en sus filas de `auditoria` al reprogramar. **C18TEC**: el
+  banco 18 R1b afirma que TEC1 lee su cita (`profesional_id` = técnico); ya no la modifica (T-028a).
 - **CI nunca ha corrido**; a `ci.yml` le faltan `NEXT_PUBLIC_SUPABASE_*` y `SEGUNDO_FACTOR_AUTOMATICO_LOCAL`.
 - **R2-H4**: `seed.mjs:29`, `test-huellas.mjs:19` toman el primer `supabase_db_*`; usar `contenedorDelProyecto()`.
 - **Worktrees** sin integrar o sucios (no borrar sin mirar): T-014-correcciones `a080931`, T-021 diseño `aba4b63`,
   `a3e7280`, `a540024`, `a6a5f46`; sucios `a0cf274`, `a0fd267`, `a2250fd`, `a47a1a5`, `a5cb7c9`, `ac7b6a3`.
-- **Memoria desfasada**: `docs/interfaz.md:67` dice «Lista y alta, sin ficha».
-- Anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md`.
+- **Memoria desfasada**: `docs/interfaz.md:67` dice «Lista y alta, sin ficha». Antes del 13-09: `docs/bitacora/`.
