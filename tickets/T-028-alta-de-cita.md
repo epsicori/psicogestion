@@ -5,6 +5,28 @@ modelo: sonnet
 fase: 1
 prioridad: alta
 depende_de: [T-010, T-011, T-013, T-014, T-028a]
+territorio:
+  - lib/agenda/sugerencias.ts               # corte A
+  - lib/agenda/sugerencias.test.ts          # corte A
+  - lib/citas/alta.ts                       # corte B en adelante: tras T-028a y con T-012 integrado
+  - lib/citas/alta.test.ts
+  - lib/citas/esquemas.ts
+  - lib/citas/esquemas.test.ts
+  - lib/i18n/es.ts
+  - lib/contraste/tokens.ts
+  - components/ui/dialogo.tsx
+  - components/ui/dialogo.test.tsx
+  - app/(app)/layout.tsx
+  - app/(app)/@modal/**
+  - app/(app)/agenda/nueva/**
+  - app/(app)/agenda/page.tsx
+  - app/(app)/agenda/rejilla-semana.tsx
+  - app/(app)/agenda/rejilla-semana.test.tsx
+  - app/(app)/agenda/lista-dia.tsx
+  - app/(app)/agenda/lista-dia.test.tsx
+  - accesibilidad/**                        # solo para añadir /agenda/nueva a la lista de rutas
+  - docs/interfaz.md                        # solo el choque 4 y §14 (diseño E7)
+  - app/(app)/pacientes/[id]/panel-resumen.tsx   # corte C, tras integrar T-012
 estado: pendiente
 ---
 

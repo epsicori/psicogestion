@@ -796,3 +796,204 @@ Va detrás de «# Contexto», con la forma de las enmiendas de T-012c:
 
 - **E10 aprobado tal cual** y pegado en `tickets/T-028-alta-de-cita.md`. D12-D16 aceptadas.
 - **Q1 (H25)**: fuera de T-028a; ticket propio de auditoría.
+
+## Enmienda por la revisión del corte A (02-10-2026) — manda sobre §1.B y §5
+
+Revisión: `tickets/T-028/revision.md` (diff `e3db77d..e56c884`), puntos H3, H4, H5 y H7. Lo que
+no se nombra aquí sigue en vigor. H1, H2 y H6 son pruebas que faltan y no necesitan decisión,
+pero **E13 y E15 cambian lo que esperan las pruebas de H1**: ver E13.3 y E15.4.
+
+Cuatro cosas verificadas leyendo `lib/agenda/sugerencias.ts` en e56c884:
+- (b) filtra por `diaSemana` y `horaLocal`, nunca por fecha (`:133-138`).
+- Los intervalos entran todos en la moda, el 0 incluido (`:89-93`).
+- `MINIMO_PASADAS = 3` (`:38`, `:102`).
+- No se ordena, no se recorta ni se valida nada de la entrada (`:68-72`, `:90-91`).
+
+Comprobado también en `lib/fechas/calendario.ts`: `diasEntre` y `sumarDias` lanzan con una fecha
+mal formada (`exigir`), así que una `pasadas[i].fecha` mala ya falla con ruido. `hoy` no pasa por
+ninguna de las dos: solo se compara como cadena (`:71`, `:115`).
+
+Esto revoca dos de las cinco lecturas literales que `docs/state.md` da por confirmadas: «(b) puede
+caer antes del objetivo» (E12) e «intervalo 0 no es habitual» (E13).
+
+### E12 · (b) busca el día habitual **a partir del objetivo** (H3)
+
+1. **Regla.** §1.B, paso 3 (b) pasa a ser: «el siguiente bloque libre en `diaHabitual` a
+   `horaHabitual` **con `fecha >= objetivo`**, no usado → `diaHabitual`».
+   - En código, a la condición de `enDiaHabitual` se añade `b.fecha >= objetivo`, comparación
+     de cadenas, válida por E15.
+   - Se usa `>=` y no `>`: si el objetivo cae en el día habitual, su bloque a la hora habitual
+     ya lo ha tomado (a) y `usados` lo descarta. Si el objetivo cae en otro día, las dos son
+     iguales.
+2. **Por qué.** ADR-049c dice «la moda del intervalo […] **cruzada** con día y franja
+   habituales». La cadencia fija *cuándo* y el día y la franja fijan *qué hueco*. Una tarjeta
+   «su día habitual» tres semanas antes de la cadencia de un paciente mensual no cruza nada:
+   descarta el intervalo. Con el filtro, (b) es «el hueco habitual más próximo que respeta la
+   cadencia».
+   - En los pacientes semanales con todas las citas en el día habitual el resultado no cambia:
+     (b) ya caía después del objetivo.
+3. **Consecuencias aceptadas, que no se corrigen:**
+   - Paciente semanal cuya última cita cayó fuera del día habitual (martes habituales y un
+     jueves al final). (b) pasa a ser el martes posterior al jueves objetivo, no el martes de
+     antes. Se prefiere una sola regla a una ventana alrededor del objetivo.
+   - Paciente con cadencia mayor que la ventana de 4 semanas (§1.G). Si el objetivo y el día
+     habitual siguiente quedan fuera de los `libres`, (a) y (b) no existen. Sale
+     `modo: 'habitual'` con tres `primerHueco`, que dicen lo que son.
+   - Las tarjetas **no** van en orden de fecha. (c) suele ser anterior a (a). Nunca lo fueron, y
+     el motivo de cada una dice por qué está.
+4. **Prueba que debe ponerse en rojo**, `sugerencias.test.ts`, nueva: «(b) mensual: el día
+   habitual se busca a partir del objetivo».
+   - Pasadas: martes a las 12:00 el `2026-06-09`, `07-07`, `08-04`, `09-01` y `09-29`. Son
+     intervalos de 28 y el objetivo es el `2026-10-27`. `hoy = '2026-10-02'`.
+   - Caso 1, con el objetivo ocupado. `libres = [10-06 12:00, 10-13 12:00, 10-27 09:00,
+     11-03 12:00]`. Se espera **exactamente**
+     `[11-03 12:00 diaHabitual{2,'12:00'}, 10-06 12:00 primerHueco, 10-13 12:00 primerHueco]`.
+   - Caso 2, con el objetivo libre. `libres = [10-06 12:00, 10-27 12:00, 11-03 12:00]`. Se
+     espera `[10-27 comoLasUltimas{n:5}, 11-03 diaHabitual, 10-06 primerHueco]`.
+   - Se pone en rojo si se quita `b.fecha >= objetivo`: la tarjeta `diaHabitual` pasa a ser la
+     del 10-06, primera en el caso 1 y segunda en el caso 2.
+   - Las pruebas existentes de (b) (`:290`, `:309`, `:318`, `:342`) siguen verdes sin tocarlas.
+
+### E13 · Los intervalos 0 se descartan **antes** de la moda (H4)
+
+1. **Regla.** §1.B, paso 1: `intervalos` = días entre fechas consecutivas de `pasadas` (ya
+   ordenadas por E15), **quedándose solo con los `> 0`**.
+   - En código, `if (d > 0) intervalos.push(d)`.
+   - `diaHabitual` y `horaHabitual` siguen calculándose sobre **todas** las pasadas, las dos
+     citas del mismo día incluidas.
+2. **Por qué.** Un intervalo es la distancia entre una sesión y la siguiente, y dos citas el
+   mismo día no tienen distancia. El contrato reserva el frío para el paciente «sin historial
+   suficiente». Seis citas en tres semanas, martes a las 12:00 y a las 13:00, son historial
+   suficiente.
+   - Con la lectura literal, el 0 gana la moda (y todos los empates, por ser el menor) y deja
+     en frío justo a ese paciente.
+   - Con el descarte, la moda es 7, la hora habitual es 12:00 (empate 3-3 con las 13:00, gana la
+     menor) y el motivo de (a) es `cadaIntervalo`, porque no coinciden todas las horas.
+3. **La guarda `intervaloModa > 0` de `habitual` se queda** (H1, orden del orquestador). Tras
+   E13 y E15 es **inalcanzable**: los intervalos salen de fechas ordenadas y filtrados `> 0`.
+   - Su mutante es **equivalente**. El revisor lo anota así, no como superviviente.
+   - Lo que protege el `while` es el filtro de E13, y el filtro sí tiene prueba roja (abajo).
+   - Por eso **cambian las dos pruebas que pedía H1**:
+     - La de «intervalo modal 0 → en frío» pasa a ser la de la sesión doble, que espera
+       **habitual**.
+     - La de «moda negativa → en frío» pasa a ser la del orden descendente de E15.4, que espera
+       **lo mismo que en ascendente**.
+4. **Pruebas que deben ponerse en rojo**, `sugerencias.test.ts`, nuevas:
+   - «sesión doble semanal: los intervalos 0 no cuentan».
+     - Pasadas: `09-15 12:00, 09-15 13:00, 09-22 12:00, 09-22 13:00, 09-29 12:00, 09-29 13:00`.
+       `hoy = '2026-10-02'`. `libres = [10-06 12:00, 10-06 13:00, 10-13 12:00]`.
+     - Se espera exactamente `modo: 'habitual'` y
+       `[10-06 12:00 cadaIntervalo{dias:7}, 10-13 12:00 diaHabitual{2,'12:00'}, 10-06 13:00 primerHueco]`.
+     - **Se pone en rojo si se quita el filtro `> 0`**: la moda pasa a ser 0, la guarda la
+       rechaza y sale `enFrio`.
+   - «tres citas el mismo día: en frío».
+     - Pasadas: `09-29` a las `10:00`, `11:00` y `12:00`. Sin intervalos tras el filtro, sale
+       `enFrio`.
+     - Ejercita el camino de H1. Sigue verde si se quita solo el filtro o solo la guarda.
+     - Si se quitan los dos, el `while` no termina y la ejecución se cuelga. Vitest no corta un
+       bucle síncrono: es un rojo por cuelgue, no por aserción, y así se deja escrito en la
+       prueba.
+
+### E14 · Fuera `MINIMO_PASADAS`; §5 se corrige (H5)
+
+1. **Regla.** §1.B, paso 2 pasa a ser: «**Habitual** si existen las tres modas. Si no, **en
+   frío**».
+   - Se borran la constante `MINIMO_PASADAS` y su condición.
+   - Un comentario en el código dice por qué no hace falta: la moda del intervalo, con
+     frecuencia ≥ 2 y sobre intervalos `> 0`, exige dos intervalos positivos, es decir, tres
+     fechas distintas.
+2. **Por qué no se sube el umbral.** Sería cambiar qué paciente es «habitual» sin que lo pidan el
+   ADR ni el contrato. Y dejar una condición que ninguna prueba puede poner en rojo es afirmar
+   una protección que no existe. Es lo que señala H5.
+   - Con E13, «historial suficiente» queda definido en un solo sitio: **tres días distintos con
+     una cadencia repetida**.
+3. **§5 se corrige.** Donde dice «`sugerencias.test.ts` "en frío" debe fallar si el umbral baja a
+   2 citas», pasa a decir: **«"0, 1 y 2 pasadas: en frío" (`:35`) debe ponerse en rojo si
+   `FRECUENCIA_MINIMA` baja a 1»**.
+   - Con dos martes a las 12:00, el intervalo 7 tendría moda con frecuencia 1 y el paciente
+     saldría `habitual`. La revisión ya midió ese mutante muerto.
+   - El nombre de la prueba se queda igual.
+4. **Prueba roja nueva**, «dos días distintos con sesión doble: en frío».
+   - Pasadas: `09-22 12:00, 09-22 13:00, 09-29 12:00, 09-29 13:00`. Los intervalos son 0, 7 y 0,
+     que tras E13 quedan en un solo 7, con frecuencia 1. Sale `enFrio`.
+   - Se pone en rojo si alguien reintroduce un umbral sobre `pasadas.length` en lugar de la
+     frecuencia (cuatro pasadas lo pasarían). Si se quita el filtro de E13, el 0 tiene
+     frecuencia 2 y la guarda lo salva, así que esta sigue verde; la que se pone en rojo es la
+     de la sesión doble de E13.4.
+
+### E15 · La función es **el único sitio** que garantiza orden, longitud y `hoy` (H7)
+
+1. **Regla.** `sugerirHuecos` normaliza su entrada antes del paso 1, y nadie más la normaliza:
+   - **`hoy`**: si `!esFechaDeCalendario(entrada.hoy)`, **lanza** un `Error` cuyo mensaje
+     nombra `'hoy'` y lleva el valor recibido. Es el mismo estilo que `exigir` en
+     `lib/fechas/calendario.ts`.
+     - Es un error de programación: `hoy` lo calcula el servidor.
+     - En el corte B lo trata el estado de error de la pieza de sugerencias (§1.F,
+       `agenda.alta.sugerencias.error`), sin manejo propio.
+   - **`pasadas`**: se ordena una **copia** ascendente por `fecha` y después `horaLocal`, y se
+     queda con las **6 últimas**: `[...entrada.pasadas].sort(compararFechaHora).slice(-MAXIMO_PASADAS)`,
+     con `MAXIMO_PASADAS = 6`.
+   - **`libres`**: se ordena una **copia** ascendente con el mismo comparador antes de filtrar.
+     §1.A.1 no fija ningún `order by` en `agenda_bloques_profesional`, así que la suposición de
+     «orden ascendente» era la misma clase de confianza.
+   - `compararFechaHora(x, y)` compara con `<` y `>` sobre cadenas: primero `fecha` y, si
+     empatan, `horaLocal`. Sin `localeCompare`. Es privada del módulo.
+   - **Nunca se muta la entrada.**
+2. **Firma (§1.B), solo cambian los comentarios:** `pasadas` «cualquier orden y longitud: la
+   función ordena y usa las 6 más recientes»; `libres` «cualquier orden»; `hoy` «AAAA-MM-DD
+   válida, o lanza».
+3. **Lo que se queda en el llamante es otra cosa: *cuáles* seis.** La función no puede recuperar
+   citas que no recibe.
+   - `leerUltimasCitasPaciente` (§1.C) mantiene `order('inicio', { ascending: false })` y
+     `limit(6)`.
+   - Su prueba es del corte B, en `lib/citas/alta.test.ts`: el constructor de consultas
+     simulado recibe exactamente esas dos llamadas.
+   - El corte B **no** reordena ni recorta antes de llamar a `sugerirHuecos`. Si lo hace, es
+     código muerto.
+4. **Pruebas que deben ponerse en rojo**, `sugerencias.test.ts`, nuevas:
+   - «pasadas en orden descendente: mismo resultado que en ascendente».
+     - Entrada: `[...SEIS_MARTES].reverse()` con los `libres` de la prueba de `:170`. Se espera
+       `toEqual` con el resultado ascendente, y además que el array de entrada **siga
+       invertido** después de la llamada.
+     - Se pone en rojo si se quita la ordenación (intervalos −7, sale `enFrio`) o si se ordena
+       en el sitio (la entrada cambia).
+   - «más de seis pasadas: cuenta las seis más recientes».
+     - Pasadas: `08-13 10:00` y `08-20 10:00` (jueves), y después `SEIS_MARTES` a las 12:00,
+       en orden ascendente, con `libres = [10-06 12:00]`. Se espera que la 1.ª sea `10-06 12:00` con
+       `comoLasUltimas{n:6}`.
+     - Se pone en rojo sin el recorte (n = 8 y no coinciden todas, así que sale
+       `cadaIntervalo`) y con `slice(0, 6)` (dos jueves y cuatro martes, también
+       `cadaIntervalo`).
+   - «hoy mal formado: lanza».
+     - Con `'2026-10-2'` y con `'2026-02-30'`, y las pasadas y libres de `:170`: `toThrow(/hoy/)`.
+     - Se pone en rojo si se quita la validación: hoy devuelve en silencio, como midió la
+       revisión.
+   - «libres desordenados: en frío, los tres primeros por fecha y hora».
+     - `pasadas = []`, `libres = [10-13 12:00, 10-06 13:00, 10-06 09:00, 10-07 10:00]`. Se
+       espera `['2026-10-06T09:00', '2026-10-06T13:00', '2026-10-07T10:00']`.
+     - Se pone en rojo sin ordenar `libres`, y también si se ordena solo por `fecha`: la
+       ordenación es estable, así que el 13:00 quedaría delante del 09:00.
+   - La prueba existente de `:84` pasa `libres` desordenados y solo mira `[0]`. Sigue verde.
+
+### E16 · §5, qué revisar en el corte A (añade)
+
+- **(b) y la cadencia** (E12): la tarjeta `diaHabitual` nunca tiene una fecha anterior al
+  objetivo. El objetivo se recalcula a mano en la prueba mensual, no se lee de la función.
+- **Intervalos** (E13): el filtro `> 0` va **antes** de `moda`, no dentro de `habitual`. Día y
+  hora habituales se calculan sobre todas las pasadas, no sobre las filtradas.
+- **Mutantes equivalentes que no cuentan como supervivientes**: la guarda `intervaloModa > 0`
+  (E13.3). Nada más: cualquier otro mutante vivo del corte A es un hallazgo.
+- **Normalización** (E15):
+  - se hace una vez y al principio, y ninguna rama usa `entrada.pasadas` ni `entrada.libres`
+    después;
+  - las copias se hacen antes de `sort`;
+  - el recorte a 6 se aplica **después** de ordenar;
+  - `hoy` se valida antes de cualquier comparación.
+- **Sin umbral fantasma** (E14): ni `MINIMO_PASADAS` ni ningún `pasadas.length >= N` en
+  `habitual`.
+- **Corte B**: `leerUltimasCitasPaciente` con `order desc + limit 6` y su prueba (E15.3); ningún
+  `sort` ni `slice` sobre pasadas o libres en `contenido-alta.tsx` ni en las acciones.
+
+**Territorio:** sin cambios. La línea `territorio:` de §6 + E7 pasa al frontmatter del contrato
+`tickets/T-028-alta-de-cita.md`, en lista de bloque y sin líneas de solo comentario, porque
+`territorio.mjs` deja de leer el bloque en la primera línea que no empieza por `-`.
