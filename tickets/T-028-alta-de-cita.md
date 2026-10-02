@@ -4,9 +4,27 @@ titulo: Alta de cita — sugerencias, serie y conflicto (pantalla)
 modelo: sonnet
 fase: 1
 prioridad: alta
-depende_de: [T-010, T-011, T-013, T-014]
+depende_de: [T-010, T-011, T-013, T-014, T-028a]
 estado: pendiente
 ---
+
+# Enmienda por ADR-074 y ADR-075 (propietario, 02-10-2026)
+
+Manda sobre lo que sigue donde choque.
+- `depende_de` añade **T-028a** (base del alta de cita) para todo lo que no es el corte A.
+- **Campos**: «modalidad» sale (ADR-075). El tipo de terapia es obligatorio y fija la
+  duración.
+- **El técnico administrativo elige el tipo de terapia en este formulario** (ADR-074.1). Las
+  tareas «el campo se omite» y «la cita se crea con el tipo por defecto del profesional»
+  quedan sin objeto. Sigue en vigor que **ninguna pantalla de lectura** (agenda, ficha de cita,
+  previsualización, motivos de sugerencia) le enseñe el tipo de ninguna cita, tampoco de las
+  que dio él.
+- El criterio «como `tecnico_administrativo`, el campo de tipo de terapia no está en el DOM, y
+  ningún motivo de sugerencia lo nombra» pasa a ser: **«como `tecnico_administrativo`, el
+  campo de tipo de terapia está en el formulario y lista solo el catálogo activo; tras guardar,
+  ni la agenda, ni la ficha de cita, ni la previsualización enseñan el tipo; ningún motivo de
+  sugerencia lo nombra»**.
+- **Criterio nuevo:** en `/agenda/nueva` no hay ningún control ni texto de modalidad.
 
 # Contexto
 
