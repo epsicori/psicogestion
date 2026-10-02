@@ -1,0 +1,59 @@
+{
+  "ticket": "T-037",
+  "ronda": 3,
+  "diff": "202934a..ea91ac3",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 4,
+  "trasladados": 1,
+  "cerrados": [
+    "A-H1 (ronda 2, para quien ve la pantalla; para el lector de pantalla, con R2-H1)",
+    "B-H1 (ronda 2)",
+    "A-H2 (ronda 2, para el spec; el resto sigue en R2-H4)",
+    "R2-H1 (ronda 3: el foco va a la vista del aviso; lo que se anuncia sigue en R3-H1)",
+    "R2-H2 (ronda 3: los refrescos diferidos de 200 y 3000 ms mueren; el plazo largo sigue en R3-H2)"
+  ],
+  "hallazgos": [
+    {
+      "id": "R3-H1",
+      "severidad": "BAJA",
+      "archivo": "app/primera-vez/segundo-factor.tsx",
+      "linea": 144,
+      "descripcion": "El foco llega a un div sin rol ni nombre accesible, y la región role=\"status\" sigue naciendo con el texto dentro: lo que oye el lector al llegar depende de que lea el subárbol por su cuenta, y la prueba no exige qué se anuncia.",
+      "escenario": "Medido en jsdom con dom-accessibility-api: el elemento enfocado da role null, nombre \"\" y descripción \"\". Un lector que anuncia el foco por nombre y rol no dice nada, y uno que lee el contenido empieza por «Verificación en dos pasos», el mismo título de la vista anterior. Quitar role=\"status\" deja el banco 5/5 en verde. No medido con un lector real."
+    },
+    {
+      "id": "R3-H2",
+      "severidad": "BAJA",
+      "archivo": "app/primera-vez/segundo-factor.test.tsx",
+      "linea": 147,
+      "descripcion": "El caso 5 promete «no ocurre solo por mucho que pase el tiempo», pero solo avanza 30 s: un refresco diferido de 60 s pasa el banco.",
+      "escenario": "Medido: setFalloCodigos(...); setTimeout(() => router.refresh(), 60000) ⇒ 5/5 en verde. Un autodescarte al minuto devuelve A-H1 a quien tarda más de un minuto en leer. Con el código del diff, vi.getTimerCount() vale 0 tras findByText: expect(vi.getTimerCount()).toBe(0) o vi.runAllTimers() mataría cualquier plazo."
+    },
+    {
+      "id": "R2-H3",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/totp.ts",
+      "linea": 53,
+      "descripcion": "El aviso («No se pudieron generar los códigos de recuperación.») no dice que no se volverán a ofrecer ni que hay que pedir la reposición (D8), y la vista no ofrece reintentar aunque el RPC lo admitiría en la ventana de 5 minutos.",
+      "escenario": "Error transitorio de PostgREST al activar ⇒ aviso ⇒ «Aceptar» ⇒ el usuario supone que se reintentará ⇒ ninguna entrada regenera ⇒ meses después el canje da sin_codigos. Una segunda llamada a generarCodigos() dentro de los 5 minutos lo habría curado."
+    },
+    {
+      "id": "R2-H4",
+      "severidad": "BAJA",
+      "archivo": "scripts/seed.mjs",
+      "linea": 29,
+      "descripcion": "El arreglo de A-H2 protege solo al spec: localizarContenedor() sigue tomando el primer supabase_db_*, y seed.mjs y test-huellas.mjs:19 confirman filas con él. Está fuera del territorio y docs/state.md aún no lo anota.",
+      "escenario": "Si se recrea supabase_db_cinfa-e2e después de la base de Psicogestión, npm run seed siembra en la base del otro proyecto los usuarios de demostración con su contraseña conocida, y npm run test:huellas escribe allí su cadena de prueba."
+    },
+    {
+      "id": "A-H3",
+      "severidad": "BAJA",
+      "estado": "trasladado al ticket «regenerar mis códigos» (T-037 P-1; anotado en docs/state.md)",
+      "archivo": "app/primera-vez/acciones.ts",
+      "linea": 21,
+      "descripcion": "T-037 quita la rotación accidental del lote en cada entrada. Un lote regenerado con una sesión aal2 robada, en sus 5 minutos de ventana, ya no caduca y el titular no recibe ningún aviso.",
+      "escenario": "El atacante tiene las cookies aal2 de la víctima menos de 5 minutos después de su TOTP, invoca generarCodigos (o el RPC) y recibe 10 códigos. El lote de la víctima queda caducado sin aviso y el del atacante sigue vigente hasta que lo use."
+    }
+  ]
+}

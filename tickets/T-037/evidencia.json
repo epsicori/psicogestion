@@ -1,0 +1,100 @@
+{
+  "ticket": "T-037",
+  "resumen": "Tercera verificacion, commit ea91ac3. Diff 202934a..ea91ac3 solo toca app/primera-vez/segundo-factor.tsx y su test. npm test 1315/1315, lint 0 errores, build OK, no-fuga vacio, territorio verde. R2-H1 y R2-H2 comprobados con contraensayo. Criterios de base y Playwright citados de 75befdd, verificacion 2. Arbol limpio.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "Al activar el factor por primera vez se generan los códigos y se muestran una sola vez.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: PUERTO=3251 npx playwright test accesibilidad/codigos-recuperacion.spec.ts --workers=1 ; SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo PUERTO=3252 igual",
+      "evidencia": "1 passed (32.1s) sin variable y 1 passed (28.7s) con variable. Pasos S2-S4: titulo 'Tus códigos de recuperación', 10 codigos unicos, L1 {vigentes:10,total:10,factores:1} por consulta, y tras 'Ya los he guardado' no reaparece."
+    },
+    {
+      "id": 2,
+      "texto": "Una entrada posterior con TOTP no genera códigos nuevos: el lote de la base es el mismo antes y después, por consulta.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: mismo spec (S7: L2 toEqual L1) con y sin variable; vitest app/primera-vez/segundo-factor.test.tsx",
+      "evidencia": "Verde en ambas variantes del spec. Test de componente 'entrar con un factor ya activo no genera códigos' en verde (4/4 con HEAD). Contraensayo de rojo hecho en la verificacion anterior (a6f5822: total 10 -> 20)."
+    },
+    {
+      "id": 3,
+      "texto": "npm test, lint, build y test:rls limpios; territorio.mjs T-037 en verde.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: npm test; npm run lint; npx next build --webpack; npx supabase db reset; npm run seed; npm run test:rls; node ~/.claude/pipeline/territorio.mjs T-037",
+      "evidencia": "Test Files 107 passed, Tests 1273 passed; lint 0 errors 2 warnings (lib/cuentas/accesos.test.ts, preexistente); build completo; db reset OK, seed completado; test:rls exit 0; territorio: 'T-037: 9 fichero(s) tocado(s), todos dentro de app/primera-vez/**, lib/cuentas/**, accesibilidad/**.'",
+      "nota": "Base/RLS/Playwright de 75befdd; en ea91ac3 el diff 202934a..ea91ac3 solo toca app/primera-vez/segundo-factor.tsx y su test, sin tocar base, scripts ni spec Playwright, asi que no afecta a esa evidencia."
+    },
+    {
+      "id": "no-fuga",
+      "texto": "Comprobaciones del diseño: .next/static sin variables.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: grep -rlE \"SEGUNDO_FACTOR_AUTOMATICO_LOCAL|SEMILLATOTPDEMO\" .next/static",
+      "evidencia": "exit 1, sin coincidencias."
+    },
+    {
+      "id": "A-H1",
+      "texto": "Si generarCodigos falla al activar, el aviso se queda hasta pulsar «Aceptar» y despues se pasa al PIN.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: Copia temporal: app/primera-vez/acciones.ts devolviendo ok:false 'FORZADO-FALLO-T037', next build --webpack y spec Playwright temporal (activar, esperar aviso, 4 s, comprobar aviso aun visible y sin PIN, pulsar Aceptar, esperar PIN). PUERTO=3254 --workers=1",
+      "evidencia": "1 passed (7.8s): el aviso seguia visible tras 4 s, no aparecia el heading 'Tu PIN de historia' hasta pulsar 'Aceptar', y despues el PIN se veia y el aviso desaparecia. Copia y spec temporal deshechos; build regenerado; git status vacio."
+    },
+    {
+      "id": "B-H1",
+      "texto": "segundo-factor.test.tsx tiene 4 casos y el cuarto falla con segundo-factor.tsx de bd3b1b7.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: git checkout bd3b1b7 -- app/primera-vez/segundo-factor.tsx; npx vitest run app/primera-vez/segundo-factor.test.tsx; git checkout HEAD -- app/primera-vez/segundo-factor.tsx",
+      "evidencia": "4 tests | 1 failed: 'si generar los códigos falla al activar, el aviso se queda hasta que el usuario sigue' -> expected vi.fn() to not be called at all, but actually been called 1 times; 3 passed. Con HEAD, 4/4 verdes. Restaurado."
+    },
+    {
+      "id": "A-H2",
+      "texto": "El spec usa el contenedor del proyecto y no otro supabase_db_*.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: docker ps (supabase_db_Psicogestion y supabase_db_cinfa-e2e presentes); test vitest temporal llamando contenedorDelProyecto() con project_id real y con project_id = \"inexistente-xyz\" en copia de config.toml",
+      "evidencia": "Con config real: 'OK:supabase_db_Psicogestion'. Con project_id renombrado: 'ERROR:No hay un contenedor \"supabase_db_inexistente-xyz\" en ejecución ... No se usa ningún otro supabase_db_*.' config.toml restaurado, test temporal borrado, git status vacio."
+    },
+    {
+      "id": "fallo-suelto",
+      "texto": "acceso.spec.ts:138 intermitente en test:a11y con la variable.",
+      "veredicto": "PASA",
+      "comando": "75befdd, verificación 2: SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo npx playwright test (3 veces) + --workers=1 (1 vez); luego 5 veces con --grep-invert T-037 y 3 con todo",
+      "evidencia": "Pedidas: run1 FALLA (acceso.spec.ts:138, 7 passed 1 failed), run2 8 passed, run3 8 passed, --workers=1 8 passed. Extra sin el spec nuevo (--grep-invert T-037): 4 de 5 verdes y 1 FALLA en :138 (6 passed 1 failed). Con todo: 2 de 3 verdes, 1 FALLA en :138. El fallo se reproduce sin el spec nuevo, asi que no es de T-037; es una carrera del propio acceso.spec.ts (perfil 'Ana Márquez'/enlace 'Pacientes' no visible) con workers en paralelo; con --workers=1 no aparecio en la unica pasada."
+    },
+    {
+      "id": "CI",
+      "texto": "Verde de CI",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "CI no se puede ejecutar en local; haria falta una ejecucion real en GitHub Actions."
+    },
+    {
+      "id": "R3-suite",
+      "texto": "npm test, lint, build, no-fuga y territorio en ea91ac3",
+      "veredicto": "PASA",
+      "comando": "npm test; npm run lint; npx next build --webpack; grep -rlE \"SEGUNDO_FACTOR_AUTOMATICO_LOCAL|SEMILLATOTPDEMO\" .next/static; node ~/.claude/pipeline/territorio.mjs T-037",
+      "evidencia": "Test Files 108 passed, Tests 1315 passed; lint 0 errors, 2 warnings preexistentes (lib/cuentas/accesos.test.ts); build OK; grep exit 1 sin coincidencias; territorio: 9 ficheros dentro de app/primera-vez/**, lib/cuentas/**, accesibilidad/**."
+    },
+    {
+      "id": "R2-H1",
+      "texto": "Tras aparecer el aviso de códigos fallidos el foco está en la vista del aviso, no en BODY; con segundo-factor.tsx de 202934a la prueba falla.",
+      "veredicto": "PASA",
+      "comando": "git checkout 202934a -- app/primera-vez/segundo-factor.tsx; npx vitest run app/primera-vez/segundo-factor.test.tsx; git checkout HEAD -- app/primera-vez/segundo-factor.tsx",
+      "evidencia": "Con 202934a: 5 tests, 1 failed (el del aviso): AssertionError expected <body> not to be <body>. Con HEAD 5/5 verdes. Restaurado."
+    },
+    {
+      "id": "R2-H2",
+      "texto": "Un setTimeout(router.refresh) tras poner el fallo hace fallar la prueba.",
+      "veredicto": "PASA",
+      "comando": "sed en la linea de setFalloCodigos anadiendo setTimeout(() => router.refresh(), N) con N=200, 3000, 30000; vitest del fichero; git checkout HEAD",
+      "evidencia": "200 ms: falla (refresh llamado 2 veces); 3000 ms: falla (1 vez); 30000 ms: falla (1 vez; el reloj avanza exactamente 30000, asi que un temporizador de >30000 ms no se detectaria: limite conocido de la prueba, aceptable). Mutantes deshechos; arbol limpio."
+    },
+    {
+      "id": "R2-foco",
+      "texto": "El elemento con foco tiene indicador visible o es contenedor no interactivo (tabIndex=-1) como zona-por-confirmar.tsx.",
+      "veredicto": "PASA",
+      "comando": "git diff 202934a..ea91ac3; grep tabIndex app/(app)/agenda/zona-por-confirmar.tsx",
+      "evidencia": "Nuevo: <div ref={vistaFallo} tabIndex={-1} className=\"flex flex-col gap-4 outline-none\"> con focus() en useEffect; identico al patron de zona-por-confirmar (tabIndex={-1} ... outline-none). Contenedor no interactivo, sin tab stop. Navegador no ejecutado por prohibicion de usar next dev/Playwright; la prueba jsdom comprueba document.activeElement."
+    }
+  ],
+  "regresiones": [
+    "acceso.spec.ts:138 ('la barra lateral enseña el perfil de verdad') es intermitente (~1 de 3-5 pasadas) con SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo, tambien sin el spec de T-037. Preexistente, fichero no tocado; conviene anotarlo en docs/state.md §Hallazgos."
+  ]
+}
