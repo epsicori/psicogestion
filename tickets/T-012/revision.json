@@ -1,33 +1,25 @@
 {
   "ticket": "T-012",
-  "ronda": "corte C · ronda 1 (07e04f2, rama T-012-corte-c)",
+  "ronda": "corte C · ronda 2 (07e04f2..61f6109, rama T-012-corte-c)",
   "altas": 0,
   "medias": 0,
-  "bajas": 4,
+  "bajas": 3,
   "hallazgos": [
     {
-      "id": "C1-H1",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/comparador.tsx",
-      "linea": 95,
-      "descripcion": "Ninguna prueba compara dos versiones con el mismo texto y distintas reservadas. El mutante hayCambios = [nota].some(...), que solo mira la nota, deja las 17 pruebas de comparador.test.tsx en verde.",
-      "escenario": "Con el mutante, una modificación que solo añade una anotación reservada anuncia «Sin cambios entre estas dos versiones.» con role=status, mientras el bloque de reservadas de debajo enseña lo añadido. El clínico que se fía del aviso no mira el bloque."
-    },
-    {
-      "id": "C1-H2",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/comparador.tsx",
-      "linea": 84,
-      "descripcion": "Ninguna prueba elige un par distinto del que sale por defecto. Sobreviven tres mutantes: useMemo de la nota sin dependencias (Q1), useMemo de las reservadas sin a/b (Q2) y b siempre la vigente (Q5). La única prueba que mueve los desplegables tiene dos versiones y acaba en el mismo par 1→2.",
-      "escenario": "Con Q1 y tres versiones, el profesional elige «Desde: Versión 1». El título dice «De la versión 1 a la 3», pero el diff sigue siendo el de la v2 a la v3, y lo cambiado de la v1 a la v2 no aparece. Con Q5, «Hasta: Versión 2» se compara contra la v3."
-    },
-    {
-      "id": "C1-H3",
+      "id": "C2-H1",
       "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 210,
-      "descripcion": "Si «Volver a intentarlo» falla otra vez, el aviso noSeRecargo se queda con el mismo texto. El role=alert no cambia, el +1 de enfoqueAviso enfoca el botón que ya tenía el foco y no hay estado de pendiente. La prueba editor-de-nota.test.tsx:1177 fija ese silencio como correcto.",
-      "escenario": "Sin red, un usuario de NVDA pulsa «Volver a intentarlo» varias veces. Solo la primera transición (firmadaSinRecargar → noSeRecargo) se anuncia. En las siguientes no oye nada y no sabe si la recarga está en curso, salió bien o falló."
+      "linea": 818,
+      "descripcion": "Ninguna prueba sostiene que fallosDeRecarga solo cambie el texto del aviso noSeRecargo: el mutante E4, sin «estado.aviso === 'noSeRecargo' &&», deja las 99 pruebas de editor-de-nota en verde.",
+      "escenario": "Con el mutante: firmada sin recargar → «Recargar» falla → «Volver a intentarlo» falla (contador 2) → el tercer intento contesta no_disponible. El aviso pasa a noDisponible con el contador en 2 y la pantalla vuelve a decir «Tampoco se pudo recargar la nota (intento 2).»: el texto es idéntico, así que NVDA no lo anuncia, y además es falso, porque la nota ya no está disponible."
+    },
+    {
+      "id": "C2-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 198,
+      "descripcion": "Ninguna prueba sostiene que fallosDeRecarga vuelva a 0 cuando una recarga sale bien: el mutante E5, que lo arrastra en la apertura abierta igual que esa línea ya arrastra enfoqueVigente, deja las 99 pruebas en verde.",
+      "escenario": "Con el mutante y la nota abierta en dos dispositivos: en el ordenador, la firma sale sin nota, «Recargar» falla dos veces y la tercera recarga trae un borrador abierto desde la tableta. El profesional firma de nuevo, la firma vuelve a salir sin nota y la recarga falla: el primer fallo de este ciclo nuevo dice «Tampoco se pudo recargar la nota (intento 3).»."
     },
     {
       "id": "B1-H8",
@@ -39,6 +31,17 @@
     }
   ],
   "rondas_anteriores": [
+    {
+      "ronda": "corte C · ronda 1 (07e04f2, rama T-012-corte-c)",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 4,
+      "cerrados_en_corte_c_ronda_2": [
+        "C1-H1",
+        "C1-H2",
+        "C1-H3"
+      ]
+    },
     {
       "ronda": "corte B · ronda 3 (0c6fac2, rama worktree-agent-a50633aa7d7148c4d)",
       "altas": 0,
