@@ -84,5 +84,35 @@ describe('BarraDeAcciones', () => {
       unmount();
       expect(document.documentElement.style.scrollPaddingBottom).toBe('3px');
     });
+
+    it('B1-H7 · observa la barra y desconecta el ResizeObserver al desmontar (jsdom no trae uno)', () => {
+      const observe = vi.fn();
+      const disconnect = vi.fn();
+      let avisar: () => void = () => {};
+      class FalsoObservador {
+        constructor(alturaCambia: () => void) {
+          avisar = alturaCambia;
+        }
+        observe = observe;
+        disconnect = disconnect;
+        unobserve = vi.fn();
+      }
+      vi.stubGlobal('ResizeObserver', FalsoObservador);
+      try {
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 40 });
+        const { unmount } = render(<BarraDeAcciones {...base} puedeGuardar />);
+        expect(observe).toHaveBeenCalledTimes(1);
+        expect(observe).toHaveBeenCalledWith(screen.getByRole('toolbar'));
+        // Un cambio de alto de la barra se refleja en el scroll-padding.
+        Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 90 });
+        avisar();
+        expect(document.documentElement.style.scrollPaddingBottom).toBe('90px');
+        expect(disconnect).not.toHaveBeenCalled();
+        unmount();
+        expect(disconnect).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
   });
 });
