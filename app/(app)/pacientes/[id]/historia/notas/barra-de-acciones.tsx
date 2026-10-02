@@ -68,7 +68,7 @@ export function BarraDeAcciones({
         </Button>
       )}
       {puedeFirmar && (
-        <Button onClick={alFirmar} disabled={pendiente}>
+        <Button onClick={alFirmar} disabled={pendiente} data-accion="firmar">
           {t('notas.editor.firmar')}
         </Button>
       )}

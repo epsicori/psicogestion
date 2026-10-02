@@ -338,6 +338,12 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
   const refBloqueada = useRef<HTMLDivElement>(null);
   const refTituloBloqueada = useRef<HTMLHeadingElement>(null);
   const refVigente = useRef<HTMLHeadingElement>(null);
+  const refRaiz = useRef<HTMLDivElement>(null);
+  // Un gesto (abrir, modificar, recargar) va a reemplazar la vista: al pintarse la nueva, el foco
+  // va a su primer control o encabezado (B1-H2). Nunca se queda en `body`.
+  const pedirFoco = useRef(false);
+  // El diálogo de firma se cerró: si el foco no tiene dónde volver, se rescata (B1-H3).
+  const rescateDeFoco = useRef(false);
 
   const abierta = estado.fase === 'abierta' ? estado : null;
 
@@ -367,6 +373,9 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
       } finally {
         abriendo.current = false;
       }
+      // Un fallo al recargar deja la vista y su botón donde estaban: no hay nada que enfocar.
+      const sigueLaVista = Boolean(opciones.reabrir) && (resultado.estado === 'error' || resultado.estado === 'no_disponible');
+      pedirFoco.current = (resultado.estado !== 'bloqueada' || Boolean(opciones.trasPin)) && !sigueLaVista;
       if (resultado.estado === 'abierta') sesion.current = sesionDesdeNota(resultado.nota);
       else if (resultado.estado !== 'error' && resultado.estado !== 'no_disponible') sesion.current = null;
       else if (!opciones.reabrir) sesion.current = null;
@@ -488,6 +497,41 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
     if (enfoqueVigente > 0) refVigente.current?.focus();
   }, [enfoqueVigente]);
 
+  /** Lo primero con rol y nombre de la vista actual, en este orden de preferencia. */
+  const enfocarPrimero = (selectores: string[]) => {
+    const raiz = refRaiz.current;
+    if (raiz === null) return;
+    for (const selector of selectores) {
+      const el = raiz.querySelector<HTMLElement>(selector);
+      if (el !== null) {
+        el.focus();
+        return;
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!pedirFoco.current) return;
+    pedirFoco.current = false;
+    enfocarPrimero(['textarea', 'h2[tabindex="-1"]', '[role="group"][tabindex="-1"]', 'button:not([disabled])']);
+  }, [estado]);
+
+  // Va la última de las de foco: si otra ya movió el foco a un sitio con nombre, no se toca.
+  useEffect(() => {
+    if (dialogo) {
+      rescateDeFoco.current = true;
+      return;
+    }
+    // El diálogo se desmonta con la transición aún en curso: «Firmar» sigue deshabilitado y un
+    // `focus()` sobre él no hace nada. Se espera a que acabe.
+    if (!rescateDeFoco.current || pendiente) return;
+    rescateDeFoco.current = false;
+    if (document.activeElement !== null && document.activeElement !== document.body) return;
+    const botonAviso = refAviso.current?.querySelector<HTMLElement>('button');
+    if (botonAviso) botonAviso.focus();
+    else enfocarPrimero(['[data-accion="firmar"]:not([disabled])', 'textarea', 'button:not([disabled])']);
+  }, [dialogo, pendiente, estado]);
+
   // ---- teclear --------------------------------------------------------------------------
 
   const alTexto = (valor: string) => {
@@ -510,6 +554,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
     }
     if (completa) {
       sesion.current = sesionDesdeNota(r.nota);
+      pedirFoco.current = true;
       dispatch({ tipo: 'modelo', nota: r.nota, caducaEn: r.caducaEn, enfocar: false });
     } else {
       dispatch({ tipo: 'solo_modelo', nota: r.nota, caducaEn: r.caducaEn });
@@ -627,7 +672,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
 
   if (estado.fase === 'inicial') {
     return (
-      <Contenedor>
+      <Contenedor refRaiz={refRaiz}>
         <div>
           <Button onClick={() => void abrir()}>{t('notas.editor.abrir')}</Button>
         </div>
@@ -637,7 +682,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
 
   if (estado.fase === 'cargando') {
     return (
-      <Contenedor>
+      <Contenedor refRaiz={refRaiz}>
         <EsqueletoEditor />
       </Contenedor>
     );
@@ -645,7 +690,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
 
   if (estado.fase === 'bloqueada') {
     return (
-      <Contenedor>
+      <Contenedor refRaiz={refRaiz}>
         <div
           ref={refBloqueada}
           className="border-border bg-card flex flex-col items-center gap-3 rounded-xl border px-6 py-12 text-center"
@@ -674,23 +719,27 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
 
   if (estado.fase === 'sin_acceso') {
     return (
-      <Contenedor>
-        <AvisoDeError mensaje={t('notas.aviso.sinAcceso')} />
+      <Contenedor refRaiz={refRaiz}>
+        <div tabIndex={-1} role="group" aria-label={t('notas.aviso.sinAcceso')} className="outline-none">
+          <AvisoDeError mensaje={t('notas.aviso.sinAcceso')} />
+        </div>
       </Contenedor>
     );
   }
 
   if (estado.fase === 'no_disponible') {
     return (
-      <Contenedor>
-        <EstadoVacio frase={t('notas.aviso.noDisponible')} />
+      <Contenedor refRaiz={refRaiz}>
+        <div tabIndex={-1} role="group" aria-label={t('notas.aviso.noDisponible')} className="outline-none">
+          <EstadoVacio frase={t('notas.aviso.noDisponible')} />
+        </div>
       </Contenedor>
     );
   }
 
   if (estado.fase === 'error') {
     return (
-      <Contenedor>
+      <Contenedor refRaiz={refRaiz}>
         <AvisoDeError
           mensaje={t('notas.aviso.noSeAbrio')}
           accion={<Button variante="contorno" onClick={() => void abrir()}>{t('notas.aviso.reintentar')}</Button>}
@@ -701,7 +750,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
 
   if (estado.fase === 'elegir_episodio') {
     return (
-      <Contenedor>
+      <Contenedor refRaiz={refRaiz}>
         <ElegirEpisodio
           episodios={estado.episodios}
           alContinuar={(episodioId) => void abrir({ episodioId })}
@@ -729,7 +778,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
   };
 
   return (
-    <Contenedor>
+    <Contenedor refRaiz={refRaiz}>
       <div className="border-border bg-muted/40 flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3">
         <p className="flex flex-1 items-center gap-2 text-sm" suppressHydrationWarning>
           <LockOpen className="text-primary size-4" aria-hidden="true" />
@@ -871,8 +920,12 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
   );
 }
 
-function Contenedor({ children }: { children: React.ReactNode }) {
-  return <div className="flex min-h-[100dvh] flex-col gap-4">{children}</div>;
+function Contenedor({ children, refRaiz }: { children: React.ReactNode; refRaiz: React.Ref<HTMLDivElement> }) {
+  return (
+    <div ref={refRaiz} className="flex min-h-[100dvh] flex-col gap-4">
+      {children}
+    </div>
+  );
 }
 
 /** `abierta` solo existe tras un gesto, nunca en el HTML del servidor: la consulta es segura. */
