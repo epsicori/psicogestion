@@ -129,12 +129,6 @@ async function leerCabeceraLeida(supabase: Supabase, notaId: string): Promise<Le
   return { ok: true, valor: data as Cabecera | null };
 }
 
-/** Para quien solo necesita «¿se ve?»: un fallo de lectura cuenta como «no». */
-async function leerCabecera(supabase: Supabase, notaId: string): Promise<Cabecera | null> {
-  const leida = await leerCabeceraLeida(supabase, notaId);
-  return leida.ok ? leida.valor : null;
-}
-
 type Episodio = { modalidad: string; centroId: string | null; abiertoEn: string };
 
 /**
@@ -666,7 +660,10 @@ export async function firmarNota(
   const fallo = (motivo: MotivoFallo): ResultadoDeNota => ({ ok: false, motivo });
 
   // 2 · Se relee la cabecera: de ahí sale todo lo que se sella, nunca del formulario.
-  const cab = await leerCabecera(supabase, entrada.notaId);
+  // Un fallo de lectura es «vuelve a intentarlo»; `bloqueada` es «sin fila» (R3-H1).
+  const cabLeida = await leerCabeceraLeida(supabase, entrada.notaId);
+  if (!cabLeida.ok) return fallo('error');
+  const cab = cabLeida.valor;
   if (!cab) return fallo('bloqueada');
   if (cab.autor_id !== usuario.id) return fallo('no_autor');
   if (cab.paciente_id !== entrada.pacienteId) return fallo('no_disponible');
@@ -764,8 +761,9 @@ export async function firmarNota(
   } catch (e) {
     if (!(e instanceof ErrorFirmaVersion)) throw e;
     if (e.codigo === '42501') {
-      const sigueVisible = await leerCabecera(supabase, entrada.notaId);
-      return fallo(sigueVisible ? 'no_disponible' : 'bloqueada');
+      const sigueVisible = await leerCabeceraLeida(supabase, entrada.notaId);
+      if (!sigueVisible.ok) return fallo('error');
+      return fallo(sigueVisible.valor ? 'no_disponible' : 'bloqueada');
     }
     // 6.8 (abierta_en posterior a firmada_en: desfase de reloj) NO es un conflicto: «vuelve a
     // intentarlo», sin ajustar ninguna fecha (§4.6 del diseño; R2-H7).
