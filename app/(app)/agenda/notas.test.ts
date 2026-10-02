@@ -7,7 +7,7 @@ describe('rutaNotas', () => {
     expect(rutaNotas('p-uuid', 'c-uuid')).toBe('/pacientes/p-uuid/historia/notas?cita=c-uuid');
   });
 
-  it('sigue apagada hasta que T-012 cree la ruta (D8)', () => {
-    expect(RUTA_NOTAS_DISPONIBLE).toBe(false);
+  it('está encendida: T-012 creó la ruta (D8)', () => {
+    expect(RUTA_NOTAS_DISPONIBLE).toBe(true);
   });
 });
