@@ -5,7 +5,21 @@ modelo: opus
 fase: 1
 prioridad: alta
 depende_de: [T-005, T-007, T-013, T-012b, T-012c]
-estado: pendiente
+estado: en_curso
+riesgo: alto
+territorio:                                   # copiado de tickets/T-012/diseno.md §6 (01-10)
+  - supabase/migrations/2026100*_nota_clinica_borrador_firma.sql
+  - scripts/rls/20-nota-borrador.sql
+  - scripts/rls/README.md
+  - scripts/t012-nota.ts
+  - lib/notas/**
+  - lib/huella/firmar.ts
+  - lib/huella/firmar.test.ts
+  - lib/supabase/tipos-bd.ts
+  - lib/i18n/es.ts
+  - app/(app)/pacientes/[id]/**
+  - app/(app)/agenda/notas.ts
+  - app/(app)/agenda/notas.test.ts
 ---
 
 # Contexto
