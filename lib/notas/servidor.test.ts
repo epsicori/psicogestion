@@ -1097,6 +1097,22 @@ describe('un error de lectura no es ausencia (R3-H1, R3-H2 y el resto del ficher
     expect(llamadas.some((l) => l.op === 'update')).toBe(false);
   });
 
+  it('empezarModificacion: cero filas y la relectura falla es error, no «ya había borrador» (ok)', async () => {
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) => {
+        if (l.tabla === 'notas_clinicas_versiones' && sinHead(l)) {
+          return {
+            data: [{ numero_version: 1, cuerpo: '{"texto":"v"}', anotaciones_reservadas: null }],
+          };
+        }
+        if (l.op === 'update') return { data: [] };
+        if (esCabecera(l)) return ERROR_LECTURA;
+        return undefined;
+      }),
+    );
+    expect(await empezarModificacion(sesion, { pacienteId: P, notaId: N })).toEqual({ ok: false, motivo: 'error' });
+  });
+
   it('empezarModificacion: sin versiones (sin error) sigue siendo no_disponible (la gemela)', async () => {
     const { sesion } = clienteSimulado(firmaFeliz());
     expect(await empezarModificacion(sesion, { pacienteId: P, notaId: N })).toEqual({

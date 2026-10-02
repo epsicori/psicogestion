@@ -269,19 +269,28 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
   // Candidatos a coprofesional: la misma regla que el disparador de T-034, que es quien manda.
   let candidatos: { id: string; nombre: string }[] = [];
   if (soyAutor && versiones.length === 0 && episodio?.centroId) {
-    const { data: enCentro } = await supabase
+    const { data: enCentro, error: errorCentro } = await supabase
       .from('perfiles_centros')
       .select('perfil_id')
       .eq('centro_id', episodio.centroId)
       .is('hasta', null);
+    // Una lista vacía por un fallo quitaría la opción de elegir coprofesional sin decirlo.
+    if (errorCentro) {
+      console.error('notas: no se pudieron leer los perfiles del centro', errorCentro);
+      return { ok: false };
+    }
     const ids = (enCentro ?? []).map((f) => f.perfil_id).filter((id) => id !== usuario.id);
     if (ids.length > 0) {
-      const { data: dir } = await supabase
+      const { data: dir, error: errorDir } = await supabase
         .from('directorio_perfiles')
         .select('id, nombre_completo, rol, estado')
         .in('id', ids)
         .in('rol', [...ROLES_COPROFESIONAL])
         .eq('estado', 'activo');
+      if (errorDir) {
+        console.error('notas: no se pudo leer el directorio de candidatos', errorDir);
+        return { ok: false };
+      }
       candidatos = (dir ?? []).flatMap((f) =>
         f.id ? [{ id: f.id, nombre: f.nombre_completo ?? '' }] : [],
       );
@@ -352,18 +361,23 @@ async function refrescarModelo(sesion: Sesion, notaId: string): Promise<ModeloDe
  * candado cerrado, otro autor, otro paciente, la falta de borrador y el conflicto real. Cuando
  * no hay testigo que cotejar (`fijarCoprofesional`, `empezarModificacion`) no se prueba.
  */
-async function diagnosticarCeroFilas(
+async function explicarCeroFilas(
   supabase: Supabase,
   usuarioId: string,
   pacienteId: string,
   notaId: string,
   testigo: string | null,
-): Promise<MotivoFallo> {
-  const { data } = await supabase
+): Promise<MotivoFallo | 'sin_causa'> {
+  const { data, error } = await supabase
     .from('notas_clinicas')
     .select('id, paciente_id, autor_id, borrador_actualizado_en')
     .eq('id', notaId)
     .maybeSingle();
+  // `bloqueada` es «sin fila»; un fallo de lectura es «vuelve a intentarlo» (R3-H1, misma clase).
+  if (error) {
+    console.error('notas: no se pudo releer la cabecera tras cero filas', error);
+    return 'error';
+  }
   if (!data) return 'bloqueada';
   if (data.paciente_id !== pacienteId) return 'no_disponible';
   if (data.autor_id !== usuarioId) return 'no_autor';
@@ -371,7 +385,20 @@ async function diagnosticarCeroFilas(
     if (data.borrador_actualizado_en === null) return 'sin_borrador';
     if (data.borrador_actualizado_en !== testigo) return 'conflicto';
   }
-  return 'error';
+  // La fila se ve, es de este paciente y de este autor y el testigo coincide: nada la explica.
+  return 'sin_causa';
+}
+
+/** Lo mismo para quien no distingue «sin causa» de un fallo: las dos cosas son `error`. */
+async function diagnosticarCeroFilas(
+  supabase: Supabase,
+  usuarioId: string,
+  pacienteId: string,
+  notaId: string,
+  testigo: string | null,
+): Promise<MotivoFallo> {
+  const motivo = await explicarCeroFilas(supabase, usuarioId, pacienteId, notaId, testigo);
+  return motivo === 'sin_causa' ? 'error' : motivo;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -612,12 +639,17 @@ export async function empezarModificacion(
   const { supabase, usuario } = sesion;
 
   // La versión vigente: de ella sale el borrador de partida.
-  const { data: ultimas } = await supabase
+  const { data: ultimas, error: errorVigente } = await supabase
     .from('notas_clinicas_versiones')
     .select('numero_version, cuerpo, anotaciones_reservadas')
     .eq('nota_id', entrada.notaId)
     .order('numero_version', { ascending: false })
     .limit(1);
+  // Un fallo de lectura no es «no hay versión»: «vuelve a intentarlo», no «no disponible».
+  if (errorVigente) {
+    console.error('notas: no se pudo leer la versión vigente', errorVigente);
+    return { ok: false, motivo: 'error' };
+  }
   const vigente = ultimas?.[0];
   // Sin versión no hay nada que modificar: se escribe, no se modifica.
   if (!vigente) return { ok: false, motivo: 'no_disponible' };
@@ -647,10 +679,10 @@ export async function empezarModificacion(
     return { ok: false, motivo: 'error' };
   }
   if (!data || data.length === 0) {
-    const motivo = await diagnosticarCeroFilas(supabase, usuario.id, entrada.pacienteId, entrada.notaId, null);
-    // 'error' aquí significa «la fila existe, es mía y no se actualizó»: ya había borrador.
-    // Se devuelve tal cual, sin pisarlo.
-    if (motivo !== 'error') return { ok: false, motivo };
+    const motivo = await explicarCeroFilas(supabase, usuario.id, entrada.pacienteId, entrada.notaId, null);
+    // 'sin_causa' significa «la fila existe, es mía y no se actualizó»: ya había borrador. Se
+    // sigue sin pisarlo. Un fallo de la relectura es `error` y NO llega aquí como «ya había».
+    if (motivo !== 'sin_causa') return { ok: false, motivo };
   }
 
   const caducaEn = await prolongarDesbloqueo(sesion);
