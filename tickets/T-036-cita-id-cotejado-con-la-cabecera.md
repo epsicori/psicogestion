@@ -6,7 +6,7 @@ riesgo: alto
 fase: 2
 prioridad: alta
 depende_de: [T-012c, T-012]
-estado: pendiente
+estado: hecho
 territorio:
   - supabase/migrations/*_firma_cotejada_con_borrador_y_cita.sql
   - scripts/rls/00-ayudantes.sql        # solo si sobre_prueba tiene que leer borrador_abierta_en de la cabecera

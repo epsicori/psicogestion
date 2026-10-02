@@ -1148,3 +1148,482 @@ diseñarlo (§D).
 9. Delegables a MiniMax: ocho piezas de pintura (P1-P8), con firma, claves y pruebas. El editor,
    la barra, el comparador, la firma y el candado se quedan en la fábrica.
 10. Tres cortes: A (base, acciones y guion), B (editor y entradas) y C (comparación y descarga).
+
+---
+
+## Corte B · Enmienda del 02-10-2026: la pantalla
+
+> Arquitecto, 02-10-2026, con el corte A en `main` (`44d6d67`) y T-036 en implementación (diseño
+> E.0-E.15, `e02a4fd`). **Esta enmienda manda sobre §1.4 (fila `abrirEditorDeNota`, paso 1), §1.5
+> (fila «sin fila» de la tabla), §1.6, §2.17 y §7 donde choquen.** Lo demás sigue en pie. El
+> corte B es `riesgo: medio` (§8) y se diseña sin la base de datos local, que está ocupada por
+> T-036: todo lo de §B.0 está leído en el árbol.
+
+### B.0 · Hechos verificados contra el código
+
+| Id | Hecho | Ruta | Efecto |
+|---|---|---|---|
+| B0.1 | `abrirEditorDeNota` devuelve `{estado:'bloqueada'}` ante **cualquier** `!acceso.ok`. Sin embargo, `registrarAccesoHistoria` distingue `motivo:'denegado'` (42501: sin desbloqueo o paciente ajeno, indistinguibles a propósito) de `motivo:'error'` (otro código, o la función no devuelve fila). Nunca lanza. | `lib/notas/servidor.ts:417`, `lib/cuentas/accesos.ts` | R4-H1 (B.2.1). |
+| B0.2 | `diagnosticarCeroFilas` traduce `'sin_causa'` a `'error'`. La tabla `it.each` de cero filas de `guardarBorrador` cubre cinco causas con nombre y no cubre «fila propia, mismo paciente, testigo igual». El mutante C4 (`'sin_causa' → 'bloqueada'`) sobrevive. | `servidor.ts:370-401`, `servidor.test.ts:395-409`, `tickets/T-012/revision.md` (R4-H2) | R4-H2 (B.2.2). |
+| B0.3 | `prolongarDesbloqueo` devuelve `null` tanto si hay error como si el RPC da nulo («sin desbloqueo vigente»). Lo llaman `servidor.ts:429,599,631,688,823`, `app/(app)/candado/acciones.ts` y `ampliarLaVentana` (`app/(app)/pacientes/[id]/acciones.ts`). El arnés de `servidor.test.ts` no simula `rpc:prolongar_desbloqueo`: hoy cualquier apertura feliz devuelve `caducaEn: null`. | `lib/cuentas/candado.ts:89`, `lib/notas/servidor.test.ts` (arnés `clienteSimulado`) | B.2.3. |
+| B0.4 | En `panel-historia.tsx:99-100`, si `caducaEn` es nulo no se arma ningún temporizador. Y `ampliar` (`:128-129`) **sobrescribe** el plazo con el `null` de `ampliarLaVentana`: un fallo pasajero deja la historia abierta en pantalla sin cierre automático. | `app/(app)/pacientes/[id]/panel-historia.tsx` | El editor no copia ese defecto (B.1.4). En la ficha es un hallazgo (Preguntas, P-2). |
+| B0.5 | Traducción de la firma: con 23514, un mensaje que contiene `abierta_en` da `'error'` (`:813`); el resto del 23514 y el 23505 dan `'conflicto'`. T-036 (E.2) reescribe 6.18 sin `abierta_en` y garantiza en el banco 14 (T036.T) que solo los tres mensajes de 6.8 lo llevan. El fragmento de 6.24 es `no es el borrador vigente`. T-036 no toca `lib/` ni `app/` (E.9 R-g). | `servidor.ts:806-818`, `tickets/T-036/diseno.md` E.1, E.2 y E.10.5 | B.2.5: hace falta una prueba que fije ese contrato desde este lado. |
+| B0.6 | `firmarNota` no recibe texto: firma el borrador releído (§1.5, paso 3). Con éxito devuelve `nota: refrescarModelo(…)`, que da `null` si la relectura falla. | `servidor.ts:692-825`, `:354-357` | B.1.4: aviso «Firmada; no se pudo recargar». |
+| B0.7 | `VersionDeVista` no tiene `enSesion`, que P2 necesita. `SelloLeido` sí trae `redactadaEnSesion`, `citaId` y `margenMinutos`. | `servidor.ts:36-49`, `lib/notas/sello.ts` | B.1.1. |
+| B0.8 | La ruta `?cita=` exige que `cita.profesional_id = uid` y busca la cabecera con `autor_id = uid`. Con una nota visible de otro autor, o con una cita reasignada, da `no_disponible`. Si quien mira es el profesional de la cita y no el autor, **crea una cabecera nueva** para esa cita: el índice único es `notas_clinicas_cita_autor_uidx`, por `(cita_id, autor_id)`, no por cita. La ruta `?nota=` abre cualquier nota visible del paciente y nunca crea. | `servidor.ts:442-560`, `supabase/migrations/20261002120000_nota_clinica_borrador_firma.sql:83` | Corrige §1.6 y §2.17: la lista enlaza siempre con `?nota=` (B.2.7). |
+| B0.9 | `notas_clinicas_versiones` lleva `paciente_id`. El check `notas_clinicas_borrador_abierta_ck` es `(borrador_abierta_en is null) = (borrador_contenido is null)`. | `lib/supabase/tipos-bd.ts` (`notas_clinicas_versiones`), migración `20261002120000:33` | La lista se lee con dos consultas por `paciente_id`, sin `.in(ids)`, y sabe si hay borrador sin traer su texto (B.1.1). |
+| B0.10 | `lib/i18n/es.ts` está en LF en el índice y en CRLF en la copia de trabajo (`git ls-files --eol`: `i/lf w/crlf`). El bloque `notas` (`:505-521`) tiene `sello{enSesion, fueraDeSesion, sinCita, sinCitaVariosDias, ilegible}`, `episodio` y `modalidad{…}`. `ficha.notasEnPreparacion` solo lo usa `panel-historia.tsx:224`. `comunes.cancelar` existe. | `lib/i18n/es.ts`, `:361-363` | B.1.9. |
+| B0.11 | El `catalogo.diff` de MiniMax está hecho sobre un índice viejo (`a6b0cd4`) y crea un bloque `notas` **nuevo**. Si se aplica como parche, deja dos claves `notas` en el objeto: la segunda pisa a la primera y desaparecen `episodio`, `modalidad` y `sinCitaVariosDias`. | `minimax/correcciones/T-012/t012b/catalogo.diff` | Se funde a mano (B.1.9). |
+| B0.12 | Las ocho piezas corregidas están en `minimax/correcciones/T-012/t012b/app/(app)/pacientes/[id]/…`, cada una con su prueba. Además: <br>· `estado-de-nota.tsx` declara su propio `export type EstadoDeNota` y `lista-de-notas.tsx` lo importa; <br>· la prueba de P6 usa `href` arbitrarios, que es inocuo porque comprueba que el `href` se pinta tal cual. | ese árbol | B.1.6. |
+| B0.13 | `panel-historia.test.tsx` (hacia `:120-131`) espera «Esta sección todavía no está» al abrir Notas clínicas. `RUTA_NOTAS_DISPONIBLE = false` (`app/(app)/agenda/notas.ts`) y `notas.test.ts:11` espera `false`. `rutaNotas` produce `?cita=`. | esos ficheros | B.1.7 y B.1.8. |
+| B0.14 | Primitivas: <br>· `Dialogo({abierto, alCerrar, titulo, focoInicial?, children})`; <br>· `Desplegable({opciones:{valor,etiqueta}[], valor, alElegir, etiqueta, marcador?})`; <br>· `Pestanas({pestanas, activa, alCambiar, etiqueta, prefijo})` y `PanelDePestana({id, prefijo, children})`; <br>· `AreaTexto({id, etiqueta, errores?, …textarea})`; <br>· `AvisoDeError({mensaje, accion?})` (`role="alert"`). <br>El patrón de diálogo con `zodResolver` está en `app/(app)/agenda/dialogo-reprogramar.tsx`. | `components/ui/*`, `app/(app)/agenda/` | B.1.4. |
+| B0.15 | La ficha (`page.tsx`) pone el trabajo asíncrono dentro de componentes `async` bajo `<Suspense>` (`cacheComponents`). `viewport` está documentado en `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/generate-viewport.md`. | `app/(app)/pacientes/[id]/page.tsx` | B.1.3. |
+| B0.16 | El territorio del contrato ya cubre todo lo del corte B: `lib/notas/**`, `lib/i18n/es.ts`, `app/(app)/pacientes/[id]/**`, `app/(app)/agenda/notas.ts` y `notas.test.ts`. | frontmatter de `tickets/T-012-nota-clinica-firma.md` | El frontmatter **no** cambia (B.6). |
+
+### B.1 · Piezas y contratos
+
+#### B.1.1 · `lib/notas/servidor.ts` (modificar) y su prueba
+
+1. **R4-H1**, en la línea 417:
+   ```ts
+   if (!acceso.ok) return acceso.motivo === 'denegado' ? { estado: 'bloqueada' } : { estado: 'error' };
+   ```
+   En los dos casos, cero consultas más.
+2. **La apertura exige plazo.** En `devolver` (`:429`): `const caducaEn = await prolongarDesbloqueo(sesion); if (caducaEn === null) return { estado: 'error' };`. El tipo pasa a `| { estado: 'abierta'; caducaEn: string; nota: ModeloDeNota }`.
+3. **`ResultadoGuardado` y `ResultadoDeNota`** conservan `caducaEn: string | null`, con este comentario de contrato encima de cada uno: «`null` = no se sabe (fallo o carrera con un cierre). La operación ya se hizo bajo RLS, así que la ventana estaba abierta: la pantalla conserva el plazo que tenía y **nunca lo amplía sin confirmación**».
+4. **`VersionDeVista`** gana dos campos, calculados en `cargarModelo` con el mismo `leerSello(v.contenido_canonico)`, que se lee una sola vez por versión:
+   ```ts
+   /** `null` si el sello no se puede leer: ni «en sesión» ni «fuera» (P2 pinta HelpCircle). */
+   enSesion: boolean | null;        // s === null ? null : s.redactadaEnSesion
+   /** «Margen aplicado: N min». Solo si el sello es legible, lleva cita y el margen no es nulo. */
+   margen: string | null;           // s?.citaId && s.margenMinutos !== null ? tCon('notas.sello.margen', { minutos: s.margenMinutos }) : null
+   ```
+5. **El borrador ajeno no sale del servidor.** En `cargarModelo`, `borrador` es `null` si `!soyAutor`. `estado` se sigue derivando de `hayBorrador`, así que la píldora dice la verdad. Está pendiente de la pregunta P-1 al propietario; si responde que el borrador ajeno se ve, este punto se cae y el editor lo pinta en solo lectura.
+6. **Función nueva**, exportada junto con el tipo `Leida<T>`:
+   ```ts
+   export type ResumenDeNota = { id: string; fechaSesion: string; estado: EstadoNota; versiones: number;
+     autor: string; conjunta: boolean; href: string };
+   export async function listarNotasDelPaciente(sesion: Sesion, pacienteId: string): Promise<Leida<ResumenDeNota[]>>
+   ```
+   Hace dos consultas en `Promise.all`:
+   - `notas_clinicas.select('id, autor_id, fecha_sesion, borrador_abierta_en').eq('paciente_id', p).order('fecha_sesion', {ascending:false})`;
+   - `notas_clinicas_versiones.select('nota_id, numero_version, alcance').eq('paciente_id', p)`.
+
+   **No selecciona `borrador_contenido`, `cuerpo` ni `anotaciones_reservadas`.** Después llama a `nombresDe` con los `autor_id`. Si cualquiera de las tres falla, `{ok:false}`. Para cada fila:
+   - `versiones` = cuántas versiones tiene;
+   - `estado = estadoDeNota({versiones, hayBorrador: borrador_abierta_en !== null})` (B0.9);
+   - `conjunta` = el `alcance` de la de mayor `numero_version` es `'conjunta'`;
+   - `fechaSesion = fechaLegible(fecha_sesion)`;
+   - `href = '/pacientes/' + p + '/historia/notas?nota=' + id`, **siempre** con `?nota=` (B.2.7).
+
+   No registra acceso ni prolonga: la llama `abrirPestanaDeHistoria` **después** de registrar (B.1.7).
+7. **Pruebas nuevas** en `lib/notas/servidor.test.ts`. El arnés aprende a guardar las columnas del `select` (`llamada.columnas = _c`) y las aperturas felices responden `rpc:prolongar_desbloqueo` con `{ data: '2026-10-02T10:00:00+00:00' }`.
+
+   | Prueba | Debe fallar si… |
+   |---|---|
+   | `registrar_acceso_historia` da `{code:'57014'}` → `{estado:'error'}` y ninguna llamada más (gemela de la prueba 42501 del `describe('abrirEditorDeNota · el candado manda')`, que sigue esperando `bloqueada`) | se vuelve a `!ok → bloqueada` (R4-H1). Al revés, si todo pasa a `error`, cae la del 42501 |
+   | `registrar_acceso_historia` da `{data: []}` → `{estado:'error'}` | se trata «sin fila» como denegado |
+   | Fila nueva en el `it.each` de `:395`: `['la fila se ve, propia y con el testigo igual → error', {data:{id:N, paciente_id:P, autor_id:A, borrador_actualizado_en:TESTIGO}}, 'error']` | C4 (`sin_causa → bloqueada`) o cualquier otra traducción de `sin_causa` |
+   | En `fijarCoprofesional`: `update → {data: []}` y relectura `{id:N, paciente_id:P, autor_id:A, borrador_actualizado_en:TESTIGO}` → `motivo:'error'` | lo mismo, por el camino sin testigo |
+   | Apertura feliz con `rpc:prolongar_desbloqueo → {data:null}` → `{estado:'error'}` | se devuelve `abierta` con un plazo desconocido |
+   | Lo mismo con `{error:{code:'XX000'}}` → `{estado:'error'}` | — |
+   | 23514 con `'Lo que se firma no es el borrador vigente de la cabecera: otra sesión lo cambió entretanto; hay que releerlo (T-036, R2-H1, ADR-036)'` → `conflicto` | alguien amplía la regla de `abierta_en` a otra subcadena |
+   | 23514 con `'El instante de apertura del sobre no es el instante en que la base abrió el borrador (columna de la cabecera, truncada a milisegundos) (T-036, ADR-046)'` → `conflicto` | ídem. **Los dos textos se copian literales de `tickets/T-036/diseno.md` E.1 y E.2**; la prueba existente del 6.8 (→ `error`) sigue igual |
+   | `enSesion` y `margen`: con un sobre en sesión y cita, `true` y «Margen aplicado: 15 min»; con un sobre sin cita, `false` y `null`; con un canónico ilegible, `null` y `null` | se calcula `enSesion` a partir de la frase, o se pinta un margen sin cita |
+   | `!soyAutor` con borrador → `modelo.borrador === null` y `estado === 'borrador'` (o `firmada_con_cambios` si hay versiones) | el texto ajeno viaja al navegador |
+   | `listarNotasDelPaciente`: dos notas, una con v1 y v2 (la v2 conjunta) y otra solo con borrador → estados `modificada`/`borrador`, `versiones` 2 y 0, `conjunta` true y false, `href` con `?nota=` en las dos | se toma el alcance de la v1, se cuenta mal o se usa `?cita=` |
+   | `listarNotasDelPaciente`: ninguna llamada pide `borrador_contenido`, `cuerpo` ni `anotaciones_reservadas` en sus columnas | la lista trae texto clínico |
+   | `listarNotasDelPaciente`: si falla una de las dos lecturas o `nombresDe`, `{ok:false}`, nunca `{ok:true, valor:[]}` | «no se pudo leer» se pinta como «Todavía no hay notas» |
+
+#### B.1.2 · `app/(app)/pacientes/[id]/peticion.ts` (nuevo), `historia/notas/esquemas.ts` (nuevo) y `historia/notas/acciones.ts` (nuevo)
+
+- `peticion.ts`: sin `'use server'`. Recibe `ipDeLaPeticion` **movida tal cual** (§1.3.c). `acciones.ts` de la ficha la importa de allí.
+- `esquemas.ts`: los cinco esquemas de §1.4, literales. `SIN_NULO` sale de `@/lib/notas/cuerpo`.
+- `acciones.ts` (`'use server'`): importa `* as servidor from '@/lib/notas/servidor'` para que los nombres no choquen. Cinco acciones, cada una con `exigirSesion()` → `esquema.safeParse` → `servidor.X`:
+
+  | Acción | Si Zod falla | Notas |
+  |---|---|---|
+  | `abrirEditorDeNota(entrada)` | `{estado:'no_disponible'}` | contexto `{ip: ipDeLaPeticion(await headers()), agente: cabeceras.get('user-agent')}` |
+  | `guardarBorrador(entrada)` | `{ok:false, motivo:'error'}` | — |
+  | `fijarCoprofesional(entrada)` | ídem | — |
+  | `empezarModificacion(entrada)` | ídem | — |
+  | `firmarNota(entrada)` | ídem | — |
+
+  No se escribe `ampliarVentana` nueva: el editor usa `ampliarLaVentana` y `cerrarHistoriaDelPaciente` de `../../acciones` (B.2.3).
+
+#### B.1.3 · `app/(app)/pacientes/[id]/historia/notas/page.tsx` (nuevo, servidor, armazón)
+
+- Lo de §1.6 sigue en pie, con la forma de la ficha: `export default function Pagina({ params, searchParams })` monta `<Suspense fallback={<EsqueletoEditor/>}>` con un componente `async Armazon`. Dentro:
+  - `await params` y `await searchParams`;
+  - validación UUID con `z.uuid()`;
+  - `cita` XOR `nota`, si no `notFound()`;
+  - `cargarPaciente(id)`, y `notFound()` si da nulo;
+  - con `cita`, `citas(inicio, fin, zona_horaria, paciente_id)` y `notFound()` si es de otro paciente.
+- Pinta `<CabeceraDeNota paciente={nombre + ' ' + apellidos} sesion={…} volverHref={'/pacientes/' + id}/>` y `<EditorDeNota pacienteId citaId notaId/>`. Con `?nota=`, `sesion` es `null`: el armazón no puede leer `notas_clinicas`, y la fecha la trae el modelo al abrir.
+- `export const viewport: Viewport = { interactiveWidget: 'resizes-content' }`. Antes de escribirlo, el implementador lee la guía `generate-viewport.md` (B0.15).
+- Imports permitidos: `@/lib/i18n`, `@/lib/fechas`, `../../datos`, `zod`, `next/navigation`, `react` y las piezas hermanas. **Ninguno** de `@/lib/notas/servidor` ni `./acciones` en el servidor: el editor importa las acciones por su cuenta.
+- `page.test.ts` (nuevo) lee el **fuente** de `page.tsx` con `readFileSync` y comprueba que no contiene `notas_clinicas`, `lib/notas/servidor` ni `from './acciones'`. Es la prueba del armazón del criterio 8.
+
+#### B.1.4 · `historia/notas/editor-de-nota.tsx` (nuevo, `'use client'`) y su prueba
+
+**Máquina de estados** (un `useReducer`; los nombres son contrato de la prueba):
+
+| Estado | Qué se pinta | Sale con |
+|---|---|---|
+| `inicial` | botón `notas.editor.abrir` | clic → `cargando` → `abrir()` |
+| `cargando` | `EsqueletoEditor` (P7) | resultado de `abrirEditorDeNota` |
+| `bloqueada` | candado (copia del bloque de `panel-historia.tsx` hacia `:192-203`) con `ficha.historiaBloqueada`, el mensaje (`ficha.historiaBloqueadaExplicacion` o `ficha.seCerroSola`) y `FormularioPinHistoria alAbrirse={() => abrir({trasPin: true})}` | PIN aceptado → `cargando` |
+| `sin_acceso` | `AvisoDeError` con `notas.aviso.sinAcceso`; la vuelta a la ficha ya la da `CabeceraDeNota` | — (antibucle, B.2.1) |
+| `no_disponible` | `EstadoVacio` con `notas.aviso.noDisponible` | — |
+| `error` | `AvisoDeError` con `notas.aviso.noSeAbrio` y el botón `notas.aviso.reintentar` | clic → `cargando` |
+| `elegir_episodio` | `Desplegable` (`notas.editor.episodio`) y el botón `notas.editor.continuar`; si la lista llega vacía, `notas.editor.sinEpisodios` | continuar → `abrir({episodioId})` |
+| `abierta` | B.1.4.a | timer, `bloqueada`, conflicto… |
+
+`abrir({trasPin})`: si el resultado es `bloqueada` **y** `trasPin`, va a `sin_acceso` en lugar de a `bloqueada`. Hay deduplicación con `useRef` contra dobles pulsaciones, como en `panel-historia.tsx:65-68`, aunque aquí no hay apertura al montar: `abrir` solo cuelga de gestos (ADR-058.3).
+
+**B.1.4.a · Abierta.** Estado local: `modelo`, `caducaEn: string`, `texto`, `reservadas`, `testigo`, `guardado: 'guardado'|'guardando'|'sin_guardar'|'fallo'`, `aviso: null | ClaveDeAviso` y `conflicto: boolean`.
+
+- **Reloj**: copia de `panel-historia.tsx:98-117` sobre `caducaEn`, que aquí **nunca es nulo**. Lleva:
+  - la franja con `ficha.historiaAbiertaMinutos`;
+  - `ficha.ampliarElTiempo` cuando quedan 2 minutos o menos, y `ficha.historiaPorCerrarse` (`role="status"`, sin robar el foco, ADR-047);
+  - `ficha.cerrarHistoria`.
+
+  Las dos acciones salen de `../../acciones`. **Diferencia obligatoria con la ficha**: `ampliar` hace `setCaducaEn(r.caducaEn ?? caducaEnActual)`, y lo mismo cualquier resultado de mutación con `caducaEn: null`. Al vencer el temporizador: `dispatch({tipo:'cerrada'})`, que **vacía** modelo, texto y reservadas del estado y pasa a `bloqueada` con `ficha.seCerroSola`. Antes de `cerrarHistoriaDelPaciente` se espera la cola de escritura.
+- **Cola de escritura** (`useRef<Promise<void>>`): guardar, fijar coprofesional, modificar y firmar se encadenan, y nunca hay dos en vuelo (§2.9). El autoguardado espera 3 s tras la última tecla, y también salta en `onBlur` de cada `AreaTexto`. Si ya hay uno en vuelo, se marca «pendiente» y al acabar se guarda **lo último**. No corre si `!modelo.soyAutor`, si `modelo.borrador === null` o si `conflicto`.
+- **Indicador de guardado**: `<p role="status" aria-live="polite">` con `notas.editor.guardado`, `guardando`, `sinGuardar` o `noSeGuardo`.
+- **Resultado de guardar**:
+  - `ok`: `testigo` y `caducaEn ?? actual`;
+  - `conflicto`: `conflicto = true` (B.2.5);
+  - `sin_borrador`: aviso `notas.aviso.yaFirmada` con el botón `notas.aviso.cargarLoGuardado`;
+  - `bloqueada`: `cerrada`;
+  - `no_autor`: aviso `notas.aviso.noAutor`;
+  - `error`: `guardado = 'fallo'`. Sin reintento automático: el siguiente teclazo o el siguiente `blur` lo vuelven a intentar.
+- **Cuerpos** (§2.8.d). Un `useEsAncho()` local con `matchMedia('(min-width: 48rem)')` y su `change`. Es seguro porque `abierta` solo existe después de una acción en el cliente, nunca en el HTML del servidor.
+  - Estrecho: `Pestanas` (`notas.editor.partes`) con «Nota» (`notas.editor.nota`) y «Anotaciones reservadas» (`notas.editor.reservadas`), y un `PanelDePestana` cada una.
+  - Ancho: dos `<section aria-labelledby>` apiladas con su `<h2>`.
+
+  `AreaTexto` lleva `maxLength={60000}` y `maxLength={20000}`, y `className="flex-1 scroll-mb-24"`. `AvisoReservadas` (P5) va **siempre** encima de la zona reservada. Con `!soyAutor` o sin borrador, los cuerpos no se pintan como `AreaTexto`: se pinta la versión vigente (abajo).
+- **Vista de la versión vigente** (si `versiones.length > 0`):
+  - `PildoraDeEstado` (P1);
+  - `SelloDeNota frase={v.sello} enSesion={v.enSesion}` (P2) y, debajo, `v.margen` si lo hay;
+  - `ModificadaPor fecha={v.firmadaEn} autor={v.autor}` (P4) si `v.numero > 1`;
+  - el texto y, si no son nulas, las reservadas con `AvisoReservadas`;
+  - un `<ol>` con una `FilaDeVersion` (P3) por versión, de la más nueva a la más vieja, con `vigente` en la última, `conjunta = alcance === 'conjunta'` y `sello = v.sello`.
+
+  Con `firmada_con_cambios` y `soyAutor`, los cuerpos editables van encima y la vista de la vigente debajo, con el encabezado `notas.editor.vigente`. Con `!soyAutor`, la frase `notas.aviso.noAutor` y, si el estado lleva borrador, `notas.editor.borradorAjeno`.
+- **Coprofesional**: solo con `soyAutor && versiones.length === 0`. `Desplegable` (`notas.editor.coprofesional`) con la opción `notas.editor.sinCoprofesional` (valor `''`, que se manda como `null`) y los candidatos. Resultados:
+  - `ok`: `modelo = nota ?? modelo` (con `nota: null`, el aviso `notas.aviso.hechoSinRecargar`);
+  - `coprofesional_invalido`: `notas.aviso.coprofesionalInvalido`; `ya_firmada`: `notas.aviso.yaFirmadaCoprofesional`.
+- **Modificar** (`soyAutor`, con versiones y sin borrador): `empezarModificacion` → `modelo = nota`, y el texto y el testigo salen de `nota.borrador`.
+- **Diálogo de firma** (`Dialogo`, título `notas.firma.titulo`). Es react-hook-form con `zodResolver(esquemaFirma)` y `defaultValues {pacienteId, notaId, testigo, alcance:'individual', motivo: null}`, como `dialogo-reprogramar.tsx`.
+  - Lleva siempre `notas.firma.loGuardado`.
+  - Con versiones, el `AreaTexto` `notas.firma.motivo` (`maxLength={500}`), que recibe el foco inicial. Sin versiones, el foco va al botón de confirmar. Un motivo vacío se convierte en el error `notas.aviso.faltaMotivo`, no en el mensaje de Zod.
+  - Si `puedeSerConjunta`, dos radios nativos `notas.firma.individual` y `notas.firma.conjunta` en un `fieldset` con leyenda `notas.firma.alcance`, con las tres frases de §2.10 (`notas.firma.conjuntaLeeran`, `conjuntaEslabon`, `conjuntaAcceso`). Si no, no se pinta ningún control.
+  - Botones: `comunes.cancelar` y `notas.firma.confirmar`, o `notas.firma.firmando` mientras dura.
+- **Firmar** (D3, criterio B). `const [pendiente, iniciar] = useTransition()` y un `enVuelo = useRef(false)`. El manejador sale si `enVuelo.current`. Si no, `enVuelo.current = true` e `iniciar(async () => { … finally enVuelo.current = false })`. Dentro:
+  1. espera la cola y, si hay cambios sin guardar, guarda. Si no sale `ok`, trata el resultado como arriba y **no firma**;
+  2. `firmarNota({…valores, testigo: testigoRecienGuardado})`.
+
+  El botón de la barra y el del diálogo llevan `disabled={pendiente}`. Resultados:
+
+  | Resultado | Qué ve el usuario |
+  |---|---|
+  | `ok` con `nota` | se cierra el diálogo; `modelo = nota` y `caducaEn ?? actual`; el foco va al `<h2>` de la vista vigente (`tabIndex={-1}`) |
+  | `ok` con `nota: null` | se cierra el diálogo; aviso `notas.aviso.firmadaSinRecargar` con el botón `notas.aviso.recargar` (`abrir()`); los cuerpos pasan a solo lectura |
+  | `conflicto` | se cierra el diálogo; `conflicto = true` (B.2.5) |
+  | `sin_borrador` | se cierra el diálogo; aviso `notas.aviso.yaFirmada` y `cargarLoGuardado` |
+  | `falta_motivo` | error en el campo motivo; el diálogo sigue abierto |
+  | `vacia` | `notas.aviso.vacia` dentro del diálogo |
+  | `cita_ilegible`, `error` | `notas.aviso.noSeFirmo` dentro del diálogo (`role="alert"`); puede volver a pulsar |
+  | `bloqueada` | `cerrada` (el modelo se vacía) |
+  | `no_autor`, `no_disponible` | su aviso; se cierra el diálogo |
+
+- **Conflicto** (B.2.5). `conflicto = true` deja los dos `AreaTexto` en `readOnly`, para que se pueda seleccionar y copiar, y para el autoguardado. Encima de los cuerpos pinta `AvisoDeError mensaje={t('notas.aviso.conflicto')} accion={<Button>{t('notas.aviso.cargarLoGuardado')}</Button>}`, y **el foco va a ese aviso** (`tabIndex={-1}`; es la respuesta a un gesto del usuario, como en T-037 R2-H1). «Cargar lo guardado» llama a `abrir()` con el `notaId` del modelo, que registra un acceso más y es un gesto; sustituye texto y testigo y quita `conflicto`. No hay reintento silencioso.
+
+**Pruebas (`editor-de-nota.test.tsx`)**, con `vi.mock('./acciones')`, `vi.mock('../../acciones')` y `vi.mock('@/app/(app)/candado/acciones')`, como `panel-historia.test.tsx`:
+
+| Prueba | Debe fallar si… |
+|---|---|
+| **B**: la firma simulada es una promesa sin resolver; el botón tiene `disabled`, y dos `click` (también con `fireEvent`, que no respeta `disabled`) llaman a `firmarNota` **una** vez | no hay `enVuelo`, o el botón no se desactiva |
+| Al montar no se llama a `abrirEditorDeNota`; solo tras el clic en «Abrir el editor» | se abre al cargar (ADR-058.3) |
+| `bloqueada` → formulario de PIN; `alAbrirse` → `bloqueada` otra vez → «No se puede abrir…» **sin** formulario de PIN | no hay antibucle |
+| `error` → «Volver a intentarlo» y **ningún** formulario de PIN | R4-H1 se pinta como candado |
+| Con `vi.useFakeTimers`: abierta con plazo `T`; un guardado devuelve `caducaEn: null`; al llegar `T`, el texto deja de estar en el documento y aparece `ficha.seCerroSola` | `null` borra el plazo (el defecto de B0.4) |
+| `ampliarLaVentana → {caducaEn:null}` conserva el plazo anterior (misma prueba con `ampliar`) | ídem |
+| Conflicto al firmar: el texto local sigue en el `textarea`, que es `readOnly`; no hay ninguna llamada más a `guardarBorrador` aunque se teclee; el foco está en el aviso; «Cargar lo guardado» llama a `abrirEditorDeNota` y el `textarea` pasa a tener el texto del modelo nuevo | se pisa o se reintenta en silencio |
+| Firmar con cambios sin guardar llama primero a `guardarBorrador` y después a `firmarNota` con el **testigo nuevo**; si el guardado da `conflicto`, no se llama a `firmarNota` | se firma con un testigo viejo |
+| Sin `puedeSerConjunta` no hay ningún radio de alcance; con él, dos | control sin dato detrás |
+| Con versiones, confirmar con el motivo vacío no llama a `firmarNota` y pinta `notas.aviso.faltaMotivo` | — |
+| `ok` con `nota: null` → `notas.aviso.firmadaSinRecargar` y el botón Recargar | «no se pudo releer» se pinta como «no se firmó» |
+
+Con temporizadores falsos y promesas, `vi.advanceTimersByTimeAsync`, no la versión síncrona.
+
+#### B.1.5 · `historia/notas/barra-de-acciones.tsx` (nuevo, `'use client'`)
+
+`BarraDeAcciones({ puedeGuardar, puedeFirmar, puedeModificar, pendiente, alGuardar, alFirmar, alModificar })`:
+- es una `<div role="toolbar" aria-label={t('notas.editor.acciones')}>` con `sticky bottom-0 pb-[env(safe-area-inset-bottom)]`;
+- lleva `Button` (44 px) solo para lo que es `true`: Guardar (`notas.editor.guardar`), Firmar (`notas.editor.firmar`) y Modificar (`notas.editor.modificar`);
+- **sin** Comparar ni Descargar, que llegan con el corte C (nada de controles sin acción).
+
+Su prueba: con los tres en `false` no hay ningún botón; con `pendiente`, Firmar está `disabled`. El contenedor del editor es `min-h-[100dvh] flex flex-col` (§2.8.b).
+
+#### B.1.6 · Integración de P1-P8
+
+1. Se copian **desde `minimax/correcciones/T-012/t012b/`**, nunca desde `minimax/respuestas/`, que tiene la errata `firma_con_cambios`. Van a las mismas rutas relativas bajo `app/(app)/pacientes/[id]/`, con sus `*.test.tsx`.
+2. **Normalización.** En `estado-de-nota.tsx` se borra `export type EstadoDeNota` y se usa `import type { EstadoNota } from '@/lib/notas/estado'`. `lista-de-notas.tsx` importa `EstadoNota` de allí mismo. No hay ningún otro cambio en las piezas.
+3. Las ocho pruebas tienen que pasar **sin tocarlas**. Si alguna falla por el catálogo, se arregla el catálogo, no la prueba.
+
+#### B.1.7 · Ficha: `app/(app)/pacientes/[id]/acciones.ts` y `panel-historia.tsx`
+
+- `ResultadoDeApertura` (rama `abierta`) gana `notas: ResumenDeNota[] | null`. Con `pestana === 'notas_clinicas'`, después del registro: `const l = await listarNotasDelPaciente(sesion, id); notas = l.ok ? l.valor : null`. En las demás pestañas, `null`.
+- En `Contenido` (`panel-historia.tsx`, hacia `:211-230`), `notas_clinicas` pinta:
+  - con `notas` en `null`, `<AvisoDeError mensaje={t('notas.lista.noSePudoLeer')}/>`;
+  - si no, `<ListaDeNotas notas={notas}/>`.
+
+  `Contenido` recibe `notas` como prop. Se borra la rama `ficha.notasEnPreparacion` (`:224`) y, en el mismo commit, la clave.
+- `panel-historia.test.tsx` deja de esperar «Esta sección todavía no está» y pasa a esperar el `EstadoVacio` de la lista (`notas.lista.vacia`) con `notas: []`. Hay un caso nuevo con `notas: null` que espera `notas.lista.noSePudoLeer`.
+
+#### B.1.8 · Agenda
+
+`RUTA_NOTAS_DISPONIBLE = true`, el comentario pasa a «T-012 creó la ruta» y `notas.test.ts:11` a `toBe(true)`, **en el mismo commit que crea `page.tsx`** (§1.6).
+
+#### B.1.9 · `lib/i18n/es.ts`: el bloque `notas` final
+
+Se funde **a mano** dentro del bloque existente (`:505`), conservando las terminaciones de la copia de trabajo: `git diff --stat lib/i18n/es.ts` tiene que dar decenas de líneas, no ~1000. **No se aplica `catalogo.diff`** (B0.11). Si las piezas P1-P8 corregidas usan alguna clave con otro texto distinto del de abajo, manda el texto de las piezas (sus pruebas lo fijan) y se avisa en la bitácora. Resultado, en este orden:
+
+```ts
+  notas: {
+    estado: { borrador: 'Borrador', firmada: 'Firmada', modificada: 'Modificada',
+      firmadaConCambios: 'Firmada · con cambios sin firmar' },
+    sello: {                                    // SEIS claves: la unión
+      enSesion: …, fueraDeSesion: …, sinCita: …, // las de hoy, intactas
+      sinCitaVariosDias: …,                     // la de hoy, intacta
+      ilegible: …,                              // la de hoy, intacta
+      margen: 'Margen aplicado: {minutos} min',
+    },
+    episodio: …, modalidad: { … },              // intactas
+    version: …, modificadaPor: …, reservadas: { … }, lista: { … }, cabecera: { … },  // las del catalogo.diff corregido
+    lista: { …, noSePudoLeer: 'No se pudieron leer las notas. Vuelve a abrir la pestaña.' },  // se añade a la de P6
+    editor: {
+      abrir: 'Abrir el editor', acciones: 'Acciones de la nota', partes: 'Partes de la nota',
+      nota: 'Nota', reservadas: 'Anotaciones reservadas', vigente: 'Versión vigente',
+      guardado: 'Guardado', guardando: 'Guardando…', sinGuardar: 'Sin guardar',
+      noSeGuardo: 'No se ha podido guardar. Se volverá a intentar al seguir escribiendo.',
+      guardar: 'Guardar', firmar: 'Firmar', modificar: 'Modificar',
+      coprofesional: 'Coprofesional', sinCoprofesional: 'Sin coprofesional',
+      episodio: 'Episodio', continuar: 'Continuar',
+      elegirEpisodio: 'Esta cita puede ir en más de un episodio. Elige en cuál se escribe la nota.',
+      sinEpisodios: 'No tienes ningún episodio abierto con este paciente.',
+      borradorAjeno: 'Su autor tiene cambios sin firmar.',
+    },
+    firma: {
+      titulo: 'Firmar la nota', confirmar: 'Firmar', firmando: 'Firmando…',
+      loGuardado: 'Se firma lo guardado. Lo firmado no se borra: cada cambio será una versión nueva.',
+      motivo: 'Motivo del cambio', alcance: 'Alcance',
+      individual: 'Nota individual', conjunta: 'Nota conjunta del episodio',
+      conjuntaLeeran: 'La leerán los profesionales del episodio.',
+      conjuntaEslabon: 'Es un solo eslabón de la cadena.',
+      conjuntaAcceso: 'No se entregará entera en un acceso individual.',
+    },
+    aviso: {
+      sinAcceso: 'No se puede abrir la historia de este paciente.',
+      noDisponible: 'Esta nota no está disponible.',
+      noSeAbrio: 'No se pudo abrir la nota. Vuelve a intentarlo.',
+      reintentar: 'Volver a intentarlo',
+      conflicto: 'La nota ha cambiado desde otro sitio y no se ha guardado ni firmado lo de esta pantalla. Tu texto sigue aquí para que lo copies; al cargar lo guardado se sustituye.',
+      cargarLoGuardado: 'Cargar lo guardado',
+      yaFirmada: 'Esta nota ya se ha firmado desde otro sitio.',
+      noAutor: 'Esta nota solo la corrige quien la escribió. Si llevas el caso, escribe una nota nueva.',
+      vacia: 'No se firma una nota vacía.',
+      faltaMotivo: 'Para modificar una nota firmada hace falta un motivo.',
+      noSeFirmo: 'No se pudo firmar. Vuelve a intentarlo.',
+      coprofesionalInvalido: 'Esa persona no puede figurar como coprofesional en este centro.',
+      yaFirmadaCoprofesional: 'Ya está firmada: el coprofesional no se cambia.',
+      firmadaSinRecargar: 'Firmada. No se pudo recargar la nota.',
+      hechoSinRecargar: 'Hecho. No se pudo recargar la nota.',
+      recargar: 'Recargar',
+    },
+  },
+```
+
+(`lista` aparece dos veces en el esquema solo para decir «la de P6 más `noSePudoLeer`»: en el fichero es **un** objeto.) Y se borra `ficha.notasEnPreparacion` (`:362-363`) en el paso 7 del orden de trabajo, no antes.
+
+### B.2 · Decisiones y alternativas descartadas
+
+1. **R4-H1: se enmienda §1.4 y §1.3.** `denegado` da `bloqueada` y `error` da `{estado:'error'}`, los dos sin ninguna lectura clínica (se mantiene ADR-058.2). *Descartado mantener la letra*: un fallo pasajero pediría el PIN con la ventana abierta, el PIN «funcionaría» y la apertura volvería a fallar, en bucle y culpando al usuario. *Antibucle*: si tras un PIN aceptado la apertura vuelve a dar `bloqueada`, es un paciente sin acceso (los dos casos son indistinguibles a propósito en `accesos.ts`), y se dice «no se puede abrir» sin volver a pedir el PIN. *Descartado* distinguir el paciente ajeno en el servidor: rompería la indistinción que protege si el paciente existe.
+2. **R4-H2: una fila más en la tabla de cero filas, y su gemela en `fijarCoprofesional`.** Mata C4 por los dos caminos (con testigo y sin él). *Descartado* probar `explicarCeroFilas` directamente: es privada, y lo que importa es el contrato público.
+3. **`prolongarDesbloqueo`: no hace falta distinguirlo, y `Leida<T>` no encaja.** Toda llamada de `servidor.ts` ocurre **después** de una operación que RLS dejó pasar, así que la ventana estaba abierta. Su `null` solo puede ser un fallo o una carrera con un cierre, y en los dos casos lo correcto es lo mismo:
+   - en la apertura, no enseñar lo que no se sabe cuándo esconder: `error`;
+   - en una mutación, conservar el plazo anterior, que es la cota segura porque el reloj local cierra igual; si la ventana se cerró de verdad, la siguiente acción da `bloqueada`.
+
+   *Descartado* `prolongarDesbloqueoLeido` en `lib/cuentas/candado.ts`, con un tipo `Ventana` de tres estados: amplía el territorio a un módulo compartido por tres llamantes, para producir dos ramas que la pantalla trataría igual. *Descartado* leer `null` como «cerrada», que es la trampa que señala la revisión: un fallo pasajero se pintaría como candado.
+4. **P1-P8 se toman de las correcciones, en un orden en que siempre compilan:** catálogo, piezas, `lib`, acciones, editor, armazón con la bandera, ficha. El catálogo se funde a mano porque el diff es de un índice viejo y crearía un segundo `notas`. El tipo del estado es uno, `EstadoNota`, porque dos uniones literales iguales divergen en silencio la primera vez que alguien añada un estado.
+5. **El `conflicto` de firma (T-036): se avisa, no se pierde nada de la base y no se reintenta.**
+   - Qué ve el usuario: «La nota ha cambiado desde otro sitio…», con su texto local intacto y de solo lectura (seleccionable), y «Cargar lo guardado».
+   - Qué pierde:
+     - en la base, nada: no se selló nada (6.24 aborta el `insert`) y el borrador vigente es el de la otra sesión;
+     - en pantalla, nada que no haya visto: lo local solo se sustituye con su gesto.
+
+     Como solo el autor guarda (ADR-059), «la otra sesión» es el mismo profesional en otra pestaña o en otro dispositivo, y lo que se carga también es suyo.
+   - *Descartado* reintentar la firma con lo vigente: firmaría un texto que el usuario no ha visto en esta pantalla, que es lo que ADR-036 prohíbe.
+   - *Descartado* reenviar el texto local encima, porque pisaría en silencio.
+   - *Descartado* un botón «Copiar mi texto»: `readOnly` ya permite seleccionarlo, y el portapapeles es comportamiento nuevo sin criterio.
+6. **P4 «modificada el · por» entra en B, no en C.** El dato ya está en el modelo y la tarea del contrato lo pone en «la vista muestra por defecto la versión vigente», que es de B. A C le quedan la comparación y la descarga.
+7. **La lista enlaza siempre con `?nota=`** (corrige §2.17). `?cita=` es la puerta de **creación** de la agenda: con una nota de otro autor, o con una cita reasignada, da `no_disponible`, y para quien es profesional de la cita sin ser el autor crearía una cabecera nueva (B0.8). *Se pierde* la línea «Sesión del…» del armazón al entrar desde la ficha, pero la fecha llega con el modelo al abrir. Cumple ADR-058: es la misma ruta.
+8. **El borrador ajeno no viaja al navegador** (pendiente de P-1). Un dato que no se pinta no se manda. Es la opción más restrictiva de las dos que permite la arquitectura («mismo RLS»), y abrirlo después es quitar una línea.
+9. **El margen se pinta bajo el sello de la vigente, no dentro de la frase.** El contrato lo cuenta entre lo sellado, y explica un «durante la sesión» firmado minutos después del fin. *Descartado* meterlo en `fraseDelSello`, que tiene sus pruebas, o en P3, cuya firma ya está entregada.
+10. **Ancho por `matchMedia`, no por CSS.** Con CSS habría paneles `tabpanel` visibles sin su `tablist`. *Descartado* las pestañas a todos los anchos, porque §2.8.d pide los dos cuerpos a la vista en `md`.
+
+### B.3 · Cómo se cierra cada criterio
+
+| # | Comprobación |
+|---|---|
+| 8 | `npx vitest run "app/(app)/pacientes/[id]/historia/notas/page.test.ts"` en verde (el armazón no importa nada clínico). Además, manual con la BD libre: candado cerrado, `curl -s -b <cookie> "http://localhost:3000/pacientes/<p>/historia/notas?cita=<c>" \| grep -c "<texto sembrado>"` → `0`, y lo mismo con `?nota=<n>`. |
+| 10 | Manual, según el guion del contrato: 360 px con el teclado virtual (dispositivo real o emulación con teclado), el cursor sigue visible y la barra queda por encima del teclado. Captura en la evidencia. |
+| 11 | `git diff --stat main -- components/armazon` vacío. |
+| B | `editor-de-nota.test.tsx`, prueba **B** (B.1.4), en verde. |
+| M4 de T-014 | Manual: `/agenda` con una cita propia → «Notas» → armazón → «Abrir el editor» → PIN. Más `notas.test.ts` con `toBe(true)`. |
+| R4-H1, R4-H2 | `npx vitest run lib/notas/servidor.test.ts` con las filas de B.1.1.7, y **mutación a mano** pegada en la evidencia: <br>· revertir la línea 417 hace caer la prueba del 57014; <br>· poner `'sin_causa' → 'bloqueada'` hace caer las dos de B0.2. <br>Las dos se restauran. |
+| Contrato con T-036 | Las dos pruebas de 23514 → `conflicto` de B.1.1.7. Cuando T-036 esté en `main`, `npx tsx scripts/t012-nota.ts` sigue firmando v1, v2 y v3 (E.9 R-f). |
+| General | `npm test`, `npm run lint` y `npm run build`, con `> log 2>&1; echo "exit=$?"`. `git grep -n "sinCitaVariosDias" -- lib/i18n/es.ts lib/notas/sello.ts` da al menos una línea en cada fichero. `npx tsc --noEmit` sale 0. |
+
+### B.4 · Riesgos, por probabilidad
+
+1. **Alta: las pruebas existentes de apertura feliz caen** cuando la apertura exige un plazo (B0.3). Es esperado: el arnés responde `rpc:prolongar_desbloqueo`. Si alguna prueba se «arregla» quitando la exigencia, es un hallazgo de revisión.
+2. **Media: la BD sigue ocupada por T-036** cuando el corte B termina. Los criterios 8 (curl), 10 y M4 son manuales y necesitan BD. El corte B se integra **después** de T-036. Si el código está listo antes, espera con la evidencia automática hecha.
+3. **Media: el catálogo mal fundido.** Dos `notas`, o claves perdidas. Lo detectan `tsc` (las claves de `sello.ts` y de las piezas son literales) y las pruebas de P1-P8.
+4. **Media: la cola de escritura y el temporizador de 3 s en las pruebas.** `vi.useFakeTimers` con promesas: usar `vi.advanceTimersByTimeAsync`.
+5. **Baja: la deriva de reloj (6.20) o un C de T-036 salen como `conflicto` repetido** (T-036 E.10.5). Se ve siempre y nunca pierde nada. No se distingue en B (Lo que no entra).
+6. **Baja: el texto sin guardar cuando vence el candado.** Solo ocurre si el último guardado falló, y ya se ve «No se ha podido guardar». El candado manda: el estado se vacía.
+
+### B.5 · Qué revisar
+
+1. **Qué elige el llamante.**
+   - En `abrirEditorDeNota`: `pacienteId`, `citaId`, `notaId` y `episodioId`, todo UUID por Zod. `cita` XOR `nota` se comprueba en el servidor.
+   - En la lista no elige nada: `paciente_id` llega del servidor, ya validado por el esquema de la ficha.
+   - En `firmarNota`: `alcance`, que se rebaja si `!puedeSerConjunta`, y `motivo`. **Nunca texto** (B0.6).
+2. **R4-H1**:
+   - `denegado` → `bloqueada` y cualquier otro motivo → `error`;
+   - **ninguna** llamada tras el registro fallido en las dos pruebas;
+   - el antibucle solo se activa con `trasPin`.
+3. **R4-H2**: la fila nueva espera `'error'` y comprueba `toEqual`, no `toBeTruthy`.
+4. **`caducaEn`**:
+   - en `abierta` es `string`, y su `null` da `error`;
+   - ningún `setCaducaEn(null)` en el editor: con `grep -n "setCaducaEn\|caducaEn:" editor-de-nota.tsx`, cada asignación lleva `?? actual`;
+   - al vencer se vacía el estado clínico: la prueba busca el texto con `queryByText` y espera `null`.
+5. **T-036**: las dos cadenas de las pruebas 23514 son **literales** de su diseño (E.1 y E.2), y la del 6.8 sigue dando `error`.
+6. **Conflicto**:
+   - `readOnly` y autoguardado parado;
+   - el foco en el aviso;
+   - «Cargar lo guardado» es la única salida y pasa por `abrirEditorDeNota` (registra acceso).
+7. **Doble pulsación**: `enVuelo` como `ref`, no como estado (un `setState` no frena dos clics en el mismo tic), y `disabled={pendiente}` en los **dos** botones.
+8. **Lista**:
+   - `href` con `?nota=` siempre;
+   - las columnas del `select` sin texto clínico;
+   - `null` no es `[]`.
+9. **Borrador ajeno** (si P-1 se confirma): `cargarModelo` lo deja en `null` antes de devolver el modelo, no en el cliente.
+10. **Armazón**: `page.tsx` sin `notas_clinicas`, sin `lib/notas/servidor` y sin `use cache`. Recargar con F5 tras abrir vuelve al botón (manual).
+11. **Catálogo**:
+    - un solo `notas:` (`grep -c "^  notas: {" lib/i18n/es.ts` → `1`);
+    - las seis de `sello`;
+    - `episodio` y `modalidad` intactas;
+    - sin `notasEnPreparacion`;
+    - `git diff --stat` pequeño.
+12. **P1-P8**: el diff de cada pieza contra su copia en `minimax/correcciones/` solo cambia el tipo del estado (`diff -r`).
+13. **Territorio**: `node ~/.claude/pipeline/territorio.mjs T-012` limpio. Ningún cambio en `lib/cuentas/**`, `components/**` ni `supabase/**`.
+
+### B.6 · Territorio del corte B
+
+Todo cabe en el `territorio:` actual del contrato, que **no se toca**:
+- `lib/notas/servidor.ts` y `lib/notas/servidor.test.ts`;
+- `lib/i18n/es.ts`;
+- `app/(app)/pacientes/[id]/{acciones.ts, peticion.ts, panel-historia.tsx, panel-historia.test.tsx, lista-de-notas.tsx, lista-de-notas.test.tsx}`;
+- `app/(app)/pacientes/[id]/historia/notas/**`;
+- `app/(app)/agenda/notas.ts` y `notas.test.ts`.
+
+Fuera: `lib/cuentas/**`, `components/**`, `supabase/**`, `scripts/**` y `lib/huella/**`.
+
+### B.7 · Delegable
+
+**Nada nuevo es `delegable: volumen`.** Las piezas sin comportamiento (P1-P8) ya están hechas y corregidas, y copiarlas e integrarlas es de la fábrica, porque un CLI no integra. `BarraDeAcciones` tiene `disabled` y rol de barra, y el resto (editor, diálogo, reloj, cola y `lib`) es comportamiento.
+
+### Preguntas para el propietario
+
+- **P-1 · ¿Quien no es el autor ve el borrador sin firmar?** RLS ya se lo deja leer a quien vea la nota (un coprofesional, quien hereda el caso). *Recomendación: no.* El borrador es el trabajo en curso del autor, solo él lo corrige (ADR-059) y no se pinta lo que no se puede usar. Se ve que existe por la píldora «Borrador» / «Firmada · con cambios sin firmar» y la frase «Su autor tiene cambios sin firmar». Si la respuesta es sí, se quita B.1.1.5 y el editor lo pinta en solo lectura.
+- **P-2 · ¿Entra en el corte B el arreglo de la ficha de B0.4?** El arreglo es `caducaEn ?? previa.caducaEn` en `ampliar`, y un plazo nulo de `abrirPestanaDeHistoria` tratado como «no se pudo abrir». Hoy un fallo pasajero deja la historia en pantalla sin cierre automático (ADR-026). Está en el territorio y en un fichero que B ya toca, pero ningún criterio lo pide. *Recomendación: sí*, con una prueba gemela de la del editor. Si no, se anota en `docs/state.md`.
+
+### Lo que no entra, y por qué
+
+- **Distinguir en `firmarNota` la deriva de reloj (6.20) o C (6.18) de 6.24**: los tres salen `conflicto`. Habría que interpretar más mensajes, y en el peor caso se ve un aviso repetido, sin pérdida (B.4.5).
+- **El comparador, «Comparar» y «Descargar»**: son del corte C.
+- **Copiar al portapapeles en el conflicto**: comportamiento nuevo sin criterio (B.2.5).
+- **Un tipo de tres estados para la ventana en `lib/cuentas/candado.ts`**: B.2.3.
+- **Crear desde la ficha una nota sin cita**: §2.17. La lista no crea.
+- **El aviso de borrador abandonado**: ADR-036, sin criterio.
+
+### Lo que el implementador lee, en este orden
+
+1. `tickets/T-012-nota-clinica-firma.md`, hasta `## Anexos`.
+2. De este diseño: §1.4, §1.5, §1.6, §2.8-§2.10, §2.13 y §7. Después, **esta enmienda entera**, que manda donde choque.
+3. `tickets/T-036/diseno.md`, solo E.1 y E.2, para los literales de los mensajes.
+4. `.claude/rules/pipeline.md` y `.claude/rules/nextjs.md`; `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/generate-viewport.md`.
+5. `lib/notas/servidor.ts` (`:30-140`, `:218-440`, `:567-633` y `:692-825`) y `lib/notas/servidor.test.ts` (arnés, tablas de cero filas, `abrirEditorDeNota · el candado manda` y SQLSTATE de la firma).
+6. `lib/cuentas/accesos.ts` y `lib/cuentas/candado.ts:85-96`, solo lectura.
+7. `app/(app)/pacientes/[id]/acciones.ts`, `panel-historia.tsx`, `panel-historia.test.tsx`, `formulario-pin-historia.tsx`, `page.tsx` y `datos.ts`.
+8. `app/(app)/agenda/dialogo-reprogramar.tsx`, como patrón de diálogo con Zod.
+9. Las primitivas de `components/ui/` (diálogo, desplegable, pestañas, área de texto, piezas, botón).
+10. `minimax/correcciones/T-012/t012b/` entero y `lib/i18n/es.ts:320-365,495-525`.
+11. `docs/decisions/ADR-058.md`, `ADR-047.md`, `ADR-059.md` y `ADR-044.md`.
+
+**Orden de trabajo** (cada paso compila y pasa `npm test`):
+1. el catálogo (B.1.9), sin borrar todavía `notasEnPreparacion`;
+2. P1-P8 (B.1.6);
+3. `servidor.ts` y sus pruebas (B.1.1);
+4. `peticion.ts`, `esquemas.ts` y `acciones.ts`;
+5. `barra-de-acciones` y `editor-de-nota`, con sus pruebas;
+6. `page.tsx`, su prueba y `RUTA_NOTAS_DISPONIBLE` en **un** commit;
+7. la ficha (B.1.7), con el borrado de `notasEnPreparacion` en el mismo commit;
+8. lint, build y la evidencia manual cuando la BD esté libre.
+
+### Resumen del corte B
+
+1. Se construye la pantalla de la nota:
+   - un armazón en `/pacientes/<id>/historia/notas` que no lee nada clínico;
+   - un editor con candado, autoguardado, coprofesional, modificación y firma;
+   - la barra táctil;
+   - la lista de notas en la ficha;
+   - la integración de P1-P8 y la activación del botón «Notas» de la agenda.
+2. **R4-H1**: un registro de acceso fallido que no es «denegado» da `error` («vuelve a intentarlo»), no el PIN. Hay un antibucle: si tras un PIN aceptado vuelve a dar `bloqueada`, se dice «no se puede abrir».
+3. **`prolongarDesbloqueo`**: no se distingue, porque toda llamada sigue a una operación que RLS dejó pasar. En la apertura, `null` da `error`; en las mutaciones, la pantalla conserva el plazo anterior y nunca lo borra. `lib/cuentas` no se toca.
+4. **Conflicto de firma (T-036)**: aviso con foco, texto local intacto en solo lectura y «Cargar lo guardado». No se reintenta, y en la base no se pierde nada. Dos pruebas fijan los literales de 6.24 y del nuevo 6.18 como `conflicto`.
+5. **R4-H2**: una fila más en la tabla de cero filas y su gemela en `fijarCoprofesional`. Las dos matan C4.
+6. Correcciones al diseño:
+   - la lista enlaza siempre con `?nota=`, porque `?cita=` puede crear una cabecera ajena;
+   - P4 entra en B;
+   - el catálogo se funde a mano, con seis claves en `sello`.
+7. Para el propietario: P-1 (el borrador ajeno no viaja; recomendación «no se ve») y P-2 (arreglar el plazo nulo de la ficha; recomendación «sí»).
+8. El territorio no cambia y no hay nada delegable.
+9. Revisar con más cuidado:
+   - ningún `caducaEn` nulo en el editor sin `?? actual`;
+   - el `enVuelo` como `ref`;
+   - las columnas sin texto clínico de la lista;
+   - el bloque `notas` único en `es.ts`.
+10. Se integra después de T-036, porque los criterios manuales 8, 10 y M4 necesitan la BD.
+
+### Decisiones del propietario sobre el corte B (02-10-2026)
+
+Mandan sobre B.1-B.7 donde choquen.
+
+- **P-1 → el borrador ajeno se ve, en solo lectura** (el propietario se aparta de la recomendación).
+  - Se cae B.1.1.5: `cargarModelo` devuelve el borrador vigente también cuando `!soyAutor`.
+  - El editor lo pinta sin poder editarlo, guardarlo ni firmarlo. Ningún control de escritura aparece; no basta con deshabilitarlo.
+  - Va marcado como no firmado («Su autor tiene cambios sin firmar», más la píldora) y separado de la última versión firmada, que sigue siendo lo primero que se ve.
+  - La fila de la tabla de B.1 (`!soyAutor` con borrador) se invierte: ahora se espera el borrador en el modelo. Sus gemelas:
+    - el autor sigue pudiendo editar;
+    - quien no ve la nota por RLS no recibe ni la cabecera ni el borrador.
+  - El punto 9 de B.5 pasa a ser: «el borrador ajeno llega en solo lectura y sin acciones de escritura; nada en la pantalla permite a quien no es el autor modificarlo».
+  - Solo lo leen quienes RLS ya deja leer la nota. La pantalla no abre más puertas.
+- **P-2 → sí, entra en el corte B.** Es el arreglo de B0.4 en la ficha (`panel-historia.tsx`):
+  - `caducaEn ?? previa.caducaEn` al ampliar;
+  - un plazo nulo de `abrirPestanaDeHistoria` se trata como «no se pudo abrir»;
+  - lleva una prueba gemela de la del editor.
