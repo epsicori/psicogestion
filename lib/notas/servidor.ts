@@ -363,7 +363,9 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<Model
       numero: lecturaConjunta ? posicion + 1 : v.numero_version,
       autor: nombres.get(v.autor_id) ?? '',
       firmadaEn: `${formatearFechaCorta(firmada, zona)} ${formatearHora(firmada, zona)}`,
-      motivo: v.motivo_cambio,
+      // B2-H3 · En lectura conjunta la primera visible se llama «Versión 1»: con motivo delataría
+      // una versión anterior individual oculta (la tabla exige motivo a toda versión > 1).
+      motivo: lecturaConjunta && posicion === 0 ? null : v.motivo_cambio,
       alcance: v.alcance,
       texto,
       reservadas: v.anotaciones_reservadas,

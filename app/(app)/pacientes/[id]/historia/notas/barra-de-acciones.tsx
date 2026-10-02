@@ -7,7 +7,8 @@ import { t } from '@/lib/i18n';
 
 /**
  * La barra del pulgar (ADR-044): pegada abajo, por encima de la zona segura del dispositivo.
- * Solo pinta lo que tiene una acción real detrás: sin Comparar ni Descargar hasta el corte C.
+ * Solo pinta lo que tiene una acción real detrás. Comparar no está aquí: vive junto al historial de
+ * versiones (`comparador.tsx`). Descargar tampoco: espera a T-040.
  * Quien no puede escribir (no es el autor) recibe los tres en `false` y la barra queda vacía.
  *
  * Con el teclado virtual abierto (`resizes-content`) la barra sticky tapaba la línea del cursor:
