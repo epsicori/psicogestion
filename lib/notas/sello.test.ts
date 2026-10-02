@@ -86,3 +86,61 @@ describe('fraseDelSello', () => {
     expect(fraseDelSello(null, 'Europe/Madrid')).toBe('Sello no legible');
   });
 });
+
+describe('fraseDelSello · la fecha que pone es la de cuando se escribió (R2-H4)', () => {
+  const sinCita = { citaId: null, ventanaCita: null, margenMinutos: null };
+
+  it('con cita, una modificación escrita otro día lleva la fecha en cada hora', () => {
+    // Sesión el 26/08; v2 abierta y firmada el 15/09 de 10:00 a 10:15 (hora de Madrid).
+    const s = leerSello(
+      canonico({
+        abiertaEn: new Date('2026-09-15T08:00:00.000Z'),
+        ahora: new Date('2026-09-15T08:15:00.000Z'),
+      }),
+    );
+    expect(fraseDelSello(s, 'Europe/Madrid')).toBe(
+      'Escrita fuera de la sesión del 26/08 · 15/09 10:00–15/09 10:15',
+    );
+  });
+
+  it('sin cita, la fecha de la frase es la de abierta_en y no la de fecha_sesion', () => {
+    const s = leerSello(
+      canonico({
+        ...sinCita,
+        abiertaEn: new Date('2026-09-15T08:00:00.000Z'),
+        ahora: new Date('2026-09-15T08:15:00.000Z'),
+      }),
+    );
+    expect(fraseDelSello(s, 'Europe/Madrid')).toBe('Escrita el 15/09 · 10:00–10:15');
+  });
+
+  it('si el año cambia, todas las fechas de la frase llevan año', () => {
+    const s = leerSello(
+      canonico({
+        ...sinCita,
+        abiertaEn: new Date('2026-10-02T08:00:00.000Z'),
+        ahora: new Date('2027-10-02T08:00:00.000Z'),
+      }),
+    );
+    expect(fraseDelSello(s, 'Europe/Madrid')).toBe(
+      'Escrita el 02/10/2026 · 02/10/2026 10:00–02/10/2027 10:00',
+    );
+  });
+
+  it('con cita en otro año que la escritura, también llevan año', () => {
+    const s = leerSello(
+      canonico({
+        fechaSesion: '2026-12-30',
+        ventanaCita: {
+          inicio: new Date('2026-12-30T15:00:00.000Z'),
+          fin: new Date('2026-12-30T15:50:00.000Z'),
+        },
+        abiertaEn: new Date('2027-01-02T08:00:00.000Z'),
+        ahora: new Date('2027-01-02T08:10:00.000Z'),
+      }),
+    );
+    expect(fraseDelSello(s, 'Europe/Madrid')).toBe(
+      'Escrita fuera de la sesión del 30/12/2026 · 02/01/2027 09:00–02/01/2027 09:10',
+    );
+  });
+});

@@ -130,37 +130,65 @@ async function leerCabecera(supabase: Supabase, notaId: string): Promise<Cabecer
 
 type Episodio = { modalidad: string; centroId: string | null; abiertoEn: string };
 
-async function leerEpisodio(supabase: Supabase, episodioId: string): Promise<Episodio | null> {
-  const { data } = await supabase
+/**
+ * Una lectura de apoyo con tres desenlaces que NO se pueden confundir (R2-H2, R2-H6): el dato,
+ * «no hay dato» (`valor: null`, sin error) y «no se pudo leer» (`ok: false`). Lo que se sella o
+ * se pinta nunca se decide con un error tomado por «no hay dato».
+ */
+type Leida<T> = { ok: true; valor: T } | { ok: false };
+
+async function leerEpisodio(supabase: Supabase, episodioId: string): Promise<Leida<Episodio | null>> {
+  const { data, error } = await supabase
     .from('episodios_asistenciales')
     .select('modalidad_relacional, centro_id, abierto_en')
     .eq('id', episodioId)
     .maybeSingle();
-  if (!data) return null;
-  return { modalidad: data.modalidad_relacional, centroId: data.centro_id, abiertoEn: data.abierto_en };
+  if (error) {
+    console.error('notas: no se pudo leer el episodio', error);
+    return { ok: false };
+  }
+  if (!data) return { ok: true, valor: null };
+  return {
+    ok: true,
+    valor: { modalidad: data.modalidad_relacional, centroId: data.centro_id, abiertoEn: data.abierto_en },
+  };
 }
 
 /** Modalidad no individual Y más de un participante en alta (§1.4). */
-async function puedeSerConjunta(supabase: Supabase, episodioId: string): Promise<boolean> {
+async function puedeSerConjunta(supabase: Supabase, episodioId: string): Promise<Leida<boolean>> {
   const episodio = await leerEpisodio(supabase, episodioId);
-  if (!episodio || episodio.modalidad === 'individual') return false;
-  const { count } = await supabase
+  if (!episodio.ok) return { ok: false };
+  if (!episodio.valor || episodio.valor.modalidad === 'individual') return { ok: true, valor: false };
+  const { count, error } = await supabase
     .from('episodio_participantes')
     .select('id', { count: 'exact', head: true })
     .eq('episodio_id', episodioId)
     .is('baja_en', null);
-  return (count ?? 0) > 1;
+  if (error) {
+    console.error('notas: no se pudieron contar los participantes', error);
+    return { ok: false };
+  }
+  return { ok: true, valor: (count ?? 0) > 1 };
 }
 
-async function zonaDeLaOrganizacion(supabase: Supabase): Promise<string | null> {
-  const { data } = await supabase.from('organizacion').select('zona_horaria').maybeSingle();
-  return data?.zona_horaria ?? null;
+async function zonaDeLaOrganizacion(supabase: Supabase): Promise<Leida<string | null>> {
+  const { data, error } = await supabase.from('organizacion').select('zona_horaria').maybeSingle();
+  if (error) {
+    console.error('notas: no se pudo leer la organización', error);
+    return { ok: false };
+  }
+  return { ok: true, valor: data?.zona_horaria ?? null };
 }
 
-async function nombresDe(supabase: Supabase, ids: string[]): Promise<Map<string, string>> {
+/** `null` si la lectura falla: sin nombres, el autor de cada versión saldría como '' (R2-H6). */
+async function nombresDe(supabase: Supabase, ids: string[]): Promise<Map<string, string> | null> {
   const nombres = new Map<string, string>();
   if (ids.length === 0) return nombres;
-  const { data } = await supabase.from('directorio_perfiles').select('id, nombre_completo').in('id', ids);
+  const { data, error } = await supabase.from('directorio_perfiles').select('id, nombre_completo').in('id', ids);
+  if (error) {
+    console.error('notas: no se pudieron leer los nombres', error);
+    return null;
+  }
   for (const fila of data ?? []) {
     if (fila.id) nombres.set(fila.id, fila.nombre_completo ?? '');
   }
@@ -188,7 +216,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
   const cab = await leerCabecera(supabase, notaId);
   if (!cab) return null;
 
-  const [{ data: filasVersiones }, episodio, conjunta] = await Promise.all([
+  const [{ data: filasVersiones, error: errorVersiones }, episodioLeido, conjuntaLeida] = await Promise.all([
     supabase
       .from('notas_clinicas_versiones')
       .select('numero_version, autor_id, creada_en, motivo_cambio, alcance, cuerpo, anotaciones_reservadas, contenido_canonico, huella')
@@ -197,19 +225,36 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
     leerEpisodio(supabase, cab.episodio_id),
     puedeSerConjunta(supabase, cab.episodio_id),
   ]);
+  // Una lectura que falla no es «no hay versiones»: una nota firmada se pintaría como borrador y
+  // con candidatos a coprofesional (R2-H6).
+  if (errorVersiones || !episodioLeido.ok || !conjuntaLeida.ok) {
+    if (errorVersiones) console.error('notas: no se pudieron leer las versiones', errorVersiones);
+    return null;
+  }
   const versiones = filasVersiones ?? [];
+  const episodio = episodioLeido.valor;
+  const conjunta = conjuntaLeida.valor;
 
   // La zona de formato: la de la cita si la hay y, si no, la de la organización (ADR-034).
   let cita: { inicio: string; fin: string; zona_horaria: string } | null = null;
   if (cab.cita_id) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('citas')
       .select('inicio, fin, zona_horaria')
       .eq('id', cab.cita_id)
       .maybeSingle();
+    if (error) {
+      console.error('notas: no se pudo leer la cita', error);
+      return null;
+    }
     cita = data;
   }
-  const zona = cita?.zona_horaria ?? (await zonaDeLaOrganizacion(supabase)) ?? 'Europe/Madrid';
+  let zona = cita?.zona_horaria;
+  if (!zona) {
+    const org = await zonaDeLaOrganizacion(supabase);
+    if (!org.ok) return null;
+    zona = org.valor ?? 'Europe/Madrid';
+  }
 
   const soyAutor = cab.autor_id === usuario.id;
   const hayBorrador = cab.borrador_contenido !== null && cab.borrador_contenido !== undefined;
@@ -240,6 +285,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
   const nombres = await nombresDe(supabase, [
     ...new Set([...versiones.map((v) => v.autor_id), ...(cab.coprofesional_id ? [cab.coprofesional_id] : [])]),
   ]);
+  if (!nombres) return null;
 
   const vista: VersionDeVista[] = versiones.map((v) => {
     let texto = '';
@@ -330,7 +376,9 @@ export async function abrirEditorDeNota(
   const acceso = await registrarAccesoHistoria(sesion, entrada.pacienteId, 'notas_clinicas', contexto);
   if (!acceso.ok) return { estado: 'bloqueada' };
 
-  // Cita XOR nota. Una nota sin cita no se abre desde aquí: no hay de dónde sacar su fecha.
+  // Cita XOR nota. Con `notaId` se ABRE cualquier nota visible, también las que no tienen cita
+  // (las sembradas); lo que no se puede desde aquí es CREAR una nota sin cita: no hay de dónde
+  // sacar su fecha (R2-H9).
   if ((entrada.citaId === null) === (entrada.notaId === null)) return { estado: 'no_disponible' };
 
   const devolver = async (notaId: string): Promise<ResultadoApertura> => {
@@ -364,6 +412,9 @@ export async function abrirEditorDeNota(
       .select('id')
       .eq('cita_id', citaId)
       .eq('autor_id', usuario.id)
+      // Del paciente que se abre: una nota de otro paciente con el `cita_id` de esta cita
+      // (H27 sigue abierto) registraría el acceso a nombre de uno y devolvería la de otro (R2-H8).
+      .eq('paciente_id', entrada.pacienteId)
       .maybeSingle();
     return data?.id ?? null;
   };
@@ -379,15 +430,48 @@ export async function abrirEditorDeNota(
   });
   if (errorEpisodio) {
     if (errorEpisodio.code === 'EP001') {
-      const { data: abiertos } = await supabase
+      // La MISMA regla que cuenta `episodio_para_nota` (R2-H3): abiertos del profesional con el
+      // paciente de titular O de participante en alta. Si la lista fuera más corta que el recuento,
+      // quien elige no podría llegar al episodio que le falta.
+      const { data: comoTitular, error: errorTitular } = await supabase
         .from('episodios_asistenciales')
         .select('id, modalidad_relacional, abierto_en')
         .eq('paciente_id', entrada.pacienteId)
         .eq('profesional_id', usuario.id)
         .is('cerrado_en', null);
+      const { data: participaciones, error: errorParticipaciones } = await supabase
+        .from('episodio_participantes')
+        .select('episodio_id')
+        .eq('paciente_id', entrada.pacienteId)
+        .is('baja_en', null);
+      if (errorTitular || errorParticipaciones) {
+        console.error('notas: no se pudieron listar los episodios', errorTitular ?? errorParticipaciones);
+        return { estado: 'error' };
+      }
+      const idsParticipados = (participaciones ?? []).map((f) => f.episodio_id);
+      let comoParticipante: typeof comoTitular = [];
+      if (idsParticipados.length > 0) {
+        const { data, error } = await supabase
+          .from('episodios_asistenciales')
+          .select('id, modalidad_relacional, abierto_en')
+          .in('id', idsParticipados)
+          .eq('profesional_id', usuario.id)
+          .is('cerrado_en', null);
+        if (error) {
+          console.error('notas: no se pudieron listar los episodios', error);
+          return { estado: 'error' };
+        }
+        comoParticipante = data;
+      }
+      const vistos = new Set<string>();
+      const abiertos = [...(comoTitular ?? []), ...(comoParticipante ?? [])].filter((e) => {
+        if (vistos.has(e.id)) return false;
+        vistos.add(e.id);
+        return true;
+      });
       return {
         estado: 'elegir_episodio',
-        episodios: (abiertos ?? []).map((e) => ({
+        episodios: abiertos.map((e) => ({
           id: e.id,
           etiqueta: etiquetaDeEpisodio(e.modalidad_relacional, e.abierto_en, cita.zona_horaria),
         })),
@@ -577,42 +661,64 @@ export async function firmarNota(
   let ventanaCita: { inicio: Date; fin: Date } | null = null;
   let margenMinutos: number | null = null;
   if (cab.cita_id) {
-    const { data: cita } = await supabase
+    // Un error de lectura NO es «no hay dato»: aquí se decide lo que se sella para siempre
+    // (R2-H2). Solo un `data` nulo SIN error significa «hereda» / «no admite».
+    const { data: cita, error: errorCita } = await supabase
       .from('citas')
       .select('inicio, fin, centro_id')
       .eq('id', cab.cita_id)
       .maybeSingle();
+    if (errorCita) {
+      console.error('notas: no se pudo leer la cita', errorCita);
+      return fallo('error');
+    }
     if (!cita) return fallo('cita_ilegible');
     ventanaCita = { inicio: new Date(cita.inicio), fin: new Date(cita.fin) };
 
     if (cita.centro_id) {
-      const { data: centro } = await supabase
+      const { data: centro, error: errorCentro } = await supabase
         .from('centros')
         .select('margen_sesion_minutos')
         .eq('id', cita.centro_id)
         .maybeSingle();
+      if (errorCentro) {
+        console.error('notas: no se pudo leer el margen del centro', errorCentro);
+        return fallo('error');
+      }
       margenMinutos = centro?.margen_sesion_minutos ?? null;
     }
     if (margenMinutos === null) {
-      const { data: organizacion } = await supabase
+      const { data: organizacion, error: errorOrganizacion } = await supabase
         .from('organizacion')
         .select('margen_sesion_minutos')
         .maybeSingle();
+      if (errorOrganizacion) {
+        console.error('notas: no se pudo leer el margen de la organización', errorOrganizacion);
+        return fallo('error');
+      }
       margenMinutos = organizacion?.margen_sesion_minutos ?? null;
     }
     if (margenMinutos === null) return fallo('cita_ilegible');
   }
 
   // 5 · El motivo: obligatorio desde la segunda versión, y se comprueba SIN insertar.
-  const { count: versiones } = await supabase
+  const { count, error: errorCuenta } = await supabase
     .from('notas_clinicas_versiones')
     .select('id', { count: 'exact', head: true })
     .eq('nota_id', entrada.notaId);
+  // Sin el recuento no se sabe si esto es una v1 o una modificación: no se sigue (R2-H7).
+  if (errorCuenta || count === null) {
+    console.error('notas: no se pudieron contar las versiones', errorCuenta);
+    return fallo('error');
+  }
+  const versiones = count;
   const motivo = entrada.motivo?.trim() ? entrada.motivo.trim() : null;
-  if ((versiones ?? 0) > 0 && motivo === null) return fallo('falta_motivo');
+  if (versiones > 0 && motivo === null) return fallo('falta_motivo');
 
-  // 6 · La conjunta solo cuenta si el episodio la admite.
-  const alcance = (await puedeSerConjunta(supabase, cab.episodio_id)) ? entrada.alcance : 'individual';
+  // 6 · La conjunta solo cuenta si el episodio la admite. Si no se puede saber, no se sella.
+  const conjunta = await puedeSerConjunta(supabase, cab.episodio_id);
+  if (!conjunta.ok) return fallo('error');
+  const alcance = conjunta.valor ? entrada.alcance : 'individual';
 
   // 7 · Sellar. El sobre sale de la cabecera y del borrador releídos.
   try {
@@ -625,7 +731,7 @@ export async function firmarNota(
       autorId: usuario.id,
       cuerpo: { texto },
       anotacionesReservadas: reservadas === '' ? null : reservadas,
-      motivoCambio: (versiones ?? 0) > 0 ? motivo : null,
+      motivoCambio: versiones > 0 ? motivo : null,
       alcance,
       citaId: cab.cita_id,
       ventanaCita,
@@ -638,6 +744,9 @@ export async function firmarNota(
       const sigueVisible = await leerCabecera(supabase, entrada.notaId);
       return fallo(sigueVisible ? 'no_disponible' : 'bloqueada');
     }
+    // 6.8 (abierta_en posterior a firmada_en: desfase de reloj) NO es un conflicto: «vuelve a
+    // intentarlo», sin ajustar ninguna fecha (§4.6 del diseño; R2-H7).
+    if (e.codigo === '23514' && e.message.includes('abierta_en')) return fallo('error');
     // 23514: la cabecera cambió entre leerla y firmar. 23505: otra firma entró antes.
     // No se reintenta en silencio: quien firma tiene que saberlo.
     if (e.codigo === '23514' || e.codigo === '23505') return fallo('conflicto');

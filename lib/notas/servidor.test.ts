@@ -564,3 +564,279 @@ describe('abrirEditorDeNota · el candado manda', () => {
     expect(llamadas.some((l) => l.op === 'insert')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// Ronda de correcciones de la revisión (R2-H2 … R2-H8)
+// ---------------------------------------------------------------------------------------
+
+const E2 = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'; // un episodio en el que el paciente solo participa
+const ACCESO_OK = { data: [{ acceso_id: 1, vistas: 1, apertura: true }] };
+const CITA_PROPIA = {
+  id: C,
+  paciente_id: P,
+  profesional_id: A,
+  inicio: '2026-10-02T08:50:00Z',
+  fin: '2026-10-02T09:40:00Z',
+  zona_horaria: 'Europe/Madrid',
+  centro_id: 'cen',
+};
+const ERROR_LECTURA = { error: { code: '57014', message: 'lectura rota' } };
+
+describe('firmarNota · un error de lectura no es «no hay dato» (R2-H2, R2-H7)', () => {
+  const entrada = { pacienteId: P, notaId: N, testigo: TESTIGO, alcance: 'individual' as const, motivo: null };
+  const pareja: Responder = (l) =>
+    l.tabla === 'episodios_asistenciales'
+      ? { data: { modalidad_relacional: 'pareja', centro_id: 'cen', abierto_en: '2026-09-01T00:00:00Z' } }
+      : undefined;
+
+  it('si falla la lectura del margen del centro, no sella con el de la organización', async () => {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) => (l.tabla === 'centros' ? ERROR_LECTURA : undefined)),
+    );
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'error' });
+    expect(inserciones(llamadas)).toHaveLength(0);
+  });
+
+  it('si falla la lectura del margen de la organización, no sella', async () => {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) => (l.tabla === 'organizacion' ? ERROR_LECTURA : undefined)),
+    );
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'error' });
+    expect(inserciones(llamadas)).toHaveLength(0);
+  });
+
+  it('si falla la lectura de la cita, no sella', async () => {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) => (l.tabla === 'citas' ? ERROR_LECTURA : undefined)),
+    );
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'error' });
+    expect(inserciones(llamadas)).toHaveLength(0);
+  });
+
+  it('si falla la lectura del episodio, no rebaja una conjunta a individual', async () => {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) => (l.tabla === 'episodios_asistenciales' ? ERROR_LECTURA : undefined)),
+    );
+    expect(await firmarNota(sesion, { ...entrada, alcance: 'conjunta' })).toEqual({ ok: false, motivo: 'error' });
+    expect(inserciones(llamadas)).toHaveLength(0);
+  });
+
+  it('si falla el recuento de participantes, no rebaja una conjunta a individual', async () => {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) => (l.tabla === 'episodio_participantes' ? ERROR_LECTURA : pareja(l))),
+    );
+    expect(await firmarNota(sesion, { ...entrada, alcance: 'conjunta' })).toEqual({ ok: false, motivo: 'error' });
+    expect(inserciones(llamadas)).toHaveLength(0);
+  });
+
+  it('si falla el recuento de versiones, no firma como v1 ni como v2', async () => {
+    const { sesion, llamadas } = clienteSimulado(
+      firmaFeliz((l) =>
+        l.tabla === 'notas_clinicas_versiones' && l.op === 'select' && (l.opciones as { head?: boolean })?.head
+          ? ERROR_LECTURA
+          : undefined,
+      ),
+    );
+    expect(await firmarNota(sesion, { ...entrada, motivo: 'Corrijo' })).toEqual({ ok: false, motivo: 'error' });
+    expect(inserciones(llamadas)).toHaveLength(0);
+  });
+
+  it('un 23514 del desfase de reloj (abierta_en > firmada_en) es «vuelve a intentarlo», no conflicto', async () => {
+    const { sesion } = clienteSimulado(
+      firmaFeliz((l) =>
+        l.tabla === 'notas_clinicas_versiones' && l.op === 'insert'
+          ? { error: { code: '23514', message: 'abierta_en no puede ser posterior a firmada_en (ADR-046)' } }
+          : undefined,
+      ),
+    );
+    expect(await firmarNota(sesion, entrada)).toEqual({ ok: false, motivo: 'error' });
+  });
+});
+
+describe('abrirEditorDeNota · lecturas que fallan al armar el modelo (R2-H6)', () => {
+  const porNota = { pacienteId: P, citaId: null, notaId: N, episodioId: null };
+  const base = (extra: Responder): Responder =>
+    firmaFeliz((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      return extra(l);
+    });
+
+  it('la apertura feliz por nota devuelve abierta (la línea base de las dos de abajo)', async () => {
+    const { sesion } = clienteSimulado(base(() => undefined));
+    expect((await abrirEditorDeNota(sesion, porNota, CONTEXTO)).estado).toBe('abierta');
+  });
+
+  it('si falla la lectura de las versiones no se pinta una nota firmada como borrador', async () => {
+    const { sesion } = clienteSimulado(
+      base((l) =>
+        l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head
+          ? ERROR_LECTURA
+          : undefined,
+      ),
+    );
+    expect((await abrirEditorDeNota(sesion, porNota, CONTEXTO)).estado).not.toBe('abierta');
+  });
+
+  it('si falla la lectura de los nombres, el autor de las versiones no sale vacío', async () => {
+    const version = {
+      numero_version: 1,
+      cuerpo: '{"texto":"v"}',
+      anotaciones_reservadas: null,
+      autor_id: A,
+      creada_en: '2026-10-01T10:00:00Z',
+      motivo_cambio: null,
+      alcance: 'individual',
+      contenido_canonico: '{}',
+      huella: '\\xab',
+    };
+    const { sesion } = clienteSimulado(
+      base((l) => {
+        if (l.tabla === 'notas_clinicas_versiones' && !(l.opciones as { head?: boolean } | undefined)?.head) {
+          return { data: [version] };
+        }
+        if (l.tabla === 'directorio_perfiles') return ERROR_LECTURA;
+        return undefined;
+      }),
+    );
+    expect((await abrirEditorDeNota(sesion, porNota, CONTEXTO)).estado).not.toBe('abierta');
+  });
+});
+
+describe('abrirEditorDeNota · la lista de episodios es la regla que obliga a elegir (R2-H3)', () => {
+  it('trae también los episodios en los que el paciente solo participa, y solo los del profesional', async () => {
+    const { sesion, llamadas } = clienteSimulado((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (l.tabla === 'notas_clinicas') return { data: null };
+      if (l.tabla === 'rpc:episodio_para_nota') return { error: { code: 'EP001', message: 'elige' } };
+      if (l.tabla === 'episodio_participantes') return { data: [{ episodio_id: E2 }] };
+      if (l.tabla === 'episodios_asistenciales') {
+        const porId = l.filtros.some(([f]) => f === 'in:id');
+        return porId
+          ? { data: [{ id: E2, modalidad_relacional: 'pareja', abierto_en: '2026-09-10T00:00:00Z' }] }
+          : { data: [{ id: E, modalidad_relacional: 'individual', abierto_en: '2026-09-01T00:00:00Z' }] };
+      }
+      return undefined;
+    });
+    const r = await abrirEditorDeNota(sesion, { pacienteId: P, citaId: C, notaId: null, episodioId: null }, CONTEXTO);
+    expect(r).toMatchObject({ estado: 'elegir_episodio' });
+    const ids = (r as { episodios: { id: string }[] }).episodios.map((e) => e.id).sort();
+    expect(ids).toEqual([E, E2].sort());
+    // Todas las consultas de episodios se acotan al profesional y a los abiertos.
+    for (const l of llamadas.filter((x) => x.tabla === 'episodios_asistenciales')) {
+      expect(l.filtros).toContainEqual(['eq:profesional_id', A]);
+      expect(l.filtros).toContainEqual(['is:cerrado_en', null]);
+    }
+  });
+
+  it('si el paciente solo participa en dos episodios, la lista no llega vacía', async () => {
+    const { sesion } = clienteSimulado((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (l.tabla === 'notas_clinicas') return { data: null };
+      if (l.tabla === 'rpc:episodio_para_nota') return { error: { code: 'EP001', message: 'elige' } };
+      if (l.tabla === 'episodio_participantes') return { data: [{ episodio_id: E }, { episodio_id: E2 }] };
+      if (l.tabla === 'episodios_asistenciales') {
+        return l.filtros.some(([f]) => f === 'in:id')
+          ? {
+              data: [
+                { id: E, modalidad_relacional: 'grupo', abierto_en: '2026-09-01T00:00:00Z' },
+                { id: E2, modalidad_relacional: 'pareja', abierto_en: '2026-09-10T00:00:00Z' },
+              ],
+            }
+          : { data: [] };
+      }
+      return undefined;
+    });
+    const r = await abrirEditorDeNota(sesion, { pacienteId: P, citaId: C, notaId: null, episodioId: null }, CONTEXTO);
+    expect((r as { episodios: unknown[] }).episodios).toHaveLength(2);
+  });
+});
+
+describe('abrirEditorDeNota · la búsqueda por cita es del paciente que se abre (R2-H8)', () => {
+  it('filtra por paciente_id: no devuelve la nota de otro paciente con el cita_id de esta cita', async () => {
+    const { sesion, llamadas } = clienteSimulado((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (l.tabla === 'rpc:episodio_para_nota') return { data: E };
+      if (l.tabla === 'notas_clinicas' && l.op === 'insert') return { data: { id: N } };
+      if (l.tabla === 'notas_clinicas' && l.op === 'select') {
+        // Solo «encuentra» una nota si la búsqueda NO acota por paciente (el defecto).
+        const acotada = l.filtros.some(([f, v]) => f === 'eq:paciente_id' && v === P);
+        if (l.filtros.some(([f]) => f === 'eq:cita_id')) return acotada ? { data: null } : { data: { id: 'otra-nota' } };
+        return { data: cabecera({ id: N }) };
+      }
+      return undefined;
+    });
+    await abrirEditorDeNota(sesion, { pacienteId: P, citaId: C, notaId: null, episodioId: null }, CONTEXTO);
+    const busquedas = llamadas.filter(
+      (l) => l.tabla === 'notas_clinicas' && l.op === 'select' && l.filtros.some(([f]) => f === 'eq:cita_id'),
+    );
+    expect(busquedas.length).toBeGreaterThan(0);
+    for (const b of busquedas) expect(b.filtros).toContainEqual(['eq:paciente_id', P]);
+    // Y por tanto se creó la nota buena en vez de abrir la ajena.
+    expect(llamadas.some((l) => l.tabla === 'notas_clinicas' && l.op === 'insert')).toBe(true);
+  });
+});
+
+describe('abrirEditorDeNota · apertura doble (R2-H5)', () => {
+  /** Un mundo con una sola nota posible por (cita, autor): la segunda inserción da 23505. */
+  function mundoConIndiceUnico() {
+    let intentosDeInsertar = 0;
+    let creada = false;
+    const responder: Responder = (l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (l.tabla === 'rpc:episodio_para_nota') return { data: E };
+      if (l.tabla === 'rpc:prolongar_desbloqueo') return { data: '2026-10-02T10:00:00Z' };
+      if (l.tabla === 'notas_clinicas' && l.op === 'insert') {
+        intentosDeInsertar += 1;
+        if (creada) return { error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
+        creada = true;
+        return { data: { id: N } };
+      }
+      if (l.tabla === 'notas_clinicas' && l.op === 'select') {
+        if (l.filtros.some(([f]) => f === 'eq:cita_id')) {
+          // Las dos aperturas buscan ANTES de que ninguna haya insertado: el caso de la carrera.
+          return intentosDeInsertar < 2 ? { data: null } : { data: { id: N } };
+        }
+        return { data: cabecera() };
+      }
+      if (l.tabla === 'notas_clinicas_versiones' && l.op === 'select') {
+        return (l.opciones as { head?: boolean } | undefined)?.head ? { count: 0 } : { data: [] };
+      }
+      if (l.tabla === 'episodios_asistenciales') {
+        return { data: { modalidad_relacional: 'individual', centro_id: 'cen', abierto_en: '2026-09-01T00:00:00Z' } };
+      }
+      if (l.tabla === 'episodio_participantes') return { count: 1 };
+      return undefined;
+    };
+    return responder;
+  }
+
+  it('la segunda de dos aperturas simultáneas recibe 23505, relee y devuelve la nota de la primera', async () => {
+    const { sesion, llamadas } = clienteSimulado(mundoConIndiceUnico());
+    const entrada = { pacienteId: P, citaId: C, notaId: null, episodioId: null };
+    const [a, b] = await Promise.all([
+      abrirEditorDeNota(sesion, entrada, CONTEXTO),
+      abrirEditorDeNota(sesion, entrada, CONTEXTO),
+    ]);
+    expect(llamadas.filter((l) => l.tabla === 'notas_clinicas' && l.op === 'insert')).toHaveLength(2);
+    expect(a.estado).toBe('abierta');
+    expect(b.estado).toBe('abierta');
+    expect((a as { nota: { notaId: string } }).nota.notaId).toBe(N);
+    expect((b as { nota: { notaId: string } }).nota.notaId).toBe(N);
+  });
+
+  it('un 23505 cuya relectura no encuentra nada es error, no abierta', async () => {
+    const { sesion } = clienteSimulado((l) => {
+      if (l.tabla === 'notas_clinicas' && l.op === 'insert') {
+        return { error: { code: '23505', message: 'duplicate key' } };
+      }
+      if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: null };
+      return mundoConIndiceUnico()(l);
+    });
+    const r = await abrirEditorDeNota(sesion, { pacienteId: P, citaId: C, notaId: null, episodioId: null }, CONTEXTO);
+    expect(r).toEqual({ estado: 'error' });
+  });
+});
