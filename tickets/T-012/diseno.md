@@ -1627,3 +1627,12 @@ Mandan sobre B.1-B.7 donde choquen.
   - `caducaEn ?? previa.caducaEn` al ampliar;
   - un plazo nulo de `abrirPestanaDeHistoria` se trata como «no se pudo abrir»;
   - lleva una prueba gemela de la del editor.
+
+### Decisión del propietario sobre B0-H3 (02-10-2026)
+
+- **El borrador ajeno se recorta por alcance** (era la recomendación).
+- Quien no es el autor ve el texto del borrador solo si podría leer esa nota una vez firmada con el mismo alcance. Es decir: el borrador es `conjunta` y el lector es coprofesional del episodio, o el lector tiene ya lectura por la RLS de las versiones firmadas.
+- En cualquier otro caso ve «Hay un borrador en curso», sin texto ni campos clínicos. El recorte se hace en servidor (`cargarModelo`): el texto no viaja al cliente.
+- Prueba y gemela:
+  - coprofesional con borrador individual → sin texto;
+  - coprofesional con borrador conjunto → texto en solo lectura.
