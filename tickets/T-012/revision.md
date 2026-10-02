@@ -947,3 +947,58 @@ Ninguna prueba de `ET` comprueba `activeElement` al abrir el diálogo con `versi
 - **La rama `faltaMotivo` del efecto (`E:1194`) y su exclusión de `aria-describedby` (`E:1188`) no tienen prueba, pero tampoco se alcanzan desde la interfaz.** Con versiones, el cliente bloquea el motivo vacío con el mismo `trim()` que el servidor (`E:1177` y `lib/notas/servidor.ts:838`), así que el servidor nunca contesta `falta_motivo`. Sin versiones en el cliente y con alguna en la base, antes salta `sin_borrador` o `conflicto` (`lib/notas/servidor.ts:773-774`). Por eso M4 y M5 son equivalentes en la práctica. No lo cuento como hallazgo. Si se quiere fijar la intención, basta un caso con `firmarNota` resolviendo `{ ok: false, motivo: "falta_motivo" }` y versiones.
 - Con `faltaMotivo` y `conVersiones === false`, el foco cae en «Firmar» y no hay mensaje en ningún sitio. `mensajeMotivo` solo se pinta dentro del `AreaTexto`, que no existe sin versiones, y `errorDePeticion` excluye ese error. Antes de `0c6fac2` el foco caía en `body` con el mismo silencio, así que no es una regresión. Solo puede ocurrir si el modelo del cliente dice «sin versiones» y la base cuenta alguna (`lib/notas/servidor.ts:839`). Por lo de la nota anterior, no lo cuento como hallazgo.
 - Con `noSeFirmo` o `vacia`, el lector de pantalla puede leer el texto dos veces: una porque la alerta se monta y otra porque es la descripción del botón que recibe el foco. No rompe nada, y la verificación 4 lo da por bueno en el navegador.
+
+## Corte C · ronda 1 (07e04f2, rama T-012-corte-c)
+
+**Sin ALTA (0/0/3 nuevas; con B1-H8 arrastrado, 0/0/4 en `revision.json`).** El comparador no deja ver nada que la vista vigente no enseñe ya, se apaga con el candado y aguanta textos largos. B2-H1, B2-H2, B2-H3, B3-H1 y B3-H2 quedan cerrados: cada uno tiene una prueba que mata a su mutante. B1-H8 sigue abierto y no está en el territorio de este corte. Los tres hallazgos nuevos son BAJA: dos son huecos de prueba en el comparador y uno es un reintento que no se anuncia.
+
+Método: copié la rama en un directorio aparte (git archive con los node_modules del repo enlazados) y medí cada mutante con `npx vitest run` sobre el fichero de pruebas que le toca. Línea base: 241 pruebas en verde en los cuatro ficheros del diff.
+
+### Las dos preguntas del implementador
+
+1. **E4 (sin `!estado.conflicto` en `enCaminoDeRecarga`, `E:178`) y E12 (sin conservar `enfoqueAviso` en la acción `modelo`, `E:255`): los dos son equivalentes.**
+   - E4: el reductor nunca tiene a la vez `conflicto` y un aviso de `AVISOS_CON_RECARGA`. `conflicto` solo llega como respuesta del servidor con testigo: guardar o firmar. Después de `yaFirmada` o `firmadaSinRecargar`, `sesion.escribe` vale `false`, y `guardarYa` (`E:420`) devuelve el conflicto en local sin hacer `dispatch`. `fijarCoprofesional` le pasa a `explicarCeroFilas` un testigo `null`, así que nunca da conflicto. `empezarModificacion` tampoco lo da. La guarda es defensiva y la dejo como está.
+   - E12: `modelo` y `apertura abierta` ponen `aviso: null`. Ningún +1 se despacha en el mismo lote que `modelo`, así que el efecto de foco (`E:516-518`) ve el paso de 0 a 1 con contador o sin él.
+   - Hay una nota en el apartado del orquestador sobre la prueba que el diseño cita para E4.
+2. **`key={versiones.length}` (`E:1152`) hace lo que pide el diseño.** C.1.3 dice: «La key lo cierra y le recalcula los valores por defecto cuando llega una versión nueva». Matando la key (K1) cae la prueba «al llegar una versión nueva…». El caso límite es una longitud igual con composición distinta: en lectura conjunta se pierde una asignación y entra una conjunta. Ahí el `useState` conserva dos números, pero el contenido se saca siempre del prop actual con `find` y respaldo a primera y última. Ningún texto viejo se queda en pantalla. No hay fuga.
+
+### Lo que se pidió buscar
+
+- **Fugas por la proyección conjunta: no hay.** El comparador solo lee `numero`, `texto` y `reservadas` de las versiones que ya trae la vista (`comparador.tsx:81-90`). El diff depende solo de dos textos que ya se ven. No pinta motivo ni autor, y la prueba «no muestra ningún motivo de cambio» lo fija. En la lectura conjunta, las reservadas de una conjunta ya salían en la vigente: `docs/architecture.md:418-421` solo las excluye de lo que se da al paciente. La numeración es la posicional de B1-H4, y la prueba «números posicionales…» la fija.
+- **Candado: se cumple.** Con `cerrada`, la fase pasa a `bloqueada` y se desmonta el árbol entero. La prueba «la comparación cae con el candado» comprueba que no queda ningún `ins` ni `del` ni texto comparado.
+- **Coste: el tope basta.** Lo medí con node 24 y `lib/notas/comparar.ts` aislado. 20 000 palabras con 490 sustituciones repartidas: 15 ms, comparación completa. Con 600 sustituciones se agota el presupuesto: 7 ms. Vocabulario de 12 palabras: 9-10 ms. Textos periódicos adversarios: 8-22 ms. Las instantáneas `Int32Array` por cada d están acotadas por `MAX_EDICIONES = 1000` (`lib/notas/comparar.ts:14,36`). El peor caso de memoria está por debajo de unos pocos MB.
+
+### Estado de los abiertos
+
+| Id | Estado | Mutante que muere |
+|---|---|---|
+| B2-H1 | Cerrado | B1a-B1f: sin contador, sin respaldo al grupo, sin reintento, sin `tabIndex` del aviso. Mueren por (a/b), (a2), (d) y «firma que sale bien pero no trae la nota» |
+| B2-H2 | Cerrado | B2a/B2b/B2c: sin `tabIndex` en `borradorOculto`, `EstadoVacio` y el `h2` de `BorradorAjeno` |
+| B2-H3 | Cerrado | H3: sin el recorte `lecturaConjunta && posicion === 0` en `lib/notas/servidor.ts:368`. H3b (sin `lecturaConjunta`) sobrevive, pero el diseño ya lo declara equivalente: en lectura individual la primera visible es la v1 real, que nunca lleva motivo |
+| B3-H1 | Cerrado | M6: efecto de foco sin dependencias |
+| B3-H2 | Cerrado | M3: sin `error === null` |
+| B1-H8 | Abierto | Fuera de territorio (`app/(app)/pacientes/[id]/datos.ts`). Ya está anotado en `docs/state.md:53` §Hallazgos, así que la parte «sin anotar» de la ronda 3 ya no vale |
+
+Mutantes del comparador que mueren: C1-C5. En `comparar.test.ts` mueren P1 (sin presupuesto), P2 (sin NFC), P3 (sin recorte de prefijo) y P4 (todo como un bloque).
+
+### BAJA
+
+**C1-H1** · `app/(app)/pacientes/[id]/historia/notas/comparador.tsx:95` · Ninguna prueba compara dos versiones con el mismo texto y distintas reservadas. El mutante `hayCambios = [nota].some(…)`, que solo mira la nota, deja las 17 pruebas en verde.
+- Escenario: con el mutante, una modificación que solo añade una anotación reservada hace que la pantalla anuncie «Sin cambios entre estas dos versiones.» (con `role="status"`, así que el lector lo dice en voz alta). Debajo, el bloque de reservadas enseña lo añadido. El clínico que se fía del aviso no mira el bloque.
+- La gemela que falta: `version(2, { texto: V1.texto, reservadas: 'Nueva' })`. Debe comprobar que no sale «Sin cambios» y que hay un `ins` en el bloque de reservadas.
+
+**C1-H2** · `app/(app)/pacientes/[id]/historia/notas/comparador.tsx:82-84` · Ninguna prueba elige un par distinto del que sale por defecto. Sobreviven tres mutantes con las 17 pruebas en verde: `useMemo` de la nota sin dependencias (Q1), `useMemo` de las reservadas sin `a`/`b` (Q2) y `b` siempre la vigente (Q5).
+- Por qué ninguna prueba lo ve: la única que cambia los desplegables («orden invertido») tiene dos versiones y acaba en el mismo par 1→2 del principio.
+- Escenario con Q1: hay tres versiones y el profesional elige «Desde: Versión 1». El título dice «De la versión 1 a la 3», pero el diff sigue siendo el de la v2 a la v3. Lo que se cambió de la v1 a la v2 desaparece de una comparación que dice incluirlo.
+- Escenario con Q5: con «Hasta: Versión 2» se compara contra la v3 y el desplegable sigue diciendo 2.
+- La gemela que falta: tres versiones de textos distintos. Elegir 1→2 y comprobar el título y el `ins`/`del` de ese par. Después, 1→3.
+
+**C1-H3** · `app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx:210-211` (y la prueba `editor-de-nota.test.tsx:1177`, que lo fija) · Si «Volver a intentarlo» falla otra vez, el aviso se queda exactamente igual: el mismo `noSeRecargo` y el mismo texto. El `role="alert"` de `AvisoDeError` (`components/ui/piezas.tsx:266`) no cambia de contenido, y el +1 de `enfoqueAviso` llama a `focus()` sobre el botón que ya tenía el foco. El botón tampoco tiene estado de pendiente ni `disabled`.
+- Escenario: sin red, el profesional que usa NVDA pulsa «Volver a intentarlo». La primera vez oye «No se pudo recargar la nota.», porque es el paso de `firmadaSinRecargar` a `noSeRecargo`. Las siguientes no oye nada y la pantalla no cambia. No puede saber si la recarga está en curso, si salió bien o si falló. La prueba (a2) da por buena justo esta situación: comprueba que el foco vuelve al botón y nada más.
+- Es la clase «aviso que no cambia no se anuncia». El diseño no pide un anuncio por reintento, así que es BAJA.
+
+### Notas para el orquestador (no son hallazgos)
+
+- **El riesgo 1 de C.4 nombra la prueba `editor-de-nota.test.tsx:1035` como la que mitiga E4, pero esa prueba no lo discrimina.** En `:1035` el aviso es `null`, así que `enCaminoDeRecarga` da `false` con la guarda de conflicto o sin ella. E4 es equivalente porque no se puede llegar a ese estado, no porque esa prueba lo cubra. Si un corte futuro deja que `conflicto` conviva con `yaFirmada`, la guarda pasará a importar y no habrá ninguna prueba que la sostenga.
+- Con `desde === hasta`, que es un paso intermedio al cambiar los dos desplegables, el título dice «De la versión 2 a la 2» y sale «Sin cambios». Es coherente y no lo cuento.
+- `barra-de-acciones.tsx` solo cambia un comentario: «Descargar» espera a T-040, como dice el contrato tachado. `node ~/.claude/pipeline/territorio.mjs T-012` da los 10 ficheros dentro del territorio.

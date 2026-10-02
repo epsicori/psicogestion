@@ -1,60 +1,57 @@
 {
   "ticket": "T-012",
-  "ronda": "corte B · ronda 3 (0c6fac2, rama worktree-agent-a50633aa7d7148c4d)",
+  "ronda": "corte C · ronda 1 (07e04f2, rama T-012-corte-c)",
   "altas": 0,
   "medias": 0,
-  "bajas": 6,
+  "bajas": 4,
   "hallazgos": [
     {
-      "id": "B2-H1",
+      "id": "C1-H1",
       "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 377,
-      "descripcion": "sigueLaVista supone que un fallo al recargar deja el botón montado, pero eso solo pasa en el camino del conflicto. Por el camino del aviso (firmadaSinRecargar, o yaFirmada tras ya_firmada o sin_borrador), el reductor cambia el aviso por noSeAbrio o noDisponible, que no llevan acción. El botón se desmonta y nadie rescata el foco.",
-      "escenario": "La firma sale bien pero la relectura falla. El profesional pulsa «Recargar» con el teclado y abrirEditorDeNota devuelve error. Medido con sonda: activeElement=BODY y el único botón que queda es «Cerrar la historia». Pasa lo mismo con no_disponible y con «Cargar lo guardado» tras ya_firmada."
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/comparador.tsx",
+      "linea": 95,
+      "descripcion": "Ninguna prueba compara dos versiones con el mismo texto y distintas reservadas. El mutante hayCambios = [nota].some(...), que solo mira la nota, deja las 17 pruebas de comparador.test.tsx en verde.",
+      "escenario": "Con el mutante, una modificación que solo añade una anotación reservada anuncia «Sin cambios entre estas dos versiones.» con role=status, mientras el bloque de reservadas de debajo enseña lo añadido. El clínico que se fía del aviso no mira el bloque."
     },
     {
-      "id": "B2-H2",
+      "id": "C1-H2",
       "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 516,
-      "descripcion": "Tras «Abrir el editor», quien no es autor, en una nota sin versiones y con el borrador oculto, recibe el foco en «Cerrar la historia». Es el primer button:not([disabled]). editor-de-nota.test.tsx:950 lo fija como correcto. Los avisos noAutor y borradorOculto no tienen foco.",
-      "escenario": "El administrador que participa en el episodio abre la nota con un lector de pantalla. Oye «Cerrar la historia, botón» y no oye «Hay un borrador en curso». Si pulsa Intro creyendo que es el paso siguiente, cierra la ventana de PIN y tiene que volver a desbloquear."
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/comparador.tsx",
+      "linea": 84,
+      "descripcion": "Ninguna prueba elige un par distinto del que sale por defecto. Sobreviven tres mutantes: useMemo de la nota sin dependencias (Q1), useMemo de las reservadas sin a/b (Q2) y b siempre la vigente (Q5). La única prueba que mueve los desplegables tiene dos versiones y acaba en el mismo par 1→2.",
+      "escenario": "Con Q1 y tres versiones, el profesional elige «Desde: Versión 1». El título dice «De la versión 1 a la 3», pero el diff sigue siendo el de la v2 a la v3, y lo cambiado de la v1 a la v2 no aparece. Con Q5, «Hasta: Versión 2» se compara contra la v3."
     },
     {
-      "id": "B2-H3",
+      "id": "C1-H3",
       "severidad": "BAJA",
-      "archivo": "lib/notas/servidor.ts",
-      "linea": 366,
-      "descripcion": "En lectura conjunta se numera por posición, pero el motivo de cambio viaja igual. Una «Versión 1» con motivo delata una versión anterior oculta, porque el check de la tabla obliga a que toda versión mayor que 1 tenga motivo y la v1 real nunca lo tiene. Contradice el comentario de lecturaConjunta (servidor.ts:72-73).",
-      "escenario": "La v1 se firma individual y la v2 conjunta, con el motivo «Se amplía para la sesión conjunta». El administrador del episodio, que no es asignado, ve «Versión 1 · Motivo: Se amplía para la sesión conjunta» y sabe que hay una versión anterior que no le enseñan. La prueba servidor.test.ts:1449 no lo ve porque su primera fila visible es una v1 real."
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 210,
+      "descripcion": "Si «Volver a intentarlo» falla otra vez, el aviso noSeRecargo se queda con el mismo texto. El role=alert no cambia, el +1 de enfoqueAviso enfoca el botón que ya tenía el foco y no hay estado de pendiente. La prueba editor-de-nota.test.tsx:1177 fija ese silencio como correcto.",
+      "escenario": "Sin red, un usuario de NVDA pulsa «Volver a intentarlo» varias veces. Solo la primera transición (firmadaSinRecargar → noSeRecargo) se anuncia. En las siguientes no oye nada y no sabe si la recarga está en curso, salió bien o falló."
     },
     {
       "id": "B1-H8",
       "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/datos.ts",
       "linea": 0,
-      "descripcion": "Arrastrado de la ronda 1 y abierto a propósito, porque está fuera del territorio. cargarPaciente se traga el error y devuelve null, y page.tsx responde con notFound(). Sigue sin anotar en docs/state.md §Hallazgos.",
+      "descripcion": "Arrastrado de la ronda 1 y abierto a propósito porque está fuera del territorio. cargarPaciente se traga el error y devuelve null, y page.tsx responde con notFound(). Ya está anotado en docs/state.md:53 §Hallazgos.",
       "escenario": "La lectura de pacientes agota el tiempo y el profesional ve «no existe» para un paciente que sí existe."
-    },
-    {
-      "id": "B3-H1",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 1196,
-      "descripcion": "Ninguna prueba fija que un re-render sin cambio no mueva el foco: con el efecto de foco sin array de dependencias (mutante M6), las 82 pruebas de editor-de-nota.test.tsx siguen en verde.",
-      "escenario": "Con M6, la firma se rechaza con noSeFirmo y el profesional pasa con Tab a «Cancelar». A los 30 s, el setTic del reloj vuelve a pintar el diálogo, el efecto corre y el foco salta a «Firmar»: con Intro firmaría en vez de cancelar."
-    },
-    {
-      "id": "B3-H2",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 1193,
-      "descripcion": "Ninguna prueba fija el foco inicial del diálogo con versiones: sin la guarda error === null (mutante M3), el efecto nuevo corre al montar después del focoInicial de Dialogo (hijo) y lo pisa, y las pruebas siguen en verde.",
-      "escenario": "Con M3, el profesional modifica una nota firmada y abre el diálogo. El foco cae en «Firmar» en vez de en «Motivo del cambio». Si pulsa Intro creyendo que está en el campo, el formulario se envía y vuelve con «hace falta un motivo»."
     }
   ],
   "rondas_anteriores": [
+    {
+      "ronda": "corte B · ronda 3 (0c6fac2, rama worktree-agent-a50633aa7d7148c4d)",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 6,
+      "cerrados_en_corte_c_ronda_1": [
+        "B2-H1",
+        "B2-H2",
+        "B2-H3",
+        "B3-H1",
+        "B3-H2"
+      ]
+    },
     {
       "ronda": "corte B · ronda 2 (bbeaf5e..3a3c564)",
       "altas": 0,
@@ -73,9 +70,6 @@
     }
   ],
   "abiertos_sin_cambios_en_esta_ronda": [
-    "B2-H1",
-    "B2-H2",
-    "B2-H3",
     "B1-H8"
   ]
 }
