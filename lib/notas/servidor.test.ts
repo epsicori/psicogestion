@@ -674,7 +674,7 @@ describe('abrirEditorDeNota · lecturas que fallan al armar el modelo (R2-H6)', 
           : undefined,
       ),
     );
-    expect((await abrirEditorDeNota(sesion, porNota, CONTEXTO)).estado).not.toBe('abierta');
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
   });
 
   it('si falla la lectura de los nombres, el autor de las versiones no sale vacío', async () => {
@@ -698,7 +698,104 @@ describe('abrirEditorDeNota · lecturas que fallan al armar el modelo (R2-H6)', 
         return undefined;
       }),
     );
-    expect((await abrirEditorDeNota(sesion, porNota, CONTEXTO)).estado).not.toBe('abierta');
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+});
+
+describe('abrirEditorDeNota · «no se pudo leer» no es «no está disponible» (R2-H14, R2-H15)', () => {
+  const porNota = { pacienteId: P, citaId: null, notaId: N, episodioId: null };
+  const porCita = { pacienteId: P, citaId: C, notaId: null, episodioId: null };
+  const sinHead = (l: Llamada) => !(l.opciones as { head?: boolean } | undefined)?.head;
+  const base = (extra: Responder): Responder =>
+    firmaFeliz((l) => (l.tabla === 'rpc:registrar_acceso_historia' ? ACCESO_OK : extra(l)));
+  const pareja: Responder = (l) =>
+    l.tabla === 'episodios_asistenciales'
+      ? { data: { modalidad_relacional: 'pareja', centro_id: 'cen', abierto_en: '2026-09-01T00:00:00Z' } }
+      : undefined;
+
+  /** Falla solo la lectura número `n` (1, 2…) de la tabla; las demás responden como siempre. */
+  const fallaLaNesima = (tabla: string, n: number, resto: Responder = () => undefined): Responder => {
+    let vistas = 0;
+    return base((l) => {
+      if (l.tabla === tabla && sinHead(l)) {
+        vistas += 1;
+        if (vistas === n) return ERROR_LECTURA;
+      }
+      return resto(l);
+    });
+  };
+
+  it('la cabecera que se relee al armar el modelo y falla es error', async () => {
+    const { sesion } = clienteSimulado(fallaLaNesima('notas_clinicas', 2));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('la cabecera que se relee y ya no se ve sigue siendo no_disponible (la gemela)', async () => {
+    let lecturas = 0;
+    const { sesion } = clienteSimulado(
+      base((l) => {
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') {
+          lecturas += 1;
+          if (lecturas === 2) return { data: null };
+        }
+        return undefined;
+      }),
+    );
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'no_disponible' });
+  });
+
+  it('la cabecera que falla al abrir por nota es error, no no_disponible', async () => {
+    const { sesion } = clienteSimulado(fallaLaNesima('notas_clinicas', 1));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('recién creada la cabecera, una lectura que falla es error, no no_disponible', async () => {
+    const { sesion } = clienteSimulado((l) => {
+      if (l.tabla === 'rpc:registrar_acceso_historia') return ACCESO_OK;
+      if (l.tabla === 'citas') return { data: CITA_PROPIA };
+      if (l.tabla === 'rpc:episodio_para_nota') return { data: E };
+      if (l.tabla === 'notas_clinicas' && l.op === 'insert') return { data: { id: N } };
+      if (l.tabla === 'notas_clinicas' && l.op === 'select') {
+        return l.filtros.some(([f]) => f === 'eq:cita_id') ? { data: null } : { data: cabecera() };
+      }
+      if (l.tabla === 'notas_clinicas_versiones' && sinHead(l)) return ERROR_LECTURA;
+      return firmaFeliz()(l);
+    });
+    expect(await abrirEditorDeNota(sesion, porCita, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  // R2-H15 · una prueba por guarda de cargarModelo.
+  it('guarda del episodio: si falla SOLO la lectura directa del episodio, error', async () => {
+    const { sesion } = clienteSimulado(fallaLaNesima('episodios_asistenciales', 1, pareja));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('guarda de «puede ser conjunta»: si falla SOLO la lectura del episodio dentro del recuento, error', async () => {
+    const { sesion } = clienteSimulado(fallaLaNesima('episodios_asistenciales', 2, pareja));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('guarda de los participantes: si falla su recuento, el modelo no sale con puedeSerConjunta indefinido', async () => {
+    const { sesion } = clienteSimulado(
+      base((l) => (l.tabla === 'episodio_participantes' ? ERROR_LECTURA : pareja(l))),
+    );
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('guarda de la cita: si falla su lectura, error y no una zona de otra parte', async () => {
+    const { sesion } = clienteSimulado(base((l) => (l.tabla === 'citas' ? ERROR_LECTURA : undefined)));
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
+  });
+
+  it('guarda de la zona: sin cita, si falla la lectura de la organización, error', async () => {
+    const { sesion } = clienteSimulado(
+      base((l) => {
+        if (l.tabla === 'notas_clinicas' && l.op === 'select') return { data: cabecera({ cita_id: null }) };
+        if (l.tabla === 'organizacion') return ERROR_LECTURA;
+        return undefined;
+      }),
+    );
+    expect(await abrirEditorDeNota(sesion, porNota, CONTEXTO)).toEqual({ estado: 'error' });
   });
 });
 

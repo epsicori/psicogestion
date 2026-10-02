@@ -113,7 +113,8 @@ type Cabecera = {
   borrador_abierta_en: string | null;
 };
 
-async function leerCabecera(supabase: Supabase, notaId: string): Promise<Cabecera | null> {
+/** La cabecera con sus tres desenlaces (R2-H14): el dato, «no se ve» y «no se pudo leer». */
+async function leerCabeceraLeida(supabase: Supabase, notaId: string): Promise<Leida<Cabecera | null>> {
   const { data, error } = await supabase
     .from('notas_clinicas')
     .select(
@@ -123,9 +124,15 @@ async function leerCabecera(supabase: Supabase, notaId: string): Promise<Cabecer
     .maybeSingle();
   if (error) {
     console.error('notas: no se pudo leer la cabecera', error);
-    return null;
+    return { ok: false };
   }
-  return data as Cabecera | null;
+  return { ok: true, valor: data as Cabecera | null };
+}
+
+/** Para quien solo necesita «¿se ve?»: un fallo de lectura cuenta como «no». */
+async function leerCabecera(supabase: Supabase, notaId: string): Promise<Cabecera | null> {
+  const leida = await leerCabeceraLeida(supabase, notaId);
+  return leida.ok ? leida.valor : null;
 }
 
 type Episodio = { modalidad: string; centroId: string | null; abiertoEn: string };
@@ -210,11 +217,16 @@ function etiquetaDeEpisodio(modalidad: string, abiertoEn: string, zona: string):
   });
 }
 
-/** El modelo de vista estrecho de §1.4. `null` si la cabecera no se puede leer. */
-async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNota | null> {
+/**
+ * El modelo de vista estrecho de §1.4. Tres desenlaces (R2-H14): el modelo, `valor: null` si la
+ * cabecera no se ve (la nota «no está disponible») y `ok: false` si una lectura falló (error).
+ */
+async function cargarModelo(sesion: Sesion, notaId: string): Promise<Leida<ModeloDeNota | null>> {
   const { supabase, usuario } = sesion;
-  const cab = await leerCabecera(supabase, notaId);
-  if (!cab) return null;
+  const cabLeida = await leerCabeceraLeida(supabase, notaId);
+  if (!cabLeida.ok) return { ok: false };
+  const cab = cabLeida.valor;
+  if (!cab) return { ok: true, valor: null };
 
   const [{ data: filasVersiones, error: errorVersiones }, episodioLeido, conjuntaLeida] = await Promise.all([
     supabase
@@ -229,7 +241,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
   // con candidatos a coprofesional (R2-H6).
   if (errorVersiones || !episodioLeido.ok || !conjuntaLeida.ok) {
     if (errorVersiones) console.error('notas: no se pudieron leer las versiones', errorVersiones);
-    return null;
+    return { ok: false };
   }
   const versiones = filasVersiones ?? [];
   const episodio = episodioLeido.valor;
@@ -245,14 +257,14 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
       .maybeSingle();
     if (error) {
       console.error('notas: no se pudo leer la cita', error);
-      return null;
+      return { ok: false };
     }
     cita = data;
   }
   let zona = cita?.zona_horaria;
   if (!zona) {
     const org = await zonaDeLaOrganizacion(supabase);
-    if (!org.ok) return null;
+    if (!org.ok) return { ok: false };
     zona = org.valor ?? 'Europe/Madrid';
   }
 
@@ -285,7 +297,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
   const nombres = await nombresDe(supabase, [
     ...new Set([...versiones.map((v) => v.autor_id), ...(cab.coprofesional_id ? [cab.coprofesional_id] : [])]),
   ]);
-  if (!nombres) return null;
+  if (!nombres) return { ok: false };
 
   const vista: VersionDeVista[] = versiones.map((v) => {
     let texto = '';
@@ -308,7 +320,7 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
     };
   });
 
-  return {
+  const modelo: ModeloDeNota = {
     notaId,
     soyAutor,
     estado: estadoDeNota({ versiones: versiones.length, hayBorrador }),
@@ -332,6 +344,13 @@ async function cargarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNot
     candidatosCoprofesional: candidatos,
     puedeSerConjunta: conjunta,
   };
+  return { ok: true, valor: modelo };
+}
+
+/** Para quien ya escribió y solo refresca la vista: un fallo de lectura deja `nota: null`. */
+async function refrescarModelo(sesion: Sesion, notaId: string): Promise<ModeloDeNota | null> {
+  const leido = await cargarModelo(sesion, notaId);
+  return leido.ok ? leido.valor : null;
 }
 
 /**
@@ -382,15 +401,19 @@ export async function abrirEditorDeNota(
   if ((entrada.citaId === null) === (entrada.notaId === null)) return { estado: 'no_disponible' };
 
   const devolver = async (notaId: string): Promise<ResultadoApertura> => {
-    const nota = await cargarModelo(sesion, notaId);
-    if (!nota) return { estado: 'no_disponible' };
+    const leido = await cargarModelo(sesion, notaId);
+    // Una lectura que falló es «vuelve a intentarlo», no «no está disponible» (R2-H14).
+    if (!leido.ok) return { estado: 'error' };
+    if (!leido.valor) return { estado: 'no_disponible' };
     const caducaEn = await prolongarDesbloqueo(sesion);
-    return { estado: 'abierta', caducaEn, nota };
+    return { estado: 'abierta', caducaEn, nota: leido.valor };
   };
 
   // 2 · Con nota: la cabecera tiene que verse (RLS) y ser de este paciente.
   if (entrada.notaId) {
-    const cab = await leerCabecera(supabase, entrada.notaId);
+    const cabLeida = await leerCabeceraLeida(supabase, entrada.notaId);
+    if (!cabLeida.ok) return { estado: 'error' };
+    const cab = cabLeida.valor;
     if (!cab || cab.paciente_id !== entrada.pacienteId) return { estado: 'no_disponible' };
     return devolver(cab.id);
   }
@@ -574,7 +597,7 @@ export async function fijarCoprofesional(
   }
 
   const caducaEn = await prolongarDesbloqueo(sesion);
-  return { ok: true, nota: await cargarModelo(sesion, entrada.notaId), caducaEn };
+  return { ok: true, nota: await refrescarModelo(sesion, entrada.notaId), caducaEn };
 }
 
 export async function empezarModificacion(
@@ -626,7 +649,7 @@ export async function empezarModificacion(
   }
 
   const caducaEn = await prolongarDesbloqueo(sesion);
-  return { ok: true, nota: await cargarModelo(sesion, entrada.notaId), caducaEn };
+  return { ok: true, nota: await refrescarModelo(sesion, entrada.notaId), caducaEn };
 }
 
 export async function firmarNota(
@@ -757,5 +780,5 @@ export async function firmarNota(
   // 8 · El disparador selló y encadenó; vaciar_borrador_al_firmar y la resolución de la alerta
   // ocurrieron en la misma transacción.
   const caducaEn = await prolongarDesbloqueo(sesion);
-  return { ok: true, nota: await cargarModelo(sesion, entrada.notaId), caducaEn };
+  return { ok: true, nota: await refrescarModelo(sesion, entrada.notaId), caducaEn };
 }
