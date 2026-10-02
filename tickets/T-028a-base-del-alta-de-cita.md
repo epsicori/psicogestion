@@ -7,7 +7,7 @@ fase: 1
 prioridad: alta
 depende_de: [T-035]   # cola de supabase/, nunca dos a la vez: T-012 → T-036 → T-035 → T-028a
 bloquea: [T-028]      # cortes B y C; el corte A (lib/agenda/sugerencias.ts) no espera
-estado: pendiente
+estado: hecho
 territorio:
   - supabase/migrations/*_base_del_alta_de_cita.sql
   - supabase/seed-completo.sql
