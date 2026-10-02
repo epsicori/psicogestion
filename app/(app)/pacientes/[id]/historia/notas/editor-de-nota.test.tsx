@@ -627,6 +627,26 @@ describe('EditorDeNota', () => {
       expect(screen.getByText('Texto firmado 1')).toBeInTheDocument();
     });
 
+    it('B0-H4 · dos envíos en el MISMO tick (antes de que el botón se desactive) firman una sola vez, aunque la primera acabe en error', async () => {
+      // `fireEvent` envuelve cada gesto en su propio `act`: entre dos el botón ya está desactivado
+      // y el guardián `enVuelo` no se ejerce. Aquí los dos envíos caen en un solo `act`, que es
+      // lo que pasa con un doble clic real más rápido que el repintado.
+      let terminar: (v: unknown) => void = () => {};
+      firmarNota.mockReturnValue(new Promise((r) => (terminar = r)));
+      await montar();
+      const dialogo = await abrirDialogoDeFirma();
+      const formulario = dialogo.querySelector('form')!;
+      await act(async () => {
+        formulario.requestSubmit();
+        formulario.requestSubmit();
+      });
+      await vaciar();
+      terminar({ ok: false, motivo: 'error' });
+      await vaciar();
+      await vaciar();
+      expect(firmarNota).toHaveBeenCalledTimes(1);
+    });
+
     it('vacia → «No se firma una nota vacía» dentro del diálogo, que sigue abierto', async () => {
       firmarNota.mockResolvedValue({ ok: false, motivo: 'vacia' });
       await montar();
