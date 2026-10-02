@@ -1,4 +1,4 @@
-Sin hallazgos ALTA (total de los dos revisores: 0 ALTA, 1 MEDIA, 10 BAJA).
+Sin hallazgos ALTA en la ronda 2 (0 ALTA, 0 MEDIA, 2 BAJA; los once de la ronda 1, cerrados). Ronda 1: 0 ALTA, 1 MEDIA, 10 BAJA.
 
 # Revisión de T-028a: base del alta de cita
 
@@ -131,3 +131,90 @@ Gate del revisor 2: **sin ALTA** (0 ALTA, 1 MEDIA, 3 BAJA).
 - **Siembra, criterio 19**: 20 franjas (Ana y Bruno, ambos en Madrid según `seed.sql`), festivo futuro, seis martes pasados a las 12:00 Madrid (el martes se calcula en la fecha UTC, que nunca va por delante de la de Madrid, así que siempre son pasados), Diego sin citas, 3 tipos activos con 3 duraciones y 1 inactivo, nombres de servicio y sin choque con el índice único `lower(trim(nombre))` ni con los nombres de los bancos. Es idempotente: `on conflict (id)` hace la comprobación del árbitro antes que la exclusión gist.
 - **Territorio**: `node ~/.claude/pipeline/territorio.mjs T-028a` → 10 ficheros, todos dentro (`docs/state.md` y `docs/bitacora/**` son rutas comunes). 15 solo toca §J, 17 solo §C y su constante, y 16 y 11 no se tocan (criterio 18).
 - **`docs/architecture.md`**: la fila «Agenda» y el párrafo cumplen el criterio 20 y no contradicen el resto de la matriz, salvo lo que dice R2-H1.
+
+## Ronda 2: las correcciones (un revisor)
+
+Delta: `git diff 4c25267 c60f057 -- . ':!docs/state.md'`, sin el merge de `main` (7f900c5). En la práctica son los commits 7a1ad9a y c60f057: la migración, el banco 21, su README, la siembra y `docs/architecture.md`. Los mutantes se han medido leyendo, sin tocar la base.
+
+Gate de la ronda 2: **sin ALTA** (0 ALTA, 0 MEDIA, 2 BAJA).
+
+### Los once de la ronda 1, uno por uno
+
+| Hallazgo | Cierre | El mutante muere, y por qué |
+|---|---|---|
+| R1-H1 | Migración :594-603. El plan se calcula sobre `v_todas`, así que D10 salta también las excluidas. Después se filtra con `with ordinality` y `jsonb_agg(... order by s.n)`. | **O2**. Festivo el lunes l294, ausencia de martes a domingo y la 2.ª sesión (l301) excluida. Con el plan sobre `v_fechas` (el código anterior), l301 deja de estar en `p_fechas` y está libre: la gemela de O2 lo prueba. La alternativa sería l301 y cae `fecha_prevista = l294 and inicio_propuesto is null`. Si se quita el filtro, también cae: G espera 7 citas y O2 espera 1. |
+| R1-H2 | O1 | **O1**. Si se quita la línea 335, el único día libre de la semana es l287, la 2.ª sesión (la gemela lo prueba), y la alternativa deja de ser `null`. |
+| R1-H3 | O3, con un disparador temporal que lanza 23P01 si `sala = 'R1-H3 carrera'` | El plan ve el hueco libre: lo demuestra la gemela, con dos propuestas `ocupada` y sin hora, es decir, sin alternativa calculada. Por eso el 23P01 solo puede salir del insert, y el fragmento `carrera simulada` lo distingue del `raise` de :610. Hay dos mutantes: envolver la 1.ª sesión estricta en `exception when exclusion_violation`, o quitar la rama `v_i = 0 and p_estricta_primera`. Con cualquiera de los dos, el 23P01 se captura, nace una propuesta y la serie se crea sin error, así que `assert_lanza_codigo_msg` cae. |
+| R1-H4 | O4, con PRO2 `suspendido` en las cuatro puertas, y su gemela ya `activo` | Con `<> 'baja'`, las cuatro llamadas pasan. La gemela demuestra que, con PRO2 activo, `crear_cita` en CB funciona. El fragmento del mensaje es el de D. |
+| R1-H5 | 21-A: `pg_get_functiondef(...) ~* 'for\s+share'` | El texto «for share» solo aparece en el cuerpo de la función. El comentario de la migración (:236) queda fuera del cuerpo, y el `comment on` no forma parte de `functiondef`. |
+| R1-H6 | La ausencia se inserta antes, en otra sentencia | Muere si se quita el `order by` entero. **No muere** si se quita solo la prioridad del festivo: ver RD2-H1. |
+| R1-H7 | Migración :587-589, más O5 (cero sesiones, un final anterior al primer lunes y la gemela «excluir la única») | Los fragmentos son disjuntos: «no tiene ninguna sesión» no contiene «sin sesiones», y al revés tampoco. l330 es martes y l335 domingo, así que la primera ocurrencia (l336) cae después del final. |
+| R2-H1 | `docs/architecture.md`, en el párrafo de puertas | Recoge la decisión del propietario tal cual está en el diseño. No contradice la fila «Agenda» («sin tipo de terapia» = el campo). |
+| R2-H2 | Siembra: las citas se insertan `programada` y un `update ... where estado = 'programada'` las pasa a realizadas | Ver abajo. |
+| R2-H3 | Siembra: el primer martes entre hoy + 14 y hoy + 20 | `(2 - isodow + 7) % 7` va de 0 a 6. El martes tiene franjas de Ana desde `current_date - 7` sin fin, y cae dentro de los 56 días. |
+| R2-H4 | 21-A con los dos ayudantes, para `authenticated` y `anon`, y el README | El README nombra las seis funciones. Si una recreación olvida el `revoke`, el `grant` por defecto a PUBLIC hace verdadera la condición y el banco cae. |
+
+### Lo que el orquestador pidió mirar
+
+**El filtro con `with ordinality` conserva el orden y los ordinales.**
+- `jsonb_agg(s.e order by s.n)` ordena por la posición en el plan, que es la de `v_todas`, que a su vez es la de `ocurrencias_serie`.
+- `ocurrencias_serie` no repite fechas, así que `= any (v_fechas)` no duplica ni pierde ninguna.
+- El cast `(s.e ->> 'fecha')::date` lee el ISO que escribió `jsonb_build_object`, y no depende de `DateStyle`.
+- Los índices de `v_plan` (0..n-1) son los de `v_fechas`. `v_plan -> 0` sigue siendo la primera sesión **no excluida**, igual que antes, así que la estricta no cambia de significado.
+- Calcular el plan de las excluidas solo cuesta lecturas: `plan_alta_serie` es `stable` y no escribe.
+
+**El disparador temporal de O3 no deja rastro.**
+- Se crea y se borra (`drop trigger` y `drop function`) dentro del `begin … rollback` único de `test-rls.mjs`.
+- Si una aserción cae entre el `create` y el `drop`, `ON_ERROR_STOP` aborta y el `rollback` se lo lleva igual.
+- 21 es el último módulo: ningún banco de catálogo corre con la función `public.t028a_banco_carrera` viva.
+- Mientras existe, solo afecta a filas con esa sala. Los inserts del resto del banco no llevan esa sala.
+
+**El seed 8.bis es idempotente y no duplica alertas.**
+- Los ids del insert (`k + 1`, con k de 0 a 5) son los mismos que los del update (k de 1 a 6).
+- Al resembrar, el insert no hace nada (`on conflict (id)`), y el update no encuentra ninguna fila `programada`, así que no dispara `alertar_nota_sin_firmar`, que es `after update of estado`.
+- Aunque disparara, `fn_alertar_nota_sin_firmar` hace `on conflict do nothing` contra el índice único parcial `alertas_documentacion_origen_abierta_idx` (`origen_tabla, origen_id, tipo` con estado `abierta`).
+- `fn_proteger_cita_pasada` permite cambiar `estado` y `marcada_realizada_en/_por` en una cita pasada.
+- Las seis citas tienen `fin < now()`, porque el último martes es estrictamente anterior a hoy. Por eso el disparador abre las seis alertas.
+
+### BAJA
+
+**RD2-H1.** `scripts/rls/21-alta-de-cita.sql:503-505`, prueba de la migración `:168`.
+- **Qué pasa.** R1-H6 solo mata el mutante que quita el `order by` entero. Si se quita solo la prioridad del festivo y se deja `order by d.id`, el mutante sobrevive en la mitad de las ejecuciones: los ids de `disponibilidad` salen de `gen_random_uuid()`, y el banco no los fija.
+- **Escenario.**
+  - Mutante: `order by d.id` en lugar de `order by (d.tipo = 'festivo') desc, d.id`. Es un «simplificar a algo determinista» verosímil.
+  - En las ejecuciones en que el uuid del festivo es menor que el de la ausencia (alrededor del 50 %), sale `festivo` y F sigue verde.
+  - En producción, un día con festivo y ausencia da `bloqueo` y `motivo` de la propuesta `ausencia` o `festivo` según el azar del id.
+- **Arreglo.** Ids fijos en los dos inserts, con el de la ausencia menor que el del festivo. Así la aserción mide la prioridad del tipo y no el desempate.
+
+**RD2-H2.** `supabase/migrations/20261005120000_base_del_alta_de_cita.sql:443-451`.
+- **Qué pasa.** R1-H7 se arregló en `agenda_crear_serie` y no en `agenda_previsualizar_alta`. Con cero ocurrencias, la previsualización devuelve un plan vacío sin error, y la creación con la misma entrada da 22023. Eso rompe, en ese borde, el «lo que se ve es lo que se crea» del criterio 6 y de la sección E.
+- **Escenario.**
+  - `agenda_previsualizar_alta(P, PRO, C, 'semanal', 1, '10:00', 50, <lunes futuro>, 0)` devuelve `{"zona_horaria": …, "sesiones": []}`, sin error.
+  - `agenda_crear_serie` con los mismos datos y `p_sesiones_totales => 0` da 22023 «La serie no tiene ninguna sesión…».
+  - Una pantalla de T-028 que previsualice al teclear enseñaría una serie vacía con «Crear» disponible, y al pulsar saldría el genérico «Los datos enviados no son válidos».
+- **Si no se arregla.** Con el mismo `raise` en la previsualización basta. Si el propietario prefiere no tocar la base, queda como nota para T-028 corte B: el esquema Zod debe exigir sesiones ≥ 1.
+
+### Las dos dudas del implementador: notas para T-028 corte B, no hallazgos
+
+**`agenda_previsualizar_alta` sin `p_excluir`.** No es un hallazgo.
+- Tras R1-H1, previsualizar y crear calculan el plan sobre la misma lista completa de ocurrencias: `ocurrencias_serie` con las mismas sesiones y sin final.
+- `plan_alta_serie` solo depende de la fecha y de esa lista (D10). Por eso cada fila de la previsualización es idéntica a la que se materializa para esa fecha, excluidas incluidas, y la segunda mitad del escenario de R1-H1 («la previsualización dijo sin alternativa y la creación propuso otra cosa») ya no se da.
+- Nota para corte B:
+  - La pantalla oculta de la previsualización las filas excluidas, en lugar de pedírselo a la base.
+  - Ojo: la previsualización tampoco acepta `p_fin_el`. Una serie «hasta el día X» no se puede previsualizar tal cual: o la pantalla la convierte a número de sesiones, o hace falta ampliar la firma (ticket de `supabase/`).
+
+**22023 frente a 23514 con cero ocurrencias.** Tampoco es un hallazgo.
+- Nadie traduce 23514: `mapearErrorCitas` (`lib/citas/errores.ts:12`) lo deja en `desconocido`, y 22023 lo lleva a `parametro_invalido`, que describe mejor el fallo.
+- El check `series_cita_sesiones_ck` sigue siendo la última guarda de la tabla.
+- El diseño no fija 23514 para este caso.
+- Nota para corte B: si la pantalla quiere un texto propio, se añade el fragmento «no tiene ninguna sesión» a `FRAGMENTOS_DE_RECHAZO`. Si no, basta con que Zod impida llegar ahí: sesiones ≥ 1 y final ≥ inicio. Esto enlaza con RD2-H2.
+
+### Comprobado sin hallazgo
+
+- Territorio de la ronda: migración, `scripts/rls/`, siembra y `docs/`. No hay nada fuera.
+- En O1 y O2 el mutante muere por la alternativa y no por otra comprobación anterior:
+  - las gemelas demuestran que la fecha descartada está libre;
+  - las anclas (l280 y siguientes) no las usa ninguna otra sección;
+  - el plan no mira franjas.
+- O4 restaura PRO2 a `activo`, y la gemela lo usa. El disparador de `perfiles` que salta con el cambio de estado (`impedir_baja_ultimo_administrador`) solo protege al último administrador y no toca las altas en centros de PRO2.
+- La siembra del festivo sigue siendo idempotente (`insert … select … on conflict (id)`).

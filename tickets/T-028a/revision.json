@@ -1,96 +1,141 @@
 {
   "ticket": "T-028a",
+  "ronda": 2,
   "altas": 0,
-  "medias": 1,
-  "bajas": 10,
+  "medias": 0,
+  "bajas": 2,
   "hallazgos": [
     {
-      "id": "R2-H1",
-      "severidad": "MEDIA",
-      "archivo": "docs/architecture.md",
-      "linea": 189,
-      "descripcion": "El párrafo de puertas da por cerradas todas salvo H25, pero D1 (migración :267) hace que fin − inicio sea función exacta del tipo, y el técnico lee el catálogo con duracion_minutos (tipos_terapia_lectura) y el inicio/fin de toda cita (citas_agenda): la duración es un canal lateral del tipo que ni la doc ni el ADR-074.2 recogen.",
-      "escenario": "db reset + seed; Ana da a Sofía una cita con «Sesión de pareja» por agenda_crear_cita → la base la fuerza a 90 min. Teresa (técnico, Madrid) ve en su agenda 10:00–11:30 y en el catálogo el único tipo activo de 90 es «Sesión de pareja»: conoce el tipo de una cita que no dio, contra «sigue sin ver el tipo de ninguna cita». Con las seis citas sembradas de Lucía (50 min) deduce «Sesión individual» igual. Decide el propietario: aceptarlo y anotarlo como puerta abierta junto a H25, o no."
-    },
-    {
-      "id": "R1-H1",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
-      "linea": 588,
-      "descripcion": "La alternativa de una sesión bloqueada puede ser una fecha que el usuario excluyó: el plan recibe v_fechas ya sin las excluidas y D10 (:334, continue when v_fecha2 = any (p_fechas)) solo salta las que siguen en la serie; además agenda_previsualizar_alta no tiene p_excluir.",
-      "escenario": "Serie semanal de lunes, 8 sesiones, p_excluir = array[lunes de la 3.ª] (vacaciones del paciente); PRO1 con festivo el lunes de la 2.ª y ausencia de martes a domingo de esa semana → la propuesta de la 2.ª trae fecha_prevista = el lunes recién excluido, y la previsualización había mostrado «sin alternativa»."
-    },
-    {
-      "id": "R1-H2",
+      "id": "RD2-H1",
       "severidad": "BAJA",
       "archivo": "scripts/rls/21-alta-de-cita.sql",
-      "linea": 424,
-      "descripcion": "D10 no tiene prueba que muerda: todas las alternativas del banco caen en d = 1 o son null, ninguna tendría que saltar otra sesión de la serie.",
-      "escenario": "Mutante: borrar la línea 334 de la migración → el banco 21 sigue verde; en producción, una ausencia de lunes a domingo exacta hace que la propuesta de la sesión N proponga el hueco de la sesión N+1, el caso que motivó D10."
+      "linea": 503,
+      "descripcion": "R1-H6 solo mata el mutante que quita el order by entero; el que deja order by d.id (sin la prioridad del festivo) sobrevive la mitad de las veces, porque los ids de disponibilidad son gen_random_uuid() y el banco no los fija.",
+      "escenario": "Mutante en la migración :168: order by d.id en vez de order by (d.tipo = 'festivo') desc, d.id → en las ejecuciones en que el uuid del festivo es menor que el de la ausencia (~50 %) sale festivo y F sigue verde; en producción, un día con festivo y ausencia da bloqueo/motivo ausencia o festivo según el azar del id. Arreglo: ids fijos, el de la ausencia menor."
     },
     {
-      "id": "R1-H3",
+      "id": "RD2-H2",
       "severidad": "BAJA",
       "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
-      "linea": 635,
-      "descripcion": "M9 sobrevive en 21-H aunque la tabla de mutantes del diseño dice que 21-H lo caza: el 23P01 medido (21:540) sale del raise explícito de :595, porque el plan ya ve la cita, y no del insert sin exception de :635.",
-      "escenario": "Mutante: envolver el insert de la 1.ª sesión estricta en begin … exception when exclusion_violation → 21-H sigue verde con «La primera sesión choca»; en producción, una carrera entre el plan y el insert convierte la 1.ª estricta en propuesta ocupada en vez de deshacer la serie (criterio 9)."
-    },
+      "linea": 443,
+      "descripcion": "El arreglo de R1-H7 está solo en agenda_crear_serie: con cero ocurrencias agenda_previsualizar_alta devuelve un plan vacío sin error, y crear con la misma entrada da 22023; lo que se ve y lo que se crea divergen en ese borde (criterio 6, sección E).",
+      "escenario": "agenda_previsualizar_alta(P, PRO, C, 'semanal', 1, '10:00', 50, <lunes futuro>, 0) → {\"sesiones\": []} sin error; agenda_crear_serie con p_sesiones_totales => 0 → 22023 «La serie no tiene ninguna sesión…». Una pantalla de T-028 que previsualice al teclear enseña una serie vacía con «Crear» activo y al pulsar sale «Los datos enviados no son válidos». Basta el mismo raise en la previsualización, o Zod con sesiones ≥ 1 en corte B."
+    }
+  ],
+  "notas_para_corte_b": [
+    "agenda_previsualizar_alta sin p_excluir no es hallazgo: tras R1-H1 previsualizar y crear calculan el plan sobre la misma lista completa de ocurrencias, así que cada fila coincide; la pantalla oculta las excluidas. La previsualización tampoco acepta p_fin_el: una serie «hasta el día X» no se previsualiza tal cual.",
+    "22023 frente a 23514 con cero ocurrencias no es hallazgo: mapearErrorCitas deja 23514 en desconocido y lleva 22023 a parametro_invalido; el check series_cita_sesiones_ck sigue de última guarda. Si se quiere texto propio, fragmento «no tiene ninguna sesión» en FRAGMENTOS_DE_RECHAZO."
+  ],
+  "cerrados_de_la_ronda_1": [
+    "R1-H1",
+    "R1-H2",
+    "R1-H3",
+    "R1-H4",
+    "R1-H5",
+    "R1-H6",
+    "R1-H7",
+    "R2-H1",
+    "R2-H2",
+    "R2-H3",
+    "R2-H4"
+  ],
+  "rondas_anteriores": [
     {
-      "id": "R1-H4",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
-      "linea": 221,
-      "descripcion": "La decisión D solo se prueba con estado baja (21:292, 417, 692, 707); estado_perfil tiene tres valores y no hay ningún caso suspendido.",
-      "escenario": "Mutante: p.estado <> 'baja' en vez de = 'activo' → el banco 21 sigue verde, y un técnico da citas y series a un profesional suspendido."
-    },
-    {
-      "id": "R1-H5",
-      "severidad": "BAJA",
-      "archivo": "scripts/rls/21-alta-de-cita.sql",
-      "linea": 166,
-      "descripcion": "Nada en el banco guarda el for share de alta_resolver_tipo (D5, migración :239-279); el revoke sin prueba de los dos ayudantes nuevos es R2-H4 y no se cuenta dos veces.",
-      "escenario": "Mutante: quitar el for share → el banco 21 sigue verde; en producción, un administrador da de baja el tipo entre T2 y el insert y la cita nace con un tipo inactivo. Basta pg_get_functiondef(...) ~* 'for share'."
-    },
-    {
-      "id": "R1-H6",
-      "severidad": "BAJA",
-      "archivo": "scripts/rls/21-alta-de-cita.sql",
-      "linea": 469,
-      "descripcion": "«Gana el festivo (determinista)» no muerde: el festivo se inserta antes que la ausencia en el mismo values, así que un recorrido secuencial o por índice lo devuelve primero aunque no haya order by (migración :168).",
-      "escenario": "Mutante: quitar order by (d.tipo = 'festivo') desc, d.id → el bloqueo sigue siendo festivo por orden físico y el banco sigue verde. Para que muerda, hay que insertar primero la ausencia."
-    },
-    {
-      "id": "R1-H7",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
-      "linea": 585,
-      "descripcion": "Con cero ocurrencias y sin excluir nada, el error es «Excluir todas las fechas deja la serie sin sesiones» (22023); antes era el 23514 del check, porque ocurrencias y plan corren ahora antes del insert de series_cita.",
-      "escenario": "agenda_crear_serie(..., p_sesiones_totales => 0, p_excluir => null), o un p_fin_el anterior a la primera fecha → 22023 «Excluir todas las fechas…», aunque el usuario no excluyó nada, y quien traduzca 23514 ya no lo recibe."
-    },
-    {
-      "id": "R2-H2",
-      "severidad": "BAJA",
-      "archivo": "supabase/seed-completo.sql",
-      "linea": 526,
-      "descripcion": "Las seis citas de Lucía se insertan ya en estado realizada, así que no dispara alertar_nota_sin_firmar (after update of estado) ni se rellena marcada_realizada_en/_por: la siembra deja un estado que la aplicación no puede producir (realizada, pasada, sin nota y sin alerta).",
-      "escenario": "db reset + npm run seed; Ana abre su agenda en la semana del último martes → la cita de Lucía de las 12:00 sale realizada SIN el aviso de nota pendiente (nota_pendiente = false, porque no hay fila nota_sin_firmar), y el panel de documentos de Lucía no enseña ninguna «Nota sin firmar» aunque ninguna de las seis sesiones tiene nota. Insertar como programada y luego update a realizada (con fin < now()) abre las seis alertas como lo haría la app."
-    },
-    {
-      "id": "R2-H3",
-      "severidad": "BAJA",
-      "archivo": "supabase/seed-completo.sql",
-      "linea": 521,
-      "descripcion": "El festivo es current_date + 14, es decir, el mismo día de la semana en que se siembra; sembrando en sábado o domingo cae en un día sin franjas y no se ve en ningún sitio (criterio 19.b pasa por recuento, pero la siembra no enseña lo que el guion necesita).",
-      "escenario": "npm run seed un sábado → festivo el sábado +14. agenda_bloques_profesional de Ana esa semana da lo mismo con y sin festivo (no hay franja el sábado) y ninguna previsualización de lunes a viernes da bloqueo = festivo. Además solo coincide con la serie de los martes de Lucía si se sembró en martes. Anclarlo a un día laborable fijo (p. ej. el martes de dentro de dos o tres semanas) lo hace visible siempre."
-    },
-    {
-      "id": "R2-H4",
-      "severidad": "BAJA",
-      "archivo": "scripts/rls/README.md",
-      "linea": 47,
-      "descripcion": "La fila del banco 21 dice «firmas y permisos ... de los cuatro ayudantes internos (A)», pero la migración crea seis funciones internas: 21-A comprueba plan_alta_serie, alta_descanso, alta_bloqueo_disponibilidad y alta_hueco_ocupado, y no alta_exigir_profesional ni alta_resolver_tipo (revocadas hoy en :234 y :279, sin prueba que lo guarde).",
-      "escenario": "T-039 (que ya prevé drop + create en estas funciones) recrea alta_resolver_tipo y olvida el revoke → por el privilegio por defecto de PUBLIC/Supabase, anon y authenticated la pueden ejecutar por PostgREST y 21-A sigue en verde, mientras el README asegura que los ayudantes internos están cubiertos."
+      "ronda": 1,
+      "ticket": "T-028a",
+      "altas": 0,
+      "medias": 1,
+      "bajas": 10,
+      "hallazgos": [
+        {
+          "id": "R2-H1",
+          "severidad": "MEDIA",
+          "archivo": "docs/architecture.md",
+          "linea": 189,
+          "descripcion": "El párrafo de puertas da por cerradas todas salvo H25, pero D1 (migración :267) hace que fin − inicio sea función exacta del tipo, y el técnico lee el catálogo con duracion_minutos (tipos_terapia_lectura) y el inicio/fin de toda cita (citas_agenda): la duración es un canal lateral del tipo que ni la doc ni el ADR-074.2 recogen.",
+          "escenario": "db reset + seed; Ana da a Sofía una cita con «Sesión de pareja» por agenda_crear_cita → la base la fuerza a 90 min. Teresa (técnico, Madrid) ve en su agenda 10:00–11:30 y en el catálogo el único tipo activo de 90 es «Sesión de pareja»: conoce el tipo de una cita que no dio, contra «sigue sin ver el tipo de ninguna cita». Con las seis citas sembradas de Lucía (50 min) deduce «Sesión individual» igual. Decide el propietario: aceptarlo y anotarlo como puerta abierta junto a H25, o no."
+        },
+        {
+          "id": "R1-H1",
+          "severidad": "BAJA",
+          "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
+          "linea": 588,
+          "descripcion": "La alternativa de una sesión bloqueada puede ser una fecha que el usuario excluyó: el plan recibe v_fechas ya sin las excluidas y D10 (:334, continue when v_fecha2 = any (p_fechas)) solo salta las que siguen en la serie; además agenda_previsualizar_alta no tiene p_excluir.",
+          "escenario": "Serie semanal de lunes, 8 sesiones, p_excluir = array[lunes de la 3.ª] (vacaciones del paciente); PRO1 con festivo el lunes de la 2.ª y ausencia de martes a domingo de esa semana → la propuesta de la 2.ª trae fecha_prevista = el lunes recién excluido, y la previsualización había mostrado «sin alternativa»."
+        },
+        {
+          "id": "R1-H2",
+          "severidad": "BAJA",
+          "archivo": "scripts/rls/21-alta-de-cita.sql",
+          "linea": 424,
+          "descripcion": "D10 no tiene prueba que muerda: todas las alternativas del banco caen en d = 1 o son null, ninguna tendría que saltar otra sesión de la serie.",
+          "escenario": "Mutante: borrar la línea 334 de la migración → el banco 21 sigue verde; en producción, una ausencia de lunes a domingo exacta hace que la propuesta de la sesión N proponga el hueco de la sesión N+1, el caso que motivó D10."
+        },
+        {
+          "id": "R1-H3",
+          "severidad": "BAJA",
+          "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
+          "linea": 635,
+          "descripcion": "M9 sobrevive en 21-H aunque la tabla de mutantes del diseño dice que 21-H lo caza: el 23P01 medido (21:540) sale del raise explícito de :595, porque el plan ya ve la cita, y no del insert sin exception de :635.",
+          "escenario": "Mutante: envolver el insert de la 1.ª sesión estricta en begin … exception when exclusion_violation → 21-H sigue verde con «La primera sesión choca»; en producción, una carrera entre el plan y el insert convierte la 1.ª estricta en propuesta ocupada en vez de deshacer la serie (criterio 9)."
+        },
+        {
+          "id": "R1-H4",
+          "severidad": "BAJA",
+          "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
+          "linea": 221,
+          "descripcion": "La decisión D solo se prueba con estado baja (21:292, 417, 692, 707); estado_perfil tiene tres valores y no hay ningún caso suspendido.",
+          "escenario": "Mutante: p.estado <> 'baja' en vez de = 'activo' → el banco 21 sigue verde, y un técnico da citas y series a un profesional suspendido."
+        },
+        {
+          "id": "R1-H5",
+          "severidad": "BAJA",
+          "archivo": "scripts/rls/21-alta-de-cita.sql",
+          "linea": 166,
+          "descripcion": "Nada en el banco guarda el for share de alta_resolver_tipo (D5, migración :239-279); el revoke sin prueba de los dos ayudantes nuevos es R2-H4 y no se cuenta dos veces.",
+          "escenario": "Mutante: quitar el for share → el banco 21 sigue verde; en producción, un administrador da de baja el tipo entre T2 y el insert y la cita nace con un tipo inactivo. Basta pg_get_functiondef(...) ~* 'for share'."
+        },
+        {
+          "id": "R1-H6",
+          "severidad": "BAJA",
+          "archivo": "scripts/rls/21-alta-de-cita.sql",
+          "linea": 469,
+          "descripcion": "«Gana el festivo (determinista)» no muerde: el festivo se inserta antes que la ausencia en el mismo values, así que un recorrido secuencial o por índice lo devuelve primero aunque no haya order by (migración :168).",
+          "escenario": "Mutante: quitar order by (d.tipo = 'festivo') desc, d.id → el bloqueo sigue siendo festivo por orden físico y el banco sigue verde. Para que muerda, hay que insertar primero la ausencia."
+        },
+        {
+          "id": "R1-H7",
+          "severidad": "BAJA",
+          "archivo": "supabase/migrations/20261005120000_base_del_alta_de_cita.sql",
+          "linea": 585,
+          "descripcion": "Con cero ocurrencias y sin excluir nada, el error es «Excluir todas las fechas deja la serie sin sesiones» (22023); antes era el 23514 del check, porque ocurrencias y plan corren ahora antes del insert de series_cita.",
+          "escenario": "agenda_crear_serie(..., p_sesiones_totales => 0, p_excluir => null), o un p_fin_el anterior a la primera fecha → 22023 «Excluir todas las fechas…», aunque el usuario no excluyó nada, y quien traduzca 23514 ya no lo recibe."
+        },
+        {
+          "id": "R2-H2",
+          "severidad": "BAJA",
+          "archivo": "supabase/seed-completo.sql",
+          "linea": 526,
+          "descripcion": "Las seis citas de Lucía se insertan ya en estado realizada, así que no dispara alertar_nota_sin_firmar (after update of estado) ni se rellena marcada_realizada_en/_por: la siembra deja un estado que la aplicación no puede producir (realizada, pasada, sin nota y sin alerta).",
+          "escenario": "db reset + npm run seed; Ana abre su agenda en la semana del último martes → la cita de Lucía de las 12:00 sale realizada SIN el aviso de nota pendiente (nota_pendiente = false, porque no hay fila nota_sin_firmar), y el panel de documentos de Lucía no enseña ninguna «Nota sin firmar» aunque ninguna de las seis sesiones tiene nota. Insertar como programada y luego update a realizada (con fin < now()) abre las seis alertas como lo haría la app."
+        },
+        {
+          "id": "R2-H3",
+          "severidad": "BAJA",
+          "archivo": "supabase/seed-completo.sql",
+          "linea": 521,
+          "descripcion": "El festivo es current_date + 14, es decir, el mismo día de la semana en que se siembra; sembrando en sábado o domingo cae en un día sin franjas y no se ve en ningún sitio (criterio 19.b pasa por recuento, pero la siembra no enseña lo que el guion necesita).",
+          "escenario": "npm run seed un sábado → festivo el sábado +14. agenda_bloques_profesional de Ana esa semana da lo mismo con y sin festivo (no hay franja el sábado) y ninguna previsualización de lunes a viernes da bloqueo = festivo. Además solo coincide con la serie de los martes de Lucía si se sembró en martes. Anclarlo a un día laborable fijo (p. ej. el martes de dentro de dos o tres semanas) lo hace visible siempre."
+        },
+        {
+          "id": "R2-H4",
+          "severidad": "BAJA",
+          "archivo": "scripts/rls/README.md",
+          "linea": 47,
+          "descripcion": "La fila del banco 21 dice «firmas y permisos ... de los cuatro ayudantes internos (A)», pero la migración crea seis funciones internas: 21-A comprueba plan_alta_serie, alta_descanso, alta_bloqueo_disponibilidad y alta_hueco_ocupado, y no alta_exigir_profesional ni alta_resolver_tipo (revocadas hoy en :234 y :279, sin prueba que lo guarde).",
+          "escenario": "T-039 (que ya prevé drop + create en estas funciones) recrea alta_resolver_tipo y olvida el revoke → por el privilegio por defecto de PUBLIC/Supabase, anon y authenticated la pueden ejecutar por PostgREST y 21-A sigue en verde, mientras el README asegura que los ayudantes internos están cubiertos."
+        }
+      ]
     }
   ]
 }
