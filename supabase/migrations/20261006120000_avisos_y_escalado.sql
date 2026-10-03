@@ -106,6 +106,22 @@ update public.alertas_documentacion a
  where a.origen_tabla <> 'citas'
     or not exists (select 1 from public.citas c where c.id = a.origen_id);
 
+-- Tercer estado: `anulada`. Lo pone solo la base (fn_anular_alerta_nota_sin_firmar) cuando la
+-- cita sale de `realizada`: la nota no se firmó, así que no es «resuelta». Columna nula sin
+-- valor por defecto y dominio ampliado: nada destructivo. `alertas_documentacion_check`
+-- (la de `resuelta`) no se toca: una anulada tiene resuelta_en nulo y la cumple.
+alter table public.alertas_documentacion
+  add column anulada_en timestamptz,
+  drop constraint alertas_documentacion_estado_check,
+  add constraint alertas_documentacion_estado_check
+    check (estado in ('abierta', 'resuelta', 'anulada')),
+  add constraint alertas_documentacion_anulada_check
+    check ((estado = 'anulada') = (anulada_en is not null));
+
+comment on column public.alertas_documentacion.anulada_en is
+  'Instante en que la cita dejó de ser realizada y la alerta perdió su motivo. Lo fija solo '
+  'fn_anular_alerta_nota_sin_firmar(); es histórico, no una resolución (T-015).';
+
 comment on column public.alertas_documentacion.referencia_en is
   'Instante desde el que corre el nivel de la alerta: el fin de la cita si el origen es una '
   'cita, si no el momento de abrirla. Lo fija fn_fijar_referencia_alerta(); el cliente no '
@@ -151,7 +167,8 @@ begin
     return new;
   end if;
 
-  if new.paciente_id is distinct from old.paciente_id
+  if new.id is distinct from old.id
+     or new.paciente_id is distinct from old.paciente_id
      or new.profesional_id is distinct from old.profesional_id
      or new.centro_id is distinct from old.centro_id
      or new.tipo is distinct from old.tipo
@@ -159,8 +176,16 @@ begin
      or new.origen_id is distinct from old.origen_id
      or new.fecha_referencia is distinct from old.fecha_referencia
      or new.referencia_en is distinct from old.referencia_en
-     or new.creada_en is distinct from old.creada_en then
+     or new.creada_en is distinct from old.creada_en
+     or new.anulada_en is distinct from old.anulada_en then
     raise exception 'Una alerta no cambia de identidad ni de instante.'
+      using errcode = '42501';
+  end if;
+
+  -- `anulada` solo la pone la base cuando la cita deja de ser realizada (definer, sin pasar
+  -- por aquí). Ningún cliente llega a ella.
+  if new.estado = 'anulada' and old.estado is distinct from 'anulada' then
+    raise exception 'Solo la corrección de la cita anula una alerta.'
       using errcode = '42501';
   end if;
 
@@ -170,9 +195,9 @@ begin
       using errcode = '42501';
   end if;
 
-  if old.estado = 'resuelta'
+  if old.estado <> 'abierta'
      and (new.estado is distinct from old.estado or new.resuelta_en is distinct from old.resuelta_en) then
-    raise exception 'Una alerta resuelta no se reabre.'
+    raise exception 'Una alerta cerrada no se reabre.'
       using errcode = '42501';
   end if;
 
@@ -188,15 +213,50 @@ end;
 $$;
 
 comment on function public.fn_proteger_alerta_documentacion() is
-  'Guarda de update para authenticated (T-015, decisión P1): congela la identidad y el '
-  'instante, impide cerrar a mano una nota_sin_firmar, impide reabrir y fija resuelta_en '
-  '= now(). Es invoker para que current_user distinga al cliente de las funciones definer.';
+  'Guarda de update para authenticated (T-015, decisión P1): congela la identidad (id '
+  'incluido) y el instante (referencia_en, anulada_en), impide cerrar a mano una '
+  'nota_sin_firmar, impide anular (solo la corrección de la cita), impide reabrir una '
+  'cerrada y fija resuelta_en = now(). Es invoker para que current_user distinga al cliente '
+  'de las funciones definer.';
 
 revoke execute on function public.fn_proteger_alerta_documentacion() from public, anon;
 
 create trigger proteger_alerta_documentacion
   before update on public.alertas_documentacion
   for each row execute function public.fn_proteger_alerta_documentacion();
+
+-- Anular la alerta cuando la cita deja de ser realizada. DEFINER: el técnico cambia el
+-- estado a través de agenda_actualizar_cita (definer) y el titular lo hace en directo; en los
+-- dos casos la guarda invoker de arriba ve current_user <> 'authenticated' y deja pasar.
+-- No lee notas_clinicas. La auditoría la escribe auditar_alertas_documentacion en la misma
+-- transacción, con actor_id = auth.uid(): quien corrigió la cita.
+create function public.fn_anular_alerta_nota_sin_firmar()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.alertas_documentacion
+     set estado = 'anulada', anulada_en = now()
+   where origen_tabla = 'citas' and origen_id = new.id
+     and tipo = 'nota_sin_firmar' and estado = 'abierta';
+  return null;
+end;
+$$;
+
+comment on function public.fn_anular_alerta_nota_sin_firmar() is
+  'Si una cita deja de ser realizada, su alerta nota_sin_firmar abierta pasa a anulada: la '
+  'sesión no ocurrió, no hay nota que firmar. Una resuelta no se toca. Nada se borra '
+  '(constitución, regla 6) y no se marca como resuelta, que sería falso (T-015).';
+
+revoke execute on function public.fn_anular_alerta_nota_sin_firmar() from public, anon, authenticated;
+
+create trigger anular_alerta_nota_sin_firmar
+  after update of estado on public.citas
+  for each row
+  when (old.estado = 'realizada' and new.estado is distinct from 'realizada')
+  execute function public.fn_anular_alerta_nota_sin_firmar();
 
 
 -- =========================================================================
@@ -408,8 +468,8 @@ begin
          format('%s tiene sin firmar la nota de la sesión del %s.',
                 pr.nombre_completo,
                 to_char(a.referencia_en at time zone public.zona_horaria_centro(a.centro_id), 'DD/MM')),
-         'alertas_documentacion',
-         a.id
+         a.origen_tabla,
+         a.origen_id
     from public.alertas_documentacion a
     join public.perfiles pr on pr.id = a.profesional_id
     cross join destinatarios ds
@@ -425,8 +485,11 @@ $$;
 
 comment on function public.escalar_notas_pendientes() is
   'Avisa al administrador designado (o a todos los activos) de cada nota sin firmar en nivel '
-  '3. El cuerpo no lleva paciente (decisión 5, ADR-038). Idempotente por '
-  'notificaciones_origen_unico. El escalado vive solo aquí, no en el outbox (T-015).';
+  '3. El cuerpo no lleva paciente (decisión 5, ADR-038). El origen de la notificación es lo '
+  'que falta (la cita, a.origen_tabla/a.origen_id), no la fila de la alerta: la idempotencia '
+  'por notificaciones_origen_unico es por cita y destinatario, así que una alerta anulada y '
+  'reabierta no avisa dos veces por la misma sesión. El escalado vive solo aquí, no en el '
+  'outbox (T-015).';
 
 revoke execute on function public.escalar_notas_pendientes() from public, anon, authenticated, service_role;
 

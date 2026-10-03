@@ -122,6 +122,7 @@ export type Database = {
       }
       alertas_documentacion: {
         Row: {
+          anulada_en: string | null
           centro_id: string | null
           creada_en: string
           estado: string
@@ -136,6 +137,7 @@ export type Database = {
           tipo: Database["public"]["Enums"]["tipo_alerta_documentacion"]
         }
         Insert: {
+          anulada_en?: string | null
           centro_id?: string | null
           creada_en?: string
           estado?: string
@@ -150,6 +152,7 @@ export type Database = {
           tipo: Database["public"]["Enums"]["tipo_alerta_documentacion"]
         }
         Update: {
+          anulada_en?: string | null
           centro_id?: string | null
           creada_en?: string
           estado?: string
