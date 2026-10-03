@@ -202,3 +202,154 @@ del prototipo.**
 - **Criterio 10 con el técnico.** Solo N2 y N3. `cita_episodio_unico` va dentro de la definer, y
   N2/N3 ya prueban que el rol no cambia la resolución.
 - **K4 sin gemela de `paciente_id`.** La gemela de `episodio_id` está en el banco 19:678.
+
+## Ronda 2 — revisor B
+
+**Sin ALTA.** 0 ALTA, 1 MEDIA, 1 BAJA. Diff `main...worktree-agent-ad4f297deba7c97ae` (HEAD 31d97f0;
+ronda 2 = 7f00448 y 31d97f0).
+
+### Cerrado y comprobado
+
+- **A-H1.** El paso 0 de `fn_velar_episodio_de_cita` va antes de la coherencia y lanza un 23514
+  con mensaje constante. D7b (vaciar el episodio y cambiar el paciente a la vez) demuestra que el
+  orden importa. D1-D5 comparan las cuatro cadenas, también tras caducar el PIN. D1b y D2b son
+  las gemelas permitidas.
+- **A-H2.** `serie_id` ya no está en los dos `grant`. La comprobación de la serie (paso 1) va
+  antes de `cita_episodio_coherente`.
+  - H4 da 42501.
+  - H5, como postgres, exige seis cadenas iguales con el 23514 de la serie. Sin el paso 1, H5 no
+    lanza; si el paso 1 estuviera solo en la rama coherente, R39 tampoco lanzaría. La aserción
+    mordería.
+  - Ninguna puerta legítima tropieza con el paso 1: `agenda_confirmar_propuesta` inserta con el
+    paciente y el profesional de la serie, y `agenda_actualizar_cita` no cambia ninguno de los dos.
+- **Adaptaciones de la sección H.** `id_ser_v` sobre W39/EB39 (S2 rechaza una serie de V39, y el
+  diseño ya preveía esta salida) e `id_ser_m` = serie de Q39. Las dos conservan lo que vigila H5.
+- **B-H1.** El párrafo ya no dice «no ve el episodio» y nombra H25. Queda a medias: ver R2-B-H1.
+- **B-H2.** La sección Z es un cable trampa, con mensajes:
+  - Z1 da 22023 «de la cita está cerrado».
+  - Z2 reabre y Z3 comprueba que `episodio_para_nota` devuelve ET39, lo que cubre el `no_lanza`
+    de 0 filas.
+  - X5 pasa a «indicado está cerrado». El fragmento es único en la migración y no casa con el
+    22023 del paso 5b.
+- **B-H3.** El bloque 8.ter da las dos citas con `agenda_crear_cita` y claims de Ana o del técnico,
+  cada una con su guarda `if not exists`, y al final vacía los claims.
+  - En la base sembrada por el verificador, la cita de Carmen es online, de `k_epi_carmen` y la
+    creó `k_tec`; la de Sofía es de `k_epi_pareja` y la creó Ana.
+  - No queda ningún `e0390001`.
+  - La guarda depende de `inicio > now()`. Si la siembra se repite cuando la cita ya pasó, se da
+    otra. Es lo que pide el diseño, no un hallazgo.
+- **B-H4.** `interfaz.md` §14 queda «tipo · profesional · modalidad».
+- **Criterio 2.** La aserción A del banco 21 localiza las funciones por nombre en `pg_proc`, tras
+  comprobar que existe una sola de cada. No se debilita: sigue comprobando el privilegio sobre el
+  oid. Los bancos 16 y 17 no están en el diff.
+- **Sección R.** Guarda `tgenabled` y lo restaura con `\gexec`, así que un mutante `disable` ya
+  no se deshace antes de Y1.
+- **Sondeo, con rollback.** El técnico, con un `update citas set paciente_id` directo, obtiene
+  UPDATE 0 por RLS en citas con y sin episodio, así que el paso 0 no le da oráculo.
+
+### MEDIA
+
+- **R2-B-H1 · `docs/architecture.md:427-431` (rama).** El arreglo de B-H1 nombra los residuos por
+  su etiqueta («residuo de fechas», «el alcance del P1 queda en el ticket», «P4 = A», H25) sin
+  decir qué dejan abierto, y la frase siguiente los contradice como garantía. Además, `:199`
+  sigue diciendo que el técnico lee «el tipo» en la auditoría, sin el `episodio_id`.
+  - *Escenario P1.* PRO2, coterapeuta de `k_epi_pareja`, escribe su nota con el `cita_id` de la
+    cita conjunta de Sofía, pero en su propio episodio. Entra, porque
+    `fn_exigir_nota_en_episodio_de_su_cita` vuelve pronto si el autor no es el profesional de la
+    cita. Mientras tanto, `:432` afirma sin excepción «La nota de una cita va en el episodio de la
+    cita».
+  - *Escenario de fechas.* El técnico reprograma con `agenda_actualizar_cita(p_inicio)` la cita
+    de Carmen a una fecha posterior al cierre de `k_epi_carmen`. El disparador es
+    `of episodio_id, paciente_id, profesional_id` y no corre con `inicio`, así que la cita queda
+    en un episodio cerrado antes de su día. La doc, en `:422-424`, sigue diciendo «no cerrado
+    antes de ese día (… 23514)», y «residuo de fechas» no avisa de que reprogramar, cerrar o dar
+    de baja no se revalida, ni dice quién lo cierra (T-034 SQL-H2).
+  - *Escenario P4.* «Riesgo aceptado (P4 = A)» no dice qué se acepta: que el administrador
+    deduce, por el `episodio_id` de la cita que acaba de dar, si el paciente es participante de un
+    episodio abierto del profesional.
+  - *Escenario H25.* Quien lea `:199` para cerrar H25 solo buscará el tipo. No sabrá que
+    `episodio_id` también viaja y permite al técnico agrupar parejas o familias por episodio
+    compartido, ni que es un bloqueo de producción.
+
+### BAJA
+
+- **R2-B-H2 · `scripts/rls/README.md:49` (rama).** La fila del banco 23 enumera las secciones sin
+  D, H ni Z, y repite la S.
+  - *Escenario.* Quien implemente T-034 SQL-H2 (revalidar el cierre de episodios) busca en el
+    README qué banco cubre los episodios cerrados con citas posteriores. No ve el cable trampa
+    23.Z y se lo encuentra al romperlo, sin saber que su rojo es la señal esperada y no una
+    regresión.
+
+## Ronda 2 — revisor A
+
+**Sin ALTA.** A-H1 y A-H2 quedan cerrados. Revisado `git diff main...worktree-agent-ad4f297deba7c97ae`
+(HEAD 31d97f0), medido en `begin … rollback` contra `supabase_db_Psicogestion` con la migración aplicada.
+
+Comprobado de la lista R2.8 (puntos 1 a 7, de seguridad):
+- **A-H1 cerrado.** El paso 0 (`mig:288`) va antes del paso 1 y del 2. Solo mira `old.episodio_id`,
+  `paciente_id` y `profesional_id`, y su mensaje es literal. En una cita futura con episodio, los
+  BEFORE que corren antes (`calcular_rango_bloqueante` con `profesional_id`, `proteger_cita_pasada`)
+  no dependen del paciente nuevo. La RLS `with check` se evalúa después de los BEFORE, así que tampoco
+  separa los casos. `insert … on conflict do update` dispara los mismos BEFORE UPDATE. D4, D5 y D7
+  comparan cadenas, no solo códigos. D7b cubre el orden respecto al paso 2.
+- **A-H2 cerrado.** `serie_id` sale de las dos listas (18 columnas). Como ADM:
+  `has_column_privilege(...,'serie_id','INSERT'/'UPDATE') = f`, medido. El 42501 de privilegio sale
+  antes de los disparadores y su cadena es constante. La comprobación de la serie (`mig:307`) va antes
+  de `cita_episodio_coherente`. Si se devuelve `serie_id` al grant, H2 muere por el código esperado:
+  discrimina.
+- **Ninguna puerta legítima tropieza con los 23514 nuevos.** Las inserciones con `serie_id` usan los
+  valores de la serie: `agenda_crear_serie` (T-039, `mig:1063/1078`) y `agenda_confirmar_propuesta`
+  (las dos versiones, con la propuesta, que sale de `p_paciente_id`/`p_profesional_id`). Las propuestas
+  de evento llevan `cita_id`, van por la rama `update` y no insertan. La FK sin `on delete` impide que
+  ese `cita_id` quede nulo. Ninguna función ni la siembra hacen `update` de `paciente_id` o
+  `profesional_id` en `citas`. Los `insert` con `serie_id` del banco 16 (`:357`, `:1265`, `:1618`)
+  usan el paciente y el profesional de su serie.
+- **Sin oráculo nuevo de participación.** `agenda_crear_cita` y `agenda_crear_serie` dan el mismo
+  «no vale» al ADM con `p_episodio_id` (`e.profesional_id = auth.uid()`). `agenda_cambiar_episodio_cita`
+  y `episodio_para_nota` se limitan a la cita y el episodio propios. La serie sin episodio elegido
+  resuelve con `baja_en is null` y `alta_en <= p_desde`, así que todas sus citas heredan igual. Lo que
+  queda es la resolución automática (P4 = A) y H25, los dos escritos en `architecture.md`.
+
+### R2-A-H1 · MEDIA · `supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql:307` (y `docs/architecture.md:439`)
+«Una cita de una serie es del paciente y del profesional de la serie (23514)» solo se comprueba al
+INSERTAR. `paciente_id` y `profesional_id` siguen en el `grant update`, y el paso 0 solo corta las citas
+con episodio. La razón que R2.2 dio para cerrar `update serie_id` («cualquier edición posterior de la
+serie la arrastraría») sigue al alcance por las dos columnas hermanas.
+- **Escenario (medido en rollback).** Hay una serie de Lucía con Ana, sin episodio, y una cita futura
+  suya. Como ADM: `update citas set paciente_id = <d0080001-…-0003>, profesional_id = <PRO2>` sobre
+  esa cita → `UPDATE 1`. Al releer, `mismo_pac = f`, `mismo_pro = f` y `serie_id` es el de la serie de
+  Ana.
+- **Efecto.** `citas_afectadas_por_regla` (20260925:244) elige por `serie_id`. Un «esta y las
+  siguientes» de Ana sobre su serie reprograma la cita que ahora es de PRO2 con otro paciente. Una
+  sustitución de una sesión por otro profesional es una reasignación realista. La arquitectura y el
+  comentario del paso 1 («ninguna puerta legítima la fabrica») afirman un invariante que la base no
+  sostiene.
+- **Arreglo en el territorio.** Extender el paso 0 a `old.serie_id is not null` (constante, sin mirar
+  la serie), o escribir el alcance real («al crear la cita») y anotarlo.
+
+### R2-A-H2 · MEDIA · `supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql:68`
+La lista nueva por columna sigue concediendo `update (id)`, y `fn_proteger_cita_pasada` (`:557-567`)
+no congela `id`. El administrador cambia la identidad de una cita pasada, y el 23503 de la FK de
+`notas_clinicas` le dice qué citas tienen nota clínica, aunque no lee ninguna.
+- **Escenario 1 (medido).** Como ADM: `update citas set id = 'aaaaaaaa-…-01' where id =
+  'e0280004-…-01'` (realizada, de Lucía, pasada) → `UPDATE 1`. Su alerta `nota_sin_firmar`
+  (`alertas_documentacion.origen_id`, sin FK) queda huérfana: 1 fila sin cita. La firma de la nota de
+  esa sesión ya no la resuelve, y el escalado avisa por una cita que no existe.
+- **Escenario 2 (medido).** Una nota de Ana con `cita_id = fce6bc3c…`. ADM ve
+  `count(*) from notas_clinicas where cita_id = … = 0`. `update citas set id = … where id = fce6bc3c…`
+  da `23503 … violates foreign key constraint "notas_clinicas_cita_id_fkey"`. Sobre `35cb8c96…`, que
+  no tiene nota, da `UPDATE 1`, y un segundo `update` lo devuelve a su id: el sondeo no deja rastro en
+  la cita, solo dos filas de auditoría.
+- **Origen.** Ya existía con el grant de tabla entera. Pero es la lista que este diff reescribe para
+  cerrar escrituras: quitar `id` del `grant update` no rompe ninguna ruta (R6). Si no se hace aquí,
+  se anota en `docs/state.md`.
+
+### R2-A-H3 · BAJA · `supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql:70`
+`rango_bloqueante` sigue en el `grant update`. `calcular_rango_bloqueante` solo corre con
+`profesional_id`, `inicio` y `fin`, así que un `update` de esa columna sola deja el rango a mano y se
+salta la exclusión.
+- **Escenario (medido).** Como PRO1 (Ana): `update citas set rango_bloqueante = 'empty' where id =
+  '35cb8c96…'` → `UPDATE 1`. Después, un `insert` de otra cita suya con el mismo `inicio` y `fin` →
+  `INSERT 0 1`, sin 23P01: doble reserva.
+- **Origen.** Ya existía. Se cierra quitándolo de la lista de `update` (en `insert` ya lo rechaza el
+  disparador) o se anota en `docs/state.md`.

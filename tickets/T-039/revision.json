@@ -1,57 +1,49 @@
 {
   "ticket": "T-039",
-  "commit": "80a99b6",
-  "altas": 2,
+  "ronda": 2,
+  "altas": 0,
   "medias": 3,
-  "bajas": 1,
+  "bajas": 2,
   "hallazgos": [
     {
-      "id": "A-H1",
-      "severidad": "ALTA",
-      "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
-      "linea": 370,
-      "descripcion": "El disparador de coherencia corre al cambiar paciente_id, columna que el administrador sigue pudiendo escribir en cualquier cita: el oráculo de participación que la tarea 3 manda cerrar sigue abierto por otra columna.",
-      "escenario": "Como ADM sin PIN: update citas set paciente_id = Hugo where id = <cita de Sofía en EP (pareja)> da 23514 «no es titular ni participante» si Hugo no está y éxito si lo está; con un ex participante, «no estaba de alta». Medido en rollback con H39, Q39 y V39. 23.C6 solo lo prueba como postgres."
-    },
-    {
-      "id": "A-H2",
-      "severidad": "ALTA",
-      "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
-      "linea": 283,
-      "descripcion": "La herencia de la serie no comprueba que la serie sea del paciente de la cita; con serie_id en el grant insert y episodio_id legible para el administrador, es un oráculo silencioso de participación y de fechas de alta y baja.",
-      "escenario": "Como ADM: insert into citas (paciente_id=Q39, profesional_id=PRO1, serie_id=<serie de P39 en EP39>, …) entra sin error y al releerla episodio_id = EP39 (participante); con R39 o H39 nace nula. Con V39 sobre la serie de EB39: la cita de hoy hereda y la de mañana no, lo que da la baja_en al día. Medido en rollback."
-    },
-    {
-      "id": "B-H1",
+      "id": "R2-B-H1",
       "severidad": "MEDIA",
       "archivo": "docs/architecture.md",
-      "linea": 425,
-      "descripcion": "El párrafo nuevo afirma que el técnico no ve el episodio y omite H25, el residuo de reprogramar o cerrar y el alcance P1 que la tarea 16, el §1.16 y el contrato («Aquí queda escrito en docs/architecture.md») mandan escribir.",
-      "escenario": "Como k_tec (aal2): agenda_cambiar_asistencia(cita de Sofía, online) y luego presencial dejan la cita igual, y sus dos filas de auditoria llevan episodio_id = k_epi_pareja. Con citas de Sofía y de Hugo, ve el mismo uuid en las dos y deduce la pareja. Medido en rollback."
+      "linea": 427,
+      "descripcion": "El arreglo de B-H1 nombra los residuos por etiqueta («residuo de fechas», «alcance del P1 queda en el ticket», «P4 = A», H25) sin decir qué dejan abierto; las frases siguientes los afirman como garantía y :199 sigue limitando H25 al tipo, sin episodio_id.",
+      "escenario": "PRO2, coterapeuta de k_epi_pareja, escribe su nota con el cita_id de la cita conjunta de Sofía en su propio episodio y entra (fn_exigir_nota_en_episodio_de_su_cita vuelve pronto), mientras :432 dice sin excepción «La nota de una cita va en el episodio de la cita». El técnico reprograma con agenda_actualizar_cita(p_inicio) la cita de Carmen a una fecha posterior al cierre de k_epi_carmen: velar no corre of inicio y la cita queda en un episodio cerrado antes de su día, contra «no cerrado antes de ese día (23514)» de :422-424. Quien cierre H25 leyendo :199 solo busca el tipo y deja viajar episodio_id, con el que el técnico agrupa parejas."
     },
     {
-      "id": "B-H2",
+      "id": "R2-B-H2",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/README.md",
+      "linea": 49,
+      "descripcion": "La fila del banco 23 enumera las secciones sin D, H ni Z y repite la S.",
+      "escenario": "Quien implemente T-034 SQL-H2 busca en el README qué banco cubre los episodios cerrados con citas posteriores, no ve el cable trampa 23.Z y lo descubre al romperlo, sin saber que su rojo es la señal esperada."
+    },
+    {
+      "id": "R2-A-H1",
       "severidad": "MEDIA",
       "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
-      "linea": 719,
-      "descripcion": "La única salida de la nota de una cita cuyo episodio se cerró es reabrir el episodio, que es justo lo que T-034 SQL-H2 va a prohibir, y docs/state.md:43 no lo anota.",
-      "escenario": "Ana cierra k_epi_carmen con una cita futura de Carmen; nada lo impide (incoherentes 0 → 2). Ya pasada la cita: episodio_para_nota da 22023 sin elegir y con el mismo episodio, y 42501 con otro; agenda_cambiar_episodio_cita da 42501 «una vez asignado». Si reabre, entra. Con la reapertura prohibida, la nota no se escribe nunca y la alerta nota_sin_firmar queda eterna."
+      "linea": 307,
+      "descripcion": "«Una cita de una serie es del paciente y del profesional de la serie» solo se comprueba al insertar: paciente_id y profesional_id siguen en el grant update y el paso 0 solo corta citas con episodio, así que el arrastre que justificó cerrar serie_id sigue abierto y architecture.md:439 afirma un invariante que la base no sostiene.",
+      "escenario": "Medido en rollback: serie de Lucía con Ana sin episodio y una cita futura suya; como ADM, update citas set paciente_id = d0080001-…-0003, profesional_id = PRO2 → UPDATE 1, y la cita queda con mismo_pac = f y mismo_pro = f bajo la serie de Ana. citas_afectadas_por_regla elige por serie_id, así que un «esta y las siguientes» de Ana reprograma la cita de PRO2."
     },
     {
-      "id": "B-H3",
+      "id": "R2-A-H2",
       "severidad": "MEDIA",
-      "archivo": "supabase/seed-completo.sql",
-      "linea": 563,
-      "descripcion": "La siembra inserta las dos citas a mano, con episodio y modalidad fijados, contra la tarea 13 y el §1.15 («Se usan las funciones de alta… y no un insert directo»), sin justificar.",
-      "escenario": "Una regresión en la resolución de agenda_crear_cita o en la modalidad pasada por el técnico deja la demostración intacta, y el criterio 23 (online 1, k_epi_pareja 1, incoherentes 0) sale verde por construcción."
+      "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
+      "linea": 68,
+      "descripcion": "La lista nueva por columna sigue concediendo update (id) y fn_proteger_cita_pasada no congela id: el administrador cambia la identidad de una cita pasada, y el 23503 de notas_clinicas le dice qué citas tienen nota clínica, aunque no lee ninguna.",
+      "escenario": "Medido en rollback como ADM: update citas set id = aaaaaaaa-…-01 where id = e0280004-…-01 (pasada, realizada) → UPDATE 1, y su alerta nota_sin_firmar queda huérfana (1 fila sin cita). Con una nota de Ana en fce6bc3c, ADM ve 0 notas pero el update de id da 23503 notas_clinicas_cita_id_fkey; en 35cb8c96, sin nota, UPDATE 1 y otro update lo devuelve a su id."
     },
     {
-      "id": "B-H4",
+      "id": "R2-A-H3",
       "severidad": "BAJA",
-      "archivo": "docs/interfaz.md",
-      "linea": 425,
-      "descripcion": "La línea de la agenda queda como tipo · modalidad · profesional, y C14 y el prototipo dicen tipo · profesional · modalidad.",
-      "escenario": "El ticket de interfaz sigue interfaz.md, que manda sobre las pantallas, y pinta un orden distinto del prototipo."
+      "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
+      "linea": 70,
+      "descripcion": "rango_bloqueante sigue en el grant update, y calcular_rango_bloqueante no corre si solo cambia esa columna: el rango queda a mano y la exclusión no lo ve (ya existía; la lista la reescribe este diff).",
+      "escenario": "Medido en rollback como PRO1 (Ana): update citas set rango_bloqueante = empty where id = 35cb8c96 → UPDATE 1; después, insert de otra cita suya con el mismo inicio y fin → INSERT 0 1, sin 23P01 (doble reserva)."
     }
   ]
 }
