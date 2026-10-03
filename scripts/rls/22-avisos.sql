@@ -18,6 +18,7 @@
 \set ADM2 '\'b0150001-0000-4000-8000-000000000001\''
 \set Z22  '\'d0150001-0000-4000-8000-000000000001\''
 \set Q22  '\'d0150001-0000-4000-8000-000000000002\''
+\set ADM3 '\'b0150001-0000-4000-8000-000000000003\''
 
 -- ---------------------------------------------------------------------------
 -- Fijación (como postgres)
@@ -136,8 +137,8 @@ select pg_temp.assert(:escalado1 >= 1, '22.C5 La primera pasada escala al menos 
 select pg_temp.assert(:escalado2 = 0, '22.C5 La segunda pasada no crea nada y no lanza (on conflict)');
 select pg_temp.assert(
   (select count(*) = 1 from public.notificaciones
-    where perfil_id = :ADM and origen_tabla = 'alertas_documentacion' and origen_id = :'a73'),
-  '22.C5 Hay UNA notificación para ADM por la alerta de 73 h');
+    where perfil_id = :ADM and origen_tabla = 'citas' and origen_id = :'c73'),
+  '22.C5 Hay UNA notificación para ADM por la cita de 73 h (origen = la cita, no la alerta)');
 select pg_temp.assert(
   (select tipo = 'nota_pendiente_escalada' and titulo = 'Nota sin firmar'
           and position('Zoraida' in detalle) = 0
@@ -145,10 +146,10 @@ select pg_temp.assert(
           and position(:Z22 in detalle) = 0
           and position('Profesional Uno' in detalle) > 0
      from public.notificaciones
-    where perfil_id = :ADM and origen_tabla = 'alertas_documentacion' and origen_id = :'a73'),
+    where perfil_id = :ADM and origen_tabla = 'citas' and origen_id = :'c73'),
   '22.C5 El detalle lleva el profesional y NO el nombre, los apellidos ni el id del paciente');
 select pg_temp.assert(
-  (select count(*) = 0 from public.notificaciones where origen_id = :'a25'),
+  (select count(*) = 0 from public.notificaciones where origen_id = :'c25'),
   '22.C5 GEMELA: la alerta de nivel 2 no genera ninguna notificación');
 
 -- Una alerta de nivel 3 ya resuelta no escala.
@@ -161,7 +162,7 @@ select id as a74 from public.alertas_documentacion
 update public.alertas_documentacion set estado = 'resuelta', resuelta_en = now() where id = :'a74';
 select public.escalar_notas_pendientes() as escalado3 \gset
 select pg_temp.assert(
-  (select count(*) = 0 from public.notificaciones where origen_id = :'a74'),
+  (select count(*) = 0 from public.notificaciones where origen_id = :'c74'),
   '22.C5 GEMELA: una alerta resuelta no escala');
 
 -- Designar: solo un administrador activo.
@@ -190,7 +191,7 @@ select pg_temp.assert(
   (select count(*) filter (where perfil_id = :ADM2) = 1
       and count(*) filter (where perfil_id = :ADM) = 0
       and count(*) = 1
-     from public.notificaciones where origen_tabla = 'alertas_documentacion' and origen_id = :'a75'),
+     from public.notificaciones where origen_tabla = 'citas' and origen_id = :'c75'),
   '22.C5 (i) Con ADM2 designado y activo el aviso va SOLO a ADM2');
 
 -- (ii) Columna nula: todos los administradores activos.
@@ -206,7 +207,7 @@ select pg_temp.assert(
   (select count(*) filter (where perfil_id = :ADM2) = 1
       and count(*) filter (where perfil_id = :ADM) = 1
       and count(*) = (select count(*) from public.perfiles where rol = 'administrador' and estado = 'activo')
-     from public.notificaciones where origen_tabla = 'alertas_documentacion' and origen_id = :'a76'),
+     from public.notificaciones where origen_tabla = 'citas' and origen_id = :'c76'),
   '22.C5 (ii) Sin designado el aviso va a TODOS los administradores activos');
 
 -- (iii) Designado ADM2 que después pasa a baja: respaldo a los activos, y ADM2 no recibe.
@@ -223,9 +224,61 @@ select pg_temp.assert(
   (select count(*) filter (where perfil_id = :ADM2) = 0
       and count(*) filter (where perfil_id = :ADM) = 1
       and count(*) = (select count(*) from public.perfiles where rol = 'administrador' and estado = 'activo')
-     from public.notificaciones where origen_tabla = 'alertas_documentacion' and origen_id = :'a77'),
+     from public.notificaciones where origen_tabla = 'citas' and origen_id = :'c77'),
   '22.C5 (iii) Designado de baja: el aviso va a los administradores activos y no a él');
 update public.organizacion set administrador_avisos_id = null;
+
+-- (iv) Designar a un administrador INACTIVO (ADM2 está de baja desde (iii)) lanza 23514:
+-- sin `p.estado = 'activo'` en el validador esto entraría (A-H5).
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.organizacion set administrador_avisos_id = %L', :ADM2),
+  '23514', 'debe ser un administrador activo',
+  '22.C5 (iv) Designar a un administrador de baja lanza 23514');
+select pg_temp.assert(
+  (select administrador_avisos_id is null from public.organizacion),
+  '22.C5 (iv) La designación rechazada no deja nada guardado');
+
+-- (v) Designado ADM3 activo que después deja de ser administrador: el validador solo se
+-- dispara con `update of administrador_avisos_id`, así que no salta. Quien decide es
+-- `designado` en el escalado, con `p.rol = 'administrador'` (A-H5).
+insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at,
+                        raw_app_meta_data, raw_user_meta_data,
+                        confirmation_token, recovery_token, email_change_token_new, email_change)
+values
+  ('00000000-0000-0000-0000-000000000000', :ADM3, 'authenticated', 'authenticated', 'adm3@rls.test', now(), now(),
+   '{"provider":"email","providers":["email"]}'::jsonb,
+   '{"rol":"administrador","nombre_completo":"Admin Tres"}'::jsonb, '', '', '', '');
+update public.organizacion set administrador_avisos_id = :ADM3;
+select pg_temp.assert(
+  (select administrador_avisos_id = :ADM3 from public.organizacion),
+  '22.C5 (v) (preparación) ADM3, administrador activo, queda designado');
+update public.perfiles set rol = 'profesional_sanitario' where id = :ADM3;
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '79 hours 20 minutes', now() - interval '79 hours', 'Europe/Madrid')
+returning id as c79 \gset
+update public.citas set estado = 'realizada' where id = :'c79';
+select public.escalar_notas_pendientes() as escalado7 \gset
+select pg_temp.assert(
+  (select count(*) filter (where perfil_id = :ADM) = 1
+      and count(*) filter (where perfil_id = :ADM3) = 0
+     from public.notificaciones where origen_tabla = 'citas' and origen_id = :'c79'),
+  '22.C5 (v) Designado que ya no es administrador: el aviso va a los administradores y no a él');
+update public.perfiles set rol = 'administrador' where id = :ADM3;
+update public.organizacion set administrador_avisos_id = null;
+
+-- A-H6 · el escalado es solo de la nota sin firmar: una consentimiento_pendiente de 4 días
+-- NO genera aviso (sin `a.tipo = 'nota_sin_firmar'`, `nivel_nota_pendiente` la pondría en 3).
+select public.escalar_notas_pendientes() as escalado8 \gset
+insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
+values (:P1, :PRO1, :CA, 'consentimiento_pendiente', 'consentimientos', gen_random_uuid())
+returning id as a4d, origen_id as o4d \gset
+update public.alertas_documentacion set referencia_en = now() - interval '4 days' where id = :'a4d';
+select count(*) as n_notif_antes from public.notificaciones \gset
+select public.escalar_notas_pendientes() as escalado9 \gset
+select pg_temp.assert(
+  (select count(*) = 0 from public.notificaciones where origen_id = :'o4d')
+  and (select count(*) = :n_notif_antes from public.notificaciones),
+  '22.C5 Una consentimiento_pendiente de 4 días no escala: ninguna notificación nueva');
 
 -- =========================================================================
 -- C6 · Notificaciones: cada cual las suyas, y la baja no lee ni las suyas
@@ -353,6 +406,42 @@ select pg_temp.assert(
   '22.E1 GEMELA: TEC1 sí ve la consentimiento_pendiente de P1 (centro A)');
 call pg_temp.reset_sesion();
 
+-- A-H3 · La lectura del técnico es una lista blanca: una alerta de CADA uno de los cinco
+-- tipos en el centro A (como postgres) y una aserción por tipo. Una política escrita como
+-- `tipo <> 'nota_sin_firmar'` dejaría pasar tres de los cuatro que no deben verse.
+insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
+values (:P1, :PRO1, :CA, 'nota_sin_firmar', 'notas_clinicas', gen_random_uuid())
+returning id as e1_nota \gset
+insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
+values (:P1, :PRO1, :CA, 'borrador_abandonado', 'notas_clinicas', gen_random_uuid())
+returning id as e1_borr \gset
+insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
+values (:P1, :PRO1, :CA, 'consentimiento_pendiente', 'consentimientos', gen_random_uuid())
+returning id as e1_cons \gset
+insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
+values (:P1, :PRO1, :CA, 'informe_pendiente', 'informes', gen_random_uuid())
+returning id as e1_info \gset
+insert into public.alertas_documentacion (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id)
+values (:P1, :PRO1, :CA, 'evaluacion_sin_corregir', 'evaluaciones', gen_random_uuid())
+returning id as e1_eval \gset
+call pg_temp.como(:TEC1);
+select pg_temp.assert(
+  pg_temp.contar(format('select * from (%s) f where f.id = %L', :'CONSULTA_FICHA', :'e1_cons')) = 1,
+  '22.E1 TEC1 ve la consentimiento_pendiente (1 de 5 tipos)');
+select pg_temp.assert(
+  pg_temp.contar(format('select * from (%s) f where f.id = %L', :'CONSULTA_FICHA', :'e1_nota')) = 0,
+  '22.E1 TEC1 no ve la nota_sin_firmar (0 de ese tipo)');
+select pg_temp.assert(
+  pg_temp.contar(format('select * from (%s) f where f.id = %L', :'CONSULTA_FICHA', :'e1_borr')) = 0,
+  '22.E1 TEC1 no ve la borrador_abandonado (0 de ese tipo)');
+select pg_temp.assert(
+  pg_temp.contar(format('select * from (%s) f where f.id = %L', :'CONSULTA_FICHA', :'e1_info')) = 0,
+  '22.E1 TEC1 no ve la informe_pendiente (0 de ese tipo)');
+select pg_temp.assert(
+  pg_temp.contar(format('select * from (%s) f where f.id = %L', :'CONSULTA_FICHA', :'e1_eval')) = 0,
+  '22.E1 TEC1 no ve la evaluacion_sin_corregir (0 de ese tipo)');
+call pg_temp.reset_sesion();
+
 -- =========================================================================
 -- E2 / E8 · Nadie cierra a mano una nota pendiente
 -- =========================================================================
@@ -380,6 +469,32 @@ select pg_temp.assert_lanza_codigo_msg(
 select pg_temp.assert_lanza_codigo_msg(
   format('update public.alertas_documentacion set tipo = %L where id = %L', 'consentimiento_pendiente', :'a25'),
   '42501', 'no cambia de identidad ni de instante', '22.E3 tipo no se mueve');
+-- A-H1 / A-H4 · una aserción por cada columna congelada (once): quitar cualquiera de la
+-- lista del disparador hace fallar la suya.
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set id = gen_random_uuid() where id = %L', :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 id no se mueve');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set paciente_id = %L where id = %L', :Z22, :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 paciente_id no se mueve');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set centro_id = %L where id = %L', :CB, :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 centro_id no se mueve');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set origen_tabla = %L where id = %L', 'informes', :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 origen_tabla no se mueve');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set origen_id = gen_random_uuid() where id = %L', :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 origen_id no se mueve');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set fecha_referencia = date ''2000-01-01'' where id = %L', :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 fecha_referencia no se mueve');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set creada_en = now() - interval ''1 day'' where id = %L', :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 creada_en no se mueve');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set anulada_en = now() where id = %L', :'a25'),
+  '42501', 'no cambia de identidad ni de instante', '22.E3 anulada_en no se mueve');
 call pg_temp.reset_sesion();
 select pg_temp.assert_no_lanza(
   format('update public.alertas_documentacion set referencia_en = referencia_en - interval ''1 second'' where id = %L', :'a2'),
@@ -451,6 +566,14 @@ select pg_temp.assert(
   (select count(*) = 1 from cron.job where jobname = 'escalar-notas-pendientes'
      and schedule = '*/15 * * * *' and command like '%public.escalar_notas_pendientes()%'),
   '22.E5 GEMELA: el cron escalar-notas-pendientes está programado cada 15 minutos');
+select pg_temp.assert(
+  (select p.prosecdef and 'search_path=""' = any (p.proconfig)
+     from pg_proc p where p.oid = 'public.fn_anular_alerta_nota_sin_firmar()'::regprocedure),
+  '22.E5 fn_anular_alerta_nota_sin_firmar es definer y fija search_path = ''''');
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.fn_anular_alerta_nota_sin_firmar()', 'execute')
+  and not has_function_privilege('anon', 'public.fn_anular_alerta_nota_sin_firmar()', 'execute'),
+  '22.E5 authenticated y anon no ejecutan fn_anular_alerta_nota_sin_firmar');
 
 -- =========================================================================
 -- E6 · Resolver: quién (P1)
@@ -510,6 +633,103 @@ select pg_temp.assert_lanza_codigo_msg(
   format('update public.alertas_documentacion set resuelta_en = %L where id = %L', '2001-01-01', :'ac3'),
   '42501', 'no se reabre', '22.E7 Ni cambia su fecha de resolución');
 call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- E9-E12 · Una cita que deja de ser `realizada` anula su alerta (A-H2): solo la base
+-- =========================================================================
+-- E9 · La cita de 78 h, realizada, con su alerta abierta; PRO1 la corrige a no_asistida.
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '78 hours 20 minutes', now() - interval '78 hours', 'Europe/Madrid')
+returning id as c78 \gset
+update public.citas set estado = 'realizada' where id = :'c78';
+select id as a78 from public.alertas_documentacion
+ where origen_tabla = 'citas' and origen_id = :'c78' and tipo = 'nota_sin_firmar' and estado = 'abierta' \gset
+call pg_temp.como(:PRO1);
+select nivel3 as e9_n3 from public.recuento_notas_pendientes() \gset
+update public.citas set estado = 'no_asistida' where id = :'c78';
+select pg_temp.assert(
+  (select nivel3 = :e9_n3 - 1 from public.recuento_notas_pendientes()),
+  '22.E9 El recuento de PRO1 baja en 1 al corregir la cita');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select estado = 'anulada' and anulada_en is not null and resuelta_en is null
+     from public.alertas_documentacion where id = :'a78'),
+  '22.E9 La alerta queda anulada, con anulada_en y sin resuelta_en (no es una resolución)');
+select public.escalar_notas_pendientes() as escalado10 \gset
+select pg_temp.assert(
+  (select count(*) = 0 from public.notificaciones where origen_id = :'c78'),
+  '22.E9 El escalado no avisa de una cita que ya no fue realizada');
+select pg_temp.assert(
+  exists (select 1 from public.auditoria
+           where tabla = 'alertas_documentacion' and operacion = 'UPDATE'
+             and registro_id = :'a78' and actor_id = :PRO1),
+  '22.E9 La anulación queda en auditoria con actor PRO1, quien corrigió la cita');
+
+-- E10 · Nadie anula ni reabre a mano.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set estado = %L where id = %L', 'anulada', :'e1_cons'),
+  '42501', 'Solo la corrección de la cita', '22.E10 PRO1 no anula a mano una alerta (estado)');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set estado = %L, anulada_en = now() where id = %L', 'anulada', :'e1_cons'),
+  '42501', 'no cambia de identidad ni de instante', '22.E10 Ni poniendo anulada_en: es columna congelada');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set estado = %L, anulada_en = null where id = %L', 'abierta', :'a78'),
+  '42501', 'no cambia de identidad ni de instante', '22.E10 Una anulada no se reabre (anulada_en congelada)');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set estado = %L where id = %L', 'abierta', :'a78'),
+  '42501', 'solo se cierra firmando la nota', '22.E10 Una anulada no se reabre (estado): una anulada es siempre una nota_sin_firmar');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.alertas_documentacion set estado = %L where id = %L', 'anulada', :'e1_info'),
+  '42501', 'Solo la corrección de la cita', '22.E10 GEMELA: tampoco otro tipo de alerta pasa a anulada a mano');
+call pg_temp.reset_sesion();
+
+-- E11 · Escalar, anular y volver a realizada: dos alertas, un solo aviso por cita.
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '80 hours 20 minutes', now() - interval '80 hours', 'Europe/Madrid')
+returning id as c80 \gset
+update public.citas set estado = 'realizada' where id = :'c80';
+select public.escalar_notas_pendientes() as escalado11 \gset
+select pg_temp.assert(
+  (select count(*) = 1 from public.notificaciones
+    where perfil_id = :ADM and origen_tabla = 'citas' and origen_id = :'c80'),
+  '22.E11 (preparación) Escalada una vez: 1 aviso para ADM por la cita');
+call pg_temp.como(:PRO1);
+update public.citas set estado = 'no_asistida' where id = :'c80';
+update public.citas set estado = 'realizada'   where id = :'c80';
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select count(*) filter (where estado = 'anulada') = 1
+      and count(*) filter (where estado = 'abierta') = 1
+      and count(*) = 2
+     from public.alertas_documentacion
+    where origen_tabla = 'citas' and origen_id = :'c80' and tipo = 'nota_sin_firmar'),
+  '22.E11 Tras volver a realizada hay 2 alertas de la cita: 1 anulada y 1 abierta');
+select pg_temp.assert(
+  (select a.referencia_en = c.fin from public.alertas_documentacion a join public.citas c on c.id = a.origen_id
+    where a.origen_id = :'c80' and a.estado = 'abierta'),
+  '22.E11 La alerta reabierta cuenta desde el fin de la sesión, no desde la corrección');
+select public.escalar_notas_pendientes() as escalado12 \gset
+select pg_temp.assert(
+  (select count(*) = 1 from public.notificaciones
+    where perfil_id = :ADM and origen_tabla = 'citas' and origen_id = :'c80'),
+  '22.E11 El segundo escalado no duplica el aviso de ADM por la misma cita (idempotencia por cita)');
+
+-- E12 · Con la nota ya resuelta, corregir la cita no toca la alerta.
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '81 hours 20 minutes', now() - interval '81 hours', 'Europe/Madrid')
+returning id as c81 \gset
+update public.citas set estado = 'realizada' where id = :'c81';
+select id as a81 from public.alertas_documentacion
+ where origen_tabla = 'citas' and origen_id = :'c81' and tipo = 'nota_sin_firmar' \gset
+update public.alertas_documentacion set estado = 'resuelta', resuelta_en = now() where id = :'a81';
+call pg_temp.como(:PRO1);
+update public.citas set estado = 'cancelada' where id = :'c81';
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select estado = 'resuelta' and anulada_en is null and resuelta_en is not null
+     from public.alertas_documentacion where id = :'a81'),
+  '22.E12 Una alerta ya resuelta no se anula al corregir la cita');
 
 -- ---------------------------------------------------------------------------
 -- Mutantes verificados a mano (03-10-2026, implementación de T-015)
