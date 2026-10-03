@@ -19,6 +19,7 @@ import { marcarNotificacionLeida, marcarTodasLeidas } from "./acciones-avisos";
  */
 
 type Props = { notificaciones: NotificacionVista[] };
+type PromesaOk = Promise<{ ok: boolean }>;
 
 /** El título: el propio, o la etiqueta del tipo, o «Aviso» si el tipo no está en el catálogo. */
 function tituloDe(notificacion: NotificacionVista): string {
@@ -128,7 +129,7 @@ export function Campana({ notificaciones }: Props) {
 
   /** Una llamada a una acción que nunca rechaza hacia React (R3): un fallo es `ok: false`. */
   async function llamar(
-    accion: () => Promise<{ ok: boolean }>,
+    accion: () => PromesaOk,
   ): Promise<boolean> {
     try {
       return (await accion()).ok;
