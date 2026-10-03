@@ -1,7 +1,9 @@
 // Avisos del armazón (T-015) — módulo puro. Sin reloj propio, sin base de datos, sin React:
 // `ahora` llega siempre como parámetro.
 
-import { estaEnCurso, type EstadoCita } from './estados-cita';
+import { z } from 'zod';
+
+import { ESTADOS_CITA, estaEnCurso, type EstadoCita } from './estados-cita';
 
 /**
  * Una sesión del propio profesional, serializada: el cliente la recibe en ISO. `desde` y
@@ -70,4 +72,72 @@ export function anadirDescartada(lista: string[], citaId: string): string[] {
 /** Lo que destaca la cabecera: nivel 2 más nivel 3 (decisión P2). */
 export function cuantasDestacadas(recuento: RecuentoNotas): number {
   return recuento.nivel2 + recuento.nivel3;
+}
+
+/** Una notificación tal como la pinta la campana. Nada clínico (ADR-038). */
+export type NotificacionVista = {
+  id: string;
+  tipo: string;
+  titulo: string | null;
+  detalle: string;
+  /** Fecha corta ya formateada en el servidor, en la zona de la organización (ADR-034). */
+  fecha: string;
+  leida: boolean;
+};
+
+/**
+ * Todo lo que alimenta los avisos del armazón en un instante: la carga del layout y la
+ * respuesta de `GET /api/avisos` tienen esta misma forma (T-015, R2).
+ */
+export type DatosAvisos = {
+  /** Instante del servidor al leer, ISO. Una foto más reciente tiene un valor mayor. */
+  ahoraServidor: string;
+  sesiones: SesionPropia[];
+  recuento: RecuentoNotas;
+  notificaciones: NotificacionVista[];
+  descartadas: string[];
+};
+
+const esquemaSesionPropia = z.object({
+  citaId: z.string(),
+  pacienteId: z.string(),
+  nombrePaciente: z.string(),
+  inicio: z.iso.datetime(),
+  fin: z.iso.datetime(),
+  desde: z.string(),
+  hasta: z.string(),
+  estado: z.enum(ESTADOS_CITA),
+});
+
+const esquemaNotificacionVista = z.object({
+  id: z.string(),
+  tipo: z.string(),
+  titulo: z.string().nullable(),
+  detalle: z.string(),
+  fecha: z.string(),
+  leida: z.boolean(),
+});
+
+const entero = z.number().int().nonnegative();
+
+/** Valida lo que llega por red: el cliente no se fía de una respuesta que no tenga esta forma. */
+export const esquemaDatosAvisos = z.object({
+  ahoraServidor: z.iso.datetime(),
+  sesiones: z.array(esquemaSesionPropia),
+  recuento: z.object({ nivel1: entero, nivel2: entero, nivel3: entero }),
+  notificaciones: z.array(esquemaNotificacionVista),
+  // El mismo UUID laxo con que la cookie los acepta (`parsearDescartadas`), no el estricto de Zod.
+  descartadas: z.array(z.string().regex(UUID)),
+});
+
+/**
+ * Gana siempre la foto más reciente: la fresca solo sustituye a la inicial si su instante es
+ * **estrictamente posterior**. Así ni un refresco lento pisa un layout recién pintado ni al
+ * revés. Un instante ilegible no gana.
+ */
+export function combinarAvisos(inicial: DatosAvisos, fresco: DatosAvisos | null): DatosAvisos {
+  if (!fresco) return inicial;
+  const nuevo = Date.parse(fresco.ahoraServidor);
+  const actual = Date.parse(inicial.ahoraServidor);
+  return Number.isFinite(nuevo) && nuevo > actual ? fresco : inicial;
 }

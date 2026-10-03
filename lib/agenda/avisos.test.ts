@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   anadirDescartada,
+  combinarAvisos,
   cuantasDestacadas,
+  esquemaDatosAvisos,
+  type DatosAvisos,
   parsearDescartadas,
   proximoCambio,
   sesionesEnCurso,
@@ -114,5 +117,78 @@ describe('cuantasDestacadas', () => {
   it('suma nivel 2 y nivel 3, nunca el 1', () => {
     expect(cuantasDestacadas({ nivel1: 5, nivel2: 2, nivel3: 1 })).toBe(3);
     expect(cuantasDestacadas({ nivel1: 5, nivel2: 0, nivel3: 0 })).toBe(0);
+  });
+});
+
+function datos(parcial: Partial<DatosAvisos> = {}): DatosAvisos {
+  return {
+    ahoraServidor: '2026-10-01T10:00:00.000Z',
+    sesiones: [],
+    recuento: { nivel1: 0, nivel2: 0, nivel3: 0 },
+    notificaciones: [],
+    descartadas: [],
+    ...parcial,
+  };
+}
+
+describe('combinarAvisos', () => {
+  it('devuelve la foto fresca solo si es estrictamente posterior', () => {
+    const inicial = datos();
+    const fresco = datos({
+      ahoraServidor: '2026-10-01T10:00:00.001Z',
+      recuento: { nivel1: 0, nivel2: 1, nivel3: 0 },
+    });
+    expect(combinarAvisos(inicial, fresco)).toBe(fresco);
+  });
+
+  it('con el mismo instante conserva la inicial (>= sería un bug)', () => {
+    const inicial = datos();
+    const fresco = datos({ recuento: { nivel1: 9, nivel2: 9, nivel3: 9 } });
+    expect(combinarAvisos(inicial, fresco)).toBe(inicial);
+  });
+
+  it('una foto más vieja nunca pisa a la nueva', () => {
+    const inicial = datos({ ahoraServidor: '2026-10-01T10:05:00.000Z' });
+    const fresco = datos({ ahoraServidor: '2026-10-01T10:00:00.000Z' });
+    expect(combinarAvisos(inicial, fresco)).toBe(inicial);
+  });
+
+  it('sin foto fresca devuelve la inicial', () => {
+    const inicial = datos();
+    expect(combinarAvisos(inicial, null)).toBe(inicial);
+  });
+
+  it('un instante ilegible en la fresca no gana', () => {
+    const inicial = datos();
+    expect(combinarAvisos(inicial, datos({ ahoraServidor: 'no es una fecha' }))).toBe(inicial);
+  });
+});
+
+describe('esquemaDatosAvisos', () => {
+  const sesionJson = sesion({});
+  const valido = {
+    ahoraServidor: '2026-10-01T10:00:00.000Z',
+    sesiones: [sesionJson],
+    recuento: { nivel1: 1, nivel2: 2, nivel3: 3 },
+    notificaciones: [
+      { id: UUID_A, tipo: 'nota_sin_firmar', titulo: null, detalle: 'x', fecha: '1 oct', leida: false },
+    ],
+    descartadas: [UUID_B],
+  };
+
+  it('acepta la forma de DatosAvisos', () => {
+    expect(esquemaDatosAvisos.safeParse(valido).success).toBe(true);
+  });
+
+  it.each([
+    ['sin sesiones', { ...valido, sesiones: undefined }],
+    ['estado de cita desconocido', { ...valido, sesiones: [{ ...sesionJson, estado: 'inventado' }] }],
+    ['recuento negativo', { ...valido, recuento: { nivel1: -1, nivel2: 0, nivel3: 0 } }],
+    ['instante no ISO', { ...valido, ahoraServidor: 'ayer' }],
+    ['descartada que no es UUID', { ...valido, descartadas: ['no-uuid'] }],
+    ['un HTML', '<html></html>'],
+    ['null', null],
+  ])('rechaza: %s', (_nombre, cuerpo) => {
+    expect(esquemaDatosAvisos.safeParse(cuerpo).success).toBe(false);
   });
 });
