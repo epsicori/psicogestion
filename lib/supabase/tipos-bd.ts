@@ -1163,6 +1163,42 @@ export type Database = {
           },
         ]
       }
+      intentos_regenerar_codigos: {
+        Row: {
+          actualizado_en: string
+          bloqueado_hasta: string | null
+          intentos_fallidos: number
+          perfil_id: string
+        }
+        Insert: {
+          actualizado_en?: string
+          bloqueado_hasta?: string | null
+          intentos_fallidos?: number
+          perfil_id: string
+        }
+        Update: {
+          actualizado_en?: string
+          bloqueado_hasta?: string | null
+          intentos_fallidos?: number
+          perfil_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intentos_regenerar_codigos_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: true
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intentos_regenerar_codigos_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: true
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notas_clinicas: {
         Row: {
           autor_id: string
@@ -3127,6 +3163,14 @@ export type Database = {
           nivel3: number
         }[]
       }
+      regenerar_codigos_recuperacion: {
+        Args: { p_contrasena: string }
+        Returns: {
+          bloqueado_hasta: string
+          codigos: string[]
+          motivo: string
+        }[]
+      }
       registrar_acceso_historia: {
         Args: {
           p_agente?: string
@@ -3157,6 +3201,7 @@ export type Database = {
         Args: { p_perfil_id: string }
         Returns: undefined
       }
+      registro_postgres_seguro: { Args: never; Returns: boolean }
       rellenar_episodio_de_citas: { Args: never; Returns: Json }
       resolver_hora_local: {
         Args: { p_local: string; p_zona: string }
