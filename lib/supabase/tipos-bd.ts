@@ -1166,21 +1166,27 @@ export type Database = {
       intentos_regenerar_codigos: {
         Row: {
           actualizado_en: string
+          autorizado_hasta: string | null
           bloqueado_hasta: string | null
           intentos_fallidos: number
           perfil_id: string
+          regeneraciones_autorizadas: number
         }
         Insert: {
           actualizado_en?: string
+          autorizado_hasta?: string | null
           bloqueado_hasta?: string | null
           intentos_fallidos?: number
           perfil_id: string
+          regeneraciones_autorizadas?: number
         }
         Update: {
           actualizado_en?: string
+          autorizado_hasta?: string | null
           bloqueado_hasta?: string | null
           intentos_fallidos?: number
           perfil_id?: string
+          regeneraciones_autorizadas?: number
         }
         Relationships: [
           {
@@ -3023,6 +3029,10 @@ export type Database = {
           tabla: string
         }[]
       }
+      comprobar_contrasena_para_regenerar: {
+        Args: { p_contrasena: string }
+        Returns: undefined
+      }
       dar_de_baja_perfil: {
         Args: { p_motivo?: string; p_perfil_id: string }
         Returns: {
@@ -3078,6 +3088,7 @@ export type Database = {
           tiene_pin: boolean
         }[]
       }
+      evaluar_registro_postgres: { Args: { p_ajustes: Json }; Returns: boolean }
       fecha_en_regla_nueva: {
         Args: {
           p_dia_semana: number
@@ -3164,7 +3175,7 @@ export type Database = {
         }[]
       }
       regenerar_codigos_recuperacion: {
-        Args: { p_contrasena: string }
+        Args: never
         Returns: {
           bloqueado_hasta: string
           codigos: string[]
