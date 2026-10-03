@@ -181,7 +181,7 @@ es el bug: la serie creada en enero se corre una hora en julio.
 | Alergias y medicación | Solo los suyos | Sus pacientes | Sin acceso (ADR-061, ADR-063) |
 | Nivel de riesgo | Solo los suyos | Sus pacientes | Solo indicador binario |
 | Notas clínicas | Solo las suyas (+ emergencia) | Autor o asignado | Sin acceso |
-| Agenda | Todas | La suya | Todas, sin tipo de terapia; lo elige al dar la cita, solo por las funciones de alta (ADR-074) |
+| Agenda | Todas | La suya | Todas, sin tipo de terapia ni episodio; lo elige al dar la cita, solo por las funciones de alta (ADR-074); ve y cambia si es presencial u online (ADR-075) |
 | Facturación | Total | Lo suyo | Cobros, sin dato clínico |
 | Usuarios y ajustes de empresa | Total | Sin acceso | Sin acceso |
 | Auditoría | Lectura | Sus propios registros | Sin acceso |
@@ -414,6 +414,20 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
   único y exige elegir (`EP001`) si hay varios. El centro del episodio nuevo sale de la cita
   o, sin cita, del centro activo, que la aplicación pasa en `p_centro_id` (la cookie no se lee
   en SQL; sin ninguno de los dos, 22023).
+- **La cita y su episodio (ADR-075, T-039)**: `citas` y `series_cita` llevan `episodio_id`
+  (clínico, nulo si no hay episodio) y `modalidad_asistencia` (presencial u online, logística).
+  Ninguna se escribe a mano: `authenticated` no tiene `insert` ni `update` sobre ellas
+  (privilegio por columna) y solo las tocan `agenda_crear_cita`, `agenda_crear_serie`,
+  `agenda_cambiar_asistencia`, `agenda_cambiar_episodio_cita`, la nota que documenta la cita y
+  los disparadores. El episodio es del mismo profesional, con el paciente como titular o
+  participante cubierto por la fecha de la cita, y no cerrado antes de ese día
+  (`velar_episodio_de_cita`, 23514). Sin elegirlo, se toma el único abierto del profesional con
+  el paciente, o ninguno; nunca se abre uno. El técnico no elige ni ve el episodio (no está en
+  `citas_agenda` ni en `agenda_citas_rango`) pero sí ve y cambia la modalidad. La nota de una
+  cita va en el episodio de la cita (`exigir_nota_en_episodio_de_su_cita`; el paso 5b de
+  `episodio_para_nota` lo devuelve) y una cita con nota no cambia de episodio. Un episodio o
+  participante con citas no se mueve, y una cita pasada no cambia de episodio ni de
+  modalidad. Las citas de una serie heredan los dos valores de la serie.
 - **Duplicados** (ADR-031): no se fusionan, **se vinculan**. `fusionado_en` apunta al
   superviviente, el absorbido queda en solo lectura, nada se repunta y RLS resuelve por el
   vínculo en un solo salto.

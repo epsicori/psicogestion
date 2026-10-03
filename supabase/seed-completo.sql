@@ -552,6 +552,31 @@ begin
      and c.estado = 'programada';
 
   -- -----------------------------------------------------------------------
+  -- 8.ter · T-039 · La cita en su episodio y la modalidad de asistencia (ADR-075)
+  --
+  -- Dos citas del próximo martes de Ana, relativas a current_date como las de arriba: la de
+  -- Sofía, de pareja, en el episodio de pareja (k_epi_pareja), y la de Carmen, ONLINE, en su
+  -- episodio individual (k_epi_carmen). Enseñan las dos cosas nuevas: el técnico ve «online» en
+  -- su agenda y no ve ningún episodio. Las escribe el dueño de la siembra, y el disparador
+  -- velar_episodio_de_cita comprueba igualmente la coherencia. Idempotente: uuids fijos.
+  -- -----------------------------------------------------------------------
+  insert into public.citas
+    (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria,
+     estado, creada_por, modalidad_asistencia, episodio_id)
+  select v.id, v.paciente_id, k_ana, k_c_madrid, v.tipo,
+         (m.martes + v.hora) at time zone 'Europe/Madrid',
+         (m.martes + v.hora + make_interval(mins => v.minutos)) at time zone 'Europe/Madrid',
+         'Europe/Madrid', 'programada', k_ana, v.modalidad, v.episodio
+    from (select current_date + (8 - extract(isodow from current_date)::int) + 1 as martes) m
+   cross join (values
+     ('e0390001-0000-4000-8000-000000000001'::uuid, k_p_sofia,  'e0280001-0000-4000-8000-000000000002'::uuid,
+      time '16:00', 90, 'presencial'::public.modalidad_asistencia, k_epi_pareja),
+     ('e0390001-0000-4000-8000-000000000002'::uuid, k_p_carmen, 'e0280001-0000-4000-8000-000000000001'::uuid,
+      time '10:00', 50, 'online'::public.modalidad_asistencia,     k_epi_carmen)
+   ) as v(id, paciente_id, tipo, hora, minutos, modalidad, episodio)
+  on conflict (id) do nothing;
+
+  -- -----------------------------------------------------------------------
   -- 9 · Y AHORA la baja, no antes
   --
   -- El orden importa y es la razón de que esto esté al final: la profesional tenía

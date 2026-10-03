@@ -422,8 +422,10 @@ Tres cosas del prototipo de la agenda no tienen dato detrás (T-014):
 - **«Pendientes»** del panel derecho (citas sin preparación o sin cobro) no tiene datos: no
   hay preparación ni cobro registrados. Hoy enseña **las propuestas por confirmar** de las
   series (bloque «Por confirmar»), que sí existen y sí esperan una decisión.
-- **«Modalidad»** no existe en la cita, así que la línea es `tipo · profesional`, sin
-  modalidad. Si `tipo` no se puede ver (el técnico, choque 4), se omite con su separador.
+- **«Modalidad»** es `modalidad_asistencia` (presencial u online, ADR-075, T-039): la línea es
+  `tipo · modalidad · profesional`. Es logística y la ve también el técnico. Si `tipo` no se
+  puede ver (el técnico, choque 4), se omite con su separador. La modalidad relacional
+  (individual, pareja) es clínica y no sale en la agenda.
 - **El cuadro inferior se limita a asistencia y ausencia sin aviso.** Ingresos, abandono y
   trazabilidad documental esperan a que haya facturación, una definición de abandono y
   trazabilidad. Sigue siendo solo para administrador y profesional sanitario (choque 6).
