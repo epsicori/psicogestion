@@ -156,4 +156,75 @@ describe('SegundoFactor (T-037)', () => {
       vi.useRealTimers();
     }
   });
+
+  describe('T-038: vistas de código y de fallo accesibles, y reintento', () => {
+    const FACTOR = {
+      data: {
+        id: 'factor-nuevo',
+        totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'SECRETO' },
+      },
+      error: null,
+    };
+
+    async function hastaElFallo() {
+      enroll.mockResolvedValue(FACTOR);
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'FALLO-CODIGOS' });
+      render(<SegundoFactor factorVerificadoId={null} />);
+      await screen.findByAltText('Código QR para configurar la verificación en dos pasos');
+      await teclearYVerificar();
+      await screen.findByText('FALLO-CODIGOS');
+    }
+
+    it('el fallo es una región con nombre y una descripción que dice dónde regenerar, con foco en ella (CA9)', async () => {
+      await hastaElFallo();
+
+      const region = screen.getByRole('region', { name: 'Verificación en dos pasos' });
+      expect(document.activeElement).toBe(region);
+      expect(region).toHaveAccessibleDescription(/Mi cuenta › Seguridad, con tu contraseña/);
+      // El mensaje de la acción sigue visible.
+      expect(region).toContainElement(screen.getByText('FALLO-CODIGOS'));
+    });
+
+    it('«Reintentar» vuelve a pedir los códigos y, si salen, los enseña en su región con foco (CA10)', async () => {
+      await hastaElFallo();
+      generarCodigos.mockResolvedValueOnce({ ok: true, codigos: DIEZ });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      const region = await screen.findByRole('region', { name: 'Tus códigos de recuperación' });
+      expect(generarCodigos).toHaveBeenCalledTimes(2);
+      await waitFor(() => expect(document.activeElement).toBe(region));
+      expect(region).toHaveAccessibleDescription(/no se pueden volver a consultar/);
+      for (const codigo of DIEZ) expect(screen.getByText(codigo)).toBeInTheDocument();
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it('si el reintento también falla, sigue en el fallo con el mensaje nuevo y sin refrescar (CA10)', async () => {
+      await hastaElFallo();
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'OTRO-FALLO' });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      expect(await screen.findByText('OTRO-FALLO')).toBeInTheDocument();
+      expect(generarCodigos).toHaveBeenCalledTimes(2);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeEnabled();
+    });
+
+    it('ni el fallo ni el reintento dejan temporizadores (CA11)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        await hastaElFallo();
+        generarCodigos.mockResolvedValueOnce({ ok: true, codigos: DIEZ });
+        await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(
+          screen.getByRole('button', { name: 'Reintentar' }),
+        );
+        await screen.findByRole('region', { name: 'Tus códigos de recuperación' });
+
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

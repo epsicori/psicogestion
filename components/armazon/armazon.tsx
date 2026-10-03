@@ -15,6 +15,7 @@ import { fotoDeLayout, parsearDescartadas, type DatosAvisos } from '@/lib/agenda
 import { leerAvisos } from '@/lib/citas/avisos';
 
 import { ArmazonCliente } from './armazon-cliente';
+import { EnlaceCuenta } from './enlace-cuenta';
 import { ProveedorAvisosSesion } from './aviso-sesion';
 import { COOKIE_FRANJAS_DESCARTADAS } from './avisos-constantes';
 import {
@@ -149,14 +150,15 @@ async function Identidad() {
   const { nombreCompleto, rolVisible } = await cargarIdentidad();
 
   return (
-    <div className="flex items-center gap-3 rounded-lg p-2">
-      <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-full font-serif text-xs font-bold">
-        {iniciales(nombreCompleto)}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{nombreCompleto}</span>
-        <span className="text-muted-foreground block truncate text-xs">{rolVisible}</span>
-      </span>
+    <div className="flex items-center gap-1">
+      <EnlaceCuenta nombre={nombreCompleto} rolVisible={rolVisible}>
+        <span
+          aria-hidden="true"
+          className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-full font-serif text-xs font-bold"
+        >
+          {iniciales(nombreCompleto)}
+        </span>
+      </EnlaceCuenta>
       <form action={cerrarSesion}>
         <button
           type="submit"

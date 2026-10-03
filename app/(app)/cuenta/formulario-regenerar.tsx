@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useRef, useState, useTransition } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ type Vista = { tipo: 'formulario' } | { tipo: 'codigos'; codigos: string[] } | {
  */
 export function FormularioRegenerar() {
   const router = useRouter();
-  const [enviando, iniciarTransicion] = useTransition();
+  const [enviando, setEnviando] = useState(false);
   const [vista, setVista] = useState<Vista>({ tipo: 'formulario' });
   // Objeto nuevo en cada fallo, para que el efecto corra aunque el campo sea el mismo.
   const [campoConFoco, setCampoConFoco] = useState<{ campo: 'contrasena' | 'codigo' } | null>(null);
@@ -50,8 +50,9 @@ export function FormularioRegenerar() {
     if (campoConFoco && !enviando) setFocus(campoConFoco.campo);
   }, [campoConFoco, enviando, setFocus]);
 
-  const enviar = handleSubmit((datos) => {
-    iniciarTransicion(async () => {
+  const enviar = handleSubmit(async (datos) => {
+    setEnviando(true);
+    try {
       const estado = (await regenerarCodigos(datos)) ?? {};
       reset({ contrasena: '', codigo: '' });
 
@@ -62,15 +63,18 @@ export function FormularioRegenerar() {
 
       if (estado.errores) {
         aplicarErroresDelServidor(estado, setError);
-        // El foco se lleva en un efecto, cuando la transición ya terminó y el botón vuelve a
-        // estar habilitado: hacerlo aquí dentro lo pierde (el botón sigue deshabilitado).
+        // El foco se lleva en un efecto, cuando ya se ha pintado el error y el botón
+        // vuelve a estar habilitado: hacerlo aquí dentro lo pierde (sigue deshabilitado).
         const primero = (['contrasena', 'codigo'] as const).find((campo) => estado.errores?.[campo]?.[0]);
         if (primero) setCampoConFoco({ campo: primero });
         return;
       }
 
       setVista({ tipo: 'fallo', mensaje: estado.mensaje ?? t('cuenta.errores.generico') });
-    });
+    } finally {
+      // Mismo lote que el error y el foco: el botón vuelve a estar habilitado cuando el foco llega.
+      setEnviando(false);
+    }
   });
 
   if (vista.tipo === 'codigos') {

@@ -52,7 +52,8 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue.
   const [falloCodigos, setFalloCodigos] = useState<string | null>(null);
   const [trabajando, iniciarTransicion] = useTransition();
-  const vistaFallo = useRef<HTMLDivElement>(null);
+  const vistaFallo = useRef<HTMLElement>(null);
+  const vistaCodigos = useRef<HTMLElement>(null);
 
   const factorId = factorVerificadoId ?? enrolamiento?.factorId ?? null;
 
@@ -89,6 +90,25 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   useEffect(() => {
     if (falloCodigos !== null) vistaFallo.current?.focus();
   }, [falloCodigos]);
+
+  // Lo mismo con los códigos: son lo único que se enseña una vez, y el foco no puede caer en BODY.
+  useEffect(() => {
+    if (codigos !== null) vistaCodigos.current?.focus();
+  }, [codigos]);
+
+  // «Reintentar» (T-038): el factor ya está verificado, solo se vuelve a pedir el lote. No
+  // refresca: si sale, se enseña; si no, se queda el aviso con el mensaje nuevo.
+  const reintentar = () => {
+    iniciarTransicion(async () => {
+      const resultado = await generarCodigos();
+      if (!resultado.ok) {
+        setFalloCodigos(resultado.mensaje);
+        return;
+      }
+      setFalloCodigos(null);
+      setCodigos(resultado.codigos);
+    });
+  };
 
   const verificar = () => {
     if (!factorId) return;
@@ -141,32 +161,56 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
 
   if (falloCodigos !== null) {
     return (
-      <div ref={vistaFallo} tabIndex={-1} className="flex flex-col gap-4 outline-none">
-        <h2 className="font-serif text-xl font-semibold tracking-tight">
+      <section
+        ref={vistaFallo}
+        tabIndex={-1}
+        aria-labelledby="fallo-codigos-titulo"
+        aria-describedby="fallo-codigos-descripcion"
+        className="flex flex-col gap-4 outline-none"
+      >
+        <h2 id="fallo-codigos-titulo" className="font-serif text-xl font-semibold tracking-tight">
           {t('primeraVez.totp.titulo')}
         </h2>
+        <p id="fallo-codigos-descripcion" className="text-muted-foreground text-sm">
+          {t('primeraVez.codigos.fallo')}
+        </p>
         <p role="status" className="text-destructive text-sm">
           {falloCodigos}
         </p>
-        <Button onClick={() => router.refresh()}>{t('comunes.aceptar')}</Button>
-      </div>
+        <div className="flex gap-2">
+          <Button onClick={reintentar} disabled={trabajando}>
+            {trabajando ? t('comunes.cargando') : t('primeraVez.codigos.reintentar')}
+          </Button>
+          <Button variante="secundario" onClick={() => router.refresh()}>
+            {t('comunes.aceptar')}
+          </Button>
+        </div>
+      </section>
     );
   }
 
   if (codigos) {
     return (
-      <div className="flex flex-col gap-4">
-        <h2 className="font-serif text-xl font-semibold tracking-tight">
+      <section
+        ref={vistaCodigos}
+        tabIndex={-1}
+        aria-labelledby="codigos-titulo"
+        aria-describedby="codigos-descripcion"
+        className="flex flex-col gap-4 outline-none"
+      >
+        <h2 id="codigos-titulo" className="font-serif text-xl font-semibold tracking-tight">
           {t('primeraVez.codigos.titulo')}
         </h2>
-        <p className="text-muted-foreground text-sm">{t('primeraVez.codigos.unaSolaVez')}</p>
+        <p id="codigos-descripcion" className="text-muted-foreground text-sm">
+          {t('primeraVez.codigos.unaSolaVez')}
+        </p>
         <ul className="border-border bg-muted grid grid-cols-2 gap-2 rounded-lg border p-4 font-mono text-sm">
           {codigos.map((uno) => (
             <li key={uno}>{uno}</li>
           ))}
         </ul>
         <Button onClick={() => router.refresh()}>{t('primeraVez.codigos.guardados')}</Button>
-      </div>
+      </section>
     );
   }
 

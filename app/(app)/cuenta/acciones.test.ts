@@ -187,9 +187,10 @@ describe('regenerarCodigos (T-038 · CA7)', () => {
     for (const opciones of [{ errorRegistro: { message: 'x' } }, { registroSeguro: undefined, errorRegistro: null }]) {
       const { rpc } = montar(opciones);
       if (opciones.errorRegistro === null) {
-        rpc.mockImplementation(async (nombre: string) =>
-          nombre === 'registro_postgres_seguro' ? { data: null, error: null } : { data: [], error: null },
-        );
+        rpc.mockImplementation((async (nombre: string) =>
+          nombre === 'registro_postgres_seguro'
+            ? { data: null, error: null }
+            : { data: [], error: null }) as never);
       }
       const r = await regenerarCodigos(BIEN);
       expect(llamadasDeRegeneracion(rpc)).toHaveLength(0);
