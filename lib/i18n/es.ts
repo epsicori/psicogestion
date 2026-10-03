@@ -861,6 +861,7 @@ export const es = {
       resolverEtiqueta: 'Marcar como resuelta: {tipo}',
       resolviendo: 'Guardando…',
       errorResolver: 'No se ha podido marcar como resuelta.',
+      resuelta: 'Marcada como resuelta.',
       vacio: 'No hay documentación pendiente',
       vacioExplicacion: 'Cuando falte una nota por firmar, aparecerá aquí.',
     },

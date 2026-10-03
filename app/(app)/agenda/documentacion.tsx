@@ -9,7 +9,7 @@ import { criterioDocumentacion, diasPendiente, puedeResolverAlerta } from './blo
 import { cargarContexto } from './datos';
 import { EstadoVacio } from './estado-vacio';
 import { MarcoBloque } from './marco';
-import { ResolverAlerta } from './resolver-alerta';
+import { ProveedorResolucion, ResolverAlerta } from './resolver-alerta';
 
 function textoDesde(dias: number | null): string {
   if (dias === null) return t('agenda.documentacion.desde.sinFecha');
@@ -23,7 +23,9 @@ function textoDesde(dias: number | null): string {
 function Marco({ children }: { children: ReactNode }) {
   return (
     <MarcoBloque id="agenda-documentacion" titulo={t('agenda.documentacion.titulo')}>
-      {children}
+      {/* Dentro del marco y en todas las ramas: el foco y el aviso de «resuelta» sobreviven a que
+          la última alerta pase a «vacío» (T-015, R4). */}
+      <ProveedorResolucion>{children}</ProveedorResolucion>
     </MarcoBloque>
   );
 }

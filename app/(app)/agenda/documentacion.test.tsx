@@ -110,6 +110,38 @@ describe('Documentacion (nivel y resolver, T-015)', () => {
     expect(screen.queryByRole('button', { name: /Marcar como resuelta/ })).toBeNull();
   });
 
+  // R4: el contenedor que recibe el foco y el aviso está en las tres ramas, dentro del marco.
+  it('el grupo enfocable con su status vive dentro del marco en la lista, en el vacío y en el error', async () => {
+    const comprobar = () => {
+      const grupo = screen.getByRole('group', { name: 'Documentación pendiente' });
+      expect(grupo.getAttribute('tabindex')).toBe('-1');
+      expect(grupo.closest('section')?.getAttribute('aria-labelledby')).toBe('agenda-documentacion');
+      expect(grupo.querySelector('[data-estado-bloque][role="status"]')).not.toBeNull();
+    };
+
+    const { unmount } = render(
+      (await (async () => {
+        m.cargarContexto.mockResolvedValue(contexto('profesional_sanitario'));
+        m.leerAlertasNotaPendiente.mockResolvedValue({
+          ok: true,
+          alertas: [alerta({ tipo: 'consentimiento_pendiente' })],
+        });
+        return Documentacion({ centroParametro: null });
+      })())!,
+    );
+    comprobar();
+    unmount();
+
+    m.leerAlertasNotaPendiente.mockResolvedValue({ ok: true, alertas: [] });
+    const vacio = render((await Documentacion({ centroParametro: null }))!);
+    comprobar();
+    vacio.unmount();
+
+    m.leerAlertasNotaPendiente.mockResolvedValue({ ok: false, mensaje: 'No se pudo' });
+    render((await Documentacion({ centroParametro: null }))!);
+    comprobar();
+  });
+
   it('técnico: no aparece en ningún tipo', async () => {
     await pintar('tecnico_administrativo', [
       alerta({ tipo: 'consentimiento_pendiente' }),
