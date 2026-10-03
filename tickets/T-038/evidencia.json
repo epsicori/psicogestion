@@ -1,169 +1,31 @@
 {
   "ticket": "T-038",
-  "ronda": 2,
-  "resumen": "Ronda 2, rama worktree-agent-ac39d19a23cb82596 HEAD e25fae0. Lint 0 errores; npm test 1933/1933; next build --webpack OK; lint:migraciones OK; test:rls exit 0; t038-concurrencia y t038-oraculo exit 0; Playwright 20/20 en serie (con 6 workers fallaron 2 specs ajenos por el TOTP sembrado compartido; regenerar-codigos paso). tipos sin diferencias; territorio en verde. Todos los mutantes ejecutados mueren con el motivo del diseno. Manuales CA14 y CA16 sin cerrar. db reset: 18:27 (desde el worktree, inicio) y tres entre 18:57 y 19:00 (mutantes de concurrencia); la base quedo reseteada a las 19:01 desde el repositorio principal (estado de main, sin seed).",
+  "ronda": 3,
+  "resumen": "Ronda 3, rama worktree-agent-a3f1df59a02f0397d HEAD b05d3e3. Lint 0 errores (2 warnings ajenos en accesos.test.ts); npm test 147 ficheros / 1940 tests OK; next build --webpack OK; lint:migraciones 26 limpias; db reset desde el worktree + test:rls exit 0 (13-cuentas completa, 1554 OK); t038-concurrencia y t038-oraculo exit 0; Playwright 20/20 con --workers=1 y PUERTO=3400; npm run tipos solo difiere en fin de linea (revertido); territorio.mjs en verde (37 ficheros). Hallazgos de la ronda 2 A2-H1, A2-H2, B2-H1..B2-H5 cerrados, cada uno con su prueba y al menos un mutante que muere con el motivo esperado. CA14 y CA16 manuales sin cerrar. Hubo dos db reset desde el worktree (CA4 no es idempotente: hizo falta uno para el mutante A2-H2) y uno final desde el repositorio principal con npm run seed: ana@psicogestion.test tiene su factor verified, max(version)=20261007120000 (migraciones de main).",
   "criterios": [
-    {
-      "id": 1,
-      "texto": "regenerar: 10 nuevos, 0 viejos, 1 aviso al titular, 0 a otros (en dos pasos)",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0)",
-      "evidencia": "Banco 13 reescrito a dos pasos: exit=0, '13-cuentas: completa.'; aserciones R2-1 punto 3 (paso uno bueno + paso dos = ok con diez) y t038-concurrencia pasada A: 10 vigentes y 2 avisos."
-    },
-    {
-      "id": 2,
-      "texto": "aal1 / reto antiguo: 42501, sin lote ni aviso, en las DOS funciones",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0)",
-      "evidencia": "R2-1 punto 10 dentro del banco 13, exit=0."
-    },
-    {
-      "id": 3,
-      "texto": "viejo rechazado, nuevo canjeable",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0)",
-      "evidencia": "Banco 13 exit=0 (aserciones CA3 con canjear_codigo_recuperacion)."
-    },
-    {
-      "id": 4,
-      "texto": "dos generaciones concurrentes: 10 vigentes, 2 avisos; contraensayo",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t038-concurrencia.mjs (tras db reset 18:27), exit 0",
-      "evidencia": "OK A 10 vigentes / 2 avisos / ok|10 x2; OK B MEDICION: sin candado de consejo 10 vigentes (hipotesis refutada para la regeneracion: el candado de fila de la autorizacion serializa); OK D CONTRAENSAYO: activacion sin candado deja 20 vigentes; OK C una sale y otra 42501, 10 vigentes, 1 aviso. Mutantes: generar sin candado -> FALLO C (20 vigentes, salen 2, rechazadas 0); caducar el lote antes de consumir la autorizacion -> FALLO B (hay 20). Usa contenedorDelProyecto()."
-    },
-    {
-      "id": 5,
-      "texto": "auditoria: 10 UPDATE + 10 INSERT con actor, sin codigo_hash",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0)",
-      "evidencia": "Banco 13 exit=0 (aserciones CA5)."
-    },
-    {
-      "id": 6,
-      "texto": "insert en notificaciones fuera de exception; sin parametro de perfil",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0) + lectura del cuerpo de la migracion",
-      "evidencia": "Aserciones de estructura de R2-1 pasan; el cuerpo de regenerar_codigos_recuperacion() y de generar_codigos_recuperacion() no contiene 'exception when' (leidos); M-A1f muere con 'la firma de un paso ... ya no existe'."
-    },
-    {
-      "id": 7,
-      "texto": "recorrido de regenerar: contrasena mala / TOTP malo no llaman al RPC; aal2 se conserva; mismo Zod",
-      "veredicto": "PASA",
-      "comando": "npm test (vitest run)",
-      "evidencia": "Test Files 147 passed (147), Tests 1933 passed (1933); el mutante B-H8 muere en acciones.test.ts."
-    },
-    {
-      "id": 8,
-      "texto": "spec Playwright del recorrido completo",
-      "veredicto": "PASA",
-      "comando": "SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo PUERTO=3187 npx playwright test --workers=1",
-      "evidencia": "20 passed (1.3m), incluido regenerar-codigos.spec.ts:162 (53.4s). Con los 6 workers por defecto, 2 specs AJENOS (acceso.spec:138 y avisos.spec:29) fallaron por 'el TOTP sembrado no se aceptó'; en serie pasan; regenerar-codigos paso en ambas pasadas."
-    },
-    {
-      "id": 9,
-      "texto": "vista de fallo al activar: implicacion, Reintentar, Aceptar",
-      "veredicto": "PASA",
-      "comando": "npm test",
-      "evidencia": "segundo-factor.test.tsx dentro de los 1933 verdes; el mutante B-H10 (falloCodigos a secas) muere: toBeEmptyDOMElement."
-    },
-    {
-      "id": 10,
-      "texto": "foco en elemento con rol, nombre accesible y aviso en nombre/descripcion",
-      "veredicto": "PASA",
-      "comando": "npm test",
-      "evidencia": "Verdes; el mutante B-H9 (sin setCampoConFoco) muere: document.activeElement es body en vez del input contrasena."
-    },
-    {
-      "id": 11,
-      "texto": "getTimerCount()===0 en la vista de fallo y tras reintento",
-      "veredicto": "PASA",
-      "comando": "npm test + mutante",
-      "evidencia": "Mutante CA11/B-H4 (setTimeout 60000 en la vista de fallo) muere: 'expected 1 to be +0' en dos pruebas."
-    },
-    {
-      "id": 12,
-      "texto": "superarSegundoFactorSembrado sin uso nuevo",
-      "veredicto": "PASA",
-      "comando": "grep -rn superarSegundoFactorSembrado",
-      "evidencia": "Solo app/login/acciones(.test).ts, lib/cuentas/modo-desarrollo(.test).ts y scripts/t012-nota.ts; ninguno en app/(app)/cuenta ni en el recorrido de regenerar."
-    },
-    {
-      "id": 13,
-      "texto": "pantalla y enlace para los tres roles; solo el lote propio; tecnico sin PIN",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0) + playwright",
-      "evidencia": "CA13 en banco 13 exit=0; regenerar-codigos.spec.ts ('CA8 y CA13') pasa."
-    },
-    {
-      "id": 14,
-      "texto": "Manual: ningun rol ve un control para regenerar los codigos de otro; /ajustes/reponer-totp no cambia",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Criterio manual. Guion: entrar como administrador, profesional y tecnico (seed), abrir /cuenta y comprobar que solo hay controles sobre la cuenta propia; abrir /ajustes/reponer-totp como administrador y comprobar que sigue igual que en main. Lo mira el propietario."
-    },
-    {
-      "id": 15,
-      "texto": "cierre: lint, test, build, lint:migraciones, test:rls, test:a11y, tipos, territorio",
-      "veredicto": "PASA",
-      "comando": "npm run lint; npm test; npx next build --webpack; npm run lint:migraciones; npm run test:rls; playwright; npm run tipos; territorio.mjs T-038",
-      "evidencia": "lint 0 errores (2 warnings ajenos en accesos.test.ts); 1933/1933; build OK (/cuenta presente); 26 migraciones limpias; test:rls exit 0; a11y 20/20 en serie; npm run tipos sin diferencias (git status limpio); territorio: 35 ficheros dentro del territorio."
-    },
-    {
-      "id": 16,
-      "texto": "Manual: pantalla nueva a 360 px junto a /prototipo, mismo vocabulario visual",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Criterio manual. Guion: arrancar la app, entrar, abrir /cuenta con la ventana a 360 px, compararla con /prototipo (tipografia, tarjetas, botones, marca 'Sin leer') y confirmar que no hay controles de adorno. Lo mira el propietario."
-    },
-    {
-      "id": "R2-1",
-      "texto": "Dos pasos en el banco (A-H1): estructura, 10 puntos de comportamiento y mutantes",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0); mutantes: begin; DDL mutado; banco 00..13; rollback (no tocan la base)",
-      "evidencia": "Mueren todos con su motivo: M-A1a 'un SEGUNDO paso dos ... se gasta'; M-A1b 'punto 6 autorizacion caducada'; M-A1c 'la comprobacion devuelve void'; M-A1d 'guarda de solo lectura y candado van ANTES del cotejo con crypt'; M-A1e 'escribe en UNA sola sentencia'; M-A1f 'la firma de un paso ... ya no existe'; M-A1g 'punto 5 buena y luego mala'."
-    },
-    {
-      "id": "R2-2",
-      "texto": "Oraculo por HTTP contra PostgREST",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t038-oraculo.mjs (exit 0)",
-      "evidencia": "O1 S1-S5 mala==buena (204/204; S4 400 PGRST128 ambas; S5 405/405); O2 S1 y S3 (tx=rollback ignorado) mala 0->1; O3 sin cambio de contadores; O4 404 PGRST202; O5 registro_postgres_seguro=true; O6 buena->ok con 10, mala->contrasena_incorrecta. oraculo-postgrest.json regenerado y revertido en el worktree. Los mutantes M-A1c, M-A1e y 'restaurar la funcion de un paso' no se ejecutaron contra el oraculo (M-A1c y M-A1e si contra el banco)."
-    },
-    {
-      "id": "R2-3",
-      "texto": "CA4 vuelto a medir tras db reset (pasadas A, B, D, C)",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t038-concurrencia.mjs",
-      "evidencia": "Ver criterio 4. Mutantes: sin candado en generar -> C roja; caducar antes de consumir -> B da 20."
-    },
-    {
-      "id": "R2-4",
-      "texto": "Reposicion propia (A-H3)",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0)",
-      "evidencia": "Mutantes: quitar la guarda de reposicion propia -> falla 'R2-4 un administrador que se repone a si mismo lanza 42501'; volver a <> -> falla 'R2-4 una sesion sin perfil (rol nulo) tampoco repone el TOTP de otro'."
-    },
-    {
-      "id": "R2-5",
-      "texto": "Registro de Postgres: C1..C8, N0, N1, nulos",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 13, exit 0); mutantes en transaccion",
-      "evidencia": "Mueren con su asercion: C1 'log_statement = all'; C2 'parametros en el error (64)'; C3 'umbral 0 con parametros sin limite'; C6 'debug_print_parse'; C7 'auto_explain a 7999'; C8 'pgaudit con parametros'; coalesce true->false 'N0 log_statement nulo'; N0 'sin statement_timeout'; N1 'auto_explain sin log_parameter_max_length'; una mutacion tosca de la ventana de C7 muere en 'la base literal es segura'. No mutados: C4, C5 y la ventana exacta between 0 y 9999 (ni los pasos en vivo L0..L7b mas alla de pasar en el banco)."
-    },
-    {
-      "id": "R2-6",
-      "texto": "Copias del contraensayo con revoke y comprobacion de anon (A-H7)",
-      "veredicto": "PASA",
-      "comando": "scripts/t038-concurrencia.sql sin las dos lineas revoke (113-114), tras db reset",
-      "evidencia": "La fase 'copia' falla (psql salio con 3, raise exception de la comprobacion) antes de lanzar ninguna carrera; revertido con git checkout."
-    },
-    {
-      "id": "R2-7",
-      "texto": "Interfaz B-H1..B-H11, con mutante por hallazgo",
-      "veredicto": "PASA",
-      "comando": "vitest run <fichero> con el mutante aplicado y revertido",
-      "evidencia": "Mueren: B-H1 (dos botones cerrarMenu en vez de uno), B-H2 (sin catch: region no encontrada, 'red caida'), B-H3 (no aparece errorLectura), B-H6-M1 (sin reset en exito: 5 pruebas fallan en toHaveValue), B-H8 (sale sinFactor), B-H9 (foco en body), B-H10 (status no vacio), B-H11 ('Sin leer' no aparece), CA11/B-H4 (temporizador 1). No mutados: B-H5 y B-H7 (sus pruebas existen y pasan en npm test)."
-    }
+    {"id": 1, "texto": "regenerar: 10 nuevos, 0 viejos, 1 aviso al titular, 0 a otros (dos pasos)", "veredicto": "PASA", "comando": "npm run test:rls (banco 13); npx tsx scripts/t038-concurrencia.mjs", "evidencia": "test:rls rc=0, '13-cuentas: completa.'; concurrencia pasada A: ok|10, 10 vigentes, 2 avisos."},
+    {"id": 2, "texto": "aal1 / reto antiguo: 42501, sin lote ni aviso, en las dos funciones", "veredicto": "PASA", "comando": "npm run test:rls", "evidencia": "R2-1 punto 10 dentro del banco 13, rc=0."},
+    {"id": 3, "texto": "viejo rechazado (codigo_invalido), nuevo canjeable", "veredicto": "PASA", "comando": "npm run test:rls", "evidencia": "Aserciones de canje del banco 13 en verde (rc=0, 1554 OK en el log)."},
+    {"id": 4, "texto": "dos generaciones concurrentes: exactamente 10 vigentes y 2 avisos, con contraensayo", "veredicto": "PASA", "comando": "npx tsx scripts/t038-concurrencia.mjs (tras db reset)", "evidencia": "A: 10 vigentes, 2 avisos, espero. B: medicion 10 vigentes sin candado de consejo. D (contraensayo): sin candado la activacion deja 20 vigentes (!= 10). C: una sale, otra 42501, 10 vigentes, 1 aviso. 'completa', rc=0."},
+    {"id": 5, "texto": "auditoria: 10 UPDATE + 10 INSERT con actor_id del titular y sin codigo_hash", "veredicto": "PASA", "comando": "npm run test:rls", "evidencia": "Banco 13 completo, rc=0."},
+    {"id": 6, "texto": "revision de cuerpo: insert en notificaciones sin exception; sin parametro de perfil; p_contrasena fuera de raise/format/execute; firma (text) de regenerar inexistente", "veredicto": "PASA", "comando": "npm run test:rls; t038-oraculo O4", "evidencia": "Aserciones de estructura R2-1 en verde; O4: POST regenerar_codigos_recuperacion con p_contrasena da 404 PGRST202."},
+    {"id": 7, "texto": "recorrido de regenerar: contrasena/TOTP erroneos no llaman al RPC; correctos lo llaman una vez; sesion sigue aal2; mismo esquema Zod", "veredicto": "PASA", "comando": "npm test", "evidencia": "147 ficheros, 1940 tests OK (acciones.test.ts, formulario-regenerar.test.tsx, esquemas.test.ts, totp.test.ts)."},
+    {"id": 8, "texto": "spec Playwright del recorrido completo", "veredicto": "PASA", "comando": "SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo PUERTO=3400 npx playwright test --workers=1", "evidencia": "20 passed (1.6m); regenerar-codigos.spec.ts:162 OK (53.4s)."},
+    {"id": 9, "texto": "fallo al activar: dice que implica y donde generarlos, Reintentar, Aceptar", "veredicto": "PASA", "comando": "npm test (segundo-factor.test.tsx)", "evidencia": "Pruebas T-038 de la vista de fallo en verde, 73 de 73 en el subconjunto app/primera-vez, app/(app)/cuenta, totp.test."},
+    {"id": 10, "texto": "vistas sustitutas: foco en elemento con rol, nombre accesible y aviso en nombre/descripcion", "veredicto": "PASA", "comando": "npm test", "evidencia": "Pruebas de foco/rol/nombre en verde; mutante B2-H2 (dependencia [fallo?.mensaje]) rojo en 'B2-H2 · tras un reintento fallido el foco vuelve a la vista'."},
+    {"id": 11, "texto": "R3-H2: getTimerCount() === 0 en la vista de fallo", "veredicto": "PASA", "comando": "npm test", "evidencia": "Pruebas B-H4 en verde en segundo-factor.test.tsx."},
+    {"id": 12, "texto": "superarSegundoFactorSembrado sin usos nuevos", "veredicto": "PASA", "comando": "grep -rln superarSegundoFactorSembrado app lib components accesibilidad scripts; git grep en main", "evidencia": "Usos en rama: app/login/acciones(.test).ts y lib/cuentas/modo-desarrollo(.test).ts (los de T-033, identicos a main) y scripts/t012-nota.ts (preexistente); ninguno en app/(app)/cuenta ni lib de regenerar."},
+    {"id": 13, "texto": "pantalla y enlace para los tres roles, solo lote propio; tecnico sin PIN", "veredicto": "PASA", "comando": "npx playwright test --workers=1; npm test", "evidencia": "Playwright 20/20 (regenerar-codigos.spec.ts, CA8 y CA13) y enlace-cuenta/armazon-cliente tests en verde; la funcion SQL no recibe perfil (CA6)."},
+    {"id": 14, "texto": "ningun rol ve control para regenerar los de otro perfil", "veredicto": "NO_VERIFICABLE", "motivo": "Manual por contrato. Guion: entrar como administrador, profesional y tecnico sembrados; abrir /cuenta y comprobar que solo hay 'Regenerar codigos' propio; en /ajustes/reponer-totp el administrador solo ve reposicion del TOTP ajeno, sin cambios."},
+    {"id": 15, "texto": "npm test, lint, build, lint:migraciones, test:rls, test:a11y limpios; tipos sin diferencias; territorio en verde", "veredicto": "PASA", "comando": "npm run lint; npm test; npx next build --webpack; npm run lint:migraciones; npm run test:rls; playwright; npm run tipos; territorio.mjs T-038", "evidencia": "lint 0 errores; 1940/1940; build OK; 'lint-migraciones: 26 migración(es) limpias'; test:rls rc=0; 20 passed; tipos solo difiere en CRLF (git diff -w vacio); 'T-038: 37 fichero(s) tocado(s), todos dentro de ...'."},
+    {"id": 16, "texto": "pantalla a 360 px y frente a /prototipo", "veredicto": "NO_VERIFICABLE", "motivo": "Manual por contrato. Guion: abrir /cuenta a 360 px junto a /prototipo y revisar vocabulario visual y ausencia de controles de adorno."},
+    {"id": "A2-H1", "texto": "regla C9 de plpgsql_check en evaluar_registro_postgres", "veredicto": "PASA", "comando": "npm run test:rls + 4 mutantes del cuerpo de evaluar_registro_postgres en begin..rollback con el banco completo", "evidencia": "Banco sin mutar rc=0. Mutantes: (1) sin el bloque C9, (2) '>=' por '<', (3) coalesce(...,true) por false, (4) v_pc := false. Todos rc=3, rojos en 'R2-5 C9 · trazador de plpgsql_check encendido a nivel log es inseguro (escribe p_contrasena)' (el 3 en 'nivel del trazador nulo ... es inseguro'). Oraculo O5: registro_postgres_seguro da true por PostgREST."},
+    {"id": "A2-H2", "texto": "pasada B de concurrencia exige espero", "veredicto": "PASA", "comando": "copia de scripts/t038-concurrencia.mjs con esperarMs(700) -> esperarMs(4500), tras db reset", "evidencia": "rc=1 con 'FALLO A · la segunda conexión llegó a esperar un Lock' y 'FALLO B · la segunda conexión llegó a esperar un Lock (las dos se solapan de verdad)' (y D rojo); la copia mutante se borro. Sin mutar, B exige espero y sale OK."},
+    {"id": "B2-H1", "texto": "Reintentar con rechazo no tumba la pagina", "veredicto": "PASA", "comando": "npx vitest run app/primera-vez app/(app)/cuenta lib/cuentas/totp.test.ts con mutante", "evidencia": "Sin mutar 73/73. Mutante: catch sustituido por finally {}: 1 rojo, 'B2-H1 · si «Reintentar» se rechaza (red caída)...' (Unable to find role=status)."},
+    {"id": "B2-H2", "texto": "foco vuelve a la vista tras reintento fallido con el mismo texto", "veredicto": "PASA", "comando": "idem; Playwright", "evidencia": "Mutante efecto [fallo?.mensaje]: 1 rojo en 'B2-H2 · tras un reintento fallido el foco vuelve a la vista ...'. Playwright 20/20."},
+    {"id": "B2-H3", "texto": "«Sin leer» separado por un espacio real", "veredicto": "PASA", "comando": "idem", "evidencia": "Mutante sin {' '}: 1 rojo, \"expected 'Regeneración de códigos bloqueadaSin …' to match /\\S\\s+Sin leer$/\"."},
+    {"id": "B2-H4", "texto": "rechazo de la accion dice que el resultado se desconoce y refresca al volver", "veredicto": "PASA", "comando": "idem", "evidencia": "Mutante sin router.refresh(): 1 rojo en 'B-H2 / B2-H4 ...'; mutante con titulo 'No se han regenerado' fijo: 1 rojo en la misma prueba."},
+    {"id": "B2-H5", "texto": "42501 al reintentar marca reentrar y ofrece Volver a entrar", "veredicto": "PASA", "comando": "idem", "evidencia": "Mutante sin reentrar:true en totp.ts: 1 rojo en 'un 42501 ... marca que la salida es volver a entrar'; mutante reentrar:false en reintentar: 1 rojo en 'B2-H5 · si el segundo factor es de hace más de cinco minutos...'."}
   ],
-  "regresiones": [
-    "Playwright con los workers por defecto (6): acceso.spec.ts:138 y avisos.spec.ts:29 fallan con 'el TOTP sembrado no se aceptó' (varios workers entran con el mismo usuario sembrado); en serie pasan 20/20. No es del ticket."
-  ]
+  "regresiones": []
 }
