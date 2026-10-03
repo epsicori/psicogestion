@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
   m.disponible = true;
   m.descartarFranja.mockReset();
-  m.descartarFranja.mockResolvedValue(undefined);
+  m.descartarFranja.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
@@ -138,6 +138,44 @@ describe('FranjaSesion', () => {
     expect(screen.getByRole('status').textContent).toBe('');
     expect(screen.getByRole('link', { name: /En sesión/ })).toBeTruthy();
   });
+
+  it.each([
+    ['rechaza', () => m.descartarFranja.mockRejectedValue(new Error('red'))],
+    ['da ok:false', () => m.descartarFranja.mockResolvedValue({ ok: false })],
+  ])(
+    'si descartar %s: nada se lanza, la franja sigue oculta, sin anuncio y el foco en el ancla',
+    async (_nombre, preparar) => {
+      preparar();
+      const errores: unknown[] = [];
+      const alError = (e: Event) => {
+        errores.push(e);
+      };
+      window.addEventListener('unhandledrejection', alError);
+      window.addEventListener('error', alError);
+      const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      pintar('2026-10-01T10:10:00.000Z');
+      fireEvent.click(screen.getByRole('button', { name: 'Descartar aviso' }));
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(m.descartarFranja).toHaveBeenCalledWith(CITA);
+      expect(screen.getByRole('status').textContent).toBe('');
+      expect(document.activeElement).toBe(screen.getByRole('link', { name: /En sesión/ }));
+      // Ni reversión ni anuncio: descartar es una preferencia de presentación (R3).
+      act(() => {
+        vi.advanceTimersByTime(120_000);
+      });
+      expect(screen.getByRole('status').textContent).toBe('');
+      expect(errores).toEqual([]);
+
+      window.removeEventListener('unhandledrejection', alError);
+      window.removeEventListener('error', alError);
+      consola.mockRestore();
+    },
+  );
 
   it('una franja descartada en la cookie no se pinta, pero el ancla sí', () => {
     pintar('2026-10-01T10:10:00.000Z', [CITA]);

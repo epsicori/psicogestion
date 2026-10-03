@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { unstable_rethrow } from 'next/navigation';
 import {
   createContext,
   useContext,
@@ -120,8 +121,16 @@ export function FranjaSesion({ ahoraServidor, sesiones, descartadas }: PropsFran
     setOcultas((previas) => (previas.includes(citaId) ? previas : [...previas, citaId]));
     // El botón desaparece con la franja: el foco va al ancla, que sigue en la cabecera.
     ancla?.current?.focus();
+    // Descartar es una preferencia de presentación: si falla, la franja sigue oculta, sin
+    // reversión ni anuncio, y nada rechaza hacia React (T-015, R3). Un redirect (sesión
+    // caducada) sí debe seguir su camino.
     iniciarTransicion(async () => {
-      await descartarFranja(citaId);
+      try {
+        await descartarFranja(citaId);
+      } catch (error) {
+        unstable_rethrow(error);
+        console.error('Franja de sesión: no se ha podido recordar el descarte', error);
+      }
     });
   }
 

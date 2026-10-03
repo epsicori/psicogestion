@@ -46,7 +46,14 @@ const SESION: SesionPropia = {
   estado: 'programada',
 };
 
-const TEXTO_FRANJA = 'Sesión en curso · Ana Prueba · 12:00–12:50';
+// La campana también lleva su propio role="status": aquí se mira el de la franja.
+function estadoFranja(): HTMLElement {
+  const el = document.querySelector<HTMLElement>('[data-franja-sesion]');
+  if (!el) throw new Error('No hay live region de la franja');
+  return el;
+}
+
+const TEXTO_FRANJA ='Sesión en curso · Ana Prueba · 12:00–12:50';
 
 function foto(parcial: Partial<DatosAvisos> = {}): DatosAvisos {
   return {
@@ -217,14 +224,14 @@ describe('lo que hace con la respuesta', () => {
 
   it('una foto posterior con una sesión que abarca ese instante pinta la franja', async () => {
     await refrescarCon(respuesta({ cuerpo: enCurso }));
-    expect(screen.getByRole('status').textContent).toContain(TEXTO_FRANJA);
+    expect(estadoFranja().textContent).toContain(TEXTO_FRANJA);
     expect(screen.getByRole('link', { name: /En sesión/ })).toBeTruthy();
   });
 
   it('una foto anterior a la que ya hay se ignora', async () => {
     const inicial = foto({ ahoraServidor: '2026-10-01T10:30:00.000Z' });
     await refrescarCon(respuesta({ cuerpo: enCurso }), inicial);
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(estadoFranja().textContent).toBe('');
   });
 
   it('el recuento fresco se pinta en el aviso de notas', async () => {
@@ -236,7 +243,7 @@ describe('lo que hace con la respuesta', () => {
 
   it('las franjas descartadas que trae el refresco no se pintan', async () => {
     await refrescarCon(respuesta({ cuerpo: { ...enCurso, descartadas: [CITA] } }));
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(estadoFranja().textContent).toBe('');
     // El ancla sigue: descartar solo quita la franja.
     expect(screen.getByRole('link', { name: /En sesión/ })).toBeTruthy();
   });
@@ -246,7 +253,7 @@ describe('lo que hace con la respuesta', () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
     const vista = render(<Arbol inicial={inicial} />);
     await navegarA('/pacientes', vista, inicial);
-    expect(screen.getByRole('status').textContent).toContain(TEXTO_FRANJA);
+    expect(estadoFranja().textContent).toContain(TEXTO_FRANJA);
   });
 
   it.each([
@@ -260,7 +267,7 @@ describe('lo que hace con la respuesta', () => {
     ['un cuerpo que no es un objeto', respuesta({ cuerpo: '<html></html>' })],
   ])('se ignora en silencio: %s', async (_nombre, res) => {
     await refrescarCon(res);
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(estadoFranja().textContent).toBe('');
     expect(screen.queryByRole('link', { name: /En sesión/ })).toBeNull();
   });
 
@@ -270,7 +277,7 @@ describe('lo que hace con la respuesta', () => {
       throw new SyntaxError('Unexpected token <');
     };
     await refrescarCon(res);
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(estadoFranja().textContent).toBe('');
   });
 
   it('el reloj se resincroniza: la franja aparece sin avanzar los temporizadores', async () => {
@@ -278,8 +285,8 @@ describe('lo que hace con la respuesta', () => {
     const inicial = foto({ sesiones: [SESION] });
     fetchMock.mockResolvedValue(respuesta({ cuerpo: enCurso }));
     const vista = render(<Arbol inicial={inicial} />);
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(estadoFranja().textContent).toBe('');
     await navegarA('/pacientes', vista, inicial);
-    expect(screen.getByRole('status').textContent).toContain(TEXTO_FRANJA);
+    expect(estadoFranja().textContent).toContain(TEXTO_FRANJA);
   });
 });
