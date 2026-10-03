@@ -731,6 +731,92 @@ select pg_temp.assert(
      from public.alertas_documentacion where id = :'a81'),
   '22.E12 Una alerta ya resuelta no se anula al corregir la cita');
 
+-- E13 · TODAS las salidas de `realizada` anulan la alerta abierta (A2-H1): el `when` del
+-- disparador no se reduce a `no_asistida`. Cada destino con su cita y su alerta: cancelada,
+-- por la puerta definer del técnico (agenda_actualizar_cita); confirmada y programada, por
+-- el profesional.
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '86 hours 20 minutes', now() - interval '86 hours', 'Europe/Madrid')
+returning id as c86 \gset
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '88 hours 20 minutes', now() - interval '88 hours', 'Europe/Madrid')
+returning id as c88 \gset
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '90 hours 20 minutes', now() - interval '90 hours', 'Europe/Madrid')
+returning id as c90 \gset
+update public.citas set estado = 'realizada' where id in (:'c86', :'c88', :'c90');
+select pg_temp.assert(
+  (select count(*) = 3 from public.alertas_documentacion
+    where origen_tabla = 'citas' and origen_id in (:'c86', :'c88', :'c90')
+      and tipo = 'nota_sin_firmar' and estado = 'abierta'),
+  '22.E13 (preparación) Tres citas realizadas, cada una con su alerta abierta');
+
+call pg_temp.como(:TEC1);
+select public.agenda_actualizar_cita(:'c86'::uuid, p_estado => 'cancelada');
+call pg_temp.reset_sesion();
+call pg_temp.como(:PRO1);
+update public.citas set estado = 'confirmada' where id = :'c88';
+update public.citas set estado = 'programada' where id = :'c90';
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select estado = 'anulada' and anulada_en is not null and resuelta_en is null
+     from public.alertas_documentacion
+    where origen_tabla = 'citas' and origen_id = :'c86' and tipo = 'nota_sin_firmar'),
+  '22.E13 realizada → cancelada (por el técnico, agenda_actualizar_cita) anula la alerta');
+select pg_temp.assert(
+  (select estado = 'anulada' and anulada_en is not null and resuelta_en is null
+     from public.alertas_documentacion
+    where origen_tabla = 'citas' and origen_id = :'c88' and tipo = 'nota_sin_firmar'),
+  '22.E13 realizada → confirmada anula la alerta');
+select pg_temp.assert(
+  (select estado = 'anulada' and anulada_en is not null and resuelta_en is null
+     from public.alertas_documentacion
+    where origen_tabla = 'citas' and origen_id = :'c90' and tipo = 'nota_sin_firmar'),
+  '22.E13 realizada → programada anula la alerta');
+select public.escalar_notas_pendientes() as escalado13 \gset
+select pg_temp.assert(
+  (select count(*) = 0 from public.notificaciones where origen_id in (:'c86', :'c88', :'c90')),
+  '22.E13 El escalado no avisa de ninguna de las tres citas corregidas');
+
+-- E13 · GEMELA: una cita que sigue `realizada` conserva su alerta (otra columna no anula).
+insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
+values (:Z22, :PRO1, :CA, now() - interval '92 hours 20 minutes', now() - interval '92 hours', 'Europe/Madrid')
+returning id as c92 \gset
+update public.citas set estado = 'realizada' where id = :'c92';
+call pg_temp.como(:PRO1);
+update public.citas set sala = 'Sala E13' where id = :'c92';
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select estado = 'abierta' and anulada_en is null
+     from public.alertas_documentacion
+    where origen_tabla = 'citas' and origen_id = :'c92' and tipo = 'nota_sin_firmar'),
+  '22.E13 GEMELA: una cita que sigue realizada conserva su alerta abierta');
+
+-- E14 · El escalado copia el origen de la alerta, no lo supone cita (A2-H2). Una
+-- nota_sin_firmar con origen `notas_clinicas` (la del seed a0080007-…-03 es así) y 100 h
+-- de antigüedad. El disparador fija la referencia solo para `citas`, así que se apaga para
+-- fijarla a mano; la fila de la prueba nace en nivel 3.
+select gen_random_uuid() as n14 \gset
+alter table public.alertas_documentacion disable trigger fijar_referencia_alerta;
+insert into public.alertas_documentacion
+  (paciente_id, profesional_id, centro_id, tipo, origen_tabla, origen_id, fecha_referencia, referencia_en)
+values (:Z22, :PRO1, :CA, 'nota_sin_firmar', 'notas_clinicas', :'n14', (now() - interval '4 days')::date, now() - interval '100 hours');
+alter table public.alertas_documentacion enable trigger fijar_referencia_alerta;
+select pg_temp.assert(
+  (select count(*) = 1 from public.alertas_documentacion
+    where origen_tabla = 'notas_clinicas' and origen_id = :'n14'
+      and public.nivel_nota_pendiente(referencia_en, centro_id) = 3),
+  '22.E14 (preparación) La alerta con origen notas_clinicas nace en nivel 3');
+select public.escalar_notas_pendientes() as escalado14 \gset
+select pg_temp.assert(
+  (select count(*) = 1 from public.notificaciones
+    where perfil_id = :ADM and origen_tabla = 'notas_clinicas' and origen_id = :'n14'),
+  '22.E14 El aviso lleva el origen de la alerta (notas_clinicas), no el literal citas');
+select pg_temp.assert(
+  (select count(*) = 0 from public.notificaciones
+    where origen_tabla = 'citas' and origen_id = :'n14'),
+  '22.E14 GEMELA: ningún aviso apunta a una cita con el id de la nota');
+
 -- ---------------------------------------------------------------------------
 -- Mutantes verificados a mano (03-10-2026, implementación de T-015)
 -- ---------------------------------------------------------------------------
@@ -755,7 +841,19 @@ select pg_temp.assert(
 --   · validador de administrador sin `activo`          → 22.C5 (iv) designar a uno de baja lanza 23514
 --   · cada columna congelada desbloqueada (id, paciente_id, profesional_id, centro_id, tipo,
 --     origen_tabla, origen_id, fecha_referencia, referencia_en, creada_en, anulada_en) → 22.E3
---   · «sin estado = abierta» en la anulación: lo mata un deadlock del banco (la resolución se
---     bloquea a sí misma), no una aserción; anotado para el revisor.
+--   · «sin estado = abierta» en la anulación: lo mata `alertas_documentacion_check` (23514) en
+--     el `update public.citas set estado = 'cancelada'` de 22.E12: la anulación pisaría la
+--     `resuelta` y dejaría `resuelta_en` no nulo con `estado = 'anulada'`. Lo mata la
+--     restricción, no una aserción. Un `deadlock detected` NO cuenta como muerte de mutante: el
+--     banco tiene un deadlock intermitente (autovacuum, antes del módulo 22) y deja el banco
+--     sin llegar a este módulo.
+-- Ronda 3 (03-10-2026, A2-H1 y A2-H2; con `mutar3.mjs`, mismo método):
+--   · `when` del disparador reducido a `new.estado = 'no_asistida'`    → 22.E13 realizada → cancelada
+--   · `when` reducido a `new.estado in ('no_asistida', 'cancelada')`    → 22.E13 realizada → confirmada
+--   · escalado con el literal 'citas' en vez de `a.origen_tabla`        → 22.E14 el aviso lleva notas_clinicas
+-- En total, 19 entradas y 29 mutantes: 9 de la implementación, 7 entradas de la ronda 2 (la de
+-- columnas congeladas son 11 mutantes, uno por columna) y 3 de la ronda 3. Dos más se descartan por equivalentes: anular sin
+-- `tipo = 'nota_sin_firmar'` (solo ese tipo tiene origen `citas`) y `old.estado = 'resuelta'` en
+-- vez de `<> 'abierta'` en «una cerrada no se reabre».
 
 \echo '22-avisos: completa.'
