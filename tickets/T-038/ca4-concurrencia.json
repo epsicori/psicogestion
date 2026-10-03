@@ -1,0 +1,74 @@
+{
+  "ticket": "T-038",
+  "criterio": "CA4",
+  "contenedor": "supabase_db_Psicogestion",
+  "pasadas": {
+    "con_candado": {
+      "espero": true,
+      "conexiones": [
+        {
+          "app": "t038-a-1",
+          "estado": 0,
+          "salida": "RESULTADO|ok|10\n\n",
+          "error": ""
+        },
+        {
+          "app": "t038-a-2",
+          "estado": 0,
+          "salida": "RESULTADO|ok|10\n\n",
+          "error": ""
+        }
+      ],
+      "cuenta": {
+        "vigentes": 10,
+        "avisos": 2,
+        "total": 30
+      }
+    },
+    "sin_candado": {
+      "espero": true,
+      "conexiones": [
+        {
+          "app": "t038-b-1",
+          "estado": 0,
+          "salida": "RESULTADO|ok|10\n\n",
+          "error": ""
+        },
+        {
+          "app": "t038-b-2",
+          "estado": 0,
+          "salida": "RESULTADO|ok|10\n\n",
+          "error": ""
+        }
+      ],
+      "cuenta": {
+        "vigentes": 20,
+        "avisos": 2,
+        "total": 30
+      }
+    },
+    "activacion": {
+      "espero": true,
+      "conexiones": [
+        {
+          "app": "t038-c-1",
+          "estado": 0,
+          "salida": "RESULTADO|10\n\n",
+          "error": ""
+        },
+        {
+          "app": "t038-c-2",
+          "estado": 0,
+          "salida": "",
+          "error": "psql:<stdin>:4: ERROR:  42501: Ya tienes códigos de recuperación vigentes: se regeneran desde Mi cuenta, con tu contraseña.\nCONTEXT:  PL/pgSQL function public.generar_codigos_recuperacion() line 35 at RAISE\nLOCATION:  exec_stmt_raise, pl_exec.c:3911\npsql:<stdin>:5: ERROR:  25P02: current transaction is aborted, commands ignored until end of transaction block\nLOCATION:  exec_simple_query, postgres.c:1140\n"
+        }
+      ],
+      "cuenta": {
+        "vigentes": 10,
+        "avisos": 1,
+        "total": 10
+      }
+    }
+  },
+  "fallos": []
+}
