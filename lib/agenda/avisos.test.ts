@@ -5,6 +5,7 @@ import {
   combinarAvisos,
   cuantasDestacadas,
   esquemaDatosAvisos,
+  fotoDeLayout,
   type DatosAvisos,
   parsearDescartadas,
   proximoCambio,
@@ -130,6 +131,37 @@ function datos(parcial: Partial<DatosAvisos> = {}): DatosAvisos {
     ...parcial,
   };
 }
+
+describe('fotoDeLayout (B2-H3: una lectura fallida no pisa la buena)', () => {
+  const COMPLETA = {
+    ahoraServidor: '2026-10-01T10:00:00.000Z',
+    sesiones: [sesion({})],
+    recuento: { nivel1: 1, nivel2: 0, nivel3: 0 },
+    notificaciones: [],
+  };
+
+  it('con las tres lecturas conserva el instante del servidor y los datos', () => {
+    const f = fotoDeLayout(COMPLETA, [UUID_A]);
+    expect(f.ahoraServidor).toBe(COMPLETA.ahoraServidor);
+    expect(f.sesiones).toEqual(COMPLETA.sesiones);
+    expect(f.recuento).toEqual(COMPLETA.recuento);
+    expect(f.descartadas).toEqual([UUID_A]);
+  });
+
+  for (const falla of ['sesiones', 'recuento', 'notificaciones'] as const) {
+    it(`si falla la lectura de ${falla}, se pinta sin sesiones y con el instante de la época`, () => {
+      const f = fotoDeLayout({ ...COMPLETA, [falla]: null }, []);
+      expect(f.sesiones).toEqual([]);
+      expect(f.ahoraServidor).toBe('1970-01-01T00:00:00.000Z');
+    });
+
+    it(`y una foto fresca buena gana a la del layout con ${falla} fallida`, () => {
+      const inicial = fotoDeLayout({ ...COMPLETA, [falla]: null }, []);
+      const fresco = datos({ ahoraServidor: '2026-10-01T09:00:00.000Z' });
+      expect(combinarAvisos(inicial, fresco)).toBe(fresco);
+    });
+  }
+});
 
 describe('combinarAvisos', () => {
   it('devuelve la foto fresca solo si es estrictamente posterior', () => {

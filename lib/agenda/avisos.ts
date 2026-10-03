@@ -131,6 +131,32 @@ export const esquemaDatosAvisos = z.object({
 });
 
 /**
+ * La foto del layout a partir de las tres lecturas, que pueden ser `null` (B2-H3). Una lectura
+ * fallida se pinta como «no hay nada», pero esa foto **no puede ganar** a una buena traída por
+ * el refresco: si falta cualquiera, lleva el instante de la época (y sin sesiones, que contadas contra 1970 mentirían) y `combinarAvisos` (gana la
+ * estrictamente posterior) le da paso a cualquier foto fresca.
+ */
+export function fotoDeLayout(
+  avisos: {
+    ahoraServidor: string;
+    sesiones: SesionPropia[] | null;
+    recuento: RecuentoNotas | null;
+    notificaciones: NotificacionVista[] | null;
+  },
+  descartadas: string[],
+): DatosAvisos {
+  const completa = Boolean(avisos.sesiones && avisos.recuento && avisos.notificaciones);
+  return {
+    ahoraServidor: completa ? avisos.ahoraServidor : new Date(0).toISOString(),
+    // Con el reloj de la época unas sesiones se contarían contra 1970: sin foto completa, sin sesiones.
+    sesiones: completa ? (avisos.sesiones ?? []) : [],
+    recuento: avisos.recuento ?? { nivel1: 0, nivel2: 0, nivel3: 0 },
+    notificaciones: avisos.notificaciones ?? [],
+    descartadas,
+  };
+}
+
+/**
  * Gana siempre la foto más reciente: la fresca solo sustituye a la inicial si su instante es
  * **estrictamente posterior**. Así ni un refresco lento pisa un layout recién pintado ni al
  * revés. Un instante ilegible no gana.

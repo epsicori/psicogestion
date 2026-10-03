@@ -11,7 +11,7 @@ import { Cargando } from '@/components/ui/piezas';
 import { t } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
-import { parsearDescartadas, type DatosAvisos } from '@/lib/agenda/avisos';
+import { fotoDeLayout, parsearDescartadas, type DatosAvisos } from '@/lib/agenda/avisos';
 import { leerAvisos } from '@/lib/citas/avisos';
 
 import { ArmazonCliente } from './armazon-cliente';
@@ -218,14 +218,9 @@ const cargarAvisos = cache(async (): Promise<DatosAvisos> => {
   const [avisos, almacen] = await Promise.all([leerAvisos(sesion, ahora), cookies()]);
 
   // Una lectura que falla se pinta como siempre «no hay nada»: el armazón no se cae por los
-  // avisos. El refresco (`GET /api/avisos`) sí distingue el fallo y conserva lo que tenía.
-  return {
-    ahoraServidor: avisos.ahoraServidor,
-    sesiones: avisos.sesiones ?? [],
-    recuento: avisos.recuento ?? { nivel1: 0, nivel2: 0, nivel3: 0 },
-    notificaciones: avisos.notificaciones ?? [],
-    descartadas: parsearDescartadas(almacen.get(COOKIE_FRANJAS_DESCARTADAS)?.value),
-  };
+  // avisos. El refresco (`GET /api/avisos`) sí distingue el fallo y conserva lo que tenía, y
+  // esa foto vacía lleva el instante de la época para no pisar una buena (B2-H3).
+  return fotoDeLayout(avisos, parsearDescartadas(almacen.get(COOKIE_FRANJAS_DESCARTADAS)?.value));
 });
 
 /**
