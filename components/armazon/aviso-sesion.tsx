@@ -119,7 +119,7 @@ export function FranjaSesion({ ahoraServidor, sesiones, descartadas }: PropsFran
 
   return (
     // Siempre montado: un live region que nace con el contenido no se anuncia.
-    <div role="status" aria-live="polite" aria-atomic="true">
+    <div data-franja-sesion role="status" aria-live="polite" aria-atomic="true">
       {sesion && (
         <div
           key={sesion.citaId}

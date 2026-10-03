@@ -19,11 +19,8 @@
   revisión ronda 3 (diff `b483b47..f8990c2`; se paró sin escribir) → integrar. El worktree `a57d63ed…` (b483b47) sobra
   tras integrar. Corte B (migración `20261009`, banco 24): `exportada_por = {nombre_completo, rol}`; contraseña en
   puntos de código también en la interfaz; Edge y Firefox en C7. `territorio.mjs` no ve el §6 del diseño.
-- **T-015** (avisos y escalado): implementación **parada a medias** en `worktree-agent-ac7685e49ee4b37ec` (8cdd524:
-  migración + banco 22, funciones y lecturas, agenda y catálogo). Sin commitear allí: `lib/agenda/avisos*`,
-  `lib/citas/avisos.ts`, `aviso-sesion.tsx` y su prueba. Falta el armazón (campana, franja, aviso-notas) y el cierre.
-  Reanudar con implementador nuevo (memoria `reanudar-ticket-interrumpido`). **Antes: `db reset` + `seed`** (la base
-  puede tener la migración aplicada).
+- **T-015** (avisos y escalado): implementado en `worktree-agent-a95f0ec47e63493e3` (commits `T-015 · …`), 1659 tests,
+  banco 22 OK. **Falta**: verificación y dos revisores, integrar. Bitácora en `docs/bitacora/T-015.md`.
 - **T-039**: diseño cerrado. Precondición: T-028a integrado (hecho) y su §0 re-comprobado.
 - **T-028** cortes B y C, ya desbloqueados. Al corte B: E15.3 (`order desc limit 6` y su prueba), `hoy` inválido →
   `agenda.alta.sugerencias.error`; H8 y H9; previsualizar no recibe `p_excluir` ni `p_fin_el` (decidir); cero
