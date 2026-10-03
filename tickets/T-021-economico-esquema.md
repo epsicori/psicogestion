@@ -6,6 +6,21 @@ fase: 2
 prioridad: alta
 depende_de: [T-004, T-010]
 estado: pendiente
+riesgo: alto
+# territorio: adenda del diseño (A.6, 03-10-2026)
+territorio:
+  - supabase/migrations/20261011120000_economico_esquema.sql
+  - scripts/rls/00-ayudantes.sql
+  - scripts/rls/01-fijacion.sql
+  - scripts/rls/11-cobertura.sql
+  - scripts/rls/26-economico.sql
+  - scripts/rls/README.md
+  - scripts/lint-migraciones.ts
+  - scripts/lint-migraciones.test.ts
+  - lib/supabase/tipos-bd.ts
+  - tickets/T-021/**
+  - docs/bitacora/T-021*.md
+  - docs/state.md
 ---
 
 # Contexto
