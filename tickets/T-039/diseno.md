@@ -1115,3 +1115,28 @@ Contexto:
 - **Sección R del banco 23, del orquestador.** No reactiva sin condición `exigir_nota_en_episodio_de_su_cita`.
   Guarda el estado previo (`pg_trigger.tgenabled`) y restaura ese, para que un mutante `disable` no
   se deshaga antes de 23.Y1.
+
+## Adenda ronda 3, del orquestador (03-10-2026)
+
+La ronda 2 pasa el gate (todos los criterios PASAN; 0 ALTA). Quedan 3 MEDIA y 2 BAJA
+(`revision.json` ronda 2). Se cierran en la misma migración, que aún no está integrada, porque
+hacerlo después costaría otra migración y otro turno en `supabase/`. Ninguna toca una decisión del
+propietario.
+
+- **R3.1 · R2-A-H1.** El paso 0 de `fn_velar_episodio_de_cita` se amplía a
+  `old.episodio_id is not null or old.serie_id is not null`. Un único 23514 constante para los dos
+  casos: `'Una cita con episodio o de una serie no cambia de paciente ni de profesional (ADR-069, ADR-075).'`
+  Las aserciones que esperan el mensaje anterior se actualizan. Banco 23: cita de serie sin episodio,
+  cambio de paciente y de profesional → ese 23514 (ADM y `postgres`, mensajes idénticos); gemela:
+  cita sin serie ni episodio sigue cambiando de paciente.
+- **R3.2 · R2-A-H2.** `id` sale del `grant update` de `citas`. Banco 23: `has_column_privilege`
+  de `id` para update, falso.
+- **R3.3 · R2-A-H3.** `rango_bloqueante` sale del `grant update` de `citas` (lo calcula
+  `calcular_rango_bloqueante`). Antes, comprobar con grep que ninguna ruta lo escribe como
+  `authenticated`; si alguna lo hace, no quitarlo y anotarlo en la bitácora. Banco 23: privilegio falso.
+- **R3.4 · R2-B-H1.** `docs/architecture.md`: cada residuo dice qué deja abierto (la coterapeuta
+  escribe la nota de la cita conjunta en su propio episodio; reprogramar o cerrar fuera de la ventana
+  no se revalida; P4 = A; H25). Las frases que lo niegan como garantía se matizan. La línea de H25
+  (≈199) incluye `episodio_id`.
+- **R3.5 · R2-B-H2.** `scripts/rls/README.md`: la fila del banco 23 nombra D, H y Z (Z, cable trampa
+  de T-034 SQL-H2), sin la S repetida.
