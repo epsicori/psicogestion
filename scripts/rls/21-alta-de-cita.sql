@@ -166,16 +166,16 @@ select pg_temp.assert(
 select pg_temp.assert(
   has_function_privilege('authenticated', 'public.agenda_bloques_profesional(uuid,uuid,date,date,smallint)'::regprocedure, 'execute')
   and has_function_privilege('authenticated', 'public.agenda_previsualizar_alta(uuid,uuid,uuid,public.periodicidad_serie,smallint,time,smallint,date,smallint)'::regprocedure, 'execute')
-  and has_function_privilege('authenticated', 'public.agenda_crear_serie(uuid,uuid,uuid,uuid,public.periodicidad_serie,smallint,time,smallint,date,smallint,date,date[],text,text,boolean)'::regprocedure, 'execute')
-  and has_function_privilege('authenticated', 'public.agenda_crear_cita(uuid,uuid,uuid,uuid,date,time,smallint,text,text)'::regprocedure, 'execute'),
+  and has_function_privilege('authenticated', 'public.agenda_crear_serie(uuid,uuid,uuid,uuid,public.periodicidad_serie,smallint,time,smallint,date,smallint,date,date[],text,text,boolean,public.modalidad_asistencia,uuid)'::regprocedure, 'execute')
+  and has_function_privilege('authenticated', 'public.agenda_crear_cita(uuid,uuid,uuid,uuid,date,time,smallint,text,text,public.modalidad_asistencia,uuid)'::regprocedure, 'execute'),
   'A · las cuatro funciones públicas de alta las ejecuta authenticated'
 );
 
 select pg_temp.assert(
   not (has_function_privilege('anon', 'public.agenda_bloques_profesional(uuid,uuid,date,date,smallint)'::regprocedure, 'execute')
     or has_function_privilege('anon', 'public.agenda_previsualizar_alta(uuid,uuid,uuid,public.periodicidad_serie,smallint,time,smallint,date,smallint)'::regprocedure, 'execute')
-    or has_function_privilege('anon', 'public.agenda_crear_serie(uuid,uuid,uuid,uuid,public.periodicidad_serie,smallint,time,smallint,date,smallint,date,date[],text,text,boolean)'::regprocedure, 'execute')
-    or has_function_privilege('anon', 'public.agenda_crear_cita(uuid,uuid,uuid,uuid,date,time,smallint,text,text)'::regprocedure, 'execute')),
+    or has_function_privilege('anon', 'public.agenda_crear_serie(uuid,uuid,uuid,uuid,public.periodicidad_serie,smallint,time,smallint,date,smallint,date,date[],text,text,boolean,public.modalidad_asistencia,uuid)'::regprocedure, 'execute')
+    or has_function_privilege('anon', 'public.agenda_crear_cita(uuid,uuid,uuid,uuid,date,time,smallint,text,text,public.modalidad_asistencia,uuid)'::regprocedure, 'execute')),
   'A · anon no ejecuta ninguna de las cuatro funciones públicas'
 );
 

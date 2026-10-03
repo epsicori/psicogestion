@@ -193,7 +193,7 @@ select (extract(year from now())::int + 4) as anio_39 \gset
 select (make_date(:anio_39, 5, 1) + ((8 - extract(isodow from make_date(:anio_39, 5, 1))::int) % 7))::text as lunes_39 \gset
 
 create function pg_temp.dia39(p_n int) returns date
-language sql immutable as $$ select (:'lunes_39'::date + p_n) $$;
+language sql immutable as $$ select (make_date(extract(year from now())::int + 4, 5, 1) + ((8 - extract(isodow from make_date(extract(year from now())::int + 4, 5, 1))::int) % 7) + p_n) $$;
 
 -- Un instante a una hora local de Madrid, relativo a hoy.
 create function pg_temp.ts39(p_dias int, p_hora time) returns timestamptz
@@ -593,7 +593,7 @@ select pg_temp.assert(
 -- ---------------------------------------------------------------------------
 
 -- Se retira cualquier desbloqueo vivo de PRO1: elegir episodio al dar la cita no pide PIN (ADR-026).
-update public.desbloqueos_historia set revocado_en = now() where perfil_id = :PRO1 and revocado_en is null;
+update public.desbloqueos_historia set concedido_en = now() - interval '1 hour', caduca_en = now() - interval '1 minute' where perfil_id = :PRO1 and revocado_en is null;
 
 call pg_temp.como(:PRO1);
 select pg_temp.assert(
@@ -694,23 +694,23 @@ select pg_temp.assert(
   '23.L2 el técnico sigue sin ver ni un episodio ni un participante, con EP39 y citas que lo apuntan ya existentes'
 );
 select pg_temp.assert(
-  (select modalidad_asistencia from public.agenda_citas_rango(pg_temp.ts39(-1, time '00:00') + interval '4 years',
-                                                              pg_temp.ts39(1, time '00:00') + interval '5 years') where id = :'cm1') = 'online',
+  (select modalidad_asistencia from public.agenda_citas_rango(pg_temp.dia39(-1)::timestamptz,
+                                                              pg_temp.dia39(1)::timestamptz) where id = :'cm1') = 'online',
   '23.L3 como TEC1, agenda_citas_rango trae modalidad_asistencia online en la cita online'
 );
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:PRO1);
 select pg_temp.assert(
-  (select modalidad_asistencia from public.agenda_citas_rango(pg_temp.ts39(-1, time '00:00') + interval '4 years',
-                                                              pg_temp.ts39(1, time '00:00') + interval '5 years') where id = :'cm1') = 'online',
+  (select modalidad_asistencia from public.agenda_citas_rango(pg_temp.dia39(-1)::timestamptz,
+                                                              pg_temp.dia39(1)::timestamptz) where id = :'cm1') = 'online',
   '23.L4 como PRO1, agenda_citas_rango trae modalidad_asistencia online en la cita online'
 );
 call pg_temp.reset_sesion();
 call pg_temp.como(:ADM);
 select pg_temp.assert(
-  (select modalidad_asistencia from public.agenda_citas_rango(pg_temp.ts39(-1, time '00:00') + interval '4 years',
-                                                              pg_temp.ts39(1, time '00:00') + interval '5 years') where id = :'cm1') = 'online',
+  (select modalidad_asistencia from public.agenda_citas_rango(pg_temp.dia39(-1)::timestamptz,
+                                                              pg_temp.dia39(1)::timestamptz) where id = :'cm1') = 'online',
   '23.L5 como ADM, agenda_citas_rango trae modalidad_asistencia online en la cita online'
 );
 call pg_temp.reset_sesion();
@@ -775,7 +775,7 @@ select public.agenda_crear_cita(:P39, :PRO1, :CA, :TT39, pg_temp.dia39(9), time 
 select public.agenda_crear_cita(:P39, :PRO1, :CA, :TT39, pg_temp.dia39(9), time '11:00', p_episodio_id => :E39)::text as c_e2 \gset
 call pg_temp.reset_sesion();
 
-update public.desbloqueos_historia set revocado_en = now() where perfil_id = :PRO1 and revocado_en is null;
+update public.desbloqueos_historia set concedido_en = now() - interval '1 hour', caduca_en = now() - interval '1 minute' where perfil_id = :PRO1 and revocado_en is null;
 
 call pg_temp.como(:PRO1);
 select pg_temp.assert_lanza_codigo_msg(
@@ -935,3 +935,5 @@ select pg_temp.assert(
   pg_temp.contar(format('select * from public.notas_clinicas where id = %L', 'f0390001-0000-4000-8000-000000000001')) = 1,
   '23.J3 PRO2 lee la nota conjunta desde el lado de su paciente (H39), con la cita puesta en el episodio');
 call pg_temp.reset_sesion();
+
+\echo '23-cita-en-episodio: completa.'

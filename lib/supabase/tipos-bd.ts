@@ -284,12 +284,14 @@ export type Database = {
           creada_en: string
           creada_por: string | null
           desviada: boolean
+          episodio_id: string | null
           estado: Database["public"]["Enums"]["estado_cita"]
           fin: string
           id: string
           inicio: string
           marcada_realizada_en: string | null
           marcada_realizada_por: string | null
+          modalidad_asistencia: Database["public"]["Enums"]["modalidad_asistencia"]
           motivo_desviacion:
             | Database["public"]["Enums"]["motivo_desviacion_cita"]
             | null
@@ -307,12 +309,14 @@ export type Database = {
           creada_en?: string
           creada_por?: string | null
           desviada?: boolean
+          episodio_id?: string | null
           estado?: Database["public"]["Enums"]["estado_cita"]
           fin: string
           id?: string
           inicio: string
           marcada_realizada_en?: string | null
           marcada_realizada_por?: string | null
+          modalidad_asistencia?: Database["public"]["Enums"]["modalidad_asistencia"]
           motivo_desviacion?:
             | Database["public"]["Enums"]["motivo_desviacion_cita"]
             | null
@@ -330,12 +334,14 @@ export type Database = {
           creada_en?: string
           creada_por?: string | null
           desviada?: boolean
+          episodio_id?: string | null
           estado?: Database["public"]["Enums"]["estado_cita"]
           fin?: string
           id?: string
           inicio?: string
           marcada_realizada_en?: string | null
           marcada_realizada_por?: string | null
+          modalidad_asistencia?: Database["public"]["Enums"]["modalidad_asistencia"]
           motivo_desviacion?:
             | Database["public"]["Enums"]["motivo_desviacion_cita"]
             | null
@@ -368,6 +374,13 @@ export type Database = {
             columns: ["creada_por"]
             isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_episodio_id_fkey"
+            columns: ["episodio_id"]
+            isOneToOne: false
+            referencedRelation: "episodios_asistenciales"
             referencedColumns: ["id"]
           },
           {
@@ -2177,9 +2190,11 @@ export type Database = {
           creada_por: string | null
           dia_semana: number
           duracion_minutos: number
+          episodio_id: string | null
           fin_el: string | null
           hora_local: string
           id: string
+          modalidad_asistencia: Database["public"]["Enums"]["modalidad_asistencia"]
           motivo_cancelacion: string | null
           paciente_id: string
           periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
@@ -2195,9 +2210,11 @@ export type Database = {
           creada_por?: string | null
           dia_semana: number
           duracion_minutos?: number
+          episodio_id?: string | null
           fin_el?: string | null
           hora_local: string
           id?: string
+          modalidad_asistencia?: Database["public"]["Enums"]["modalidad_asistencia"]
           motivo_cancelacion?: string | null
           paciente_id: string
           periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
@@ -2213,9 +2230,11 @@ export type Database = {
           creada_por?: string | null
           dia_semana?: number
           duracion_minutos?: number
+          episodio_id?: string | null
           fin_el?: string | null
           hora_local?: string
           id?: string
+          modalidad_asistencia?: Database["public"]["Enums"]["modalidad_asistencia"]
           motivo_cancelacion?: string | null
           paciente_id?: string
           periodicidad?: Database["public"]["Enums"]["periodicidad_serie"]
@@ -2244,6 +2263,13 @@ export type Database = {
             columns: ["creada_por"]
             isOneToOne: false
             referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "series_cita_episodio_id_fkey"
+            columns: ["episodio_id"]
+            isOneToOne: false
+            referencedRelation: "episodios_asistenciales"
             referencedColumns: ["id"]
           },
           {
@@ -2537,6 +2563,9 @@ export type Database = {
           fin: string | null
           id: string | null
           inicio: string | null
+          modalidad_asistencia:
+            | Database["public"]["Enums"]["modalidad_asistencia"]
+            | null
           motivo_desviacion:
             | Database["public"]["Enums"]["motivo_desviacion_cita"]
             | null
@@ -2553,6 +2582,9 @@ export type Database = {
           fin?: string | null
           id?: string | null
           inicio?: string | null
+          modalidad_asistencia?:
+            | Database["public"]["Enums"]["modalidad_asistencia"]
+            | null
           motivo_desviacion?:
             | Database["public"]["Enums"]["motivo_desviacion_cita"]
             | null
@@ -2569,6 +2601,9 @@ export type Database = {
           fin?: string | null
           id?: string | null
           inicio?: string | null
+          modalidad_asistencia?:
+            | Database["public"]["Enums"]["modalidad_asistencia"]
+            | null
           motivo_desviacion?:
             | Database["public"]["Enums"]["motivo_desviacion_cita"]
             | null
@@ -2692,6 +2727,17 @@ export type Database = {
           inicio: string
         }[]
       }
+      agenda_cambiar_asistencia: {
+        Args: {
+          p_cita_id: string
+          p_modalidad_asistencia: Database["public"]["Enums"]["modalidad_asistencia"]
+        }
+        Returns: string
+      }
+      agenda_cambiar_episodio_cita: {
+        Args: { p_cita_id: string; p_episodio_id: string }
+        Returns: string
+      }
       agenda_cancelar_cita: {
         Args: {
           p_alcance: Database["public"]["Enums"]["alcance_cambio_serie"]
@@ -2711,6 +2757,7 @@ export type Database = {
           fin: string
           id: string
           inicio: string
+          modalidad_asistencia: Database["public"]["Enums"]["modalidad_asistencia"]
           motivo_desviacion: Database["public"]["Enums"]["motivo_desviacion_cita"]
           nota_operativa: string
           nota_pendiente: boolean
@@ -2734,8 +2781,10 @@ export type Database = {
         Args: {
           p_centro_id: string
           p_duracion_minutos?: number
+          p_episodio_id?: string
           p_fecha: string
           p_hora_local: string
+          p_modalidad_asistencia?: Database["public"]["Enums"]["modalidad_asistencia"]
           p_nota_operativa?: string
           p_paciente_id: string
           p_profesional_id: string
@@ -2750,10 +2799,12 @@ export type Database = {
           p_desde: string
           p_dia_semana: number
           p_duracion_minutos: number
+          p_episodio_id?: string
           p_estricta_primera?: boolean
           p_excluir?: string[]
           p_fin_el?: string
           p_hora_local: string
+          p_modalidad_asistencia?: Database["public"]["Enums"]["modalidad_asistencia"]
           p_nota_operativa?: string
           p_paciente_id: string
           p_periodicidad: Database["public"]["Enums"]["periodicidad_serie"]
@@ -2901,6 +2952,23 @@ export type Database = {
           p_inicio: string
         }
         Returns: boolean
+      }
+      cita_episodio_coherente: {
+        Args: {
+          p_episodio_id: string
+          p_fecha: string
+          p_paciente_id: string
+          p_profesional_id: string
+        }
+        Returns: boolean
+      }
+      cita_episodio_unico: {
+        Args: {
+          p_fecha: string
+          p_paciente_id: string
+          p_profesional_id: string
+        }
+        Returns: string
       }
       citas_afectadas_por_regla: {
         Args: { p_desde_cita_id?: string; p_serie_id: string }
@@ -3089,6 +3157,7 @@ export type Database = {
         Args: { p_perfil_id: string }
         Returns: undefined
       }
+      rellenar_episodio_de_citas: { Args: never; Returns: Json }
       resolver_hora_local: {
         Args: { p_local: string; p_zona: string }
         Returns: {
@@ -3145,6 +3214,7 @@ export type Database = {
       estado_evento_saliente: "pendiente" | "entregado" | "fallido"
       estado_perfil: "activo" | "suspendido" | "baja"
       estado_propuesta_cita: "pendiente" | "confirmada" | "descartada"
+      modalidad_asistencia: "presencial" | "online"
       modalidad_relacional: "individual" | "pareja" | "familiar" | "grupo"
       motivo_desviacion_cita:
         | "reprogramada"
@@ -3347,6 +3417,7 @@ export const Constants = {
       estado_evento_saliente: ["pendiente", "entregado", "fallido"],
       estado_perfil: ["activo", "suspendido", "baja"],
       estado_propuesta_cita: ["pendiente", "confirmada", "descartada"],
+      modalidad_asistencia: ["presencial", "online"],
       modalidad_relacional: ["individual", "pareja", "familiar", "grupo"],
       motivo_desviacion_cita: [
         "reprogramada",
