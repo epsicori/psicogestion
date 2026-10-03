@@ -9,9 +9,12 @@ import type { DatosAvisos, SesionPropia } from '@/lib/agenda/avisos';
  * la sesión caduca a los 30 minutos de inactividad y un sondeo la mantendría viva.
  */
 
-const m = vi.hoisted(() => ({ ruta: '/agenda' }));
+const m = vi.hoisted(() => ({ ruta: '/agenda', consulta: '' }));
 
-vi.mock('next/navigation', () => ({ usePathname: () => m.ruta }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => m.ruta,
+  useSearchParams: () => new URLSearchParams(m.consulta),
+}));
 vi.mock('@/app/(app)/agenda/notas', () => ({
   RUTA_NOTAS_DISPONIBLE: true,
   rutaNotas: (pacienteId: string, citaId: string) => `/pacientes/${pacienteId}/historia/notas?cita=${citaId}`,
@@ -85,6 +88,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   m.ruta = '/agenda';
+  m.consulta = '';
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(respuesta());
   vi.stubGlobal('fetch', fetchMock);
@@ -110,7 +114,10 @@ function Arbol({ inicial }: { inicial: DatosAvisos }) {
 }
 
 async function navegarA(ruta: string, vista: ReturnType<typeof render>, inicial: DatosAvisos) {
-  m.ruta = ruta;
+  // `ruta` puede llevar query («/agenda?fecha=2026-10-02»): ruta y consulta se mueven por separado.
+  const [soloRuta, consulta = ''] = ruta.split('?');
+  m.ruta = soloRuta;
+  m.consulta = consulta;
   await act(async () => {
     vista.rerender(<Arbol inicial={inicial} />);
   });
@@ -154,6 +161,32 @@ describe('el refresco', () => {
     await avanzar(REFRESCO_MINIMO_MS);
     await navegarA('/pacientes', vista, inicial);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('un cambio solo de query (misma ruta) también es navegar: pide, con el mismo mínimo (B2-H2)', async () => {
+    const inicial = foto();
+    const vista = render(<Arbol inicial={inicial} />);
+    await navegarA('/agenda?fecha=2026-10-02', vista, inicial);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Otro día a los 10 s: dentro del mínimo, ninguna.
+    await avanzar(10_000);
+    await navegarA('/agenda?fecha=2026-10-03', vista, inicial);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Pasado el mínimo, otro cambio de query sí.
+    await avanzar(REFRESCO_MINIMO_MS);
+    await navegarA('/agenda?fecha=2026-10-04&profesional=x', vista, inicial);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('gemela: repintar con la misma ruta y la misma query no pide nada', async () => {
+    const inicial = foto();
+    const vista = render(<Arbol inicial={inicial} />);
+    await avanzar(REFRESCO_MINIMO_MS * 2);
+    await navegarA('/agenda', vista, inicial);
+    await navegarA('/agenda', vista, inicial);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('mientras hay una petición en curso no lanza otra', async () => {

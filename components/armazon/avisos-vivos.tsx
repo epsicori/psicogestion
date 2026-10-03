@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   createContext,
   useCallback,
@@ -98,19 +98,24 @@ export function ProveedorAvisosVivos({ children }: { children: ReactNode }) {
 }
 
 /**
- * Pide el refresco al cambiar la ruta (no al montar: el primer pintado ya es reciente).
- * `usePathname` exige `<Suspense>` con Cache Components: el llamador lo pone.
+ * Pide el refresco al cambiar la ruta **o solo la query** (no al montar: el primer pintado ya
+ * es reciente). La agenda navega por días, semanas, centro y profesional cambiando solo la
+ * query (`/agenda?fecha=…`), y eso también es navegar (B2-H2). El mínimo de 30 s es el mismo.
+ * `usePathname` y `useSearchParams` exigen `<Suspense>` con Cache Components: el llamador lo
+ * pone (`AvisosDeCabecera`).
  */
 export function RefrescoPorNavegacion() {
   const ruta = usePathname();
+  const consulta = useSearchParams().toString();
   const { refrescar } = useContext(ContextoAvisosVivos);
-  const anterior = useRef(ruta);
+  const destino = consulta ? `${ruta}?${consulta}` : ruta;
+  const anterior = useRef(destino);
 
   useEffect(() => {
-    if (anterior.current === ruta) return;
-    anterior.current = ruta;
+    if (anterior.current === destino) return;
+    anterior.current = destino;
     refrescar();
-  }, [ruta, refrescar]);
+  }, [destino, refrescar]);
 
   return null;
 }
