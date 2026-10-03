@@ -645,3 +645,13 @@ Nada: todo es RLS, dinero o la cadena. La fila del `README.md` es una línea y n
   Repetir el redondeo en SQL sería tener dos sitios donde redondear.
 - **Tocar `fn_proteger_cita_pasada()`, `fn_auditar()` o la cadena clínica.**
 - **Sembrar datos económicos**: el seed es de T-008 y ningún criterio lo pide.
+
+## Decisiones del propietario sobre la adenda (03-10-2026)
+
+- **P1 · pendiente:** por paciente, según la recomendación.
+- **P2 · borradores:** «descartado» es una versión nueva sellada con la marca `descartado`. «Enviado» no se
+  deriva en T-021, según la recomendación.
+- **P4 · clave del NIF:** `identificacion_cifrado_v1`, según la recomendación.
+- **P3 · espejo y sincronizador: sin decidir.** El propietario dice: «La facturación será del programa de
+  facturación, analiza exhaustivamente cómo podemos proceder». Va a un análisis aparte del arquitecto, que se
+  añadirá a continuación.
