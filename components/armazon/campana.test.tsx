@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -276,6 +276,53 @@ describe('Campana: adónde va el foco (T-015, R4)', () => {
     await usuario.click(botonesMarcar()[0]);
     await screen.findByText('No se ha podido marcar como leída.');
     // Se eligió el botón de la segunda; tras revertir, la primera vuelve pero el foco sigue ahí.
+    expect(document.activeElement).toBe(botonesMarcar()[1]);
+  });
+
+  function pendiente() {
+    let falla!: () => void;
+    const promesa = new Promise<{ ok: boolean }>((resolver) => {
+      falla = () => resolver({ ok: false });
+    });
+    return { promesa, falla };
+  }
+
+  it('con la acción pendiente, quien mueve el foco a otro botón del panel no lo pierde cuando falla (B2-H1)', async () => {
+    const p = pendiente();
+    m.marcarNotificacionLeida.mockReturnValue(p.promesa);
+    const { usuario } = await abrir([vista({ id: 'a' }), vista({ id: 'b' }), vista({ id: 'c' })]);
+    await usuario.click(botonesMarcar()[0]);
+    // Se eligió el botón de B; la persona tabula a C mientras la red tarda.
+    expect(botonesMarcar()).toHaveLength(2);
+    expect(document.activeElement).toBe(botonesMarcar()[0]);
+    botonesMarcar()[1].focus();
+    expect(document.activeElement).toBe(botonesMarcar()[1]);
+
+    await act(async () => {
+      p.falla();
+    });
+    await screen.findByText('No se ha podido marcar como leída.');
+
+    // A vuelve la primera; el foco sigue en C (ahora la tercera), no salta a B.
+    expect(botonesMarcar()).toHaveLength(3);
+    expect(document.activeElement).toBe(botonesMarcar()[2]);
+  });
+
+  it('si el foco se había perdido (body) cuando falla, vuelve al destino elegido (B2-H1)', async () => {
+    const p = pendiente();
+    m.marcarNotificacionLeida.mockReturnValue(p.promesa);
+    const { usuario } = await abrir([vista({ id: 'a' }), vista({ id: 'b' }), vista({ id: 'c' })]);
+    await usuario.click(botonesMarcar()[0]);
+    expect(document.activeElement).toBe(botonesMarcar()[0]);
+    (document.activeElement as HTMLElement).blur();
+    expect(document.activeElement).toBe(document.body);
+
+    await act(async () => {
+      p.falla();
+    });
+    await screen.findByText('No se ha podido marcar como leída.');
+
+    // El destino elegido fue B: tras revertir, la segunda de la lista (A es la primera).
     expect(document.activeElement).toBe(botonesMarcar()[1]);
   });
 });
