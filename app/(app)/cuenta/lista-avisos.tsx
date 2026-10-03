@@ -38,6 +38,7 @@ export async function ListaAvisos({ sesion }: { sesion: Pick<Sesion, 'supabase'>
   if (error) console.error('[ListaAvisos] no se pudieron leer los avisos', error.code);
 
   const zona = organizacion?.zona_horaria ?? ZONA_POR_DEFECTO;
+  const sinAvisos = !avisos || avisos.length === 0;
 
   return (
     <section aria-labelledby={ID_TITULO_AVISOS} className="flex flex-col gap-3">
@@ -48,11 +49,9 @@ export async function ListaAvisos({ sesion }: { sesion: Pick<Sesion, 'supabase'>
       >
         {t('cuenta.avisos.titulo')}
       </h3>
-      {error ? (
-        <p className="text-destructive text-sm">{t('cuenta.avisos.errorLectura')}</p>
-      ) : !avisos || avisos.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{t('cuenta.avisos.vacio')}</p>
-      ) : (
+      {error && <p className="text-destructive text-sm">{t('cuenta.avisos.errorLectura')}</p>}
+      {!error && sinAvisos && <p className="text-muted-foreground text-sm">{t('cuenta.avisos.vacio')}</p>}
+      {!error && !sinAvisos && (
         <ul className="flex flex-col">
           {avisos.map((aviso) => {
             const instante = new Date(aviso.creado_en);
