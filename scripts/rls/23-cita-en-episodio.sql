@@ -76,10 +76,12 @@ select pg_temp.assert(
   and not has_column_privilege('authenticated', 'public.citas', 'modalidad_asistencia', 'INSERT')
   and has_column_privilege('authenticated', 'public.citas', 'sala', 'UPDATE')
   and has_column_privilege('authenticated', 'public.citas', 'sala', 'INSERT')
+  and not has_column_privilege('authenticated', 'public.citas', 'serie_id', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.citas', 'serie_id', 'INSERT')
   and not has_table_privilege('authenticated', 'public.series_cita', 'INSERT')
   and not has_table_privilege('authenticated', 'public.series_cita', 'UPDATE')
   and not has_table_privilege('service_role', 'public.citas', 'UPDATE'),
-  '23.A6 authenticated no escribe episodio_id ni modalidad_asistencia de citas (la gemela, sala, sí), y series_cita sigue cerrada'
+  '23.A6 authenticated no escribe episodio_id, modalidad_asistencia ni serie_id de citas (la gemela, sala, sí), y series_cita sigue cerrada'
 );
 
 select pg_temp.assert(
@@ -254,12 +256,21 @@ select id as c_re from public.citas where paciente_id = :V39 and inicio = pg_tem
 select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:P39, :PRO1, -20, time '13:00', :E39), 'R · fijación de la cita Rf (ya con episodio)');
 select id as c_rf from public.citas where paciente_id = :P39 and inicio = pg_temp.ts39(-20, time '13:00') \gset
 
+-- Se guarda el estado previo del disparador y se restaura ESE (no se reactiva sin condición): un mutante
+-- que lo dejara desactivado en la migración no debe deshacerse aquí antes de 23.Y1.
+select t.tgenabled::text as tg_nota_estado from pg_trigger t
+ where t.tgname = 'exigir_nota_en_episodio_de_su_cita' and t.tgrelid = 'public.notas_clinicas'::regclass \gset
 alter table public.notas_clinicas disable trigger exigir_nota_en_episodio_de_su_cita;
 insert into public.notas_clinicas (paciente_id, episodio_id, autor_id, cita_id) values
   (:P39, :E39, :PRO1, :'c_ra'),
   (:P39, :E39, :PRO1, :'c_rb'),
   (:P39, :F39, :PRO2, :'c_rb');
-alter table public.notas_clinicas enable trigger exigir_nota_en_episodio_de_su_cita;
+select case :'tg_nota_estado'
+         when 'D' then 'alter table public.notas_clinicas disable trigger exigir_nota_en_episodio_de_su_cita'
+         when 'R' then 'alter table public.notas_clinicas enable replica trigger exigir_nota_en_episodio_de_su_cita'
+         when 'A' then 'alter table public.notas_clinicas enable always trigger exigir_nota_en_episodio_de_su_cita'
+         else          'alter table public.notas_clinicas enable trigger exigir_nota_en_episodio_de_su_cita'
+       end \gexec
 
 -- Una serie sin episodio, de un paciente con un solo abierto (S39), y otra con dos (P39).
 select pg_temp.assert_no_lanza(pg_temp.sql_serie39(:S39, :PRO1, null), 'R · fijación de la serie Rs1');
@@ -362,9 +373,16 @@ select id as c_cu from public.citas where paciente_id = :P39 and inicio = pg_tem
 select pg_temp.assert_lanza_codigo_msg(
   format('update public.citas set episodio_id = %L where id = %L', :F39, :'c_cu'), '23514',
   'no son del mismo profesional', '23.C5 un UPDATE de episodio_id incoherente también lanza');
+-- Desde la ronda 2 (A-H1) el UPDATE de paciente_id de una cita CON episodio lo corta el paso 0, antes que V2.
 select pg_temp.assert_lanza_codigo_msg(
   format('update public.citas set paciente_id = %L where id = %L', :R39, :'c_cu'), '23514',
-  'no es titular ni participante del episodio', '23.C6 un UPDATE de paciente_id que descoloca el episodio también lanza');
+  'no cambia de paciente ni de profesional', '23.C6 un UPDATE de paciente_id de una cita con episodio lo corta el paso 0 (A-H1)');
+-- La cobertura de V2 por UPDATE queda en una cita SIN episodio a la que se le pone uno.
+select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:R39, :PRO1, 8, time '03:00', null), 'C · fijación de la cita C6b (R39, sin episodio)');
+select id as c_c6b from public.citas where paciente_id = :R39 and inicio = pg_temp.ts39(8, time '03:00') \gset
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.citas set episodio_id = %L where id = %L', :EP39, :'c_c6b'), '23514',
+  'no es titular ni participante del episodio', '23.C6b V2 por UPDATE de episodio_id: una cita sin episodio de un paciente ajeno no entra en EP39');
 
 -- Series: S1, S2 y S3 con sus gemelas.
 select pg_temp.assert_lanza_codigo_msg(pg_temp.sql_serie39(:P39, :PRO1, :F39), '23514',
@@ -470,6 +488,79 @@ select pg_temp.assert(
 );
 
 -- ---------------------------------------------------------------------------
+-- D · El paciente y el profesional de una cita con episodio no se cambian (A-H1)
+-- ---------------------------------------------------------------------------
+
+select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:W39, :PRO1, 3, time '13:00', :EB39), 'D · fijación de la cita c_eb (W39 en EB39)');
+select id as c_eb from public.citas where paciente_id = :W39 and inicio = pg_temp.ts39(3, time '13:00') \gset
+create temp table d0_citas as select id, paciente_id, profesional_id, episodio_id from public.citas where id in (:'c_cu', :'c_eb');
+
+-- Las cuatro sentencias del oráculo: participante activo (Q39), ajeno (R39), de otro profesional (H39) y
+-- participante de baja (V39). Todas dan el MISMO 23514 con la MISMA cadena.
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set paciente_id = %L where id = %L', :Q39, :'c_cu'), '23514',
+  'no cambia de paciente ni de profesional', '23.D1 ADM · paciente_id a un participante activo (Q39): 23514 constante');
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set paciente_id = %L where id = %L', :R39, :'c_cu'), '23514',
+  'no cambia de paciente ni de profesional', '23.D2 ADM · paciente_id a uno ajeno (R39): el mismo 23514');
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set paciente_id = %L where id = %L', :H39, :'c_cu'), '23514',
+  'no cambia de paciente ni de profesional', '23.D2 ADM · paciente_id a uno de otro profesional (H39): el mismo 23514');
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set paciente_id = %L where id = %L', :V39, :'c_eb'), '23514',
+  'no cambia de paciente ni de profesional', '23.D3 ADM · paciente_id a un participante de baja (V39): el mismo 23514');
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :Q39, :'c_cu')) as d_adm1 \gset
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :R39, :'c_cu')) as d_adm2 \gset
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :H39, :'c_cu')) as d_adm3 \gset
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :V39, :'c_eb')) as d_adm4 \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  :'d_adm1' like '23514%no cambia de paciente ni de profesional%'
+  and :'d_adm1' = :'d_adm2' and :'d_adm1' = :'d_adm3' and :'d_adm1' = :'d_adm4',
+  '23.D4 las cuatro CADENAS (participante, ajeno, de otro profesional, de baja) son idénticas: no hay oráculo de participación');
+
+-- PRO1, sin desbloquear la historia, sobre sus propias citas: la misma cadena.
+update public.desbloqueos_historia set concedido_en = now() - interval '1 hour', caduca_en = now() - interval '1 minute' where perfil_id = :PRO1 and revocado_en is null;
+call pg_temp.como(:PRO1);
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :Q39, :'c_cu')) as d_p1a \gset
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :R39, :'c_cu')) as d_p1b \gset
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :H39, :'c_cu')) as d_p1c \gset
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :V39, :'c_eb')) as d_p1d \gset
+select pg_temp.assert(not (select public.historia_desbloqueada()), '23.D5 PRO1 no tiene la historia desbloqueada');
+select pg_temp.assert(
+  :'d_p1a' = :'d_adm1' and :'d_p1b' = :'d_adm1' and :'d_p1c' = :'d_adm1' and :'d_p1d' = :'d_adm1',
+  '23.D5 PRO1 (sin PIN) recibe las cuatro respuestas idénticas entre sí y a las del administrador');
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set profesional_id = %L where id = %L', :PRO2, :'c_cu'), '23514',
+  'no cambia de paciente ni de profesional', '23.D6 PRO1 · profesional_id a PRO2: el mismo 23514');
+select pg_temp.sqlerrm39(format('update public.citas set profesional_id = %L where id = %L', :PRO2, :'c_cu')) as d_p1e \gset
+select pg_temp.assert(:'d_p1e' = :'d_adm1', '23.D6 la cadena del cambio de profesional es la misma');
+call pg_temp.reset_sesion();
+
+-- Ni el dueño se lo salta.
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :Q39, :'c_cu')) as d_pg1 \gset
+select pg_temp.sqlerrm39(format('update public.citas set profesional_id = %L where id = %L', :PRO2, :'c_cu')) as d_pg2 \gset
+select pg_temp.assert(:'d_pg1' = :'d_adm1' and :'d_pg2' = :'d_adm1',
+  '23.D7 postgres recibe el mismo 23514 en paciente_id y en profesional_id: ni el dueño se lo salta');
+-- El paso 0 va antes que el 2: vaciar episodio_id y cambiar paciente_id en la MISMA sentencia tampoco pasa.
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.citas set episodio_id = null, paciente_id = %L where id = %L', :Q39, :'c_cu'), '23514',
+  'no cambia de paciente ni de profesional', '23.D7b postgres · vaciar episodio_id y cambiar paciente_id a la vez: el paso 0 va antes que el 2');
+
+select pg_temp.assert(
+  not exists (select 1 from d0_citas d join public.citas c on c.id = d.id
+               where c.paciente_id is distinct from d.paciente_id or c.profesional_id is distinct from d.profesional_id
+                  or c.episodio_id is distinct from d.episodio_id),
+  '23.D8 tras D1 a D7, c_cu y c_eb conservan paciente, profesional y episodio (0 filas cambiadas)');
+
+-- Gemelas: sin episodio, el administrador sí reasigna (decisión de producto, R2.9); con episodio, una columna abierta entra.
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(format('update public.citas set paciente_id = %L where id = %L', :Q39, :'c_w'),
+  '23.D1b gemela · ADM reasigna el paciente de una cita SIN episodio');
+call pg_temp.reset_sesion();
+select pg_temp.assert_no_lanza(format('update public.citas set paciente_id = %L where id = %L', :P39, :'c_w'), 'D · se devuelve c_w a su paciente');
+call pg_temp.como(:PRO1);
+select pg_temp.assert_no_lanza(format('update public.citas set sala = %L where id = %L', 'Sala D', :'c_cu'),
+  '23.D2b gemela · PRO1 escribe una columna abierta (sala) de una cita CON episodio');
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------
 -- M · Alta con modalidad y herencia de la serie (criterio 9)
 -- ---------------------------------------------------------------------------
 
@@ -539,6 +630,94 @@ select pg_temp.assert_lanza_codigo_msg(
          :S39, :PRO1, :CA, :TT39, 'semanal', '09:00', pg_temp.dia39(2)), '22023',
   'no puede ser nula', '23.M6 lo mismo en la serie');
 call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------
+-- H · Una cita de serie es de su serie (A-H2). id_ser_m es la serie de Q39 con PRO1 (sobre EP39).
+-- ---------------------------------------------------------------------------
+
+select pg_temp.assert(
+  not has_column_privilege('authenticated', 'public.citas', 'serie_id', 'INSERT')
+  and not has_column_privilege('authenticated', 'public.citas', 'serie_id', 'UPDATE')
+  and has_column_privilege('authenticated', 'public.citas', 'sala', 'INSERT')
+  and has_column_privilege('authenticated', 'public.citas', 'sala', 'UPDATE'),
+  '23.H1 serie_id no se escribe como authenticated ni en INSERT ni en UPDATE (la gemela, sala, sí en los dos)');
+
+-- Una serie de W39 (titular) con PRO1 sobre EB39. S2 rechaza una serie de V39 (su baja_en no es nulo: no está
+-- «activo»), así que, como prevé el diseño (R2.2), los casos de V39 son los de un paciente ajeno a la serie.
+select pg_temp.assert_no_lanza(pg_temp.sql_serie39(:W39, :PRO1, :EB39), 'H · fijación de la serie id_ser_v (W39 sobre EB39)');
+select id as id_ser_v from public.series_cita where paciente_id = :W39 and episodio_id = :EB39 order by creada_en desc limit 1 \gset
+
+create function pg_temp.sql_ins_serie39(p_pac uuid, p_pro uuid, p_dias int, p_hora time, p_serie uuid)
+returns text language sql stable as $$
+  select format($f$insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria, serie_id)
+                   values (%L, %L, %L, %L, %L, 'Europe/Madrid', %L)$f$,
+                p_pac, p_pro, (select centro_id from public.pacientes where id = p_pac),
+                pg_temp.ts39(p_dias, p_hora), pg_temp.ts39(p_dias, p_hora) + interval '20 minutes', p_serie)
+$$;
+
+select count(*) as n_h_antes from public.citas where serie_id in (:'id_ser_m', :'id_ser_v') \gset
+
+-- Serie ajena (P39 sobre la serie de Q39) y V39 (de baja en EB39) sobre la serie de W39, hoy y mañana: el MISMO 42501.
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(pg_temp.sql_ins_serie39(:P39, :PRO1, 12, time '05:00', :'id_ser_m'), '42501',
+  'permission denied', '23.H2 ADM · insertar con serie_id de una serie ajena: 42501');
+select pg_temp.assert_lanza_codigo_msg(pg_temp.sql_ins_serie39(:V39, :PRO1, 0, time '05:00', :'id_ser_v'), '42501',
+  'permission denied', '23.H2 ADM · V39 (de baja) sobre la serie de EB39, hoy: 42501');
+select pg_temp.assert_lanza_codigo_msg(pg_temp.sql_ins_serie39(:V39, :PRO1, 1, time '05:00', :'id_ser_v'), '42501',
+  'permission denied', '23.H2 ADM · V39 (de baja) sobre la serie de EB39, mañana: 42501');
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:P39, :PRO1, 12, time '05:00', :'id_ser_m')) as h_adm1 \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:V39, :PRO1, 0, time '05:00', :'id_ser_v')) as h_adm2 \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:V39, :PRO1, 1, time '05:00', :'id_ser_v')) as h_adm3 \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(:'h_adm1' like '42501%' and :'h_adm1' = :'h_adm2' and :'h_adm1' = :'h_adm3',
+  '23.H2 las tres CADENAS del administrador son idénticas: no hay oráculo de baja_en ni de cerrado_en');
+
+update public.desbloqueos_historia set concedido_en = now() - interval '1 hour', caduca_en = now() - interval '1 minute' where perfil_id = :PRO1 and revocado_en is null;
+call pg_temp.como(:PRO1);
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:P39, :PRO1, 12, time '05:00', :'id_ser_m')) as h_p1a \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:V39, :PRO1, 0, time '05:00', :'id_ser_v')) as h_p1b \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:V39, :PRO1, 1, time '05:00', :'id_ser_v')) as h_p1c \gset
+select pg_temp.assert(:'h_p1a' like '42501%' and :'h_p1a' = :'h_adm1' and :'h_p1b' = :'h_adm1' and :'h_p1c' = :'h_adm1',
+  '23.H3 PRO1 (sin PIN) recibe las tres cadenas iguales entre sí y a las del administrador');
+call pg_temp.reset_sesion();
+
+-- UPDATE de serie_id: cerrado también (cita de P39 sin episodio, c_w).
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set serie_id = %L where id = %L', :'id_ser_m', :'c_w'), '42501',
+  'permission denied', '23.H4 ADM no cuelga una cita suelta de una serie');
+call pg_temp.reset_sesion();
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set serie_id = %L where id = %L', :'id_ser_m', :'c_w'), '42501',
+  'permission denied', '23.H4 PRO1 tampoco');
+call pg_temp.reset_sesion();
+
+-- postgres no se salta la coherencia con la serie: paciente o profesional distintos de los de la serie.
+select pg_temp.assert_lanza_codigo_msg(pg_temp.sql_ins_serie39(:P39, :PRO1, 12, time '05:00', :'id_ser_m'), '23514',
+  'es del paciente y del profesional de la serie', '23.H5 postgres · otro paciente (P39) sobre la serie de Q39');
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:P39, :PRO1, 12, time '05:00', :'id_ser_m')) as h_pg1 \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:R39, :PRO1, 12, time '05:00', :'id_ser_m')) as h_pg2 \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:H39, :PRO1, 12, time '05:00', :'id_ser_m')) as h_pg3 \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:Q39, :PRO2, 12, time '05:00', :'id_ser_m')) as h_pg4 \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:V39, :PRO1, 0, time '05:00', :'id_ser_v')) as h_pg5 \gset
+select pg_temp.sqlerrm39(pg_temp.sql_ins_serie39(:V39, :PRO1, 1, time '05:00', :'id_ser_v')) as h_pg6 \gset
+select pg_temp.assert(:'h_pg1' like '23514%es del paciente y del profesional de la serie%'
+  and :'h_pg1' = :'h_pg2' and :'h_pg1' = :'h_pg3' and :'h_pg1' = :'h_pg4'
+  and :'h_pg1' = :'h_pg5' and :'h_pg1' = :'h_pg6',
+  '23.H5 postgres · ajeno, de otro profesional, profesional distinto y V39 (de baja) hoy y mañana: las seis cadenas son idénticas');
+
+select pg_temp.assert((select count(*) from public.citas where serie_id in (:'id_ser_m', :'id_ser_v')) = :n_h_antes,
+  '23.H6 tras H2 a H5 no entró ninguna cita en las series');
+
+-- Gemelas: la herencia sigue viva para quien sí es de la serie; la puerta legítima (M3) no tropieza.
+select pg_temp.assert_no_lanza(pg_temp.sql_ins_serie39(:Q39, :PRO1, 12, time '05:00', :'id_ser_m'),
+  '23.H1b gemela · postgres inserta la cita del paciente y el profesional de la serie');
+select pg_temp.assert(
+  (select episodio_id = :EP39 and modalidad_asistencia = 'online' from public.citas
+    where serie_id = :'id_ser_m' and inicio = pg_temp.ts39(12, time '05:00')),
+  '23.H1b la cita heredó EP39 y la modalidad de la serie');
+select pg_temp.assert(
+  (select serie_id = :'id_ser_m' and episodio_id = :EP39 from public.citas where id = :'cita_prop_m'),
+  '23.H2b gemela · la propuesta confirmada (puerta legítima, M3) entró con la serie y su episodio');
 
 -- ---------------------------------------------------------------------------
 -- N · Resolución automática del episodio (criterio 10): como PRO1 y como TEC1
@@ -641,7 +820,7 @@ select pg_temp.sqlerrm39(format('select public.agenda_crear_cita(%L, %L, %L, %L,
 select pg_temp.assert_lanza_codigo_msg(
   format('select public.agenda_crear_cita(%L, %L, %L, %L, %L::date, time %L, p_episodio_id => %L)',
          :R39, :PRO1, :CA, :TT39, pg_temp.dia39(6), '09:00', :EC39), '22023',
-  'está cerrado', '23.X5 al dueño sí se le dice que su episodio está cerrado (22023)');
+  'indicado está cerrado', '23.X5 al dueño sí se le dice que su episodio está cerrado (22023; no casa con el 22023 del paso 5b)');
 call pg_temp.reset_sesion();
 
 select pg_temp.assert(
@@ -934,6 +1113,32 @@ select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222
 select pg_temp.assert(
   pg_temp.contar(format('select * from public.notas_clinicas where id = %L', 'f0390001-0000-4000-8000-000000000001')) = 1,
   '23.J3 PRO2 lee la nota conjunta desde el lado de su paciente (H39), con la cita puesta en el episodio');
+call pg_temp.reset_sesion();
+
+-- ---------------------------------------------------------------------------
+-- Z · CABLE TRAMPA de B-H2 / T-034 SQL-H2. No es una regla del producto: es una alarma.
+-- ---------------------------------------------------------------------------
+-- Cerrar un episodio con una cita posterior deja la nota de esa cita sin salida salvo reabrir el episodio.
+-- El ticket que cierre episodios (T-034 SQL-H2) y prohíba reabrir romperá este bloque a propósito.
+
+\set T39  '\'d0390001-0000-4000-8000-000000000009\''
+\set ET39 '\'e0390001-0000-4000-8000-000000000009\''
+insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values (:T39, 'Teo', 'Cierre39', :PRO1, :CA);
+insert into public.episodios_asistenciales (id, paciente_id, profesional_id, centro_id, modalidad_relacional, abierto_en, cerrado_en)
+values (:ET39, :T39, :PRO1, :CA, 'individual', current_date - 60, null);
+select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:T39, :PRO1, -2, time '10:00', :ET39), 'Z · fijación de la cita pasada c_z en ET39 (abierto)');
+select id as c_z from public.citas where paciente_id = :T39 and inicio = pg_temp.ts39(-2, time '10:00') \gset
+update public.episodios_asistenciales set cerrado_en = current_date - 5 where id = :ET39;
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')), 'Z · PRO1 desbloquea la historia');
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.episodio_para_nota(%L, null, %L)', :T39, :'c_z'), '22023',
+  'de la cita está cerrado', '23.Z1 B-H2 / T-034 SQL-H2 · el episodio de la cita se cerró después de darla: la nota no tiene salida');
+select pg_temp.assert_no_lanza(format('update public.episodios_asistenciales set cerrado_en = null where id = %L', :ET39),
+  '23.Z2 B-H2 / T-034 SQL-H2: reabrir es hoy la única salida de la nota de una cita cuyo episodio se cerró después de darla; antes de prohibir reabrir, dar otra salida o prohibir el cierre con citas posteriores');
+select pg_temp.assert(public.episodio_para_nota(:T39::uuid, null, :'c_z'::uuid) = :ET39::uuid,
+  '23.Z3 B-H2 / T-034 SQL-H2: reabierto, la nota de la cita vuelve a tener episodio (si esto falla, ya hay otra salida o se prohibió reabrir: revisar la regla de T-034 SQL-H2)');
 call pg_temp.reset_sesion();
 
 \echo '23-cita-en-episodio: completa.'

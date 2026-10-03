@@ -53,17 +53,19 @@ comment on column public.series_cita.episodio_id is
 --
 -- Una columna nueva de `citas` nace cerrada a `authenticated`: si debe escribirse a mano, se añade a
 -- estos `grant`. Un `revoke` de tabla revoca también los privilegios por columna, así que primero el
--- `revoke` y después los `grant`. `series_cita` no cambia: ya no tiene insert ni update para
+-- `revoke` y después los `grant`. `serie_id` tampoco se escribe a mano (ADR-069, A-H2): las series y lo que
+-- nace de ellas solo se crean por las funciones que las validan; sin el privilegio, un insert directo con
+-- `serie_id` da 42501 antes de los disparadores y no hay respuesta que leer. `series_cita` no cambia: ya no tiene insert ni update para
 -- `authenticated`. Las funciones definer (dueño `postgres`) siguen escribiendo todo.
 -- =========================================================================
 
 revoke insert, update on table public.citas from authenticated;
 
-grant insert (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, serie_id, inicio, fin,
+grant insert (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin,
               zona_horaria, estado, sala, nota_operativa, desviada, motivo_desviacion,
               rango_bloqueante, marcada_realizada_en, marcada_realizada_por, creada_en, creada_por)
   on public.citas to authenticated;
-grant update (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, serie_id, inicio, fin,
+grant update (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin,
               zona_horaria, estado, sala, nota_operativa, desviada, motivo_desviacion,
               rango_bloqueante, marcada_realizada_en, marcada_realizada_por, creada_en, creada_por)
   on public.citas to authenticated;
@@ -273,21 +275,39 @@ declare
   v_fecha     date := (new.inicio at time zone new.zona_horaria)::date;
   v_s_mod     public.modalidad_asistencia;
   v_s_epi     uuid;
+  v_s_pac     uuid;
+  v_s_pro     uuid;
   v_hay_serie boolean;
   v_e_pro     uuid;
   v_e_pac     uuid;
   v_e_cerrado date;
 begin
-  -- 1 · Herencia de la serie (solo al insertar una cita de serie). No lanza: confirmar una propuesta
-  --     o materializar una sesión nunca da error por el episodio.
+  -- 0 · Una cita con episodio no cambia de paciente ni de profesional. Constante: no mira participación
+  --     ni fechas, así que no responde a quien prueba pacientes (A-H1). Va antes de la salida sin episodio
+  --     (paso 2): vaciar episodio_id y cambiar paciente_id en una sentencia tampoco pasa. Vale para todos.
+  if tg_op = 'UPDATE' and old.episodio_id is not null
+     and (new.paciente_id is distinct from old.paciente_id
+          or new.profesional_id is distinct from old.profesional_id) then
+    raise exception 'Una cita con episodio no cambia de paciente ni de profesional (ADR-075).'
+      using errcode = '23514';
+  end if;
+
+  -- 1 · Herencia de la serie (solo al insertar una cita de serie). La herencia del episodio no lanza:
+  --     confirmar una propuesta o materializar una sesión nunca da error por el episodio. Lo que sí
+  --     lanza, antes de mirar la participación, es una fila que no es del paciente y del profesional de
+  --     la serie (A-H2): ninguna puerta legítima la fabrica, y así no depende de baja_en ni de cerrado_en.
   if tg_op = 'INSERT' and new.serie_id is not null then
-    select s.modalidad_asistencia, s.episodio_id
-      into v_s_mod, v_s_epi
+    select s.modalidad_asistencia, s.episodio_id, s.paciente_id, s.profesional_id
+      into v_s_mod, v_s_epi, v_s_pac, v_s_pro
       from public.series_cita s
      where s.id = new.serie_id
        for share;
     v_hay_serie := found;
     if v_hay_serie then
+      if new.paciente_id is distinct from v_s_pac or new.profesional_id is distinct from v_s_pro then
+        raise exception 'Una cita de una serie es del paciente y del profesional de la serie (ADR-069).'
+          using errcode = '23514';
+      end if;
       new.modalidad_asistencia := v_s_mod;
       if new.episodio_id is null and v_s_epi is not null
          and public.cita_episodio_coherente(v_s_epi, new.paciente_id, new.profesional_id, v_fecha) then
@@ -359,8 +379,9 @@ $$;
 
 comment on function public.fn_velar_episodio_de_cita() is
   'T-039, ADR-075. Antes de insertar o de cambiar episodio_id, paciente_id o profesional_id en una '
-  'cita: (1) una cita de serie hereda la modalidad de la serie y, si encaja con su fecha, su episodio '
-  '(sin lanzar nunca); (2) un episodio puesto debe ser del mismo profesional, con el paciente como '
+  'cita: (0) una cita con episodio no cambia de paciente ni de profesional (23514 constante); (1) una '
+  'cita de serie es del paciente y del profesional de la serie (23514) y hereda su modalidad y, si '
+  'encaja con su fecha, su episodio (la herencia no lanza); (2) un episodio puesto debe ser del mismo profesional, con el paciente como '
   'titular o participante cubierto por la fecha, y no estar cerrado antes del día de la cita (23514). '
   'No se ejecuta con inicio. Por el nombre va el último de los BEFORE de citas.';
 
