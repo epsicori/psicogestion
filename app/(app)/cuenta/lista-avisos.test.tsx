@@ -141,6 +141,16 @@ describe('ListaAvisos (T-038)', () => {
     expect(within(items[0]).queryByText('Sin leer')).toBeNull();
   });
 
+  it('B2-H3 · «Sin leer» va separado de la etiqueta en el texto, no solo en pantalla', async () => {
+    const { sesion } = sesionFingida([SIN_LEER]);
+
+    render(await ListaAvisos({ sesion }));
+
+    // El lector de pantalla lee el texto: «…bloqueadaSin leer» sería una sola palabra.
+    const etiqueta = screen.getByText('Sin leer').parentElement as HTMLElement;
+    expect(etiqueta.textContent).toMatch(/\S\s+Sin leer$/);
+  });
+
   it('B-H5 · la hora sale en la zona de la organización (Canarias, no Madrid)', async () => {
     const { sesion } = sesionFingida([{ ...LEIDA, creado_en: '2026-10-03T10:00:00+00:00' }], 'Atlantic/Canary');
 

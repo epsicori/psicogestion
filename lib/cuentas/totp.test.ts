@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../supabase/administracion', () => ({ crearClienteAdministracion: vi.fn() }));
 
-import { regenerarCodigosRecuperacion } from './totp';
+import { generarCodigosRecuperacion, regenerarCodigosRecuperacion } from './totp';
 import type { Sesion } from './tipos';
 
 const CONTRASENA = 'contrasena-que-no-debe-salir-nunca';
@@ -109,5 +109,28 @@ describe('regenerarCodigosRecuperacion', () => {
 
     expect(consola).not.toHaveBeenCalled();
     expect(log).not.toHaveBeenCalled();
+  });
+});
+
+describe('generarCodigosRecuperacion · B2-H5', () => {
+  it('un 42501 (segundo factor de hace más de cinco minutos) marca que la salida es volver a entrar', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { sesion } = sesionFingida({ error: { code: '42501', message: 'sin segundo factor reciente' } });
+
+    const r = await generarCodigosRecuperacion(sesion);
+
+    expect(r).toMatchObject({ ok: false, reentrar: true });
+    consola.mockRestore();
+  });
+
+  it('cualquier otro fallo no marca reentrar: reintentar sí puede funcionar', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { sesion } = sesionFingida({ error: { code: '57014', message: 'timeout' } });
+
+    const r = await generarCodigosRecuperacion(sesion);
+
+    expect(r.ok).toBe(false);
+    expect(r).not.toHaveProperty('reentrar');
+    consola.mockRestore();
   });
 });

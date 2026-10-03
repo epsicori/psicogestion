@@ -64,7 +64,10 @@ export async function ListaAvisos({ sesion }: { sesion: Pick<Sesion, 'supabase'>
                   <p className={aviso.leida_en ? 'font-medium' : 'font-semibold'}>
                     {etiquetaDe(aviso.tipo)}
                     {!aviso.leida_en && (
-                      <span className="text-primary ml-2 text-xs font-medium">{t('cuenta.avisos.sinLeer')}</span>
+                      <>
+                        {/* Un espacio de verdad: el margen solo separa en pantalla y el lector oiría «…bloqueadaSin leer». */}{' '}
+                        <span className="text-primary text-xs font-medium">{t('cuenta.avisos.sinLeer')}</span>
+                      </>
                     )}
                   </p>
                   <span className="text-muted-foreground shrink-0 text-xs">

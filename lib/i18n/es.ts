@@ -247,6 +247,11 @@ export const es = {
       fallo:
         'No se han podido generar tus códigos de recuperación. No se volverán a ofrecer al entrar: puedes generarlos en Mi cuenta › Seguridad, con tu contraseña.',
       reintentar: 'Reintentar',
+      sinRespuesta:
+        'No hemos podido contactar con el servidor: revisa tu conexión y vuelve a intentarlo. Si no sale, genera tus códigos en Mi cuenta › Seguridad.',
+      reentrar:
+        'Tu verificación en dos pasos se hizo hace más de cinco minutos y ya no vale para generar los códigos. Vuelve a entrar y genéralos en Mi cuenta › Seguridad, con tu contraseña.',
+      volverAEntrar: 'Volver a entrar',
     },
 
     pin: {
@@ -279,6 +284,8 @@ export const es = {
       sinFactor: 'No tienes la verificación en dos pasos activada.',
       bloqueado: 'Demasiados intentos. Prueba de nuevo a las {hora}.',
       generico: 'No se han podido regenerar los códigos. Vuelve a intentarlo.',
+      resultadoDesconocido:
+        'No hemos recibido respuesta y no sabemos si se han regenerado. Si se hubieran regenerado, la lista de códigos que tenías en papel ya no valdría. Comprueba en tu lista de avisos de seguridad si aparece «Códigos de recuperación nuevos»; si no aparece, vuelve a intentarlo.',
       registroInseguro:
         'Ahora mismo no es seguro enviar tu contraseña: avisa al administrador. No se ha cambiado nada.',
     },
@@ -290,6 +297,7 @@ export const es = {
     },
     fallo: {
       titulo: 'No se han regenerado los códigos',
+      tituloDesconocido: 'No sabemos si se han regenerado los códigos',
       volver: 'Volver',
     },
     avisos: {

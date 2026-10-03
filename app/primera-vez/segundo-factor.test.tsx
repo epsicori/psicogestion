@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { Component, type ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +9,9 @@ const generarCodigos = vi.fn();
 vi.mock('./acciones', () => ({
   generarCodigos: (...argumentos: unknown[]) => generarCodigos(...argumentos),
 }));
+
+const cerrarSesion = vi.fn();
+vi.mock('@/app/(app)/acciones', () => ({ cerrarSesion: (...argumentos: unknown[]) => cerrarSesion(...argumentos) }));
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -40,6 +44,7 @@ describe('SegundoFactor (T-037)', () => {
     // Sin valor, el código previo rompería con un TypeError y la prueba fallaría por otra cosa.
     generarCodigos.mockResolvedValue({ ok: true, codigos: DIEZ });
     refresh.mockReset();
+    cerrarSesion.mockReset();
     enroll.mockReset();
     challenge.mockReset();
     challenge.mockResolvedValue({ data: { id: 'reto-1' }, error: null });
@@ -261,6 +266,66 @@ describe('SegundoFactor (T-037)', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    class Frontera extends Component<{ children: ReactNode }, { error: Error | null }> {
+      state = { error: null as Error | null };
+      static getDerivedStateFromError(error: Error) {
+        return { error };
+      }
+      render() {
+        return this.state.error ? <p>FRONTERA {this.state.error.message}</p> : this.props.children;
+      }
+    }
+
+    it('B2-H1 · si «Reintentar» se rechaza (red caída), la frontera de error no se activa y el fallo se anuncia en la página', async () => {
+      const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+      enroll.mockResolvedValue(FACTOR);
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'FALLO-CODIGOS' });
+      render(
+        <Frontera>
+          <SegundoFactor factorVerificadoId={null} />
+        </Frontera>,
+      );
+      await screen.findByAltText('Código QR para configurar la verificación en dos pasos');
+      await teclearYVerificar();
+      await screen.findByText('FALLO-CODIGOS');
+      generarCodigos.mockRejectedValueOnce(new Error('red caida'));
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/conexión/i));
+      expect(screen.queryByText(/FRONTERA/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeEnabled();
+      consola.mockRestore();
+    });
+
+    it('B2-H2 · tras un reintento fallido el foco vuelve a la vista aunque el navegador lo haya quitado y el mensaje sea el mismo', async () => {
+      await hastaElFallo();
+      const region = screen.getByRole('region', { name: 'Verificación en dos pasos' });
+      // jsdom no quita el foco al deshabilitar el botón; el navegador sí (lo manda a BODY). Se simula.
+      generarCodigos.mockImplementationOnce(async () => {
+        (document.activeElement as HTMLElement | null)?.blur();
+        return { ok: false, mensaje: 'FALLO-CODIGOS' };
+      });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('FALLO-CODIGOS'));
+      await waitFor(() => expect(document.activeElement).toBe(region));
+    });
+
+    it('B2-H5 · si el segundo factor es de hace más de cinco minutos, lo dice y ofrece volver a entrar en lugar de reintentar', async () => {
+      await hastaElFallo();
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'FALLO-CODIGOS', reentrar: true });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/hace más de cinco minutos/));
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).toBeNull();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Volver a entrar' }));
+      expect(cerrarSesion).toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
     });
   });
 });

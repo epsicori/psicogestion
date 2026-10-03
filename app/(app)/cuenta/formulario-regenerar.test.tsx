@@ -147,18 +147,33 @@ describe('FormularioRegenerar (T-038)', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Contraseña')));
   });
 
-  it('B-H2 · si la acción se rechaza, la contraseña se borra, se dice como fallo y no queda rechazo sin tratar', async () => {
+  it('B-H2 / B2-H4 · si la acción se rechaza, la contraseña se borra y se dice que el resultado se desconoce, sin afirmar que no se regeneró', async () => {
     regenerarCodigos.mockRejectedValue(new Error('red caída'));
     render(<FormularioRegenerar />);
     const usuario = await rellenarYEnviar();
 
-    const region = await screen.findByRole('region', { name: 'No se han regenerado los códigos' });
+    const region = await screen.findByRole('region', { name: 'No sabemos si se han regenerado los códigos' });
     expect(document.activeElement).toBe(region);
-    expect(region).toHaveAccessibleDescription(expect.stringContaining('No se han podido regenerar los códigos'));
+    // Dice que la lista en papel puede haber dejado de valer y dónde comprobarlo.
+    expect(region).toHaveAccessibleDescription(expect.stringMatching(/lista[^.]*en papel[^.]*ya no valdr/));
+    expect(region).toHaveAccessibleDescription(expect.stringContaining('lista de avisos'));
+    expect(screen.queryByText(/No se han regenerado/)).toBeNull();
 
     await usuario.click(screen.getByRole('button', { name: 'Volver' }));
     expect(screen.getByLabelText('Contraseña')).toHaveValue('');
     expect(screen.getByLabelText('Código de la aplicación')).toHaveValue('');
+    // El aviso que lo delataría solo aparece si la página se refresca.
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('un fallo que la acción SÍ devuelve sigue diciendo que no se ha regenerado y no refresca al volver', async () => {
+    regenerarCodigos.mockResolvedValue({ mensaje: 'Ahora mismo no es seguro.' });
+    render(<FormularioRegenerar />);
+    const usuario = await rellenarYEnviar();
+
+    await screen.findByRole('region', { name: 'No se han regenerado los códigos' });
+    await usuario.click(screen.getByRole('button', { name: 'Volver' }));
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('B-H6 · la contraseña no queda en el campo tras el éxito ni al volver al formulario', async () => {

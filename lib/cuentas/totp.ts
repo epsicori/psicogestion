@@ -43,14 +43,18 @@ export async function reponerTotp(
   return { ok: true };
 }
 
-export type ResultadoCodigosRecuperacion = { ok: true; codigos: string[] } | { ok: false; mensaje: string };
+/** `reentrar`: la base exige un segundo factor de menos de cinco minutos; reintentar no puede funcionar, la salida es volver a entrar. */
+export type ResultadoCodigosRecuperacion =
+  | { ok: true; codigos: string[] }
+  | { ok: false; mensaje: string; reentrar?: true };
 
 /** Genera diez códigos de recuperación EN CLARO, para mostrar una sola vez. */
 export async function generarCodigosRecuperacion(sesion: Sesion): Promise<ResultadoCodigosRecuperacion> {
   const { data, error } = await sesion.supabase.rpc('generar_codigos_recuperacion');
   if (error || !data) {
     console.error('generarCodigosRecuperacion: fallo al generar los códigos', error);
-    return { ok: false, mensaje: 'No se pudieron generar los códigos de recuperación.' };
+    const mensaje = 'No se pudieron generar los códigos de recuperación.';
+    return error?.code === '42501' ? { ok: false, mensaje, reentrar: true } : { ok: false, mensaje };
   }
   return { ok: true, codigos: data };
 }

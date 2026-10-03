@@ -269,6 +269,9 @@ test('regenerar los códigos desde Mi cuenta (T-038, CA8 y CA13)', async ({ brow
     await expect(pagina.getByLabel('Contraseña')).toHaveValue('');
     await expect(pagina.getByLabel('Código de la aplicación')).toHaveValue('');
     await expect(pagina.getByRole('listitem').filter({ hasText: 'Códigos de recuperación nuevos' })).toHaveCount(avisosAntes + 1);
+    // B2-H3: para el lector de pantalla la marca va separada de la etiqueta («…nuevos Sin leer», no «…nuevosSin leer»).
+    const sinLeer = pagina.getByRole('listitem').filter({ hasText: 'Sin leer' }).first();
+    expect(await sinLeer.ariaSnapshot()).toMatch(/Códigos de recuperación nuevos Sin leer/);
   });
 
   await test.step('S7 · Ninguna navegación pasó por /primera-vez', async () => {

@@ -8,6 +8,8 @@ import { Field } from '@/components/ui/field';
 import { t } from '@/lib/i18n';
 import { crearClienteNavegador } from '@/lib/supabase/navegador';
 
+import { cerrarSesion } from '@/app/(app)/acciones';
+
 import { generarCodigos } from './acciones';
 
 type Props = {
@@ -49,8 +51,9 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   const [codigo, setCodigo] = useState('');
   const [codigos, setCodigos] = useState<string[] | null>(null);
   const [mensaje, setMensaje] = useState('');
-  // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue.
-  const [falloCodigos, setFalloCodigos] = useState<string | null>(null);
+  // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue. Es un
+  // objeto nuevo en cada fallo, aunque el texto sea el mismo, para que el efecto del foco corra (B2-H2).
+  const [fallo, setFallo] = useState<{ mensaje: string; reentrar: boolean } | null>(null);
   const [trabajando, iniciarTransicion] = useTransition();
   const vistaFallo = useRef<HTMLElement>(null);
   const vistaCodigos = useRef<HTMLElement>(null);
@@ -88,8 +91,8 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   // la vista para que el lector de pantalla la lea antes de que se pulse «Aceptar»
   // (mismo patrón que zona-por-confirmar: contenedor con tabIndex -1 y foco explícito).
   useEffect(() => {
-    if (falloCodigos !== null) vistaFallo.current?.focus();
-  }, [falloCodigos]);
+    if (fallo !== null) vistaFallo.current?.focus();
+  }, [fallo]);
 
   // Lo mismo con los códigos: son lo único que se enseña una vez, y el foco no puede caer en BODY.
   useEffect(() => {
@@ -100,13 +103,19 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   // refresca: si sale, se enseña; si no, se queda el aviso con el mensaje nuevo.
   const reintentar = () => {
     iniciarTransicion(async () => {
-      const resultado = await generarCodigos();
-      if (!resultado.ok) {
-        setFalloCodigos(resultado.mensaje);
-        return;
+      // Sin esto, un rechazo de la acción (red caída) sube a la frontera de error y tumba la
+      // página entera, con el aviso de dónde generar los códigos dentro (B2-H1).
+      try {
+        const resultado = await generarCodigos();
+        if (!resultado.ok) {
+          setFallo({ mensaje: resultado.mensaje, reentrar: resultado.reentrar === true });
+          return;
+        }
+        setFallo(null);
+        setCodigos(resultado.codigos);
+      } catch {
+        setFallo({ mensaje: t('primeraVez.codigos.sinRespuesta'), reentrar: false });
       }
-      setFalloCodigos(null);
-      setCodigos(resultado.codigos);
     });
   };
 
@@ -151,7 +160,7 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
         // El factor ya está verificado: el paso está superado aunque los códigos
         // fallen. Se avisa y se espera: refrescar aquí desmontaría el aviso sin que
         // se viera (D8, «avisa y deja seguir»); seguir es cosa del usuario.
-        setFalloCodigos(resultado.mensaje);
+        setFallo({ mensaje: resultado.mensaje, reentrar: resultado.reentrar === true });
         return;
       }
 
@@ -159,7 +168,7 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
     });
   };
 
-  if (falloCodigos !== null) {
+  if (fallo !== null) {
     return (
       <section
         ref={vistaFallo}
@@ -177,12 +186,20 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
         {/* Se vacía mientras se reintenta: un reintento que falla con el MISMO texto sigue
             siendo un cambio y el lector de pantalla lo vuelve a anunciar (B-H10). */}
         <p role="status" className="text-destructive text-sm">
-          {trabajando ? '' : falloCodigos}
+          {trabajando ? '' : fallo.reentrar ? t('primeraVez.codigos.reentrar') : fallo.mensaje}
         </p>
         <div className="flex gap-2">
-          <Button onClick={reintentar} disabled={trabajando}>
-            {trabajando ? t('comunes.cargando') : t('primeraVez.codigos.reintentar')}
-          </Button>
+          {fallo.reentrar ? (
+            // Reintentar no puede funcionar: la base exige un segundo factor de menos de cinco
+            // minutos. La salida es volver a entrar (B2-H5).
+            <form action={cerrarSesion}>
+              <Button type="submit">{t('primeraVez.codigos.volverAEntrar')}</Button>
+            </form>
+          ) : (
+            <Button onClick={reintentar} disabled={trabajando}>
+              {trabajando ? t('comunes.cargando') : t('primeraVez.codigos.reintentar')}
+            </Button>
+          )}
           <Button variante="secundario" onClick={() => router.refresh()}>
             {t('comunes.aceptar')}
           </Button>

@@ -1,0 +1,38 @@
+{
+  "B2-H1 sin try/catch en Reintentar": {
+    "rojo": true,
+    "lineas": [
+      "× B2-H1 · si «Reintentar» se rechaza (red caída), la frontera de error no se activa y el fallo se anuncia en la página 1273ms"
+    ]
+  },
+  "B2-H2 efecto del foco por el texto (como antes)": {
+    "rojo": true,
+    "lineas": [
+      "× B2-H2 · tras un reintento fallido el foco vuelve a la vista aunque el navegador lo haya quitado y el mensaje sea el mismo 1289ms"
+    ]
+  },
+  "B2-H3 sin el espacio": {
+    "rojo": true,
+    "lineas": [
+      "× B2-H3 · «Sin leer» va separado de la etiqueta en el texto, no solo en pantalla 3ms"
+    ]
+  },
+  "B2-H4 el catch afirma que no se regeneró": {
+    "rojo": true,
+    "lineas": [
+      "× B-H2 / B2-H4 · si la acción se rechaza, la contraseña se borra y se dice que el resultado se desconoce, sin afirmar que no se regeneró 1588ms"
+    ]
+  },
+  "B2-H5a la acción no marca reentrar": {
+    "rojo": true,
+    "lineas": [
+      "× un 42501 (segundo factor de hace más de cinco minutos) marca que la salida es volver a entrar 4ms"
+    ]
+  },
+  "B2-H5b la vista ignora reentrar": {
+    "rojo": true,
+    "lineas": [
+      "× B2-H5 · si el segundo factor es de hace más de cinco minutos, lo dice y ofrece volver a entrar en lugar de reintentar 221ms"
+    ]
+  }
+}

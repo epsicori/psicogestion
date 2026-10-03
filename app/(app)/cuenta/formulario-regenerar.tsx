@@ -14,7 +14,10 @@ import { t } from '@/lib/i18n';
 import { regenerarCodigos } from './acciones';
 import { ID_TITULO_AVISOS } from './ids';
 
-type Vista = { tipo: 'formulario' } | { tipo: 'codigos'; codigos: string[] } | { tipo: 'fallo'; mensaje: string };
+type Vista =
+  | { tipo: 'formulario' }
+  | { tipo: 'codigos'; codigos: string[] }
+  | { tipo: 'fallo'; mensaje: string; desconocido?: boolean };
 
 /**
  * Regenerar mis códigos de recuperación (T-038).
@@ -73,8 +76,9 @@ export function FormularioRegenerar() {
       setVista({ tipo: 'fallo', mensaje: estado.mensaje ?? t('cuenta.errores.generico') });
     } catch {
       // La acción se rechazó (red, servidor): ni la contraseña se queda ni el fallo se calla (B-H2).
+      // Un rechazo no dice si el paso dos llegó a confirmarse: el resultado es DESCONOCIDO (B2-H4).
       reset({ contrasena: '', codigo: '' });
-      setVista({ tipo: 'fallo', mensaje: t('cuenta.errores.generico') });
+      setVista({ tipo: 'fallo', mensaje: t('cuenta.errores.resultadoDesconocido'), desconocido: true });
     } finally {
       // Mismo lote que el error y el foco: el botón vuelve a estar habilitado cuando el foco llega.
       setEnviando(false);
@@ -104,10 +108,15 @@ export function FormularioRegenerar() {
 
   if (vista.tipo === 'fallo') {
     return (
-      <VistaConFoco titulo={t('cuenta.fallo.titulo')} descripcion={vista.mensaje}>
+      <VistaConFoco
+        titulo={vista.desconocido ? t('cuenta.fallo.tituloDesconocido') : t('cuenta.fallo.titulo')}
+        descripcion={vista.mensaje}
+      >
         <Button
           onClick={() => {
             setVista({ tipo: 'formulario' });
+            // Si el resultado se desconoce, el aviso que lo delata solo sale al refrescar.
+            if (vista.desconocido) router.refresh();
             // El efecto de arriba lleva el foco al campo cuando el formulario vuelve (B-H9).
             setCampoConFoco({ campo: 'contrasena' });
           }}
