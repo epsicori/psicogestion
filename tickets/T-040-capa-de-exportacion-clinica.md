@@ -6,7 +6,7 @@ riesgo: alto
 fase: 1
 prioridad: alta
 depende_de: [T-012]
-estado: pendiente
+estado: en curso (corte A integrado; falta B)
 territorio:                           # provisional: lo cierra el diseño (§territorio)
   - supabase/migrations/*_exportaciones.sql   # cola de un solo dueño
   - scripts/rls/*-exportaciones.sql
