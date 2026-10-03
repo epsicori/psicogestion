@@ -1,0 +1,153 @@
+{
+  "ticket": "T-038",
+  "ronda": 1,
+  "altas": 1,
+  "medias": 8,
+  "bajas": 9,
+  "hallazgos": [
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "components/armazon/enlace-cuenta.tsx",
+      "linea": 33,
+      "descripcion": "«Mi cuenta» no cierra el cajón: `identidad` se pinta fuera de `CajonContext.Provider` (armazon-cliente.tsx:91 envuelve solo `navegacion`; :95 deja `identidad` fuera), así que `useCerrarCajon()` devuelve el `() => {}` por defecto, y el armazón no cierra el cajón al cambiar de ruta. La prueba pasa porque monta el Provider a mano (enlace-cuenta.test.tsx:44).",
+      "escenario": "Móvil a 360 px: «Abrir menú» → pulsar «Mi cuenta» → navega a /cuenta, pero el cajón sigue abierto (translate-x-0) con el velo encima del formulario. Medido con el ArmazonCliente real (sonda D): tras el clic, abierto=true y el velo «Cerrar menú» sigue presente."
+    },
+    {
+      "id": "B-H2",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/cuenta/formulario-regenerar.tsx",
+      "linea": 57,
+      "descripcion": "`reset` va después del `await`, dentro de un `try` que solo tiene `finally`. Si la acción lanza (red caída, un 500, un despliegue nuevo con el id de la acción obsoleto), no se borra la contraseña, no se muestra nada y el rechazo queda sin capturar.",
+      "escenario": "regenerarCodigos rechaza → medido (sonda B): la contraseña sigue en el campo («secreta-xyz»), no aparece región de fallo, el botón vuelve a habilitarse en silencio y hay 1 unhandled rejection. Incumple «la contraseña no vive en el estado: reset siempre»."
+    },
+    {
+      "id": "B-H3",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/cuenta/lista-avisos.tsx",
+      "linea": 51,
+      "descripcion": "Si la lectura de avisos falla, `avisos` es null y se pinta «No hay avisos de seguridad.» (la línea 38 solo registra el código). Un fallo se presenta como tranquilidad justo en la lista que sirve para avisar de accesos ajenos.",
+      "escenario": "PostgREST devuelve error (tiempo de espera, permiso revocado tras una migración) → la persona ve «No hay avisos de seguridad.» aunque tenga un aviso «regeneración bloqueada» de alguien que prueba su contraseña, y no sabe que debe reintentar."
+    },
+    {
+      "id": "B-H4",
+      "severidad": "MEDIA",
+      "archivo": "app/primera-vez/segundo-factor.test.tsx",
+      "linea": 148,
+      "descripcion": "CA11 («ni el fallo ni el reintento dejan temporizadores») solo comprueba `getTimerCount()` tras un reintento con éxito (línea 224). La prueba de la vista de fallo avanza 30 s y mira `refresh`, pero no cuenta temporizadores.",
+      "escenario": "Mutante M2b: un `useEffect` en la vista de fallo con `setTimeout(..., 60000)` y su limpieza → las 9 pruebas de segundo-factor siguen verdes (medido). El temporizador vive mientras la vista de fallo está en pantalla, que es justo lo que CA11 prohíbe."
+    },
+    {
+      "id": "B-H5",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/cuenta/lista-avisos.tsx",
+      "linea": 40,
+      "descripcion": "La «hora en la zona de la organización» no está probada. Todas las pruebas usan Europe/Madrid, que es también el valor por defecto, así que ignorar la zona de la organización no rompe nada. Lo mismo pasa en acciones.ts:81 con «bloqueado hasta las …».",
+      "escenario": "Mutante `const zona = ZONA_POR_DEFECTO;` en lista-avisos → 6/6 verdes. Mutante `ZONA_POR_DEFECTO,` en acciones.ts:81 → 17/17 verdes. Ambos medidos. Una organización en Atlantic/Canary vería todas las horas de aviso y la hora de desbloqueo una hora adelantadas, y no fallaría ninguna prueba."
+    },
+    {
+      "id": "B-H6",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/formulario-regenerar.test.tsx",
+      "linea": 140,
+      "descripcion": "Las comprobaciones de que `innerHTML` y `pagina.content()` no contienen la contraseña no prueban nada: el valor tecleado en un input es una propiedad, no un atributo, y nunca aparece en el HTML serializado. Pasa lo mismo en la línea 153 y en accesibilidad/regenerar-codigos.spec.ts:255.",
+      "escenario": "Mutante M1 (quitar `reset` del camino de éxito) → las 10 pruebas del formulario siguen verdes (medido). Tras «Ya los he guardado», el campo contraseña vuelve a contener «secreta-xyz» (sonda A): justo lo que esas aserciones dicen vigilar."
+    },
+    {
+      "id": "B-H7",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/acciones.test.ts",
+      "linea": 181,
+      "descripcion": "La prueba del registro inseguro solo exige que `r.mensaje` exista, no que sea el texto `registroInseguro`. El texto del desvío declarado no queda fijado por ninguna prueba.",
+      "escenario": "Mutante `t('cuenta.errores.registroInseguro')` → `t('cuenta.errores.generico')` en acciones.ts:63 → 17/17 verdes (medido). La persona recibiría «algo ha fallado» en vez de saber que debe avisar al administrador."
+    },
+    {
+      "id": "B-H8",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/acciones.ts",
+      "linea": 40,
+      "descripcion": "Se descarta el error de `mfa.listFactors()` y se trata como si la persona no tuviera factor.",
+      "escenario": "GoTrue responde 500 o la sesión caduca durante la llamada → `factores` llega undefined → se muestra `cuenta.errores.sinFactor` («No tienes la verificación en dos pasos…») a alguien que sí la tiene, en vez del error genérico."
+    },
+    {
+      "id": "B-H9",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/formulario-regenerar.tsx",
+      "linea": 104,
+      "descripcion": "«Volver», en la vista de fallo, desmonta la región que tiene el foco y no lo lleva a ningún sitio.",
+      "escenario": "Usuario de lector de pantalla: fallo genérico → pulsa «Volver» → el botón desaparece y el foco cae a `body`, así que tiene que recorrer otra vez la página desde arriba para llegar al formulario. «Ya los he guardado», en cambio, sí lleva el foco."
+    },
+    {
+      "id": "B-H10",
+      "severidad": "BAJA",
+      "archivo": "app/primera-vez/segundo-factor.tsx",
+      "linea": 177,
+      "descripcion": "Si un reintento vuelve a fallar con el mismo mensaje, el contenido de `role=\"status\"` no cambia y no se anuncia. El mensaje real es constante (lib/cuentas/totp.ts:53), pero la prueba usa 'OTRO-FALLO' (segundo-factor.test.tsx:204), el dominio cómodo.",
+      "escenario": "Fallo → «Reintentar» → vuelve a fallar con «No se pudieron generar los códigos de recuperación.» → medido (sonda C): el foco queda en el botón y el texto no cambia. El lector de pantalla no dice nada después de «Cargando…» y la persona no sabe si el reintento falló o funcionó."
+    },
+    {
+      "id": "B-H11",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/lista-avisos.tsx",
+      "linea": 63,
+      "descripcion": "Leído y no leído se distinguen solo por el peso de la fuente (font-medium frente a font-semibold), sin texto ni atributo accesible.",
+      "escenario": "Con lector de pantalla o baja visión, la lista no deja saber qué avisos no se han visto aún: un «regeneración bloqueada» sin leer suena igual que uno leído hace meses."
+    },
+    {
+      "id": "A-H1",
+      "severidad": "ALTA",
+      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
+      "linea": 171,
+      "descripcion": "El contador de intentos (D4: «la contraseña errónea no lanza, así el contador persiste») solo persiste si la transacción del llamante confirma; PostgREST puede fallar después de que la función devuelva (o ejecutarla en solo lectura) y entonces el intento se deshace, mientras la respuesta sigue distinguiendo la contraseña buena de la mala. El límite de cinco intentos de P-4 no se cumple por la puerta directa /rest/v1/rpc.",
+      "escenario": "Medido en begin…rollback con un perfil sembrado y aal2 reciente: varias llamadas con contraseña errónea cuya transacción acaba en error por una causa posterior a la función no dejan fila en intentos_regenerar_codigos ni aviso, y el error que vuelve permite distinguir «contrasena_incorrecta» de «ok». Tras siete fallos así, la contraseña buena devuelve ok y genera el lote: nunca se bloquea. Contrastado contra el PostgREST local. D4 supone que solo un raise de la propia función deshace el contador. El arreglo es decisión del arquitecto: persistir el intento fuera de la transacción del llamante, o no exponer la RPC a PostgREST y llamarla solo desde la acción con un rol propio."
+    },
+    {
+      "id": "A-H2",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
+      "linea": 71,
+      "descripcion": "registro_postgres_seguro() no comprueba log_transaction_sample_rate, que escribe en el registro todas las sentencias de las transacciones muestreadas, con sus parámetros.",
+      "escenario": "Medido como supabase_admin en begin…rollback: con set local log_transaction_sample_rate = 1, registro_postgres_seguro() devuelve t; con ese ajuste y log_parameter_max_length = -1 (el de la imagen), una sentencia con $1 deja «Parameters: $1 = …» en docker logs. En una instancia con muestreo de transacciones la acción da el registro por seguro (Q1 b) y la contraseña queda escrita. Se arregla tratándolo como log_min_duration_sample (seguro solo si vale 0 o si log_parameter_max_length = 0), con su negativa en el banco."
+    },
+    {
+      "id": "A-H3",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
+      "linea": 274,
+      "descripcion": "La regla Q3(B) cuenta con que una fila TOTP_REPUESTO posterior al lote solo puede venir de una reposición legítima, pero registrar_reposicion_totp() solo exige rol administrador y no impide que el llamante se reponga a sí mismo.",
+      "escenario": "Un administrador con sesión aal2 llama a registrar_reposicion_totp con su propio id: queda una fila TOTP_REPUESTO posterior a su lote vigente, y generar_codigos_recuperacion() vuelve a emitir lote sin pedir contraseña. Es justo la puerta que P-4 manda cerrar «una vez hay lote», y la abre el rol con más alcance. Los avisos llegan al titular, pero nada lo impide. La función no está en el diff, aunque la regla nueva depende de ella. Hay que decidir entre excluir p_perfil_id = auth.uid() en la reposición o exigir en la regla Q3 que actor_id <> registro_id."
+    },
+    {
+      "id": "A-H4",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/13-cuentas.sql",
+      "linea": 502,
+      "descripcion": "El banco ejercita una sola de las seis condiciones de registro_postgres_seguro() (log_parameter_max_length_on_error); las otras cinco no tienen negativa.",
+      "escenario": "Mutante: se borra la cláusula de log_statement, la de log_min_duration_statement, la del muestreo, la de auto_explain o la de pgaudit, y el banco 13 sigue verde. Medido: como supabase_admin y dentro de begin…rollback, set local fija esos ajustes, así que cada rama puede tener su negativa y su gemela."
+    },
+    {
+      "id": "A-H5",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
+      "linea": 53,
+      "descripcion": "La cabecera dice que la función «falla cerrado» si no puede leer un ajuste, pero los coalesce de log_statement, auto_explain.* y pgaudit.* caen al valor que da por seguro.",
+      "escenario": "Si el dueño de la función deja de ver un ajuste en pg_settings (pierde pg_read_all_settings, o la extensión no está cargada en ese proceso), la función responde «seguro» sin haberlo leído. Hoy postgres sí lo ve, así que el problema está en el comentario. Corregir el comentario o invertir los coalesce."
+    },
+    {
+      "id": "A-H6",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
+      "linea": 84,
+      "descripcion": "La condición de auto_explain (inseguro solo entre 0 y 9999 ms) es segura en la imagen local solo porque authenticated tiene statement_timeout = 8s, y la función no lo comprueba.",
+      "escenario": "Medido: la imagen trae auto_explain.log_min_duration = 10000 y auto_explain.log_parameter_max_length = -1, y una regeneración tarda 1,6 s en local (bcrypt 12 por diez). Si se sube el statement_timeout de authenticated y una llamada pasa de 10 s (por una instancia lenta o por esperar el candado), auto_explain escribe los parámetros aunque la función haya dicho «seguro». Hay que tratar cualquier valor ≥ 0 igual que log_min_duration_statement."
+    },
+    {
+      "id": "A-H7",
+      "severidad": "BAJA",
+      "archivo": "scripts/t038-concurrencia.sql",
+      "linea": 75,
+      "descripcion": "La copia sin candado del contraensayo se crea en public con el EXECUTE por defecto a PUBLIC (anon incluido) y solo se borra en el finally del corredor.",
+      "escenario": "Medido durante la ronda: public.t038_sin_candado existía con has_function_privilege('anon', …) = t. Si el corredor se interrumpe antes del finally, la base local se queda con una regeneración sin candado ejecutable por cualquiera. Arreglo: revocar de public y anon al crearla."
+    }
+  ]
+}
