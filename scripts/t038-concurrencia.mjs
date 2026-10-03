@@ -193,6 +193,7 @@ try {
     medicion:
       "sin candado de consejo, el candado de fila del consumo de la autorización serializa la regeneración",
   };
+  exigir(b.espero, "B · la segunda conexión llegó a esperar un Lock (las dos se solapan de verdad)");
   exigir(
     b.conexiones.every((c) => c.salida.includes("RESULTADO|ok|10")),
     "B · las dos regeneraciones sin candado de consejo devuelven ok con diez códigos",
