@@ -1,0 +1,122 @@
+{
+  "ticket": "T-015",
+  "ronda": 1,
+  "commit": "1faf4c4",
+  "altas": 0,
+  "medias": 7,
+  "bajas": 7,
+  "hallazgos": [
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "components/armazon/armazon.tsx",
+      "linea": 207,
+      "descripcion": "Las sesiones de franja y ancla son una foto del layout, que no se repinta al navegar en el cliente; las acciones de agenda revalidan solo /agenda y el horizonte es de 12 h. El riesgo 1 del diseño ('solo se quedan atrás los números') es falso.",
+      "escenario": "Carga a las 08:00 y navegación en el cliente; la secretaria le da una cita a las 10:00 a las 09:00 → a las 10:00 no hay franja ni ancla. Carga a las 07:30 → la sesión de las 20:00 nunca avisa."
+    },
+    {
+      "id": "B-H2",
+      "severidad": "MEDIA",
+      "archivo": "components/armazon/aviso-sesion.tsx",
+      "linea": 115,
+      "descripcion": "descartar, marcar y marcarTodas (también campana.tsx:77 y :86) esperan Server Actions en transiciones asíncronas sin try/catch, y app/ no tiene error.tsx ni global-error.tsx.",
+      "escenario": "Wifi caída + «Descartar aviso» o «Marcar como leída» → la acción rechaza con Failed to fetch → toda la aplicación se sustituye por la pantalla de error de Next (medido: frontera=true, contenido=false)."
+    },
+    {
+      "id": "B-H3",
+      "severidad": "MEDIA",
+      "archivo": "components/armazon/campana.tsx",
+      "linea": 55,
+      "descripcion": "El botón «Marcar como leída» enfocado se desmonta al marcar («Marcar todas» igual) y el foco cae al body con el panel abierto.",
+      "escenario": "Teclado: abrir la campana, Tab a la notificación, Intro → activeElement = BODY con el diálogo abierto (medido); sin anuncio, y el siguiente Tab empieza al principio del documento."
+    },
+    {
+      "id": "B-H4",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/resolver-alerta.tsx",
+      "linea": 28,
+      "descripcion": "disabled={pendiente} sobre el botón enfocado manda el foco al body y no vuelve. El éxito quita la fila sin anuncio y un segundo fallo idéntico no se reanuncia.",
+      "escenario": "Intro en «Marcar como resuelta» → el foco pasa a BODY (medido en Chromium; sigue en BODY al rehabilitar) → la fila desaparece en silencio, o falla dos veces y el status no cambia de texto."
+    },
+    {
+      "id": "B-H5",
+      "severidad": "BAJA",
+      "archivo": "components/armazon/campana.tsx",
+      "linea": 79,
+      "descripcion": "La reversión ante ok:false no tiene prueba y es muda.",
+      "escenario": "Mutante que quita las dos reversiones → 41/41 en verde. Si la acción devuelve ok:false, la notificación vuelve a no leída con 0 status y 0 alert."
+    },
+    {
+      "id": "B-H6",
+      "severidad": "BAJA",
+      "archivo": "accesibilidad/avisos.spec.ts",
+      "linea": 53,
+      "descripcion": "La spec nunca pinta la franja con contenido a 360 px, aunque diseño §1.9/C9 lo piden; mide un div vacío.",
+      "escenario": "Una franja con nombre largo y dos botones que desborde a 360 px, o con un ascendente sticky → la spec sigue en verde."
+    },
+    {
+      "id": "B-H7",
+      "severidad": "BAJA",
+      "archivo": "tickets/T-015-avisos-sesion-y-escalado.md",
+      "linea": 9,
+      "descripcion": "territorio.mjs no ve el territorio de T-015 porque la línea 'territorio:' lleva un comentario, y sale con 0 sin comprobar nada.",
+      "escenario": "La rama toca aviso-notas.test.tsx y lib/citas/agenda.test.ts, fuera de la lista (justificados, pero no anotados) → el gate dice 'sin territorio declarado' y da verde."
+    },
+    {
+      "id": "B-H8",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 6,
+      "descripcion": "La reescritura de state.md se quedó a medias: la línea 6 dice 'T-015 a medias', el hallazgo de la línea 67 sigue abierto y faltan las notas que manda el diseño (firmar → revalidar el layout, alertas no abiertas por realizada antes del fin, intermitencia de 16-series).",
+      "escenario": "El siguiente orquestador lee 'T-015 a medias' y lo reanuda, o reabre el hallazgo de la línea 67; las tres notas solo quedan en la bitácora o en ninguna parte."
+    },
+    {
+      "id": "A-H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261006120000_avisos_y_escalado.sql",
+      "linea": 154,
+      "descripcion": "fn_proteger_alerta_documentacion congela nueve columnas pero no id; el titular cambia la PK de su alerta y rompe la idempotencia del escalado (origen_id = a.id).",
+      "escenario": "Medido: PRO1 'update alertas_documentacion set id = nuevo' → UPDATE 1; escalar_notas_pendientes() → 1 y el administrador recibe una segunda notificación idéntica. Repetible: un aviso más cada 15 min."
+    },
+    {
+      "id": "A-H2",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261006120000_avisos_y_escalado.sql",
+      "linea": 167,
+      "descripcion": "Una cita realizada corregida a no_asistida/cancelada deja su nota_sin_firmar abierta sin salida: nadie la cierra a mano, el escalado no mira la cita y solo firmar la cierra.",
+      "escenario": "Medido: PRO1 pasa la cita realizada a no_asistida (permitido) → cerrar la alerta da 42501. La cabecera la cuenta para siempre y a las 72 h el administrador recibe '«X» tiene sin firmar la nota…', que es falso. La única salida es firmar la nota de una sesión que no ocurrió."
+    },
+    {
+      "id": "A-H3",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/22-avisos.sql",
+      "linea": 345,
+      "descripcion": "La lectura del técnico es una lista blanca (consentimiento_pendiente), pero E1 solo comprueba que no ve nota_sin_firmar, y el enum tiene cinco valores.",
+      "escenario": "Mutante medido: política 'tipo <> nota_sin_firmar' → 22-avisos completa. Con esa regresión, el técnico vería en la ficha borrador_abandonado, informe_pendiente y evaluacion_sin_corregir sin que el banco lo detecte."
+    },
+    {
+      "id": "A-H4",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/22-avisos.sql",
+      "linea": 371,
+      "descripcion": "E3 prueba 3 de las 9 columnas congeladas.",
+      "escenario": "Mutante medido: quitar paciente_id, centro_id, origen_tabla, origen_id, fecha_referencia y creada_en de la guarda → completa. PRO1 podría reasignar la alerta a otro paciente o cambiar origen_id (doble aviso como A-H1) en verde."
+    },
+    {
+      "id": "A-H5",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/22-avisos.sql",
+      "linea": 168,
+      "descripcion": "El rol y el estado del administrador designado se prueban con un solo eje cada uno: la negativa del validador falla por rol, y no hay ningún designado degradado de rol.",
+      "escenario": "Mutantes medidos: sin 'p.estado = activo' en el validador (l.357) → completa; sin 'p.rol = administrador' en el CTE designado (l.394) → completa. Si el designado pasa a profesional, con M3 los avisos de nivel 3 solo le llegarían a él."
+    },
+    {
+      "id": "A-H6",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261006120000_avisos_y_escalado.sql",
+      "linea": 417,
+      "descripcion": "El filtro a.tipo = 'nota_sin_firmar' del escalado no tiene prueba.",
+      "escenario": "Mutante medido: quitarlo → completa (los consentimientos del banco nacen en now()). Con esa regresión, un consentimiento pendiente de hace 4 días generaría al administrador 'X tiene sin firmar la nota de la sesión…'."
+    }
+  ]
+}
