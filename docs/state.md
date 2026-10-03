@@ -12,7 +12,7 @@
 
 ## En curso
 
-- **T-038**: rama `worktree-agent-a4f5dba88baa1b115` (3fc4a2b). Ronda 1: evidencia 14 PASA + 2 manuales (CA14, CA16 a 360 px); revisión 1 ALTA (A-H1: el límite de intentos se esquiva si la transacción del llamante no confirma) + 8 MEDIA + 9 BAJA. Adenda R2 decidida; ronda 2 en implementación.
+- **T-038**: rama `worktree-agent-a4f5dba88baa1b115` (3fc4a2b). Ronda 1: evidencia 14 PASA + 2 manuales (CA14, CA16 a 360 px); revisión 1 ALTA (A-H1: el límite de intentos se esquiva si la transacción del llamante no confirma) + 8 MEDIA + 9 BAJA. Ronda 2: evidencia 21 PASA + CA14/CA16 manuales; revisión 0 ALTA, 2 MEDIA (A2-H1 `plpgsql_check`, B2-H1 «Reintentar»), 5 BAJA. Ronda 3 corta en implementación.
 - **T-040 A**: R3-H1 abierto (opacidad/color sin prueba). Corte B: migración, banco 24, interfaz.
 - **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). T-023 sube a riesgo alto (vista definer del pendiente).
 - **T-028 B/C**: desbloqueados. E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod.
@@ -32,6 +32,8 @@
 - **PIN y canje (ALTA, T-038 R1 revisor A, fuera del diff)**: `desbloquear_historia` y `canjear_codigo_recuperacion` devuelven el fallo sin lanzar; con PostgREST, objeto singular + filtro sobre la salida da 406 y deshace el intento fallido. El límite de cinco no existe. Arreglo: dos pasos de T-038 (DR1). **Ticket propio de riesgo alto, justo tras T-038** (P3, 03-10-2026); nota completa en `tickets/T-038/diseno.md` §R2.9.
 - **T-038 nota de despliegue (Q1)**: los ajustes de registro de Postgres que exige `registro_postgres_seguro()` viven solo en `docs/bitacora/T-038.md`; no hay manual de despliegue.
 - **`app/page.tsx` en `next dev`**: el `redirect('/agenda')` hace saltar «Route "/": Could not validate `instant`» (Cache Components) en cada visita a `/`; sale en el indicador de errores de desarrollo. Funciona, pero ensucia el registro.
+- **`verificar` en `app/primera-vez/segundo-factor.tsx:117` (T-037)**: transición asíncrona sin `try/catch` y sin `error.tsx` en `app/`; un fallo sustituye la página entera (mismo patrón que T-038 B2-H1).
+- **Playwright con 6 workers**: `acceso.spec:138` y `avisos.spec:29` fallan porque entran a la vez con el mismo usuario sembrado («el TOTP sembrado no se aceptó»); en serie pasan.
 - **`test:a11y`**: sin `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` cinco specs ajenas caen en `/primera-vez` y fallan sin decir por qué. El script debería fijarla.
 - **R2-H4 (T-037)**: `scripts/seed.mjs:29` y `scripts/test-huellas.mjs:19` toman el primer `supabase_db_*`.
 - **Base compartida**: el verificador hace `db reset` mientras los revisores miden; los revisores trabajan en `begin … rollback` y esperan a `max(version)`.
