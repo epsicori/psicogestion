@@ -16,6 +16,7 @@ territorio:
   - scripts/rls/16-series.sql            # solo si alguna aserción enumera las columnas de series_cita
   - scripts/rls/18-agenda-rango.sql      # solo si alguna aserción enumera las columnas de agenda_citas_rango
   - scripts/rls/19-nota-en-episodio.sql  # solo si el cambio de episodio_para_nota obliga a reescribir una aserción
+  - scripts/rls/21-alta-de-cita.sql      # solo las firmas de agenda_crear_serie/agenda_crear_cita en la aserción A (ampliado por el orquestador, 03-10-2026)
   - scripts/rls/11-cobertura.sql         # solo para declarar las políticas nuevas, si las hay
   - scripts/rls/README.md
   - lib/supabase/tipos-bd.ts
