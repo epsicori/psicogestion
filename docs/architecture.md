@@ -181,7 +181,7 @@ es el bug: la serie creada en enero se corre una hora en julio.
 | Alergias y medicación | Solo los suyos | Sus pacientes | Sin acceso (ADR-061, ADR-063) |
 | Nivel de riesgo | Solo los suyos | Sus pacientes | Solo indicador binario |
 | Notas clínicas | Solo las suyas (+ emergencia) | Autor o asignado | Sin acceso |
-| Agenda | Todas | La suya | Todas, sin tipo de terapia; lo elige al dar la cita, solo por las funciones de alta (ADR-074) |
+| Agenda | Todas | La suya | Todas, sin tipo de terapia ni episodio; lo elige al dar la cita, solo por las funciones de alta (ADR-074); ve y cambia si es presencial u online (ADR-075) |
 | Facturación | Total | Lo suyo | Cobros, sin dato clínico |
 | Usuarios y ajustes de empresa | Total | Sin acceso | Sin acceso |
 | Auditoría | Lectura | Sus propios registros | Sin acceso |
@@ -196,7 +196,8 @@ y el tipo de todas las citas de su centro) y **H24** (`series_cita_lectura`, que
 La rama del profesional exige además el rol `profesional_sanitario`, así que un técnico que
 figure como `profesional_id` de una cita no la modifica por ahí. Una función de alta rechaza
 con 22023 un profesional que no sea profesional sanitario o administrador activo. **Sigue
-abierta H25**: el técnico lee el tipo en sus filas de `auditoria` (ticket aparte). **Puerta
+abierta H25**: el técnico lee el tipo y el `episodio_id` de una cita en sus filas de `auditoria`, y con el
+`episodio_id` puede agrupar parejas o familias por episodio compartido; es un bloqueo de producción (ticket aparte). **Puerta
 conocida y aceptada (R2-H1, decisión del propietario del 02-10-2026)**: el técnico deduce el tipo
 de una cita por su duración, porque la duración es la del tipo (D1), lee el catálogo
 (`tipos_terapia_lectura`) y ve `inicio` y `fin` en `citas_agenda`. Sin cambio de base: ADR-074.2
@@ -414,6 +415,35 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
   único y exige elegir (`EP001`) si hay varios. El centro del episodio nuevo sale de la cita
   o, sin cita, del centro activo, que la aplicación pasa en `p_centro_id` (la cookie no se lee
   en SQL; sin ninguno de los dos, 22023).
+- **La cita y su episodio (ADR-075, T-039)**: `citas` y `series_cita` llevan `episodio_id`
+  (clínico, nulo si no hay episodio) y `modalidad_asistencia` (presencial u online, logística).
+  Ninguna se escribe a mano: `authenticated` no tiene `insert` ni `update` sobre ellas
+  (privilegio por columna) y solo las tocan `agenda_crear_cita`, `agenda_crear_serie`,
+  `agenda_cambiar_asistencia`, `agenda_cambiar_episodio_cita`, la nota que documenta la cita y
+  los disparadores. El episodio es del mismo profesional, con el paciente como titular o
+  participante cubierto por la fecha de la cita, y no cerrado antes de ese día
+  (`velar_episodio_de_cita`, 23514). Sin elegirlo, se toma el único abierto del profesional con
+  el paciente, o ninguno; nunca se abre uno. El técnico no elige el episodio y la agenda
+  (`citas_agenda`, `agenda_citas_rango`) no se lo enseña, pero sí ve y cambia la modalidad.
+  **Residuos que esto deja abiertos.** (1) H25: `tipo_terapia_id` y `episodio_id` de una cita
+  viajan en sus filas de auditoría, que el técnico lee, y con el `episodio_id` agrupa parejas o
+  familias por episodio compartido; no se cierra aquí. (2) P4 = A: la resolución automática
+  (único episodio abierto) también se aplica al administrador, que deduce por el `episodio_id` de la
+  cita que acaba de dar si el paciente es participante de un episodio abierto del profesional; es
+  un riesgo aceptado, y la cita es real y auditada y el profesional la verá en su agenda. (3) Fechas:
+  que el episodio no esté cerrado antes del día de la cita se valida al fijar el episodio, no
+  después; reprogramar (`agenda_actualizar_cita`), cerrar el episodio o dar de baja a un participante
+  no revalida las citas ya puestas (lo cierra T-034 SQL-H2; el cable trampa 23.Z avisa). (4) P1: la
+  coterapeuta escribe la nota de una cita conjunta en su propio episodio, porque la exigencia solo
+  vale para el profesional de la cita. Salvo esos residuos, la nota de una cita va en el episodio
+  de la cita (`exigir_nota_en_episodio_de_su_cita`; el paso 5b de `episodio_para_nota` lo
+  devuelve) y una cita con nota no cambia de episodio. Si se cierra un
+  episodio con una cita posterior, la nota de esa cita solo entra reabriéndolo. Un episodio o
+  participante con citas no se mueve, y una cita pasada no cambia de episodio ni de
+  modalidad. Una cita con episodio o de una serie no cambia de paciente ni de profesional (23514,
+  mensaje constante, para todos los roles): para moverla se cancela y se da otra. Las citas de una
+  serie heredan los dos valores de la serie, y `serie_id` tampoco se escribe a mano: una cita
+  de una serie es del paciente y del profesional de la serie (23514).
 - **Duplicados** (ADR-031): no se fusionan, **se vinculan**. `fusionado_en` apunta al
   superviviente, el absorbido queda en solo lectura, nada se repunta y RLS resuelve por el
   vínculo en un solo salto.
