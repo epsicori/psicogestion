@@ -638,11 +638,17 @@ select pg_temp.assert(pg_temp.t38_ev('{"pgaudit.log":"all"}'),
 -- N0: faltan claves del núcleo, o una vale nulo (A-H5)
 select pg_temp.assert(not pg_temp.t38_ev_sin('log_statement'),     'R2-5 N0 · sin log_statement es inseguro');
 select pg_temp.assert(not pg_temp.t38_ev_sin('statement_timeout'), 'R2-5 N0 · sin statement_timeout es inseguro');
+-- con todos los umbrales apagados ninguna regla C ve la falta: solo N0 la atrapa
+select pg_temp.assert(not public.evaluar_registro_postgres(((select m from t38_base) - 'statement_timeout') || '{"auto_explain.log_min_duration":"-1"}'),
+  'R2-5 N0 · sin statement_timeout es inseguro aunque ningún umbral esté activo (solo N0 lo atrapa)');
 select pg_temp.assert(not pg_temp.t38_ev('{"log_statement":null}'), 'R2-5 N0 · log_statement nulo es inseguro (un valor ilegible nunca es seguro)');
 select pg_temp.assert(not pg_temp.t38_ev('{"log_parameter_max_length_on_error":null}'),
   'R2-5 coalesce · log_parameter_max_length_on_error nulo es inseguro');
 select pg_temp.assert(not public.evaluar_registro_postgres(null), 'R2-5 N0 · un mapa nulo es inseguro');
 -- N1: una extensión cargada cuyas claves no se leyeron
+-- con el umbral apagado (-1) la regla C7 no se activa: solo N1 atrapa la clave que falta
+select pg_temp.assert(not public.evaluar_registro_postgres(((select m from t38_base) - 'auto_explain.log_parameter_max_length') || '{"auto_explain.log_min_duration":"-1"}'),
+  'R2-5 N1 · auto_explain cargada y sin auto_explain.log_parameter_max_length es inseguro aunque el umbral esté apagado (solo N1 lo atrapa)');
 select pg_temp.assert(not pg_temp.t38_ev_sin('auto_explain.log_min_duration'),
   'R2-5 N1 · auto_explain cargada y sin su umbral es inseguro');
 select pg_temp.assert(not pg_temp.t38_ev_sin('pgaudit.log_parameter'),
