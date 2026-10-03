@@ -1,0 +1,57 @@
+{
+  "ticket": "T-039",
+  "commit": "80a99b6",
+  "altas": 2,
+  "medias": 3,
+  "bajas": 1,
+  "hallazgos": [
+    {
+      "id": "A-H1",
+      "severidad": "ALTA",
+      "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
+      "linea": 370,
+      "descripcion": "El disparador de coherencia corre al cambiar paciente_id, columna que el administrador sigue pudiendo escribir en cualquier cita: el oráculo de participación que la tarea 3 manda cerrar sigue abierto por otra columna.",
+      "escenario": "Como ADM sin PIN: update citas set paciente_id = Hugo where id = <cita de Sofía en EP (pareja)> da 23514 «no es titular ni participante» si Hugo no está y éxito si lo está; con un ex participante, «no estaba de alta». Medido en rollback con H39, Q39 y V39. 23.C6 solo lo prueba como postgres."
+    },
+    {
+      "id": "A-H2",
+      "severidad": "ALTA",
+      "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
+      "linea": 283,
+      "descripcion": "La herencia de la serie no comprueba que la serie sea del paciente de la cita; con serie_id en el grant insert y episodio_id legible para el administrador, es un oráculo silencioso de participación y de fechas de alta y baja.",
+      "escenario": "Como ADM: insert into citas (paciente_id=Q39, profesional_id=PRO1, serie_id=<serie de P39 en EP39>, …) entra sin error y al releerla episodio_id = EP39 (participante); con R39 o H39 nace nula. Con V39 sobre la serie de EB39: la cita de hoy hereda y la de mañana no, lo que da la baja_en al día. Medido en rollback."
+    },
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "docs/architecture.md",
+      "linea": 425,
+      "descripcion": "El párrafo nuevo afirma que el técnico no ve el episodio y omite H25, el residuo de reprogramar o cerrar y el alcance P1 que la tarea 16, el §1.16 y el contrato («Aquí queda escrito en docs/architecture.md») mandan escribir.",
+      "escenario": "Como k_tec (aal2): agenda_cambiar_asistencia(cita de Sofía, online) y luego presencial dejan la cita igual, y sus dos filas de auditoria llevan episodio_id = k_epi_pareja. Con citas de Sofía y de Hugo, ve el mismo uuid en las dos y deduce la pareja. Medido en rollback."
+    },
+    {
+      "id": "B-H2",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261007120000_cita_en_episodio_y_asistencia.sql",
+      "linea": 719,
+      "descripcion": "La única salida de la nota de una cita cuyo episodio se cerró es reabrir el episodio, que es justo lo que T-034 SQL-H2 va a prohibir, y docs/state.md:43 no lo anota.",
+      "escenario": "Ana cierra k_epi_carmen con una cita futura de Carmen; nada lo impide (incoherentes 0 → 2). Ya pasada la cita: episodio_para_nota da 22023 sin elegir y con el mismo episodio, y 42501 con otro; agenda_cambiar_episodio_cita da 42501 «una vez asignado». Si reabre, entra. Con la reapertura prohibida, la nota no se escribe nunca y la alerta nota_sin_firmar queda eterna."
+    },
+    {
+      "id": "B-H3",
+      "severidad": "MEDIA",
+      "archivo": "supabase/seed-completo.sql",
+      "linea": 563,
+      "descripcion": "La siembra inserta las dos citas a mano, con episodio y modalidad fijados, contra la tarea 13 y el §1.15 («Se usan las funciones de alta… y no un insert directo»), sin justificar.",
+      "escenario": "Una regresión en la resolución de agenda_crear_cita o en la modalidad pasada por el técnico deja la demostración intacta, y el criterio 23 (online 1, k_epi_pareja 1, incoherentes 0) sale verde por construcción."
+    },
+    {
+      "id": "B-H4",
+      "severidad": "BAJA",
+      "archivo": "docs/interfaz.md",
+      "linea": 425,
+      "descripcion": "La línea de la agenda queda como tipo · modalidad · profesional, y C14 y el prototipo dicen tipo · profesional · modalidad.",
+      "escenario": "El ticket de interfaz sigue interfaz.md, que manda sobre las pantallas, y pinta un orden distinto del prototipo."
+    }
+  ]
+}
