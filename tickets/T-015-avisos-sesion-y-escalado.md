@@ -5,7 +5,8 @@ modelo: opus   # subido el 02-10-2026: migración con RLS, disparadores y pg_cro
 fase: 1
 prioridad: alta
 depende_de: [T-010, T-014]
-estado: pendiente
+estado: hecho
+completado: 2026-10-03
 riesgo: alto
 # territorio: adenda ronda 2 del diseño (R7, 03-10-2026); sustituye a la lista del §6
 territorio:
