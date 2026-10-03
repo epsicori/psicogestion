@@ -921,3 +921,453 @@ impacto de cada opción.
 | P3 | **El nivel 2 no notifica al profesional**: basta la cabecera. | Ninguno. El tipo `nota_pendiente` queda en el catálogo sin generador. |
 | P4 | **El nivel 3 va a un administrador designado, con respaldo a todos los activos.** Un campo en `organizacion` (se fija por base hasta que Ajustes tenga pantalla). Si está vacío, o la persona ya no es `administrador` activo, se notifica a todos los administradores activos: el aviso nunca se pierde. | D13 cambia. Nueva columna y nueva gemela en C5. |
 | P5–P8 | Se aceptan las recomendaciones: P5 aplazada al consumidor del outbox; P6 pg_cron; P7 columna `titulo` con respaldo a la etiqueta del tipo; P8 el administrador sigue viendo todas las alertas en la RLS. | Ninguno. |
+
+---
+
+## Adenda ronda 2 (03-10-2026)
+
+Responde a la revisión de la ronda 1 (`tickets/T-015/revision.md` y `revision.json`, commit
+`1faf4c4`: 0 ALTA, 7 MEDIA y 7 BAJA). Las secciones anteriores siguen vigentes **salvo en lo
+que esta adenda sustituye de forma expresa** (§R1.4 C5, Riesgo 1 y §6). Si chocan, manda la
+adenda.
+
+### R0 · Hechos verificados contra el código
+
+Los hechos de la rama se han comprobado en el worktree `.claude/worktrees/agent-a95f0ec47e63493e3`
+(HEAD `1faf4c4`) y los de la base, con `psql` en `supabase_db_Psicogestion`, que tiene aplicada
+la migración de la ronda 1.
+
+| # | Hecho | Dónde |
+|---|---|---|
+| R0.1 | En la base, las restricciones de `estado` se llaman `alertas_documentacion_estado_check` (`estado in ('abierta','resuelta')`) y `alertas_documentacion_check` (`(estado='resuelta') = (resuelta_en is not null)`). `alertas_documentacion_origen_tabla_check` ya admite `'citas'`. | `pg_constraint`; DDL en `20260822094547_…:874-876` |
+| R0.2 | Disparadores AFTER UPDATE sobre `citas`: `alertar_nota_sin_firmar` (OF estado) y `auditar_citas`. Sobre `alertas_documentacion`: `auditar_alertas_documentacion` (`fn_auditar('id')`, AFTER I/U/D), `proteger_alerta_documentacion` (BEFORE UPDATE, invoker) y `fijar_referencia_alerta` (BEFORE INSERT). La tabla no tiene `FORCE ROW LEVEL SECURITY`. | `pg_trigger`, `pg_class.relforcerowsecurity = f` |
+| R0.3 | **Todos los lectores filtran `estado = 'abierta'`**: la ficha (`app/(app)/pacientes/[id]/datos.ts:328`), la bandeja (`lib/citas/agenda.ts:225`), el punto de la cita en `agenda_citas_rango` (`20260926120000_…:154-158`), la vista del nivel (el nivel solo se calcula si está `abierta`, migración `:283`), el recuento (`:308`) y el escalado (`:416`). Por tanto, un tercer estado no aparece en ninguna pantalla. | ídem |
+| R0.4 | La siembra crea una `nota_sin_firmar` con `origen_tabla = 'notas_clinicas'`, además de las de `'citas'`. | `select … group by tipo, origen_tabla` en la base local; `supabase/seed-completo.sql` |
+| R0.5 | `notificaciones_origen_unico` es `(perfil_id, tipo, origen_tabla, origen_id) where origen_id is not null`, y `origen_tabla` es texto libre (solo se exige que no esté vacío). | `pg_indexes`, `pg_constraint` |
+| R0.6 | El escalado escribe `origen_tabla = 'alertas_documentacion', origen_id = a.id`. | migración `:404-405` |
+| R0.7 | El proxy redirige a `/login` toda ruta no pública sin usuario (`proxy.ts:59-81`), y a `/primera-vez` si falta un paso del primer acceso (`:100-114`). Llama a `getUser()` en cada petición, y **«esta llamada es la que refresca el token»** (`proxy.ts:54-57`). | `proxy.ts` |
+| R0.8 | **Decisión fundacional: «sesión de 30 min de inactividad»** (`docs/decisions/fundacionales.md:44`). En local es `inactivity_timeout = "30m"` y `jwt_expiry = 1800` (`supabase/config.toml:165`, `:283-291`): «sin actividad durante este tiempo, GoTrue invalida la sesión y el refresco falla». | ídem |
+| R0.9 | `exigirSesion()` hace `redirect('/login')` y `obtenerUsuario()` devuelve `usuario: null` sin redirigir. | `lib/supabase/sesion.ts:9-27` |
+| R0.10 | Next 16.3.1: los layouts no se vuelven a pintar al navegar (`01-getting-started/03-layouts-and-pages.md:43`). `template.tsx` no envuelve el layout de su segmento (`03-file-conventions/template.md`). Un GET de Route Handler con Cache Components se ejecuta en cada petición si toca `cookies()`, `connection()` o la base (`01-getting-started/15-route-handlers.md:89`, `:122`). `usePathname` puede suspender y necesita `<Suspense>` (`04-functions/use-pathname.md:70-77`). Hoy ya se usa así dentro de una ranura con `<Suspense>` (`components/armazon/navegacion.tsx:34`). | docs de `node_modules/next` |
+| R0.11 | `router.refresh()` vuelve a pedir los layouts, pero si la petición falla (red, redirección o error del servidor) cae a una navegación MPA completa: la página se recarga entera. | `next/dist/client/components/router-reducer/reducers/refresh-reducer.js` y `ppr-navigations.js` (comprobado en la sesión anterior) |
+| R0.12 | «If the Server Function inside `useTransition` throws, the error is forwarded to the nearest error boundary». `app/` no tiene `error.tsx` ni `global-error.tsx`. | `02-guides/interactive-apps.md:174`; `ls app` |
+| R0.13 | En la campana, «Marcar como leída» se desmonta al marcar (`campana.tsx:53-58`) y «Marcar todas» desaparece con `sinLeer = 0` (`:119-125`). Las transiciones de `:77-80` y `:86-89` no llevan `try`. El panel del `Emergente` es `role="dialog"` con `tabIndex={-1}` y atrapa el foco (`components/ui/emergente.tsx:27-28`, `:56-63`). | ídem |
+| R0.14 | `ResolverAlerta` pone `disabled={pendiente}` (`resolver-alerta.tsx:28`), y su `status` vive dentro del `<form>`, que se desmonta con la fila. `Documentacion` es un componente de servidor. `Marco` pinta `MarcoBloque` con `id="agenda-documentacion"`, que es el `id` del `<h2>` (`documentacion.tsx:23-29`, `marco.tsx`). | ídem |
+| R0.15 | `useInstante` no reinicia `instante` cuando cambia `base` (`aviso-sesion.tsx:46-70`). `descartar` espera la acción sin `try` (`:111-118`). | ídem |
+| R0.16 | Una spec de Playwright ya prepara datos en la base con `ejecutarSql` (`scripts/psql.mjs`) y `contenedorDelProyecto()`. | `accesibilidad/codigos-recuperacion.spec.ts:1-8`, `:139` |
+| R0.17 | `scripts/rls/01-fijacion.sql:167` tiene un comentario que dice «solo tiene DOS estados reales». No es una aserción, así que no rompe nada; queda desfasado y está fuera del territorio. | ídem |
+| R0.18 | Vitest corre en `jsdom` por defecto (`vitest.config.ts`). No existe `lib/citas/avisos.test.ts`. | ídem |
+| R0.19 | `20261006120000` no está en `main` (la última es `20261005120000`), y la regla 6 del linter de migraciones solo compara las que ya están en `main`. **Se edita en su sitio.** | `git ls-tree main supabase/migrations`; `scripts/lint-migraciones.ts` |
+
+### R1 · A-H2 — la alerta de una cita que deja de ser `realizada`
+
+**Decisión.** Un tercer estado, **`anulada`**. Lo pone **solo la base**, cuando la cita sale de
+`realizada`. Nada se borra y nada se marca como «resuelta», que sería falso: la nota no se ha
+firmado. La alerta anulada queda como hecho histórico y auditado.
+
+**R1.1 · Cambios en `20261006120000_avisos_y_escalado.sql` (editada en su sitio, bloque B)**
+
+1. Dominio y columna, en este orden y antes de crear la vista del bloque D:
+   ```sql
+   alter table public.alertas_documentacion
+     add column anulada_en timestamptz,
+     drop constraint alertas_documentacion_estado_check,
+     add constraint alertas_documentacion_estado_check
+       check (estado in ('abierta', 'resuelta', 'anulada')),
+     add constraint alertas_documentacion_anulada_check
+       check ((estado = 'anulada') = (anulada_en is not null));
+   ```
+   - `alertas_documentacion_check` (la de `resuelta`) no se toca. Una `anulada` tiene
+     `resuelta_en` nulo, así que la cumple.
+   - Es una columna nula sin valor por defecto y un dominio que se amplía: nada destructivo.
+   - La vista `alertas_documentacion_nivel` enumera sus columnas, así que no cambia.
+2. Una función y un disparador nuevos:
+   ```sql
+   create function public.fn_anular_alerta_nota_sin_firmar()
+   returns trigger language plpgsql security definer set search_path = '' as $$
+   begin
+     update public.alertas_documentacion
+        set estado = 'anulada', anulada_en = now()
+      where origen_tabla = 'citas' and origen_id = new.id
+        and tipo = 'nota_sin_firmar' and estado = 'abierta';
+     return null;
+   end; $$;
+   revoke execute on function public.fn_anular_alerta_nota_sin_firmar() from public, anon, authenticated;
+   create trigger anular_alerta_nota_sin_firmar
+     after update of estado on public.citas
+     for each row
+     when (old.estado = 'realizada' and new.estado is distinct from 'realizada')
+     execute function public.fn_anular_alerta_nota_sin_firmar();
+   ```
+   - **Definer**, porque el técnico cambia el estado a través de `agenda_actualizar_cita`
+     (definer) y el titular lo hace en directo. En los dos casos la guarda invoker de
+     `alertas_documentacion` ve `current_user <> 'authenticated'` y deja pasar.
+   - **No lee `notas_clinicas`** (contrato). Lleva su `comment on function`.
+   - **Auditoría**: la escribe `auditar_alertas_documentacion` en la misma transacción que
+     la de la cita, con `actor_id = auth.uid()`, es decir, quien corrigió la cita.
+3. La guarda `fn_proteger_alerta_documentacion` (para `authenticated`) queda así:
+   - La lista congelada suma **`id`** (A-H1) y **`anulada_en`**. Mismo mensaje: «Una alerta
+     no cambia de identidad ni de instante.».
+   - Nueva rama, la **primera** tras la lista congelada: si `new.estado = 'anulada'` y
+     `old.estado is distinct from 'anulada'`, lanza 42501 con «Solo la corrección de la cita
+     anula una alerta.».
+   - La rama «resuelta no se reabre» pasa a ser «`old.estado <> 'abierta'` y cambia
+     `estado` o `resuelta_en`», con el mensaje «Una alerta cerrada no se reabre.». Cubre
+     `resuelta` y `anulada`.
+   - Lo demás queda igual, incluida la rama de `nota_sin_firmar`.
+4. El escalado (bloque G) cambia el origen de la notificación: **`origen_tabla = a.origen_tabla,
+   origen_id = a.origen_id`**, es decir, *lo que falta*, no la fila de la alerta.
+   - Así la idempotencia es por cita y destinatario. Si la cita se anula y vuelve a
+     `realizada`, la alerta nueva no genera un segundo aviso al administrador por la misma
+     sesión.
+   - Es genérico a propósito: la `nota_sin_firmar` de la siembra con
+     `origen_tabla = 'notas_clinicas'` (R0.4) sigue escalando una vez.
+   - El `comment on function` se ajusta.
+
+**R1.2 · Qué pasa en cada caso**
+
+| Secuencia | Resultado |
+|---|---|
+| Cita `realizada` con alerta abierta, corregida a `no_asistida`, `cancelada`, `programada` o `confirmada` | La alerta pasa a `anulada` con `anulada_en = now()`. Sale del recuento, de la bandeja, de la ficha y del escalado (R0.3). Queda una fila `UPDATE` en `auditoria`. |
+| Lo mismo, pero con la nota ya firmada (alerta `resuelta`) | No se toca: el `where estado = 'abierta'` la excluye. |
+| La cita vuelve a `realizada` | `fn_alertar_nota_sin_firmar` (sin cambios) abre **una alerta nueva**: la anulada no está abierta y el índice parcial no choca. Si para entonces hay una versión de nota, no abre nada, como hoy. `referencia_en` vuelve a ser `citas.fin` (bloque B), así que el nivel cuenta desde la sesión, no desde la corrección. |
+| La reabierta llega al nivel 3 y el administrador ya fue avisado por esa cita | `on conflict … do nothing`: cero filas nuevas. |
+| La reabierta llega al nivel 3 y nunca se avisó | Una fila: es verdad que la nota de una sesión realizada lleva más de 72 h sin firmar. |
+| Un usuario intenta poner `anulada` a mano, reabrir una anulada o tocar `anulada_en` | 42501. |
+| El cron escala en el mismo instante en que se corrige la cita | Puede quedar una notificación emitida para una alerta que acaba de anularse. Se acepta: la notificación es un hecho fechado (ADR-038) y la corrección queda en la agenda y en la auditoría. |
+
+**R1.3 · PREGUNTA AL PROPIETARIO (A-H2).** Si el administrador ya recibió el aviso de nivel 3
+y después la cita se corrige a «no asistió», ¿hay que mandarle un aviso de rectificación?
+**Recomendación: no, en este ticket.** El aviso decía algo cierto cuando se emitió, la
+corrección queda auditada y un segundo aviso duplica ruido. Si se quiere, va en el ticket que
+consuma el outbox. El diseño no depende de la respuesta.
+
+**R1.4 · C5 cambia.** Donde §3 C5 dice `origen_id = alerta`, ahora es
+`origen_tabla = 'citas' and origen_id = <cita>`. El resto de C5 sigue igual.
+
+### R2 · B-H1 — cómo se mantienen al día la franja, el ancla, el recuento y la campana
+
+**Diagnóstico aceptado.** El Riesgo 1 del diseño era falso. El layout del grupo `(app)` no se
+vuelve a pintar al navegar (R0.10). Las acciones de la agenda solo revalidan `/agenda` y el
+horizonte es de 12 h. Así que la lista de sesiones es una foto de la última vez que se pintó
+el layout.
+
+**Restricción que manda (R0.7, R0.8).** La sesión caduca a los **30 minutos sin actividad**.
+Cada petición pasa por el proxy, que llama a `getUser()` y renueva el token. Un sondeo con
+temporizador mantendría viva la sesión de una pestaña abierta en una consulta vacía, y eso va
+contra la decisión fundacional. **Por eso no hay temporizador de red**: los avisos se refrescan
+con **actividad del usuario**, que ya hace peticiones por sí misma.
+
+**R2.1 · El mecanismo**
+
+1. **Route Handler `app/api/avisos/route.ts`, solo `GET`** (de lectura; ninguna mutación, D12
+   intacta).
+   - Primera línea: `await connection()`.
+   - Después, `obtenerUsuario()`. **No** `exigirSesion()`: un `redirect` en un `fetch` no
+     sirve de nada. Sin usuario, devuelve `401` con cuerpo `{}`.
+   - Con usuario: `ahora = new Date()`, la lectura común `leerAvisos(sesion, ahora)` (R2.2) y
+     la cookie `franjas_descartadas`.
+   - Si **cualquiera** de las tres lecturas falla, devuelve `503` y el cliente conserva lo que
+     tenía. Así una caída momentánea de la base no apaga una franja en curso.
+   - Si todo va bien, `200` con `Response.json(DatosAvisos)`.
+   - Cabeceras siempre: `Cache-Control: private, no-store`. Nunca `Access-Control-Allow-*`.
+     Sin `use cache` de ningún tipo (ADR-043).
+2. **Lectura común en `lib/citas/avisos.ts`.**
+   - Los tres lectores pasan a devolver `null` si hay error, en vez de ceros o `[]`:
+     `leerSesionesPropias(...): Promise<SesionPropia[] | null>`,
+     `leerRecuentoNotas(...): Promise<RecuentoNotas | null>` y
+     `leerNotificaciones(...): Promise<NotificacionVista[] | null>`.
+   - Nueva `leerAvisos(sesion, ahora)`, que los lanza en paralelo y devuelve
+     `{ ahoraServidor, sesiones, recuento, notificaciones }` con los `null` tal cual.
+   - El layout (`cargarAvisos` en `armazon.tsx`) usa `leerAvisos` y traduce cada `null` al
+     valor por defecto de hoy, así que se comporta igual que en la ronda 1. El Route Handler
+     traduce cualquier `null` a `503`.
+3. **Tipos y validación en `lib/agenda/avisos.ts`** (puro, sin `server-only`).
+   - Se mueve aquí la definición de `NotificacionVista`, y `lib/citas/avisos.ts` la vuelve a
+     exportar, como ya hace con `SesionPropia` y `RecuentoNotas`.
+   - Nuevos `esquemaDatosAvisos` (Zod) y
+     `type DatosAvisos = { ahoraServidor: string; sesiones: SesionPropia[]; recuento: RecuentoNotas; notificaciones: NotificacionVista[]; descartadas: string[] }`.
+   - Nueva `combinarAvisos(inicial: DatosAvisos, fresco: DatosAvisos | null): DatosAvisos`:
+     devuelve `fresco` solo si existe y su `ahoraServidor` es **estrictamente posterior** al
+     de `inicial`. Si no, devuelve `inicial`. Así gana siempre la foto más reciente, venga
+     del layout (por ejemplo, tras el `revalidatePath('/', 'layout')` de «marcar como leída»)
+     o del refresco.
+4. **Cliente `components/armazon/avisos-vivos.tsx`** (`'use client'`).
+   - `ProveedorAvisosVivos`: contexto con `fresco: DatosAvisos | null` y `refrescar()`. Va en
+     `Armazon`, junto a `ProveedorAvisosSesion`, envolviendo `ArmazonCliente`.
+   - `refrescar()`:
+     - no hace nada si ya hay una petición en curso o si la última empezó hace menos de
+       `REFRESCO_MINIMO_MS = 30_000` (medido con `performance.now()`);
+     - si no, hace `fetch('/api/avisos', { cache: 'no-store', redirect: 'manual', headers: { accept: 'application/json' } })`;
+     - **solo acepta** `res.status === 200`, con `content-type` que empiece por
+       `application/json` y un cuerpo que pase `esquemaDatosAvisos`;
+     - todo lo demás (rechazo de red, `opaqueredirect` del proxy, 401, 503, HTML, forma
+       inválida) **se ignora en silencio** y se conserva lo que había. Un refresco de fondo
+       no anuncia nada;
+     - lleva un `AbortController` que se aborta al desmontar.
+   - **Disparadores**, y no hay más (en particular, ningún `setInterval` ni `setTimeout` de red):
+     1. **Cambio de ruta**: `RefrescoPorNavegacion`, un componente sin salida (`return null`)
+        que llama a `usePathname()` y, cuando la ruta cambia respecto a la anterior (no en el
+        primer montaje), llama a `refrescar()`. Va **dentro** de la ranura `avisos`, junto a
+        `AnclaSesion` en `AvisosDeCabecera` y bajo su `<Suspense>`, para que `usePathname`
+        no rompa el prerenderizado (R0.10).
+     2. **Vuelta a la pestaña**: `visibilitychange` con `document.visibilityState === 'visible'`
+        llama a `refrescar()`. El mínimo de 30 s ya filtra los vaivenes.
+   - Los envoltorios de presentación `AnclaSesionViva`, `FranjaSesionViva`, `AvisoNotasVivo` y
+     `CampanaViva` reciben `inicial: DatosAvisos`, hacen
+     `const d = combinarAvisos(inicial, useContext(...).fresco)` y pintan el componente de
+     siempre con sus props de siempre. **`AnclaSesion`, `FranjaSesion`, `AvisoNotas` y
+     `Campana` no cambian de props.**
+   - En `armazon.tsx`, `AvisosDeCabecera` y `FranjaDeSesion` pasan
+     `inicial = await cargarAvisos()` (con `descartadas`) a los envoltorios.
+5. **`useInstante` se resincroniza** (`aviso-sesion.tsx`). Cuando cambia `base` (llega otra
+   foto), `instante` vuelve a `base` **en el mismo render**, con el patrón de «estado del
+   render anterior»: `const [baseVista, setBaseVista] = useState(base); if (base !== baseVista) { setBaseVista(base); setInstante(base); }`.
+   - **No** se hace con `key`, que remontaría la franja y perdería `ocultas`.
+   - El efecto conserva `[base, sesiones]` como dependencias.
+   - Como `combinarAvisos` solo admite fotos más nuevas, `base` nunca retrocede. Como mucho
+     hay un salto atrás de la latencia de la red (segundos), y se acepta.
+6. **Las franjas descartadas** que trae el refresco se suman a `ocultas` (la franja ya hace
+   `descartadas ∪ ocultas`).
+
+**R2.2 · Qué se invalida, cuándo y con qué coste**
+
+| Disparador | Qué se vuelve a pedir | Coste por disparo |
+|---|---|---|
+| Navegación en el cliente (como mucho uno cada 30 s) | Solo `/api/avisos`: ni el layout ni la página. | Una petición: el proxy (`getUser` + `primerAccesoPendiente`) y el handler (`getUser` + `agenda_citas_rango` en 12 h + `recuento_notas_pendientes` + 2 lecturas de `notificaciones` + `organizacion`). Del mismo orden que la navegación que lo provoca. |
+| Pestaña visible otra vez (como mucho uno cada 30 s) | Lo mismo. | Lo mismo. |
+| «Marcar como leída» o «Marcar todas» | El layout entero, por su `revalidatePath('/', 'layout')`, que ya estaba en la ronda 1. | Sin cambios. |
+| Pestaña quieta, sin tocarla | **Nada.** El reloj local sigue moviendo la franja y el ancla entre los inicios y fines **ya conocidos**. | Cero peticiones: la sesión caduca a los 30 min, como manda la decisión fundacional. |
+
+**R2.3 · Retraso que queda (dicho, no escondido).** Una cita que alguien crea o cancela para
+el profesional **después** de su última navegación no se ve hasta que vuelva a navegar o a la
+pestaña. Las acciones de la agenda (`app/(app)/agenda/acciones.ts`, fuera del territorio)
+siguen revalidando solo `/agenda`: marcar `realizada` desde la agenda no actualiza el recuento
+de la cabecera hasta la siguiente navegación. Queda en `docs/state.md`.
+
+**R2.4 · PREGUNTA AL PROPIETARIO (B-H1).** ¿Quiere que los avisos se refresquen **solos cada
+pocos minutos**, aunque nadie toque la pantalla? Eso cubriría la cita creada «para dentro de
+diez minutos» mientras el profesional no navega. El precio es que una pestaña abierta haría
+peticiones sin parar, y **la sesión dejaría de caducar a los 30 minutos de inactividad**
+(decisión fundacional). **Recomendación: no.** Refresco por actividad del usuario, como en
+R2.1. Si dijera que sí, haría falta un ADR que matice la decisión fundacional y otro ticket
+que separe el refresco de la renovación del token (toca `proxy.ts` y `lib/supabase/**`).
+
+### R3 · B-H2 y B-H5 — fallos de las Server Actions: el patrón común
+
+Regla para las tres piezas (campana, franja y resolver):
+
+1. **Ninguna llamada a una Server Action puede rechazar hacia React.** Cada llamada va en
+   `try { … } catch { resultado = { ok: false } }`. Así ningún fallo de red llega a una
+   frontera de error (R0.12). No se añade `error.tsx`: está fuera del territorio y además
+   sustituiría la pantalla, que es justo lo que no se quiere.
+2. **Reversión visible**: si el resultado es `ok: false`, por rechazo o por la respuesta, el
+   estado optimista vuelve atrás **y se anuncia**.
+3. **Anuncio**: cada pieza tiene un `role="status"` **siempre montado** y fuera de lo que se
+   desmonta.
+   - El texto va en `<span key={n}>{texto}</span>`, y `n` sube con cada anuncio. Así un
+     segundo fallo idéntico cambia el nodo y se vuelve a anunciar.
+   - Nunca `role="alert"`: un fallo al marcar no interrumpe (ADR-047, como en la ronda 1).
+4. **El `catch` no se traga una redirección de Next.** Si la sesión ha caducado, una acción
+   con `exigirSesion()` sigue llevando a `/login`. Hay que comprobarlo a mano: Riesgo R6.2.
+
+Aplicación a cada pieza:
+
+| Pieza | Al fallar | Al acertar |
+|---|---|---|
+| Campana, una notificación | Vuelve a no leída. `status`: `notificaciones.errorMarcar` («No se ha podido marcar como leída.»). | `status`: `notificaciones.marcadaLeida` («Marcada como leída.»). |
+| Campana, todas | Vuelven a no leídas las que se marcaron. `status`: `notificaciones.errorMarcarTodas` («No se han podido marcar como leídas.»). | `status`: `notificaciones.todasMarcadas` («Todas las notificaciones están marcadas como leídas.»). |
+| Franja, «Descartar» | **Ni reversión ni anuncio.** Descartar es una preferencia de presentación. La franja sigue oculta en esta pestaña (`ocultas`) y el foco ya está en el ancla. Si la cookie no se guardó, la franja solo vuelve con una recarga completa. Enseñarla otra vez justo después de que alguien la haya quitado sería peor que el fallo. | Sin anuncio, como en la ronda 1. |
+| Resolver alerta | `status` de la fila: `agenda.documentacion.errorResolver`, que se vuelve a anunciar con `n`. | `status` **del bloque**: `agenda.documentacion.resuelta` («Marcada como resuelta.»). Ver R4. |
+
+- El `status` de la campana es un `<p role="status" className="sr-only">` **fuera** del
+  `Emergente`, para que siga montado aunque se cierre el panel.
+- `descartarFranja` pasa a devolver `Promise<{ ok: boolean }>`, como las otras dos acciones.
+  Da `ok: false` si el id no es válido.
+- `ResolverAlerta` deja de pasar `resolverAlerta` directamente a `useActionState`. Le pasa una
+  función cliente que la envuelve en `try` y devuelve `{ resultado, intento }`, con
+  `intento = (previo?.intento ?? 0) + 1`, y el `key` del `status` es `intento`. Se pierde la
+  mejora progresiva sin JavaScript, que en esta aplicación no existe.
+
+### R4 · B-H3 y B-H4 — adónde va el foco
+
+| Caso | Destino del foco | Cómo |
+|---|---|---|
+| Campana: «Marcar como leída» y quedan otras sin leer | El botón «Marcar como leída» de la **siguiente** no leída en el orden que se veía al pulsar. Si era la última, la **anterior**. | El destino se calcula **antes** de cambiar el estado, sobre `ordenadas`, y se guarda en estado (`destinoFoco: id | 'panel' | null`). Un `useLayoutEffect` lo enfoca tras el commit. Cada botón lleva `data-marcar={id}`, y se busca dentro del diálogo con `closest('[role="dialog"]')` desde el botón pulsado. |
+| Campana: «Marcar como leída» de la única sin leer | El **panel** (`role="dialog"`, ya tiene `tabIndex={-1}`, R0.13). | Igual, con `'panel'`. |
+| Campana: «Marcar todas» | El **panel**. | Igual. |
+| Campana: falla y revierte | El foco **no se mueve** del destino ya elegido. El fallo se anuncia (R3). | — |
+| Resolver: mientras se envía | **Se queda en el botón.** | `aria-disabled={pendiente}` en lugar de `disabled`, y `onClick={(e) => { if (pendiente) e.preventDefault(); }}` para que un segundo Intro o clic no envíe dos veces. |
+| Resolver: éxito (la fila desaparece) | El **contenedor del bloque**: `<div role="group" aria-labelledby="agenda-documentacion" tabIndex={-1}>`, con el anuncio «Marcada como resuelta.» en el `status` del bloque. | Nuevo `ProveedorResolucion` (cliente, en `resolver-alerta.tsx`) que pinta ese contenedor, el `status` del bloque y un contexto con `alResolver()`. Lo pinta `Marco` en `documentacion.tsx` **dentro** de `MarcoBloque` y **en todas las ramas** (lista, vacío y error), para que la posición en el árbol sea la misma y no pierda el estado cuando la última alerta pasa a «vacío». La función cliente de R3 llama a `alResolver()` tras un `ok: true`, y el proveedor enfoca el contenedor en un efecto. Da igual si ese commit llega antes o después de que desaparezca la fila: el contenedor no se desmonta. |
+| Resolver: fallo | **Se queda en el botón**, ya habilitado. Anuncio en el `status` de la fila. | — |
+
+No se toca `components/ui/emergente.tsx` (fuera del territorio): se usa el `tabIndex={-1}`
+que ya tiene el panel.
+
+### R5 · El resto de hallazgos
+
+| Hallazgo | Arreglo |
+|---|---|
+| A-H1 | `id` entra en la lista congelada (R1.1.3). Además, con el origen = cita (R1.1.4), ni cambiando la clave primaria saldría un aviso doble. |
+| A-H3 | E1 comprueba, como TEC1 y con una alerta de **cada uno** de los cinco tipos en el centro A (insertadas como postgres), que ve exactamente 1 (`consentimiento_pendiente`) y 0 de cada uno de los otros cuatro, con una aserción por tipo. |
+| A-H4 | E3 tiene un `assert_lanza` por columna congelada, **once** en total: las nueve de antes más `id` y `anulada_en`. Todos con el fragmento «no cambia de identidad ni de instante». |
+| A-H5 | Dos negativas nuevas en C5. (iv) Designar a un administrador **inactivo** (`estado = 'baja'`) lanza 23514; mata al mutante sin `p.estado = 'activo'` en el validador. (v) Designado ADM2 activo, después `perfiles.rol` de ADM2 pasa a `profesional_sanitario` (como postgres), y una alerta nueva de 73 h da ADM = 1 y ADM2 = 0; mata al mutante sin `p.rol = 'administrador'` en `designado`. Al final se restaura el rol de ADM2. |
+| A-H6 | Una `consentimiento_pendiente` insertada como postgres, con `referencia_en` llevada a `now() - interval '4 days'` por `update` como postgres (la guarda solo actúa con `authenticated`). `escalar_notas_pendientes()` no crea ninguna notificación con ese `origen_id`, y el total de notificaciones no cambia. |
+| B-H6 | `accesibilidad/avisos.spec.ts` añade una prueba **con contenido**. En `beforeAll`, como postgres con `ejecutarSql`, busca una cita no cancelada de Ana que abarque `now()`. Si no la hay, inserta una de 5 min que empiece hace 1 min, copiando paciente, centro y tipo de una cita existente de Ana. Ante una violación de exclusión (`23P01`), escoge otro hueco o usa la que choca, que también está en curso. A 360 px comprueba: la franja visible y con texto; el enlace «Notas» y «Descartar» dentro de la ventana (`x + width ≤ 360`) y con una altura de al menos 44 px; ningún ascendente `fixed` ni `sticky`; y que no hay desbordamiento horizontal. En `afterAll` pasa la cita **insertada** a `cancelada` (no se borra). Se mide con el mutante `whitespace-nowrap` en el párrafo de la franja, que debe hacer fallar la prueba. |
+| B-H7 | **Lo aplica el orquestador, no el implementador** (`tickets/**`): la línea `territorio:` del contrato queda **sin comentario** (se pasa a la línea anterior como `# territorio: del diseño §6 y de la adenda ronda 2`) y la lista pasa a ser exactamente la de R7. Después, `node ~/.claude/pipeline/territorio.mjs T-015` tiene que listarla. |
+| B-H8 | Se reescribe `docs/state.md` (sin ampliarlo, como mucho 80 líneas), con estos cambios. (a) La línea 6 y «En curso» dicen el estado real de T-015. (b) Se cierra el hallazgo de la ficha que leía todas las alertas, porque la RLS lo cierra (lo comprueba E1). (c) Notas nuevas: firmar una nota debería revalidar el layout (sin ticket); una cita marcada `realizada` antes de su fin no abre alerta; intermitencia de `16-series.sql`; el retraso de R2.3; y el comentario desfasado de `01-fijacion.sql:167` (R0.17). |
+
+### R6 · Riesgos, por probabilidad
+
+1. **La base local tiene aplicada la migración de la ronda 1.** Al editarla en su sitio,
+   `supabase db reset` es obligatorio antes de `npm run seed`, del banco y de Playwright. Si
+   no, el banco corre contra el esquema viejo.
+2. **Un `catch` que se trague la redirección a `/login`.** Comprobación manual: borrar las
+   cookies de sesión con la app abierta, pulsar «Marcar como leída» y ver que lleva a
+   `/login`. Si no lleva, el `catch` hace `throw` cuando el error sea de redirección de Next
+   (se identifica con lo que exporte `next/navigation` en 16.3.1; hay que leer la guía
+   antes).
+3. **`usePathname` fuera de un `<Suspense>`** rompe el build con
+   `blocking-prerender-client-hook`. Va dentro de la ranura `avisos` (R2.1.4).
+4. **Foco en la campana**: si el destino se calcula después de cambiar el estado, el orden
+   ya ha cambiado (la leída baja al final) y el foco cae en la equivocada.
+5. **Spec B-H6**: insertar una cita en curso puede chocar con la exclusión de solapes. Va
+   resuelto en la propia spec (R5).
+6. **Carrera entre el cron y la corrección de la cita**: aceptada (R1.2).
+7. **`Response` en jsdom**: la prueba del Route Handler declara
+   `// @vitest-environment node` en la primera línea.
+
+### R7 · Territorio de la ronda 2 (lista exacta; sustituye a §6)
+
+```
+supabase/migrations/20261006120000_avisos_y_escalado.sql      # editada en su sitio (R0.19)
+lib/supabase/tipos-bd.ts                                       # + anulada_en en alertas_documentacion
+lib/citas/avisos.ts
+lib/citas/avisos.test.ts                                       # nuevo
+lib/citas/agenda.ts
+lib/citas/agenda.test.ts                                       # ya tocado en la ronda 1, se regulariza
+lib/agenda/avisos.ts
+lib/agenda/avisos.test.ts
+lib/i18n/es.ts
+app/api/avisos/route.ts                                        # nuevo
+app/api/avisos/route.test.ts                                   # nuevo
+components/armazon/armazon.tsx
+components/armazon/armazon-cliente.tsx
+components/armazon/avisos-vivos.tsx                            # nuevo
+components/armazon/avisos-vivos.test.tsx                       # nuevo
+components/armazon/aviso-sesion.tsx
+components/armazon/aviso-sesion.test.tsx
+components/armazon/aviso-notas.tsx
+components/armazon/aviso-notas.test.tsx                        # ya tocado en la ronda 1, se regulariza
+components/armazon/campana.tsx
+components/armazon/campana.test.tsx
+components/armazon/acciones-avisos.ts
+components/armazon/acciones-avisos.test.ts
+components/armazon/avisos-constantes.ts
+app/(app)/agenda/bloques.ts
+app/(app)/agenda/bloques.test.ts
+app/(app)/agenda/documentacion.tsx
+app/(app)/agenda/documentacion.test.tsx
+app/(app)/agenda/esquema-alertas.ts
+app/(app)/agenda/acciones-alertas.ts
+app/(app)/agenda/acciones-alertas.test.ts
+app/(app)/agenda/resolver-alerta.tsx
+app/(app)/agenda/resolver-alerta.test.tsx                      # nuevo
+scripts/rls/22-avisos.sql
+scripts/rls/README.md
+scripts/rls/11-cobertura.sql        # solo si hay que declarar algo nuevo (no se prevé: no hay políticas nuevas)
+accesibilidad/avisos.spec.ts
+docs/bitacora/T-015.md
+docs/state.md
+docs/interfaz.md                    # solo §Armazón
+```
+
+Queda **fuera**, y tocarlo es un hallazgo y no una edición: `proxy.ts`, `next.config.ts`,
+`components/ui/**`, `app/(app)/agenda/acciones.ts`, `app/(app)/agenda/marco.tsx`,
+`app/(app)/pacientes/**`, `scripts/rls/01-fijacion.sql` y cualquier otra migración.
+
+### R8 · Cómo se cierra cada hallazgo (prueba y mutante que debe matar)
+
+| Hallazgo | Prueba | Mutante que debe hacerla fallar, y por qué |
+|---|---|---|
+| A-H2 | **22.E9.** Como PRO1, `update citas set estado='no_asistida'` sobre su cita realizada de 73 h con alerta abierta. Comprueba: la alerta queda `anulada` con `anulada_en` no nulo y `resuelta_en` nulo; `recuento_notas_pendientes()` baja en 1; `escalar_notas_pendientes()` no crea nada para esa cita; y hay una fila `UPDATE` en `auditoria` de esa alerta con `actor_id = PRO1`. **22.E10.** Como PRO1: `set estado='anulada', anulada_en=now()` sobre una `consentimiento_pendiente` da 42501 «Solo la corrección de la cita»; sobre la anulada, `set estado='abierta', anulada_en=null` da 42501 «no cambia de identidad». **22.E11.** Escalar (1 fila para ADM), anular, volver a `realizada` como PRO1: hay 2 alertas de la cita (1 `anulada` y 1 `abierta`, con `referencia_en = citas.fin`), y otro `escalar` deja el total de ADM para `('citas', cita)` en 1. **22.E12.** Una cita con la alerta ya `resuelta`, corregida a `cancelada`: la alerta sigue `resuelta`. **22.E5** suma: `fn_anular_alerta_nota_sin_firmar` es definer, tiene `search_path=''` en `proconfig` y `authenticated` no la ejecuta. | Sin el disparador: E9 ve `abierta`. Sin la rama `anulada` en la guarda: E10 entra. Con el origen `a.id`: E11 da 2. Sin `estado = 'abierta'` en el `where`: E12 falla (y además salta `alertas_documentacion_check`). Invoker en vez de definer: la guarda ve `authenticated` y E9 da 42501. |
+| A-H1 / A-H4 | 22.E3 con once `assert_lanza`. | Quitar cualquier columna de la lista: falla su aserción. |
+| A-H3 | 22.E1 con cinco aserciones por tipo. | Política `tipo <> 'nota_sin_firmar'`: TEC1 ve `borrador_abandonado` y falla. |
+| A-H5 | 22.C5 (iv) y (v). | Los dos de la revisión. |
+| A-H6 | 22.C5 consentimiento de 4 días. | Quitar `a.tipo = 'nota_sin_firmar'`: aparece una notificación. |
+| C5 (cambio) | Las aserciones de C5 sobre `origen_tabla = 'citas' and origen_id = cita`. | Volver a `'alertas_documentacion', a.id`: el filtro da 0 y falla. |
+| B-H1 | **`avisos-vivos.test.tsx`** (con `vi.mock('next/navigation')` para `usePathname`, `fetch` simulado y temporizadores falsos). (1) Al montar no hay `fetch`. (2) Cambiar la ruta hace 1 `fetch`, y otro cambio a los 10 s no hace ninguno. (3) Una respuesta con `ahoraServidor` posterior y una sesión que abarca ese instante pinta la franja; una anterior se ignora. (4) `fetch` rechaza: nada se rompe y la franja anterior sigue. (5) `status 401`, `type 'opaqueredirect'`, `content-type text/html` o un cuerpo sin `sesiones`: se ignoran. (6) `visibilitychange` a visible a los 31 s hace 1 `fetch`. (7) **Avanzar 2 h sin eventos: 0 `fetch`.** **`aviso-sesion.test.tsx`**: volver a pintar `FranjaSesion` con un `ahoraServidor` 31 min posterior, que cae dentro de una sesión, la muestra **sin avanzar los temporizadores**. **`route.test.ts`**: 401 sin usuario y sin ninguna lectura; 200 con `Cache-Control: private, no-store` y la forma de `DatosAvisos`; 503 si un lector da `null`; nunca `Access-Control-Allow-Origin`. **`lib/agenda/avisos.test.ts`**: `combinarAvisos` (más nueva, igual y más vieja) y `esquemaDatosAvisos`. **`lib/citas/avisos.test.ts`**: cada lector da `null` ante error. | Añadir un `setInterval` de red: falla (7). Quitar el mínimo de 30 s: falla (2). Aceptar cualquier `res.ok` sin mirar `content-type`, o seguir redirecciones: falla (5). Quitar la resincronización de `useInstante`: la franja no aparece hasta el temporizador. `combinarAvisos` con `>=`, o siempre `fresco`: falla el caso de la foto vieja. |
+| B-H2 / B-H5 | **`campana.test.tsx`**: la acción **rechaza** y da `ok:false` (por separado, en una y en todas). Comprueba que no se lanza nada, que la notificación vuelve a no leída y que el `status` dice el error. Un segundo fallo idéntico cambia el nodo del `span` (`not.toBe(anterior)`). **`aviso-sesion.test.tsx`**: `descartarFranja` rechaza y la franja sigue oculta, el foco en el ancla y nada se lanza. **`resolver-alerta.test.tsx`**: rechaza y da `ok:false`, con anuncio, y el segundo fallo vuelve a anunciarse. | Quitar las reversiones: falla (B-H5, el mutante de la revisión). Quitar el `try`: la prueba recibe el rechazo. Quitar el `key`: falla la identidad del nodo. |
+| B-H3 | `campana.test.tsx`: con dos sin leer, marcar la primera deja el foco en el botón de la otra; con una, en el `dialog`; con «Marcar todas», en el `dialog`. Nunca en `body`. | Quitar el `useLayoutEffect` del foco: `document.activeElement === body`. |
+| B-H4 | `resolver-alerta.test.tsx`: mientras está pendiente el botón tiene `aria-disabled="true"`, **no** `disabled`, y sigue con el foco; un segundo clic no llama otra vez a la acción. Con éxito, y quitando la fila al volver a pintar, el foco va al `role="group"` y el `status` del bloque dice «Marcada como resuelta.». | Volver a `disabled`: pierde el foco. Quitar `preventDefault`: 2 llamadas. Poner el `status` dentro de la fila: el anuncio desaparece con ella. |
+| B-H6 | `avisos.spec.ts` con contenido (R5). | `whitespace-nowrap` en el párrafo: desborda. |
+| B-H7 | `node ~/.claude/pipeline/territorio.mjs T-015` lista la R7 y la rama no se sale. | — |
+| B-H8 | `docs/state.md` como mucho 80 líneas y con los puntos de R5. | — |
+
+Cierre de la ronda: `npx supabase db reset && npm run seed`, `npm run test:rls` (banco 22
+completo), `npm test`, `npm run lint`, `npm run build` y
+`PUERTO=… npx playwright test accesibilidad/avisos.spec.ts`.
+
+### R9 · Qué revisar (lista de comprobación de esta ronda)
+
+- **Base**:
+  - ¿puede `authenticated` llegar a `anulada` por alguna puerta? Directa (E10), por la
+    política de update o por una función definer que no sea el disparador;
+  - ¿algún lector nuevo o viejo deja de filtrar `estado = 'abierta'` (R0.3)?;
+  - ¿el disparador nuevo lee `notas_clinicas` (prohibido)?;
+  - ¿el `when` del disparador abarca **toda** salida de `realizada`?;
+  - ¿el escalado usa `a.origen_tabla, a.origen_id` y no un literal `'citas'`? (R0.4).
+- **Migración editada en su sitio**: el linter pasa; no hay migración nueva; el `drop
+  constraint` va en el mismo `alter` que su `add`.
+- **Route Handler**:
+  - sin `use cache`, con `connection()` lo primero, con `Cache-Control: private, no-store` y
+    sin CORS;
+  - no escribe nada: ni `cookies().set`, ni acceso a la historia, ni auditoría;
+  - no expone más que lo que ya llevaba la carga útil RSC del layout.
+- **Cliente**:
+  - no hay **ningún** temporizador que haga peticiones (decisión fundacional de 30 min);
+  - `redirect: 'manual'`;
+  - la validación Zod de la respuesta;
+  - una foto vieja nunca pisa a una nueva.
+- **Fallos**:
+  - ninguna Server Action se espera sin `try`;
+  - todo `status` está montado **fuera** de lo que se desmonta;
+  - ningún `role="alert"` nuevo;
+  - el `catch` no se traga la redirección (R6.2, manual).
+- **Foco**: ningún camino deja `document.activeElement === document.body` con el panel abierto
+  o tras resolver; el destino de la campana se calcula **antes** de cambiar el estado.
+- **Territorio**: la R7 exacta; nada en `proxy.ts`, `components/ui/**` ni `app/(app)/agenda/acciones.ts`.
+
+### R10 · Delegable
+
+- Las claves nuevas de `lib/i18n/es.ts` (R3 y R4), con los textos ya fijados.
+- Volver a generar `lib/supabase/tipos-bd.ts` tras el `db reset`.
+- Nada más: lo demás es foco, ARIA, red o base.
+
+### R11 · Lo que no entra en la ronda 2, y por qué
+
+- **Refresco periódico sin actividad del usuario**: va contra la decisión fundacional de
+  sesión (R2.4, pregunta al propietario).
+- **`router.refresh()`**: si falla la red, recarga la página entera y se pierde lo que
+  hubiera sin guardar (R0.11). Además vuelve a pedir la página completa en cada disparo.
+- **`template.tsx`**: no envuelve el layout, así que la cabecera y la franja no se vuelven a
+  pintar (R0.10). Además reiniciaría el estado de los hijos.
+- **Supabase Realtime**: abre un canal persistente con la clave anónima en el navegador, es
+  otra superficie de RLS que probar y mantiene la conexión viva. Merece su propio ticket y
+  quizá un ADR.
+- **`revalidatePath('/', 'layout')` en las acciones de la agenda y en la firma de nota**:
+  esos ficheros están fuera del territorio y la medida vuelve a pintar el árbol entero. Queda
+  anotado (R2.3, B-H8).
+- **Aviso de rectificación al administrador** tras una anulación: pregunta R1.3.
+- **`error.tsx` o `global-error.tsx`**: fuera del territorio. Con R3, ningún fallo de estas
+  piezas llega a una frontera.
+- **Actualizar el comentario de `01-fijacion.sql:167`**: fuera del territorio. Se anota.
+
+## Decisiones del propietario sobre la adenda (03-10-2026)
+
+- **R1.3 · rectificación al administrador:** no, en este ticket. La alerta pasa a `anulada` y deja de contar
+  y de escalar. El aviso de 72 h ya enviado se queda como registro histórico. Si hace falta rectificar, irá
+  en un ticket aparte.
+- **R2.4 · refresco con temporizador:** no. Los avisos se refrescan al navegar o al volver a la pestaña. Se
+  mantiene el cierre de sesión a los 30 min de inactividad (decisión fundacional) y no hace falta ADR.
+- **B-H7:** hecho en el contrato. La línea `territorio:` ya no lleva comentario y la lista es la de R7.
