@@ -93,6 +93,8 @@ declare
   v_cargadas text[];
   v_ae       boolean;
   v_pa       boolean;
+  v_pc       boolean;
+  v_niveles  constant text[] := array['debug5','debug4','debug3','debug2','debug1','info','notice','warning','error','log','fatal','panic'];
   v_st       bigint;
   v_lpml     bigint;
 begin
@@ -123,6 +125,7 @@ begin
 
   v_ae := 'auto_explain' = any (v_cargadas) or p_ajustes ? 'auto_explain.log_min_duration';
   v_pa := 'pgaudit' = any (v_cargadas) or p_ajustes ? 'pgaudit.log';
+  v_pc := 'plpgsql_check' = any (v_cargadas) or p_ajustes ? 'plpgsql_check.enable_tracer';
 
   if v_ae and not coalesce(p_ajustes ?& array[
        'auto_explain.log_min_duration', 'auto_explain.log_parameter_max_length'], false) then
@@ -130,6 +133,12 @@ begin
   end if;
   if v_pa and not coalesce(p_ajustes ?& array[
        'pgaudit.log', 'pgaudit.log_parameter', 'pgaudit.role'], false) then
+    return false;
+  end if;
+
+  if v_pc and not coalesce(p_ajustes ?& array[
+       'plpgsql_check.enable_tracer', 'plpgsql_check.tracer', 'plpgsql_check.tracer_errlevel',
+       'log_min_messages'], false) then
     return false;
   end if;
 
@@ -189,6 +198,16 @@ begin
     return false;
   end if;
 
+  -- C9 · plpgsql_check: con el trazador encendido escribe cada argumento de cada función
+  -- PL/pgSQL (p_contrasena incluido) al nivel tracer_errlevel; llega al registro del
+  -- servidor si ese nivel alcanza log_min_messages (A2-H1).
+  if v_pc and coalesce((p_ajustes->>'plpgsql_check.enable_tracer') = 'on'
+                       and (p_ajustes->>'plpgsql_check.tracer') = 'on'
+                       and array_position(v_niveles, lower(p_ajustes->>'plpgsql_check.tracer_errlevel'))
+                           >= array_position(v_niveles, lower(p_ajustes->>'log_min_messages')), true) then
+    return false;
+  end if;
+
   return true;
 end;
 $$;
@@ -220,7 +239,8 @@ as $$
         'debug_print_plan', 'statement_timeout', 'shared_preload_libraries',
         'session_preload_libraries', 'local_preload_libraries',
         'auto_explain.log_min_duration', 'auto_explain.log_parameter_max_length',
-        'pgaudit.log', 'pgaudit.log_parameter', 'pgaudit.role'
+        'pgaudit.log', 'pgaudit.log_parameter', 'pgaudit.role', 'log_min_messages',
+        'plpgsql_check.enable_tracer', 'plpgsql_check.tracer', 'plpgsql_check.tracer_errlevel'
       ])));
 $$;
 

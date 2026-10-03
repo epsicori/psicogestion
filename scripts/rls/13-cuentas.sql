@@ -572,7 +572,11 @@ insert into t38_base values (jsonb_build_object(
   'auto_explain.log_parameter_max_length', '-1',
   'pgaudit.log', 'none',
   'pgaudit.log_parameter', 'off',
-  'pgaudit.role', ''));
+  'pgaudit.role', '',
+  'log_min_messages', 'warning',
+  'plpgsql_check.enable_tracer', 'off',
+  'plpgsql_check.tracer', 'off',
+  'plpgsql_check.tracer_errlevel', 'notice'));
 
 -- t38_ev(extra): el evaluador sobre la base con `extra` encima (|| sobrescribe).
 create or replace function pg_temp.t38_ev(extra jsonb) returns boolean language sql stable as $$
@@ -635,6 +639,19 @@ select pg_temp.assert(pg_temp.t38_ev('{"pgaudit.log_parameter":"on"}'),
   'R2-5 C8 · gemela: log_parameter = on sin nada que auditar es seguro');
 select pg_temp.assert(pg_temp.t38_ev('{"pgaudit.log":"all"}'),
   'R2-5 C8 · gemela: pgaudit.log = all con log_parameter = off es seguro');
+-- C9 · plpgsql_check: su trazador escribe cada argumento de cada función PL/pgSQL (A2-H1)
+select pg_temp.assert(not pg_temp.t38_ev('{"plpgsql_check.enable_tracer":"on","plpgsql_check.tracer":"on","plpgsql_check.tracer_errlevel":"log"}'),
+  'R2-5 C9 · trazador de plpgsql_check encendido a nivel log es inseguro (escribe p_contrasena)');
+select pg_temp.assert(not pg_temp.t38_ev('{"plpgsql_check.enable_tracer":"on","plpgsql_check.tracer":"on","plpgsql_check.tracer_errlevel":"notice","log_min_messages":"notice"}'),
+  'R2-5 C9 · trazador a nivel notice con log_min_messages = notice llega al registro: inseguro');
+select pg_temp.assert(pg_temp.t38_ev('{"plpgsql_check.enable_tracer":"on","plpgsql_check.tracer":"on","plpgsql_check.tracer_errlevel":"notice"}'),
+  'R2-5 C9 · gemela: trazador a nivel notice con log_min_messages = warning no llega al registro: seguro');
+select pg_temp.assert(pg_temp.t38_ev('{"plpgsql_check.enable_tracer":"on","plpgsql_check.tracer":"off","plpgsql_check.tracer_errlevel":"log"}'),
+  'R2-5 C9 · gemela: tracer apagado es seguro aunque enable_tracer esté encendido');
+select pg_temp.assert(pg_temp.t38_ev('{"plpgsql_check.enable_tracer":"off","plpgsql_check.tracer":"on","plpgsql_check.tracer_errlevel":"log"}'),
+  'R2-5 C9 · gemela: enable_tracer apagado es seguro aunque tracer esté encendido');
+select pg_temp.assert(not pg_temp.t38_ev('{"plpgsql_check.enable_tracer":"on","plpgsql_check.tracer":"on","plpgsql_check.tracer_errlevel":null}'),
+  'R2-5 C9 · nivel del trazador nulo con el trazador encendido es inseguro');
 -- N0: faltan claves del núcleo, o una vale nulo (A-H5)
 select pg_temp.assert(not pg_temp.t38_ev_sin('log_statement'),     'R2-5 N0 · sin log_statement es inseguro');
 select pg_temp.assert(not pg_temp.t38_ev_sin('statement_timeout'), 'R2-5 N0 · sin statement_timeout es inseguro');
@@ -646,6 +663,19 @@ select pg_temp.assert(not pg_temp.t38_ev('{"log_parameter_max_length_on_error":n
   'R2-5 coalesce · log_parameter_max_length_on_error nulo es inseguro');
 select pg_temp.assert(not public.evaluar_registro_postgres(null), 'R2-5 N0 · un mapa nulo es inseguro');
 -- N1: una extensión cargada cuyas claves no se leyeron
+-- plpgsql_check cargada y sin sus claves: con el trazador apagado ninguna regla C lo ve, solo N1 (A2-H1)
+select pg_temp.assert(not pg_temp.t38_ev_sin('plpgsql_check.tracer_errlevel'),
+  'R2-5 N1 · plpgsql_check cargada y sin plpgsql_check.tracer_errlevel es inseguro aunque el trazador esté apagado (solo N1 lo atrapa)');
+select pg_temp.assert(not pg_temp.t38_ev_sin('plpgsql_check.enable_tracer'),
+  'R2-5 N1 · plpgsql_check cargada y sin plpgsql_check.enable_tracer es inseguro');
+select pg_temp.assert(not pg_temp.t38_ev_sin('log_min_messages'),
+  'R2-5 N1 · plpgsql_check cargada y sin log_min_messages es inseguro');
+select pg_temp.assert(
+  public.evaluar_registro_postgres(
+    ((select m from t38_base) - 'plpgsql_check.enable_tracer' - 'plpgsql_check.tracer' - 'plpgsql_check.tracer_errlevel' - 'log_min_messages')
+    || jsonb_build_object('shared_preload_libraries',
+         'pg_stat_statements, pgaudit, plpgsql, pg_cron, pg_net, pgsodium, auto_explain, pg_tle, plan_filter, supabase_vault')),
+  'R2-5 N1 · gemela: sin las claves de plpgsql_check Y sin plpgsql_check en la precarga es seguro');
 -- con el umbral apagado (-1) la regla C7 no se activa: solo N1 atrapa la clave que falta
 select pg_temp.assert(not public.evaluar_registro_postgres(((select m from t38_base) - 'auto_explain.log_parameter_max_length') || '{"auto_explain.log_min_duration":"-1"}'),
   'R2-5 N1 · auto_explain cargada y sin auto_explain.log_parameter_max_length es inseguro aunque el umbral esté apagado (solo N1 lo atrapa)');
@@ -718,6 +748,11 @@ select pg_temp.assert(public.registro_postgres_seguro(), 'R2-5 L7 gemela · lo m
 call pg_temp.reset_sesion();
 reset auto_explain.log_parameter_max_length;
 reset auto_explain.log_min_duration;
+
+-- L8 · plpgsql_check (A2-H1): NO se mide en vivo. `postgres` en Supabase no es superusuario
+-- real y `set local plpgsql_check.enable_tracer` da 42501 (medido en R3); la regla C9 y su N1
+-- se prueban arriba, sobre el evaluador puro. L0 sí prueba en vivo que el envoltorio lee las
+-- cuatro claves (si no las leyera, N1 daría falso y L0 fallaría).
 
 set local statement_timeout = 0;
 call pg_temp.como_con_2fa(:PRO1);
