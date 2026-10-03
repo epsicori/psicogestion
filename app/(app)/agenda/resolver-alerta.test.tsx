@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const m = vi.hoisted(() => ({ resolverAlerta: vi.fn() }));
+const m = vi.hoisted(() => ({ resolverAlerta: vi.fn(), rethrow: vi.fn() }));
+
+vi.mock('next/navigation', () => ({ unstable_rethrow: (e: unknown) => m.rethrow(e) }));
 
 vi.mock('./acciones-alertas', () => ({ resolverAlerta: m.resolverAlerta }));
 
@@ -149,5 +151,48 @@ describe('ResolverAlerta: éxito (T-015, R4)', () => {
     await pulsar();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: NOMBRE_BOTON }));
     expect(estadoBloque().textContent).toBe('');
+  });
+});
+
+describe('ResolverAlerta: redirección de la sesión caducada (T-015, R3)', () => {
+  beforeEach(() => {
+    m.resolverAlerta.mockReset();
+    m.rethrow.mockClear();
+  });
+
+  it('el catch pasa el error por unstable_rethrow antes de tragarlo (un redirect sigue su camino)', async () => {
+    const error = new Error('NEXT_REDIRECT');
+    m.resolverAlerta.mockRejectedValue(error);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<Bloque conFila />);
+    await pulsar();
+
+    // Lo que hace `unstable_rethrow` con un redirect real es de Next; aquí se fija que se llama
+    // con el error de la acción, en el primer lugar del catch.
+    expect(m.rethrow).toHaveBeenCalledWith(error);
+  });
+});
+
+describe('ResolverAlerta: el segundo clic mientras envía (T-015, R4)', () => {
+  beforeEach(() => m.resolverAlerta.mockReset());
+
+  it('con el envío pendiente, el clic llega con defaultPrevented y no se envía otra vez', async () => {
+    const d = diferido<{ ok: true }>();
+    m.resolverAlerta.mockReturnValue(d.promesa);
+    render(<Bloque conFila />);
+    await pulsar();
+
+    const pendiente = screen.getByRole('button', { name: 'Guardando…' });
+    let prevenido = false;
+    await act(async () => {
+      prevenido = !fireEvent.click(pendiente);
+    });
+    expect(prevenido).toBe(true);
+    expect(m.resolverAlerta).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      d.resolver({ ok: true });
+    });
   });
 });

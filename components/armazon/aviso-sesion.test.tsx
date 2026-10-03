@@ -151,7 +151,7 @@ describe('FranjaSesion', () => {
         errores.push(e);
       };
       window.addEventListener('unhandledrejection', alError);
-      window.addEventListener('error', alError);
+      window.addEventListener('error', alError, { capture: true });
       const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       pintar('2026-10-01T10:10:00.000Z');
@@ -172,10 +172,29 @@ describe('FranjaSesion', () => {
       expect(errores).toEqual([]);
 
       window.removeEventListener('unhandledrejection', alError);
-      window.removeEventListener('error', alError);
+      window.removeEventListener('error', alError, { capture: true });
       consola.mockRestore();
     },
   );
+
+  it('si descartar rechaza con un redirect de Next (sesión caducada), no se traga: sale hacia React', async () => {
+    const redireccion = Object.assign(new Error('NEXT_REDIRECT'), { digest: 'NEXT_REDIRECT;replace;/login;307;' });
+    m.descartarFranja.mockRejectedValue(redireccion);
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consola.mockClear();
+
+    pintar('2026-10-01T10:10:00.000Z');
+    fireEvent.click(screen.getByRole('button', { name: 'Descartar aviso' }));
+    // React devuelve fuera de `act` lo que una transición asíncrona lanza: aquí, el redirect.
+    await expect(
+      act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      }),
+    ).rejects.toMatchObject({ digest: 'NEXT_REDIRECT;replace;/login;307;' });
+    expect(consola.mock.calls.some((c) => String(c[0]).includes('Franja de sesión'))).toBe(false);
+    consola.mockRestore();
+  });
 
   it('una franja descartada en la cookie no se pinta, pero el ancla sí', () => {
     pintar('2026-10-01T10:10:00.000Z', [CITA]);

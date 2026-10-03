@@ -182,6 +182,31 @@ describe('Campana: fallos de las acciones (T-015, R3)', () => {
     expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Marcar como leída' })).toHaveLength(2);
   });
 
+  it('un redirect de Next (sesión caducada) no se traga: sale hacia React, sin revertir ni anunciar', async () => {
+    const redireccion = Object.assign(new Error('NEXT_REDIRECT'), { digest: 'NEXT_REDIRECT;replace;/login;307;' });
+    m.marcarNotificacionLeida.mockRejectedValue(redireccion);
+    const errores: unknown[] = [];
+    const alError = (e: Event) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      errores.push(e);
+    };
+    window.addEventListener('error', alError, { capture: true });
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consola.mockClear();
+
+    const { usuario, panel } = await abrir([vista({ id: 'a' })]);
+    await usuario.click(within(panel).getByRole('button', { name: 'Marcar como leída' }));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(errores.length).toBeGreaterThan(0);
+    expect(screen.queryByText(ERROR_UNA)).toBeNull();
+    expect(consola.mock.calls.some((c) => String(c[0]).includes('la acción ha fallado'))).toBe(false);
+
+    window.removeEventListener('error', alError, { capture: true });
+    consola.mockRestore();
+  });
+
   it('un segundo fallo idéntico cambia el nodo del anuncio (se vuelve a leer)', async () => {
     m.marcarNotificacionLeida.mockResolvedValue({ ok: false });
     const { usuario, panel } = await abrir([vista({ id: 'a' })]);
