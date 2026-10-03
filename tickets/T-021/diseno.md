@@ -943,3 +943,14 @@ Si se aprueba, los cambios de contrato de T-021, T-023 y T-026 los hacen el prop
 - **La forma exacta de los envíos y las observaciones**: es de T-026 y depende de lo que conteste Holded (constitución, regla 1).
 - **Si una rectificativa hecha en el programa se puede atribuir a un paciente**: depende de si Holded la enlaza con la original. Sin verificar.
 - **P1, P2 y P4**: no se reabren. §P3.4 solo señala que la vista del pendiente se puede redefinir sin migrar datos.
+
+## Decisiones del propietario sobre el análisis P3 (03-10-2026)
+
+- **P3.a:** (d). La app guarda una copia mínima: número, fecha, importes y enlace, una sola vez. De lo que
+  pase después en el programa solo anota, como hecho fechado y de solo adición, el borrado, la rectificación
+  o la anulación.
+- **P3.b:** el espejo nace en **T-026** (M2) y sale de T-021.
+- **P3.c:** el estado de pago del programa no se copia. Lo cobrado es solo lo que registra la app.
+- **P3.d:** qué cuenta el pendiente se decide al diseñar T-023.
+- **P3.e:** sí, con un ADR nuevo que estreche el ADR-053 c y d sin editarlo.
+- **P3.f:** sí. La consulta al asesor (ADR-053 k.1) lleva la lista exacta de lo que la app copia del programa.
