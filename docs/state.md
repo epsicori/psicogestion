@@ -13,7 +13,7 @@
 ## En curso
 
 - **T-040 A**: R3-H1 abierto (opacidad/color sin prueba). Corte B: migración, banco 24, interfaz.
-- **T-039** (cola `supabase/`): en implementación (worktree propio, migración 20261007120000, banco 23).
+- **T-039**: ronda 1 con 2 ALTA (oráculos de participación) + 3 MEDIA + 1 BAJA; adenda R2 escrita, P4 = A (resolución automática también para el admin, documentada). Ronda 2 en implementación.
 - **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). Turno en `supabase/` tras T-028 B. T-023 sube a riesgo alto (vista definer del pendiente).
 - **T-038, T-041**: diseños cerrados; esperan turno en `supabase/`.
 - **T-028 B/C**: desbloqueados. E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod.
@@ -38,7 +38,7 @@
 - **`docs/decisions/INDEX.md`**: faltan ADR-060..075.
 - **Scratchpad**: mutar.mjs paralelo.
 - **T-041 R3/R6**: funciones cuentas.
-- **T-034 SQL-H2**: esquiva D6, reloj.
+- **T-034 SQL-H2**: reabrir esquiva D6, reloj; y reabrir es hoy la única salida de la nota de una cita cuyo episodio se cerró (T-039 B-H2, banco 23.Z). Recomendación: no cerrar con citas no canceladas posteriores al cierre.
 - **T-033**: next start, URL inline, Suspense.
 - **T-011c**: ordinal último, sin candado.
 - **T-036**: drop if exists + inserts UUID.
@@ -52,7 +52,7 @@
 - **T-021 A.9/P3.8**: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
 - **T-025**: su consulta al asesor debe llevar la lista del ADR-077 punto 7 (contrato sin tocar).
 - **Armazón**: <44px; login→/pacientes. T-031/T-032.
-- **H25**: técnico lee tipos ajenos.
+- **H25**: el técnico lee en su auditoría `tipo_terapia_id` y, desde T-039, `episodio_id` de las citas de sus centros. Deduce parejas. **Bloquea producción**.
 - **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`.
 - **Worktrees**: sucios (T-014-correcciones, T-021).
 - **interfaz.md:67**: «Lista y alta, sin ficha».
