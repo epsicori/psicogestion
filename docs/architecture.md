@@ -422,12 +422,21 @@ instancia con certificado de borrado. Procedimiento documentado y ensayado, no i
   los disparadores. El episodio es del mismo profesional, con el paciente como titular o
   participante cubierto por la fecha de la cita, y no cerrado antes de ese día
   (`velar_episodio_de_cita`, 23514). Sin elegirlo, se toma el único abierto del profesional con
-  el paciente, o ninguno; nunca se abre uno. El técnico no elige ni ve el episodio (no está en
-  `citas_agenda` ni en `agenda_citas_rango`) pero sí ve y cambia la modalidad. La nota de una
-  cita va en el episodio de la cita (`exigir_nota_en_episodio_de_su_cita`; el paso 5b de
-  `episodio_para_nota` lo devuelve) y una cita con nota no cambia de episodio. Un episodio o
+  el paciente, o ninguno; nunca se abre uno. El técnico no elige el episodio y la agenda
+  (`citas_agenda`, `agenda_citas_rango`) no se lo enseña, pero sí ve y cambia la modalidad.
+  Residuo conocido (H25): `tipo_terapia_id` y `episodio_id` de una cita viajan en sus filas de
+  auditoría, que el técnico lee; no se cierra aquí. La resolución automática (único episodio
+  abierto) también se aplica al administrador: es un riesgo aceptado (P4 = A), una cita real y
+  auditada que el profesional verá en su agenda. El estado de abierto o cerrado de un episodio
+  se infiere por fechas (residuo de fechas) y el alcance del P1 queda en el ticket. La nota de
+  una cita va en el episodio de la cita (`exigir_nota_en_episodio_de_su_cita`; el paso 5b de
+  `episodio_para_nota` lo devuelve) y una cita con nota no cambia de episodio. Si se cierra un
+  episodio con una cita posterior, la nota de esa cita solo entra reabriéndolo. Un episodio o
   participante con citas no se mueve, y una cita pasada no cambia de episodio ni de
-  modalidad. Las citas de una serie heredan los dos valores de la serie.
+  modalidad. Una cita con episodio no cambia de paciente ni de profesional (23514, mensaje
+  constante, para todos los roles): para moverla se cancela y se da otra. Las citas de una
+  serie heredan los dos valores de la serie, y `serie_id` tampoco se escribe a mano: una cita
+  de una serie es del paciente y del profesional de la serie (23514).
 - **Duplicados** (ADR-031): no se fusionan, **se vinculan**. `fusionado_en` apunta al
   superviviente, el absorbido queda en solo lectura, nada se repunta y RLS resuelve por el
   vínculo en un solo salto.

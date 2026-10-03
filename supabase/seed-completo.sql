@@ -111,6 +111,7 @@ declare
   k_n_corregida constant uuid := 'f0080001-0000-4000-8000-000000000003';
   k_n_conjunta constant uuid := 'f0080001-0000-4000-8000-000000000004';
   k_n_de_baja  constant uuid := 'f0080001-0000-4000-8000-000000000005';
+  v_martes     date;
 begin
 
   -- -----------------------------------------------------------------------
@@ -554,27 +555,32 @@ begin
   -- -----------------------------------------------------------------------
   -- 8.ter · T-039 · La cita en su episodio y la modalidad de asistencia (ADR-075)
   --
-  -- Dos citas del próximo martes de Ana, relativas a current_date como las de arriba: la de
-  -- Sofía, de pareja, en el episodio de pareja (k_epi_pareja), y la de Carmen, ONLINE, en su
-  -- episodio individual (k_epi_carmen). Enseñan las dos cosas nuevas: el técnico ve «online» en
-  -- su agenda y no ve ningún episodio. Las escribe el dueño de la siembra, y el disparador
-  -- velar_episodio_de_cita comprueba igualmente la coherencia. Idempotente: uuids fijos.
+  -- Dos citas del próximo martes de Ana, por la PUERTA REAL (agenda_crear_cita), con la sesión
+  -- de quien la daría: la de Sofía, de pareja, en el episodio de pareja (la da Ana) y la de
+  -- Carmen, ONLINE (la da el técnico, que no elige episodio). Una siembra que inserta a mano
+  -- prueba el esquema, no el producto (B-H3). Idempotente por guardas, no por uuid: la función
+  -- genera el id. La sesión se simula con los claims, que se limpian al acabar.
   -- -----------------------------------------------------------------------
-  insert into public.citas
-    (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria,
-     estado, creada_por, modalidad_asistencia, episodio_id)
-  select v.id, v.paciente_id, k_ana, k_c_madrid, v.tipo,
-         (m.martes + v.hora) at time zone 'Europe/Madrid',
-         (m.martes + v.hora + make_interval(mins => v.minutos)) at time zone 'Europe/Madrid',
-         'Europe/Madrid', 'programada', k_ana, v.modalidad, v.episodio
-    from (select current_date + (8 - extract(isodow from current_date)::int) + 1 as martes) m
-   cross join (values
-     ('e0390001-0000-4000-8000-000000000001'::uuid, k_p_sofia,  'e0280001-0000-4000-8000-000000000002'::uuid,
-      time '16:00', 90, 'presencial'::public.modalidad_asistencia, k_epi_pareja),
-     ('e0390001-0000-4000-8000-000000000002'::uuid, k_p_carmen, 'e0280001-0000-4000-8000-000000000001'::uuid,
-      time '10:00', 50, 'online'::public.modalidad_asistencia,     k_epi_carmen)
-   ) as v(id, paciente_id, tipo, hora, minutos, modalidad, episodio)
-  on conflict (id) do nothing;
+  v_martes := current_date + (8 - extract(isodow from current_date)::int) + 1;
+
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', k_ana, 'role', 'authenticated')::text, true);
+  if not exists (select 1 from public.citas c
+                  where c.paciente_id = k_p_sofia and c.episodio_id = k_epi_pareja and c.inicio > now()) then
+    perform public.agenda_crear_cita(k_p_sofia, k_ana, k_c_madrid,
+      'e0280001-0000-4000-8000-000000000002', v_martes, time '16:00',
+      p_episodio_id => k_epi_pareja);
+  end if;
+
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', k_tec, 'role', 'authenticated')::text, true);
+  if not exists (select 1 from public.citas c
+                  where c.paciente_id = k_p_carmen and c.modalidad_asistencia = 'online' and c.inicio > now()) then
+    perform public.agenda_crear_cita(k_p_carmen, k_ana, k_c_madrid,
+      'e0280001-0000-4000-8000-000000000001', v_martes, time '10:00',
+      p_modalidad_asistencia => 'online');
+  end if;
+  perform set_config('request.jwt.claims', '', true);
 
   -- -----------------------------------------------------------------------
   -- 9 · Y AHORA la baja, no antes

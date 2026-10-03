@@ -423,7 +423,7 @@ Tres cosas del prototipo de la agenda no tienen dato detrás (T-014):
   hay preparación ni cobro registrados. Hoy enseña **las propuestas por confirmar** de las
   series (bloque «Por confirmar»), que sí existen y sí esperan una decisión.
 - **«Modalidad»** es `modalidad_asistencia` (presencial u online, ADR-075, T-039): la línea es
-  `tipo · modalidad · profesional`. Es logística y la ve también el técnico. Si `tipo` no se
+  `tipo · profesional · modalidad`. Es logística y la ve también el técnico. Si `tipo` no se
   puede ver (el técnico, choque 4), se omite con su separador. La modalidad relacional
   (individual, pareja) es clínica y no sale en la agenda.
 - **El cuadro inferior se limita a asistencia y ausencia sin aviso.** Ingresos, abandono y
