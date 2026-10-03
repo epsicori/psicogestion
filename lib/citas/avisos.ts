@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { RecuentoNotas, SesionPropia } from '../agenda/avisos';
-import { formatearHora } from '../fechas/formato';
+import { formatearFechaCorta, formatearHora } from '../fechas/formato';
 import { leerCitasRango } from './agenda';
 import type { Sesion } from './tipos';
 
@@ -18,7 +18,8 @@ export type NotificacionVista = {
   tipo: string;
   titulo: string | null;
   detalle: string;
-  creadoEn: Date;
+  /** Fecha corta ya formateada en el servidor, en la zona de la organización (ADR-034). */
+  fecha: string;
   leida: boolean;
 };
 
@@ -36,20 +37,20 @@ type FilaNotificacion = {
   leida_en: string | null;
 };
 
-function aVista(fila: FilaNotificacion): NotificacionVista {
+function aVista(fila: FilaNotificacion, zona: string | null): NotificacionVista {
   return {
     id: fila.id,
     tipo: fila.tipo,
     titulo: fila.titulo,
     detalle: fila.detalle,
-    creadoEn: new Date(fila.creado_en),
+    fecha: zona ? formatearFechaCorta(new Date(fila.creado_en), zona) : '',
     leida: fila.leida_en !== null,
   };
 }
 
 /** Las no leídas (hasta 50) primero y después las 10 últimas leídas. Sin filtrar por tipo. */
 export async function leerNotificaciones(sesion: Sesion): Promise<NotificacionVista[]> {
-  const [noLeidas, leidas] = await Promise.all([
+  const [noLeidas, leidas, organizacion] = await Promise.all([
     sesion.supabase
       .from('notificaciones')
       .select(COLUMNAS_NOTIFICACION)
@@ -62,6 +63,7 @@ export async function leerNotificaciones(sesion: Sesion): Promise<NotificacionVi
       .not('leida_en', 'is', null)
       .order('creado_en', { ascending: false })
       .limit(MAX_LEIDAS),
+    sesion.supabase.from('organizacion').select('zona_horaria').maybeSingle(),
   ]);
 
   if (noLeidas.error || leidas.error) {
@@ -69,7 +71,9 @@ export async function leerNotificaciones(sesion: Sesion): Promise<NotificacionVi
     return [];
   }
 
-  return [...(noLeidas.data ?? []), ...(leidas.data ?? [])].map(aVista);
+  // Sin zona legible la fecha se omite: nunca un UTC silencioso (ADR-034).
+  const zona = organizacion.data?.zona_horaria ?? null;
+  return [...(noLeidas.data ?? []), ...(leidas.data ?? [])].map((f) => aVista(f, zona));
 }
 
 /** El recuento de la cabecera. Si falla, ceros: no se inventan números. */

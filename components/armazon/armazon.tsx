@@ -11,7 +11,14 @@ import { Cargando } from '@/components/ui/piezas';
 import { t } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
+import { parsearDescartadas } from '@/lib/agenda/avisos';
+import { leerNotificaciones, leerRecuentoNotas, leerSesionesPropias } from '@/lib/citas/avisos';
+
 import { ArmazonCliente } from './armazon-cliente';
+import { AvisoNotas } from './aviso-notas';
+import { AnclaSesion, FranjaSesion, ProveedorAvisosSesion } from './aviso-sesion';
+import { COOKIE_FRANJAS_DESCARTADAS } from './avisos-constantes';
+import { Campana } from './campana';
 import { iniciales, nombrarRol, type RolUsuario } from './modulos';
 import { Navegacion } from './navegacion';
 import { SelectorDeCentro, type CentroDelUsuario } from './selector-centro';
@@ -179,13 +186,62 @@ async function SaludoYFecha() {
 
   return (
     <>
-      <p className="text-muted-foreground text-sm">
+      <p className="text-muted-foreground truncate text-sm">
         {fecha.charAt(0).toUpperCase() + fecha.slice(1)}
       </p>
-      <h1 className="font-serif text-xl font-semibold tracking-tight md:text-2xl">
+      <h1 className="truncate font-serif text-xl font-semibold tracking-tight md:text-2xl">
         {`${franjaDelDia(ahora.getHours())}, ${nombreCompleto.split(' ')[0]}`}
       </h1>
     </>
+  );
+}
+
+/**
+ * Datos de los avisos (T-015): las sesiones propias que pueden estar en curso, el recuento de
+ * notas sin firmar, las notificaciones y las franjas ya descartadas. Una sola carga por
+ * petición (`cache()`, no `use cache`: es de cada usuario) para las dos ranuras.
+ *
+ * El instante baja resuelto desde el servidor, como el saludo: `connection()` y un único
+ * `new Date()` aquí. El cliente solo cuenta hacia delante desde lo que recibe.
+ */
+const cargarAvisos = cache(async () => {
+  await connection();
+  const ahora = new Date();
+  const sesion = await exigirSesion();
+
+  const [sesiones, recuento, notificaciones, almacen] = await Promise.all([
+    leerSesionesPropias(sesion, ahora),
+    leerRecuentoNotas(sesion),
+    leerNotificaciones(sesion),
+    cookies(),
+  ]);
+
+  return {
+    ahoraServidor: ahora.toISOString(),
+    sesiones,
+    recuento,
+    notificaciones,
+    descartadas: parsearDescartadas(almacen.get(COOKIE_FRANJAS_DESCARTADAS)?.value),
+  };
+});
+
+/** Cabecera derecha: ancla de sesión, notas sin firmar y campana. */
+async function AvisosDeCabecera() {
+  const { ahoraServidor, sesiones, recuento, notificaciones } = await cargarAvisos();
+  return (
+    <>
+      <AnclaSesion ahoraServidor={ahoraServidor} sesiones={sesiones} />
+      <AvisoNotas recuento={recuento} />
+      <Campana notificaciones={notificaciones} />
+    </>
+  );
+}
+
+/** Franja de sesión en curso, en el flujo encima del contenido. */
+async function FranjaDeSesion() {
+  const { ahoraServidor, sesiones, descartadas } = await cargarAvisos();
+  return (
+    <FranjaSesion ahoraServidor={ahoraServidor} sesiones={sesiones} descartadas={descartadas} />
   );
 }
 
@@ -194,13 +250,16 @@ async function SaludoYFecha() {
  * contenedor no dependen de ningún dato, así que se prerenderizan enteros y llegan
  * instantáneos.
  *
- * Lo que sí depende de la petición son CUATRO bloques, cada uno con su propio
+ * Lo que sí depende de la petición son SEIS bloques, cada uno con su propio
  * `<Suspense>`: el selector de centro, la navegación (que depende del rol), la
- * identidad del pie y el saludo de la cabecera. Un solo `<Suspense>` alrededor de
+ * identidad del pie, el saludo de la cabecera y los avisos (cabecera y franja).
+ * Un solo `<Suspense>` alrededor de
  * todo habría dejado la página entera detrás de la sesión.
  */
 export function Armazon({ children }: { children: ReactNode }) {
   return (
+    // El proveedor lleva el ancla de la cabecera hasta la franja (foco al descartar).
+    <ProveedorAvisosSesion>
     <ArmazonCliente
       selectorCentro={
         <Suspense fallback={null}>
@@ -222,8 +281,19 @@ export function Armazon({ children }: { children: ReactNode }) {
           <SaludoYFecha />
         </Suspense>
       }
+      avisos={
+        <Suspense fallback={null}>
+          <AvisosDeCabecera />
+        </Suspense>
+      }
+      franja={
+        <Suspense fallback={null}>
+          <FranjaDeSesion />
+        </Suspense>
+      }
     >
       {children}
     </ArmazonCliente>
+    </ProveedorAvisosSesion>
   );
 }

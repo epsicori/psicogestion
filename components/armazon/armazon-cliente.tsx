@@ -20,6 +20,10 @@ type Props = {
   navegacion: ReactNode;
   identidad: ReactNode;
   saludo: ReactNode;
+  /** Cabecera derecha: ancla de sesión, notas sin firmar y campana (T-015). */
+  avisos: ReactNode;
+  /** Franja de sesión en curso: en el flujo, encima del contenido, ni `fixed` ni `sticky`. */
+  franja: ReactNode;
   children: ReactNode;
 };
 
@@ -28,6 +32,8 @@ export function ArmazonCliente({
   navegacion,
   identidad,
   saludo,
+  avisos,
+  franja,
   children,
 }: Props) {
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -102,9 +108,13 @@ export function ArmazonCliente({
             </button>
             <div className="min-w-0">{saludo}</div>
           </div>
+          <div className="flex shrink-0 items-center gap-2">{avisos}</div>
         </header>
 
-        <div className="mx-auto max-w-[1480px] px-5 py-6 md:px-8 md:py-8">{children}</div>
+        <div className="mx-auto max-w-[1480px] px-5 py-6 md:px-8 md:py-8">
+          {franja}
+          {children}
+        </div>
       </section>
     </div>
   );
