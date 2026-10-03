@@ -55,6 +55,48 @@ export async function generarCodigosRecuperacion(sesion: Sesion): Promise<Result
   return { ok: true, codigos: data };
 }
 
+export type ResultadoRegenerar =
+  | { ok: true; codigos: string[] }
+  | { ok: false; motivo: 'contrasena_incorrecta' }
+  | { ok: false; motivo: 'bloqueado'; bloqueadoHasta: string }
+  | { ok: false; motivo: 'error'; mensaje: string };
+
+const MENSAJE_ERROR_REGENERAR = 'No se pudieron regenerar los códigos de recuperación.';
+
+/**
+ * Regenera el lote del PROPIO usuario (T-038). La base comprueba la contraseña y el
+ * segundo factor reciente; aquí solo se traduce su respuesta. Es POST —nunca
+ * `{ get: true }`: la contraseña no puede acabar en una URL— y nada de esta función
+ * registra `contrasena`, los argumentos ni los códigos. Cualquier forma inesperada,
+ * o un «ok» que no traiga exactamente diez códigos, es `error`: jamás un éxito.
+ */
+export async function regenerarCodigosRecuperacion(
+  sesion: Sesion,
+  contrasena: string,
+): Promise<ResultadoRegenerar> {
+  const { data, error } = await sesion.supabase.rpc('regenerar_codigos_recuperacion', {
+    p_contrasena: contrasena,
+  });
+  const fila = data?.[0];
+  if (error || !fila) {
+    console.error('[regenerarCodigosRecuperacion]', error);
+    return { ok: false, motivo: 'error', mensaje: MENSAJE_ERROR_REGENERAR };
+  }
+
+  if (fila.motivo === 'ok' && Array.isArray(fila.codigos) && fila.codigos.length === 10) {
+    return { ok: true, codigos: fila.codigos };
+  }
+  if (fila.motivo === 'contrasena_incorrecta') {
+    return { ok: false, motivo: 'contrasena_incorrecta' };
+  }
+  if (fila.motivo === 'bloqueado' && fila.bloqueado_hasta) {
+    return { ok: false, motivo: 'bloqueado', bloqueadoHasta: fila.bloqueado_hasta };
+  }
+
+  console.error('[regenerarCodigosRecuperacion] respuesta inesperada', fila.motivo);
+  return { ok: false, motivo: 'error', mensaje: MENSAJE_ERROR_REGENERAR };
+}
+
 export type ResultadoCanjeCodigo = {
   canjeado: boolean;
   motivo: 'ok' | 'codigo_invalido' | 'bloqueado' | 'sin_codigos' | 'error';
