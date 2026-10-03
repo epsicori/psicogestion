@@ -50,7 +50,7 @@
 - **T-015 retardo R2.3**: acciones agenda revalidan solo `/agenda`; cabecera vieja hasta navegar.
 - **16-series**: `test:rls` falla en `16-series.sql` también en main.
 - **T-021 A.9/P3.8**: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
-- **T-025**: su consulta al asesor debe llevar la lista del ADR-077 punto 7 (contrato sin tocar).
+- **T-025/T-026 (ADR-078)**: borradores en `docs/legal/` (consulta vinculante DGT con la lista del ADR-077 p.7; preguntas a Holded). Los envía el propietario tras revisión de asesor, antes de comercializar. Contratos sin tocar: los ajusta el arquitecto (vocabulario, 14.6, clave mínima).
 - **Armazón**: <44px; login→/pacientes. T-031/T-032.
 - **H25**: el técnico lee en su auditoría `tipo_terapia_id` y, desde T-039, `episodio_id` de las citas de sus centros. Deduce parejas. **Bloquea producción**.
 - **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`.

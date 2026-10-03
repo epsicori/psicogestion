@@ -43,3 +43,4 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-059](ADR-059.md) | Una nota clínica la corrige quien la escribió; quien no estuvo en la sala añade la suya | aceptada | 15-09-2026 |
 | [ADR-076](ADR-076.md) | La copia clínica descargable es un HTML que se descifra solo (Argon2id + AES-256-GCM), con marca de agua que disuade y rastrea, no impide copiar | aceptada | 02-10-2026 |
 | [ADR-077](ADR-077.md) | De una factura del programa, la app guarda solo los hechos de la expedición: ni su estado ni sus cobros (estrecha el 053 c y d) | aceptada | 03-10-2026 |
+| [ADR-078](ADR-078.md) | Ningún control de la app expide: la factura se emite siempre en el programa, y la app no se presenta como facturación (refuerza el 053 y el 077) | aceptada | 03-10-2026 |
