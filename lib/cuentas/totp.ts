@@ -64,9 +64,11 @@ export type ResultadoRegenerar =
 const MENSAJE_ERROR_REGENERAR = 'No se pudieron regenerar los códigos de recuperación.';
 
 /**
- * Regenera el lote del PROPIO usuario (T-038). La base comprueba la contraseña y el
- * segundo factor reciente; aquí solo se traduce su respuesta. Es POST —nunca
- * `{ get: true }`: la contraseña no puede acabar en una URL— y nada de esta función
+ * Regenera el lote del PROPIO usuario (T-038). Dos llamadas, la primera con la contraseña:
+ * `comprobar_contrasena_para_regenerar` la coteja y deja confirmado el resultado sin
+ * devolverlo, y `regenerar_codigos_recuperacion` (sin parámetros) gasta la autorización.
+ * La base comprueba además el segundo factor reciente; aquí solo se traduce su respuesta.
+ * Es POST —nunca `{ get: true }`: la contraseña no puede acabar en una URL— y nada de esta función
  * registra `contrasena`, los argumentos ni los códigos. Cualquier forma inesperada,
  * o un «ok» que no traiga exactamente diez códigos, es `error`: jamás un éxito.
  */
@@ -74,9 +76,15 @@ export async function regenerarCodigosRecuperacion(
   sesion: Sesion,
   contrasena: string,
 ): Promise<ResultadoRegenerar> {
-  const { data, error } = await sesion.supabase.rpc('regenerar_codigos_recuperacion', {
+  const { error: errorComprobacion } = await sesion.supabase.rpc('comprobar_contrasena_para_regenerar', {
     p_contrasena: contrasena,
   });
+  if (errorComprobacion) {
+    console.error('[regenerarCodigosRecuperacion] comprobar', errorComprobacion.code);
+    return { ok: false, motivo: 'error', mensaje: MENSAJE_ERROR_REGENERAR };
+  }
+
+  const { data, error } = await sesion.supabase.rpc('regenerar_codigos_recuperacion');
   const fila = data?.[0];
   if (error || !fila) {
     console.error('[regenerarCodigosRecuperacion]', error);

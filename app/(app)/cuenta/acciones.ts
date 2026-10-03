@@ -17,7 +17,7 @@ const ZONA_POR_DEFECTO = 'Europe/Madrid';
  * Regenerar los códigos de recuperación del PROPIO usuario (T-038).
  *
  * El orden es el contrato: sesión, validación, segundo factor, comprobación del registro
- * de Postgres y UNA llamada a la base con la contraseña. Un TOTP erróneo no llega a la
+ * de Postgres y los dos pasos de la base (la contraseña solo en el primero). Un TOTP erróneo no llega a la
  * base. La contraseña solo vive aquí lo que dura la llamada: no se devuelve, no se
  * registra, y esta acción no abre ni cierra ninguna sesión de Auth (`signInWithPassword`,
  * `reauthenticate`, `updateUser` y `signOut` están fuera de este recorrido a propósito:
@@ -37,7 +37,12 @@ export async function regenerarCodigos(datos: unknown): Promise<EstadoRegenerar>
   }
   const { contrasena, codigo } = resultado.data;
 
-  const { data: factores } = await sesion.supabase.auth.mfa.listFactors();
+  const { data: factores, error: errorFactores } = await sesion.supabase.auth.mfa.listFactors();
+  if (errorFactores) {
+    // Un fallo al leer no es «no tienes factor»: se dice como fallo (B-H8).
+    console.error('[regenerarCodigos] listFactors', errorFactores.code);
+    return { ...ESTADO_INICIAL, mensaje: t('cuenta.errores.generico') };
+  }
   const factor = factores?.totp?.find((uno) => uno.status === 'verified') ?? null;
   if (!factor) {
     return { ...ESTADO_INICIAL, mensaje: t('cuenta.errores.sinFactor') };

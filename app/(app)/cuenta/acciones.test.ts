@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { t } from '@/lib/i18n';
+
 /**
  * CA7 de T-038. La acción es la que ordena: primero el segundo factor, después UNA
  * llamada a la base con la contraseña, y la contraseña nunca vuelve ni se registra.
@@ -18,6 +20,7 @@ vi.mock('next/cache', () => ({ revalidatePath: (...a: unknown[]) => revalidatePa
 const { regenerarCodigos } = await import('./acciones');
 
 const PRIMERO = 'rpc:registro_postgres_seguro';
+const COMPROBAR = 'rpc:comprobar_contrasena_para_regenerar';
 const SEGUNDO = 'rpc:regenerar_codigos_recuperacion';
 
 function montar(opciones: {
@@ -27,6 +30,7 @@ function montar(opciones: {
   registroSeguro?: boolean;
   errorRegistro?: unknown;
   regeneracion?: { data?: unknown; error?: unknown };
+  zona?: string;
 } = {}) {
   const orden: string[] = [];
   const prohibidas = {
@@ -61,13 +65,14 @@ function montar(opciones: {
     if (nombre === 'registro_postgres_seguro') {
       return { data: opciones.registroSeguro ?? true, error: opciones.errorRegistro ?? null };
     }
+    if (nombre === 'comprobar_contrasena_para_regenerar') return { data: null, error: null };
     return {
       data: opciones.regeneracion?.data ?? [{ motivo: 'ok', bloqueado_hasta: null, codigos: DIEZ }],
       error: opciones.regeneracion?.error ?? null,
     };
   });
   const from = vi.fn(() => ({
-    select: () => ({ maybeSingle: async () => ({ data: { zona_horaria: 'Europe/Madrid' }, error: null }) }),
+    select: () => ({ maybeSingle: async () => ({ data: { zona_horaria: opciones.zona ?? 'Europe/Madrid' }, error: null }) }),
   }));
   const supabase = { rpc, from, auth: { ...prohibidas, mfa: { listFactors, challengeAndVerify } } };
   exigirSesion.mockResolvedValue({ supabase, usuario: { id: 'u' } });
@@ -76,6 +81,11 @@ function montar(opciones: {
 
 function llamadasDeRegeneracion(rpc: ReturnType<typeof montar>['rpc']) {
   return rpc.mock.calls.filter(([nombre]) => nombre === 'regenerar_codigos_recuperacion');
+}
+
+/** Lo que la contraseña toca: el paso uno de la regeneración (A-H1). */
+function llamadasConContrasena(rpc: ReturnType<typeof montar>['rpc']) {
+  return rpc.mock.calls.filter(([nombre]) => nombre === 'comprobar_contrasena_para_regenerar');
 }
 
 const BIEN = { contrasena: CONTRASENA, codigo: '123456' };
@@ -100,13 +110,13 @@ function nadaDeLaContrasena(resultado: unknown) {
 }
 
 describe('regenerarCodigos (T-038 · CA7)', () => {
-  it('las dos bien: una sola llamada a la base, POST sin opciones, y devuelve los diez códigos', async () => {
+  it('las dos bien: dos pasos en la base, la contraseña solo en el primero, y devuelve los diez códigos', async () => {
     const { rpc, challengeAndVerify } = montar();
 
     const r = await regenerarCodigos(BIEN);
 
-    expect(llamadasDeRegeneracion(rpc)).toHaveLength(1);
-    expect(llamadasDeRegeneracion(rpc)[0]).toEqual(['regenerar_codigos_recuperacion', { p_contrasena: CONTRASENA }]);
+    expect(llamadasConContrasena(rpc)).toEqual([['comprobar_contrasena_para_regenerar', { p_contrasena: CONTRASENA }]]);
+    expect(llamadasDeRegeneracion(rpc)).toEqual([['regenerar_codigos_recuperacion']]);
     expect(challengeAndVerify).toHaveBeenCalledWith({ factorId: 'factor-1', code: '123456' });
     expect(r.codigos).toEqual(DIEZ);
     expect(r.errores).toBeUndefined();
@@ -119,7 +129,7 @@ describe('regenerarCodigos (T-038 · CA7)', () => {
 
     await regenerarCodigos(BIEN);
 
-    expect(orden).toEqual(['listFactors', 'challengeAndVerify', PRIMERO, SEGUNDO]);
+    expect(orden).toEqual(['listFactors', 'challengeAndVerify', PRIMERO, COMPROBAR, SEGUNDO]);
   });
 
   it('TOTP erróneo: el error va en el campo codigo y la base no recibe NINGUNA llamada', async () => {
@@ -133,7 +143,7 @@ describe('regenerarCodigos (T-038 · CA7)', () => {
     nadaDeLaContrasena(r);
   });
 
-  it('contraseña errónea: una llamada, error en el campo contrasena y sin códigos', async () => {
+  it('contraseña errónea: un paso dos, error en el campo contrasena y sin códigos', async () => {
     const { rpc } = montar({
       regeneracion: { data: [{ motivo: 'contrasena_incorrecta', bloqueado_hasta: null, codigos: null }] },
     });
@@ -167,7 +177,7 @@ describe('regenerarCodigos (T-038 · CA7)', () => {
 
     const r = await regenerarCodigos(BIEN);
 
-    expect(r.mensaje).toBeTruthy();
+    expect(r.mensaje).toBe(t('cuenta.errores.generico'));
     expect(r.codigos).toBeUndefined();
     nadaDeLaContrasena(r);
   });
@@ -177,8 +187,9 @@ describe('regenerarCodigos (T-038 · CA7)', () => {
 
     const r = await regenerarCodigos(BIEN);
 
+    expect(llamadasConContrasena(rpc)).toHaveLength(0);
     expect(llamadasDeRegeneracion(rpc)).toHaveLength(0);
-    expect(r.mensaje).toBeTruthy();
+    expect(r.mensaje).toBe(t('cuenta.errores.registroInseguro'));
     expect(r.codigos).toBeUndefined();
     nadaDeLaContrasena(r);
   });
@@ -193,9 +204,37 @@ describe('regenerarCodigos (T-038 · CA7)', () => {
             : { data: [], error: null }) as never);
       }
       const r = await regenerarCodigos(BIEN);
+      expect(llamadasConContrasena(rpc)).toHaveLength(0);
       expect(llamadasDeRegeneracion(rpc)).toHaveLength(0);
+      expect(r.mensaje).toBe(t('cuenta.errores.registroInseguro'));
       expect(r.codigos).toBeUndefined();
     }
+  });
+
+  it('B-H8 · un error al listar los factores es un fallo general, no «sin factor», y no se verifica nada', async () => {
+    const { rpc, challengeAndVerify } = montar({ errorFactores: { code: 'X', message: 'caído' } });
+
+    const r = await regenerarCodigos(BIEN);
+
+    expect(r.mensaje).toBe(t('cuenta.errores.generico'));
+    expect(r.mensaje).not.toBe(t('cuenta.errores.sinFactor'));
+    expect(challengeAndVerify).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('B-H5 · la hora del bloqueo se da en la zona de la organización, no en la de por defecto', async () => {
+    montar({
+      zona: 'Atlantic/Canary',
+      regeneracion: {
+        // 10:00 UTC: 11:00 en Canarias (WEST) y 12:00 en Madrid (CEST).
+        data: [{ motivo: 'bloqueado', bloqueado_hasta: '2026-10-03T10:00:00+00:00', codigos: null }],
+      },
+    });
+
+    const r = await regenerarCodigos(BIEN);
+
+    expect(r.mensaje).toContain('11:00');
+    expect(r.mensaje).not.toContain('12:00');
   });
 
   it('sin factor TOTP verificado: error general y la base no recibe ninguna llamada', async () => {
