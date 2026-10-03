@@ -1,27 +1,27 @@
 {
   "ticket": "T-038",
-  "ronda": 2,
+  "ronda": 3,
   "revisor": "A",
   "altas": 0,
-  "medias": 1,
-  "bajas": 1,
-  "cerrados_ronda_1": ["A-H1", "A-H2", "A-H3", "A-H4", "A-H5", "A-H6", "A-H7"],
+  "medias": 0,
+  "bajas": 2,
+  "cerrados_ronda_2": ["A2-H1", "A2-H2"],
   "hallazgos": [
     {
-      "id": "A2-H1",
-      "severidad": "MEDIA",
-      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
-      "linea": 216,
-      "descripcion": "registro_postgres_seguro() no lee los ajustes de plpgsql_check, que está precargada y cuyo trazador escribe los argumentos de cada función PL/pgSQL, p_contrasena incluido.",
-      "escenario": "Medido como supabase_admin dentro de begin…rollback, con plpgsql_check.enable_tracer = on, plpgsql_check.tracer = on y tracer_errlevel = log: registro_postgres_seguro() devuelve t, y comprobar_contrasena_para_regenerar('clave-revisor-log-7731') deja «\"p_contrasena\" => 'clave-revisor-log-7731'» en docker logs. Si un operador activa el trazador, la acción da el registro por seguro y la contraseña queda escrita en claro. Es la misma familia que A-H2. Arreglo: una regla C9, las claves de plpgsql_check en N0 si la biblioteca está cargada, y negativa y gemela en el banco; o bien una lista de bibliotecas precargadas permitidas en N1."
+      "id": "A3-H1",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/totp.ts",
+      "linea": 57,
+      "descripcion": "Cualquier 42501 de generar_codigos_recuperacion() se traduce como «segundo factor de hace más de cinco minutos», pero la función también lanza 42501 por Q3(B), cuando ya hay códigos vigentes, y por falta de sesión o perfil inactivo.",
+      "escenario": "En /primera-vez, «Reintentar» confirma los diez códigos pero la respuesta se pierde (sinRespuesta, segundo-factor.tsx:117). Un minuto después, con el segundo factor aún reciente, se pulsa «Reintentar» otra vez y llega 42501 «Ya tienes códigos de recuperación vigentes». La vista dice «Tu verificación en dos pasos se hizo hace más de cinco minutos», que es falso. La salida que ofrece sí resuelve. La prueba de totp.test.ts usa un 42501 con el mensaje de aal2 y no cubre la rama que comparte el código."
     },
     {
-      "id": "A2-H2",
+      "id": "A3-H2",
       "severidad": "BAJA",
-      "archivo": "scripts/t038-concurrencia.mjs",
-      "linea": 198,
-      "descripcion": "La pasada B, que mide que el candado de fila basta sin el candado de consejo, no exige b.espero, a diferencia de la A.",
-      "escenario": "Si las dos conexiones no se solapan (máquina lenta o cambio de dormir), las dos regeneraciones van en serie, dan ok|10 con diez vigentes y dos avisos, y B sale verde: «el candado de fila serializa» queda registrado sin que haya habido carrera. Hoy el JSON registra espero: true, pero la condición no se exige."
+      "archivo": "docs/bitacora/T-038.md",
+      "linea": 56,
+      "descripcion": "La nota de despliegue de Q1, que es la única, nombra dos de las nueve condiciones (C2 y C7); la ronda 3 añade C9 sin ampliarla.",
+      "escenario": "En producción, un operador activa el trazador de plpgsql_check a nivel log para depurar otra función. Cada regeneración devuelve registroInseguro. El administrador sigue la nota, ve bien log_parameter_max_length_on_error y auto_explain, y no encuentra la causa. Nadie puede regenerar. La acción falla cerrada y no se filtra nada."
     }
   ]
 }

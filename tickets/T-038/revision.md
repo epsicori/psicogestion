@@ -1,175 +1,162 @@
-**Sin ALTA. Gate combinado: 0 ALTA** (revisores A y B, ronda 2: 0 ALTA, 2 MEDIA, 5 BAJA).
+**Sin ALTA. Gate combinado: 0 ALTA** (revisores A y B, ronda 3: 0 ALTA, 1 MEDIA, 2 BAJA, una vez quitado el duplicado).
 
-# T-038 · Revisión, ronda 2
+# T-038 · Revisión, ronda 3
 
-Sustituye a la ronda 1. Diff: `git diff main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`). De la ronda 1 quedan cerrados A-H1 a A-H7 y B-H1 a B-H11 (B-H10 cerrado en el anuncio y B-H11 en lo visible; lo que les falta va en B2-H2 y B2-H3).
+Esta ronda sustituye a la 2.
+
+- **Diff revisado:** el de la ronda 3, `worktree-agent-ac39d19a23cb82596..worktree-agent-a3f1df59a02f0397d` (HEAD `b05d3e3`). También se repasó el conjunto `main...worktree-agent-a3f1df59a02f0397d`.
+- **Cerrados de la ronda 2:** A2-H1, A2-H2 y B2-H1 a B2-H5. De dos de ellos sale un hallazgo nuevo: de B2-H4 nace B3-H1 y de B2-H5 nace A3-H1.
+- **Duplicado:** A3-H1 (revisor A) y B3-H2 (revisor B) son el mismo hallazgo: `lib/cuentas/totp.ts:57` traduce cualquier 42501 como «segundo factor de hace más de cinco minutos». Se cuenta una vez, con el id A3-H1.
 
 | Id | Sev. | Dónde | Qué |
 |---|---|---|---|
-| A2-H1 | MEDIA | `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:216` | registro_postgres_seguro() no lee los ajustes de plpgsql_check, que está precargada y cuyo trazador escribe los argumentos de cada función PL/pgSQL, p_contrasena incluido. |
-| B2-H1 | MEDIA | `app/primera-vez/segundo-factor.tsx:102` | «Reintentar» (nuevo en T-038) hace iniciarTransicion(async () => await generarCodigos()) sin try/catch, y en app/ no hay error.tsx ni global-error.tsx: un rechazo tumba la página entera. |
-| A2-H2 | BAJA | `scripts/t038-concurrencia.mjs:198` | La pasada B, que mide que el candado de fila basta sin el candado de consejo, no exige b.espero, a diferencia de la A. |
-| B2-H2 | BAJA | `app/primera-vez/segundo-factor.tsx:183` | disabled={trabajando} sobre el «Reintentar» enfocado manda el foco a BODY, y un reintento que falla con el mismo texto (constante de totp.ts:53, todo fallo de la RPC) no lo devuelve: setFalloCodigos con el mismo string no cambia el estado y el efecto [falloCodigos] no corre. |
-| B2-H3 | BAJA | `app/(app)/cuenta/lista-avisos.tsx:253` | La marca «Sin leer» es un span pegado a la etiqueta sin espacio en el DOM (ml-2 solo separa en pantalla). |
-| B2-H4 | BAJA | `app/(app)/cuenta/formulario-regenerar.tsx:77` | El catch afirma «No se han regenerado los códigos» cuando el rechazo de la acción no dice si el paso dos se confirmó. |
-| B2-H5 | BAJA | `app/primera-vez/segundo-factor.tsx:101` | «Reintentar» llama a generar_codigos_recuperacion(), que exige segundo factor de menos de cinco minutos, desde una vista sin temporizadores que espera a la persona. |
+| B3-H1 | MEDIA | `lib/i18n/es.ts:287` | El texto de resultado desconocido manda reintentar solo si no aparece «Códigos de recuperación nuevos». La activación inserta ese mismo aviso, así que la condición no se cumple nunca. Y si la regeneración sí se confirmó, el texto no dice que haga falta otra lista. |
+| A3-H1 (= B3-H2) | BAJA | `lib/cuentas/totp.ts:57` | `reentrar` se marca ante cualquier 42501. Pero también es 42501 tener ya códigos vigentes (Q3(B), con el reto de hace 24 s en el banco 13), no tener sesión o tener el perfil inactivo. En todos esos casos la vista dice «hace más de cinco minutos», y es falso. |
+| A3-H2 | BAJA | `docs/bitacora/T-038.md:56` | La nota de despliegue de Q1 nombra dos de las nueve condiciones (C2 y C7). La ronda 3 añade C9 y no la amplía. |
 
 <!-- REVISOR-A -->
-## Revisor A · base y seguridad (ronda 2)
+Sin hallazgos ALTA. Revisor A, ronda 3: 0 ALTA, 0 MEDIA, 2 BAJA.
 
-- **Diff:** `main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`).
-- **Dónde se midió:** en `supabase_db_Psicogestion`, siempre dentro de `begin … rollback`, sin `db reset`, con `max(version) = 20261008120000`.
-- **Interrupción:** el verificador reseteó la base a mitad de un mutante. Ese mutante se repitió cuando la migración volvió a estar aplicada.
+## Revisor A · base, seguridad y guiones (ronda 3)
 
-### Hallazgos de la ronda 1
+- **Diff:** `worktree-agent-ac39d19a23cb82596..worktree-agent-a3f1df59a02f0397d` (HEAD `b05d3e3`), comparado fichero a fichero contra la rama de la ronda 2. También se repasó el conjunto `main...worktree-agent-a3f1df59a02f0397d` en lo que me toca.
+- **Dónde se midió:** en `supabase_db_Psicogestion`, con `max(version) = 20261008120000` y el cuerpo de C9 ya aplicado. Todo dentro de `begin … rollback`, sin `db reset` y sin sembrar nada.
+- **Rol de la medición:** se midió como `supabase_admin -d postgres`, porque `postgres` no puede fijar `plpgsql_check.enable_tracer`.
+
+### Hallazgos de la ronda 2
 
 | Id | Estado | Cómo se comprobó |
 |---|---|---|
-| A-H1 | **Cerrado** | El paso uno devuelve `void`. Después de `crypt` hay una sola escritura (`insert … on conflict` con `case` sobre `v_ok`) y el aviso, que solo depende de `v_bloqueo`; ningún `return` ni `raise` depende del acierto. La guarda de solo lectura (25006) y el candado van antes del cotejo. El paso dos no recibe la contraseña. El oráculo da la misma respuesta con la buena y con la mala en S1 a S5, y el contador confirma. |
-| A-H2 | **Cerrado** | C5 está en la migración (`:166`). El mutante que la quita pone el banco en rojo con «R2-5 C5». |
-| A-H3 | **Cerrado** | `registrar_reposicion_totp` rechaza `p_perfil_id = v_actor` y cambia `<>` por `is distinct from`. Por lo demás es una copia fiel del cuerpo anterior. El mutante que quita la guarda pone el banco en rojo con «R2-4». |
-| A-H4 | **Cerrado** | C1 a C8, N0 y N1 tienen su negativa y su gemela, también en vivo (L0 a L7b). |
-| A-H5 | **Cerrado** | Cada condición lleva su `coalesce(…, true)`. Si falta una clave (N0) o una biblioteca (N1), el resultado es `false`. |
-| A-H6 | **Cerrado** | Se cierra con DR7: `alcanzable(u)` usa `st > 0 and st <= u` y L7b lo prueba con el `statement_timeout` de `authenticated`. |
-| A-H7 | **Cerrado** | Hay `revoke … from public, anon` y una comprobación que para si `anon` puede ejecutarlas. Queda una ventana de milisegundos entre la creación y el `revoke`, cubierta por el `finally` del corredor. |
+| A2-H1 | **Cerrado** | Detalle debajo de la tabla. |
+| A2-H2 | **Cerrado** | `scripts/t038-concurrencia.mjs:196` exige `b.espero` con la misma aserción que la A, y antes de la de `ok|10`. Si no hay solape, `exigir` mete el fallo en `fallos` y la pasada B sale roja. |
 
-### MEDIA
+**A2-H1, cómo se comprobó.** El arreglo tiene tres piezas:
+- C9 en el evaluador;
+- N1 para `plpgsql_check`, que pide `enable_tracer`, `tracer`, `tracer_errlevel` y `log_min_messages`;
+- el envoltorio, que lee esas cuatro claves de `pg_settings`.
 
-- **A2-H1** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:216` · `registro_postgres_seguro()` no lee los ajustes de `plpgsql_check`. Esa biblioteca está en `shared_preload_libraries`, y su trazador escribe los argumentos de cada función PL/pgSQL, `p_contrasena` incluido.
-  - **Escenario:** se midió como `supabase_admin` dentro de `begin … rollback`, con un perfil sembrado con aal2 y una contraseña marcada.
-    1. Se fijaron `set local plpgsql_check.enable_tracer = on`, `plpgsql_check.tracer = on` y `plpgsql_check.tracer_errlevel = 'log'`.
-    2. `registro_postgres_seguro()` devolvió `t`.
-    3. Se llamó a `comprobar_contrasena_para_regenerar('clave-revisor-log-7731')`.
-    4. `docker logs supabase_db_Psicogestion` mostró `LOG:  #0  "p_contrasena" => 'clave-revisor-log-7731'`.
-  - **Variante:** con el `tracer_errlevel` por defecto (`notice`) y `log_min_messages` en `notice` o por debajo, la línea llega igual al registro.
-  - **Por qué importa:** si un operador activa el trazador para depurar, la acción da el registro por seguro (Q1 b) y la contraseña queda escrita en claro. Es la misma familia que A-H2: un ajuste que escribe parámetros y que la lista no enumera.
-  - **Arreglo:**
-    - añadir una C9: si `plpgsql_check` está cargada, el registro es inseguro cuando `plpgsql_check.enable_tracer = on` y `plpgsql_check.tracer = on`;
-    - si la biblioteca está cargada, sus claves pasan a N0;
-    - una negativa y una gemela en R2-5 y en vivo.
-  - **Más ancho (lo decide el arquitecto):** la lista cerrada de ajustes no protege ante una biblioteca precargada que la lista no conoce. Una alternativa es que N1 tenga una lista de bibliotecas permitidas, de modo que cualquier precargada que no figure en ella cuente como insegura.
+Se midió en vivo con `registro_postgres_seguro()` y, en la misma transacción, una función `pg_temp.sonda(p_contrasena text)` en PL/pgSQL. Después se buscó la sonda en `docker logs`. Para que C7 no tapara el resultado se fijó `statement_timeout = 8000`; sin eso, `auto_explain.log_min_duration` (10000) da falso por su cuenta.
+
+| `tracer_errlevel` / `log_min_messages` | Evaluador | ¿Llega al registro? |
+|---|---|---|
+| valores de fábrica (trazador apagado) | t | no |
+| los mismos, como `authenticated` | t | no |
+| notice / warning | t | no |
+| notice / notice | **f** | sí |
+| notice / log | t | no |
+| log / log | **f** | sí |
+| log / error | **f** | sí |
+| log / warning | **f** | sí |
+| log / fatal | t | no |
+| log / panic | t | no |
+| info / error | t | no |
+| info / info | **f** | sí |
+| debug1 / debug1 | **f** | sí |
+
+El evaluador coincide con el registro real en las 13 combinaciones. Dos conclusiones:
+- **El orden de niveles es el correcto.** El orden de `v_niveles` (con `log` entre `error` y `fatal`) es el que aplica `is_log_level_output` al registro del servidor, no el del cliente.
+- **N1 no deja la acción siempre bloqueada.** Con la imagen de fábrica, `plpgsql_check` está en `shared_preload_libraries`, sus claves salen en `pg_settings`, el trazador está apagado y el resultado es `t`.
+
+Detalles que también se comprobaron:
+- El alias `debug` se guarda como `debug2`, que está en el arreglo.
+- Los valores posibles de `tracer_errlevel` en esta imagen son `debug5..debug1, info, notice, log`, y todos están en el arreglo.
+
+**Las negativas del banco distinguen cada pieza.** Se razonó mutante por mutante:
+- Si se quita el bloque N1 de `plpgsql_check`, las tres negativas `t38_ev_sin(...)` pasan a dar `t`, porque con `enable_tracer` en `off` o en `null` y `tracer` en `off`, el `and` da `false` sin pasar por el `coalesce`. Cada una pone el banco en rojo.
+- Si `>=` se cambia por `>`, salta la negativa notice/notice.
+- Si `log` se coloca entre los `debug`, que es el orden del cliente, salta la negativa log/warning.
+- Si se quita cualquiera de las dos condiciones `on`, salta su gemela.
 
 ### BAJA
 
-- **A2-H2** · `scripts/t038-concurrencia.mjs:198` · La pasada B («sin candado de consejo, el candado de fila del consumo serializa») no exige `b.espero`, a diferencia de la A (`:175`).
-  - **Escenario:** las dos conexiones pueden no solaparse, por ejemplo porque la primera confirma antes de que arranque la segunda en una máquina lenta, o porque cambia `dormir`. Entonces las dos regeneraciones van en serie, dan `ok|10`, dejan diez vigentes y dos avisos, y la B sale verde. La medición «el candado de fila basta» queda registrada en `ca4-concurrencia.json` sin que haya habido carrera.
-  - **Estado actual:** hoy el JSON registra `espero: true`, así que la medición vale. Lo que falta es que la condición se exija en lugar de solo anotarse.
-  - **Arreglo:** `exigir(b.espero, …)`, igual que en la A. La D no lo necesita, porque sin solape la segunda activación lanza 42501 y deja 10 vigentes, y entonces la D sale roja.
+- **A3-H1** · `lib/cuentas/totp.ts:57`
+  - **Qué falla:** se traduce cualquier 42501 de `generar_codigos_recuperacion()` como «el segundo factor tiene más de cinco minutos». Pero esa función lanza 42501 por cuatro causas:
+    - no hay sesión;
+    - el perfil no está activo;
+    - el segundo factor no es reciente;
+    - **ya hay códigos vigentes** (Q3(B), en `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:509`).
+  - **Escenario:**
+    1. En `/primera-vez` el usuario pulsa «Reintentar».
+    2. La acción llega a confirmar los diez códigos, pero la respuesta se pierde. El `catch` muestra `sinRespuesta` (`segundo-factor.tsx:117`).
+    3. Un minuto después vuelve a pulsar «Reintentar», con el segundo factor aún dentro de los cinco minutos.
+    4. La base contesta 42501 «Ya tienes códigos de recuperación vigentes».
+    5. La vista dice «Tu verificación en dos pasos se hizo hace más de cinco minutos y ya no vale…», que es falso.
+  - **Alcance:** la salida que ofrece (volver a entrar y regenerar en Mi cuenta con la contraseña) sí resuelve el caso. Lo que falla es la causa que se le da al usuario.
+  - **Prueba:** la de `lib/cuentas/totp.test.ts` usa un 42501 con el mensaje «sin segundo factor reciente». No prueba la rama Q3(B), que comparte el código.
+- **A3-H2** · `docs/bitacora/T-038.md:56`
+  - **Qué falla:** la nota de despliegue de Q1, la única que existe según `docs/state.md`, solo nombra dos de las nueve condiciones: C2 y C7. La ronda 3 añade C9 sin ampliarla.
+  - **Escenario:**
+    1. En producción, un operador activa el trazador de `plpgsql_check` a nivel `log` para depurar otra función.
+    2. Desde ese momento, cada regeneración devuelve `registroInseguro` («avisa al administrador»).
+    3. El administrador sigue la nota, comprueba `log_parameter_max_length_on_error` y `auto_explain`, y los dos están bien.
+    4. Nadie puede regenerar códigos y la nota no da la causa.
+  - **Alcance:** la acción falla cerrada y no se filtra nada. El problema es que la nota no deja diagnosticarlo.
+  - **Lo mismo pasa** con C1, C3 a C6 y C8, que ya estaban en la ronda 2.
 
 ### Comprobado sin hallazgo
 
-**Lista R2.7, punto por punto:**
-- **Paso uno uniforme:**
-  - una sola escritura con `case` y `least(…, 100)`;
-  - sin `return` ni `raise` dentro de un `if v_ok`;
-  - el aviso depende solo de `v_bloqueo`;
-  - si `p_contrasena` es `null`, `v_ok` es falso y cuenta como fallo.
-- **Guarda de solo lectura:** va antes del candado y de `crypt`.
-- **Paso dos:**
-  - no lee `auth.users` ni recibe nada;
-  - consume con `> 0 and autorizado_hasta > now()` antes de caducar el lote.
-- **Firma antigua:** en la base no queda `regenerar_codigos_recuperacion(text)`. En `tipos-bd.ts` la función figura con `Args: never`, y `p_contrasena` solo aparece en `lib/cuentas/totp.ts:80`, que es la comprobación.
-- **Evaluador:**
-  - solo lo ejecuta su dueño: se revoca a `public`, `anon`, `authenticated` y `service_role`;
-  - normaliza las listas de precarga;
-  - `alcanzable` usa `<=`.
-- **Tabla `intentos_regenerar_codigos`:**
-  - ni `anon` ni `authenticated` tienen `TRUNCATE`, `DELETE`, `UPDATE` ni `SELECT`;
-  - `authenticated` no puede insertar en `auditoria`, así que una fila `TOTP_REPUESTO` no se puede fabricar para eludir Q3(B).
+- **Otros ajustes de `plpgsql_check`** (se listaron todos en `pg_settings`):
+  - `trace_assert` es de contexto `user`, pero solo enseña variables cuando falla un `ASSERT`, y ninguna función de las migraciones usa `ASSERT`;
+  - `profiler`, `mode` y los avisos no escriben los valores de los argumentos.
+- **Resto de bibliotecas precargadas:**
+  - `pg_stat_statements` guarda texto normalizado;
+  - `pg_cron` registra solo sus propios trabajos;
+  - de `plan_filter`, un error cae en C2;
+  - `pg_tle`, `pg_net`, `pgsodium`, `supabase_vault` y `supautils` no escriben parámetros de RPC.
 
-**Mutantes del banco**, cada uno aplicado tras el `begin` con el banco completo (`00` a `23`) en `rollback`. El banco sin mutar sale verde: rc 0 y 1139 OK. Los siete ponen el banco en rojo por la aserción esperada:
-
-| Mutante | Aserción que salta |
-|---|---|
-| La contraseña mala autoriza en el primer insert | «R2-1 · contraseña mala: UN intento fallido …» |
-| La mala no anula la autorización | «R2-1 punto 5» |
-| El paso dos ignora `autorizado_hasta` | «R2-1 punto 6» |
-| Sin guarda 25006 | «R2-1 · la guarda de solo lectura y el candado van ANTES …» |
-| Umbral de bloqueo en 6 | «CA2 bis» |
-| Sin C5 | «R2-5 C5» |
-| Reposición propia permitida | «R2-4 … 42501» |
-
-**Lado TS:**
-- los dos pasos van por POST;
-- el error del paso uno se registra solo con el `code`;
-- el error del paso dos no puede llevar la contraseña, porque el paso dos no la recibe.
-
-**Residuo aceptado:** el tope 2 deja una autorización sobrante tras un doble envío. Durante 60 s, quien tenga la cookie con aal2 reciente puede gastarla y regenerar sin contraseña. Es la decisión P2 del propietario y cada regeneración avisa al titular, así que no se cuenta como hallazgo.
+  La propuesta más amplia de A2-H1 (una lista de bibliotecas permitidas en N1) no se adoptó. Queda para el arquitecto; no cuenta como hallazgo, porque hoy ninguna biblioteca precargada escribe parámetros sin una regla que la cubra.
+- **`app/primera-vez/acciones.ts`:** devuelve `resultado` tal cual. El tipo solo lleva `mensaje` y `reentrar`; no viaja nada más al cliente.
+- **`formulario-regenerar.tsx`:** en B2-H4 el `catch` sigue vaciando la contraseña (`reset`) antes de cambiar de vista, y no registra nada.
+- **Comentario L8 de `scripts/rls/13-cuentas.sql`:** es exacto para `postgres`. La medición en vivo de C9 la cubre la tabla de arriba.
 
 <!-- REVISOR-B -->
-## Revisor B · interfaz, accesibilidad e integración TS (ronda 2)
+**Sin ALTA en la parte del revisor B** (ronda 3: 0 ALTA, 1 MEDIA, 1 BAJA).
 
-Sin ALTA en la parte del revisor B: 0 ALTA, 1 MEDIA, 4 BAJA.
+# T-038 · Revisión, ronda 3 · Revisor B (interfaz, accesibilidad y TS)
 
-Diff revisado: `git diff main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`), ficheros de `app/(app)/cuenta/**`, `app/primera-vez/**`, `components/armazon/**`, `lib/cuentas/totp.ts`, `lib/cuentas/esquemas.ts`, `lib/i18n/es.ts`, `lib/supabase/tipos-bd.ts`, `next.config.ts`, `accesibilidad/**` y `docs/interfaz.md`. Las mutaciones y las sondas se ejecutaron en una copia exportada con `git archive e25fae0` fuera del worktree, que no se tocó. No se ejecutó `db reset`.
+**Qué se ha revisado.** El commit de la ronda 3 `b05d3e3`, sobre la rama `worktree-agent-a3f1df59a02f0397d`, en la parte de interfaz y TS. Además, el conjunto `main...b05d3e3` en `app/primera-vez/**`, `app/(app)/cuenta/**`, `lib/cuentas/totp.ts`, `lib/i18n/es.ts` y `accesibilidad/**`.
 
-### B-H1 a B-H11 de la ronda 1
+**Qué se ha ejecutado en el worktree, sin modificarlo:**
+- `npx vitest run app/primera-vez "app/(app)/cuenta" lib/cuentas/totp.test.ts`: 73 de 73.
+- `npx tsc --noEmit`: limpio.
+- `eslint` sobre los ficheros tocados: limpio.
 
-| # | Estado | Cómo se ha comprobado |
+No se ha ejecutado `db reset`.
+
+## B2-H1 a B2-H5 de la ronda 2
+
+| # | Estado | Comprobación |
 |---|---|---|
-| B-H1 | **Cerrado** | El Provider envuelve el `<aside>` entero. `armazon-cliente.test.tsx` monta el `ArmazonCliente` real y cuenta los botones «Cerrar menú»: 1, luego 2 y luego 1. El mutante «Provider solo en `navegacion`» sale rojo (`mutantes-ui.json`). Ningún otro consumidor de `CajonContext` cambia de comportamiento: solo están `navegacion.tsx` y `enlace-cuenta.tsx`. |
-| B-H2 | **Cerrado** | `catch` con `reset` y vista de fallo. Medido: sin el `reset` del `catch` (y con el resto igual) cae «B-H2 · si la acción se rechaza…», porque RHF repuebla el campo al volver. La prueba discrimina. El texto que se pinta tiene un matiz: **B2-H4**. |
-| B-H3 | **Cerrado** | Error → `errorLectura`, sin `vacio` ni lista. Mutante rojo. |
-| B-H4 | **Cerrado** | Medido: M2b (`useEffect` con `setTimeout(60000)` en la vista de fallo) tumba «B-H4 · en la vista de fallo…» (1 rojo de 11). |
-| B-H5 | **Cerrado** | Medido: `zona = ZONA_POR_DEFECTO` en lista-avisos da 1 rojo de 9, y `ZONA_POR_DEFECTO,` en acciones.ts da 1 rojo de 19 (Canarias, 11:00). |
-| B-H6 | **Cerrado** | Vitest mira `toHaveValue('')`. Medido: M1 (sin el `reset` de `:57`) da 5 rojos de 11. Playwright lo mira en S3 y S6. «Volver» no se ejercita en Playwright, pero Vitest lo cubre. |
-| B-H7 | **Cerrado** | `toBe(registroInseguro)` en las tres variantes (falso, error y `null`), y ninguna llamada a ninguno de los dos pasos. |
-| B-H8 | **Cerrado** | `listFactors` con error da `generico`, sin `challengeAndVerify` ni RPC. Mutante rojo. |
-| B-H9 | **Cerrado** | «Volver» lleva el foco al campo contraseña. Mutante rojo en las dos variantes de fallo. Que el efecto vuelva a correr cuando cambia `enviando` con un `campoConFoco` antiguo no roba el foco: el input ya está desmontado y `focus()` sobre un nodo desconectado no hace nada. |
-| B-H10 | **Cerrado en el anuncio** | El `status` se vacía y se rellena, y el mutante sale rojo. Pero el foco se pierde en cada reintento fallido: **B2-H2**. |
-| B-H11 | **Cerrado en lo visible** | La marca «Sin leer» está dentro del `<li>` del no leído. Para el lector de pantalla se pega a la etiqueta: **B2-H3**. |
+| B2-H1 | **Cerrado** | `reintentar` lleva `try/catch` (`segundo-factor.tsx:108-118`). La prueba monta una frontera de clase y rechaza la acción. La frontera no se activa, el `status` lo dice y «Reintentar» sigue habilitado. Mutante «sin catch» en rojo (`mutantes-r3-ui.json`). `verificar` (T-037) sigue anotado en `docs/state.md:35`. El texto del `catch` tiene un matiz: lo recoge **B3-H2**. |
+| B2-H2 | **Cerrado** | `fallo` es un objeto nuevo en cada fallo, así que el efecto `[fallo]` vuelve a correr aunque el texto sea el mismo. La prueba simula el `blur()` que hace Chromium al deshabilitar, y con el efecto atado al texto queda en rojo. El foco también vuelve a la región cuando «Reintentar» se sustituye por «Volver a entrar»: el botón enfocado se desmonta y el objeto es nuevo. |
+| B2-H3 | **Cerrado** | Hay un `{' '}` real antes de la marca. Vitest mira `textContent` (`/\S\s+Sin leer$/`) y Playwright S6 mira `ariaSnapshot`. Sin el espacio sale en rojo. |
+| B2-H4 | **Cerrado en lo que afirmaba; abre B3-H1** | El rechazo ya no dice «No se han regenerado»: el título es «No sabemos si se han regenerado los códigos» y «Volver» refresca para que salga el aviso. Ahora bien, la regla que el texto da para decidir no discrimina, y deja de pedir el reintento que el texto anterior sí pedía: **B3-H1**. |
+| B2-H5 | **Cerrado en el caso medido; abre B3-H2** | Con el reto TOTP caducado, la vista dice por qué y ofrece «Volver a entrar», que hace `cerrarSesion`, `signOut` y `redirect('/login')`. El foco va a la región. La salida es buena: si queda el PIN pendiente, `fijar_pin_historia` también exige un reto reciente (`20260830090000:873`), así que «Aceptar» no bastaría. Pero la marca se pone ante **cualquier** 42501: **B3-H2**. |
 
-### R2.7 «Qué revisar» (parte de interfaz e integración TS)
+## MEDIA
 
-- **La firma `(text)` no reaparece.**
-  - `tipos-bd.ts` tiene `comprobar_contrasena_para_regenerar: { Args: { p_contrasena: string } }` y `regenerar_codigos_recuperacion: { Args: never }`.
-  - `p_contrasena` solo aparece en `lib/cuentas/totp.ts:80`, en sus pruebas y en `scripts/t038-oraculo.mjs`. Este último la usa precisamente para comprobar que la firma vieja da 404/PGRST202.
-  - Ninguna de las dos llamadas lleva `{ get: true }`.
-- **Integración de los dos pasos en `totp.ts`.**
-  - Si el paso uno da error, la función devuelve `error`, registra solo `.code` y no llama al paso dos (probado).
-  - La traducción del paso dos no cambia.
-  - Contrastado con el SQL:
-    - con bloqueo, el paso uno vuelve sin escribir y el paso dos devuelve `bloqueado` con su hora;
-    - sin autorización, el paso dos devuelve `contrasena_incorrecta`;
-    - el quinto fallo devuelve `bloqueado`, no `contrasena_incorrecta`.
-  - Las tres respuestas llegan bien a la acción.
-- **Orden de la acción.** `listFactors` → `challengeAndVerify` → `registro_postgres_seguro` → comprobar → regenerar, probado en `acciones.test.ts:132`. `logging.serverFunctions: false` sigue en su sitio.
-- **La prueba de B-H1 monta `ArmazonCliente` de verdad, y B-H6 mira `value` y no el HTML**: sí, en las dos.
+- **B3-H1** · `lib/i18n/es.ts:287` (`cuenta.errores.resultadoDesconocido`), que pinta `app/(app)/cuenta/formulario-regenerar.tsx:81`
+  - **Problema.** El texto manda reintentar solo «si no aparece» el aviso «Códigos de recuperación nuevos». Ese aviso lo inserta también la **activación**: `generar_codigos_recuperacion()` lo escribe en `20261008120000:530`, con el mismo tipo `codigos_regenerados` y la misma etiqueta (`es.ts:1032`). Por tanto, toda persona que activó o regeneró desde T-038 ya lo tiene en la lista, y la condición del reintento no se cumple nunca. Hay un segundo problema: si el aviso aparece porque la regeneración se confirmó, el texto tampoco dice que haya que regenerar otra vez. En ese caso la lista en papel ha caducado y la nueva nunca se enseñó.
+  - **Escenario.**
+    1. Ana activa el 05-10 y en su lista queda «Códigos de recuperación nuevos · 05/10».
+    2. El 20-11 regenera y la acción se rechaza por transporte.
+    3. Caso (a): el paso dos no llegó. Ana pulsa «Volver», la lista se refresca y ve el aviso del 05-10. Como «aparece», no reintenta, y además cree que su papel ya no vale, aunque sigue valiendo.
+    4. Caso (b): el paso dos se confirmó. Ve el aviso nuevo, no reintenta y se queda **sin ningún código válido**: el papel caducó y el lote nuevo no se le mostró. Si pierde el móvil, depende de que el administrador le reponga el TOTP.
+    5. El texto anterior, «No se han regenerado… Vuelve a intentarlo», mentía sobre el estado, pero llevaba al reintento, y el reintento es lo correcto en los dos casos.
+  - **Arreglo posible.** Pedir el reintento sin condición: «en los dos casos necesitas una lista nueva». El aviso queda solo como explicación.
+  - **Por qué la prueba no lo ve.** Busca las palabras («en papel», «lista de avisos») y no la instrucción.
 
-### MEDIA
+## BAJA
 
-- **B2-H1** · `app/primera-vez/segundo-factor.tsx:102`
-  - **Problema:** «Reintentar» (nuevo en T-038) hace `iniciarTransicion(async () => await generarCodigos())` sin `try/catch`. En `app/` no hay `error.tsx` ni `global-error.tsx`.
-  - **Escenario:** en la vista «no se han podido generar tus códigos», la red cae y la persona pulsa «Reintentar». `generarCodigos` rechaza, el error sube a la frontera más cercana y la página entera se sustituye por la pantalla de error de Next. Se pierden con ella el texto que dice que los códigos ya no se ofrecerán al entrar y dónde generarlos.
-  - **Medido** con una frontera de clase en Vitest y `mockRejectedValueOnce(new Error('red caida'))`: el documento solo contiene «FRONTERA Error: red caida».
-  - Es el mismo patrón que B-H2 resolvió en el formulario de Mi cuenta.
-  - `verificar` (`:117`) tiene el mismo patrón desde T-037: queda fuera del diff y es para `docs/state.md`.
+- **B3-H2** · `lib/cuentas/totp.ts:57` (y la vista en `app/primera-vez/segundo-factor.tsx:111,163`, con el texto en `es.ts:252`)
+  - **Problema.** `reentrar` se marca con `error?.code === '42501'` y no mira nada más. Pero `generar_codigos_recuperacion()` lanza 42501 por cuatro causas: «No hay sesión», «El perfil no está activo», el reto caducado y **Q3(B), «Ya tienes códigos de recuperación vigentes»**. El banco 13 mide esta última con el reto de hace **24 segundos** (`scripts/rls/13-cuentas.sql:797-803`). En las cuatro, la vista dice «Tu verificación en dos pasos se hizo hace más de cinco minutos». En la llamada de `verificar` (`:163`), que va justo tras `mfa.verify`, esa frase es siempre falsa.
+  - **Escenario.**
+    1. Tras el TOTP, la respuesta de `generar_codigos_recuperacion()` se pierde después del commit. Puede llegar como error de supabase-js o como rechazo de la acción; en este segundo caso, el nuevo `catch` de B2-H1 dice «No hemos podido contactar con el servidor… vuelve a intentarlo».
+    2. A los 30 s la persona pulsa «Reintentar». Hay lote vigente y salta Q3(B) con 42501.
+    3. Ve «se hizo hace más de cinco minutos», que es falso, y «Volver a entrar», que cierra la sesión (`signOut` con el alcance por defecto).
+    4. La salida remite a Mi cuenta, que es la correcta para Q3(B). Lo que está mal es la causa que se le da.
+  - **Arreglo posible.** Distinguir por el mensaje, que es fijo en el SQL, o hacer neutro el texto de `reentrar`: «tu verificación ya no vale para generarlos aquí; vuelve a entrar y genéralos en Mi cuenta».
 
-### BAJA
+## Fuera del diff
 
-- **B2-H2** · `app/primera-vez/segundo-factor.tsx:183`
-  - **Problema:** `disabled={trabajando}` sobre el «Reintentar» que tiene el foco manda el foco a `BODY`. Si el reintento vuelve a fallar con el mismo texto, nada lo devuelve. Ese caso es todo fallo de la RPC, porque `lib/cuentas/totp.ts:53` devuelve siempre la misma constante.
-  - **Escenario:** con teclado, «Reintentar» → fallo. El `status` se anuncia, pero el foco queda en `body` y hay que volver a recorrer la página para reintentar.
-  - **Medido:**
-    - en Chromium, con `page.setContent`, un botón enfocado y `disabled = true`, el foco pasa a `BODY` y no vuelve al habilitarlo;
-    - en Vitest, tras el reintento fallido con el mismo texto, `focus()` de la región se llama 0 veces: `setFalloCodigos` con el mismo string no cambia el estado y el efecto `[falloCodigos]` no corre.
-  - **Por qué la prueba no lo ve:** la de B-H10 corre en jsdom, que no quita el foco al deshabilitar, así que allí `activeElement` sigue siendo «Reintentar».
-- **B2-H3** · `app/(app)/cuenta/lista-avisos.tsx:253`
-  - **Problema:** la marca «Sin leer» es un `<span>` pegado a la etiqueta sin espacio: el `ml-2` solo separa en pantalla.
-  - **Escenario:** el lector de pantalla oye «Regeneración de códigos bloqueadaSin leer», una sola palabra al final.
-  - **Medido** en Chromium: `ariaSnapshot()` da `paragraph: Regeneración de códigos bloqueadaSin leer`, y `innerText` lo mismo.
-  - **Por qué la prueba no lo ve:** busca el `<span>` con `getByText` y no puede notarlo.
-- **B2-H4** · `app/(app)/cuenta/formulario-regenerar.tsx:77`
-  - **Problema:** el `catch` afirma «No se han regenerado los códigos», pero un rechazo de la acción no dice si el paso dos se confirmó.
-  - **Escenario:**
-    1. La conexión se corta después de que `regenerar_codigos_recuperacion()` confirme. El lote viejo ya está caducado y el nuevo no se ha enseñado.
-    2. La persona lee «No se han regenerado» y se queda con su lista en papel, que ya no vale.
-    3. «Volver» no refresca, así que el aviso `codigos_regenerados` que lo delataría no aparece en la lista hasta que se recargue.
-  - El texto lo fijó el diseño (R2.4, B-H2), pero el resultado es desconocido y la vista lo da por sabido.
-- **B2-H5** · `app/primera-vez/segundo-factor.tsx:101`
-  - **Problema:** «Reintentar» llama a `generar_codigos_recuperacion()`, que exige el segundo factor verificado hace menos de cinco minutos (`20261008120000:469`). La vista de fallo no tiene temporizadores, a propósito, y espera a la persona.
-  - **Escenario:** la persona vuelve a los seis minutos y pulsa «Reintentar». Da 42501 y la misma constante «No se pudieron generar los códigos de recuperación.» una y otra vez. El botón ya no puede funcionar y nada lo dice. La descripción remite a Mi cuenta, que sí funciona: es una vía muerta con salida, no un bloqueo.
-
-### Fuera del diff (para `docs/state.md`, no cuenta en el gate)
-
-- `verificar` en `app/primera-vez/segundo-factor.tsx:117` (T-037): la misma transición asíncrona sin `try/catch` que B2-H1, con `generarCodigos()` y `mfa.verify` dentro.
+Nada nuevo. `verificar` (T-037) sigue en `docs/state.md:35`.

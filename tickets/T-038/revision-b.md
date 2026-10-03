@@ -1,76 +1,50 @@
-**Sin ALTA en la parte del revisor B** (ronda 2: 0 ALTA, 1 MEDIA, 4 BAJA).
+**Sin ALTA en la parte del revisor B** (ronda 3: 0 ALTA, 1 MEDIA, 1 BAJA).
 
-# T-038 · Revisión, ronda 2 · Revisor B (interfaz, accesibilidad e integración TS de los dos pasos)
+# T-038 · Revisión, ronda 3 · Revisor B (interfaz, accesibilidad y TS)
 
-Diff revisado: `git diff main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`), ficheros de `app/(app)/cuenta/**`, `app/primera-vez/**`, `components/armazon/**`, `lib/cuentas/totp.ts`, `lib/cuentas/esquemas.ts`, `lib/i18n/es.ts`, `lib/supabase/tipos-bd.ts`, `next.config.ts`, `accesibilidad/**` y `docs/interfaz.md`. Las mutaciones y las sondas se ejecutaron en una copia exportada con `git archive e25fae0` fuera del worktree, que no se tocó. No se ejecutó `db reset`.
+**Qué se ha revisado.** El commit de la ronda 3 `b05d3e3`, sobre la rama `worktree-agent-a3f1df59a02f0397d`, en la parte de interfaz y TS. Además, el conjunto `main...b05d3e3` en `app/primera-vez/**`, `app/(app)/cuenta/**`, `lib/cuentas/totp.ts`, `lib/i18n/es.ts` y `accesibilidad/**`.
 
-## B-H1 a B-H11 de la ronda 1
+**Qué se ha ejecutado en el worktree, sin modificarlo:**
+- `npx vitest run app/primera-vez "app/(app)/cuenta" lib/cuentas/totp.test.ts`: 73 de 73.
+- `npx tsc --noEmit`: limpio.
+- `eslint` sobre los ficheros tocados: limpio.
 
-| # | Estado | Cómo se ha comprobado |
+No se ha ejecutado `db reset`.
+
+## B2-H1 a B2-H5 de la ronda 2
+
+| # | Estado | Comprobación |
 |---|---|---|
-| B-H1 | **Cerrado** | El Provider envuelve el `<aside>` entero. `armazon-cliente.test.tsx` monta el `ArmazonCliente` real y cuenta los botones «Cerrar menú»: 1, luego 2 y luego 1. El mutante «Provider solo en `navegacion`» sale rojo (`mutantes-ui.json`). Ningún otro consumidor de `CajonContext` cambia de comportamiento: solo están `navegacion.tsx` y `enlace-cuenta.tsx`. |
-| B-H2 | **Cerrado** | `catch` con `reset` y vista de fallo. Medido: sin el `reset` del `catch` (y con el resto igual) cae «B-H2 · si la acción se rechaza…», porque RHF repuebla el campo al volver. La prueba discrimina. El texto que se pinta tiene un matiz: **B2-H4**. |
-| B-H3 | **Cerrado** | Error → `errorLectura`, sin `vacio` ni lista. Mutante rojo. |
-| B-H4 | **Cerrado** | Medido: M2b (`useEffect` con `setTimeout(60000)` en la vista de fallo) tumba «B-H4 · en la vista de fallo…» (1 rojo de 11). |
-| B-H5 | **Cerrado** | Medido: `zona = ZONA_POR_DEFECTO` en lista-avisos da 1 rojo de 9, y `ZONA_POR_DEFECTO,` en acciones.ts da 1 rojo de 19 (Canarias, 11:00). |
-| B-H6 | **Cerrado** | Vitest mira `toHaveValue('')`. Medido: M1 (sin el `reset` de `:57`) da 5 rojos de 11. Playwright lo mira en S3 y S6. «Volver» no se ejercita en Playwright, pero Vitest lo cubre. |
-| B-H7 | **Cerrado** | `toBe(registroInseguro)` en las tres variantes (falso, error y `null`), y ninguna llamada a ninguno de los dos pasos. |
-| B-H8 | **Cerrado** | `listFactors` con error da `generico`, sin `challengeAndVerify` ni RPC. Mutante rojo. |
-| B-H9 | **Cerrado** | «Volver» lleva el foco al campo contraseña. Mutante rojo en las dos variantes de fallo. Que el efecto vuelva a correr cuando cambia `enviando` con un `campoConFoco` antiguo no roba el foco: el input ya está desmontado y `focus()` sobre un nodo desconectado no hace nada. |
-| B-H10 | **Cerrado en el anuncio** | El `status` se vacía y se rellena, y el mutante sale rojo. Pero el foco se pierde en cada reintento fallido: **B2-H2**. |
-| B-H11 | **Cerrado en lo visible** | La marca «Sin leer» está dentro del `<li>` del no leído. Para el lector de pantalla se pega a la etiqueta: **B2-H3**. |
-
-## R2.7 «Qué revisar» (parte de interfaz e integración TS)
-
-- **La firma `(text)` no reaparece.**
-  - `tipos-bd.ts` tiene `comprobar_contrasena_para_regenerar: { Args: { p_contrasena: string } }` y `regenerar_codigos_recuperacion: { Args: never }`.
-  - `p_contrasena` solo aparece en `lib/cuentas/totp.ts:80`, en sus pruebas y en `scripts/t038-oraculo.mjs`. Este último la usa precisamente para comprobar que la firma vieja da 404/PGRST202.
-  - Ninguna de las dos llamadas lleva `{ get: true }`.
-- **Integración de los dos pasos en `totp.ts`.**
-  - Si el paso uno da error, la función devuelve `error`, registra solo `.code` y no llama al paso dos (probado).
-  - La traducción del paso dos no cambia.
-  - Contrastado con el SQL:
-    - con bloqueo, el paso uno vuelve sin escribir y el paso dos devuelve `bloqueado` con su hora;
-    - sin autorización, el paso dos devuelve `contrasena_incorrecta`;
-    - el quinto fallo devuelve `bloqueado`, no `contrasena_incorrecta`.
-  - Las tres respuestas llegan bien a la acción.
-- **Orden de la acción.** `listFactors` → `challengeAndVerify` → `registro_postgres_seguro` → comprobar → regenerar, probado en `acciones.test.ts:132`. `logging.serverFunctions: false` sigue en su sitio.
-- **La prueba de B-H1 monta `ArmazonCliente` de verdad, y B-H6 mira `value` y no el HTML**: sí, en las dos.
+| B2-H1 | **Cerrado** | `reintentar` lleva `try/catch` (`segundo-factor.tsx:108-118`). La prueba monta una frontera de clase y rechaza la acción. La frontera no se activa, el `status` lo dice y «Reintentar» sigue habilitado. Mutante «sin catch» en rojo (`mutantes-r3-ui.json`). `verificar` (T-037) sigue anotado en `docs/state.md:35`. El texto del `catch` tiene un matiz: lo recoge **B3-H2**. |
+| B2-H2 | **Cerrado** | `fallo` es un objeto nuevo en cada fallo, así que el efecto `[fallo]` vuelve a correr aunque el texto sea el mismo. La prueba simula el `blur()` que hace Chromium al deshabilitar, y con el efecto atado al texto queda en rojo. El foco también vuelve a la región cuando «Reintentar» se sustituye por «Volver a entrar»: el botón enfocado se desmonta y el objeto es nuevo. |
+| B2-H3 | **Cerrado** | Hay un `{' '}` real antes de la marca. Vitest mira `textContent` (`/\S\s+Sin leer$/`) y Playwright S6 mira `ariaSnapshot`. Sin el espacio sale en rojo. |
+| B2-H4 | **Cerrado en lo que afirmaba; abre B3-H1** | El rechazo ya no dice «No se han regenerado»: el título es «No sabemos si se han regenerado los códigos» y «Volver» refresca para que salga el aviso. Ahora bien, la regla que el texto da para decidir no discrimina, y deja de pedir el reintento que el texto anterior sí pedía: **B3-H1**. |
+| B2-H5 | **Cerrado en el caso medido; abre B3-H2** | Con el reto TOTP caducado, la vista dice por qué y ofrece «Volver a entrar», que hace `cerrarSesion`, `signOut` y `redirect('/login')`. El foco va a la región. La salida es buena: si queda el PIN pendiente, `fijar_pin_historia` también exige un reto reciente (`20260830090000:873`), así que «Aceptar» no bastaría. Pero la marca se pone ante **cualquier** 42501: **B3-H2**. |
 
 ## MEDIA
 
-- **B2-H1** · `app/primera-vez/segundo-factor.tsx:102`
-  - **Problema:** «Reintentar» (nuevo en T-038) hace `iniciarTransicion(async () => await generarCodigos())` sin `try/catch`. En `app/` no hay `error.tsx` ni `global-error.tsx`.
-  - **Escenario:** en la vista «no se han podido generar tus códigos», la red cae y la persona pulsa «Reintentar». `generarCodigos` rechaza, el error sube a la frontera más cercana y la página entera se sustituye por la pantalla de error de Next. Se pierden con ella el texto que dice que los códigos ya no se ofrecerán al entrar y dónde generarlos.
-  - **Medido** con una frontera de clase en Vitest y `mockRejectedValueOnce(new Error('red caida'))`: el documento solo contiene «FRONTERA Error: red caida».
-  - Es el mismo patrón que B-H2 resolvió en el formulario de Mi cuenta.
-  - `verificar` (`:117`) tiene el mismo patrón desde T-037: queda fuera del diff y es para `docs/state.md`.
+- **B3-H1** · `lib/i18n/es.ts:287` (`cuenta.errores.resultadoDesconocido`), que pinta `app/(app)/cuenta/formulario-regenerar.tsx:81`
+  - **Problema.** El texto manda reintentar solo «si no aparece» el aviso «Códigos de recuperación nuevos». Ese aviso lo inserta también la **activación**: `generar_codigos_recuperacion()` lo escribe en `20261008120000:530`, con el mismo tipo `codigos_regenerados` y la misma etiqueta (`es.ts:1032`). Por tanto, toda persona que activó o regeneró desde T-038 ya lo tiene en la lista, y la condición del reintento no se cumple nunca. Hay un segundo problema: si el aviso aparece porque la regeneración se confirmó, el texto tampoco dice que haya que regenerar otra vez. En ese caso la lista en papel ha caducado y la nueva nunca se enseñó.
+  - **Escenario.**
+    1. Ana activa el 05-10 y en su lista queda «Códigos de recuperación nuevos · 05/10».
+    2. El 20-11 regenera y la acción se rechaza por transporte.
+    3. Caso (a): el paso dos no llegó. Ana pulsa «Volver», la lista se refresca y ve el aviso del 05-10. Como «aparece», no reintenta, y además cree que su papel ya no vale, aunque sigue valiendo.
+    4. Caso (b): el paso dos se confirmó. Ve el aviso nuevo, no reintenta y se queda **sin ningún código válido**: el papel caducó y el lote nuevo no se le mostró. Si pierde el móvil, depende de que el administrador le reponga el TOTP.
+    5. El texto anterior, «No se han regenerado… Vuelve a intentarlo», mentía sobre el estado, pero llevaba al reintento, y el reintento es lo correcto en los dos casos.
+  - **Arreglo posible.** Pedir el reintento sin condición: «en los dos casos necesitas una lista nueva». El aviso queda solo como explicación.
+  - **Por qué la prueba no lo ve.** Busca las palabras («en papel», «lista de avisos») y no la instrucción.
 
 ## BAJA
 
-- **B2-H2** · `app/primera-vez/segundo-factor.tsx:183`
-  - **Problema:** `disabled={trabajando}` sobre el «Reintentar» que tiene el foco manda el foco a `BODY`. Si el reintento vuelve a fallar con el mismo texto, nada lo devuelve. Ese caso es todo fallo de la RPC, porque `lib/cuentas/totp.ts:53` devuelve siempre la misma constante.
-  - **Escenario:** con teclado, «Reintentar» → fallo. El `status` se anuncia, pero el foco queda en `body` y hay que volver a recorrer la página para reintentar.
-  - **Medido:**
-    - en Chromium, con `page.setContent`, un botón enfocado y `disabled = true`, el foco pasa a `BODY` y no vuelve al habilitarlo;
-    - en Vitest, tras el reintento fallido con el mismo texto, `focus()` de la región se llama 0 veces: `setFalloCodigos` con el mismo string no cambia el estado y el efecto `[falloCodigos]` no corre.
-  - **Por qué la prueba no lo ve:** la de B-H10 corre en jsdom, que no quita el foco al deshabilitar, así que allí `activeElement` sigue siendo «Reintentar».
-- **B2-H3** · `app/(app)/cuenta/lista-avisos.tsx:253`
-  - **Problema:** la marca «Sin leer» es un `<span>` pegado a la etiqueta sin espacio: el `ml-2` solo separa en pantalla.
-  - **Escenario:** el lector de pantalla oye «Regeneración de códigos bloqueadaSin leer», una sola palabra al final.
-  - **Medido** en Chromium: `ariaSnapshot()` da `paragraph: Regeneración de códigos bloqueadaSin leer`, y `innerText` lo mismo.
-  - **Por qué la prueba no lo ve:** busca el `<span>` con `getByText` y no puede notarlo.
-- **B2-H4** · `app/(app)/cuenta/formulario-regenerar.tsx:77`
-  - **Problema:** el `catch` afirma «No se han regenerado los códigos», pero un rechazo de la acción no dice si el paso dos se confirmó.
-  - **Escenario:**
-    1. La conexión se corta después de que `regenerar_codigos_recuperacion()` confirme. El lote viejo ya está caducado y el nuevo no se ha enseñado.
-    2. La persona lee «No se han regenerado» y se queda con su lista en papel, que ya no vale.
-    3. «Volver» no refresca, así que el aviso `codigos_regenerados` que lo delataría no aparece en la lista hasta que se recargue.
-  - El texto lo fijó el diseño (R2.4, B-H2), pero el resultado es desconocido y la vista lo da por sabido.
-- **B2-H5** · `app/primera-vez/segundo-factor.tsx:101`
-  - **Problema:** «Reintentar» llama a `generar_codigos_recuperacion()`, que exige el segundo factor verificado hace menos de cinco minutos (`20261008120000:469`). La vista de fallo no tiene temporizadores, a propósito, y espera a la persona.
-  - **Escenario:** la persona vuelve a los seis minutos y pulsa «Reintentar». Da 42501 y la misma constante «No se pudieron generar los códigos de recuperación.» una y otra vez. El botón ya no puede funcionar y nada lo dice. La descripción remite a Mi cuenta, que sí funciona: es una vía muerta con salida, no un bloqueo.
+- **B3-H2** · `lib/cuentas/totp.ts:57` (y la vista en `app/primera-vez/segundo-factor.tsx:111,163`, con el texto en `es.ts:252`)
+  - **Problema.** `reentrar` se marca con `error?.code === '42501'` y no mira nada más. Pero `generar_codigos_recuperacion()` lanza 42501 por cuatro causas: «No hay sesión», «El perfil no está activo», el reto caducado y **Q3(B), «Ya tienes códigos de recuperación vigentes»**. El banco 13 mide esta última con el reto de hace **24 segundos** (`scripts/rls/13-cuentas.sql:797-803`). En las cuatro, la vista dice «Tu verificación en dos pasos se hizo hace más de cinco minutos». En la llamada de `verificar` (`:163`), que va justo tras `mfa.verify`, esa frase es siempre falsa.
+  - **Escenario.**
+    1. Tras el TOTP, la respuesta de `generar_codigos_recuperacion()` se pierde después del commit. Puede llegar como error de supabase-js o como rechazo de la acción; en este segundo caso, el nuevo `catch` de B2-H1 dice «No hemos podido contactar con el servidor… vuelve a intentarlo».
+    2. A los 30 s la persona pulsa «Reintentar». Hay lote vigente y salta Q3(B) con 42501.
+    3. Ve «se hizo hace más de cinco minutos», que es falso, y «Volver a entrar», que cierra la sesión (`signOut` con el alcance por defecto).
+    4. La salida remite a Mi cuenta, que es la correcta para Q3(B). Lo que está mal es la causa que se le da.
+  - **Arreglo posible.** Distinguir por el mensaje, que es fijo en el SQL, o hacer neutro el texto de `reentrar`: «tu verificación ya no vale para generarlos aquí; vuelve a entrar y genéralos en Mi cuenta».
 
-## Fuera del diff (para `docs/state.md`, no cuenta en el gate)
+## Fuera del diff
 
-- `verificar` en `app/primera-vez/segundo-factor.tsx:117` (T-037): la misma transición asíncrona sin `try/catch` que B2-H1, con `generarCodigos()` y `mfa.verify` dentro.
+Nada nuevo. `verificar` (T-037) sigue en `docs/state.md:35`.

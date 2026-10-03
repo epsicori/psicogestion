@@ -1,85 +1,36 @@
 {
   "ticket": "T-038",
-  "ronda": 2,
+  "ronda": 3,
+  "head": "b05d3e3",
   "altas": 0,
-  "medias": 2,
-  "bajas": 5,
-  "cerrados_ronda_1": [
-    "A-H1",
-    "A-H2",
-    "A-H3",
-    "A-H4",
-    "A-H5",
-    "A-H6",
-    "A-H7",
-    "B-H1",
-    "B-H2",
-    "B-H3",
-    "B-H4",
-    "B-H5",
-    "B-H6",
-    "B-H7",
-    "B-H8",
-    "B-H9",
-    "B-H10",
-    "B-H11"
-  ],
+  "medias": 1,
+  "bajas": 2,
+  "cerrados_ronda_2": ["A2-H1", "A2-H2", "B2-H1", "B2-H2", "B2-H3", "B2-H4", "B2-H5"],
+  "duplicados": { "B3-H2": "A3-H1" },
   "hallazgos": [
     {
-      "id": "A2-H1",
+      "id": "B3-H1",
       "severidad": "MEDIA",
-      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
-      "linea": 216,
-      "descripcion": "registro_postgres_seguro() no lee los ajustes de plpgsql_check, que está precargada y cuyo trazador escribe los argumentos de cada función PL/pgSQL, p_contrasena incluido.",
-      "escenario": "Medido como supabase_admin dentro de begin…rollback, con plpgsql_check.enable_tracer = on, plpgsql_check.tracer = on y tracer_errlevel = log: registro_postgres_seguro() devuelve t, y comprobar_contrasena_para_regenerar('clave-revisor-log-7731') deja «\"p_contrasena\" => 'clave-revisor-log-7731'» en docker logs. Si un operador activa el trazador, la acción da el registro por seguro y la contraseña queda escrita en claro. Es la misma familia que A-H2. Arreglo: una regla C9, las claves de plpgsql_check en N0 si la biblioteca está cargada, y negativa y gemela en el banco; o bien una lista de bibliotecas precargadas permitidas en N1."
+      "archivo": "lib/i18n/es.ts",
+      "linea": 287,
+      "descripcion": "El texto de resultado desconocido solo pide reintentar «si no aparece» «Códigos de recuperación nuevos». La activación inserta el mismo aviso (20261008120000:530), así que la condición nunca se cumple, y cuando la regeneración sí se confirmó no dice que haga falta otra lista.",
+      "escenario": "Ana activó el 05-10, y ese aviso está en su lista. El 20-11 la regeneración se rechaza por transporte después del commit. Pulsa Volver, la lista se refresca y aparece el aviso, así que no reintenta. Se queda sin códigos válidos: el papel caducó y el lote nuevo nunca se le enseñó. Si el paso dos no llegó, cree que su papel ya no vale, y sí vale. El texto anterior llevaba al reintento, que era lo correcto en los dos casos."
     },
     {
-      "id": "B2-H1",
-      "severidad": "MEDIA",
-      "archivo": "app/primera-vez/segundo-factor.tsx",
-      "linea": 102,
-      "descripcion": "«Reintentar» (nuevo en T-038) hace iniciarTransicion(async () => await generarCodigos()) sin try/catch, y en app/ no hay error.tsx ni global-error.tsx: un rechazo tumba la página entera.",
-      "escenario": "Vista de fallo de los códigos → la red cae → «Reintentar» → generarCodigos rechaza → la frontera más cercana sustituye la página por el error de Next y se pierde el aviso de dónde generar los códigos. Medido con frontera de clase y mockRejectedValueOnce: el documento solo contiene «FRONTERA Error: red caida»."
-    },
-    {
-      "id": "A2-H2",
+      "id": "A3-H1",
       "severidad": "BAJA",
-      "archivo": "scripts/t038-concurrencia.mjs",
-      "linea": 198,
-      "descripcion": "La pasada B, que mide que el candado de fila basta sin el candado de consejo, no exige b.espero, a diferencia de la A.",
-      "escenario": "Si las dos conexiones no se solapan (máquina lenta o cambio de dormir), las dos regeneraciones van en serie, dan ok|10 con diez vigentes y dos avisos, y B sale verde: «el candado de fila serializa» queda registrado sin que haya habido carrera. Hoy el JSON registra espero: true, pero la condición no se exige."
+      "archivo": "lib/cuentas/totp.ts",
+      "linea": 57,
+      "descripcion": "Cualquier 42501 de generar_codigos_recuperacion() se traduce como «segundo factor de hace más de cinco minutos». Pero la función también lanza 42501 por Q3(B), cuando ya hay códigos vigentes (banco 13:797-803, con el reto de hace 24 s), y cuando no hay sesión o el perfil está inactivo. Es el mismo hallazgo que B3-H2 del revisor B.",
+      "escenario": "En /primera-vez, «Reintentar» confirma los diez códigos pero la respuesta se pierde. Un minuto después, con el segundo factor aún reciente, se pulsa «Reintentar» otra vez y llega 42501 «Ya tienes códigos de recuperación vigentes». La vista dice «Tu verificación en dos pasos se hizo hace más de cinco minutos», que es falso, y «Volver a entrar» cierra la sesión. La salida, Mi cuenta, sí resuelve; la causa que se da, no."
     },
     {
-      "id": "B2-H2",
+      "id": "A3-H2",
       "severidad": "BAJA",
-      "archivo": "app/primera-vez/segundo-factor.tsx",
-      "linea": 183,
-      "descripcion": "disabled={trabajando} sobre el «Reintentar» enfocado manda el foco a BODY, y un reintento que falla con el mismo texto (constante de totp.ts:53, todo fallo de la RPC) no lo devuelve: setFalloCodigos con el mismo string no cambia el estado y el efecto [falloCodigos] no corre.",
-      "escenario": "Teclado: «Reintentar» → fallo → el status se anuncia pero el foco queda en body. Medido: Chromium (page.setContent, disabled=true) → BODY y no vuelve; Vitest → focus() de la región 0 veces tras el reintento con el mismo texto. La prueba de B-H10 corre en jsdom, que no quita el foco al deshabilitar."
-    },
-    {
-      "id": "B2-H3",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/cuenta/lista-avisos.tsx",
-      "linea": 253,
-      "descripcion": "La marca «Sin leer» es un span pegado a la etiqueta sin espacio en el DOM (ml-2 solo separa en pantalla).",
-      "escenario": "Lector de pantalla: «Regeneración de códigos bloqueadaSin leer». Medido en Chromium: ariaSnapshot() = «paragraph: Regeneración de códigos bloqueadaSin leer», innerText igual. La prueba busca el span con getByText y no lo ve."
-    },
-    {
-      "id": "B2-H4",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/cuenta/formulario-regenerar.tsx",
-      "linea": 77,
-      "descripcion": "El catch afirma «No se han regenerado los códigos» cuando el rechazo de la acción no dice si el paso dos se confirmó.",
-      "escenario": "La conexión se corta después de que regenerar_codigos_recuperacion() confirme: lote viejo caducado, el nuevo sin enseñar; la persona lee «No se han regenerado» y conserva su lista en papel, que ya no vale. «Volver» no refresca, así que el aviso codigos_regenerados no aparece hasta recargar."
-    },
-    {
-      "id": "B2-H5",
-      "severidad": "BAJA",
-      "archivo": "app/primera-vez/segundo-factor.tsx",
-      "linea": 101,
-      "descripcion": "«Reintentar» llama a generar_codigos_recuperacion(), que exige segundo factor de menos de cinco minutos, desde una vista sin temporizadores que espera a la persona.",
-      "escenario": "La persona vuelve a los seis minutos y pulsa «Reintentar» → 42501 → la misma constante una y otra vez; el botón ya no puede funcionar y nada lo dice (la descripción sí remite a Mi cuenta, que funciona)."
+      "archivo": "docs/bitacora/T-038.md",
+      "linea": 56,
+      "descripcion": "La nota de despliegue de Q1, que es la única, nombra dos de las nueve condiciones (C2 y C7); la ronda 3 añade C9 sin ampliarla.",
+      "escenario": "En producción, un operador activa el trazador de plpgsql_check a nivel log para depurar otra función. Cada regeneración devuelve registroInseguro. El administrador sigue la nota, ve bien log_parameter_max_length_on_error y auto_explain, y no encuentra la causa. Nadie puede regenerar. La acción falla cerrada y no se filtra nada."
     }
   ]
 }

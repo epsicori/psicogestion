@@ -1,82 +1,93 @@
-Sin hallazgos ALTA. Revisor A, ronda 2: 0 ALTA, 1 MEDIA, 1 BAJA.
+Sin hallazgos ALTA. Revisor A, ronda 3: 0 ALTA, 0 MEDIA, 2 BAJA.
 
-## Revisor A · base y seguridad (ronda 2)
+## Revisor A · base, seguridad y guiones (ronda 3)
 
-- **Diff:** `main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`).
-- **Dónde se midió:** en `supabase_db_Psicogestion`, siempre dentro de `begin … rollback`, sin `db reset`, con `max(version) = 20261008120000`.
-- **Interrupción:** el verificador reseteó la base a mitad de un mutante. Ese mutante se repitió cuando la migración volvió a estar aplicada.
+- **Diff:** `worktree-agent-ac39d19a23cb82596..worktree-agent-a3f1df59a02f0397d` (HEAD `b05d3e3`), comparado fichero a fichero contra la rama de la ronda 2. También se repasó el conjunto `main...worktree-agent-a3f1df59a02f0397d` en lo que me toca.
+- **Dónde se midió:** en `supabase_db_Psicogestion`, con `max(version) = 20261008120000` y el cuerpo de C9 ya aplicado. Todo dentro de `begin … rollback`, sin `db reset` y sin sembrar nada.
+- **Rol de la medición:** se midió como `supabase_admin -d postgres`, porque `postgres` no puede fijar `plpgsql_check.enable_tracer`.
 
-### Hallazgos de la ronda 1
+### Hallazgos de la ronda 2
 
 | Id | Estado | Cómo se comprobó |
 |---|---|---|
-| A-H1 | **Cerrado** | El paso uno devuelve `void`. Después de `crypt` hay una sola escritura (`insert … on conflict` con `case` sobre `v_ok`) y el aviso, que solo depende de `v_bloqueo`; ningún `return` ni `raise` depende del acierto. La guarda de solo lectura (25006) y el candado van antes del cotejo. El paso dos no recibe la contraseña. El oráculo da la misma respuesta con la buena y con la mala en S1 a S5, y el contador confirma. |
-| A-H2 | **Cerrado** | C5 está en la migración (`:166`). El mutante que la quita pone el banco en rojo con «R2-5 C5». |
-| A-H3 | **Cerrado** | `registrar_reposicion_totp` rechaza `p_perfil_id = v_actor` y cambia `<>` por `is distinct from`. Por lo demás es una copia fiel del cuerpo anterior. El mutante que quita la guarda pone el banco en rojo con «R2-4». |
-| A-H4 | **Cerrado** | C1 a C8, N0 y N1 tienen su negativa y su gemela, también en vivo (L0 a L7b). |
-| A-H5 | **Cerrado** | Cada condición lleva su `coalesce(…, true)`. Si falta una clave (N0) o una biblioteca (N1), el resultado es `false`. |
-| A-H6 | **Cerrado** | Se cierra con DR7: `alcanzable(u)` usa `st > 0 and st <= u` y L7b lo prueba con el `statement_timeout` de `authenticated`. |
-| A-H7 | **Cerrado** | Hay `revoke … from public, anon` y una comprobación que para si `anon` puede ejecutarlas. Queda una ventana de milisegundos entre la creación y el `revoke`, cubierta por el `finally` del corredor. |
+| A2-H1 | **Cerrado** | Detalle debajo de la tabla. |
+| A2-H2 | **Cerrado** | `scripts/t038-concurrencia.mjs:196` exige `b.espero` con la misma aserción que la A, y antes de la de `ok|10`. Si no hay solape, `exigir` mete el fallo en `fallos` y la pasada B sale roja. |
 
-### MEDIA
+**A2-H1, cómo se comprobó.** El arreglo tiene tres piezas:
+- C9 en el evaluador;
+- N1 para `plpgsql_check`, que pide `enable_tracer`, `tracer`, `tracer_errlevel` y `log_min_messages`;
+- el envoltorio, que lee esas cuatro claves de `pg_settings`.
 
-- **A2-H1** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:216` · `registro_postgres_seguro()` no lee los ajustes de `plpgsql_check`. Esa biblioteca está en `shared_preload_libraries`, y su trazador escribe los argumentos de cada función PL/pgSQL, `p_contrasena` incluido.
-  - **Escenario:** se midió como `supabase_admin` dentro de `begin … rollback`, con un perfil sembrado con aal2 y una contraseña marcada.
-    1. Se fijaron `set local plpgsql_check.enable_tracer = on`, `plpgsql_check.tracer = on` y `plpgsql_check.tracer_errlevel = 'log'`.
-    2. `registro_postgres_seguro()` devolvió `t`.
-    3. Se llamó a `comprobar_contrasena_para_regenerar('clave-revisor-log-7731')`.
-    4. `docker logs supabase_db_Psicogestion` mostró `LOG:  #0  "p_contrasena" => 'clave-revisor-log-7731'`.
-  - **Variante:** con el `tracer_errlevel` por defecto (`notice`) y `log_min_messages` en `notice` o por debajo, la línea llega igual al registro.
-  - **Por qué importa:** si un operador activa el trazador para depurar, la acción da el registro por seguro (Q1 b) y la contraseña queda escrita en claro. Es la misma familia que A-H2: un ajuste que escribe parámetros y que la lista no enumera.
-  - **Arreglo:**
-    - añadir una C9: si `plpgsql_check` está cargada, el registro es inseguro cuando `plpgsql_check.enable_tracer = on` y `plpgsql_check.tracer = on`;
-    - si la biblioteca está cargada, sus claves pasan a N0;
-    - una negativa y una gemela en R2-5 y en vivo.
-  - **Más ancho (lo decide el arquitecto):** la lista cerrada de ajustes no protege ante una biblioteca precargada que la lista no conoce. Una alternativa es que N1 tenga una lista de bibliotecas permitidas, de modo que cualquier precargada que no figure en ella cuente como insegura.
+Se midió en vivo con `registro_postgres_seguro()` y, en la misma transacción, una función `pg_temp.sonda(p_contrasena text)` en PL/pgSQL. Después se buscó la sonda en `docker logs`. Para que C7 no tapara el resultado se fijó `statement_timeout = 8000`; sin eso, `auto_explain.log_min_duration` (10000) da falso por su cuenta.
+
+| `tracer_errlevel` / `log_min_messages` | Evaluador | ¿Llega al registro? |
+|---|---|---|
+| valores de fábrica (trazador apagado) | t | no |
+| los mismos, como `authenticated` | t | no |
+| notice / warning | t | no |
+| notice / notice | **f** | sí |
+| notice / log | t | no |
+| log / log | **f** | sí |
+| log / error | **f** | sí |
+| log / warning | **f** | sí |
+| log / fatal | t | no |
+| log / panic | t | no |
+| info / error | t | no |
+| info / info | **f** | sí |
+| debug1 / debug1 | **f** | sí |
+
+El evaluador coincide con el registro real en las 13 combinaciones. Dos conclusiones:
+- **El orden de niveles es el correcto.** El orden de `v_niveles` (con `log` entre `error` y `fatal`) es el que aplica `is_log_level_output` al registro del servidor, no el del cliente.
+- **N1 no deja la acción siempre bloqueada.** Con la imagen de fábrica, `plpgsql_check` está en `shared_preload_libraries`, sus claves salen en `pg_settings`, el trazador está apagado y el resultado es `t`.
+
+Detalles que también se comprobaron:
+- El alias `debug` se guarda como `debug2`, que está en el arreglo.
+- Los valores posibles de `tracer_errlevel` en esta imagen son `debug5..debug1, info, notice, log`, y todos están en el arreglo.
+
+**Las negativas del banco distinguen cada pieza.** Se razonó mutante por mutante:
+- Si se quita el bloque N1 de `plpgsql_check`, las tres negativas `t38_ev_sin(...)` pasan a dar `t`, porque con `enable_tracer` en `off` o en `null` y `tracer` en `off`, el `and` da `false` sin pasar por el `coalesce`. Cada una pone el banco en rojo.
+- Si `>=` se cambia por `>`, salta la negativa notice/notice.
+- Si `log` se coloca entre los `debug`, que es el orden del cliente, salta la negativa log/warning.
+- Si se quita cualquiera de las dos condiciones `on`, salta su gemela.
 
 ### BAJA
 
-- **A2-H2** · `scripts/t038-concurrencia.mjs:198` · La pasada B («sin candado de consejo, el candado de fila del consumo serializa») no exige `b.espero`, a diferencia de la A (`:175`).
-  - **Escenario:** las dos conexiones pueden no solaparse, por ejemplo porque la primera confirma antes de que arranque la segunda en una máquina lenta, o porque cambia `dormir`. Entonces las dos regeneraciones van en serie, dan `ok|10`, dejan diez vigentes y dos avisos, y la B sale verde. La medición «el candado de fila basta» queda registrada en `ca4-concurrencia.json` sin que haya habido carrera.
-  - **Estado actual:** hoy el JSON registra `espero: true`, así que la medición vale. Lo que falta es que la condición se exija en lugar de solo anotarse.
-  - **Arreglo:** `exigir(b.espero, …)`, igual que en la A. La D no lo necesita, porque sin solape la segunda activación lanza 42501 y deja 10 vigentes, y entonces la D sale roja.
+- **A3-H1** · `lib/cuentas/totp.ts:57`
+  - **Qué falla:** se traduce cualquier 42501 de `generar_codigos_recuperacion()` como «el segundo factor tiene más de cinco minutos». Pero esa función lanza 42501 por cuatro causas:
+    - no hay sesión;
+    - el perfil no está activo;
+    - el segundo factor no es reciente;
+    - **ya hay códigos vigentes** (Q3(B), en `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:509`).
+  - **Escenario:**
+    1. En `/primera-vez` el usuario pulsa «Reintentar».
+    2. La acción llega a confirmar los diez códigos, pero la respuesta se pierde. El `catch` muestra `sinRespuesta` (`segundo-factor.tsx:117`).
+    3. Un minuto después vuelve a pulsar «Reintentar», con el segundo factor aún dentro de los cinco minutos.
+    4. La base contesta 42501 «Ya tienes códigos de recuperación vigentes».
+    5. La vista dice «Tu verificación en dos pasos se hizo hace más de cinco minutos y ya no vale…», que es falso.
+  - **Alcance:** la salida que ofrece (volver a entrar y regenerar en Mi cuenta con la contraseña) sí resuelve el caso. Lo que falla es la causa que se le da al usuario.
+  - **Prueba:** la de `lib/cuentas/totp.test.ts` usa un 42501 con el mensaje «sin segundo factor reciente». No prueba la rama Q3(B), que comparte el código.
+- **A3-H2** · `docs/bitacora/T-038.md:56`
+  - **Qué falla:** la nota de despliegue de Q1, la única que existe según `docs/state.md`, solo nombra dos de las nueve condiciones: C2 y C7. La ronda 3 añade C9 sin ampliarla.
+  - **Escenario:**
+    1. En producción, un operador activa el trazador de `plpgsql_check` a nivel `log` para depurar otra función.
+    2. Desde ese momento, cada regeneración devuelve `registroInseguro` («avisa al administrador»).
+    3. El administrador sigue la nota, comprueba `log_parameter_max_length_on_error` y `auto_explain`, y los dos están bien.
+    4. Nadie puede regenerar códigos y la nota no da la causa.
+  - **Alcance:** la acción falla cerrada y no se filtra nada. El problema es que la nota no deja diagnosticarlo.
+  - **Lo mismo pasa** con C1, C3 a C6 y C8, que ya estaban en la ronda 2.
 
 ### Comprobado sin hallazgo
 
-**Lista R2.7, punto por punto:**
-- **Paso uno uniforme:**
-  - una sola escritura con `case` y `least(…, 100)`;
-  - sin `return` ni `raise` dentro de un `if v_ok`;
-  - el aviso depende solo de `v_bloqueo`;
-  - si `p_contrasena` es `null`, `v_ok` es falso y cuenta como fallo.
-- **Guarda de solo lectura:** va antes del candado y de `crypt`.
-- **Paso dos:**
-  - no lee `auth.users` ni recibe nada;
-  - consume con `> 0 and autorizado_hasta > now()` antes de caducar el lote.
-- **Firma antigua:** en la base no queda `regenerar_codigos_recuperacion(text)`. En `tipos-bd.ts` la función figura con `Args: never`, y `p_contrasena` solo aparece en `lib/cuentas/totp.ts:80`, que es la comprobación.
-- **Evaluador:**
-  - solo lo ejecuta su dueño: se revoca a `public`, `anon`, `authenticated` y `service_role`;
-  - normaliza las listas de precarga;
-  - `alcanzable` usa `<=`.
-- **Tabla `intentos_regenerar_codigos`:**
-  - ni `anon` ni `authenticated` tienen `TRUNCATE`, `DELETE`, `UPDATE` ni `SELECT`;
-  - `authenticated` no puede insertar en `auditoria`, así que una fila `TOTP_REPUESTO` no se puede fabricar para eludir Q3(B).
+- **Otros ajustes de `plpgsql_check`** (se listaron todos en `pg_settings`):
+  - `trace_assert` es de contexto `user`, pero solo enseña variables cuando falla un `ASSERT`, y ninguna función de las migraciones usa `ASSERT`;
+  - `profiler`, `mode` y los avisos no escriben los valores de los argumentos.
+- **Resto de bibliotecas precargadas:**
+  - `pg_stat_statements` guarda texto normalizado;
+  - `pg_cron` registra solo sus propios trabajos;
+  - de `plan_filter`, un error cae en C2;
+  - `pg_tle`, `pg_net`, `pgsodium`, `supabase_vault` y `supautils` no escriben parámetros de RPC.
 
-**Mutantes del banco**, cada uno aplicado tras el `begin` con el banco completo (`00` a `23`) en `rollback`. El banco sin mutar sale verde: rc 0 y 1139 OK. Los siete ponen el banco en rojo por la aserción esperada:
-
-| Mutante | Aserción que salta |
-|---|---|
-| La contraseña mala autoriza en el primer insert | «R2-1 · contraseña mala: UN intento fallido …» |
-| La mala no anula la autorización | «R2-1 punto 5» |
-| El paso dos ignora `autorizado_hasta` | «R2-1 punto 6» |
-| Sin guarda 25006 | «R2-1 · la guarda de solo lectura y el candado van ANTES …» |
-| Umbral de bloqueo en 6 | «CA2 bis» |
-| Sin C5 | «R2-5 C5» |
-| Reposición propia permitida | «R2-4 … 42501» |
-
-**Lado TS:**
-- los dos pasos van por POST;
-- el error del paso uno se registra solo con el `code`;
-- el error del paso dos no puede llevar la contraseña, porque el paso dos no la recibe.
-
-**Residuo aceptado:** el tope 2 deja una autorización sobrante tras un doble envío. Durante 60 s, quien tenga la cookie con aal2 reciente puede gastarla y regenerar sin contraseña. Es la decisión P2 del propietario y cada regeneración avisa al titular, así que no se cuenta como hallazgo.
+  La propuesta más amplia de A2-H1 (una lista de bibliotecas permitidas en N1) no se adoptó. Queda para el arquitecto; no cuenta como hallazgo, porque hoy ninguna biblioteca precargada escribe parámetros sin una regla que la cubra.
+- **`app/primera-vez/acciones.ts`:** devuelve `resultado` tal cual. El tipo solo lleva `mensaje` y `reentrar`; no viaja nada más al cliente.
+- **`formulario-regenerar.tsx`:** en B2-H4 el `catch` sigue vaciando la contraseña (`reset`) antes de cambiar de vista, y no registra nada.
+- **Comentario L8 de `scripts/rls/13-cuentas.sql`:** es exacto para `postgres`. La medición en vivo de C9 la cubre la tabla de arriba.
