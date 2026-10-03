@@ -7,7 +7,8 @@ fase: 1
 prioridad: alta
 depende_de: [T-028a]   # cola de supabase/, nunca dos a la vez: T-035 → T-028a → T-039 → T-038
 bloquea: []            # el ticket de interfaz que pinte la modalidad en el alta, la agenda y la ficha de cita
-estado: pendiente
+estado: hecho
+completado: 2026-10-03
 territorio:
   - supabase/migrations/*_cita_en_episodio_y_asistencia.sql
   - supabase/seed-completo.sql
