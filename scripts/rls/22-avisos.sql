@@ -745,5 +745,17 @@ select pg_temp.assert(
 --   · alertas_documentacion_lectura con la fuga del técnico (sin filtro de tipo) → 22.E1
 --   · umbrales_escalado() que devuelve 24/72 fijos       → 22.C4 umbral por centro
 --   · escalar_notas_pendientes() a todos los administradores, sin designado → 22.C5 (i)
+-- Ronda 2 (03-10-2026, A-H1..A-H6; con `mutar.mjs`, que quita los `\r` de la migración CRLF):
+--   · sin el disparador que anula al corregir la cita  → 22.E9 el recuento de PRO1 baja en 1
+--   · sin la rama `anulada` del disparador de guarda   → 22.E10 PRO1 no anula a mano (lanza 23514
+--     por el check `alertas_documentacion_anulada_check` en vez de 42501: lo mata la restricción,
+--     no la aserción; la aserción exige el código exacto y por eso también salta)
+--   · fn_anular_alerta_nota_sin_firmar en invoker      → 22.E5 es definer y fija search_path = ''
+--   · política de lectura del técnico por lista negra  → 22.E1 TEC1 no ve la borrador_abandonado
+--   · validador de administrador sin `activo`          → 22.C5 (iv) designar a uno de baja lanza 23514
+--   · cada columna congelada desbloqueada (id, paciente_id, profesional_id, centro_id, tipo,
+--     origen_tabla, origen_id, fecha_referencia, referencia_en, creada_en, anulada_en) → 22.E3
+--   · «sin estado = abierta» en la anulación: lo mata un deadlock del banco (la resolución se
+--     bloquea a sí misma), no una aserción; anotado para el revisor.
 
 \echo '22-avisos: completa.'
