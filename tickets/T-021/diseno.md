@@ -655,3 +655,291 @@ Nada: todo es RLS, dinero o la cadena. La fila del `README.md` es una línea y n
 - **P3 · espejo y sincronizador: sin decidir.** El propietario dice: «La facturación será del programa de
   facturación, analiza exhaustivamente cómo podemos proceder». Va a un análisis aparte del arquitecto, que se
   añadirá a continuación.
+
+## Análisis P3: la facturación es del programa externo (03-10-2026)
+
+> Arquitecto, 03-10-2026, contra `main` en `b7f044a`. Responde a la frase del propietario: «La
+> facturación será del programa de facturación, analiza exhaustivamente cómo podemos proceder».
+> Esta sección **solo añade**. No cambia el diseño aprobado ni la adenda hasta que el propietario
+> conteste §P3.7. Tampoco toca los contratos de T-021, T-023, T-026 ni T-027: §P3.5 dice qué habría
+> que cambiar en cada uno.
+
+### P3.0 · Hechos verificados, y lo que no se pudo verificar
+
+**En el repositorio**
+
+| Hecho | Dónde | Consecuencia |
+|---|---|---|
+| El ADR-053 c pone un **techo** a lo que se guarda: «identificador, número, importe, estado y un enlace». El 053 d dice qué vuelve del proveedor («número, fecha, total, estado, cobrado») y que la tabla «la aplicación **no puede editar**: entra por el sincronizador y por nadie más» | `docs/decisions/ADR-053.md:51-58` | El ADR no prohíbe que el sincronizador actualice: prohíbe que edite la aplicación. La inmutabilidad la ponen el contrato de T-021 y la regla 6. Guardar **menos** de lo que el ADR enumera no lo contradice |
+| El 053 g deja dentro `cobros` y el pendiente. El 053 d trae además «cobrado» del proveedor | `ADR-053.md:68-71` frente a `:55` | El ADR admite **dos fuentes para el mismo hecho**. Hay que quedarse con una (P3.c) |
+| El 053 h: los borradores se conservan encadenados y de solo adición | `ADR-053.md:73-79` | Ninguna opción lo cambia |
+| T-026 actualiza `estado_proveedor` y `sincronizado_en` de un documento ya copiado. El contrato de T-021 hace el espejo inmutable, y `cobertura_solo_adicion()` exige que **nadie**, ni siquiera `postgres`, tenga UPDATE | `tickets/T-026-…:66-73`; `tickets/T-021-…:74-82` y `:107-111`; `20260829150000:470-478` | Es el choque P3. Una función definer cuyo dueño es `postgres` tampoco podría actualizar el espejo |
+| T-026 dice que, sin proveedor configurado, «se registran cobros y pendiente (T-023)». Pero P1, ya decidido, calcula el pendiente como la suma de los totales del espejo menos los cobros | `T-026:57-58`; §Decisiones del propietario | Sin proveedor no hay espejo, así que el pendiente sería siempre 0 y todo cobro saldría como excedente. Los dos textos no casan (P3.4) |
+| Según T-027, si un bono se factura, se factura en el proveedor y fuera de la app | `T-027:27-29`, `:92-93` | Esa factura no sale de un borrador. El sincronizador enlaza por el id que devolvió `crearBorrador` y no la ve. Con P1, el cobro del bono queda como excedente para siempre |
+| T-023 calcula saldo y estado de cobro **por factura** (`parcial`, `cobrada`, `sobrecobrada`) | `T-023:59-62` | Contradice P1, que va por paciente. Va a hallazgos (§P3.8) |
+| El outbox `eventos_salientes` es estado operativo y **mutable** (ADR-024: «no es de solo adición»), con `clave_idempotencia unique` | `20260910120000:48-66`; ADR-024 | El id del documento que devuelve el proveedor no puede guardarse solo ahí. Si no, el vínculo borrador→factura que pide la FAQ de prefacturación (tabla siguiente) viviría en una tabla que se actualiza |
+| Una tabla de solo adición no puede ser destino de una clave ajena | `.claude/rules/supabase.md:16` | Toda tabla hija del espejo va **sin FK**, con un disparador que compruebe que el padre existe, como D6 |
+| Cuatro textos de `docs/` son anteriores al ADR-053: §Dominios, fila Económico; el invariante 1 (`facturas` en la cadena por Verifactu); el invariante 2 («una factura no se edita: se anula y se reemite»), y la sección Facturación de `interfaz.md` (estado «En cola AEAT», «Nueva factura») | `docs/architecture.md:27`, `:51`, `:127-129`; `docs/interfaz.md:136-146` | Manda el ADR-053, que es posterior y es ley. Este análisis no usa ninguna de esas líneas como argumento. Las corrige el documentalista |
+
+**Normativa**
+
+| Texto | Fuente | Grado de verificación |
+|---|---|---|
+| **Art. 29.2.j LGT**: «la obligación, por parte de los productores, comercializadores y usuarios, de que los sistemas y programas informáticos o electrónicos que soporten los procesos contables, de facturación **o de gestión** de quienes desarrollen actividades económicas, garanticen la integridad, conservación, accesibilidad, legibilidad, trazabilidad e inalterabilidad de los registros, **sin interpolaciones, omisiones o alteraciones de las que no quede la debida anotación en los sistemas mismos**.» | Transcrito en fiscal-impuestos.com, en la nota sobre el aviso de la AEAT de entrada en vigor | Literal, pero de fuente secundaria. No pude leer entero el BOE consolidado: la página llega truncada |
+| **Art. 201 bis.1 LGT**. Afecta a quien fabrique o comercialice sistemas «que soporten los procesos contables, de facturación o de gestión» que: a) «permitan llevar contabilidades distintas en los términos del artículo 200.1.d)»; b) «permitan no reflejar, total o parcialmente, la anotación de transacciones realizadas»; c) «permitan registrar transacciones distintas a las anotaciones realizadas»; d) «permitan alterar transacciones ya registradas incumpliendo la normativa aplicable»; e) incumplan las especificaciones de integridad e inalterabilidad; f) «no se certifiquen, estando obligado a ello por disposición reglamentaria». Sanción: 150.000 € por ejercicio con ventas y por tipo de sistema | Letras: misma fuente. Encabezado: la búsqueda encontró la frase exacta. Importe: ADR-053 | Literales por fuente secundaria las letras a-d y f; la e está parafraseada. No leí literalmente los apartados 2 y 3 |
+| **Definición de SIF**: «un conjunto de hardware y software **utilizado para expedir facturas** mediante la realización de las siguientes acciones: 1. Admitir la entrada de información de facturación por cualquier método. 2. Conservar la información de facturación, dentro o fuera del SIF. 3. Procesar la información de facturación mediante cualquier procedimiento para producir otros resultados derivados» | FAQ de la Sede de la AEAT, «Cuestiones generales, conceptos y definiciones» | Literal y de fuente oficial, leída el 03-10-2026 |
+| **FAQ de prefacturación**: «no sería legal y sería susceptible de sanción, el uso de sistemas que generen documentos preparatorios de facturas o de facturas simplificadas, sin que el sistema informático mismo disponga de elementos de control para la conservación de tales documentos preparatorios de forma **debidamente vinculada a las facturas o a los registros de facturación que finalmente se emitan**» | La misma FAQ | Fragmento literal, de fuente oficial |
+| RD 1619/2012, art. 3.1.a: las operaciones exentas del art. 20.Uno.3.º LIVA se facturan «en todo caso» | Resumen de un buscador | **No verificado** contra el BOE. Solo afecta a P3.4 |
+| **No encontrado**: ningún texto de la AEAT trata el caso de un sistema de gestión que guarda número, fecha e importe de facturas expedidas por **otro** SIF | — | Lo más cercano es la aclaración 10 que cita el ADR-053. Va a nuestro favor, pero es lectura y no texto |
+| **No verificado, de Holded**: qué estados expone la API, si deja anular una factura aprobada, cómo enlaza una rectificativa con la original y si un pago registrado allí se ve por API | La referencia pública de la API redirige a una página comercial (03-10-2026) | Son preguntas de T-026 a Holded. Nada de lo que sigue depende de suponerlas |
+
+### P3.1 · Qué significa «la facturación es del programa», pieza por pieza
+
+**La regla que sale de la frase:**
+- La app es fuente de verdad de lo que nace en la consulta: la tarifa, el borrador, el envío, el cobro y el bono.
+- El programa es fuente de verdad de todo lo que nace al expedir: número, fecha de expedición, importes definitivos, rectificativas y anulaciones, los pagos que se registren allí, el PDF, el QR y el registro de facturación (RF).
+- La app copia del programa solo **lo que no puede saber de otra forma**, y solo para lo que ella misma tiene que enseñar o derivar.
+
+| Pieza | Fuente de verdad | Qué guarda la app | Para qué | Cómo cambia |
+|---|---|---|---|---|
+| Tarifa | App | `tarifas_paciente` | Proponer el precio del borrador | Se historifica: cerrar una tarifa y abrir otra |
+| Borrador | La app, hasta que se envía. Desde entonces, el documento que está en el programa es del programa: si alguien lo cambia allí antes de aprobarlo, vale lo aprobado | Versiones encadenadas | Art. 29.2.j, aclaración 11 (ADR-053 h) y FAQ de prefacturación | Solo adición |
+| **Envío**: qué versión salió, cuándo, a qué proveedor y con qué id | App | **Hoy nada**: solo el outbox, que es mutable. Es un hueco que no recoge ningún contrato | Atar el borrador a la factura (FAQ de prefacturación), saber que está «enviado» (P2) e idempotencia | Debería ser de solo adición, en T-026 |
+| Factura expedida | Programa | Según la opción: nada en (b); número, fecha, importes y enlace en (a), (c) y (d) | Saber que se facturó y dónde está. Con P1, además, sumar lo facturado | Ver P3.2 |
+| Estado de la factura en el programa: pagada, enviada al cliente, rectificada o anulada | Programa | Según la opción | Ver P3.2 | — |
+| Cobro | App (ADR-053 g) | `cobros` | Lo que el paciente ha pagado, lo sepa o no el programa | Solo adición |
+| Pagos registrados en el programa | Programa | **Nada** (recomendado, P3.c) | Copiarlos daría dos cifras de «cobrado» | — |
+| Pendiente | Lo deriva la app | Una vista | «La familia García debe 60 €» | Solo depende del programa si cuenta lo facturado (P3.4) |
+| Bono | App: es gestión interna (T-027) | `bonos` y `citas.bono_id` | El saldo de sesiones | Consumo derivado |
+| Factura del bono, si la hay | Programa | Nada: no sale de un borrador | — | — |
+| Sincronizador | — | Escribe solo lo que la opción elegida copia | — | Lee del programa. En el programa solo escribe `crearBorrador`, con `approveDoc: false` |
+
+### P3.2 · Qué puede cambiar en el programa después de la copia, y qué necesita saberlo la app
+
+1. **El borrador sigue sin aprobar, o se borra sin aprobar.** La app tiene que dejar de enseñar «enviado» para siempre. Es un hecho, no un estado que se sobrescribe.
+2. **Se aprueba.** Nacen el número, la fecha y los importes, y nacen una sola vez. Es lo único que el espejo necesita copiar.
+3. **Cambian el número o los importes de una factura ya aprobada.** No debería pasar: una factura expedida se rectifica, no se edita. No está verificado para Holded. Si pasa, es una alarma: T-026 ya lo llama hallazgo.
+4. **Se registra un pago en el programa.** El programa la marca como «pagada» o «parcial». Eso **duplica** `cobros`. La app no lo necesita y le hace daño (P3.c).
+5. **Se emite una rectificativa.** Es un documento nuevo en el programa que no sale de un borrador de la app. Solo importa si el pendiente cuenta lo facturado (P3.4).
+6. **Se anula.** No sé si Holded lo permite (no verificado). Importa por el mismo motivo que la rectificativa.
+7. **Se envía al cliente por correo desde el programa.** No le importa a la app.
+
+**Conclusión**: después de la copia, la app solo necesita enterarse de 1, de 3 (como alarma) y, si el pendiente cuenta lo facturado, de 5 y 6. **Ninguno es un campo que se sobrescribe**: son hechos con fecha, y un hecho con fecha se añade. «Cambiar el estado del espejo» resulta ser una pregunta mal planteada. Lo que hay que decidir es qué hechos posteriores registra la app, si registra alguno.
+
+### P3.3 · Las opciones
+
+**(a) Espejo inmutable más `facturas_espejo_estados` de solo adición** (la recomendación de A.8)
+
+Cómo funciona:
+- El espejo es el de A.2, y `estado_proveedor` guarda el estado del momento de la copia.
+- Cada cambio de estado que observa el sincronizador es una fila hija: `factura_espejo_id` sin FK, `estado text` y `observado_en`.
+- El estado actual es la última fila, que se lee por una vista.
+
+Consecuencias:
+- **SIF**: no lo es (ver «¿Alguna convierte la app en SIF?», más abajo). Copia más información de facturación que (d): el estado bruto del programa, incluido su estado de pago.
+- **Art. 29.2.j y 201 bis**: nada se altera y cada cambio queda anotado, así que cumple. Pero el estado de pago del programa entra en la app al lado de `cobros`: son **dos cifras de «cobrado»** que pueden no coincidir. Una app de gestión que enseña dos versiones del mismo hecho económico es lo más parecido que hay en este dominio a «contabilidades distintas» (201 bis.1.a). Esto es lectura, no texto. Y es exactamente la «segunda contabilidad» que el 053 d quiere evitar.
+- **Regla 6 y ADR**: cumple las dos.
+- **RLS**: la tabla hija hereda la del espejo. El técnico necesita otra vista definer, que es una puerta lateral más.
+- **Coste**: medio. Una tabla, una función definer de alta que solo inserta si el estado difiere del último, una vista y el banco. Además depende de un vocabulario de estados que no conocemos: sería un `text` libre sobre el que la app no puede razonar.
+
+**(b) Sin espejo: la app guarda la referencia y consulta el programa**
+
+Cómo funciona: la app guarda solo el envío (borrador, versión e id del documento). El número, el total y el estado se piden al programa cada vez que se pinta.
+
+Consecuencias:
+- **SIF**: no lo es, y es la opción que menos información de facturación conserva.
+- **Art. 29.2.j**: cumple sobre lo poco que guarda. Pero la FAQ de prefacturación pide los borradores «debidamente vinculad[os] a las facturas […] que finalmente se emitan», y con (b) ese vínculo, el número de la factura final, **solo vive en el programa**. Si el cliente cambia de programa o cierra la cuenta, la app se queda con borradores atados a un id que ya no resuelve. Es la opción más débil justo en la norma que sí nos alcanza (ADR-053 h).
+- **Regla 6 y ADR**: cumple la regla 6, pero **contradice el ADR-053 d** («se guarda para que la ficha del paciente sepa lo que se debe»). Haría falta un ADR nuevo.
+- **RLS**: lo que llega del programa no pasa por RLS. El servidor lo lee con la clave API del cliente, que ve todas las facturas, así que quién ve qué lo decidiría el código de la aplicación, filtrando por los envíos que la RLS deja ver. Funciona, pero sería el primer dato económico del proyecto acotado fuera de la base (invariante 3).
+- **Coste**: bajo en base y alto en producto.
+  - El ADR-043 prohíbe cachear datos de paciente, así que cada ficha y cada listado llaman al programa. El pendiente de un paciente cuesta N llamadas.
+  - Con el programa caído, o sin plan de pago, no hay ni «facturado» ni pendiente.
+  - El listado filtrable de T-023 no se puede hacer sin traerlo todo.
+  - Los límites de peticiones de Holded están sin verificar.
+
+**(c) Espejo como caché reemplazable, fuera del dominio de solo adición**
+
+Cómo funciona:
+- `facturas_espejo` sale del catálogo de solo adición.
+- El sincronizador, una función definer que solo ejecuta `service_role`, hace `insert … on conflict do update`.
+- `authenticated` solo lee, y cada cambio queda en `auditoria` por `fn_auditar`.
+
+Consecuencias:
+- **SIF**: no lo es, igual que (a).
+- **Art. 29.2.j**: el texto admite alteraciones de las que quede «la debida anotación en los sistemas mismos», y con el disparador de auditoría esa anotación existe. Es la opción que la ley probablemente tolera, pero es lectura y nadie la ha confirmado.
+- **Regla 6 y ADR**: **rompe la letra de la regla 6** («nada […] económico se modifica»). Necesita que el propietario la enmiende con una excepción explícita para la caché de un tercero, más un ADR. Y deja precedente: la próxima tabla que «solo es una caché» lo tendrá más fácil.
+- **RLS**: como (a), sin tabla hija.
+- **Coste**: el menor en código. Los costes ocultos:
+  - Por diseño, ni `cobertura_solo_adicion()` ni el linter la vigilan, y nada impediría que mañana alguien concediera `update` a `authenticated`.
+  - Un error del sincronizador sobrescribe lo bueno con lo malo, y solo se ve buscando en `auditoria`.
+
+**(d) Espejo mínimo: solo los hechos de la expedición, inmutable y sin estado del programa**
+
+Cómo funciona. Son tres piezas de solo adición; la forma exacta la fija T-026 cuando conteste Holded:
+- **`borradores_factura_envios`**: `borrador_id`, `version_id`, `proveedor`, `proveedor_documento_id` y `enviado_en`. Es el vínculo que pide la FAQ, y de él sale «enviado» (P2).
+- **`facturas_espejo`**: `proveedor`, `proveedor_documento_id`, `borrador_id`, `numero`, `fecha_expedicion`, `base`, `cuota_iva`, `total`, `url_proveedor` y `copiado_en`. **Sin `estado_proveedor`.** Entra una sola vez, cuando el sincronizador ve el documento aprobado.
+- **`documentos_proveedor_observaciones`**: `proveedor_documento_id`, `tipo` con un enum cerrado (`eliminado_sin_aprobar`, `rectificado`, `anulado`, `datos_distintos`), `detalle` y `observado_en`. Recoge solo los hechos de P3.2 que cambian algo en la app.
+- El **estado de pago del programa no se copia nunca**. El cobro es de la app; en el programa, el cliente hace lo que quiera.
+
+Consecuencias:
+- **SIF**: no lo es. Conserva lo mínimo que permite el 053 c, y nada que se parezca a un RF.
+- **Art. 29.2.j**: cumple. Además cumple la FAQ de prefacturación **sin depender de que el programa responda**: el envío y el espejo atan el borrador a la factura final con su número, y los dos son inalterables.
+- **Art. 201 bis**: no hay dos cifras de «cobrado», y la aplicación no puede escribir en el espejo.
+- **Regla 6 y ADR**: cumple la regla 6. Es un **subconjunto** de lo que el 053 c y d permiten: deja de copiar «estado» y «cobrado». Para que conste, conviene un ADR nuevo que lo diga, sin editar el 053 (P3.e).
+- **RLS**: el espejo, como en A.2. Los envíos y las observaciones, con la RLS del borrador: el profesional ve los suyos y el técnico nada, o solo la cabecera a través de la vista.
+- **Coste**: medio, parecido al de (a). Pero el vocabulario es **cerrado**, así que la app puede razonar con él (por ejemplo, «anulado» saca la factura del pendiente) sin conocer los estados de Holded.
+
+**(e) Traer el cobro del programa. Descartada**
+
+- Contradice el 053 g y P1.
+- Cobrar antes de facturar es el caso normal según T-021 y T-023, y ese cobro no tiene en el programa ningún documento del que colgar. No he verificado si Holded admite cobros sueltos.
+- El técnico, que de Facturación solo ve cobros, pasaría a depender del programa.
+
+**Resumen**
+
+| | (a) | (b) | (c) | **(d)** |
+|---|---|---|---|---|
+| ¿Convierte la app en SIF? | No | No | No | No |
+| Art. 29.2.j y FAQ de prefacturación | Cumple | Vínculo frágil: depende del programa | Cumple, por lectura | Cumple |
+| Dos cifras de «cobrado» | **Sí** | No (se lee del programa) | Sí, si copia el estado | No |
+| Regla 6 | Cumple | Cumple | **La rompe** | Cumple |
+| ADR | Dentro del 053 | **Contradice el 053 d** | Enmienda la regla 6 y pide ADR | Dentro del 053; un ADR que lo estrecha |
+| RLS | En la base | **Fuera de la base** | En la base | En la base |
+| Sin proveedor o con el programa caído | Muestra lo copiado | No muestra nada | Muestra lo copiado | Muestra lo copiado |
+| Coste | Medio | Base baja, producto alto | Bajo, con deuda | Medio |
+
+**¿Alguna convierte la app en SIF?**
+
+No, en lo que se puede verificar:
+- La FAQ define el SIF como el sistema «utilizado para expedir facturas».
+- Ninguna opción expide, aprueba, numera, genera RF o QR, remite a la AEAT ni conserva la factura (053 a-c).
+- La frontera sigue donde la puso el ADR-053: `approveDoc: false` y la duda k.1.
+
+Lo que no está verificado:
+- No hay texto de la AEAT sobre un sistema de gestión que guarda el número y el importe de facturas de otro SIF y los procesa (les resta cobros).
+- Si alguien lee la definición quitándole el «para expedir», sus tres acciones (admitir, conservar y procesar información de facturación) describen (a), (c) y (d); a (b) bastante menos.
+- Por eso, **la consulta al asesor de k.1 debe llevar la lista exacta de columnas que se copian** (P3.f). Nada de esto se implementa antes: T-026 está bloqueado por esa misma respuesta.
+
+### P3.4 · Una consecuencia de la misma frase, aunque no sea P3: qué cuenta el pendiente
+
+Con P1, el pendiente es lo facturado en el espejo menos lo cobrado. Si la facturación es del programa, ese «facturado» solo ve las facturas que salieron de un borrador de la app. No ve:
+- la factura de un bono (T-027);
+- las rectificativas;
+- las facturas hechas directamente en el programa;
+- nada en modo degradado (T-026:57-58).
+
+Además, como se cobra antes de facturar, todo cobro sale como excedente hasta que el programa aprueba la factura.
+
+**Alternativa: devengado menos cobrado.** Lo devengado son las citas realizadas sin bono, por la tarifa vigente ese día, más el importe de los bonos dados de alta.
+- **A favor**: no depende del programa, funciona sin proveedor y es lo que dice literalmente el ejemplo de P1.
+- **En contra**: cada cita tiene que poder resolver su tarifa (`tarifas_paciente` y, si no hay, `tipos_terapia.tarifa_base`), y hay que decidir si una `no_asistida` se cobra.
+
+**No corre prisa.** Es una vista, y una vista se redefine sin migrar datos. Con la recomendación de §P3.6, T-021 no crea `pendiente_paciente`. Se decide al diseñar T-023 (P3.d).
+
+### P3.5 · Qué cambia en T-021 según la opción
+
+Hay dos ejes: **qué opción** se elige y **dónde nace el espejo**.
+
+**M1 · El espejo nace en T-021, como en A.2**
+- (a): no cambia nada. El `comment on column` de `estado_proveedor` dice «estado al copiar». La tabla hija la crea T-026.
+- (c): el espejo sale de `tablas_solo_adicion`, de `TABLAS_SOLO_ADICION` (D10) y de `01-fijacion` (D11). Además, cambia el criterio «update/delete/truncate fallan» del contrato.
+- (d): sale `estado_proveedor` del espejo y de `facturas_espejo_cabecera`, y `sincronizado_en` pasa a ser `copiado_en`. Envíos y observaciones, en T-026.
+- (b): no es compatible con M1.
+
+**M2 · El espejo nace en T-026 (recomendado, con (d))**
+
+Pasa de T-021 a T-026:
+- el enum `proveedor_facturacion`;
+- `facturas_espejo`, con sus tres capas, su fila del catálogo, su entrada en el linter y su fila de fijación;
+- `registrar_factura_espejo()`;
+- `fn_espejo_del_paciente()` (D6) y las columnas `cobros.factura_espejo_id` y `bonos.factura_espejo_id`. T-026 las añade con `alter table … add column … uuid`, nulas. Añadir una columna nula sin default no es un `UPDATE` y no dispara los disparadores de fila;
+- la vista `facturas_espejo_cabecera`, y también `pendiente_paciente` si P3.d se queda en P1; si no, esta la crea T-023;
+- `borradores_factura_estado`, que se queda en T-021 con `sin_enviar` y `descartado`, y que T-026 redefine con `enviado` y `facturado`. Es lo mismo que P2 ya decidió para «enviado».
+
+Se queda en T-021:
+- tarifas;
+- borradores, versiones, cadena y verificador;
+- `cobros` y `bonos`, sin `factura_espejo_id`;
+- `citas.bono_id` y `bonos_consumo`;
+- auditoría y RLS.
+
+Criterios del contrato de T-021 que habría que reescribir:
+- «`update`/`delete`/`truncate` fallan […] Lo mismo sobre `facturas_espejo` y `cobros`» pasa a ser solo sobre `cobros`.
+- «`insert into facturas_espejo` como `authenticated` falla; por la función […] entra» sale del contrato. T-026 ya lo tiene en `:90-91`.
+- «La consulta a las líneas del borrador no devuelve `cita_id`» se cierra con lo que A.3 ya prueba: el técnico ve 0 filas en `borradores_factura_versiones`, y la gemela del administrador ve 1.
+- Las tareas «`facturas_espejo`» y «`factura_espejo_id` nulo» de `cobros` y `bonos` pasan a «las crea T-026».
+
+En la adenda:
+- Salen D6 y D9.
+- A.2: salen los puntos 3 (`proveedor_facturacion`) y 5 (el espejo); el 7 pierde `registrar_factura_espejo` y `fn_espejo_del_paciente`; el 8 pierde dos vistas; el 10 queda en dos tablas, y el 12 pierde dos filas.
+- D10 y D11 quedan en dos tablas.
+- A.3 pierde la fila del espejo.
+- A.4: el riesgo 2 se queda con una sola vista definer de las tres.
+- A.5 pierde las líneas del espejo.
+- A.6 no cambia.
+
+**Qué gana T-021**: pierde una de las tres tablas inmutables, dos vistas definer (el riesgo 2 de A.4), una función definer y un disparador. Y deja de fijar la forma de una tabla contra una API que nadie ha verificado (constitución, regla 1). **Qué pierde**: nada funcional, porque antes de T-026 nadie escribe en el espejo.
+
+**Otros tickets**:
+- La parte de T-023 que lista facturas, y su pendiente si se queda P1, pasa a depender de T-026. La de cobros no.
+- T-027 no cambia, porque no usa `factura_espejo_id`.
+- T-025 cita las columnas del espejo de T-026, no las de T-021.
+
+**Con (b)** el reparto es como en M2, pero T-026 no crea espejo: crea solo los envíos.
+
+### P3.6 · Recomendación: (d), con el espejo naciendo en T-026 (M2)
+
+Leída al pie de la letra, «la facturación es del programa» significa que la app copia lo mínimo para saber **que** un borrador se convirtió en factura y **en cuál**. Y que nunca guarda una segunda versión de lo que el programa decide después, como el estado o lo cobrado.
+
+(d) es la única opción que cumple a la vez cinco cosas:
+- mantiene la regla 6 sin excepciones;
+- cumple la FAQ de prefacturación sin depender de que el programa responda;
+- no mete una segunda cifra de «cobrado»;
+- deja la RLS en la base;
+- no necesita un ADR que contradiga el 053, solo uno que lo estreche.
+
+Hacer nacer el espejo en T-026 permite fijar su forma cuando Holded conteste, no antes. Y le quita a T-021, el ticket más caro de equivocar de la fase 2, una parte delicada que ninguno de sus criterios necesita para funcionar.
+
+### P3.7 · Preguntas al propietario (de opción cerrada)
+
+- **P3.a · ¿Qué hace la app con el estado de una factura que ya está en el programa?**
+  - (a) La copia, y cada cambio es una fila nueva.
+  - (b) No guarda copia y lo consulta siempre al programa.
+  - (c) Guarda una copia que el sincronizador sobrescribe, con rastro en auditoría.
+  - **(d) Solo copia número, fecha, importes y enlace, una vez. Del estado, solo anota borrado, rectificación o anulación. (Recomendada.)**
+- **P3.b · ¿Dónde nace el espejo?**
+  - En T-021, como está.
+  - **En T-026, con el sincronizador. (Recomendada.)**
+  - Si se elige (b) en P3.a, no nace.
+- **P3.c · El estado de pago que lleve el programa (pagada o parcial):**
+  - **No se copia; el cobro es solo el de la app. (Recomendada.)**
+  - Se copia como dato informativo junto al pendiente, sin sumarlo.
+- **P3.d · ¿Qué cuenta el pendiente?**
+  - (i) Lo facturado menos lo cobrado (P1 tal cual, con los huecos de §P3.4).
+  - (ii) Lo devengado menos lo cobrado.
+  - **(iii) Se decide al diseñar T-023. (Recomendada: con M2 no bloquea T-021.)**
+- **P3.e · ¿Se escribe un ADR nuevo que deje dicho «el espejo guarda solo los hechos de la expedición; el estado y los cobros del programa no se copian»?** Estrecha el 053 c y d, no los edita.
+  - **Sí. (Recomendada.)**
+  - No, basta con los contratos.
+- **P3.f · ¿La consulta al asesor (ADR-053 k.1) incluye la lista exacta de lo que la app copia del programa?**
+  - **Sí. (Recomendada.)**
+  - No.
+
+Si se aprueba, los cambios de contrato de T-021, T-023 y T-026 los hacen el propietario o el arquitecto, porque en `tickets/**` no escribe nadie automático. La adenda de T-021 se ajusta con una sección nueva, sin editar las anteriores.
+
+### P3.8 · Hallazgos para `docs/state.md` (los anota el orquestador)
+
+- Las pruebas de T-023 calculan saldo y estado de cobro por factura (`:59-62`), y P1 los calcula por paciente.
+- T-026 promete pendiente en modo degradado (`:57-58`), y con P1 no lo hay.
+- La factura de un bono (T-027) no sale de un borrador y no llega nunca al espejo.
+- El ADR-053 trae «cobrado» del proveedor (d) y deja `cobros` dentro (g). Lo resuelve el ADR de P3.e.
+- Ningún contrato guarda de forma inalterable el vínculo borrador → documento del proveedor: hoy solo existiría en el outbox, que es mutable.
+- `docs/interfaz.md:136-146` (estado «En cola AEAT», «Nueva factura») es anterior al ADR-053.
+- `tickets/T-026-…:113` manda los hallazgos a `kimi/hallazgos/`, que está obsoleto.
+- RD 1619/2012, art. 3.1.a (facturar siempre la terapia exenta): sin verificar contra el BOE.
+
+### Lo que este análisis no decide, y por qué
+
+- **La forma exacta de los envíos y las observaciones**: es de T-026 y depende de lo que conteste Holded (constitución, regla 1).
+- **Si una rectificativa hecha en el programa se puede atribuir a un paciente**: depende de si Holded la enlaza con la original. Sin verificar.
+- **P1, P2 y P4**: no se reabren. §P3.4 solo señala que la vista del pendiente se puede redefinir sin migrar datos.
