@@ -708,6 +708,44 @@ select pg_temp.assert(:'h_pg1' like '23514%es del paciente y del profesional de 
 select pg_temp.assert((select count(*) from public.citas where serie_id in (:'id_ser_m', :'id_ser_v')) = :n_h_antes,
   '23.H6 tras H2 a H5 no entró ninguna cita en las series');
 
+-- R3.1 (R2-A-H1) · Una cita de serie SIN episodio tampoco cambia de paciente ni de profesional: el paso 0 mira
+-- episodio_id O serie_id, con un único 23514 constante (ADM y postgres, la misma cadena).
+select id as c_hs from public.citas where serie_id = :'id_ser_m' order by inicio limit 1 \gset
+update public.citas set episodio_id = null where id = :'c_hs';
+select pg_temp.assert((select serie_id is not null and episodio_id is null from public.citas where id = :'c_hs'),
+  '23.H7 preparación: c_hs es una cita de serie sin episodio');
+create temp table h7_cita as select id, paciente_id, profesional_id from public.citas where id = :'c_hs';
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set paciente_id = %L where id = %L', :P39, :'c_hs'), '23514',
+  'Una cita con episodio o de una serie no cambia de paciente ni de profesional (ADR-069, ADR-075).',
+  '23.H7 ADM · paciente_id de una cita de serie sin episodio: 23514 constante');
+select pg_temp.assert_lanza_codigo_msg(format('update public.citas set profesional_id = %L where id = %L', :PRO2, :'c_hs'), '23514',
+  'Una cita con episodio o de una serie no cambia de paciente ni de profesional (ADR-069, ADR-075).',
+  '23.H7 ADM · profesional_id de una cita de serie sin episodio: el mismo 23514');
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :P39, :'c_hs')) as h7_adm \gset
+call pg_temp.reset_sesion();
+select pg_temp.sqlerrm39(format('update public.citas set paciente_id = %L where id = %L', :P39, :'c_hs')) as h7_pg1 \gset
+select pg_temp.sqlerrm39(format('update public.citas set profesional_id = %L where id = %L', :PRO2, :'c_hs')) as h7_pg2 \gset
+select pg_temp.assert(:'h7_pg1' like '23514%' and :'h7_pg1' = :'h7_adm' and :'h7_pg2' = :'h7_adm',
+  '23.H7 postgres recibe la misma cadena que el administrador (paciente y profesional)');
+select pg_temp.assert(not exists (select 1 from h7_cita h join public.citas c on c.id = h.id
+    where c.paciente_id is distinct from h.paciente_id or c.profesional_id is distinct from h.profesional_id),
+  '23.H7 la cita de serie conserva paciente y profesional');
+update public.citas set episodio_id = :EP39 where id = :'c_hs';
+-- Gemela: sin serie ni episodio (c_w), el administrador sigue reasignando el paciente.
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(format('update public.citas set paciente_id = %L where id = %L', :Q39, :'c_w'),
+  '23.H7b gemela · ADM reasigna el paciente de una cita sin serie ni episodio');
+call pg_temp.reset_sesion();
+update public.citas set paciente_id = :P39 where id = :'c_w';
+
+-- R3.2 y R3.3 (R2-A-H2 y H3) · id y rango_bloqueante no se escriben con UPDATE como authenticated.
+select pg_temp.assert(
+  not has_column_privilege('authenticated', 'public.citas', 'id', 'UPDATE')
+  and not has_column_privilege('authenticated', 'public.citas', 'rango_bloqueante', 'UPDATE')
+  and has_column_privilege('authenticated', 'public.citas', 'sala', 'UPDATE'),
+  '23.H8 id y rango_bloqueante fuera del UPDATE de authenticated (la gemela, sala, sigue abierta)');
+
 -- Gemelas: la herencia sigue viva para quien sí es de la serie; la puerta legítima (M3) no tropieza.
 select pg_temp.assert_no_lanza(pg_temp.sql_ins_serie39(:Q39, :PRO1, 12, time '05:00', :'id_ser_m'),
   '23.H1b gemela · postgres inserta la cita del paciente y el profesional de la serie');

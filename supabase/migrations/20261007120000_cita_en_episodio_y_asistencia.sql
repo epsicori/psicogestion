@@ -55,7 +55,8 @@ comment on column public.series_cita.episodio_id is
 -- estos `grant`. Un `revoke` de tabla revoca también los privilegios por columna, así que primero el
 -- `revoke` y después los `grant`. `serie_id` tampoco se escribe a mano (ADR-069, A-H2): las series y lo que
 -- nace de ellas solo se crean por las funciones que las validan; sin el privilegio, un insert directo con
--- `serie_id` da 42501 antes de los disparadores y no hay respuesta que leer. `series_cita` no cambia: ya no tiene insert ni update para
+-- `serie_id` da 42501 antes de los disparadores y no hay respuesta que leer. `id` y `rango_bloqueante` tampoco se actualizan a mano (R3.2, R3.3): el segundo lo calcula
+-- `fn_calcular_rango_bloqueante` y nadie lo escribe con UPDATE como `authenticated`. `series_cita` no cambia: ya no tiene insert ni update para
 -- `authenticated`. Las funciones definer (dueño `postgres`) siguen escribiendo todo.
 -- =========================================================================
 
@@ -65,9 +66,9 @@ grant insert (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inici
               zona_horaria, estado, sala, nota_operativa, desviada, motivo_desviacion,
               rango_bloqueante, marcada_realizada_en, marcada_realizada_por, creada_en, creada_por)
   on public.citas to authenticated;
-grant update (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin,
+grant update (paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin,
               zona_horaria, estado, sala, nota_operativa, desviada, motivo_desviacion,
-              rango_bloqueante, marcada_realizada_en, marcada_realizada_por, creada_en, creada_por)
+              marcada_realizada_en, marcada_realizada_por, creada_en, creada_por)
   on public.citas to authenticated;
 
 
@@ -282,13 +283,14 @@ declare
   v_e_pac     uuid;
   v_e_cerrado date;
 begin
-  -- 0 · Una cita con episodio no cambia de paciente ni de profesional. Constante: no mira participación
-  --     ni fechas, así que no responde a quien prueba pacientes (A-H1). Va antes de la salida sin episodio
-  --     (paso 2): vaciar episodio_id y cambiar paciente_id en una sentencia tampoco pasa. Vale para todos.
-  if tg_op = 'UPDATE' and old.episodio_id is not null
+  -- 0 · Una cita con episodio, o de una serie, no cambia de paciente ni de profesional. Constante: no mira
+  --     participación ni fechas, así que no responde a quien prueba pacientes (A-H1, R2-A-H1). Va antes de la
+  --     salida sin episodio (paso 2): vaciar episodio_id y cambiar paciente_id en una sentencia tampoco pasa.
+  --     Vale para todos. Un único mensaje para los dos casos.
+  if tg_op = 'UPDATE' and (old.episodio_id is not null or old.serie_id is not null)
      and (new.paciente_id is distinct from old.paciente_id
           or new.profesional_id is distinct from old.profesional_id) then
-    raise exception 'Una cita con episodio no cambia de paciente ni de profesional (ADR-075).'
+    raise exception 'Una cita con episodio o de una serie no cambia de paciente ni de profesional (ADR-069, ADR-075).'
       using errcode = '23514';
   end if;
 
@@ -379,7 +381,7 @@ $$;
 
 comment on function public.fn_velar_episodio_de_cita() is
   'T-039, ADR-075. Antes de insertar o de cambiar episodio_id, paciente_id o profesional_id en una '
-  'cita: (0) una cita con episodio no cambia de paciente ni de profesional (23514 constante); (1) una '
+  'cita: (0) una cita con episodio o de una serie no cambia de paciente ni de profesional (23514 constante); (1) una '
   'cita de serie es del paciente y del profesional de la serie (23514) y hereda su modalidad y, si '
   'encaja con su fecha, su episodio (la herencia no lanza); (2) un episodio puesto debe ser del mismo profesional, con el paciente como '
   'titular o participante cubierto por la fecha, y no estar cerrado antes del día de la cita (23514). '
