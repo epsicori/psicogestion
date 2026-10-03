@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import { ejecutarSql, localizarContenedor } from '../scripts/psql.mjs';
+import { contenedorDelProyecto } from '../lib/cuentas/contenedor-proyecto';
+import { ejecutarSql } from '../scripts/psql.mjs';
 
 /**
  * T-015 · Lo que jsdom no puede comprobar de los avisos del armazón: la disposición a 360 px.
@@ -58,7 +59,7 @@ test('con la campana abierta, el panel cabe en la ventana y Escape devuelve el f
 const MARCA_CITA = 'T-015 spec avisos';
 
 function sql(guion: string): void {
-  expect(ejecutarSql(localizarContenedor(), guion)).toBe(0);
+  expect(ejecutarSql(contenedorDelProyecto(), guion)).toBe(0);
 }
 
 test.describe('con una sesión en curso', () => {
@@ -79,9 +80,21 @@ begin
   end if;
   select * into v_ref from public.citas c where c.profesional_id = v_pro order by c.inicio desc limit 1;
   if v_ref.id is null then raise exception 'Ana no tiene ninguna cita de la que copiar paciente y centro'; end if;
-  insert into public.citas (paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria, nota_operativa)
-  values (v_ref.paciente_id, v_pro, v_ref.centro_id, v_ref.tipo_terapia_id,
-          now() - interval '1 minute', now() + interval '10 minutes', v_ref.zona_horaria, '${MARCA_CITA}');
+  begin
+    insert into public.citas (paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria, nota_operativa)
+    values (v_ref.paciente_id, v_pro, v_ref.centro_id, v_ref.tipo_terapia_id,
+            now() - interval '1 minute', now() + interval '10 minutes', v_ref.zona_horaria, '${MARCA_CITA}');
+  exception when exclusion_violation then
+    -- 23P01 (citas_sin_solape_profesional): Ana ya tiene otra cita que se pisa con la ventana.
+    -- Si esa cita está en curso, programada o confirmada, sirve para la franja y se reutiliza;
+    -- si es de otro estado (realizada, no asistida...) no hay franja que medir: se dice claro.
+    if exists (select 1 from public.citas c
+                where c.profesional_id = v_pro and c.estado in ('programada', 'confirmada')
+                  and c.inicio <= now() and c.fin > now() + interval '1 minute') then
+      return;
+    end if;
+    raise exception 'Ana tiene una cita que se solapa con ahora y no esta en curso (programada o confirmada): la prueba no puede fabricar una sesion en curso sin tocar datos ajenos';
+  end;
 end $$;
 `);
   });
