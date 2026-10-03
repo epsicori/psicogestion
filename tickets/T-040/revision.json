@@ -1,11 +1,11 @@
 {
   "ticket": "T-040",
-  "ronda": 2,
+  "ronda": 3,
   "corte": "A",
-  "commit": "b483b47",
+  "commit": "f8990c2",
   "altas": 0,
-  "medias": 1,
-  "bajas": 4,
+  "medias": 0,
+  "bajas": 1,
   "cerrados": [
     "A-H1",
     "A-H2",
@@ -19,48 +19,21 @@
     "B-H2",
     "B-H3",
     "B-H4",
-    "B-H5"
+    "B-H5",
+    "R2-H1",
+    "R2-H2",
+    "R2-H3",
+    "R2-H4",
+    "R2-H5"
   ],
   "hallazgos": [
     {
-      "id": "R2-H1",
-      "severidad": "MEDIA",
-      "archivo": "lib/exportaciones/visor-js.test.ts",
-      "linea": 326,
-      "descripcion": "La decisión sobre A-H3 exige una prueba de Playwright sobre el fichero de muestra y no existe. La prueba de vitest repite la fórmula del código (6 px por carácter, filas de 72 px) en jsdom, y el guion del implementador, fuera del repo, modela el giro en vez de medirlo.",
-      "escenario": "Medido en Chromium. Con transform rotate(-30deg) translateX(40%), la suite queda verde y el guion del implementador da 100 % en los tres tamaños; con píxeles reales, <main> queda cubierto al 67,8 % a 390×844. Con fontSize 6px, la suite queda verde y el guion da 80,4 %; con píxeles reales, 71,7 % a 2560×1440. Una regresión de estilo vuelve a dejar la nota sin marca en una captura, y nada lo para."
-    },
-    {
-      "id": "R2-H2",
+      "id": "R3-H1",
       "severidad": "BAJA",
-      "archivo": "lib/exportaciones/visor-js.ts",
-      "linea": 207,
-      "descripcion": "`lado` se fija una sola vez, al pintar, con la pantalla de ese momento. Si la ventana pasa después a una pantalla mucho más ancha, las filas, alineadas a la izquierda del bloque girado, no llegan al centro.",
-      "escenario": "Medido con píxeles reales. Se abre en 1366×768 o 1920×1080 y la ventana se arrastra y se maximiza en un ultrapanorámico de 5120×1440: queda bajo la marca el 35,5 % de <main>, y la captura de la mitad derecha de la nota sale sin código. Abriendo directamente en 5120×1440 se cubre el 99,8 %."
-    },
-    {
-      "id": "R2-H3",
-      "severidad": "BAJA",
-      "archivo": "lib/exportaciones/visor-js.test.ts",
-      "linea": 269,
-      "descripcion": "La prueba de B-H5 no distingue uno de dos fotogramas: ejecuta los fotogramas en bucle y solo comprueba que no se deriva antes del primero.",
-      "escenario": "El mutante window.requestAnimationFrame(f), con un solo rAF, deja la suite verde. Argon2id corre entonces en la retrollamada del fotograma, antes de que se pinte, y «Abriendo…» no se ve ni se anuncia durante 1-5 s: es el fallo de B-H5."
-    },
-    {
-      "id": "R2-H4",
-      "severidad": "BAJA",
-      "archivo": "lib/exportaciones/visor-js.ts",
-      "linea": 141,
-      "descripcion": "Cualquier excepción de Argon2id se presenta como falta de memoria, y el visor admite m hasta 1 GiB y t hasta 16, aunque v1 escribe siempre 65536 y 3. Una cabecera dañada en m se toma por un problema del dispositivo.",
-      "escenario": "Medido en Chromium con la contraseña correcta y \"m\":65536 cambiado a 655360 o a 1048576. En un dispositivo con poca memoria (simulado, 256 MiB), el aviso es «no tiene memoria libre suficiente… ábrela en otro ordenador». En un ordenador con memoria suficiente, a los 9,5-15 s, «Contraseña incorrecta o fichero dañado». En la ronda 1 este caso daba el mensaje correcto."
-    },
-    {
-      "id": "R2-H5",
-      "severidad": "BAJA",
-      "archivo": "lib/exportaciones/formato.ts",
-      "linea": 93,
-      "descripcion": "El .trim() de exportada_por.nombre_completo no tiene prueba, y perfiles.nombre_completo no tiene ningún check contra un valor solo de blancos.",
-      "escenario": "El mutante z.string().min(1), sin .trim(), deja formato.test.ts verde. Con esa regresión, un perfil con nombre_completo = \"  \" produce quien: \"\" y una copia «exportada por  (Profesional sanitario)», con la capa sin autor."
+      "archivo": "accesibilidad/marca-de-agua.spec.ts",
+      "linea": 81,
+      "descripcion": "La spec de la marca fuerza opacity:1 en la capa y pinta de negro el fondo de las filas antes de medir: comprueba la geometría, pero no que la marca se vea. Ninguna prueba de vitest fija la opacidad (visor-js.ts:205) ni el color de la tinta (visor-js.ts:239).",
+      "escenario": "Medido en una copia aparte. Con s.opacity = '0', vitest de lib/exportaciones da 101/101 y la spec 5/5 (99,8 %). Con fila.style.color = '#fff', 101/101 y 5/5 (92,5 %). En los dos casos la copia se abre en Chromium sin marca visible, y una captura de la nota sale sin código: la clase de fallo de R2-H1 por otra vía."
     }
   ],
   "rondas_anteriores": [
@@ -177,6 +150,56 @@
       "altas": 0,
       "medias": 4,
       "bajas": 9
+    },
+    {
+      "ronda": 2,
+      "commit": "b483b47",
+      "ticket": "T-040",
+      "hallazgos": [
+        {
+          "id": "R2-H1",
+          "severidad": "MEDIA",
+          "archivo": "lib/exportaciones/visor-js.test.ts",
+          "linea": 326,
+          "descripcion": "La decisión sobre A-H3 exige una prueba de Playwright sobre el fichero de muestra y no existe. La prueba de vitest repite la fórmula del código (6 px por carácter, filas de 72 px) en jsdom, y el guion del implementador, fuera del repo, modela el giro en vez de medirlo.",
+          "escenario": "Medido en Chromium. Con transform rotate(-30deg) translateX(40%), la suite queda verde y el guion del implementador da 100 % en los tres tamaños; con píxeles reales, <main> queda cubierto al 67,8 % a 390×844. Con fontSize 6px, la suite queda verde y el guion da 80,4 %; con píxeles reales, 71,7 % a 2560×1440. Una regresión de estilo vuelve a dejar la nota sin marca en una captura, y nada lo para."
+        },
+        {
+          "id": "R2-H2",
+          "severidad": "BAJA",
+          "archivo": "lib/exportaciones/visor-js.ts",
+          "linea": 207,
+          "descripcion": "`lado` se fija una sola vez, al pintar, con la pantalla de ese momento. Si la ventana pasa después a una pantalla mucho más ancha, las filas, alineadas a la izquierda del bloque girado, no llegan al centro.",
+          "escenario": "Medido con píxeles reales. Se abre en 1366×768 o 1920×1080 y la ventana se arrastra y se maximiza en un ultrapanorámico de 5120×1440: queda bajo la marca el 35,5 % de <main>, y la captura de la mitad derecha de la nota sale sin código. Abriendo directamente en 5120×1440 se cubre el 99,8 %."
+        },
+        {
+          "id": "R2-H3",
+          "severidad": "BAJA",
+          "archivo": "lib/exportaciones/visor-js.test.ts",
+          "linea": 269,
+          "descripcion": "La prueba de B-H5 no distingue uno de dos fotogramas: ejecuta los fotogramas en bucle y solo comprueba que no se deriva antes del primero.",
+          "escenario": "El mutante window.requestAnimationFrame(f), con un solo rAF, deja la suite verde. Argon2id corre entonces en la retrollamada del fotograma, antes de que se pinte, y «Abriendo…» no se ve ni se anuncia durante 1-5 s: es el fallo de B-H5."
+        },
+        {
+          "id": "R2-H4",
+          "severidad": "BAJA",
+          "archivo": "lib/exportaciones/visor-js.ts",
+          "linea": 141,
+          "descripcion": "Cualquier excepción de Argon2id se presenta como falta de memoria, y el visor admite m hasta 1 GiB y t hasta 16, aunque v1 escribe siempre 65536 y 3. Una cabecera dañada en m se toma por un problema del dispositivo.",
+          "escenario": "Medido en Chromium con la contraseña correcta y \"m\":65536 cambiado a 655360 o a 1048576. En un dispositivo con poca memoria (simulado, 256 MiB), el aviso es «no tiene memoria libre suficiente… ábrela en otro ordenador». En un ordenador con memoria suficiente, a los 9,5-15 s, «Contraseña incorrecta o fichero dañado». En la ronda 1 este caso daba el mensaje correcto."
+        },
+        {
+          "id": "R2-H5",
+          "severidad": "BAJA",
+          "archivo": "lib/exportaciones/formato.ts",
+          "linea": 93,
+          "descripcion": "El .trim() de exportada_por.nombre_completo no tiene prueba, y perfiles.nombre_completo no tiene ningún check contra un valor solo de blancos.",
+          "escenario": "El mutante z.string().min(1), sin .trim(), deja formato.test.ts verde. Con esa regresión, un perfil con nombre_completo = \"  \" produce quien: \"\" y una copia «exportada por  (Profesional sanitario)», con la capa sin autor."
+        }
+      ],
+      "altas": 0,
+      "medias": 1,
+      "bajas": 4
     }
   ]
 }

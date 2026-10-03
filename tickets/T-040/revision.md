@@ -206,3 +206,42 @@ La marca y el visor se miden en Chromium (Playwright) sobre `%TEMP%\psicogestion
 - `trasPintar`: hasta la derivación, `ocupado` y `boton.disabled` siguen como estaban. La rama sin rAF es la que recorren las demás pruebas en jsdom, que no trae rAF.
 - `avisarDeNuevo`: con dos pulsaciones seguidas, el último `setTimeout` escribe el mismo texto, y no se anuncia dos veces.
 - Los textos nuevos salen de `t()` (`sinMemoria`). No hay `innerHTML` ni `console.*` nuevos, y la ronda no toca ni docs ni ADR.
+
+## Ronda 3 · corte A (revisor único, 03-10-2026)
+
+Rama `worktree-agent-a3bc1f4d1b3e8ee02`, HEAD `f8990c2`. Diff de la ronda `b483b47..f8990c2` (un commit por hallazgo), con el contexto de `main...f8990c2`.
+Los mutantes se miden en una copia aparte (`git archive f8990c2` al scratchpad de la sesión, con una unión de `node_modules` que ya está quitada). Las mutaciones de la marca se miden con la spec nueva en Chromium, con una configuración de Playwright sin `webServer` solo en la copia (la spec abre por `file://`).
+
+**Comandos en el worktree:**
+- `npm test`: 128 ficheros y 1626 pruebas, todo verde (1621 de la ronda 2 + 5 nuevas).
+- `npm run lint`: 0 errores. Hay 2 avisos en `lib/cuentas/accesos.test.ts`, fuera del diff.
+- `npx next build --webpack`: «Compiled successfully», salida 0.
+- `PUERTO=3101 npx playwright test accesibilidad/marca-de-agua.spec.ts --workers=1`: 5/5 en verde. `<main>` y ventana: 99,8/99,8 % a 1920×1080, 99,9/99,8 % a 1366×768, 99,9/99,9 % a 390×844, 99,8/99,8 % a 2560×1440, y 99,8/99,7 % al pasar de 1366×768 a 5120×1440.
+
+**Sin ALTA. 0 MEDIA, 1 BAJA. R2-H1..R2-H5 quedan cerrados.**
+
+### Cierre de la ronda 2 (mutante medido → resultado)
+
+| id | cierre | mutante (copia aparte) |
+|---|---|---|
+| R2-H1 | `accesibilidad/marca-de-agua.spec.ts`: genera la copia con el código de `lib/exportaciones/`, la abre en Chromium y cuenta píxeles negros (filas `max-content` con fondo negro, `<main>` invisible) en cuatro tamaños. Exige el 80 % de `<main>` y de la ventana. | `rotate(-30deg) translateX(40%)` → **muere** (0,0 % de `<main>` de 1366 a 5120). `fontSize` a `6px` → **muere** (48,4 % de la ventana de 1366 a 5120). Con el centrado nuevo, los cuatro tamaños fijos ya no distinguen estos dos mutantes: los mata solo el caso de R2-H2. `zIndex -1` → **muere** (0 % en los cinco casos). La opacidad y el color de la tinta **sobreviven** (R3-H1). |
+| R2-H2 | Las filas van centradas en el bloque girado (`flex`, columna, centrado en los dos ejes). Con la ventana agrandada después, siguen cruzando el centro. La spec lo prueba de 1366×768 a 5120×1440 (en Playwright, `screen` = viewport al abrir, así que `lado` = 1920: la prueba no es vacua). | `display:block` → **muere** (35,5 %, la cifra de la ronda 2). `alignItems: flex-start` → **muere** (35,5 %). Sin el suelo de 1920 → **muere** (77,4 % de la ventana). `justifyContent: flex-start` → sobrevive, pero no hay fallo: `<main>` sigue al 99,8 % incluso de 1366×768 a un 2160×3840 vertical (la ventana baja al 55,7 % en las esquinas). Sin hallazgo. |
+| R2-H3 | La prueba de B-H5 ejecuta un solo fotograma, exige `derivaciones === 0` y que se haya pedido el segundo. | Un solo rAF → **muere**. `rAF(() => setTimeout(f, 0))` → **muere**. |
+| R2-H4 | El visor v1 solo admite `m = 65536`, `t = 3`, `p = 1`, `longitud = 32`; lo demás es «dañado» al cargar. Reserva aparte los 64 MiB y la pasa al núcleo: «sin memoria» solo si falla esa reserva, y cualquier otro fallo de Argon2id da `error`. El núcleo acepta la memoria reservada, comprueba que sea un `Uint32Array` de la medida exacta y la deja a cero. Coincide con el diseño §8, «los parámetros viven en `formato_version`». | Volver a las cotas de la ronda 2 → **muere** (2 rojas). Quitar `t` → **muere**. Quitar `m` → **muere**. El catch de Argon2id con `sinMemoria` → **muere**. No pasar la memoria al núcleo → **muere** (2 reservas en vez de 1). El núcleo sin comprobar la memoria → **muere**. El núcleo sin `memoria.fill(0)` → **muere**. |
+| R2-H5 | Prueba con `'   '` y `' \t\n '`, y las gemelas `'B'` y `'  Berta Ruiz  '`. | `z.string().min(1)` sin `.trim()` → **muere**. |
+
+### BAJA
+
+- **R3-H1** `accesibilidad/marca-de-agua.spec.ts:81` (y `lib/exportaciones/visor-js.ts:205`, `:239`). La spec mide la geometría de la marca, pero antes de medir fuerza `opacity: 1` en la capa y pinta de negro el fondo de cada fila. Así no ve si la marca se ve. Ninguna prueba de vitest comprueba la opacidad ni el color de la tinta.
+  *Escenario:* medido en la copia. Con `s.opacity = '0'`, vitest de `lib/exportaciones` da 101/101 y la spec 5/5 (99,8 % en todos los casos). Con `fila.style.color = '#fff'`, 101/101 y 5/5 (92,5 %). En los dos casos la copia se abre en Chromium sin ninguna marca visible: con opacidad 0, por definición; con tinta blanca, sobre el fondo `#fff` del cuerpo y, al 12 %, sobre el `#f6f8fa` de `.texto`. Una captura de la nota sale sin código y nada lo para, que es la clase de fallo de R2-H1 por otra vía.
+  Arreglo barato: en vitest, fijar `capa.style.opacity === '0.12'` (o un intervalo) y `color` de fila; o, en la spec, comprobar con `getComputedStyle` la opacidad y el color antes de neutralizarlos.
+
+### Comprobado sin hallazgo
+
+- **Impresión con el centrado nuevo** (`emulateMedia print`, sonda en la copia): 99,9 % a 794×1123 (A4) y 99,8 % a 1920×1080. El bloque sigue siendo `flex` en impresión.
+- **Crecimiento en vertical** con el código real: de 1366×768 a 1440×2560, 99,8 % de `<main>` y de la ventana. A 2160×3840, 99,8 % y 98,9 %.
+- `leerCabecera`: con `!==` estricto, una `m` en cadena (`"65536"`) también se rechaza. `danado` se escribe al cargar, sin derivar; las pruebas comprueban la alerta antes de enviar y después.
+- Las sustituciones de la prueba de literales (`"t":3`, `"p":1`) caen en la cabecera, no en otro JSON del fichero: lo demuestra el mutante «sin `t`», que muere en `"t":4`.
+- `sinMemoriaPara` solo intercepta reservas de 64 MiB o más. La gemela cuenta una sola reserva, así que el núcleo usa la del visor.
+- **Node ≥ 24.7.** La spec usa `crypto.argon2Sync`, como las pruebas de vitest de `lib/exportaciones`. `ci.yml` fija Node 20, pero el diseño ya lo anota (riesgos, «fijar Node en `engines`») y `state.md` dice que la CI nunca ha corrido. No es nuevo de esta ronda.
+- La ronda no toca docs, ADR, `package.json` ni `.github`. `accesibilidad/**` está en el territorio de §6. El worktree queda limpio (`git status` vacío).
