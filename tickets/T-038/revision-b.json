@@ -1,0 +1,50 @@
+{
+  "ticket": "T-038",
+  "ronda": 2,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 4,
+  "hallazgos": [
+    {
+      "id": "B2-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/primera-vez/segundo-factor.tsx",
+      "linea": 102,
+      "descripcion": "«Reintentar» (nuevo en T-038) hace iniciarTransicion(async () => await generarCodigos()) sin try/catch, y en app/ no hay error.tsx ni global-error.tsx: un rechazo tumba la página entera.",
+      "escenario": "Vista de fallo de los códigos → la red cae → «Reintentar» → generarCodigos rechaza → la frontera más cercana sustituye la página por el error de Next y se pierde el aviso de dónde generar los códigos. Medido con frontera de clase y mockRejectedValueOnce: el documento solo contiene «FRONTERA Error: red caida»."
+    },
+    {
+      "id": "B2-H2",
+      "severidad": "BAJA",
+      "archivo": "app/primera-vez/segundo-factor.tsx",
+      "linea": 183,
+      "descripcion": "disabled={trabajando} sobre el «Reintentar» enfocado manda el foco a BODY, y un reintento que falla con el mismo texto (constante de totp.ts:53, todo fallo de la RPC) no lo devuelve: setFalloCodigos con el mismo string no cambia el estado y el efecto [falloCodigos] no corre.",
+      "escenario": "Teclado: «Reintentar» → fallo → el status se anuncia pero el foco queda en body. Medido: Chromium (page.setContent, disabled=true) → BODY y no vuelve; Vitest → focus() de la región 0 veces tras el reintento con el mismo texto. La prueba de B-H10 corre en jsdom, que no quita el foco al deshabilitar."
+    },
+    {
+      "id": "B2-H3",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/lista-avisos.tsx",
+      "linea": 253,
+      "descripcion": "La marca «Sin leer» es un span pegado a la etiqueta sin espacio en el DOM (ml-2 solo separa en pantalla).",
+      "escenario": "Lector de pantalla: «Regeneración de códigos bloqueadaSin leer». Medido en Chromium: ariaSnapshot() = «paragraph: Regeneración de códigos bloqueadaSin leer», innerText igual. La prueba busca el span con getByText y no lo ve."
+    },
+    {
+      "id": "B2-H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/formulario-regenerar.tsx",
+      "linea": 77,
+      "descripcion": "El catch afirma «No se han regenerado los códigos» cuando el rechazo de la acción no dice si el paso dos se confirmó.",
+      "escenario": "La conexión se corta después de que regenerar_codigos_recuperacion() confirme: lote viejo caducado, el nuevo sin enseñar; la persona lee «No se han regenerado» y conserva su lista en papel, que ya no vale. «Volver» no refresca, así que el aviso codigos_regenerados no aparece hasta recargar."
+    },
+    {
+      "id": "B2-H5",
+      "severidad": "BAJA",
+      "archivo": "app/primera-vez/segundo-factor.tsx",
+      "linea": 101,
+      "descripcion": "«Reintentar» llama a generar_codigos_recuperacion(), que exige segundo factor de menos de cinco minutos, desde una vista sin temporizadores que espera a la persona.",
+      "escenario": "La persona vuelve a los seis minutos y pulsa «Reintentar» → 42501 → la misma constante una y otra vez; el botón ya no puede funcionar y nada lo dice (la descripción sí remite a Mi cuenta, que funciona)."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "ticket": "T-038",
+  "ronda": 2,
+  "revisor": "A",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 1,
+  "cerrados_ronda_1": ["A-H1", "A-H2", "A-H3", "A-H4", "A-H5", "A-H6", "A-H7"],
+  "hallazgos": [
+    {
+      "id": "A2-H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql",
+      "linea": 216,
+      "descripcion": "registro_postgres_seguro() no lee los ajustes de plpgsql_check, que está precargada y cuyo trazador escribe los argumentos de cada función PL/pgSQL, p_contrasena incluido.",
+      "escenario": "Medido como supabase_admin dentro de begin…rollback, con plpgsql_check.enable_tracer = on, plpgsql_check.tracer = on y tracer_errlevel = log: registro_postgres_seguro() devuelve t, y comprobar_contrasena_para_regenerar('clave-revisor-log-7731') deja «\"p_contrasena\" => 'clave-revisor-log-7731'» en docker logs. Si un operador activa el trazador, la acción da el registro por seguro y la contraseña queda escrita en claro. Es la misma familia que A-H2. Arreglo: una regla C9, las claves de plpgsql_check en N0 si la biblioteca está cargada, y negativa y gemela en el banco; o bien una lista de bibliotecas precargadas permitidas en N1."
+    },
+    {
+      "id": "A2-H2",
+      "severidad": "BAJA",
+      "archivo": "scripts/t038-concurrencia.mjs",
+      "linea": 198,
+      "descripcion": "La pasada B, que mide que el candado de fila basta sin el candado de consejo, no exige b.espero, a diferencia de la A.",
+      "escenario": "Si las dos conexiones no se solapan (máquina lenta o cambio de dormir), las dos regeneraciones van en serie, dan ok|10 con diez vigentes y dos avisos, y B sale verde: «el candado de fila serializa» queda registrado sin que haya habido carrera. Hoy el JSON registra espero: true, pero la condición no se exige."
+    }
+  ]
+}

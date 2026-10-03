@@ -1,123 +1,175 @@
-**Gate combinado: 1 ALTA** (revisores A y B, ronda 1: 1 ALTA, 8 MEDIA, 9 BAJA).
+**Sin ALTA. Gate combinado: 0 ALTA** (revisores A y B, ronda 2: 0 ALTA, 2 MEDIA, 5 BAJA).
 
-**Sin ALTA en la parte del revisor B** (ronda 1: 0 ALTA, 5 MEDIA, 6 BAJA). La parte del revisor A aún no estaba escrita al cerrar B: el gate combinado lo fija quien fusione la última parte.
+# T-038 · Revisión, ronda 2
 
-# T-038 · Revisión, ronda 1
+Sustituye a la ronda 1. Diff: `git diff main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`). De la ronda 1 quedan cerrados A-H1 a A-H7 y B-H1 a B-H11 (B-H10 cerrado en el anuncio y B-H11 en lo visible; lo que les falta va en B2-H2 y B2-H3).
 
-<!-- REVISOR-B -->
-## Revisor B · aplicación e interfaz (ronda 1)
-
-Revisor B no encuentra ningún hallazgo ALTA: 0 ALTA, 5 MEDIA y 6 BAJA.
-
-Diff revisado: `git diff cdfefbe..3fc4a2b`, ficheros de `app/`, `components/`, `lib/cuentas/`, `lib/i18n/`, `next.config.ts`, `accesibilidad/` y `docs/`. Las mutaciones y sondas se ejecutaron en una copia del árbol fuera del worktree, que no se tocó. No se ejecutó `db reset`.
-
-### Lista «Qué revisar», punto por punto
-
-| Punto | Resultado |
-|---|---|
-| El mismo esquema Zod en cliente y servidor | Sí. `esquemaRegenerarCodigos` se usa en el resolver del formulario y en el `safeParse` de la acción. |
-| La contraseña no se queda en el estado ni en los registros | `serverFunctions:false` está en `next.config.ts` y es un valor válido según `logging.md`. En los registros, `totp.ts` registra el objeto `error` del RPC, no los argumentos. En el estado, `reset` se ejecuta en el camino de vuelta normal, pero no cuando la acción lanza: **B-H2**. |
-| Se llama a `registro_postgres_seguro()` antes de enviar la contraseña y falla cerrado | Sí. Se llama antes de `regenerarCodigosRecuperacion`; con error o con un valor distinto de `true`, la acción corta y nunca llama al RPC. Está probado con error y con `null`. |
-| Foco, `region` con nombre, `aria-invalid` y `aria-describedby` | Correcto en las vistas de códigos y de fallo, y en los campos. «Volver» pierde el foco: **B-H9**. |
-| Ningún temporizador en el formulario | Correcto, con `getTimerCount` en formulario-regenerar.test.tsx:79. En segundo-factor, CA11 tiene un hueco: **B-H4**. |
-| «Ya los he guardado» lleva el foco a los avisos | Sí, a `#avisos-seguridad-titulo` (h3 con `tabIndex -1`). |
-| lista-avisos: filtro y leídos | Filtra por los cuatro tipos, incluye los leídos (no filtra por `leida_en`) y ordena por fecha descendente con límite 50. La política RLS `notificaciones_lectura_propia` restringe a las filas propias. |
-| lista-avisos: zona horaria y lista vacía | La zona está, pero no hay prueba que la distinga del valor por defecto: **B-H5**. Un error de lectura se presenta como lista vacía: **B-H3**. |
-| enlace-cuenta: `aria-current`, nombre accesible y 44 px | Correcto: `min-h-11`, «Mi cuenta» en `sr-only` y el nombre de la persona. |
-| enlace-cuenta: cierra el cajón | **No** con el armazón real: **B-H1**. |
-| segundo-factor: vistas de fallo y de reintento | Están. Si el reintento falla con el mismo mensaje, no se anuncia: **B-H10**. |
-| Ningún literal en los `.tsx` | Correcto. Todo sale de `lib/i18n/es.ts`, y `lib/i18n/sin-literales.test.ts` recorre `app/` y `components/`. |
-| El spec de Playwright prueba lo que dice | En general sí: S3 a S9 contra la base y los contenedores. La aserción de la línea 255 es vacía: **B-H6**. |
-
-### Desvíos declarados
-
-- **El texto `registroInseguro`**: se acepta, porque responde a la decisión Q1 del propietario y no dice qué ajuste falla. Ninguna prueba lo fija: **B-H7**.
-- **El spec solo cubre al rol técnico**: se acepta, porque CA13 del diseño permite el técnico. La variante profesional necesita el paso del PIN y queda anotada en la bitácora.
-- **La nota de despliegue de Q1 vive en la bitácora**: comprobado, está en `docs/bitacora/T-038.md` §«Nota de despliegue de Q1». Es correcto mientras no haya manual de despliegue. El orquestador debería llevarla a `docs/state.md` §Hallazgos para que no se pierda.
-
-### MEDIA
-
-- **B-H1**, `components/armazon/enlace-cuenta.tsx:33`.
-  - **Problema:** «Mi cuenta» no cierra el cajón. `identidad` se pinta fuera de `CajonContext.Provider`: en `armazon-cliente.tsx`, la línea 91 envuelve solo `navegacion` y la 95 deja `identidad` fuera. Por eso `useCerrarCajon()` devuelve el `() => {}` por defecto. Además, el armazón no cierra el cajón al cambiar de ruta.
-  - **Por qué la prueba pasa:** monta el Provider a mano (`enlace-cuenta.test.tsx:44`).
-  - **Escenario:** en móvil a 360 px, «Abrir menú» y pulsar «Mi cuenta». La navegación va a `/cuenta`, pero el cajón sigue abierto y el velo tapa el formulario. Medido con el `ArmazonCliente` real: tras el clic, abierto=true y el velo sigue presente.
-- **B-H2**, `app/(app)/cuenta/formulario-regenerar.tsx:57`.
-  - **Problema:** `reset` va después del `await`, dentro de un `try` que solo tiene `finally`.
-  - **Escenario:** la acción lanza (red caída, un 500, un id de acción obsoleto tras un despliegue). Medido:
-    - la contraseña sigue en el campo;
-    - no aparece región de fallo;
-    - el botón vuelve a habilitarse sin decir nada;
-    - queda 1 unhandled rejection.
-- **B-H3**, `app/(app)/cuenta/lista-avisos.tsx:51`.
-  - **Problema:** si la lectura falla, se pinta «No hay avisos de seguridad.».
-  - **Escenario:** PostgREST devuelve un error. La persona ve una falsa tranquilidad aunque tenga un aviso «regeneración bloqueada» de alguien que prueba su contraseña.
-- **B-H4**, `app/primera-vez/segundo-factor.test.tsx:148`.
-  - **Problema:** CA11 solo cuenta temporizadores tras un reintento con éxito.
-  - **Escenario:** el mutante M2b añade un `useEffect` con `setTimeout(60000)` y su limpieza en la vista de fallo. Las 9 pruebas de segundo-factor siguen verdes (medido).
-- **B-H5**, `app/(app)/cuenta/lista-avisos.tsx:40` y `acciones.ts:81`.
-  - **Problema:** la zona de la organización no está probada. Todas las pruebas usan Madrid, que es también el valor por defecto.
-  - **Escenario:** con `zona = ZONA_POR_DEFECTO` forzado, lista-avisos sigue 6/6 verde y acciones 17/17 (medido). Una organización en Atlantic/Canary vería todas las horas una hora adelantadas sin que falle ninguna prueba.
-
-### BAJA
-
-- **B-H6**, `app/(app)/cuenta/formulario-regenerar.test.tsx:140` y `:153`, y `accesibilidad/regenerar-codigos.spec.ts:255`.
-  - **Problema:** las comprobaciones de que `innerHTML` o `content()` no contienen la contraseña no prueban nada: el valor tecleado es una propiedad del input y no se serializa.
-  - **Escenario:** el mutante M1 quita `reset` del camino de éxito y las 10 pruebas siguen verdes. Tras «Ya los he guardado», el campo vuelve a contener la contraseña.
-- **B-H7**, `app/(app)/cuenta/acciones.test.ts:181`.
-  - **Problema:** la prueba solo exige `r.mensaje` verdadero.
-  - **Escenario:** cambiar `registroInseguro` por `generico` deja las pruebas 17/17 verdes (medido).
-- **B-H8**, `app/(app)/cuenta/acciones.ts:40`.
-  - **Problema:** se descarta el error de `listFactors()`.
-  - **Escenario:** si GoTrue responde 500, la persona recibe «No tienes la verificación en dos pasos…» aunque la tenga.
-- **B-H9**, `app/(app)/cuenta/formulario-regenerar.tsx:104`.
-  - **Problema:** «Volver» desmonta la región que tiene el foco y no lo devuelve a ningún sitio.
-  - **Escenario:** el foco cae a `body` y el lector de pantalla tiene que volver a recorrer la página desde arriba.
-- **B-H10**, `app/primera-vez/segundo-factor.tsx:177`.
-  - **Problema:** un reintento que vuelve a fallar con el mismo mensaje constante (`totp.ts:53`) no cambia el `role="status"` y no se anuncia. La prueba usa 'OTRO-FALLO' (`:204`).
-  - **Escenario:** medido, el foco queda en el botón y no hay anuncio. La persona no sabe si el reintento falló.
-- **B-H11**, `app/(app)/cuenta/lista-avisos.tsx:63`.
-  - **Problema:** leído y no leído se distinguen solo por el peso de la fuente.
-  - **Escenario:** con lector de pantalla, un aviso de bloqueo sin leer suena igual que uno leído hace meses.
+| Id | Sev. | Dónde | Qué |
+|---|---|---|---|
+| A2-H1 | MEDIA | `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:216` | registro_postgres_seguro() no lee los ajustes de plpgsql_check, que está precargada y cuyo trazador escribe los argumentos de cada función PL/pgSQL, p_contrasena incluido. |
+| B2-H1 | MEDIA | `app/primera-vez/segundo-factor.tsx:102` | «Reintentar» (nuevo en T-038) hace iniciarTransicion(async () => await generarCodigos()) sin try/catch, y en app/ no hay error.tsx ni global-error.tsx: un rechazo tumba la página entera. |
+| A2-H2 | BAJA | `scripts/t038-concurrencia.mjs:198` | La pasada B, que mide que el candado de fila basta sin el candado de consejo, no exige b.espero, a diferencia de la A. |
+| B2-H2 | BAJA | `app/primera-vez/segundo-factor.tsx:183` | disabled={trabajando} sobre el «Reintentar» enfocado manda el foco a BODY, y un reintento que falla con el mismo texto (constante de totp.ts:53, todo fallo de la RPC) no lo devuelve: setFalloCodigos con el mismo string no cambia el estado y el efecto [falloCodigos] no corre. |
+| B2-H3 | BAJA | `app/(app)/cuenta/lista-avisos.tsx:253` | La marca «Sin leer» es un span pegado a la etiqueta sin espacio en el DOM (ml-2 solo separa en pantalla). |
+| B2-H4 | BAJA | `app/(app)/cuenta/formulario-regenerar.tsx:77` | El catch afirma «No se han regenerado los códigos» cuando el rechazo de la acción no dice si el paso dos se confirmó. |
+| B2-H5 | BAJA | `app/primera-vez/segundo-factor.tsx:101` | «Reintentar» llama a generar_codigos_recuperacion(), que exige segundo factor de menos de cinco minutos, desde una vista sin temporizadores que espera a la persona. |
 
 <!-- REVISOR-A -->
-## Revisor A · base y seguridad (ronda 1)
+## Revisor A · base y seguridad (ronda 2)
 
-Revisor A: **1 ALTA**, 3 MEDIA, 3 BAJA.
+- **Diff:** `main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`).
+- **Dónde se midió:** en `supabase_db_Psicogestion`, siempre dentro de `begin … rollback`, sin `db reset`, con `max(version) = 20261008120000`.
+- **Interrupción:** el verificador reseteó la base a mitad de un mutante. Ese mutante se repitió cuando la migración volvió a estar aplicada.
 
-Diff `cdfefbe..3fc4a2b`. Medido en `supabase_db_Psicogestion` dentro de `begin … rollback`. La base se reseteó a mitad de la ronda; antes de volver a medir se esperó a `max(version) = 20261008120000` con la siembra hecha.
+### Hallazgos de la ronda 1
 
-### ALTA
-
-- **A-H1** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:171` · El contador de intentos (D4: «la contraseña errónea no lanza, así el contador persiste») solo persiste si la transacción del llamante confirma; PostgREST puede fallar después de que la función devuelva (o ejecutarla en solo lectura) y entonces el intento se deshace, mientras la respuesta sigue distinguiendo la contraseña buena de la mala. El límite de cinco intentos de P-4 no se cumple por la puerta directa /rest/v1/rpc.
-  - Escenario: Medido en begin…rollback con un perfil sembrado y aal2 reciente: varias llamadas con contraseña errónea cuya transacción acaba en error por una causa posterior a la función no dejan fila en intentos_regenerar_codigos ni aviso, y el error que vuelve permite distinguir «contrasena_incorrecta» de «ok». Tras siete fallos así, la contraseña buena devuelve ok y genera el lote: nunca se bloquea. Contrastado contra el PostgREST local. D4 supone que solo un raise de la propia función deshace el contador. El arreglo es decisión del arquitecto: persistir el intento fuera de la transacción del llamante, o no exponer la RPC a PostgREST y llamarla solo desde la acción con un rol propio.
+| Id | Estado | Cómo se comprobó |
+|---|---|---|
+| A-H1 | **Cerrado** | El paso uno devuelve `void`. Después de `crypt` hay una sola escritura (`insert … on conflict` con `case` sobre `v_ok`) y el aviso, que solo depende de `v_bloqueo`; ningún `return` ni `raise` depende del acierto. La guarda de solo lectura (25006) y el candado van antes del cotejo. El paso dos no recibe la contraseña. El oráculo da la misma respuesta con la buena y con la mala en S1 a S5, y el contador confirma. |
+| A-H2 | **Cerrado** | C5 está en la migración (`:166`). El mutante que la quita pone el banco en rojo con «R2-5 C5». |
+| A-H3 | **Cerrado** | `registrar_reposicion_totp` rechaza `p_perfil_id = v_actor` y cambia `<>` por `is distinct from`. Por lo demás es una copia fiel del cuerpo anterior. El mutante que quita la guarda pone el banco en rojo con «R2-4». |
+| A-H4 | **Cerrado** | C1 a C8, N0 y N1 tienen su negativa y su gemela, también en vivo (L0 a L7b). |
+| A-H5 | **Cerrado** | Cada condición lleva su `coalesce(…, true)`. Si falta una clave (N0) o una biblioteca (N1), el resultado es `false`. |
+| A-H6 | **Cerrado** | Se cierra con DR7: `alcanzable(u)` usa `st > 0 and st <= u` y L7b lo prueba con el `statement_timeout` de `authenticated`. |
+| A-H7 | **Cerrado** | Hay `revoke … from public, anon` y una comprobación que para si `anon` puede ejecutarlas. Queda una ventana de milisegundos entre la creación y el `revoke`, cubierta por el `finally` del corredor. |
 
 ### MEDIA
 
-- **A-H2** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:71` · registro_postgres_seguro() no comprueba log_transaction_sample_rate, que escribe en el registro todas las sentencias de las transacciones muestreadas, con sus parámetros.
-  - Escenario: Medido como supabase_admin en begin…rollback: con set local log_transaction_sample_rate = 1, registro_postgres_seguro() devuelve t; con ese ajuste y log_parameter_max_length = -1 (el de la imagen), una sentencia con $1 deja «Parameters: $1 = …» en docker logs. En una instancia con muestreo de transacciones la acción da el registro por seguro (Q1 b) y la contraseña queda escrita. Se arregla tratándolo como log_min_duration_sample (seguro solo si vale 0 o si log_parameter_max_length = 0), con su negativa en el banco.
-- **A-H3** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:274` · La regla Q3(B) cuenta con que una fila TOTP_REPUESTO posterior al lote solo puede venir de una reposición legítima, pero registrar_reposicion_totp() solo exige rol administrador y no impide que el llamante se reponga a sí mismo.
-  - Escenario: Un administrador con sesión aal2 llama a registrar_reposicion_totp con su propio id: queda una fila TOTP_REPUESTO posterior a su lote vigente, y generar_codigos_recuperacion() vuelve a emitir lote sin pedir contraseña. Es justo la puerta que P-4 manda cerrar «una vez hay lote», y la abre el rol con más alcance. Los avisos llegan al titular, pero nada lo impide. La función no está en el diff, aunque la regla nueva depende de ella. Hay que decidir entre excluir p_perfil_id = auth.uid() en la reposición o exigir en la regla Q3 que actor_id <> registro_id.
-- **A-H4** · `scripts/rls/13-cuentas.sql:502` · El banco ejercita una sola de las seis condiciones de registro_postgres_seguro() (log_parameter_max_length_on_error); las otras cinco no tienen negativa.
-  - Escenario: Mutante: se borra la cláusula de log_statement, la de log_min_duration_statement, la del muestreo, la de auto_explain o la de pgaudit, y el banco 13 sigue verde. Medido: como supabase_admin y dentro de begin…rollback, set local fija esos ajustes, así que cada rama puede tener su negativa y su gemela.
+- **A2-H1** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:216` · `registro_postgres_seguro()` no lee los ajustes de `plpgsql_check`. Esa biblioteca está en `shared_preload_libraries`, y su trazador escribe los argumentos de cada función PL/pgSQL, `p_contrasena` incluido.
+  - **Escenario:** se midió como `supabase_admin` dentro de `begin … rollback`, con un perfil sembrado con aal2 y una contraseña marcada.
+    1. Se fijaron `set local plpgsql_check.enable_tracer = on`, `plpgsql_check.tracer = on` y `plpgsql_check.tracer_errlevel = 'log'`.
+    2. `registro_postgres_seguro()` devolvió `t`.
+    3. Se llamó a `comprobar_contrasena_para_regenerar('clave-revisor-log-7731')`.
+    4. `docker logs supabase_db_Psicogestion` mostró `LOG:  #0  "p_contrasena" => 'clave-revisor-log-7731'`.
+  - **Variante:** con el `tracer_errlevel` por defecto (`notice`) y `log_min_messages` en `notice` o por debajo, la línea llega igual al registro.
+  - **Por qué importa:** si un operador activa el trazador para depurar, la acción da el registro por seguro (Q1 b) y la contraseña queda escrita en claro. Es la misma familia que A-H2: un ajuste que escribe parámetros y que la lista no enumera.
+  - **Arreglo:**
+    - añadir una C9: si `plpgsql_check` está cargada, el registro es inseguro cuando `plpgsql_check.enable_tracer = on` y `plpgsql_check.tracer = on`;
+    - si la biblioteca está cargada, sus claves pasan a N0;
+    - una negativa y una gemela en R2-5 y en vivo.
+  - **Más ancho (lo decide el arquitecto):** la lista cerrada de ajustes no protege ante una biblioteca precargada que la lista no conoce. Una alternativa es que N1 tenga una lista de bibliotecas permitidas, de modo que cualquier precargada que no figure en ella cuente como insegura.
 
 ### BAJA
 
-- **A-H5** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:53` · La cabecera dice que la función «falla cerrado» si no puede leer un ajuste, pero los coalesce de log_statement, auto_explain.* y pgaudit.* caen al valor que da por seguro.
-  - Escenario: Si el dueño de la función deja de ver un ajuste en pg_settings (pierde pg_read_all_settings, o la extensión no está cargada en ese proceso), la función responde «seguro» sin haberlo leído. Hoy postgres sí lo ve, así que el problema está en el comentario. Corregir el comentario o invertir los coalesce.
-- **A-H6** · `supabase/migrations/20261008120000_regenerar_codigos_recuperacion.sql:84` · La condición de auto_explain (inseguro solo entre 0 y 9999 ms) es segura en la imagen local solo porque authenticated tiene statement_timeout = 8s, y la función no lo comprueba.
-  - Escenario: Medido: la imagen trae auto_explain.log_min_duration = 10000 y auto_explain.log_parameter_max_length = -1, y una regeneración tarda 1,6 s en local (bcrypt 12 por diez). Si se sube el statement_timeout de authenticated y una llamada pasa de 10 s (por una instancia lenta o por esperar el candado), auto_explain escribe los parámetros aunque la función haya dicho «seguro». Hay que tratar cualquier valor ≥ 0 igual que log_min_duration_statement.
-- **A-H7** · `scripts/t038-concurrencia.sql:75` · La copia sin candado del contraensayo se crea en public con el EXECUTE por defecto a PUBLIC (anon incluido) y solo se borra en el finally del corredor.
-  - Escenario: Medido durante la ronda: public.t038_sin_candado existía con has_function_privilege('anon', …) = t. Si el corredor se interrumpe antes del finally, la base local se queda con una regeneración sin candado ejecutable por cualquiera. Arreglo: revocar de public y anon al crearla.
+- **A2-H2** · `scripts/t038-concurrencia.mjs:198` · La pasada B («sin candado de consejo, el candado de fila del consumo serializa») no exige `b.espero`, a diferencia de la A (`:175`).
+  - **Escenario:** las dos conexiones pueden no solaparse, por ejemplo porque la primera confirma antes de que arranque la segunda en una máquina lenta, o porque cambia `dormir`. Entonces las dos regeneraciones van en serie, dan `ok|10`, dejan diez vigentes y dos avisos, y la B sale verde. La medición «el candado de fila basta» queda registrada en `ca4-concurrencia.json` sin que haya habido carrera.
+  - **Estado actual:** hoy el JSON registra `espero: true`, así que la medición vale. Lo que falta es que la condición se exija en lugar de solo anotarse.
+  - **Arreglo:** `exigir(b.espero, …)`, igual que en la A. La D no lo necesita, porque sin solape la segunda activación lanza 42501 y deja 10 vigentes, y entonces la D sale roja.
 
 ### Comprobado sin hallazgo
 
-- `p_contrasena` solo aparece en el `coalesce(...) <> ''` y en `extensions.crypt`. Ningún raise, format, insert ni aviso la lleva, y las dos funciones no tienen bloques `exception` ni `execute` dinámico.
-- El orden de guardas es correcto: sesión, rol y segundo factor (42501) van antes del candado y del contador. Las dos funciones usan el mismo `pg_advisory_xact_lock` y son `volatile`, `security definer` con `search_path = ''`.
-- CA4: sin candado, el contraensayo deja 20 códigos vigentes; con él, 10. El script usa `contenedorDelProyecto()`.
-- `intentos_regenerar_codigos` tiene RLS sin políticas, ningún grant y auditoría con `fn_auditar`. No hay UPDATE ni DELETE nuevo sobre tablas de solo adición. `canjear_codigo_recuperacion` y `registrar_reposicion_totp` no cambian.
-- Lado TS: la RPC va por POST. `console.error` registra el objeto de error o el motivo, nunca la entrada, y `next.config.ts` pone `logging.serverFunctions: false`.
+**Lista R2.7, punto por punto:**
+- **Paso uno uniforme:**
+  - una sola escritura con `case` y `least(…, 100)`;
+  - sin `return` ni `raise` dentro de un `if v_ok`;
+  - el aviso depende solo de `v_bloqueo`;
+  - si `p_contrasena` es `null`, `v_ok` es falso y cuenta como fallo.
+- **Guarda de solo lectura:** va antes del candado y de `crypt`.
+- **Paso dos:**
+  - no lee `auth.users` ni recibe nada;
+  - consume con `> 0 and autorizado_hasta > now()` antes de caducar el lote.
+- **Firma antigua:** en la base no queda `regenerar_codigos_recuperacion(text)`. En `tipos-bd.ts` la función figura con `Args: never`, y `p_contrasena` solo aparece en `lib/cuentas/totp.ts:80`, que es la comprobación.
+- **Evaluador:**
+  - solo lo ejecuta su dueño: se revoca a `public`, `anon`, `authenticated` y `service_role`;
+  - normaliza las listas de precarga;
+  - `alcanzable` usa `<=`.
+- **Tabla `intentos_regenerar_codigos`:**
+  - ni `anon` ni `authenticated` tienen `TRUNCATE`, `DELETE`, `UPDATE` ni `SELECT`;
+  - `authenticated` no puede insertar en `auditoria`, así que una fila `TOTP_REPUESTO` no se puede fabricar para eludir Q3(B).
+
+**Mutantes del banco**, cada uno aplicado tras el `begin` con el banco completo (`00` a `23`) en `rollback`. El banco sin mutar sale verde: rc 0 y 1139 OK. Los siete ponen el banco en rojo por la aserción esperada:
+
+| Mutante | Aserción que salta |
+|---|---|
+| La contraseña mala autoriza en el primer insert | «R2-1 · contraseña mala: UN intento fallido …» |
+| La mala no anula la autorización | «R2-1 punto 5» |
+| El paso dos ignora `autorizado_hasta` | «R2-1 punto 6» |
+| Sin guarda 25006 | «R2-1 · la guarda de solo lectura y el candado van ANTES …» |
+| Umbral de bloqueo en 6 | «CA2 bis» |
+| Sin C5 | «R2-5 C5» |
+| Reposición propia permitida | «R2-4 … 42501» |
+
+**Lado TS:**
+- los dos pasos van por POST;
+- el error del paso uno se registra solo con el `code`;
+- el error del paso dos no puede llevar la contraseña, porque el paso dos no la recibe.
+
+**Residuo aceptado:** el tope 2 deja una autorización sobrante tras un doble envío. Durante 60 s, quien tenga la cookie con aal2 reciente puede gastarla y regenerar sin contraseña. Es la decisión P2 del propietario y cada regeneración avisa al titular, así que no se cuenta como hallazgo.
+
+<!-- REVISOR-B -->
+## Revisor B · interfaz, accesibilidad e integración TS (ronda 2)
+
+Sin ALTA en la parte del revisor B: 0 ALTA, 1 MEDIA, 4 BAJA.
+
+Diff revisado: `git diff main...worktree-agent-ac39d19a23cb82596` (HEAD `e25fae0`), ficheros de `app/(app)/cuenta/**`, `app/primera-vez/**`, `components/armazon/**`, `lib/cuentas/totp.ts`, `lib/cuentas/esquemas.ts`, `lib/i18n/es.ts`, `lib/supabase/tipos-bd.ts`, `next.config.ts`, `accesibilidad/**` y `docs/interfaz.md`. Las mutaciones y las sondas se ejecutaron en una copia exportada con `git archive e25fae0` fuera del worktree, que no se tocó. No se ejecutó `db reset`.
+
+### B-H1 a B-H11 de la ronda 1
+
+| # | Estado | Cómo se ha comprobado |
+|---|---|---|
+| B-H1 | **Cerrado** | El Provider envuelve el `<aside>` entero. `armazon-cliente.test.tsx` monta el `ArmazonCliente` real y cuenta los botones «Cerrar menú»: 1, luego 2 y luego 1. El mutante «Provider solo en `navegacion`» sale rojo (`mutantes-ui.json`). Ningún otro consumidor de `CajonContext` cambia de comportamiento: solo están `navegacion.tsx` y `enlace-cuenta.tsx`. |
+| B-H2 | **Cerrado** | `catch` con `reset` y vista de fallo. Medido: sin el `reset` del `catch` (y con el resto igual) cae «B-H2 · si la acción se rechaza…», porque RHF repuebla el campo al volver. La prueba discrimina. El texto que se pinta tiene un matiz: **B2-H4**. |
+| B-H3 | **Cerrado** | Error → `errorLectura`, sin `vacio` ni lista. Mutante rojo. |
+| B-H4 | **Cerrado** | Medido: M2b (`useEffect` con `setTimeout(60000)` en la vista de fallo) tumba «B-H4 · en la vista de fallo…» (1 rojo de 11). |
+| B-H5 | **Cerrado** | Medido: `zona = ZONA_POR_DEFECTO` en lista-avisos da 1 rojo de 9, y `ZONA_POR_DEFECTO,` en acciones.ts da 1 rojo de 19 (Canarias, 11:00). |
+| B-H6 | **Cerrado** | Vitest mira `toHaveValue('')`. Medido: M1 (sin el `reset` de `:57`) da 5 rojos de 11. Playwright lo mira en S3 y S6. «Volver» no se ejercita en Playwright, pero Vitest lo cubre. |
+| B-H7 | **Cerrado** | `toBe(registroInseguro)` en las tres variantes (falso, error y `null`), y ninguna llamada a ninguno de los dos pasos. |
+| B-H8 | **Cerrado** | `listFactors` con error da `generico`, sin `challengeAndVerify` ni RPC. Mutante rojo. |
+| B-H9 | **Cerrado** | «Volver» lleva el foco al campo contraseña. Mutante rojo en las dos variantes de fallo. Que el efecto vuelva a correr cuando cambia `enviando` con un `campoConFoco` antiguo no roba el foco: el input ya está desmontado y `focus()` sobre un nodo desconectado no hace nada. |
+| B-H10 | **Cerrado en el anuncio** | El `status` se vacía y se rellena, y el mutante sale rojo. Pero el foco se pierde en cada reintento fallido: **B2-H2**. |
+| B-H11 | **Cerrado en lo visible** | La marca «Sin leer» está dentro del `<li>` del no leído. Para el lector de pantalla se pega a la etiqueta: **B2-H3**. |
+
+### R2.7 «Qué revisar» (parte de interfaz e integración TS)
+
+- **La firma `(text)` no reaparece.**
+  - `tipos-bd.ts` tiene `comprobar_contrasena_para_regenerar: { Args: { p_contrasena: string } }` y `regenerar_codigos_recuperacion: { Args: never }`.
+  - `p_contrasena` solo aparece en `lib/cuentas/totp.ts:80`, en sus pruebas y en `scripts/t038-oraculo.mjs`. Este último la usa precisamente para comprobar que la firma vieja da 404/PGRST202.
+  - Ninguna de las dos llamadas lleva `{ get: true }`.
+- **Integración de los dos pasos en `totp.ts`.**
+  - Si el paso uno da error, la función devuelve `error`, registra solo `.code` y no llama al paso dos (probado).
+  - La traducción del paso dos no cambia.
+  - Contrastado con el SQL:
+    - con bloqueo, el paso uno vuelve sin escribir y el paso dos devuelve `bloqueado` con su hora;
+    - sin autorización, el paso dos devuelve `contrasena_incorrecta`;
+    - el quinto fallo devuelve `bloqueado`, no `contrasena_incorrecta`.
+  - Las tres respuestas llegan bien a la acción.
+- **Orden de la acción.** `listFactors` → `challengeAndVerify` → `registro_postgres_seguro` → comprobar → regenerar, probado en `acciones.test.ts:132`. `logging.serverFunctions: false` sigue en su sitio.
+- **La prueba de B-H1 monta `ArmazonCliente` de verdad, y B-H6 mira `value` y no el HTML**: sí, en las dos.
+
+### MEDIA
+
+- **B2-H1** · `app/primera-vez/segundo-factor.tsx:102`
+  - **Problema:** «Reintentar» (nuevo en T-038) hace `iniciarTransicion(async () => await generarCodigos())` sin `try/catch`. En `app/` no hay `error.tsx` ni `global-error.tsx`.
+  - **Escenario:** en la vista «no se han podido generar tus códigos», la red cae y la persona pulsa «Reintentar». `generarCodigos` rechaza, el error sube a la frontera más cercana y la página entera se sustituye por la pantalla de error de Next. Se pierden con ella el texto que dice que los códigos ya no se ofrecerán al entrar y dónde generarlos.
+  - **Medido** con una frontera de clase en Vitest y `mockRejectedValueOnce(new Error('red caida'))`: el documento solo contiene «FRONTERA Error: red caida».
+  - Es el mismo patrón que B-H2 resolvió en el formulario de Mi cuenta.
+  - `verificar` (`:117`) tiene el mismo patrón desde T-037: queda fuera del diff y es para `docs/state.md`.
+
+### BAJA
+
+- **B2-H2** · `app/primera-vez/segundo-factor.tsx:183`
+  - **Problema:** `disabled={trabajando}` sobre el «Reintentar» que tiene el foco manda el foco a `BODY`. Si el reintento vuelve a fallar con el mismo texto, nada lo devuelve. Ese caso es todo fallo de la RPC, porque `lib/cuentas/totp.ts:53` devuelve siempre la misma constante.
+  - **Escenario:** con teclado, «Reintentar» → fallo. El `status` se anuncia, pero el foco queda en `body` y hay que volver a recorrer la página para reintentar.
+  - **Medido:**
+    - en Chromium, con `page.setContent`, un botón enfocado y `disabled = true`, el foco pasa a `BODY` y no vuelve al habilitarlo;
+    - en Vitest, tras el reintento fallido con el mismo texto, `focus()` de la región se llama 0 veces: `setFalloCodigos` con el mismo string no cambia el estado y el efecto `[falloCodigos]` no corre.
+  - **Por qué la prueba no lo ve:** la de B-H10 corre en jsdom, que no quita el foco al deshabilitar, así que allí `activeElement` sigue siendo «Reintentar».
+- **B2-H3** · `app/(app)/cuenta/lista-avisos.tsx:253`
+  - **Problema:** la marca «Sin leer» es un `<span>` pegado a la etiqueta sin espacio: el `ml-2` solo separa en pantalla.
+  - **Escenario:** el lector de pantalla oye «Regeneración de códigos bloqueadaSin leer», una sola palabra al final.
+  - **Medido** en Chromium: `ariaSnapshot()` da `paragraph: Regeneración de códigos bloqueadaSin leer`, y `innerText` lo mismo.
+  - **Por qué la prueba no lo ve:** busca el `<span>` con `getByText` y no puede notarlo.
+- **B2-H4** · `app/(app)/cuenta/formulario-regenerar.tsx:77`
+  - **Problema:** el `catch` afirma «No se han regenerado los códigos», pero un rechazo de la acción no dice si el paso dos se confirmó.
+  - **Escenario:**
+    1. La conexión se corta después de que `regenerar_codigos_recuperacion()` confirme. El lote viejo ya está caducado y el nuevo no se ha enseñado.
+    2. La persona lee «No se han regenerado» y se queda con su lista en papel, que ya no vale.
+    3. «Volver» no refresca, así que el aviso `codigos_regenerados` que lo delataría no aparece en la lista hasta que se recargue.
+  - El texto lo fijó el diseño (R2.4, B-H2), pero el resultado es desconocido y la vista lo da por sabido.
+- **B2-H5** · `app/primera-vez/segundo-factor.tsx:101`
+  - **Problema:** «Reintentar» llama a `generar_codigos_recuperacion()`, que exige el segundo factor verificado hace menos de cinco minutos (`20261008120000:469`). La vista de fallo no tiene temporizadores, a propósito, y espera a la persona.
+  - **Escenario:** la persona vuelve a los seis minutos y pulsa «Reintentar». Da 42501 y la misma constante «No se pudieron generar los códigos de recuperación.» una y otra vez. El botón ya no puede funcionar y nada lo dice. La descripción remite a Mi cuenta, que sí funciona: es una vía muerta con salida, no un bloqueo.
 
 ### Fuera del diff (para `docs/state.md`, no cuenta en el gate)
 
-- `desbloquear_historia` (PIN) tiene el mismo patrón que A-H1: el contador sin raise y el motivo en la respuesta, así que su límite de intentos se elude igual. La solución que se elija para A-H1 debería aplicarse también ahí.
-<!-- /REVISOR-A -->
+- `verificar` en `app/primera-vez/segundo-factor.tsx:117` (T-037): la misma transición asíncrona sin `try/catch` que B2-H1, con `generarCodigos()` y `mfa.verify` dentro.
