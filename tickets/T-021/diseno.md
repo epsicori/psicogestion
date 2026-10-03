@@ -954,3 +954,182 @@ Si se aprueba, los cambios de contrato de T-021, T-023 y T-026 los hacen el prop
 - **P3.d:** qué cuenta el pendiente se decide al diseñar T-023.
 - **P3.e:** sí, con un ADR nuevo que estreche el ADR-053 c y d sin editarlo.
 - **P3.f:** sí. La consulta al asesor (ADR-053 k.1) lleva la lista exacta de lo que la app copia del programa.
+
+## Adenda P3 aplicada (03-10-2026)
+
+> Arquitecto, 03-10-2026, contra `main` en `36663f9`. Aplica las decisiones del propietario sobre P3
+> (sección anterior) y el **ADR-077**. Solo añade: lo de arriba no se edita. **Si chocan, manda esta
+> sección**, después la adenda del 03-10 y después el diseño del 12-09. Con ella, T-021 queda
+> implementable sin el espejo. El contrato `tickets/T-021-economico-esquema.md` ya está ajustado a lo
+> que dice aquí.
+
+### PA.0 · Hechos verificados contra main
+
+| Hecho | Dónde | Consecuencia |
+|---|---|---|
+| El último ADR era el 076. El 077 es nuevo y estrecha el 053 c y d: copia mínima, una vez, sin estado ni cobros del programa | `docs/decisions/ADR-077.md` | Es ley para T-021, T-023 y T-026 |
+| La última migración es `20261006120000_avisos_y_escalado.sql` (T-015, integrado). Siguen reservados T-039 `20261007120000`, T-038 `20261008…`, T-040 B `20261009120000` y T-041 `20261010120000` | `ls supabase/migrations` | El sello provisional `20261011120000` de A.2 sigue libre. El implementador lo comprueba igual antes de escribir |
+| Existe `22-avisos.sql`. Siguen reservados `23` (T-039), `24` (T-040 B) y `25` (T-041) | `ls scripts/rls` | El banco sigue siendo `26-economico.sql` |
+| El banco va en una sola conexión y un solo `pg_temp`: `00` se carga antes que `01` | `scripts/rls/README.md` («Cómo funciona») | La fila de fijación de las versiones puede construir su sobre con `pg_temp.sobre_borrador()` de `00`, como `01` ya hace con `sobre_prueba()` (`01-fijacion.sql:111-140`) |
+| La regla 1 del linter solo mira `update`, `delete from` y `truncate` sobre las tablas de su lista. `alter table … add column` no la dispara | `scripts/lint-migraciones.ts:190-214` | T-026 podrá añadir `cobros.factura_espejo_id` sin que el linter lo señale |
+| `lib/dinero/reparto.ts` tiene `EstadoCobro = 'pendiente' \| 'cobrado' \| 'cobrado_de_mas'` | `lib/dinero/reparto.ts:31` | No afecta a T-021, porque la vista del pendiente sale de aquí (PA.1). Se cita en el contrato de T-023 |
+
+### PA.1 · Qué sale de T-021
+
+Pasan a **T-026** (ADR-077, punto 5):
+
+| Pieza | Dónde estaba | Nota |
+|---|---|---|
+| Enum `proveedor_facturacion` | A.2 punto 3 | Solo lo usa el espejo |
+| Tabla `facturas_espejo` | A.2 punto 5, D9 | Con sus tres capas, su fila de `tablas_solo_adicion`, su entrada en `TABLAS_SOLO_ADICION`, su fila de `01-fijacion`, su auditoría, su política `facturas_espejo_lectura` y su `grant select`. Cambia de forma: sin `estado_proveedor`, y `sincronizado_en` pasa a ser `copiado_en` (ADR-077, punto 1) |
+| `registrar_factura_espejo(...)` | A.2 punto 7 | — |
+| `fn_espejo_del_paciente()` y sus dos disparadores | A.2 punto 7, D6 | D6 sale entero |
+| Columnas `cobros.factura_espejo_id` y `bonos.factura_espejo_id` | A.2 punto 5 | T-026 las añade nulas, sin FK y sin default. Si mantiene la de `bonos` lo decide su diseño: la factura de un bono no sale de un borrador (P3.4) |
+| Vista `facturas_espejo_cabecera` | A.2 punto 8 | — |
+| Los valores `enviado` y `facturado` de `borradores_factura_estado` | A.2 punto 8 | T-026 redefine la vista con `create or replace view` (P2) |
+
+Pasa a **T-023**:
+
+| Pieza | Dónde estaba | Nota |
+|---|---|---|
+| Vista `pendiente_paciente` | A.2 punto 8, D7 | Qué cuenta (lo facturado o lo devengado) se decide al diseñar T-023 (P3.d). P1 sigue en pie: por paciente. Si cuenta lo facturado, T-023 depende también de T-026 |
+
+**D6, D7 y D9 dejan de aplicarse en T-021.** D7 se conserva como decisión (P1) para T-023.
+
+Se queda en T-021 todo lo demás:
+- cinco tablas: `tarifas_paciente`, `borradores_factura`, `borradores_factura_versiones`, `cobros` y `bonos`;
+- dos de ellas de solo adición: `borradores_factura_versiones` y `cobros`;
+- la cadena hermana, su verificador y `fn_cerrar_tarifa()`;
+- `citas.bono_id` y `fn_bono_de_la_cita()` (D8);
+- dos vistas: `borradores_factura_estado`, con dos valores, y `bonos_consumo`;
+- la auditoría (D2) y la RLS.
+
+### PA.2 · La migración: qué cambia en A.2
+
+Mismo fichero, mismo orden. Cambia esto:
+
+| Punto de A.2 | Queda así |
+|---|---|
+| 1 · Comentario `--` | El del ADR-053, y una línea más: «`facturas_espejo`, el registro de envíos y las anotaciones del programa los crea T-026 (ADR-077)». Va con `--`, nunca con `comment on` (D13) |
+| 3 · Enums | Solo `forma_pago`. **No** se crea `proveedor_facturacion` |
+| 5 · Tablas | `facturas_espejo` no se crea. `cobros` y `bonos`, **sin** `factura_espejo_id`. Las demás columnas de A.2, sin cambios |
+| 7 · Funciones | `fn_sellar_version_borrador()`, `verificar_cadena_borrador()` y `fn_cerrar_tarifa()`. **No** se crean `registrar_factura_espejo()` ni `fn_espejo_del_paciente()` |
+| 8 · Vistas | Solo dos, detalladas debajo de esta tabla |
+| 9 · Disparadores | Tres capas en **dos** tablas: las versiones y `cobros`. El sellado. Auditoría en **cinco** tablas: `fn_auditar('id', …)` con el recorte de D2 en las versiones, y `fn_auditar('id')` en las otras cuatro |
+| 10 · Catálogo | **Dos** filas en `tablas_solo_adicion`: `borradores_factura_versiones` (art. 29.2.j LGT, ADR-053 h) y `cobros` (ADR-053 g) |
+| 11 · Políticas | Sale `facturas_espejo_lectura`. Las demás, sin cambios. Las de `cobros` y `bonos` no nombran el espejo en ningún sitio |
+| 12 · Grants | Sale la fila de `facturas_espejo`. `bonos`: `select, insert` y `update (caducidad)`, sin `factura_espejo_id`. «Las cuatro vistas» pasan a ser **las dos vistas**. Capa 1 sobre **dos** tablas |
+| 13 · Comentarios | Sin cambios, salvo el de `cobros`: «el enlace a la factura lo añade T-026 (ADR-077)» |
+
+Las dos vistas del punto 8:
+
+- **`borradores_factura_estado`** (`security_invoker = true`): `borrador_id`, `ultima_version` y `estado`.
+  - `estado` es `text`, no un enum, para que T-026 añada valores redefiniendo la vista sin migrar un tipo.
+  - `estado = 'descartado'` si la última versión tiene `descartado`; si no, `'sin_enviar'`.
+  - El `comment on view` dice: «`enviado` y `facturado` los añade T-026 (ADR-077)».
+  - T-026 tendrá que conservar los nombres y el orden de las columnas para poder usar `create or replace view`.
+- **`bonos_consumo`**: igual que en A.2. Es la **única** vista definer del ticket.
+
+Después de `db reset`, `npm run tipos`, como en A.2.
+
+### PA.3 · El banco: qué cambia
+
+**`scripts/rls/01-fijacion.sql`** (D11)
+- **Dos** filas de fijación, no tres: una versión de borrador, con su cabecera, y un cobro. No hay
+  fila del espejo.
+- La versión se inserta como `postgres`, con el sobre de `pg_temp.sobre_borrador()`. Así el disparador
+  de sellado la acepta y `10-solo-adicion` tiene sobre qué lanzar el `update`.
+- Se usan los pacientes, profesionales y centros que `01` ya tiene, para que la versión sea del
+  profesional asignado.
+
+**`scripts/rls/00-ayudantes.sql`**: `pg_temp.sobre_borrador(...)`, sin cambios respecto a D11.
+
+**`scripts/rls/11-cobertura.sql`**: los nombres de las políticas nuevas, sin `facturas_espejo_lectura`.
+
+**`scripts/rls/26-economico.sql`**
+- Sale todo lo del espejo:
+  - el `insert into facturas_espejo` por rol;
+  - `registrar_factura_espejo()`: la llamada, su `execute` denegado y su idempotencia;
+  - el cobro enlazado a un espejo de otro paciente (23514);
+  - las columnas y las filas de `facturas_espejo_cabecera`.
+- El criterio del técnico (las líneas del borrador, sin `cita_id`) se cierra así:
+  - TEC1 cuenta 0 en `borradores_factura_versiones`, con su gemela: ADM cuenta 1 sobre la misma fila;
+  - TEC1 cuenta 0 en `borradores_factura_estado`, con la misma gemela;
+  - las columnas de `bonos_consumo` en `information_schema.columns` no incluyen `cita_id` ni `lineas`.
+- Ninguna aserción comprueba que el espejo **no** existe. Fallaría al integrarse T-026, porque el banco
+  corre entero contra todas las migraciones. Eso lo vigila el `grep` de PA.4.
+
+**`scripts/lint-migraciones.ts`**: `TABLAS_SOLO_ADICION` gana **dos** entradas, `borradores_factura_versiones`
+y `cobros`. La prueba de `scripts/lint-migraciones.test.ts:204-209` fija la lista con esas dos.
+`facturas_espejo` la añade T-026.
+
+### PA.4 · Criterios del contrato que cambian, y cómo se cierran (sustituye a A.3 donde choca)
+
+| Criterio del contrato (ya ajustado) | Comprobación |
+|---|---|
+| `update`, `delete` y `truncate` fallan sobre `borradores_factura_versiones` y `cobros` | `10-solo-adicion` las recorre por catálogo, con las dos filas de `01`. `cobertura_solo_adicion()` = 0. En `26`, como `authenticated`, `assert_lanza_codigo` con 42501 |
+| **Sale**: «`insert into facturas_espejo` como `authenticated` falla; por la función entra» | Lo tiene T-026 |
+| Un cobro sin factura entra | Como TEC1 (en su centro) y como ADM, `insert into cobros` entra. `cobros` no tiene columna de factura en T-021 |
+| Técnico: cobros sí, tarifas no, y no ve las líneas del borrador | TEC1: `cobros` > 0; `tarifas_paciente` = 0, con la gemela de ADM; versiones y `borradores_factura_estado` = 0, con la gemela de ADM (PA.3) |
+| Cada tabla nueva escribe en `auditoria` al insertar | Las **cinco** tablas, con el recorte de D2 en las versiones |
+| Manual: nada del espejo en la migración | `grep -vE '^\s*--' supabase/migrations/20261011120000_economico_esquema.sql \| grep -ciE "espejo\|proveedor"` → `0` |
+
+Los demás criterios se cierran como en A.3, sin cambios: `db reset`, la cadena de tres versiones,
+`sesiones_consumidas`, los bonos por rol, los borradores del profesional, `test:rls`, lint, build,
+el linter y el `grep` de D13.
+
+### PA.5 · Riesgos y qué revisar (se añaden a A.4 y A.5, o los sustituyen donde choquen)
+
+**Riesgos, por probabilidad**
+1. **Que queden restos del espejo en la migración.** Por ejemplo, copiar de A.2 el
+   `grant update (caducidad, factura_espejo_id)`, que rompe `db reset`, o una política de `cobros` con
+   un `exists` sobre `facturas_espejo`, que tampoco compila. Más sutil: un `comment on` que prometa
+   columnas que no existen. Lo cubre el `grep` de PA.4.
+2. **Que `10-solo-adicion` falle por tabla vacía**, ahora en dos tablas en lugar de tres (A.4.1). La
+   fila difícil es la de la versión, porque necesita un sobre válido.
+3. **La vista definer `bonos_consumo`** es la única puerta lateral que queda (A.4.2, ahora con una sola
+   vista).
+4. **Que `borradores_factura_estado` nazca con una forma que T-026 no pueda ampliar con
+   `create or replace view`**: `estado` como enum, o columnas en otro orden.
+
+**Qué revisar.** Lo de A.5, quitando las líneas del espejo, de `registrar_factura_espejo` y de las
+vistas `facturas_espejo_cabecera` y `pendiente_paciente`. Y además:
+- En la migración no aparece, fuera de comentarios, nada del espejo ni del proveedor (`grep` de PA.4).
+- `\dp` sobre las **cinco** tablas: ni `TRUNCATE`, ni `TRIGGER`, ni `REFERENCES` para `authenticated`.
+- `has_column_privilege('authenticated','public.bonos','caducidad','UPDATE')` es verdadero, y ninguna
+  otra columna de `bonos` tiene `UPDATE`.
+- Las puertas laterales del técnico son dos vistas, no cuatro. El único `execute` que se le deniega es
+  el de `verificar_cadena_borrador`.
+- `tablas_solo_adicion` tiene exactamente dos filas nuevas, y `TABLAS_SOLO_ADICION` dos entradas nuevas.
+- `26-economico.sql` no tiene ninguna aserción que dependa de que el espejo **no** exista (PA.3).
+
+### PA.6 · Territorio
+
+No cambia. Es el de A.6, que ya está en el frontmatter del contrato. Ningún fichero entra ni sale: quitar
+el espejo solo quita contenido de los mismos ficheros.
+
+### PA.7 · Delegable
+
+Nada, como en A.7.
+
+### PA.8 · Hallazgos para `docs/state.md` (los anota el orquestador)
+
+- `tickets/T-025-expediente-no-sif.md:58` («`facturas_espejo` no tiene columna de PDF, de QR…») sigue
+  valiendo, pero el espejo ahora nace en T-026. Además, la consulta al asesor, que es la pieza central
+  de T-025, tiene que llevar la lista del ADR-077, punto 7. El contrato de T-025 no se ha tocado.
+- `docs/architecture.md` §Dominios, fila Económico: además de las tablas retiradas por el ADR-053,
+  `facturas_espejo` es ahora de T-026 y no guarda estado. Lo corrige el documentalista.
+- T-027 no usa `factura_espejo_id`. Su nota dice que la vista de saldo es «la que T-021 deje escrita»:
+  es `bonos_consumo`, y no cambia.
+- Quedan resueltos por los contratos de esta fecha:
+  - el choque de T-026 con el espejo inmutable;
+  - las dos fuentes de «cobrado» del ADR-053;
+  - el vínculo borrador → documento, que solo vivía en el outbox;
+  - el saldo por factura de T-023;
+  - la nota `kimi/hallazgos/` de T-021 y T-026.
+
+### Lo que no entra, y por qué
+
+- **El espejo, los envíos y las anotaciones**: nacen en T-026 (ADR-077, punto 5).
+- **`pendiente_paciente`**: qué cuenta se decide en T-023 (P3.d).
+- **Comprobar dentro del banco que el espejo no existe**: rompería al integrarse T-026.

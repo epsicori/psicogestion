@@ -14,7 +14,7 @@
 
 - **T-040 A**: R3-H1 abierto (opacidad/color sin prueba). Corte B: migración, banco 24, interfaz.
 - **T-039** (cola `supabase/`): en implementación (worktree propio, migración 20261007120000, banco 23).
-- **T-021**: P1–P4 y P3.a–f decididas (36663f9). Arquitecto escribiendo ADR nuevo y ajustando contratos T-021/T-023/T-026.
+- **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). Turno en `supabase/` tras T-028 B. T-023 sube a riesgo alto (vista definer del pendiente).
 - **T-038, T-041**: diseños cerrados; esperan turno en `supabase/`.
 - **T-028 B/C**: desbloqueados. E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod.
 
@@ -50,6 +50,7 @@
 - **T-015 retardo R2.3**: acciones agenda revalidan solo `/agenda`; cabecera vieja hasta navegar.
 - **16-series**: `test:rls` falla en `16-series.sql` también en main.
 - **T-021 A.9/P3.8**: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
+- **T-025**: su consulta al asesor debe llevar la lista del ADR-077 punto 7 (contrato sin tocar).
 - **Armazón**: <44px; login→/pacientes. T-031/T-032.
 - **H25**: técnico lee tipos ajenos.
 - **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`.
