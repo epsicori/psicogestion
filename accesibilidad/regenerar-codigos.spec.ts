@@ -251,8 +251,6 @@ test('regenerar los códigos desde Mi cuenta (T-038, CA8 y CA13)', async ({ brow
     expect(codigos).toHaveLength(10);
     for (const codigo of codigos) expect(codigo).toMatch(/^[0-9A-F]{10}$/);
     expect(new Set(codigos).size).toBe(10);
-    // La contraseña no se queda en la página.
-    expect(await pagina.content()).not.toContain(CONTRASENA);
   });
 
   await test.step('S5 · La base: lote nuevo y aviso', async () => {
@@ -267,6 +265,9 @@ test('regenerar los códigos desde Mi cuenta (T-038, CA8 y CA13)', async ({ brow
     await pagina.getByRole('button', { name: 'Ya los he guardado' }).click();
     const titulo = pagina.getByRole('heading', { name: 'Avisos de seguridad' });
     await expect(titulo).toBeFocused();
+    // B-H6: la contraseña no se queda en el campo (se mira el valor, no el HTML: `content()` no ve el valor de un input).
+    await expect(pagina.getByLabel('Contraseña')).toHaveValue('');
+    await expect(pagina.getByLabel('Código de la aplicación')).toHaveValue('');
     await expect(pagina.getByRole('listitem').filter({ hasText: 'Códigos de recuperación nuevos' })).toHaveCount(avisosAntes + 1);
   });
 

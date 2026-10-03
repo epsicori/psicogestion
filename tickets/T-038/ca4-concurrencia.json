@@ -1,5 +1,6 @@
 {
   "ticket": "T-038",
+  "ronda": 2,
   "criterio": "CA4",
   "contenedor": "supabase_db_Psicogestion",
   "pasadas": {
@@ -19,13 +20,14 @@
           "error": ""
         }
       ],
+      "autorizadas_previas": "2",
       "cuenta": {
         "vigentes": 10,
         "avisos": 2,
         "total": 30
       }
     },
-    "sin_candado": {
+    "sin_candado_consejo": {
       "espero": true,
       "conexiones": [
         {
@@ -41,10 +43,34 @@
           "error": ""
         }
       ],
+      "autorizadas_previas": "2",
+      "cuenta": {
+        "vigentes": 10,
+        "avisos": 2,
+        "total": 30
+      },
+      "medicion": "sin candado de consejo, el candado de fila del consumo de la autorización serializa la regeneración"
+    },
+    "activacion_sin_candado": {
+      "espero": false,
+      "conexiones": [
+        {
+          "app": "t038-d-1",
+          "estado": 0,
+          "salida": "RESULTADO|10\n\n",
+          "error": ""
+        },
+        {
+          "app": "t038-d-2",
+          "estado": 0,
+          "salida": "RESULTADO|10\n\n",
+          "error": ""
+        }
+      ],
       "cuenta": {
         "vigentes": 20,
         "avisos": 2,
-        "total": 30
+        "total": 20
       }
     },
     "activacion": {
