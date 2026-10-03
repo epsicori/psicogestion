@@ -211,6 +211,42 @@ describe('SegundoFactor (T-037)', () => {
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeEnabled();
     });
 
+    it('B-H4 · en la vista de fallo, antes y después de un reintento fallido, no hay temporizadores (CA11)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        await hastaElFallo();
+        expect(vi.getTimerCount()).toBe(0);
+
+        generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'OTRO-FALLO' });
+        await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(
+          screen.getByRole('button', { name: 'Reintentar' }),
+        );
+        await screen.findByText('OTRO-FALLO');
+
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('B-H10 · un reintento que falla con el MISMO texto se vuelve a anunciar: el aviso se vacía mientras trabaja', async () => {
+      await hastaElFallo();
+      let fallar!: (valor: { ok: false; mensaje: string }) => void;
+      generarCodigos.mockReturnValueOnce(new Promise((resolver) => (fallar = resolver)));
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      // Mientras está pendiente, la región de estado sigue montada y vacía: hay cambio que anunciar.
+      const estado = screen.getByRole('status');
+      expect(estado).toBeEmptyDOMElement();
+
+      await act(async () => {
+        fallar({ ok: false, mensaje: 'FALLO-CODIGOS' });
+      });
+
+      expect(screen.getByRole('status')).toHaveTextContent('FALLO-CODIGOS');
+    });
+
     it('ni el fallo ni el reintento dejan temporizadores (CA11)', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       try {

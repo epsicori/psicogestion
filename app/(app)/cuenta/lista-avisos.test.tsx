@@ -5,7 +5,11 @@ import { ListaAvisos } from './lista-avisos';
 
 type Fila = { id: string; tipo: string; detalle: string; creado_en: string; leida_en: string | null };
 
-function sesionFingida(filas: Fila[], zona: string | null = 'Europe/Madrid') {
+function sesionFingida(
+  filas: Fila[],
+  zona: string | null = 'Europe/Madrid',
+  errorLectura: { code: string } | null = null,
+) {
   const consultas: { tabla: string; columnas?: string; en?: [string, string[]]; orden?: unknown; limite?: number }[] = [];
   const from = vi.fn((tabla: string) => {
     const consulta: (typeof consultas)[number] = { tabla };
@@ -30,7 +34,7 @@ function sesionFingida(filas: Fila[], zona: string | null = 'Europe/Madrid') {
       },
       async limit(n: number) {
         consulta.limite = n;
-        return { data: filas, error: null };
+        return errorLectura ? { data: null, error: errorLectura } : { data: filas, error: null };
       },
     };
     return cadena;
@@ -110,6 +114,41 @@ describe('ListaAvisos (T-038)', () => {
 
     expect(screen.getByText('No hay avisos de seguridad.')).toBeInTheDocument();
     expect(screen.queryByRole('list')).toBeNull();
+  });
+
+  it('B-H3 · un fallo de lectura se dice como fallo, nunca como lista vacía', async () => {
+    const { sesion } = sesionFingida([], 'Europe/Madrid', { code: 'XX000' });
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(await ListaAvisos({ sesion }));
+
+    expect(
+      screen.getByText('No se han podido cargar los avisos. Recarga la página para intentarlo de nuevo.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No hay avisos de seguridad.')).toBeNull();
+    expect(screen.queryByRole('list')).toBeNull();
+    consola.mockRestore();
+  });
+
+  it('B-H11 · el no leído lleva una marca visible «Sin leer», el leído no', async () => {
+    const { sesion } = sesionFingida([LEIDA, SIN_LEER]);
+
+    render(await ListaAvisos({ sesion }));
+
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(screen.getAllByText('Sin leer')).toHaveLength(1);
+    expect(within(items[1]).getByText('Sin leer')).toBeInTheDocument();
+    expect(within(items[0]).queryByText('Sin leer')).toBeNull();
+  });
+
+  it('B-H5 · la hora sale en la zona de la organización (Canarias, no Madrid)', async () => {
+    const { sesion } = sesionFingida([{ ...LEIDA, creado_en: '2026-10-03T10:00:00+00:00' }], 'Atlantic/Canary');
+
+    render(await ListaAvisos({ sesion }));
+
+    const item = screen.getByRole('listitem');
+    expect(item).toHaveTextContent('11:00');
+    expect(item).not.toHaveTextContent('12:00');
   });
 
   it('no escribe nada: no marca como leído (eso es de la campana)', async () => {

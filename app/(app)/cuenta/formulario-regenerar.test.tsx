@@ -136,20 +136,40 @@ describe('FormularioRegenerar (T-038)', () => {
     const region = await screen.findByRole('region', { name: 'No se han regenerado los códigos' });
     expect(document.activeElement).toBe(region);
     expect(region).toHaveAccessibleDescription(expect.stringContaining(mensaje));
-    // Ni la contraseña ni el código se quedan en ningún sitio de la vista.
-    expect(document.body.innerHTML).not.toContain(CONTRASENA);
+    // La vista de fallo no lleva campos: ni la contraseña ni el código se quedan a la vista.
+    expect(screen.queryByLabelText('Contraseña')).toBeNull();
 
     await usuario.click(screen.getByRole('button', { name: 'Volver' }));
     expect(screen.getByLabelText('Contraseña')).toHaveValue('');
+    expect(screen.getByLabelText('Código de la aplicación')).toHaveValue('');
     expect(screen.queryByRole('region')).toBeNull();
+    // B-H9: el foco vuelve al primer campo, no se pierde en BODY.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Contraseña')));
   });
 
-  it('la contraseña no queda en el DOM tras ningún envío', async () => {
+  it('B-H2 · si la acción se rechaza, la contraseña se borra, se dice como fallo y no queda rechazo sin tratar', async () => {
+    regenerarCodigos.mockRejectedValue(new Error('red caída'));
+    render(<FormularioRegenerar />);
+    const usuario = await rellenarYEnviar();
+
+    const region = await screen.findByRole('region', { name: 'No se han regenerado los códigos' });
+    expect(document.activeElement).toBe(region);
+    expect(region).toHaveAccessibleDescription(expect.stringContaining('No se han podido regenerar los códigos'));
+
+    await usuario.click(screen.getByRole('button', { name: 'Volver' }));
+    expect(screen.getByLabelText('Contraseña')).toHaveValue('');
+    expect(screen.getByLabelText('Código de la aplicación')).toHaveValue('');
+  });
+
+  it('B-H6 · la contraseña no queda en el campo tras el éxito ni al volver al formulario', async () => {
     regenerarCodigos.mockResolvedValue({ codigos: DIEZ });
     render(<FormularioRegenerar />);
-    await rellenarYEnviar();
+    const usuario = await rellenarYEnviar();
     await screen.findByRole('region');
 
-    expect(document.body.innerHTML).not.toContain(CONTRASENA);
+    await usuario.click(screen.getByRole('button', { name: 'Ya los he guardado' }));
+
+    expect(screen.getByLabelText('Contraseña')).toHaveValue('');
+    expect(screen.getByLabelText('Código de la aplicación')).toHaveValue('');
   });
 });

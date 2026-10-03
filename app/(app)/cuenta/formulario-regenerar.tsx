@@ -71,6 +71,10 @@ export function FormularioRegenerar() {
       }
 
       setVista({ tipo: 'fallo', mensaje: estado.mensaje ?? t('cuenta.errores.generico') });
+    } catch {
+      // La acción se rechazó (red, servidor): ni la contraseña se queda ni el fallo se calla (B-H2).
+      reset({ contrasena: '', codigo: '' });
+      setVista({ tipo: 'fallo', mensaje: t('cuenta.errores.generico') });
     } finally {
       // Mismo lote que el error y el foco: el botón vuelve a estar habilitado cuando el foco llega.
       setEnviando(false);
@@ -101,7 +105,15 @@ export function FormularioRegenerar() {
   if (vista.tipo === 'fallo') {
     return (
       <VistaConFoco titulo={t('cuenta.fallo.titulo')} descripcion={vista.mensaje}>
-        <Button onClick={() => setVista({ tipo: 'formulario' })}>{t('cuenta.fallo.volver')}</Button>
+        <Button
+          onClick={() => {
+            setVista({ tipo: 'formulario' });
+            // El efecto de arriba lleva el foco al campo cuando el formulario vuelve (B-H9).
+            setCampoConFoco({ campo: 'contrasena' });
+          }}
+        >
+          {t('cuenta.fallo.volver')}
+        </Button>
       </VistaConFoco>
     );
   }

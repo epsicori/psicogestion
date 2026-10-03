@@ -174,8 +174,10 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
         <p id="fallo-codigos-descripcion" className="text-muted-foreground text-sm">
           {t('primeraVez.codigos.fallo')}
         </p>
+        {/* Se vacía mientras se reintenta: un reintento que falla con el MISMO texto sigue
+            siendo un cambio y el lector de pantalla lo vuelve a anunciar (B-H10). */}
         <p role="status" className="text-destructive text-sm">
-          {falloCodigos}
+          {trabajando ? '' : falloCodigos}
         </p>
         <div className="flex gap-2">
           <Button onClick={reintentar} disabled={trabajando}>

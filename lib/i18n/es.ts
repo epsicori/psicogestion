@@ -295,6 +295,8 @@ export const es = {
     avisos: {
       titulo: 'Avisos de seguridad',
       vacio: 'No hay avisos de seguridad.',
+      errorLectura: 'No se han podido cargar los avisos. Recarga la página para intentarlo de nuevo.',
+      sinLeer: 'Sin leer',
     },
   },
 

@@ -199,7 +199,8 @@ Contenido, en este orden:
   los avisos.
 - **Avisos de seguridad**: historial de los cuatro tipos de aviso de acceso (códigos regenerados,
   regeneración bloqueada, TOTP repuesto, PIN bloqueado), con los leídos incluidos y la hora en la zona de
-  la organización. Solo lectura: marcar como leído es de la campana.
+  la organización. Solo lectura: marcar como leído es de la campana. Los no leídos llevan la marca
+  visible «Sin leer»; un fallo al leerlos se dice como fallo, nunca como lista vacía.
 
 ## De dónde sale cada pieza
 

@@ -48,7 +48,9 @@ export async function ListaAvisos({ sesion }: { sesion: Pick<Sesion, 'supabase'>
       >
         {t('cuenta.avisos.titulo')}
       </h3>
-      {!avisos || avisos.length === 0 ? (
+      {error ? (
+        <p className="text-destructive text-sm">{t('cuenta.avisos.errorLectura')}</p>
+      ) : !avisos || avisos.length === 0 ? (
         <p className="text-muted-foreground text-sm">{t('cuenta.avisos.vacio')}</p>
       ) : (
         <ul className="flex flex-col">
@@ -60,7 +62,12 @@ export async function ListaAvisos({ sesion }: { sesion: Pick<Sesion, 'supabase'>
                 className="border-border flex flex-col gap-1 border-b py-3 first:pt-0 last:border-b-0 last:pb-0"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <p className={aviso.leida_en ? 'font-medium' : 'font-semibold'}>{etiquetaDe(aviso.tipo)}</p>
+                  <p className={aviso.leida_en ? 'font-medium' : 'font-semibold'}>
+                    {etiquetaDe(aviso.tipo)}
+                    {!aviso.leida_en && (
+                      <span className="text-primary ml-2 text-xs font-medium">{t('cuenta.avisos.sinLeer')}</span>
+                    )}
+                  </p>
                   <span className="text-muted-foreground shrink-0 text-xs">
                     {formatearFechaCorta(instante, zona)} · {formatearHora(instante, zona)}
                   </span>
