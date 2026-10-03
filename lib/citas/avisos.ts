@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { RecuentoNotas, SesionPropia } from '../agenda/avisos';
+import { formatearHora } from '../fechas/formato';
 import { leerCitasRango } from './agenda';
 import type { Sesion } from './tipos';
 
@@ -105,6 +106,8 @@ export async function leerSesionesPropias(sesion: Sesion, ahora: Date): Promise<
       nombrePaciente: [fila.pacienteNombre, fila.pacienteApellidos].filter(Boolean).join(' '),
       inicio: fila.inicio.toISOString(),
       fin: fila.fin.toISOString(),
+      desde: formatearHora(fila.inicio, fila.zonaHoraria),
+      hasta: formatearHora(fila.fin, fila.zonaHoraria),
       estado: fila.estado,
     }));
 }

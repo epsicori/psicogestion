@@ -19,6 +19,8 @@ function sesion(parcial: Partial<SesionPropia>): SesionPropia {
     nombrePaciente: 'Ana',
     inicio: '2026-10-01T10:00:00.000Z',
     fin: '2026-10-01T10:50:00.000Z',
+    desde: '12:00',
+    hasta: '12:50',
     estado: 'programada',
     ...parcial,
   };

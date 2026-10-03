@@ -3,13 +3,19 @@
 
 import { estaEnCurso, type EstadoCita } from './estados-cita';
 
-/** Una sesión del propio profesional, serializada: el cliente la recibe en ISO. */
+/**
+ * Una sesión del propio profesional, serializada: el cliente la recibe en ISO. `desde` y
+ * `hasta` son las horas ya formateadas en el servidor, en la zona de la cita (ADR-034): el
+ * cliente no formatea horas.
+ */
 export type SesionPropia = {
   citaId: string;
   pacienteId: string;
   nombrePaciente: string;
   inicio: string;
   fin: string;
+  desde: string;
+  hasta: string;
   estado: EstadoCita;
 };
 
