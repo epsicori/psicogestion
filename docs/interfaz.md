@@ -51,8 +51,21 @@ producción, y define el marco de todas las pantallas con sesión (grupo `app/(a
 - **Saludo y fecha**: se calculan en servidor (`components/armazon/armazon.tsx`) y bajan
   como texto ya hecho. Nunca `new Date()` en cliente: hidratación.
 
-**Todavía no está**: el selector de centro (ver choque 1), la búsqueda global, la campana
-de notificaciones, el menú de «más opciones» y la banda de aviso superior.
+- **Avisos (T-015)**, a la derecha de la cabecera: un ancla de la sesión en curso, un aviso
+  de las notas **propias** con más de un día sin firmar (niveles 2 y 3; con cero no se pinta)
+  y la campana de notificaciones. La campana es un `Emergente` no modal: solo se puede
+  **marcar como leída**, nunca borrar (ADR-038). Encima del contenido, **en el flujo** (ni
+  `fixed` ni `sticky`), la franja de sesión en curso: `role="status"` siempre montado, sin
+  `alert`, sin foco robado y sin diálogo (ADR-047); al descartarla el foco va al ancla. La
+  hora de cada aviso baja formateada desde el servidor.
+  Los avisos se refrescan al navegar (cambio de ruta o solo de query, p. ej. otro día de la agenda) y al volver a la pestaña (`GET /api/avisos`, mínimo 30 s entre
+  peticiones, sin temporizador de red); lo que falla conserva lo que había. La campana tiene su propio
+  `role="status"` fuera del panel: «marcada como leída» o el error se anuncian, un fallo revierte y el
+  foco va a la siguiente sin leer (o al panel). A 360 px la cabecera cede ancho al saludo y la franja
+  baja «Notas» y «Descartar» a una segunda línea.
+
+**Todavía no está**: el selector de centro (ver choque 1), la búsqueda global, el menú de
+«más opciones» y la banda de aviso superior.
 
 ## Los cuatro módulos
 

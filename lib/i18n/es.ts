@@ -855,8 +855,13 @@ export const es = {
         sinFecha: 'pendiente',
       },
       fila: '{tipo} · {desde}',
-      mas24: 'Más de 24 h',
-      mas72: 'Más de 72 h',
+      nivel2: 'Atrasada',
+      nivel3: 'Muy atrasada',
+      resolver: 'Marcar como resuelta',
+      resolverEtiqueta: 'Marcar como resuelta: {tipo}',
+      resolviendo: 'Guardando…',
+      errorResolver: 'No se ha podido marcar como resuelta.',
+      resuelta: 'Marcada como resuelta.',
       vacio: 'No hay documentación pendiente',
       vacioExplicacion: 'Cuando falte una nota por firmar, aparecerá aquí.',
     },
@@ -934,6 +939,48 @@ export const es = {
       marcaLinea: 'Copia {codigo} · exportada por {quien} ({rol}) el {fecha} · {motivo}',
       avisoImpresion:
         'Lo que se imprima o se guarde desde esta pantalla queda sin cifrar, y es responsabilidad de quien lo haga.',
+    },
+  },
+
+  // Avisos del armazón (T-015). Los plurales, con la convención del catálogo: `una` / `varias`.
+  avisos: {
+    sesion: {
+      franja: 'Sesión en curso · {paciente} · {desde}–{hasta}',
+      notas: 'Notas',
+      descartar: 'Descartar aviso',
+      ancla: 'En sesión',
+    },
+    notas: {
+      etiqueta: {
+        una: '{n} nota sin firmar desde hace más de un día',
+        varias: '{n} notas sin firmar desde hace más de un día',
+      },
+    },
+  },
+
+  // Notificaciones (T-015). `tipos` es EL sitio de las etiquetas por tipo: T-038 las reutiliza.
+  notificaciones: {
+    boton: {
+      sinLeer: 'Notificaciones, {n} sin leer',
+      todas: 'Notificaciones',
+    },
+    titulo: 'Notificaciones',
+    vacio: 'No tienes notificaciones.',
+    marcarLeida: 'Marcar como leída',
+    marcarTodas: 'Marcar todas como leídas',
+    marcadaLeida: 'Marcada como leída.',
+    todasMarcadas: 'Todas las notificaciones están marcadas como leídas.',
+    errorMarcar: 'No se ha podido marcar como leída.',
+    errorMarcarTodas: 'No se han podido marcar como leídas.',
+    tipos: {
+      nota_pendiente: 'Falta firmar una nota',
+      nota_pendiente_escalada: 'Nota sin firmar',
+      acceso_emergencia: 'Acceso de emergencia a una historia',
+      pin_bloqueado: 'PIN bloqueado',
+      totp_repuesto: 'Segundo factor repuesto',
+      codigos_regenerados: 'Códigos de recuperación nuevos',
+      regeneracion_codigos_bloqueada: 'Regeneración de códigos bloqueada',
+      otro: 'Aviso',
     },
   },
 } as const;

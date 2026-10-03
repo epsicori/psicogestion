@@ -122,6 +122,7 @@ export type Database = {
       }
       alertas_documentacion: {
         Row: {
+          anulada_en: string | null
           centro_id: string | null
           creada_en: string
           estado: string
@@ -131,10 +132,12 @@ export type Database = {
           origen_tabla: string
           paciente_id: string
           profesional_id: string | null
+          referencia_en: string
           resuelta_en: string | null
           tipo: Database["public"]["Enums"]["tipo_alerta_documentacion"]
         }
         Insert: {
+          anulada_en?: string | null
           centro_id?: string | null
           creada_en?: string
           estado?: string
@@ -144,10 +147,12 @@ export type Database = {
           origen_tabla: string
           paciente_id: string
           profesional_id?: string | null
+          referencia_en?: string
           resuelta_en?: string | null
           tipo: Database["public"]["Enums"]["tipo_alerta_documentacion"]
         }
         Update: {
+          anulada_en?: string | null
           centro_id?: string | null
           creada_en?: string
           estado?: string
@@ -157,6 +162,7 @@ export type Database = {
           origen_tabla?: string
           paciente_id?: string
           profesional_id?: string | null
+          referencia_en?: string
           resuelta_en?: string | null
           tipo?: Database["public"]["Enums"]["tipo_alerta_documentacion"]
         }
@@ -230,6 +236,8 @@ export type Database = {
           codigo_postal: string | null
           creado_en: string
           direccion: string | null
+          escalado_nivel2_horas: number | null
+          escalado_nivel3_horas: number | null
           id: string
           localidad: string | null
           margen_sesion_minutos: number | null
@@ -243,6 +251,8 @@ export type Database = {
           codigo_postal?: string | null
           creado_en?: string
           direccion?: string | null
+          escalado_nivel2_horas?: number | null
+          escalado_nivel3_horas?: number | null
           id?: string
           localidad?: string | null
           margen_sesion_minutos?: number | null
@@ -256,6 +266,8 @@ export type Database = {
           codigo_postal?: string | null
           creado_en?: string
           direccion?: string | null
+          escalado_nivel2_horas?: number | null
+          escalado_nivel3_horas?: number | null
           id?: string
           localidad?: string | null
           margen_sesion_minutos?: number | null
@@ -1339,24 +1351,33 @@ export type Database = {
           detalle: string
           id: string
           leida_en: string | null
+          origen_id: string | null
+          origen_tabla: string | null
           perfil_id: string
           tipo: string
+          titulo: string | null
         }
         Insert: {
           creado_en?: string
           detalle: string
           id?: string
           leida_en?: string | null
+          origen_id?: string | null
+          origen_tabla?: string | null
           perfil_id: string
           tipo: string
+          titulo?: string | null
         }
         Update: {
           creado_en?: string
           detalle?: string
           id?: string
           leida_en?: string | null
+          origen_id?: string | null
+          origen_tabla?: string | null
           perfil_id?: string
           tipo?: string
+          titulo?: string | null
         }
         Relationships: [
           {
@@ -1378,9 +1399,12 @@ export type Database = {
       organizacion: {
         Row: {
           actualizado_en: string
+          administrador_avisos_id: string | null
           correo: string | null
           creado_en: string
           direccion: string | null
+          escalado_nivel2_horas: number
+          escalado_nivel3_horas: number
           fila_unica: boolean
           id: string
           margen_sesion_minutos: number
@@ -1392,9 +1416,12 @@ export type Database = {
         }
         Insert: {
           actualizado_en?: string
+          administrador_avisos_id?: string | null
           correo?: string | null
           creado_en?: string
           direccion?: string | null
+          escalado_nivel2_horas?: number
+          escalado_nivel3_horas?: number
           fila_unica?: boolean
           id?: string
           margen_sesion_minutos?: number
@@ -1406,9 +1433,12 @@ export type Database = {
         }
         Update: {
           actualizado_en?: string
+          administrador_avisos_id?: string | null
           correo?: string | null
           creado_en?: string
           direccion?: string | null
+          escalado_nivel2_horas?: number
+          escalado_nivel3_horas?: number
           fila_unica?: boolean
           id?: string
           margen_sesion_minutos?: number
@@ -1418,7 +1448,22 @@ export type Database = {
           telefono?: string | null
           zona_horaria?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizacion_administrador_avisos_id_fkey"
+            columns: ["administrador_avisos_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organizacion_administrador_avisos_id_fkey"
+            columns: ["administrador_avisos_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pacientes: {
         Row: {
@@ -2410,6 +2455,80 @@ export type Database = {
           },
         ]
       }
+      alertas_documentacion_nivel: {
+        Row: {
+          centro_id: string | null
+          creada_en: string | null
+          estado: string | null
+          fecha_referencia: string | null
+          id: string | null
+          nivel: number | null
+          origen_id: string | null
+          origen_tabla: string | null
+          paciente_id: string | null
+          profesional_id: string | null
+          referencia_en: string | null
+          tipo: Database["public"]["Enums"]["tipo_alerta_documentacion"] | null
+        }
+        Insert: {
+          centro_id?: string | null
+          creada_en?: string | null
+          estado?: string | null
+          fecha_referencia?: string | null
+          id?: string | null
+          nivel?: never
+          origen_id?: string | null
+          origen_tabla?: string | null
+          paciente_id?: string | null
+          profesional_id?: string | null
+          referencia_en?: string | null
+          tipo?: Database["public"]["Enums"]["tipo_alerta_documentacion"] | null
+        }
+        Update: {
+          centro_id?: string | null
+          creada_en?: string | null
+          estado?: string | null
+          fecha_referencia?: string | null
+          id?: string | null
+          nivel?: never
+          origen_id?: string | null
+          origen_tabla?: string | null
+          paciente_id?: string | null
+          profesional_id?: string | null
+          referencia_en?: string | null
+          tipo?: Database["public"]["Enums"]["tipo_alerta_documentacion"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alertas_documentacion_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_documentacion_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_documentacion_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_documentacion_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       citas_agenda: {
         Row: {
           centro_id: string | null
@@ -2843,6 +2962,7 @@ export type Database = {
         Returns: boolean
       }
       es_zona_iana: { Args: { p_zona: string }; Returns: boolean }
+      escalar_notas_pendientes: { Args: never; Returns: number }
       esta_en_curso: { Args: { p_cita_id: string }; Returns: boolean }
       estado_de_cuenta: {
         Args: never
@@ -2881,6 +3001,10 @@ export type Database = {
           domicilio_nonce: string
           tipo_documento: string
         }[]
+      }
+      nivel_nota_pendiente: {
+        Args: { p_centro: string; p_referencia: string }
+        Returns: number
       }
       nota_tiene_version_conjunta: {
         Args: { p_nota_id: string }
@@ -2927,6 +3051,14 @@ export type Database = {
         Returns: undefined
       }
       prolongar_desbloqueo: { Args: never; Returns: string }
+      recuento_notas_pendientes: {
+        Args: never
+        Returns: {
+          nivel1: number
+          nivel2: number
+          nivel3: number
+        }[]
+      }
       registrar_acceso_historia: {
         Args: {
           p_agente?: string
@@ -2979,6 +3111,13 @@ export type Database = {
       segundo_factor_verificado_recientemente: {
         Args: { p_minutos?: number }
         Returns: boolean
+      }
+      umbrales_escalado: {
+        Args: { p_centro: string }
+        Returns: {
+          nivel2_horas: number
+          nivel3_horas: number
+        }[]
       }
       verificar_cadena_huellas: {
         Args: { p_paciente_id?: string }

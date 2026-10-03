@@ -127,10 +127,10 @@ describe('zonaDeCentro', () => {
 describe('leerAlertasNotaPendiente', () => {
   it('pone el nombre del paciente y deja nulo el que la RLS no deja ver', async () => {
     const { sesion } = sesionFalsa({
-      alertas_documentacion: {
+      alertas_documentacion_nivel: {
         data: [
-          { id: 'a1', paciente_id: 'p1', tipo: 'nota_sin_firmar', fecha_referencia: '2026-09-20', creada_en: 'x' },
-          { id: 'a2', paciente_id: 'p2', tipo: 'nota_sin_firmar', fecha_referencia: '2026-09-24', creada_en: 'y' },
+          { id: 'a1', paciente_id: 'p1', tipo: 'nota_sin_firmar', fecha_referencia: '2026-09-20', creada_en: 'x', nivel: 1 },
+          { id: 'a2', paciente_id: 'p2', tipo: 'nota_sin_firmar', fecha_referencia: '2026-09-24', creada_en: 'y', nivel: 1 },
         ],
         error: null,
       },
@@ -147,7 +147,7 @@ describe('leerAlertasNotaPendiente', () => {
   // Revisión SQL H2 (choque 2 de interfaz.md): el secreto profesional es del profesional, no del
   // cargo. La RLS deja al administrador ver todas las alertas; la bandeja no las enseña.
   it('con soloPropias filtra por el profesional de la sesión; sin él, no filtra', async () => {
-    const { sesion, from } = sesionFalsa({ alertas_documentacion: { data: [], error: null } });
+    const { sesion, from } = sesionFalsa({ alertas_documentacion_nivel: { data: [], error: null } });
 
     await leerAlertasNotaPendiente(sesion, { soloPropias: true });
     const conFiltro = from.mock.results[0].value.eq as ReturnType<typeof vi.fn>;
@@ -160,7 +160,7 @@ describe('leerAlertasNotaPendiente', () => {
   });
 
   it('con tipos, la consulta se limita a ellos; sin ellos, no', async () => {
-    const { sesion, from } = sesionFalsa({ alertas_documentacion: { data: [], error: null } });
+    const { sesion, from } = sesionFalsa({ alertas_documentacion_nivel: { data: [], error: null } });
 
     await leerAlertasNotaPendiente(sesion, { tipos: ['consentimiento_pendiente', 'informe_pendiente'] });
     const con = from.mock.results[0].value.in as ReturnType<typeof vi.fn>;
@@ -174,7 +174,7 @@ describe('leerAlertasNotaPendiente', () => {
 
   it('un fallo de lectura es un fallo, no una bandeja vacía', async () => {
     const { sesion } = sesionFalsa({
-      alertas_documentacion: { data: null, error: { code: '42501', message: 'permission denied' } },
+      alertas_documentacion_nivel: { data: null, error: { code: '42501', message: 'permission denied' } },
     });
     expect(await leerAlertasNotaPendiente(sesion)).toMatchObject({ ok: false, motivo: 'no_autorizado' });
   });
