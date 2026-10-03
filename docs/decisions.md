@@ -57,3 +57,4 @@ Las 22 decisiones fundacionales (tabla) están en `docs/decisions/fundacionales.
 | [ADR-073](decisions/ADR-073.md) | El centro de un episodio con notas no cambia; el director sanitario puede ser coprofesional | aceptada | 01-10-2026 |
 | [ADR-074](decisions/ADR-074.md) | El técnico administrativo elige el tipo de terapia al dar la cita, y sigue sin verlo en la agenda | aceptada | 02-10-2026 |
 | [ADR-075](decisions/ADR-075.md) | La cita apunta a su episodio, y lleva si es presencial u online | aceptada | 02-10-2026 |
+| [ADR-076](decisions/ADR-076.md) | La copia clínica descargable es un HTML que se descifra solo (Argon2id + AES-256-GCM), con marca de agua que disuade y rastrea, no impide copiar | aceptada | 02-10-2026 |
