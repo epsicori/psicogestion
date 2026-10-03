@@ -31,6 +31,7 @@
 
 - **PIN y canje (ALTA, T-038 R1 revisor A, fuera del diff)**: `desbloquear_historia` y `canjear_codigo_recuperacion` devuelven el fallo sin lanzar; con PostgREST, objeto singular + filtro sobre la salida da 406 y deshace el intento fallido. El límite de cinco no existe. Arreglo: dos pasos de T-038 (DR1). **Ticket propio de riesgo alto, justo tras T-038** (P3, 03-10-2026); nota completa en `tickets/T-038/diseno.md` §R2.9.
 - **T-038 nota de despliegue (Q1)**: los ajustes de registro de Postgres que exige `registro_postgres_seguro()` viven solo en `docs/bitacora/T-038.md`; no hay manual de despliegue.
+- **`app/page.tsx` en `next dev`**: el `redirect('/agenda')` hace saltar «Route "/": Could not validate `instant`» (Cache Components) en cada visita a `/`; sale en el indicador de errores de desarrollo. Funciona, pero ensucia el registro.
 - **`test:a11y`**: sin `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` cinco specs ajenas caen en `/primera-vez` y fallan sin decir por qué. El script debería fijarla.
 - **R2-H4 (T-037)**: `scripts/seed.mjs:29` y `scripts/test-huellas.mjs:19` toman el primer `supabase_db_*`.
 - **Base compartida**: el verificador hace `db reset` mientras los revisores miden; los revisores trabajan en `begin … rollback` y esperan a `max(version)`.
