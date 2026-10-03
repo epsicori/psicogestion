@@ -96,8 +96,8 @@ export function ArmazonCliente({
       </aside>
 
       <section className="min-w-0 flex-1">
-        <header className="border-border bg-card/90 flex h-20 items-center justify-between border-b px-5 backdrop-blur md:px-8">
-          <div className="flex items-center gap-3">
+        <header className="border-border bg-card/90 flex h-20 items-center justify-between border-b gap-2 px-3 backdrop-blur sm:px-5 md:px-8">
+          <div className="flex min-w-0 items-center gap-1 sm:gap-3">
             <button
               type="button"
               onClick={() => setMenuAbierto(true)}

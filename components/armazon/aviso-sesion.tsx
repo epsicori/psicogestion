@@ -142,7 +142,7 @@ export function FranjaSesion({ ahoraServidor, sesiones, descartadas }: PropsFran
           key={sesion.citaId}
           className="border-border bg-secondary text-secondary-foreground mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border px-4 py-3 text-sm motion-safe:transition-opacity motion-safe:duration-300 motion-safe:starting:opacity-0"
         >
-          <p className="min-w-0 flex-1 font-medium">
+          <p className="min-w-0 basis-48 flex-1 font-medium break-words">
             {tCon('avisos.sesion.franja', {
               paciente: sesion.nombrePaciente,
               desde: sesion.desde,
