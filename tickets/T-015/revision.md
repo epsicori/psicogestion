@@ -1,3 +1,4 @@
+**Sin ningún hallazgo ALTA en la ronda 3** (revisor único: 0 ALTA, 0 MEDIA, 2 BAJA; los 9 de la ronda 2, cerrados).
 **Sin ningún hallazgo ALTA en la ronda 2** (combinado A+B: 0 ALTA, 0 MEDIA, 9 BAJA).
 
 # Revisión T-015 · ronda 1
@@ -275,3 +276,62 @@ Hay además otro desajuste: `scripts/rls/README.md:48` sigue describiendo el 22 
 **Escenario**: el banco sí tiene un deadlock intermitente (contra autovacuum, véase arriba). Quien vuelva a medir este mutante con la nota en la mano y vea «deadlock detected» lo dará por muerto, aunque el banco haya caído antes de llegar al 22. Me pasó en esta ronda: un mutante equivalente salió «muerto» por deadlock en la primera pasada y vivo en la segunda.
 
 La nota debe decir quién lo mata de verdad (el check, en E12:727). Y una muerte por deadlock no cuenta como muerte de mutante.
+
+## Ronda 3 · revisor único (HEAD 987408b; diff de la ronda 16466e3..987408b)
+
+**Sin ALTA ni MEDIA en la ronda 3**: 0 ALTA, 0 MEDIA, 2 BAJA. Los nueve de la ronda 2 quedan cerrados. B2-H3 se cierra en lo que pedía, pero su arreglo abre R3-H1.
+
+### Cómo se midió
+
+- Copia de 987408b por `git archive` en el scratchpad de la sesión, nunca en el worktree. `node_modules` va por junction de PowerShell, y se deshizo con `Directory.Delete(…, false)` (el de main sigue con 384 entradas).
+- Mutantes TS con `mutar-r3.mjs`: normaliza CRLF → LF, sustituye, devuelve CRLF y restaura. Línea base: 7 ficheros, 116/116.
+- Mutantes SQL con `banco-r3.mjs`: banco 00-22 sin `16-series.sql`, en una sola transacción con `rollback` y el mutante inyectado justo antes de `22-avisos.sql`. Corre contra `supabase_db_Psicogestion` nombrado de forma explícita, sin `db reset`. La línea base da estado 0 y «22-avisos: completa.».
+
+### Cierre de los 9 de la ronda 2
+
+| Hallazgo | Mutante | Resultado |
+|---|---|---|
+| A2-H1 | `when` reducido a `new.estado = 'no_asistida'` | MUERE en «22.E13 realizada → cancelada (por el técnico, agenda_actualizar_cita)» |
+| A2-H1 | `when` reducido a `in ('no_asistida','cancelada')` | MUERE en «22.E13 realizada → confirmada» |
+| A2-H1 | `when` reducido a `in ('no_asistida','cancelada','confirmada')` | MUERE en «22.E13 realizada → programada» |
+| A2-H1 | disparador `after update` (sin `of estado`) con `when (old.estado = 'realizada')` | MUERE en «22.E13 GEMELA: una cita que sigue realizada conserva su alerta abierta» |
+| A2-H2 | escalado con el literal `'citas'` en vez de `a.origen_tabla` | MUERE en «22.E14 El aviso lleva el origen de la alerta (notas_clinicas)» |
+| A2-H3 | anular sin `estado = 'abierta'` | MUERE por `alertas_documentacion_check` (23514) en el `update` de la cita de E12, sin deadlock. La nota nueva del banco lo describe bien, y `README.md` describe E9-E14 |
+| B2-H1 | campana sin la guarda «foco ya dentro del panel» | MUERE en «con la acción pendiente, quien mueve el foco a otro botón del panel no lo pierde cuando falla» |
+| B2-H1 | campana sin `if (destino) irA(destino)` tras el fallo | MUERE en «si el foco se había perdido (body) cuando falla, vuelve al destino elegido» |
+| B2-H2 | `RefrescoPorNavegacion` sin la query (`consulta = ''`) | MUERE en «un cambio solo de query (misma ruta) también es navegar» |
+| B2-H3 | `fotoDeLayout` conserva el instante del servidor / conserva las sesiones / `completa` solo mira sesiones / `completa` sin notificaciones / `completa = true` (vuelta a R2) | MUEREN los cinco (6, 2, 4, 2 y 6 pruebas) |
+| B2-H4 | (lectura) | `contenedorDelProyecto()` lee `project_id` y exige ese contenedor exacto |
+| B2-H5 | (sonda en `begin … rollback`, con el `do $$` del spec copiado tal cual) | Ejercité la rama 23P01, que pedía el implementador. (A) Una cita que sobra de una ejecución interrumpida (t−7, t+4) no pasa el `fin > now()+5 min`, el insert da 23P01 y se reutiliza: `DO` sin error ni cita nueva. (B) Una cita de Ana que empieza en 3 min da 23P01 y la excepción clara. (C) Sin choque, inserta |
+| B2-H6 | (lectura) | `state.md:50` lleva el retardo R2.3. Pero la reescritura quita otras notas → R3-H2 |
+
+La pregunta del implementador sobre B2-H3 está respondida en R3-H1. Que la franja desaparezca hasta el refresco cuando la lectura falla y no hay foto fresca es aceptable: en la ronda 2 pasaba lo mismo con `sesiones` null. Ahora también pasa si falla solo el recuento o solo las notificaciones, y es un retroceso menor. Lo que no es aceptable es que la época deje ganar a una foto fresca **vieja**.
+
+### R3-H1 · BAJA · `lib/agenda/avisos.ts:150`
+
+La foto de época le gana a cualquier foto fresca, sea cual sea su edad, también a una anterior a la última buena del layout. Además, `useInstante` (`components/armazon/aviso-sesion.tsx:56`) vuelve a poner el reloj en el `ahoraServidor` de esa foto vieja: el reloj retrocede, y la franja y el ancla dicen «Sesión en curso» de una sesión que ya acabó.
+
+**Escenario** (medido con una sonda de `avisos-vivos.test.tsx` en la copia):
+- 09:55: el layout da L1. A las 10:00 Ana navega y `GET /api/avisos` trae F(10:00) con su sesión de 10:00 a 10:50.
+- 11:30: el layout se repinta bien, L2 sin sesiones, y la franja queda vacía (`""`).
+- 11:31: Ana marca una notificación. `revalidatePath('/', 'layout')` y la lectura del recuento falla, así que `fotoDeLayout` da la época. `combinarAvisos(época, F)` elige F, de las 10:00.
+- La franja pasa a «Sesión en curso · Ana Prueba · 12:00–12:50 · Notas · Descartar» y el ancla, a «En sesión», 41 minutos después del fin. El recuento y la campana vuelven a los de las 10:00, y lo ya leído aparece sin leer.
+- Dura hasta la siguiente navegación. En la ronda 2 la cabecera quedaba vacía; ahora queda falsa.
+
+Un arreglo posible: que el cliente recuerde la última `inicial` buena y no la cambie por la época, de modo que la época compita contra la buena anterior y no contra nada. Debe ir con una prueba de `useDatos` de esta secuencia (L1, F, L2, época).
+
+### R3-H2 · BAJA · `docs/state.md:50`
+
+La reescritura de `state.md` sustituye la entrada «T-015 (anotados)» por el retardo R2.3 y la nota de 16-series. Con ello desaparecen dos pendientes que el diseño manda anotar en §Hallazgos:
+- «una cita marcada `realizada` antes de su `fin` no abre alerta» (`diseno.md:888`: «Se anota en `state.md` §Hallazgos»);
+- «que firmar revalide el layout» (`diseno.md:896`, de T-012).
+
+También desaparece «el escalado del nivel 3 tarda hasta 15 min». Además, `docs/bitacora/T-015.md:41` sigue remitiendo a «`docs/state.md` §Hallazgos («T-015 (anotados)»)», una entrada que ya no existe. Main no tiene ninguna de esas notas, así que al integrar (rama gana) se pierden.
+
+**Escenario**: tras integrar, un profesional marca `realizada` una cita a mitad de sesión. `fn_alertar_nota_sin_firmar` no abre la alerta, y la nota sin firmar no cuenta en la cabecera ni escala nunca al administrador. Quien lea `state.md` para el siguiente ticket de alertas (T-010) o de firma (T-012) no encuentra el agujero. La bitácora de T-015 le manda a una sección vacía, y el hueco del escalado, que existe por diseño, parecerá cubierto por T-015.
+
+### Descartado tras mirarlo
+
+- `useSearchParams` en `RefrescoPorNavegacion` está bajo el `Suspense` de `AvisosDeCabecera`. Un buscador que reescribe la query en cada tecla queda limitado por el mismo mínimo de 30 s: es la decisión del orquestador.
+- E14 añade otro `alter table … disable trigger` al banco. Es el mismo patrón que ya usan otros módulos, y no he visto ningún deadlock en las 8 pasadas.
+- Que `armazon.tsx` llame a `fotoDeLayout` no tiene prueba, pero la llamada es una sola línea, sin rama.

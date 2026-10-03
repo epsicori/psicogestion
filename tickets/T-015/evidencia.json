@@ -1,21 +1,88 @@
 {
   "ticket": "T-015",
-  "resumen": "Ronda 2, HEAD 16466e3. Lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts), lint:migraciones 24 limpias, vitest 133 ficheros / 1745 tests verdes, next build --webpack compila, banco RLS sin 16-series exit 0 (22 modulos, 1057 OK; 22-avisos con 108 OK), Playwright 13/14 a la primera y 14/14 tras repetir el unico fallo (cajon en acceso.spec.ts, intermitente y ajeno al ticket). El fallo de 16-series (citas_sin_solape_profesional, linea 6197) es identico en main (538799f): ajeno a T-015. Los criterios manuales de foco real, descarte entre navegaciones, lector de pantalla y prototipo quedan NO_VERIFICABLE con guion; lo medible en navegador (360 px, sin alert, no fixed/sticky) pasa. BD dejada con reset+seed desde la rama.",
+  "resumen": "Ronda 3, HEAD 987408b. Reset+seed+tipos desde la rama. Lint 0 errores (2 warnings preexistentes), lint:migraciones 24 limpias, vitest 133 ficheros / 1756 tests verdes, next build --webpack compila, banco RLS sin 16-series exit 0 (22 modulos, 22-avisos incl. E13 y E14 OK), Playwright 14/14 a la primera con workers=1 (acceso.spec.ts:101 paso, no hizo falta compararlo con main). Criterios manuales de foco real, descarte entre navegaciones, lector de pantalla y prototipo NO_VERIFICABLE con guion; lo medible en navegador pasa.",
   "criterios": [
-    {"id": 1, "texto": "Manual: franja Sesion en curso sin robar el foco", "veredicto": "NO_VERIFICABLE", "comando": "npx vitest run components/armazon (349 tests verdes) + playwright avisos.spec.ts", "evidencia": "aviso-sesion.test.tsx 'aparece al llegar el inicio sin robar el foco del campo enfocado' y 'vive dentro de role=status y no hay ningun role=alert' pasan en jsdom; avisos.spec.ts 'la region de estado existe, no hay alert...' pasa en Chromium.", "motivo": "No ejerci el escenario real en navegador (escribir en un campo mientras el reloj hace aparecer la franja). Guion: npm run dev, ajustar una cita para que empiece en 1 min, escribir en un campo y comprobar que el cursor no se mueve al aparecer la franja."},
-    {"id": 2, "texto": "Manual: descartar, navegar, el ancla sigue y la franja no vuelve", "veredicto": "NO_VERIFICABLE", "comando": "npx vitest run components/armazon", "evidencia": "aviso-sesion.test.tsx 'tras descartar: no vuelve con el tiempo, el ancla sigue y el foco queda en el ancla' y 'una franja descartada en la cookie no se pinta, pero el ancla si' pasan (jsdom).", "motivo": "Falta el recorrido real entre paginas con cookie de sesion de navegador. Guion: con la franja visible, Descartar, navegar a /pacientes y /agenda; el ancla 'En sesion' sigue en la cabecera y la franja no reaparece."},
-    {"id": 3, "texto": "Manual: lector de pantalla anuncia la franja una vez sin interrumpir", "veredicto": "NO_VERIFICABLE", "comando": "vitest aviso-sesion.test.tsx", "evidencia": "Pruebas confirman live region role=status/aria-live polite presente y vacia antes de la franja, y ningun role=alert.", "motivo": "Requiere lector de pantalla real (NVDA/VoiceOver). Guion: activarlo, dejar que la franja aparezca durante la lectura de otra cosa y comprobar un unico anuncio educado sin cortar la lectura."},
-    {"id": 4, "texto": "Automatico: cita realizada de ayer sin nota firmada genera alerta nivel 2 y sube el recuento de la cabecera", "veredicto": "PASA", "comando": "node scratchpad/rls-sin16/test-rls.mjs (banco completo menos 16-series)", "evidencia": "OK: 22.C4 La cita realizada hace 25 h sin firmar esta en nivel 2 | OK: 22.C4 El recuento de PRO1 suma una en nivel 2 | GEMELA: la de hace 2 h esta en nivel 1 | GEMELA: la de 73 h esta en nivel 3 | umbrales por centro y herencia (nunca nulo) OK. Exit 0."},
-    {"id": 5, "texto": "Automatico: a las 72 h UNA notificacion para el administrador sin nombre de paciente ni dato clinico", "veredicto": "PASA", "comando": "idem banco RLS", "evidencia": "OK: 22.C5 Hay UNA notificacion para ADM por la cita de 73 h | OK: El detalle lleva el profesional y NO el nombre, los apellidos ni el id del paciente | OK: La segunda pasada no crea nada (on conflict) | GEMELA: nivel 2 y alerta resuelta no generan notificacion | destinatarios: designado unico o todos los admin activos."},
-    {"id": 6, "texto": "Automatico: profesional_sanitario ve cero notificaciones ajenas", "veredicto": "PASA", "comando": "idem banco RLS", "evidencia": "OK: 22.C6 PRO1 no ve ninguna notificacion de PRO2 | OK: 22.C6 PRO1 no puede marcar como leida una notificacion de PRO2 (0 filas) | GEMELA: PRO1 ve la suya."},
-    {"id": 7, "texto": "Automatico: update titulo falla; marcar leida_en entra", "veredicto": "PASA", "comando": "idem banco RLS", "evidencia": "OK (42501 'solo se puede actualizar en su columna leida_en'): 22.C7 titulo no se toca (y detalle, tipo, origen, id, creado_en, perfil_id) | OK: 22.C7 GEMELA: marcar como leida entra y la base pone now(), no el 2000-01-01 del cliente | 22.E5 authenticated no inserta, borra ni trunca notificaciones."},
-    {"id": 8, "texto": "Automatico: el recuento de un profesional no incluye alertas de otro", "veredicto": "PASA", "comando": "idem banco RLS", "evidencia": "OK: 22.C8 Pero su recuento NO la cuenta: no es suya | OK: 22.C8 GEMELA: el recuento de PRO1 si la cuenta | OK: 22.C8 PRO2 (asignado del paciente) VE la alerta de nivel 2 de PRO1."},
-    {"id": 9, "texto": "Manual: a 360 px la franja no tapa la accion primaria ni el teclado virtual", "veredicto": "PASA", "comando": "SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo PUERTO=3321 npx playwright test --workers=1", "evidencia": "13 passed en la primera pasada: 'la franja a 360 px se ve entera: texto, Notas y Descartar dentro de la ventana y tocables (>=44 px)', 'la region de estado existe, no hay alert y la franja no es fixed ni sticky', 'la cabecera a 360 px no desborda y la campana tiene nombre accesible', 'campana abierta: el panel cabe y Escape devuelve el foco'. Al no ser fixed/sticky no tapa acciones ni teclado. El teclado virtual real no se probo (dispositivo)."},
-    {"id": 10, "texto": "Manual: /agenda y la cabecera junto a /prototipo, mismo vocabulario, sin adornos", "veredicto": "NO_VERIFICABLE", "motivo": "Comparacion visual humana. Guion: abrir /agenda y /prototipo lado a lado, comparar textos de franja, ancla, campana y recuento, y confirmar que cada control tiene dato o accion real detras."},
-    {"id": 11, "texto": "Automatico: npm run lint && npm run build limpios y verificador a11y de T-009 en verde", "veredicto": "PASA", "comando": "npm run lint; npx next build --webpack; npm test; npm run lint:migraciones; playwright test --workers=1", "evidencia": "lint 0 errors / 2 warnings preexistentes (lib/cuentas/accesos.test.ts); build 'Compiled successfully'; vitest 133 files, 1745 tests passed; lint-migraciones 24 limpias; playwright: 1a pasada 13 passed, 1 failed (acceso.spec.ts:101 cajon a 360 px, x=-266, medido en plena transicion); repetido dos veces el fichero: 7 passed y 7 passed. Intermitente, sin relacion con los ficheros de T-015."}
+    {
+      "id": 1,
+      "texto": "Manual: franja Sesion en curso sin robar el foco",
+      "veredicto": "NO_VERIFICABLE",
+      "comando": "npx vitest run components/armazon (349 tests verdes) + playwright avisos.spec.ts",
+      "evidencia": "aviso-sesion.test.tsx 'aparece al llegar el inicio sin robar el foco del campo enfocado' y 'vive dentro de role=status y no hay ningun role=alert' pasan en jsdom; avisos.spec.ts 'la region de estado existe, no hay alert...' pasa en Chromium.",
+      "motivo": "No ejerci el escenario real en navegador (escribir en un campo mientras el reloj hace aparecer la franja). Guion: npm run dev, ajustar una cita para que empiece en 1 min, escribir en un campo y comprobar que el cursor no se mueve al aparecer la franja."
+    },
+    {
+      "id": 2,
+      "texto": "Manual: descartar, navegar, el ancla sigue y la franja no vuelve",
+      "veredicto": "NO_VERIFICABLE",
+      "comando": "npx vitest run components/armazon",
+      "evidencia": "aviso-sesion.test.tsx 'tras descartar: no vuelve con el tiempo, el ancla sigue y el foco queda en el ancla' y 'una franja descartada en la cookie no se pinta, pero el ancla si' pasan (jsdom).",
+      "motivo": "Falta el recorrido real entre paginas con cookie de sesion de navegador. Guion: con la franja visible, Descartar, navegar a /pacientes y /agenda; el ancla 'En sesion' sigue en la cabecera y la franja no reaparece."
+    },
+    {
+      "id": 3,
+      "texto": "Manual: lector de pantalla anuncia la franja una vez sin interrumpir",
+      "veredicto": "NO_VERIFICABLE",
+      "comando": "vitest aviso-sesion.test.tsx",
+      "evidencia": "Pruebas confirman live region role=status/aria-live polite presente y vacia antes de la franja, y ningun role=alert.",
+      "motivo": "Requiere lector de pantalla real (NVDA/VoiceOver). Guion: activarlo, dejar que la franja aparezca durante la lectura de otra cosa y comprobar un unico anuncio educado sin cortar la lectura."
+    },
+    {
+      "id": 4,
+      "texto": "Automatico: cita realizada de ayer sin nota firmada genera alerta nivel 2 y sube el recuento de la cabecera",
+      "veredicto": "PASA",
+      "comando": "test-rls sin 16-series (copia temporal del runner), exit 0",
+      "evidencia": "OK: 22.C4 La cita realizada hace 25 h sin firmar esta en nivel 2 | OK: 22.C4 El recuento de PRO1 suma una en nivel 2 | GEMELA: la de hace 2 h esta en nivel 1 | GEMELA: la de 73 h esta en nivel 3 | umbrales por centro y herencia (nunca nulo) OK. Exit 0."
+    },
+    {
+      "id": 5,
+      "texto": "Automatico: a las 72 h UNA notificacion para el administrador sin nombre de paciente ni dato clinico",
+      "veredicto": "PASA",
+      "comando": "test-rls sin 16-series (copia temporal del runner), exit 0",
+      "evidencia": "OK: 22.C5 Hay UNA notificacion para ADM por la cita de 73 h | OK: El detalle lleva el profesional y NO el nombre, los apellidos ni el id del paciente | OK: La segunda pasada no crea nada (on conflict) | GEMELA: nivel 2 y alerta resuelta no generan notificacion | destinatarios: designado unico o todos los admin activos. | Ronda 3: 22.E14 el aviso lleva el origen de la alerta (notas_clinicas) y ninguno apunta a una cita con el id de la nota; 22.E13 corregir cita realizada a cancelada/confirmada/programada anula la alerta y no escala."
+    },
+    {
+      "id": 6,
+      "texto": "Automatico: profesional_sanitario ve cero notificaciones ajenas",
+      "veredicto": "PASA",
+      "comando": "test-rls sin 16-series (copia temporal del runner), exit 0",
+      "evidencia": "OK: 22.C6 PRO1 no ve ninguna notificacion de PRO2 | OK: 22.C6 PRO1 no puede marcar como leida una notificacion de PRO2 (0 filas) | GEMELA: PRO1 ve la suya."
+    },
+    {
+      "id": 7,
+      "texto": "Automatico: update titulo falla; marcar leida_en entra",
+      "veredicto": "PASA",
+      "comando": "test-rls sin 16-series (copia temporal del runner), exit 0",
+      "evidencia": "OK (42501 'solo se puede actualizar en su columna leida_en'): 22.C7 titulo no se toca (y detalle, tipo, origen, id, creado_en, perfil_id) | OK: 22.C7 GEMELA: marcar como leida entra y la base pone now(), no el 2000-01-01 del cliente | 22.E5 authenticated no inserta, borra ni trunca notificaciones."
+    },
+    {
+      "id": 8,
+      "texto": "Automatico: el recuento de un profesional no incluye alertas de otro",
+      "veredicto": "PASA",
+      "comando": "test-rls sin 16-series (copia temporal del runner), exit 0",
+      "evidencia": "OK: 22.C8 Pero su recuento NO la cuenta: no es suya | OK: 22.C8 GEMELA: el recuento de PRO1 si la cuenta | OK: 22.C8 PRO2 (asignado del paciente) VE la alerta de nivel 2 de PRO1."
+    },
+    {
+      "id": 9,
+      "texto": "Manual: a 360 px la franja no tapa la accion primaria ni el teclado virtual",
+      "veredicto": "PASA",
+      "comando": "SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo PUERTO=3341 npx playwright test --workers=1",
+      "evidencia": "14 passed (22.1s): avisos.spec.ts 4 tests (franja a 360 px entera y tocable, region de estado sin alert y franja ni fixed ni sticky, cabecera sin desbordar con campana nombrada, panel de campana cabe y Escape devuelve foco). No fixed/sticky, no tapa acciones ni teclado. Teclado virtual real no probado."
+    },
+    {
+      "id": 10,
+      "texto": "Manual: /agenda y la cabecera junto a /prototipo, mismo vocabulario, sin adornos",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Comparacion visual humana. Guion: abrir /agenda y /prototipo lado a lado, comparar textos de franja, ancla, campana y recuento, y confirmar que cada control tiene dato o accion real detras."
+    },
+    {
+      "id": 11,
+      "texto": "Automatico: npm run lint && npm run build limpios y verificador a11y de T-009 en verde",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npx next build --webpack; npm test; npm run lint:migraciones; playwright test --workers=1",
+      "evidencia": "lint 0 errors / 2 warnings preexistentes; build webpack OK; vitest 133 files, 1756 tests passed; lint-migraciones 24 limpias; playwright 14 passed, 0 failed (acceso.spec.ts:101 verde)."
+    }
   ],
   "regresiones": [
-    "scripts/rls/16-series.sql falla en la rama (psql:6197 citas_sin_solape_profesional con la cita sembrada de 2026-10-06 09:10-10:10) y el MISMO error, en la misma linea, sale en main (538799f, worktree temporal, db reset + seed + test:rls completo, exit 3). Ajeno a T-015: choque de fecha del seed con la hora de ejecucion. Sin 16-series el banco pasa con exit 0.",
-    "Playwright acceso.spec.ts:101 (cajon a 360 px) fallo una vez en la pasada completa y paso 2/2 al repetir; probable intermitencia por animacion/compilacion en frio, no atribuida a T-015 pero no verificada contra main."
+    "scripts/rls/16-series.sql falla igual en main (ronda 2, citas_sin_solape_profesional, choque de fecha del seed): ajeno a T-015; excluido por indicacion. Sin el, banco exit 0."
   ]
 }
