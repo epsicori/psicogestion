@@ -271,7 +271,6 @@ export const es = {
       aviso: 'Los códigos que tienes ahora dejarán de valer.',
       contrasena: 'Contraseña',
       codigo: 'Código de la aplicación',
-      ayudaCodigo: 'El número de seis dígitos que te da tu aplicación de autenticación.',
       enviar: 'Regenerar códigos',
     },
     errores: {
