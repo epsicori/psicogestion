@@ -43,7 +43,7 @@ beforeEach(() => {
 
 describe('descartarFranja', () => {
   it('un id que no es UUID no escribe la cookie', async () => {
-    await acciones.descartarFranja('no-es-uuid');
+    expect(await acciones.descartarFranja('no-es-uuid')).toEqual({ ok: false });
     expect(almacen.set).not.toHaveBeenCalled();
   });
 
@@ -55,7 +55,7 @@ describe('descartarFranja', () => {
 
   it('añade la cita a la cookie de sesión del navegador: sin maxAge ni expires', async () => {
     almacen.get.mockReturnValue({ value: C1 });
-    await acciones.descartarFranja(C2);
+    expect(await acciones.descartarFranja(C2)).toEqual({ ok: true });
     expect(almacen.set).toHaveBeenCalledTimes(1);
     const [nombre, valor, opciones] = almacen.set.mock.calls[0];
     expect(nombre).toBe(COOKIE_FRANJAS_DESCARTADAS);

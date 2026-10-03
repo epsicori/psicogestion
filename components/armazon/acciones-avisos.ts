@@ -18,10 +18,10 @@ const esquemaId = z.uuid();
  * oculta, y un id ajeno no da acceso a nada. Cookie de sesión del navegador: sin `maxAge`
  * ni `expires`. Sin `revalidatePath`: el cliente ya ha ocultado la franja.
  */
-export async function descartarFranja(citaId: string): Promise<void> {
+export async function descartarFranja(citaId: string): Promise<{ ok: boolean }> {
   await exigirSesion();
   const validado = esquemaId.safeParse(citaId);
-  if (!validado.success) return;
+  if (!validado.success) return { ok: false };
 
   const almacen = await cookies();
   const lista = anadirDescartada(
@@ -34,6 +34,7 @@ export async function descartarFranja(citaId: string): Promise<void> {
     secure: process.env.NODE_ENV === 'production',
     path: '/',
   });
+  return { ok: true };
 }
 
 /** Marca una notificación como leída. El instante lo pone la base (`now()`), no este valor. */

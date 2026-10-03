@@ -900,6 +900,10 @@ export const es = {
     vacio: 'No tienes notificaciones.',
     marcarLeida: 'Marcar como leída',
     marcarTodas: 'Marcar todas como leídas',
+    marcadaLeida: 'Marcada como leída.',
+    todasMarcadas: 'Todas las notificaciones están marcadas como leídas.',
+    errorMarcar: 'No se ha podido marcar como leída.',
+    errorMarcarTodas: 'No se han podido marcar como leídas.',
     tipos: {
       nota_pendiente: 'Falta firmar una nota',
       nota_pendiente_escalada: 'Nota sin firmar',

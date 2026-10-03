@@ -135,3 +135,122 @@ describe('Campana', () => {
     expect(within(panel).queryByRole('button', { name: /Marcar/ })).toBeNull();
   });
 });
+
+describe('Campana: fallos de las acciones (T-015, R3)', () => {
+  const ERROR_UNA = 'No se ha podido marcar como leída.';
+  const ERROR_TODAS = 'No se han podido marcar como leídas.';
+
+  function estado() {
+    return screen.getByRole('status');
+  }
+
+  it('el status existe vacío antes de actuar, fuera del panel y sin ningún role="alert"', async () => {
+    const { container } = render(<Campana notificaciones={[vista({ id: 'a' })]} />);
+    expect(estado().textContent).toBe('');
+    expect(estado().getAttribute('aria-live')).toBe('polite');
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+
+    const usuario = userEvent.setup();
+    await usuario.click(screen.getByRole('button', { name: /^Notificaciones/ }));
+    expect(within(screen.getByRole('dialog')).queryByRole('status')).toBeNull();
+  });
+
+  it.each([
+    ['rechaza', () => m.marcarNotificacionLeida.mockRejectedValue(new Error('red'))],
+    ['da ok:false', () => m.marcarNotificacionLeida.mockResolvedValue({ ok: false })],
+  ])('una notificación: si la acción %s no se lanza nada, vuelve a no leída y se anuncia', async (_n, preparar) => {
+    preparar();
+    const { usuario, panel } = await abrir([vista({ id: 'a' })]);
+    await usuario.click(within(panel).getByRole('button', { name: 'Marcar como leída' }));
+
+    expect(await screen.findByText(ERROR_UNA)).toBeTruthy();
+    expect(estado().textContent).toBe(ERROR_UNA);
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Marcar como leída' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Notificaciones, 1 sin leer' })).toBeTruthy();
+  });
+
+  it.each([
+    ['rechaza', () => m.marcarTodasLeidas.mockRejectedValue(new Error('red'))],
+    ['da ok:false', () => m.marcarTodasLeidas.mockResolvedValue({ ok: false })],
+  ])('todas: si la acción %s no se lanza nada, vuelven a no leídas y se anuncia', async (_n, preparar) => {
+    preparar();
+    const { usuario, panel } = await abrir([vista({ id: 'a' }), vista({ id: 'b' })]);
+    await usuario.click(within(panel).getByRole('button', { name: 'Marcar todas como leídas' }));
+
+    expect(await screen.findByText(ERROR_TODAS)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Notificaciones, 2 sin leer' })).toBeTruthy();
+    expect(within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Marcar como leída' })).toHaveLength(2);
+  });
+
+  it('un segundo fallo idéntico cambia el nodo del anuncio (se vuelve a leer)', async () => {
+    m.marcarNotificacionLeida.mockResolvedValue({ ok: false });
+    const { usuario, panel } = await abrir([vista({ id: 'a' })]);
+    await usuario.click(within(panel).getByRole('button', { name: 'Marcar como leída' }));
+    const primero = (await screen.findByText(ERROR_UNA)) as HTMLElement;
+
+    await usuario.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Marcar como leída' }));
+    await vi.waitFor(() => expect(m.marcarNotificacionLeida).toHaveBeenCalledTimes(2));
+    const segundo = (await screen.findByText(ERROR_UNA)) as HTMLElement;
+    expect(segundo).not.toBe(primero);
+  });
+
+  it('con éxito se anuncia, también si el panel se cierra', async () => {
+    const { usuario, panel } = await abrir([vista({ id: 'a' })]);
+    await usuario.click(within(panel).getByRole('button', { name: 'Marcar como leída' }));
+    expect(await screen.findByText('Marcada como leída.')).toBeTruthy();
+
+    await usuario.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(estado().textContent).toBe('Marcada como leída.');
+  });
+
+  it('todas con éxito: se anuncia', async () => {
+    const { usuario, panel } = await abrir([vista({ id: 'a' }), vista({ id: 'b' })]);
+    await usuario.click(within(panel).getByRole('button', { name: 'Marcar todas como leídas' }));
+    expect(await screen.findByText('Todas las notificaciones están marcadas como leídas.')).toBeTruthy();
+  });
+});
+
+describe('Campana: adónde va el foco (T-015, R4)', () => {
+  function botonesMarcar() {
+    return within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Marcar como leída' });
+  }
+
+  it('con dos sin leer, marcar la primera deja el foco en el botón de la otra', async () => {
+    const { usuario } = await abrir([vista({ id: 'a', detalle: 'Uno.' }), vista({ id: 'b', detalle: 'Dos.' })]);
+    await usuario.click(botonesMarcar()[0]);
+    const restantes = botonesMarcar();
+    expect(restantes).toHaveLength(1);
+    expect(document.activeElement).toBe(restantes[0]);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('si era la última de la lista, el foco va a la anterior sin leer', async () => {
+    const { usuario } = await abrir([vista({ id: 'a' }), vista({ id: 'b' }), vista({ id: 'c' })]);
+    await usuario.click(botonesMarcar()[2]);
+    const restantes = botonesMarcar();
+    expect(restantes).toHaveLength(2);
+    expect(document.activeElement).toBe(restantes[1]);
+  });
+
+  it('si era la única sin leer, el foco va al panel', async () => {
+    const { usuario } = await abrir([vista({ id: 'a' }), vista({ id: 'l', leida: true })]);
+    await usuario.click(botonesMarcar()[0]);
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
+  });
+
+  it('«Marcar todas» deja el foco en el panel', async () => {
+    const { usuario, panel } = await abrir([vista({ id: 'a' }), vista({ id: 'b' })]);
+    await usuario.click(within(panel).getByRole('button', { name: 'Marcar todas como leídas' }));
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
+  });
+
+  it('si falla y revierte, el foco no se mueve del destino ya elegido', async () => {
+    m.marcarNotificacionLeida.mockResolvedValue({ ok: false });
+    const { usuario } = await abrir([vista({ id: 'a' }), vista({ id: 'b' })]);
+    await usuario.click(botonesMarcar()[0]);
+    await screen.findByText('No se ha podido marcar como leída.');
+    // Se eligió el botón de la segunda; tras revertir, la primera vuelve pero el foco sigue ahí.
+    expect(document.activeElement).toBe(botonesMarcar()[1]);
+  });
+});
