@@ -47,6 +47,14 @@ function useInstante(ahoraServidor: string, sesiones: SesionPropia[]): number {
   const base = Date.parse(ahoraServidor);
   const [instante, setInstante] = useState(base);
 
+  // Llega una foto más reciente (refresco, o el layout repintado): el reloj se resincroniza
+  // con ella en el mismo render, sin esperar al temporizador ni remontar con `key` (T-015, R2.5).
+  const [baseVista, setBaseVista] = useState(base);
+  if (baseVista !== base) {
+    setBaseVista(base);
+    setInstante(base);
+  }
+
   useEffect(() => {
     const t0 = performance.now();
     let temporizador: ReturnType<typeof setTimeout> | undefined;

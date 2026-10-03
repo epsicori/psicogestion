@@ -11,14 +11,20 @@ import { Cargando } from '@/components/ui/piezas';
 import { t } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
-import { parsearDescartadas } from '@/lib/agenda/avisos';
-import { leerNotificaciones, leerRecuentoNotas, leerSesionesPropias } from '@/lib/citas/avisos';
+import { parsearDescartadas, type DatosAvisos } from '@/lib/agenda/avisos';
+import { leerAvisos } from '@/lib/citas/avisos';
 
 import { ArmazonCliente } from './armazon-cliente';
-import { AvisoNotas } from './aviso-notas';
-import { AnclaSesion, FranjaSesion, ProveedorAvisosSesion } from './aviso-sesion';
+import { ProveedorAvisosSesion } from './aviso-sesion';
 import { COOKIE_FRANJAS_DESCARTADAS } from './avisos-constantes';
-import { Campana } from './campana';
+import {
+  AnclaSesionViva,
+  AvisoNotasVivo,
+  CampanaViva,
+  FranjaSesionViva,
+  ProveedorAvisosVivos,
+  RefrescoPorNavegacion,
+} from './avisos-vivos';
 import { iniciales, nombrarRol, type RolUsuario } from './modulos';
 import { Navegacion } from './navegacion';
 import { SelectorDeCentro, type CentroDelUsuario } from './selector-centro';
@@ -204,45 +210,43 @@ async function SaludoYFecha() {
  * El instante baja resuelto desde el servidor, como el saludo: `connection()` y un único
  * `new Date()` aquí. El cliente solo cuenta hacia delante desde lo que recibe.
  */
-const cargarAvisos = cache(async () => {
+const cargarAvisos = cache(async (): Promise<DatosAvisos> => {
   await connection();
   const ahora = new Date();
   const sesion = await exigirSesion();
 
-  const [sesiones, recuento, notificaciones, almacen] = await Promise.all([
-    leerSesionesPropias(sesion, ahora),
-    leerRecuentoNotas(sesion),
-    leerNotificaciones(sesion),
-    cookies(),
-  ]);
+  const [avisos, almacen] = await Promise.all([leerAvisos(sesion, ahora), cookies()]);
 
+  // Una lectura que falla se pinta como siempre «no hay nada»: el armazón no se cae por los
+  // avisos. El refresco (`GET /api/avisos`) sí distingue el fallo y conserva lo que tenía.
   return {
-    ahoraServidor: ahora.toISOString(),
-    sesiones,
-    recuento,
-    notificaciones,
+    ahoraServidor: avisos.ahoraServidor,
+    sesiones: avisos.sesiones ?? [],
+    recuento: avisos.recuento ?? { nivel1: 0, nivel2: 0, nivel3: 0 },
+    notificaciones: avisos.notificaciones ?? [],
     descartadas: parsearDescartadas(almacen.get(COOKIE_FRANJAS_DESCARTADAS)?.value),
   };
 });
 
-/** Cabecera derecha: ancla de sesión, notas sin firmar y campana. */
+/**
+ * Cabecera derecha: ancla de sesión, notas sin firmar y campana. Lleva el refresco por
+ * navegación: `usePathname` exige estar bajo este `<Suspense>`.
+ */
 async function AvisosDeCabecera() {
-  const { ahoraServidor, sesiones, recuento, notificaciones } = await cargarAvisos();
+  const inicial = await cargarAvisos();
   return (
     <>
-      <AnclaSesion ahoraServidor={ahoraServidor} sesiones={sesiones} />
-      <AvisoNotas recuento={recuento} />
-      <Campana notificaciones={notificaciones} />
+      <RefrescoPorNavegacion />
+      <AnclaSesionViva inicial={inicial} />
+      <AvisoNotasVivo inicial={inicial} />
+      <CampanaViva inicial={inicial} />
     </>
   );
 }
 
 /** Franja de sesión en curso, en el flujo encima del contenido. */
 async function FranjaDeSesion() {
-  const { ahoraServidor, sesiones, descartadas } = await cargarAvisos();
-  return (
-    <FranjaSesion ahoraServidor={ahoraServidor} sesiones={sesiones} descartadas={descartadas} />
-  );
+  return <FranjaSesionViva inicial={await cargarAvisos()} />;
 }
 
 /**
@@ -260,6 +264,7 @@ export function Armazon({ children }: { children: ReactNode }) {
   return (
     // El proveedor lleva el ancla de la cabecera hasta la franja (foco al descartar).
     <ProveedorAvisosSesion>
+    <ProveedorAvisosVivos>
     <ArmazonCliente
       selectorCentro={
         <Suspense fallback={null}>
@@ -294,6 +299,7 @@ export function Armazon({ children }: { children: ReactNode }) {
     >
       {children}
     </ArmazonCliente>
+    </ProveedorAvisosVivos>
     </ProveedorAvisosSesion>
   );
 }
