@@ -3,7 +3,7 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 03-10-2026 · T-039 integrado (cdfefbe); T-038 ronda 1 con 1 ALTA, adenda R2 en diseño.
+**Actualizado**: 03-10-2026 · T-039 integrado (cdfefbe); T-038 ronda 1 con 1 ALTA, adenda R2 decidida (P1–P4 como recomendaba el arquitecto).
 
 ## Dónde estamos
 
@@ -12,7 +12,7 @@
 
 ## En curso
 
-- **T-038**: rama `worktree-agent-a4f5dba88baa1b115` (3fc4a2b). Ronda 1: evidencia 14 PASA + 2 manuales (CA14, CA16 a 360 px); revisión 1 ALTA (A-H1: el límite de intentos se esquiva si la transacción del llamante no confirma) + 8 MEDIA + 9 BAJA. Adenda R2 del arquitecto en curso.
+- **T-038**: rama `worktree-agent-a4f5dba88baa1b115` (3fc4a2b). Ronda 1: evidencia 14 PASA + 2 manuales (CA14, CA16 a 360 px); revisión 1 ALTA (A-H1: el límite de intentos se esquiva si la transacción del llamante no confirma) + 8 MEDIA + 9 BAJA. Adenda R2 decidida; ronda 2 en implementación.
 - **T-040 A**: R3-H1 abierto (opacidad/color sin prueba). Corte B: migración, banco 24, interfaz.
 - **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). T-023 sube a riesgo alto (vista definer del pendiente).
 - **T-028 B/C**: desbloqueados. E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod.
@@ -25,11 +25,11 @@
 
 ## Siguiente paso
 
-`supabase/`: T-038 (R2) → T-040 B → T-041 → T-028 B → T-021.
+`supabase/`: T-038 (R2) → ticket del PIN y el canje → T-040 B → T-041 → T-028 B → T-021.
 
 ## Hallazgos anotados
 
-- **T-038 A-H1 en el PIN**: `desbloquear_historia` registra el intento fallido igual que `regenerar_codigos_recuperacion`; su límite se esquiva por la misma vía. Lo asigna la adenda R2 de T-038.
+- **PIN y canje (ALTA, T-038 R1 revisor A, fuera del diff)**: `desbloquear_historia` y `canjear_codigo_recuperacion` devuelven el fallo sin lanzar; con PostgREST, objeto singular + filtro sobre la salida da 406 y deshace el intento fallido. El límite de cinco no existe. Arreglo: dos pasos de T-038 (DR1). **Ticket propio de riesgo alto, justo tras T-038** (P3, 03-10-2026); nota completa en `tickets/T-038/diseno.md` §R2.9.
 - **T-038 nota de despliegue (Q1)**: los ajustes de registro de Postgres que exige `registro_postgres_seguro()` viven solo en `docs/bitacora/T-038.md`; no hay manual de despliegue.
 - **`test:a11y`**: sin `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` cinco specs ajenas caen en `/primera-vez` y fallan sin decir por qué. El script debería fijarla.
 - **R2-H4 (T-037)**: `scripts/seed.mjs:29` y `scripts/test-huellas.mjs:19` toman el primer `supabase_db_*`.

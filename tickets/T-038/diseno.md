@@ -963,3 +963,869 @@ Las tres van con la recomendación y mandan sobre lo de arriba donde choquen.
 - **Q2 → (a).** `next.config.ts` entra en el territorio, solo para `logging: { serverFunctions: false }`. El contrato ya está ampliado.
 - **Q3 → (B).** La activación se rechaza si existe un código vigente creado en o después de la última reposición del TOTP. No se redefine ninguna otra función.
   - El hueco que queda (el primer lote con la sesión robada y un TOTP reciente) se da por aceptado: el titular recibe el aviso.
+
+---
+
+# Adenda ronda 2 (03-10-2026)
+
+Responde a la revisión de la ronda 1 (`tickets/T-038/revision.md`: 1 ALTA, 8 MEDIA, 9 BAJA) sobre la
+rama `worktree-agent-a4f5dba88baa1b115` (HEAD 3fc4a2b). Lo de arriba sigue en vigor salvo donde esta
+adenda lo sustituye, y lo dice: §1.1 (la función de un paso), §1.3 (la llamada única), D2, D4 y D6, y
+el cierre de CA2, CA4 y CA6 en el banco.
+
+**Antes de implementar hay que confirmar P1** (§R2.9). Cambia la forma de la función que pide P-4, y
+eso lo decide el propietario.
+
+## R2.0 · Hechos verificados (ronda 2)
+
+### PostgREST, contra el código y la configuración reales
+
+- Versión: `docker exec supabase_rest_Psicogestion /bin/postgrest --version` → **PostgREST 16.1**.
+  Fuente leída en el tag `v16.1`, bajo `src/library/PostgREST/` (`ApiRequest/Preferences.hs`,
+  `Plan.hs`, `Query.hs`/`MainTx.hs`, `Config.hs`).
+- **`Prefer: tx=rollback` hoy no funciona.**
+  - `preferTransaction` solo se acepta con `db-tx-end` en `commit-allow-override` o en
+    `rollback-allow-override`.
+  - El contenedor no lleva `PGRST_DB_TX_END`, así que vale el valor por defecto, `commit`.
+  - `supabase/config.toml [api]` no tiene ajuste de transacción.
+  - Conclusión: un cambio de configuración lo abriría. El arreglo no puede depender de él.
+- **Un GET a `/rpc/...` corre en una transacción de solo lectura** (`SQL.Read`).
+  - Con la función de un paso de la ronda 1 da un oráculo por el mensaje de error:
+    - contraseña mala → falla el `INSERT` del contador;
+    - contraseña buena con el contador limpio → no escribe y devuelve `ok`… hasta el `UPDATE` del lote;
+    - los textos de error son distintos.
+  - Deducido del código; no medido por HTTP en esta ronda.
+- **El oráculo principal es el del objeto singular** (A-H1).
+  - Para una llamada RPC, `Accept: application/vnd.pgrst.object+json` más un filtro sobre la salida
+    (`?motivo=eq.ok`) hace que una respuesta con 0 filas dé **406 y rollback**, y una con 1 fila dé 200
+    y commit.
+  - Con contraseña mala: 406, el contador no se guarda y se puede repetir sin límite.
+  - `Prefer: handling=strict, max-affected=…` hace lo mismo.
+  - No hay `Prefer: timeout` en 16.1: la lista de preferencias es `resolution`, `representation`,
+    `count`, `tx`, `missing`, `handling`, `timezone` y `max-affected`.
+- **Principio que sale de todo lo anterior:** en una sola transacción cuyo resultado ve el llamante no
+  se puede comparar un secreto y llevar la cuenta de los fallos. Cualquier forma de la respuesta que
+  dependa del acierto le deja al cliente deshacer el intento.
+
+### Base local (solo lectura, en `begin … rollback`, sin `db reset`)
+
+- La base del verificador tiene aplicada hasta `20261007120000`: la migración de T-038 no está aplicada
+  ahora mismo.
+- `dblink`: disponible pero no instalado. `pg_background`: no disponible.
+- `pgaudit` está en `shared_preload_libraries` pero no como extensión creada.
+- Bibliotecas precargadas:
+  - `shared_preload_libraries` = `pg_stat_statements, pgaudit, plpgsql, plpgsql_check, pg_cron,
+    pg_net, pgsodium, auto_explain, pg_tle, plan_filter, supabase_vault`.
+  - `session_preload_libraries` = `supautils`.
+  - `local_preload_libraries` está vacío.
+- `postgres` no es superusuario y es miembro de `pg_read_all_settings`.
+- Ajustes de registro de la imagen:
+
+  | Ajuste | Valor |
+  |---|---|
+  | `log_statement` | `ddl` |
+  | `log_parameter_max_length` | `-1` |
+  | `log_parameter_max_length_on_error` | `0` |
+  | `log_min_duration_statement` | `-1` |
+  | `log_min_duration_sample` | `-1` |
+  | `log_statement_sample_rate` | `1` |
+  | `log_transaction_sample_rate` | `0` |
+  | `debug_print_parse`, `debug_print_rewritten`, `debug_print_plan` | `off` |
+  | `auto_explain.log_min_duration` | `10000` (ms) |
+  | `auto_explain.log_parameter_max_length` | `-1` |
+  | `auto_explain.log_nested_statements` | `off` |
+  | `pgaudit.log` | `none` |
+  | `pgaudit.log_parameter` | `off` |
+  | `pgaudit.role` | `''` |
+
+- `statement_timeout`:
+  - en la sesión `psql -U postgres` vale **`0`**;
+  - en `pg_db_role_setting`: `authenticated` → `statement_timeout=8s`; `anon` → `3s`;
+    `authenticator` → `statement_timeout=8s`, `lock_timeout=8s` y
+    `session_preload_libraries=supautils, safeupdate`.
+- **Qué puede fijar `postgres` con `set local`** (medido; lo permite `supautils`):
+
+  | `postgres` sí puede fijar | `postgres` no puede fijar (`permission denied`) |
+  |---|---|
+  | `log_statement` | `log_transaction_sample_rate` |
+  | `log_min_duration_statement` | `log_min_duration_sample` |
+  | `log_parameter_max_length` | `log_statement_sample_rate` |
+  | `log_parameter_max_length_on_error` | `pgaudit.log_parameter` |
+  | `debug_print_plan` | |
+  | `auto_explain.log_min_duration` | |
+  | `auto_explain.log_parameter_max_length` | |
+  | `pgaudit.log` | |
+  | `pgaudit.role` | |
+
+  `alter database postgres set auto_explain.…` se rechaza; `alter role authenticated set auto_explain.…`
+  se acepta (medido en `rollback`).
+- `set local transaction_read_only = on` dentro de un `savepoint` se deshace con
+  `rollback to savepoint`: después, `transaction_read_only` vuelve a `off` y se puede escribir (medido).
+  El banco puede probar la guarda de solo lectura sin romper su transacción única.
+- PostgREST lleva un JWKS con una clave `oct` (HS256, la heredada) y una `EC` (ES256): un token HS256
+  firmado con el secreto local vale para un guion.
+
+### Código
+
+- `registrar_reposicion_totp(p_perfil_id)` (`20260830090000_cuentas_invitacion_baja_totp.sql:498`):
+  - es su única definición;
+  - la guarda es `if (select public.rol_actual()) <> 'administrador'`, y con `rol_actual()` nulo la
+    comparación da `null` y **la guarda no salta**;
+  - no rechaza `p_perfil_id = auth.uid()`;
+  - la pantalla `app/(app)/ajustes/reponer-totp/page.tsx:38` ya excluye al propio perfil;
+  - `lib/cuentas/totp.ts:30-43` solo borra factores si la RPC no da error.
+- `desbloquear_historia(p_pin)` (última definición: `20260830090000:727`, sin `volatile` explícito, o
+  sea volátil):
+  - devuelve `pin_incorrecto` sin lanzar y su contador solo persiste si el llamante confirma: es **el
+    mismo patrón que A-H1**;
+  - la llama `lib/cuentas/candado.ts:61`.
+- `canjear_codigo_recuperacion(p_codigo)` (`20260830090000:606`) tiene el mismo patrón, con
+  `motivo = 'codigo_invalido'`.
+- `components/armazon/armazon-cliente.tsx`:
+  - en `:91` el `CajonContext.Provider` envuelve solo `{navegacion}`;
+  - en `:95` `{identidad}` queda fuera;
+  - el velo y la «X» comparten el nombre `t('armazon.cerrarMenu')`.
+- `app/(app)/cuenta/formulario-regenerar.tsx:53-78`:
+  - un `try/finally` sin `catch`;
+  - el `reset` está en `:57`, después del `await`;
+  - «Volver» (`:104`) solo cambia la vista.
+- `lista-avisos.tsx:38-52`: si hay `error` se registra y se pinta `cuenta.avisos.vacio`. En `:63` el
+  leído y el no leído solo se distinguen por el grosor de letra.
+- `acciones.ts:40`: el `error` de `listFactors` se descarta.
+- `segundo-factor.tsx:177`: el `role="status"` muestra `{falloCodigos}` sin más; con el mismo texto dos
+  veces, no cambia.
+
+## R2.1 · Piezas y contratos (cambios sobre §1)
+
+### R2.1.1 Migración `20261008120000_regenerar_codigos_recuperacion.sql` (se edita en su sitio)
+
+No está en `main`, así que se corrige el mismo fichero y no se añade otro. La firma
+`regenerar_codigos_recuperacion(text)` **desaparece del fichero**: no se crea y se borra, simplemente
+no se crea.
+
+**a) Tabla `intentos_regenerar_codigos`: dos columnas más en el `create table`.**
+
+```
+regeneraciones_autorizadas smallint not null default 0
+  check (regeneraciones_autorizadas between 0 and 2),
+autorizado_hasta timestamptz
+```
+
+Se mantienen RLS sin políticas, `revoke all` y el disparador `fn_auditar('perfil_id')`.
+
+**b) Nueva `public.comprobar_contrasena_para_regenerar(p_contrasena text) returns void`.**
+
+Es `language plpgsql volatile security definer set search_path = ''`. Las sentencias van en este
+orden exacto:
+
+1. Las tres guardas de hoy, con los mismos textos y el 42501: sesión, `rol_actual()` nulo, y
+   `segundo_factor_verificado_recientemente()`. El fragmento «para regenerar los códigos de
+   recuperación» se queda.
+2. `if current_setting('transaction_read_only') = 'on' then raise exception 'La comprobación de la
+   contraseña exige una transacción de escritura.' using errcode = '25006'; end if;`
+   - Va **antes** del candado y de `crypt`: con un GET nunca se llega a comparar.
+3. `perform pg_advisory_xact_lock(hashtextextended('codigos_recuperacion:' || v_uid::text, 0));`
+4. `select it.bloqueado_hasta into v_hasta … where perfil_id = v_uid;`
+   - Si `v_hasta > now()`, `return;` sin comparar ni escribir.
+5. Se lee `v_hash` y se calcula `v_ok` con **la misma expresión** de la ronda 1: no vacío, regex
+   bcrypt y `crypt`. Luego `v_ok := coalesce(v_ok, false)`.
+6. **Una sola sentencia de escritura**, igual para el acierto y para el fallo. Nada de `if v_ok`
+   alrededor:
+
+   ```
+   insert into public.intentos_regenerar_codigos as it
+     (perfil_id, intentos_fallidos, bloqueado_hasta, regeneraciones_autorizadas, autorizado_hasta, actualizado_en)
+   values (v_uid,
+           case when v_ok then 0 else 1 end,
+           null,
+           case when v_ok then 1 else 0 end,
+           case when v_ok then now() + interval '60 seconds' end,
+           now())
+   on conflict (perfil_id) do update set
+     intentos_fallidos = case when v_ok then 0 else least(it.intentos_fallidos + 1, 100) end,
+     bloqueado_hasta   = case when v_ok then null
+                              when it.intentos_fallidos + 1 >= 5 then now() + interval '15 minutes'
+                              else null end,
+     regeneraciones_autorizadas = case when v_ok
+                                       then least(case when it.autorizado_hasta > now()
+                                                       then it.regeneraciones_autorizadas else 0 end + 1, 2)
+                                       else 0 end,
+     autorizado_hasta  = case when v_ok then now() + interval '60 seconds' else null end,
+     actualizado_en    = now()
+   returning it.bloqueado_hasta into v_bloqueo;
+   ```
+
+   - El `least(…, 100)` hace que ninguna rama pueda desbordar el `smallint`. Un error solo en la rama
+     del fallo volvería a ser un oráculo.
+7. `if v_bloqueo is not null then insert into public.notificaciones … 'regeneracion_codigos_bloqueada' …`
+   con el texto de la ronda 1.
+   - Esta es la única diferencia entre ramas, y solo pasa en el fallo que bloquea.
+   - Ese fallo se confirma igual que los demás. Y lo que revela, «estás bloqueado», ya lo dice el paso
+     dos.
+8. Fin, sin `return query`.
+
+Grants y comentario:
+
+- `revoke execute … from public, anon; grant execute … to authenticated;`
+- Comentario: «Paso uno de dos (T-038, ronda 2). Coteja la contraseña y deja confirmado el resultado:
+  un intento fallido o una autorización de 60 s. No devuelve nada, ni distinto en el acierto: el
+  resultado solo se ve en una transacción posterior.»
+
+**c) `public.regenerar_codigos_recuperacion()`, sin parámetros.**
+
+Devuelve `table (motivo text, bloqueado_hasta timestamptz, codigos text[])` y es `volatile security
+definer set search_path = ''`. El orden:
+
+1. Las mismas tres guardas (42501).
+2. El mismo candado de consejo.
+3. Lectura de `bloqueado_hasta`. Si `> now()`: `return query select 'bloqueado', v_hasta, null`.
+4. **Consumo de una autorización:**
+
+   ```
+   update public.intentos_regenerar_codigos it
+      set regeneraciones_autorizadas = it.regeneraciones_autorizadas - 1, actualizado_en = now()
+    where it.perfil_id = v_uid and it.regeneraciones_autorizadas > 0 and it.autorizado_hasta > now();
+   ```
+
+   - `if not found then return query select 'contrasena_incorrecta'::text, null::timestamptz,
+     null::text[]; return; end if;`
+   - Este paso **no** toca `intentos_fallidos`: sin contraseña no hay intento.
+5. Caducar el lote, generar diez, avisar con `codigos_regenerados` y devolver `'ok'`: el cuerpo de la
+   ronda 1 sin cambios.
+   - **El consumo va antes de caducar el lote.** Lo mide la pasada B de R2-3.
+
+Grants: los mismos que en (b).
+
+**d) `generar_codigos_recuperacion()` (la activación) no cambia.**
+
+**e) `registrar_reposicion_totp(p_perfil_id uuid)` se redefine aquí (A-H3).**
+
+Es el cuerpo de `20260830090000:498-525` copiado entero, con dos cambios:
+
+- La guarda pasa a `if (select public.rol_actual()) is distinct from 'administrador'::public.rol_usuario
+  then raise … '42501'` (mismo texto). Con un rol nulo ya salta.
+- Justo después: `if p_perfil_id = (select auth.uid()) then raise exception 'Un administrador no puede
+  reponer su propio TOTP: lo repone otro administrador o el titular con un código de recuperación.'
+  using errcode = '42501'; end if;`
+
+Se copian también el mismo comentario, más la frase «Rechaza la reposición propia (T-038, A-H3)», y los
+grants existentes (se comprueban con `\df+` antes de copiar).
+
+**f) `registro_postgres_seguro()` se parte en dos (A-H2, A-H4, A-H5, A-H6).**
+
+**`public.evaluar_registro_postgres(p_ajustes jsonb) returns boolean`**
+
+- `language plpgsql immutable set search_path = ''`, no definer.
+- `revoke execute … from public, anon, authenticated, service_role`: solo la llama su dueño, que es el
+  banco como `postgres`.
+- Es una función pura del mapa `nombre → setting` (el texto de `pg_settings.setting`, en sus unidades:
+  ms para los umbrales y el `statement_timeout`).
+- Devuelve **falso** (inseguro) si se cumple cualquiera de estas reglas, en este orden:
+
+  | Regla | Inseguro cuando… |
+  |---|---|
+  | **N0** · faltan claves del núcleo | falta cualquiera de `log_statement`, `log_parameter_max_length`, `log_parameter_max_length_on_error`, `log_min_duration_statement`, `log_min_duration_sample`, `log_statement_sample_rate`, `log_transaction_sample_rate`, `debug_print_parse`, `debug_print_rewritten`, `debug_print_plan`, `statement_timeout`, `shared_preload_libraries`, `session_preload_libraries`, `local_preload_libraries` (`not p_ajustes ?& array[…]`) |
+  | **N1** · faltan claves de una extensión cargada | se calcula `cargadas` = las tres listas `*_preload_libraries` partidas por comas, con `trim`, sin comillas, sin ruta (`regexp_replace(x, '^.*/', '')`) y en minúsculas. `ae := 'auto_explain' = any(cargadas) or p_ajustes ? 'auto_explain.log_min_duration'`; `pa := 'pgaudit' = any(cargadas) or p_ajustes ? 'pgaudit.log'`. Inseguro si `ae` y falta alguna de `auto_explain.log_min_duration` o `auto_explain.log_parameter_max_length`, o si `pa` y falta alguna de `pgaudit.log`, `pgaudit.log_parameter` o `pgaudit.role` |
+  | **C1** | `log_statement = 'all'` |
+  | **C2** | `log_parameter_max_length_on_error <> 0` |
+  | **C3** | `alcanzable(log_min_duration_statement)` y `log_parameter_max_length <> 0` |
+  | **C4** | `alcanzable(log_min_duration_sample)` y `log_statement_sample_rate > 0` y `log_parameter_max_length <> 0` |
+  | **C5** | `log_transaction_sample_rate > 0` y `log_parameter_max_length <> 0` (A-H2) |
+  | **C6** | `debug_print_parse` o `debug_print_rewritten` o `debug_print_plan` = `on`. Un plan a medida lleva los parámetros como constantes |
+  | **C7** | `ae` y `alcanzable(auto_explain.log_min_duration)` y `auto_explain.log_parameter_max_length <> 0` (A-H6) |
+  | **C8** | `pa` y `pgaudit.log_parameter = 'on'` y (`pgaudit.log <> 'none'` o `pgaudit.role <> ''`) |
+
+  - `alcanzable(u) := u >= 0 and not (st > 0 and st <= u)`, con `st` = `statement_timeout`.
+  - Dicho en palabras: un umbral de duración solo es seguro si está apagado (`-1`) o si **el
+    `statement_timeout` en vigor corta antes**. Una sentencia cancelada no llega a `ExecutorEnd` ni al
+    registro de duración.
+  - Cada condición se evalúa con `coalesce(<condición>, true)`: un valor nulo o ilegible es
+    **inseguro** (A-H5).
+  - Un valor que no se puede convertir lanza al hacer el cast. En la acción, un error de la RPC ya es
+    «inseguro».
+  - Comentario de la función: `log_statement` en `mod`/`ddl` y `log_min_error_statement` son seguros
+    porque PostgREST manda los argumentos como parámetro ligado (`$1`). Lo que escribe los valores son
+    las reglas de arriba.
+
+**`public.registro_postgres_seguro()`**
+
+- Misma firma y mismos grants que en la ronda 1 (`authenticated` sí, `anon` no).
+- `language sql stable security definer set search_path = ''`.
+- Cuerpo:
+
+  ```
+  select public.evaluar_registro_postgres(
+    (select jsonb_object_agg(s.name, s.setting) from pg_catalog.pg_settings s
+      where s.name = any (array[ <las 14 del núcleo>, 'auto_explain.log_min_duration',
+             'auto_explain.log_parameter_max_length', 'pgaudit.log', 'pgaudit.log_parameter',
+             'pgaudit.role' ])));
+  ```
+
+- Lee el `statement_timeout` **de la propia transacción del llamante**. Por PostgREST es el de
+  `authenticated`/`authenticator` (8 s). El paso uno corre con el mismo rol, así que con el mismo valor.
+- La cabecera del fichero deja de decir «falla cerrado» sin más y dice lo que hace N0/N1/`coalesce`.
+
+### R2.1.2 `lib/cuentas/totp.ts` · `regenerarCodigosRecuperacion(sesion, contrasena)`
+
+1. `const { error: errorComprobacion } = await sesion.supabase.rpc('comprobar_contrasena_para_regenerar',
+   { p_contrasena: contrasena });`
+   - Si hay error: `console.error('[regenerarCodigosRecuperacion] comprobar', errorComprobacion.code)`
+     y devuelve `{ ok: false, motivo: 'error', mensaje: MENSAJE_ERROR_REGENERAR }`.
+2. `const { data, error } = await sesion.supabase.rpc('regenerar_codigos_recuperacion');` y debajo la
+   traducción de hoy, sin cambios.
+
+Ninguna de las dos lleva `{ get: true }`. El comentario de la función dice «dos llamadas, la primera
+con la contraseña». `ResultadoRegenerar` no cambia.
+
+### R2.1.3 Tipos
+
+`npm run tipos` tras aplicar la migración. La vía la fija §1.2; es el único cambio en
+`lib/supabase/tipos-bd.ts`.
+
+### R2.1.4 Textos nuevos en `lib/i18n/es.ts`
+
+- `cuenta.avisos.errorLectura`: «No se han podido cargar los avisos. Recarga la página para
+  intentarlo de nuevo.»
+- `cuenta.avisos.sinLeer`: «Sin leer».
+
+### R2.1.5 `docs/interfaz.md` (líneas 200-202)
+
+Se añade una frase: «Los no leídos llevan la marca visible "Sin leer"; un fallo al leerlos se dice como
+fallo, nunca como lista vacía.»
+
+## R2.2 · Decisiones y alternativas descartadas (ronda 2)
+
+**DR1 · Dos pasos.** El paso uno compara y confirma siempre, con una respuesta igual para el acierto y
+el fallo. El paso dos regenera leyendo solo lo confirmado. Sustituye a D4 en la firma, y D2 pasa a tres
+funciones.
+
+- El cliente no puede ver el resultado de la comparación dentro de la transacción que la hace.
+  Ninguna combinación de `Accept`, filtro, `Prefer`, GET o `max-affected` distingue nada: la respuesta
+  es la misma.
+- Cuando lo ve, en el paso dos, el intento ya está confirmado.
+- *Descartado `dblink`/transacción autónoma*: no está instalado y pide credenciales guardadas en la
+  base.
+- *Descartado no exponer la RPC* (llamarla con `service_role`): obligaría a pasar el perfil como
+  parámetro (rompe CA6) y a reimplementar las guardas de sesión fuera de Postgres.
+- *Descartado «solo `volatile` + comprobar `transaction_read_only`»*: cierra el GET, pero no el objeto
+  singular con filtro, que va por POST en una transacción de escritura.
+- *Descartado confiar en `db-tx-end=commit`*: hoy `tx=rollback` se ignora, pero es configuración y no
+  cierra el 406.
+- *Descartado que el paso dos vuelva a pedir la contraseña*:
+  - Si la coteja y devuelve códigos, vuelve a ser comparar y revelar en la misma transacción.
+  - Quien tuviese una autorización pendiente podría probar contraseñas sin límite durante 60 s.
+
+**DR2 · La autorización es un contador con caducidad (60 s, máximo 2), no un booleano.**
+
+- Un doble envío legítimo da dos regeneraciones correctas y no un «contraseña incorrecta» falso.
+- CA4 se cumple al pie de la letra: dos regeneraciones concurrentes, diez vigentes, dos avisos.
+- Un fallo pone la autorización a 0: tras una contraseña mala no queda nada pendiente.
+
+**DR3 · El paso uno escribe en una sola sentencia con `case` sobre `v_ok`, y la guarda de solo lectura
+va antes de `crypt`.**
+
+- Con dos ramas (`if v_ok then update … else insert …`) volvería el oráculo del mensaje de error con
+  GET.
+- La guarda explícita hace además que el GET no gaste bcrypt.
+
+**DR4 · Se queda el candado de consejo en los tres sitios.**
+
+- En la regeneración ya no es lo único que serializa: también lo hace el candado de fila del consumo.
+- Sigue haciendo falta entre activación y regeneración, que no comparten fila.
+
+**DR5 · A-H3: se rechaza la reposición propia en `registrar_reposicion_totp`, en vez de filtrar
+`actor_id <> registro_id` en la regla Q3(B).**
+
+- Cierra la puerta en su origen, y no deja filas `TOTP_REPUESTO` que mañana otra regla tome por
+  legítimas.
+- No contradice el ADR-039: la reposición existe para quien se queda fuera, y quien se queda fuera no
+  tiene sesión `aal2` para reponerse.
+- La guarda nula (`is distinct from`) se corrige porque es la misma línea, y la regla Q3(B) depende de
+  ella.
+
+**DR6 · Evaluador puro más envoltorio.**
+
+- El banco corre como `postgres`, que no puede fijar `log_transaction_sample_rate`,
+  `log_min_duration_sample`, `log_statement_sample_rate` ni `pgaudit.log_parameter` (medido).
+- Sin el evaluador, C4, C5 y C8 no tendrían negativa. El revisor midió como `supabase_admin`, que el
+  banco no usa.
+- Las condiciones que `postgres` sí puede fijar se prueban además en vivo, a través del envoltorio.
+
+**DR7 · El umbral de duración se compara con el `statement_timeout` leído en la misma función, no se
+supone.**
+
+- La regla literal de A-H6 («cualquier valor ≥ 0 es inseguro») declara inseguro el valor de fábrica de
+  la imagen (`auto_explain.log_min_duration = 10000` con `log_parameter_max_length = -1`).
+- Con ella la regeneración no funcionaría nunca, ni en local ni, previsiblemente, en la instancia
+  dedicada.
+- Lo que A-H6 señala de verdad es que la ronda 1 suponía los 8 s sin mirarlos. Ahora se miran:
+  - si alguien sube el `statement_timeout` por encima del umbral, o lo quita (`0`), la función dice
+    «inseguro» y no se manda la contraseña.
+- Es la pregunta P4 al propietario, por si quiere la regla literal.
+
+**DR8 · A-H7: las copias del contraensayo se crean con `revoke … from public, anon` en la misma fase, y
+la fase borra antes cualquier copia de una pasada interrumpida.**
+
+## R2.3 · Criterios de la ronda 2 para el verificador (con sus mutantes)
+
+**Todos los CA1–CA16 de la ronda 1 se vuelven a ejecutar.** Se reescriben al protocolo de dos pasos
+como dice R2.5.
+
+Comandos:
+
+- `npm run test:rls`
+- `npm test`
+- `npm run lint`
+- `npm run build`
+- `npx playwright test accesibilidad/regenerar-codigos.spec.ts`
+- los dos guiones de abajo, después de `npx supabase db reset`. **Coordinar con el verificador: la base
+  la está usando.**
+
+Cada mutante se aplica, se ejecuta la prueba indicada, se ve **rojo con el motivo dicho** y se revierte.
+
+### R2-1 · Dos pasos en el banco (A-H1)
+
+Lo comprueba `scripts/rls/13-cuentas.sql`.
+
+**Estructura:**
+
+- `to_regprocedure('public.regenerar_codigos_recuperacion(text)') is null`.
+- `regenerar_codigos_recuperacion()` tiene 0 argumentos y `comprobar_contrasena_para_regenerar(text)`
+  tiene 1.
+- Las dos son `prosecdef`, con `proconfig` que contiene `search_path=""` y `provolatile = 'v'`.
+- Ninguna tiene `exception when`.
+- `p_contrasena` no aparece en `raise|format|jsonb_build_object|execute`.
+- `prorettype = 'void'::regtype` en la comprobación.
+- En la definición de la comprobación, `strpos(def, 'transaction_read_only')` y
+  `strpos(def, 'pg_advisory_xact_lock')` van antes de `strpos(def, 'extensions.crypt(')`.
+- Una sola aparición de `intentos_regenerar_codigos` como destino de escritura, y ningún
+  `update public.intentos_regenerar_codigos`.
+- `execute`: `authenticated` sí y `anon` no, en las dos.
+
+**Comportamiento** (como PRO1 con 2FA reciente, dentro del banco):
+
+1. La comprobación con la contraseña **mala** y con la **buena** devuelve lo mismo: una fila con
+   `null`, y `pg_typeof` es `void`.
+2. Mala: `intentos_fallidos` +1, `regeneraciones_autorizadas = 0`. El paso dos devuelve
+   `contrasena_incorrecta`: ni lote nuevo ni aviso.
+3. Buena: `intentos_fallidos = 0`, `regeneraciones_autorizadas = 1`, `autorizado_hasta > now()`. El
+   paso dos devuelve `ok` con diez. **Un segundo paso dos** devuelve `contrasena_incorrecta`.
+4. Buena tres veces: `regeneraciones_autorizadas = 2` (el tope).
+5. Buena y luego mala: `regeneraciones_autorizadas = 0` y el paso dos da `contrasena_incorrecta`.
+6. Buena; como `postgres`, `autorizado_hasta = now() - interval '1 second'`; el paso dos da
+   `contrasena_incorrecta`. El banco es una sola transacción y `now()` no avanza, así que la caducidad
+   se fuerza a mano.
+7. Paso dos sin paso uno (solo cookies): `contrasena_incorrecta`, ni lote ni aviso. Es P-4.
+8. Solo lectura: `savepoint s; set local transaction_read_only = on;` La comprobación con la buena y
+   con la mala lanza **25006 con el mismo texto** «exige una transacción de escritura»
+   (`assert_lanza_codigo_msg`). Después, `rollback to savepoint s;` y los contadores no cambian.
+9. Cinco malas: bloqueo y un único aviso `regeneracion_codigos_bloqueada`. Una buena durante el
+   bloqueo no cambia la fila (`regeneraciones_autorizadas` sigue a 0). El paso dos da `bloqueado` con
+   la hora.
+10. Las guardas: con aal1 y con el reto de hace diecisiete minutos, **las dos** funciones lanzan 42501
+    con el fragmento de hoy.
+
+**Mutantes:**
+
+| Mutante | Cambio | Qué falla y por qué |
+|---|---|---|
+| M-A1a | el paso dos no resta | el punto 3 da `ok` en el segundo paso dos |
+| M-A1b | sin `autorizado_hasta > now()` | el punto 6 da `ok` |
+| M-A1c | la comprobación `returns boolean` y devuelve `v_ok` | la aserción `prorettype = void` falla, y el punto 1 da valores distintos |
+| M-A1d | se quita la guarda de solo lectura | el punto 8 falla por el texto: el error pasa a ser el de Postgres, «cannot execute INSERT…» |
+| M-A1e | en el acierto con el contador limpio se hace `return` sin escribir (el «solo si estaba sucio» de la ronda 1) | la aserción de una sola escritura falla, y el punto 3 da `regeneraciones_autorizadas = 0` |
+| M-A1f | se deja también la firma `(text)` | falla `to_regprocedure(...) is null` |
+| M-A1g | el fallo no pone a 0 la autorización | el punto 5 da `ok` |
+
+### R2-2 · Oráculo por HTTP contra PostgREST (A-H1, de extremo a extremo)
+
+Guion nuevo: `npx tsx scripts/t038-oraculo.mjs`. Escribe `tickets/T-038/oraculo-postgrest.json`.
+
+**Fijación.** Confirma filas, con un UUID y un correo aleatorios por pasada, así que es repetible sin
+`db reset`. Como en `t038-concurrencia.sql`, con psql como `postgres`:
+
+- un usuario con la contraseña `clave-oraculo` (bf 4);
+- un factor `verified` con `last_challenged_at = clock_timestamp()` (el índice es único y global).
+
+**Token.** HS256 sin dependencias (`node:crypto`), con `JWT_SECRET` de `npx supabase status -o env`.
+
+- Si no viene, se toma la clave `oct` de `PGRST_JWT_SECRET` del contenedor rest; el campo `k` va en
+  base64url.
+- Claims: `sub`, `role: 'authenticated'`, `aud: 'authenticated'`, `aal: 'aal2'`, `session_id`
+  aleatorio, `iat` y `exp = iat + 600`.
+- Cabeceras: `apikey: ANON_KEY` y `Authorization: Bearer …`.
+- Las peticiones van a `${API_URL}/rest/v1/rpc/...`.
+
+**Formas.** Por cada forma S se manda la comprobación con la contraseña mala y luego con la buena:
+
+- S1 · POST normal.
+- S2 · POST con `Accept: application/vnd.pgrst.object+json`.
+- S3 · POST con `Prefer: tx=rollback`.
+- S4 · POST con `Prefer: handling=strict, max-affected=0`.
+- S5 · GET `?p_contrasena=…`.
+
+**Aserciones:**
+
+- **O1:** para cada forma, `(status, cuerpo)` de la mala **≡** `(status, cuerpo)` de la buena.
+- **O2:** en S1, tras la mala, `intentos_fallidos` sube en 1 (leído por psql). En S3 también: prueba que
+  `tx=rollback` se ignora; si un día no, el informe lo dice.
+- **O3:** S5 da el mismo 4xx para las dos y ningún contador cambia.
+- **O4:** `POST /rpc/regenerar_codigos_recuperacion` con `{"p_contrasena": "x"}` da 404 o `PGRST202`:
+  la puerta de un paso ya no existe.
+- **O5:** `POST /rpc/registro_postgres_seguro` da `true`. Es la integración real con el
+  `statement_timeout` de PostgREST.
+- **O6:**
+  1. una comprobación buena en S1;
+  2. después, `POST /rpc/regenerar_codigos_recuperacion` da `ok` con 10;
+  3. una comprobación mala;
+  4. después, el paso dos da `contrasena_incorrecta`.
+
+Al final se suman las malas confirmadas, para no llegar a cinco: en S1, S3 y S4 cuentan como fallo si
+confirman. Si la cuenta llega a cinco, el guion para y lo dice.
+
+**Mutantes:**
+
+| Mutante | Qué falla |
+|---|---|
+| M-A1c | O1 en S1 (`true` frente a `false`) |
+| M-A1e | O1 en S5: la buena, con el contador limpio, no escribe y da 200; la mala da 4xx |
+| Restaurar la función de un paso de la ronda 1 | O4, y O1 en S2 (200 frente a 406) |
+
+### R2-3 · CA4 vuelto a medir (`npx tsx scripts/t038-concurrencia.mjs`, tras `db reset`)
+
+**Pasada A, producción.**
+
+1. Dos comprobaciones buenas confirmadas en serie para el perfil A, y se comprueba
+   `regeneraciones_autorizadas = 2`.
+2. Carrera de dos `regenerar_codigos_recuperacion()`.
+3. Resultado esperado:
+   - `espero` es cierto;
+   - las dos devuelven `ok|10`;
+   - **10 vigentes y 2 avisos**.
+
+**Pasada B, medición.**
+
+1. Copia `t038_regenerar_sin_candado()` de la nueva `regenerar_codigos_recuperacion()` sin
+   `pg_advisory_xact_lock`.
+2. Dos comprobaciones buenas para B y la carrera.
+3. Se exige: **10 vigentes, 2 avisos y las dos `ok|10`.**
+4. Se registra en el JSON como medición: «sin candado de consejo, el candado de fila del consumo
+   serializa la regeneración».
+   - Ya no se exige `≠ 10`: el contrato admite «una medición que refute la hipótesis».
+
+**Pasada D, contraensayo en rojo.**
+
+1. Copia `t038_activar_sin_candado()` de `generar_codigos_recuperacion()` sin el candado.
+2. Carrera de dos activaciones sobre un perfil D nuevo sin lote: UUID fijo `…00000000000d`, en `fijar`.
+3. Se exige: **vigentes ≠ 10** (predicción, 20) y dos avisos. En D no se exige `espero`.
+
+**Pasada C:** como en la ronda 1.
+
+**Mutantes:**
+
+| Mutante | Qué falla |
+|---|---|
+| Se quita el candado de `generar_codigos_recuperacion()` | C, que deja de dar un 42501 y diez |
+| El paso dos caduca el lote **antes** de consumir la autorización | B da 20 |
+| Las copias siguen el patrón de la ronda 1 | la copia de D no sale: la fase lo comprueba y para |
+
+### R2-4 · Reposición propia (A-H3), en el banco
+
+- ADM con 2FA llama a `registrar_reposicion_totp(:ADM)`:
+  - lanza 42501 con el fragmento «no puede reponer su propio TOTP»;
+  - después no hay ninguna fila `TOTP_REPUESTO` nueva con `registro_id = :ADM` ni ningún aviso
+    `totp_repuesto` nuevo para ADM.
+- Gemela: ADM sobre PRO1 sigue funcionando (es la aserción existente de `:216`).
+- Con `pg_temp.como('<uuid sin perfil>')`, la llamada sobre PRO1 lanza 42501.
+- Y, como encadenado de Q3(B): tras el intento de reposición propia rechazado, la activación de ADM con
+  lote vigente sigue lanzando 42501.
+
+**Mutantes:**
+
+| Mutante | Qué falla |
+|---|---|
+| Se quita la línea de la reposición propia | la primera aserción |
+| Se vuelve a `<>` en la guarda de rol | la del uuid sin perfil |
+
+### R2-5 · Registro de Postgres (A-H2, A-H4, A-H5, A-H6), en el banco
+
+**Mapa base literal `t38_base`.** Son los valores de R2.0, con `statement_timeout = '8000'` y las tres
+listas de precarga de la imagen. Debe cumplirse `evaluar_registro_postgres(t38_base)`.
+
+Una negativa y una gemela por regla, todas como `postgres`. `||` sobrescribe y `-` quita una clave:
+
+| Regla | Negativa (→ falso) | Gemela (→ cierto) |
+|---|---|---|
+| C1 | `{"log_statement":"all"}` | `{"log_statement":"mod"}` |
+| C2 | `{"log_parameter_max_length_on_error":"64"}` | `"0"` |
+| C3 | `{"log_min_duration_statement":"0"}`; `{"log_min_duration_statement":"7999"}` | `{"log_min_duration_statement":"0","log_parameter_max_length":"0"}`; `{"log_min_duration_statement":"8000"}` |
+| C4 | `{"log_min_duration_sample":"0","log_statement_sample_rate":"0.1"}` | la misma con `log_statement_sample_rate` en `"0"` |
+| C5 | `{"log_transaction_sample_rate":"0.01"}` | la misma con `"log_parameter_max_length":"0"` |
+| C6 | tres negativas, una por cada `debug_print_*` en `on` | la base |
+| C7 | `{"auto_explain.log_min_duration":"7999"}`; `{"statement_timeout":"0"}`; `{"statement_timeout":"20000"}` | la base (10000 frente a 8000); `{"auto_explain.log_min_duration":"0","auto_explain.log_parameter_max_length":"0"}`; `{"auto_explain.log_min_duration":"-1","statement_timeout":"0"}` |
+| C8 | `{"pgaudit.log_parameter":"on","pgaudit.log":"function"}`; `{"pgaudit.log_parameter":"on","pgaudit.role":"auditor"}` | `{"pgaudit.log_parameter":"on"}`; `{"pgaudit.log":"all"}` |
+| N0 | `t38_base - 'log_statement'`; `t38_base - 'statement_timeout'`; `t38_base \|\| '{"log_statement":null}'` | — |
+| N1 | `t38_base - 'auto_explain.log_min_duration'`; `t38_base - 'pgaudit.log_parameter'` | quitar las dos claves de `auto_explain` **y** quitar `auto_explain` de `shared_preload_libraries` |
+
+**En vivo, a través del envoltorio**, como PRO1 con 2FA:
+
+- Antes de empezar, como `postgres`, se fija `statement_timeout` en la transacción con el valor de
+  `pg_db_role_setting` de `authenticated`. Así se imita a PostgREST:
+
+  ```
+  select set_config('statement_timeout', split_part(c, '=', 2), true)
+    from pg_db_role_setting s, unnest(s.setconfig) c
+   where s.setrole = 'authenticated'::regrole and c like 'statement_timeout=%';
+  ```
+
+  Más una aserción de que existe ese ajuste.
+- Al acabar el bloque se vuelve a `set local statement_timeout = 0`.
+
+| Paso | Ajuste | Resultado |
+|---|---|---|
+| L0 | ninguno | cierto |
+| L1 | `set local log_statement = 'all'` | falso |
+| L2 | `log_parameter_max_length_on_error`, la aserción que ya existe | falso |
+| L3 | `log_min_duration_statement = 0` | falso |
+| L3, gemela | lo mismo más `log_parameter_max_length = 0` | cierto |
+| L6 | `debug_print_plan = on` | falso |
+| L7 | `auto_explain.log_min_duration = 0` | falso |
+| L7, gemela | lo mismo más `auto_explain.log_parameter_max_length = 0` | cierto |
+| L7b | `statement_timeout = 0` | falso (A-H6 en vivo) |
+
+Se restaura cada ajuste después de su paso.
+
+**Mutantes:**
+
+- Borrar cualquiera de C1 a C8 hace fallar su negativa.
+- Cambiar un `coalesce(…, true)` por `false` hace fallar la negativa del valor nulo.
+- Quitar N0 o N1 hace fallar sus negativas.
+- Volver a la ventana de la ronda 1 (`between 0 and 9999`) hace fallar las negativas de C7 con
+  `statement_timeout` 0 y 20000, y L7b.
+
+### R2-6 · Copias del contraensayo (A-H7)
+
+En `scripts/t038-concurrencia.sql`, fase `copia`:
+
+1. `drop function if exists` de las dos copias.
+2. Creación.
+3. `revoke execute … from public, anon; grant execute … to authenticated;`.
+4. Una comprobación psql que **para** si `has_function_privilege('anon', <copia>, 'execute')`.
+
+La limpieza sigue en `finally`.
+
+Mutante: se quita el `revoke`. La fase para con «la copia es ejecutable por anon».
+
+### R2-7 · Interfaz (B-H1 a B-H11)
+
+Una prueba por hallazgo, cada una con su mutante: la tabla de R2.4. Todas en `npm test`, salvo la
+parte de Playwright de B-H6.
+
+## R2.4 · B-H1 a B-H11: arreglo en una línea, prueba y mutante
+
+| # | Arreglo | Prueba que lo demuestra | Mutante que la pone en rojo |
+|---|---|---|---|
+| B-H1 | En `armazon-cliente.tsx`, el `<CajonContext.Provider value={cerrarCajon}>` pasa a envolver **el `<aside>` entero** (`:57-96`), y se quita el de `:91`. | `components/armazon/armazon-cliente.test.tsx`, nueva: monta el `ArmazonCliente` **real** con `identidad={<EnlaceCuenta nombre="Ana" rolVisible="Rol" />}`, las demás ranuras a `null` y `usePathname` simulado. Pulsa «Abrir menú» y espera **dos** botones `cerrarMenu` (velo y X). Pulsa el enlace «Mi cuenta…» y espera **uno** (el velo se fue). La prueba de `enlace-cuenta.test.tsx:41` se queda, pero no es la evidencia. | Provider otra vez solo en `navegacion`: quedan dos botones. |
+| B-H2 | `formulario-regenerar.tsx`: `try { … } catch { reset({ contrasena: '', codigo: '' }); setVista({ tipo: 'fallo', mensaje: t('cuenta.errores.generico') }); } finally { setEnviando(false); }`. El `reset` del camino normal se queda donde está, porque en `finally` borraría los errores de `setError`. | Acción simulada con `mockRejectedValue`: aparece la región de fallo con el texto genérico y el foco dentro, el campo contraseña `toHaveValue('')`, y no hay rechazo sin tratar (Vitest falla la pasada si lo hay). | Sin `catch`: rechazo sin tratar, la contraseña se queda y no hay región. |
+| B-H3 | `lista-avisos.tsx`: si `error`, `<p className="text-destructive text-sm">{t('cuenta.avisos.errorLectura')}</p>` y no la lista ni `vacio`. | Cliente simulado con `{ data: null, error: { code: 'X' } }`: aparece `errorLectura` y no aparece `vacio`. | `!avisos \|\| …` como hoy: sale «No hay avisos». |
+| B-H4 | En `segundo-factor.test.tsx`, CA11 cuenta temporizadores **en la vista de fallo** (con `vi.useFakeTimers({ shouldAdvanceTime: true })`), antes del reintento y tras un reintento fallido, no solo tras el éxito. | `expect(vi.getTimerCount()).toBe(0)` en los dos puntos. | M2b: `useEffect` con `setTimeout(60000)` en la vista de fallo: cuenta 1. |
+| B-H5 | Ningún cambio de código: las pruebas fijan la zona. | `acciones.test.ts`: organización con `Atlantic/Canary` y `bloqueadoHasta = '2026-10-03T10:00:00Z'`; el mensaje contiene «11:00» y no «12:00». `lista-avisos.test.tsx`: lo mismo con `creado_en`. | `zona = ZONA_POR_DEFECTO` forzado: sale 12:00. |
+| B-H6 | Se sustituyen las aserciones de `innerHTML`/`content()` (`formulario-regenerar.test.tsx:140,153`, `regenerar-codigos.spec.ts:255`) por el valor. | Vitest: tras el éxito, «Ya los he guardado» y el campo contraseña `toHaveValue('')`; lo mismo tras error de campo y tras «Volver». Playwright: `await expect(page.getByLabel(<contraseña>)).toHaveValue('')` en los mismos tres puntos. | M1, sin `reset` en el éxito: el campo vuelve con la contraseña. |
+| B-H7 | Ningún cambio de código. | `acciones.test.ts:181` y su gemela del error de la RPC: `expect(r.mensaje).toBe(t('cuenta.errores.registroInseguro'))`, y `regenerarCodigosRecuperacion` simulado `not.toHaveBeenCalled()`. | La acción devuelve `generico`: falla el `toBe`. |
+| B-H8 | `acciones.ts:40`: `const { data: factores, error: errorFactores } = …; if (errorFactores) { console.error('[regenerarCodigos] listFactors', errorFactores.code); return { ...ESTADO_INICIAL, mensaje: t('cuenta.errores.generico') }; }`. | `listFactors` con error: `mensaje` es `generico`, no `sinFactor`, y `challengeAndVerify` no se llama. | Error descartado: sale `sinFactor`. |
+| B-H9 | «Volver» hace `setVista({ tipo: 'formulario' }); setCampoConFoco({ campo: 'contrasena' });`: el efecto de `:49` ya lleva el foco. | Tras la vista de fallo, pulsar «Volver» deja `document.activeElement` en el campo contraseña. | Sin `setCampoConFoco`: el foco queda en `body`. |
+| B-H10 | `segundo-factor.tsx:177`: el `role="status"` sigue montado y su texto es `{trabajando ? '' : falloCodigos}`. Al reintentar se vacía y al volver a fallar se rellena: hay cambio y se anuncia. | Reintento con `generarCodigos` diferido que falla con **el mismo** texto, `'No se pudieron generar los códigos de recuperación.'` (`totp.ts:53`): mientras está pendiente el `status` está vacío, y al resolver vuelve a tener el texto. Se quita `'OTRO-FALLO'`. | `{falloCodigos}` a secas: mientras está pendiente el `status` no está vacío. |
+| B-H11 | `lista-avisos.tsx:63`: si `!aviso.leida_en`, una marca visible `<span className="text-xs font-medium">{t('cuenta.avisos.sinLeer')}</span>` junto a la etiqueta. Se queda también el grosor. | Con un leído y un no leído: «Sin leer» aparece una vez, dentro del `<li>` del no leído. | Sin la marca: no aparece. |
+
+**Desvíos aceptados en la ronda 1, al cerrar:** la nota de despliegue de Q1 pasa de
+`docs/bitacora/T-038.md` a `docs/state.md` §Hallazgos.
+
+## R2.5 · Banco 13: cómo se reescribe lo de la ronda 1
+
+- Cada `public.regenerar_codigos_recuperacion('X')` pasa a ser **dos sentencias** dentro del mismo
+  bloque `como_con_2fa`:
+  1. `select public.comprobar_contrasena_para_regenerar('X');`
+  2. `… from public.regenerar_codigos_recuperacion()`
+- Las guardas de CA2 (aal1 y reto antiguo) se comprueban **en las dos** funciones.
+- CA2 bis (límite):
+  - los cinco fallos son cinco comprobaciones malas;
+  - el «bloqueado» lo devuelve el paso dos;
+  - «intentos» se lee con `pg_temp.t38_intentos`;
+  - se añade `pg_temp.t38_autorizadas(p uuid)` con la misma forma.
+- CA2 ter (cuentas sin contraseña): la comprobación no autoriza; el paso dos da
+  `contrasena_incorrecta`.
+- CA6: las aserciones de estructura de R2-1 sustituyen a las de `:458-476`.
+- El bloque Q1 (`:496-507`) se sustituye por R2-5.
+- R2-4 va junto a la sección de `registrar_reposicion_totp` (`:207`).
+
+## R2.6 · Riesgos de la ronda 2, por probabilidad
+
+1. **Alta.** El implementador escribe la comprobación con dos ramas de escritura, «más legible». Lo
+   cogen R2-1 (una sola escritura y M-A1e) y O1 en S5.
+2. **Alta.** `db reset` y `npm run tipos` con el verificador usando la base. Se ordena desde fuera: el
+   implementador no resetea hasta que el orquestador lo diga.
+3. **Media.** `supabase status -o env` no trae `JWT_SECRET` con esta versión del CLI. El guion tiene la
+   alternativa de la clave `oct` del contenedor (R2-2). Si las dos fallan, R2-2 pasa a manual con el
+   token de una sesión real del navegador, y se anota.
+4. **Media.** La autorización sobrante: una comprobación buena cuyo paso dos no llega deja hasta 60 s
+   en los que quien tenga **solo** la sesión (aal2 reciente incluido) puede regenerar una vez.
+   - Para eso hace falta la cookie robada justo en ese minuto.
+   - El titular recibe el aviso `codigos_regenerados`.
+   - Se dice, no se cierra (P2).
+5. **Baja.** La diferencia de tiempo del aviso de bloqueo en el quinto fallo. No revela nada que el
+   paso dos no diga ya, y el fallo se confirma.
+6. **Baja.** Un `statement_timeout` distinto entre la llamada a `registro_postgres_seguro` y la
+   comprobación. Las dos van por PostgREST con el mismo rol: harían falta dos configuraciones de rol
+   distintas entre dos peticiones seguidas.
+
+## R2.7 · Qué revisar (ronda 2)
+
+- **Uniformidad del paso uno.**
+  - Entre `crypt` y el final solo hay **una** sentencia de escritura con `case`, más el aviso
+    condicionado a `v_bloqueo`.
+  - No hay `return` dentro de ningún `if v_ok`.
+  - No hay `raise` después de `crypt`.
+  - El `least(…, 100)` está.
+- **La guarda de solo lectura** va antes del candado y de `crypt`, y su texto es el que pide el banco.
+- **El paso dos** no lee `auth.users` ni recibe nada. Consume con `> 0 and autorizado_hasta > now()`,
+  **antes** de caducar el lote.
+- **Ningún sitio vuelve a crear `regenerar_codigos_recuperacion(text)`**, ni en `tipos-bd.ts` ni en el
+  TS (`rg "p_contrasena" lib app` solo da la comprobación).
+- **`registrar_reposicion_totp`** es una copia fiel del cuerpo anterior más dos líneas. Compara con
+  `diff` contra `20260830090000:498-525`.
+- **`evaluar_registro_postgres`**:
+  - no la ejecuta nadie más que su dueño;
+  - cada condición lleva su `coalesce(…, true)`;
+  - las listas de precarga se normalizan (ruta, comillas, espacios, mayúsculas);
+  - `alcanzable` usa `st > 0 and st <= u`, y no `<`.
+- **Las negativas del banco fallan por el motivo dicho**, no por un error de cast. Cada mapa de negativa
+  es un `jsonb` válido.
+- **Puertas laterales:**
+  - `TRUNCATE` y `DELETE` sobre `intentos_regenerar_codigos`: sin grants, como en la ronda 1.
+  - Un `null` en `p_contrasena`: `v_ok` falso, y cuenta como fallo.
+  - Dos comprobaciones concurrentes: el candado y el `on conflict` las serializan.
+  - Las dos copias del contraensayo, sin `execute` para `anon`.
+- **Interfaz:** que la prueba de B-H1 monte `ArmazonCliente` de verdad, y que B-H6 mire `value` y no
+  HTML.
+
+## R2.8 · Territorio y delegable
+
+**El territorio no cambia.** Todo lo de esta adenda cae dentro de lo que declara el contrato:
+
+- la migración `*_regenerar_codigos_recuperacion.sql`, también para redefinir
+  `registrar_reposicion_totp`;
+- `scripts/rls/13-cuentas.sql`;
+- `scripts/t038-*`, que incluye `t038-oraculo.mjs`;
+- `lib/cuentas/**`;
+- `lib/supabase/tipos-bd.ts`, solo por `npm run tipos`;
+- `lib/i18n/es.ts`;
+- `app/(app)/cuenta/**` y `app/primera-vez/**`;
+- `components/armazon/**`, que incluye el test nuevo;
+- `accesibilidad/**`;
+- `docs/interfaz.md`.
+
+Los JSON de evidencia van a `tickets/T-038/` como en la ronda 1. La memoria de cierre
+(`docs/bitacora/T-038.md` y `docs/state.md`) es la de siempre.
+
+**No se toca** `app/(app)/ajustes/**`: la pantalla de reposición ya excluye al propio perfil.
+
+**Delegable: nada.** Lo de esta ronda es base, contraseña, foco o ARIA. La marca «Sin leer» es pintura,
+pero son tres líneas y no merecen encargo.
+
+## R2.9 · Preguntas para el propietario
+
+**P1 · ¿Se da por cumplido P-4 con el protocolo de dos pasos?**
+
+P-4 dice «la función que regenera exige la contraseña como parámetro y la coteja en Postgres». Con DR1:
+
+- la contraseña la coteja en Postgres `comprobar_contrasena_para_regenerar`;
+- la que regenera **no** la recibe: solo gasta una autorización que la otra deja confirmada.
+
+La lectura literal, una sola función que coteja y devuelve los códigos, es justo la que deja el límite
+de intentos sin efecto (A-H1). No hay forma de cumplirla al pie de la letra sin el oráculo.
+
+- La puerta de PostgREST con solo las cookies sigue cerrada, porque sin autorización el paso dos no da
+  nada.
+- Sigue habiendo límite de intentos, y ahora se cuenta siempre.
+
+**Recomendación: sí.** Sin esta confirmación no se implementa.
+
+**P2 · Caducidad y tope de la autorización: 60 s y 2.**
+
+60 s sobra para las dos llamadas seguidas de la acción y acota la ventana del riesgo 4. El tope 2 cubre
+el doble envío y el CA4.
+
+- Alternativa más estricta: atar la autorización al `session_id` del JWT. No protege contra la cookie
+  robada, que es la misma sesión, así que no compensa.
+
+**Recomendación: 60 s y 2.**
+
+**P3 · El PIN (`desbloquear_historia`), en un ticket aparte, de riesgo alto, justo detrás de T-038 en la
+cola de `supabase/`** (antes de T-040 B).
+
+Es el mismo defecto que A-H1, pero sobre el tercer factor que protege la historia clínica. Con una
+sesión aal2 robada, un PIN de seis dígitos cae por fuerza bruta.
+
+No entra en T-038 por tres razones:
+
+- su función vive en otras migraciones;
+- su pantalla está fuera del alcance del contrato;
+- meterlo duplicaría el tamaño de la ronda.
+
+`canjear_codigo_recuperacion` va en el mismo ticket: el patrón es el mismo, aunque el impacto es menor
+(40 bits).
+
+**Recomendación: ticket aparte e inmediato**, con la nota de abajo para `docs/state.md` §Hallazgos.
+
+> **Hallazgo ALTA (T-038 ronda 1, revisor A, fuera del diff) · `desbloquear_historia(p_pin)` y
+> `canjear_codigo_recuperacion(p_codigo)` (`20260830090000:727` y `:606`).**
+> - Las dos devuelven el fallo como motivo sin lanzar, y su contador solo persiste si la transacción
+>   del llamante confirma.
+> - Por PostgREST 16.1, el objeto singular con un filtro sobre la salida da 406 y deshace el intento
+>   fallido: `Accept: application/vnd.pgrst.object+json` más `?desbloqueado=is.true`, o
+>   `?canjeado=is.true`.
+> - El límite de cinco fallos no existe. Un PIN de seis dígitos cae por fuerza bruta con una sesión aal2
+>   robada.
+> - Arreglo: el protocolo de dos pasos de T-038, ronda 2 (DR1 en `tickets/T-038/diseno.md`). Una
+>   comprobación que confirma siempre con respuesta uniforme, y luego el paso que lee lo confirmado.
+> - Ticket propio de riesgo alto. Territorio:
+>   - `supabase/migrations/*_pin_y_canje_en_dos_pasos.sql`;
+>   - `scripts/rls/**`;
+>   - `lib/cuentas/candado.ts`, `lib/cuentas/totp.ts` (canje) y sus pruebas;
+>   - las pantallas que los llaman.
+> - Deducido del código de PostgREST, no medido por HTTP. Su oráculo se mide con un guion como
+>   `t038-oraculo.mjs`.
+
+**P4 · El umbral de `auto_explain` (DR7).**
+
+- La regla literal de A-H6 deja la regeneración siempre en «inseguro» con los valores de fábrica de la
+  imagen (umbral 10 s y parámetros sin límite).
+- La regla de esta adenda la permite solo mientras el `statement_timeout` en vigor corte antes del
+  umbral, y lo comprueba en cada llamada.
+- La tercera vía sería que la migración fijase `alter role authenticated set
+  auto_explain.log_parameter_max_length = 0`. `postgres` puede, medido en `rollback`. Pero:
+  - no está medido que PostgREST lo aplique en cada transacción;
+  - toca la configuración de registro de todo el rol.
+
+**Recomendación: la regla de la adenda.**
+
+## Lo que no entra, y por qué (ronda 2)
+
+- **Arreglar `desbloquear_historia` y `canjear_codigo_recuperacion`:** P3, ticket aparte.
+- **Exigir `aal2` en `registrar_reposicion_totp`:** ningún hallazgo lo pide. La acción de ajustes ya
+  corre con sesión `aal2`. Se anota en `docs/state.md` si el revisor lo ve necesario.
+- **Atar la autorización a la sesión:** P2. No protege contra la cookie robada.
+- **Cambiar la configuración de registro de la instancia o de los roles:** es de despliegue, P4. La
+  nota de Q1 sigue yendo a `state.md`.
+- **`dblink` o transacciones autónomas:** DR1.
+- **Bajar el coste del bcrypt de los códigos o tocar la activación:** ningún hallazgo lo pide.
+- **Cambiar `app/(app)/ajustes/**`:** ya excluye al propio perfil.
+
+## R2.10 · Respuestas del propietario (03-10-2026)
+
+- **P1 → sí.** P-4 se da por cumplido con el protocolo de dos pasos (DR1).
+- **P2 → 60 s y 2 usos.**
+- **P3 → ticket aparte, de riesgo alto, inmediatamente después de T-038** en la cola de `supabase/`
+  (antes de T-040 B). Lleva `desbloquear_historia` y `canjear_codigo_recuperacion`.
+- **P4 → la regla de la adenda (DR7):** el umbral se compara con el `statement_timeout` en vigor en
+  cada llamada.
