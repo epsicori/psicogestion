@@ -18,6 +18,13 @@ const nextConfig: NextConfig = {
    * usuarios distintos, y `use cache: private` no se usa en ningún sitio.
    */
   cacheComponents: true,
+  /**
+   * T-038 (decisión Q2 del propietario). En desarrollo, Next imprime en la terminal cada
+   * Server Function con SUS ARGUMENTOS (`ƒ regenerarCodigos({contrasena…})`). La
+   * contraseña de «Regenerar mis códigos» viaja como argumento: se apaga ese registro.
+   * Verificado en `node_modules/next/dist/docs/.../logging.md` («Server Functions»).
+   */
+  logging: { serverFunctions: false },
 };
 
 export default nextConfig;

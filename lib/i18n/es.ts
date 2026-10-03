@@ -14,6 +14,7 @@ export const es = {
     abrirMenu: 'Abrir menú',
     cerrarMenu: 'Cerrar menú',
     cerrarSesion: 'Cerrar sesión',
+    miCuenta: 'Mi cuenta',
     perfilSinAsignar: 'Perfil sin asignar',
     sinPerfil: 'Sin perfil',
     proximamente: 'pronto',
@@ -243,6 +244,9 @@ export const es = {
       unaSolaVez:
         'Guárdalos ahora en un sitio seguro: son la única forma de entrar si pierdes el teléfono, y no se pueden volver a consultar.',
       guardados: 'Ya los he guardado',
+      fallo:
+        'No se han podido generar tus códigos de recuperación. No se volverán a ofrecer al entrar: puedes generarlos en Mi cuenta › Seguridad, con tu contraseña.',
+      reintentar: 'Reintentar',
     },
 
     pin: {
@@ -254,6 +258,44 @@ export const es = {
       fijar: 'Guardar el PIN',
       noCoinciden: 'Los dos PIN no coinciden.',
       fijado: 'PIN guardado.',
+    },
+  },
+
+  // --- T-038 · Mi cuenta ------------------------------------------------------
+
+  cuenta: {
+    titulo: 'Mi cuenta',
+    seguridad: 'Seguridad',
+    regenerar: {
+      titulo: 'Regenerar mis códigos de recuperación',
+      aviso: 'Los códigos que tienes ahora dejarán de valer.',
+      contrasena: 'Contraseña',
+      codigo: 'Código de la aplicación',
+      ayudaCodigo: 'El número de seis dígitos que te da tu aplicación de autenticación.',
+      enviar: 'Regenerar códigos',
+    },
+    errores: {
+      contrasenaIncorrecta: 'La contraseña no es correcta.',
+      codigoNoValido: 'Ese código no es válido. Prueba con el siguiente que te dé la aplicación.',
+      sinFactor: 'No tienes la verificación en dos pasos activada.',
+      bloqueado: 'Demasiados intentos. Prueba de nuevo a las {hora}.',
+      generico: 'No se han podido regenerar los códigos. Vuelve a intentarlo.',
+      registroInseguro:
+        'Ahora mismo no es seguro enviar tu contraseña: avisa al administrador. No se ha cambiado nada.',
+    },
+    codigos: {
+      titulo: 'Tus códigos de recuperación nuevos',
+      aviso:
+        'Guárdalos ahora en un sitio seguro: solo se enseñan esta vez y los anteriores ya no valen.',
+      guardados: 'Ya los he guardado',
+    },
+    fallo: {
+      titulo: 'No se han regenerado los códigos',
+      volver: 'Volver',
+    },
+    avisos: {
+      titulo: 'Avisos de seguridad',
+      vacio: 'No hay avisos de seguridad.',
     },
   },
 
