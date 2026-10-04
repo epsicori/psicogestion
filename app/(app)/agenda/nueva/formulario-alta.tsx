@@ -429,6 +429,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
               etiqueta={t('agenda.alta.campos.sesiones')}
               type="number"
               inputMode="numeric"
+              className="h-11"
               min={2}
               max={52}
               value={typeof sesionesTotales === 'number' ? sesionesTotales : ''}
@@ -459,6 +460,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
           id={`${prefijo}-sala`}
           etiqueta={t('agenda.alta.campos.sala')}
           autoComplete="off"
+          className="h-11"
           {...register('sala', { setValueAs: vacioANulo })}
           errores={errors.sala ? [errors.sala.message ?? ''] : undefined}
         />

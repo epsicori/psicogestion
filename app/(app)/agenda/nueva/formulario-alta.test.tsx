@@ -301,6 +301,20 @@ describe('FormularioAlta · duración y hueco', () => {
   });
 });
 
+// man-12 (ronda 3, FALLA del verificador): a 360 px los campos de texto medían 40 px; el minimo es 44 (ADR-044).
+describe('FormularioAlta · tamano de los campos (man-12)', () => {
+  it('Numero de sesiones y Sala, y todo campo del formulario, piden 44 px o mas', () => {
+    pinta();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+
+    const campos = Array.from(document.querySelectorAll('form input:not([type=hidden]):not([type=checkbox]), form select'));
+    expect(campos.length).toBeGreaterThanOrEqual(4);
+    for (const campo of campos) {
+      expect(campo.className.split(' ').some((c) => c === 'h-11' || c === 'min-h-11'), campo.id).toBe(true);
+    }
+  });
+});
+
 describe('FormularioAlta · serie', () => {
   it('con periodicidad semanal pide la previsualización y guarda con su firma', async () => {
     const FIRMA = 'a'.repeat(64);
