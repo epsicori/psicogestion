@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   esquemaAlcance,
+  esquemaAltaCita,
   esquemaCancelarCita,
   esquemaCrearSerie,
   esquemaEditarSerie,
@@ -251,5 +252,74 @@ describe('esquemaReprogramarCita (T-014)', () => {
   it('la firma es SHA-256 hexadecimal en minúsculas, nada más', () => {
     expect(esquemaReprogramarCita.safeParse({ ...base, alcance: 'esta', firma: 'A'.repeat(64) }).success).toBe(false);
     expect(esquemaReprogramarCita.safeParse({ ...base, alcance: 'esta' }).success).toBe(true);
+  });
+});
+
+describe('esquemaAltaCita', () => {
+  const base = {
+    pacienteId: '11111111-1111-4111-8111-111111111111',
+    profesionalId: '22222222-2222-4222-8222-222222222222',
+    centroId: '33333333-3333-4333-8333-333333333333',
+    tipoTerapiaId: '44444444-4444-4444-8444-444444444444',
+    fecha: '2027-02-02',
+    horaLocal: '12:00',
+    periodicidad: 'suelta' as const,
+    sesionesTotales: null,
+    sala: null,
+    notaOperativa: null,
+    excluir: [] as string[],
+    aceptarAlternativas: [] as string[],
+    firma: null,
+  };
+  const firma = 'a'.repeat(64);
+  const serie = { ...base, periodicidad: 'semanal' as const, sesionesTotales: 8, firma };
+
+  it('acepta una cita suelta y una serie completa', () => {
+    expect(esquemaAltaCita.safeParse(base).success).toBe(true);
+    expect(esquemaAltaCita.safeParse(serie).success).toBe(true);
+  });
+
+  it('el tipo de terapia es obligatorio: nulo falla con «Elige un tipo de terapia.»', () => {
+    const r = esquemaAltaCita.safeParse({ ...base, tipoTerapiaId: null });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0].message).toBe('Elige un tipo de terapia.');
+  });
+
+  it('descarta una duración que mande el cliente: la fija el catálogo', () => {
+    const r = esquemaAltaCita.safeParse({ ...base, duracionMinutos: 999 });
+    expect(r.success).toBe(true);
+    if (r.success) expect('duracionMinutos' in r.data).toBe(false);
+  });
+
+  it('cero y una sesión no valen; 2 y 52 sí; 53 no', () => {
+    for (const n of [0, 1, 53]) {
+      expect(esquemaAltaCita.safeParse({ ...serie, sesionesTotales: n }).success).toBe(false);
+    }
+    for (const n of [2, 52]) {
+      expect(esquemaAltaCita.safeParse({ ...serie, sesionesTotales: n }).success).toBe(true);
+    }
+  });
+
+  it('suelta sin sesiones ni firma; serie con ambas', () => {
+    expect(esquemaAltaCita.safeParse({ ...base, sesionesTotales: 4 }).success).toBe(false);
+    expect(esquemaAltaCita.safeParse({ ...base, firma }).success).toBe(false);
+    expect(esquemaAltaCita.safeParse({ ...serie, sesionesTotales: null }).success).toBe(false);
+    expect(esquemaAltaCita.safeParse({ ...serie, firma: null }).success).toBe(false);
+  });
+
+  it('una fecha no puede estar a la vez excluida y con alternativa aceptada', () => {
+    const r = esquemaAltaCita.safeParse({ ...serie, excluir: ['2027-02-09'], aceptarAlternativas: ['2027-02-09'] });
+    expect(r.success).toBe(false);
+  });
+
+  it('rechaza fechas inexistentes, horas mal formadas y firmas que no son SHA-256 en minúsculas', () => {
+    expect(esquemaAltaCita.safeParse({ ...base, fecha: '2027-02-30' }).success).toBe(false);
+    expect(esquemaAltaCita.safeParse({ ...base, horaLocal: '9:00' }).success).toBe(false);
+    expect(esquemaAltaCita.safeParse({ ...serie, firma: 'A'.repeat(64) }).success).toBe(false);
+    expect(esquemaAltaCita.safeParse({ ...serie, excluir: ['2027-13-01'] }).success).toBe(false);
+  });
+
+  it('no existe periodicidad «diaria»', () => {
+    expect(esquemaAltaCita.safeParse({ ...base, periodicidad: 'diaria' }).success).toBe(false);
   });
 });
