@@ -54,13 +54,16 @@ function vacioANulo(valor: unknown): string | null {
 export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vista: vistaInicial, alTerminar, alCancelar }: PropsFormularioAlta) {
   const prefijo = useId();
   const [paciente, setPaciente] = useState<PacienteElegido | null>(inicial.paciente);
-  const [foco, setFoco] = useState<string | null>(null);
+  // La semana pedida (el lunes). Arranca en la que llegó pintada: con `?inicio=` en otra semana, un recálculo no salta a la de hoy.
+  const [foco, setFoco] = useState<string | null>(vistaInicial.calendario.desde);
   const [excluirHuecos, setExcluirHuecos] = useState<string[]>([]);
   const [elegido, setElegido] = useState<Elegido | null>(() => {
     const hueco = vistaInicial.calendario.huecos.find((h) => h.clave === inicial.clave && h.estado === 'libre');
     return hueco ? { clave: hueco.clave, etiqueta: hueco.etiqueta } : null;
   });
   const [serie, setSerie] = useState<Serie | null>(null);
+  // La serie que no se pudo calcular (clave y mensaje): no deja Guardar esperando, y volver a pulsarlo la reintenta.
+  const [serieFallida, setSerieFallida] = useState<{ clave: string; mensaje: string } | null>(null);
   const [aviso, setAviso] = useState('');
   const [fallo, setFallo] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -102,7 +105,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   // Los huecos: lo último que llegó y la clave de lo que se pidió, para ignorar lo que llega tarde.
   const claveCalculo = [paciente?.id ?? '', profesionalId, centroId, tipoId ?? '', foco ?? '', excluirHuecos.join(',')].join('|');
   const [calculo, setCalculo] = useState<{ clave: string; vista: VistaAlta }>({
-    clave: [inicial.paciente?.id ?? '', inicial.profesionalId, inicial.centroId, '', '', ''].join('|'),
+    clave: [inicial.paciente?.id ?? '', inicial.profesionalId, inicial.centroId, '', vistaInicial.calendario.desde, ''].join('|'),
     vista: vistaInicial,
   });
   const vista = calculo.vista;
@@ -157,7 +160,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   const claveSerie = piden ? [paciente.id, profesionalId, centroId, tipoId, fecha, hora, periodicidad, sesionesTotales].join('|') : null;
 
   useEffect(() => {
-    if (!claveSerie || serie?.clave === claveSerie) return;
+    if (!claveSerie || serie?.clave === claveSerie || serieFallida?.clave === claveSerie) return;
     let vigente = true;
     (async () => {
       try {
@@ -174,22 +177,23 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         if (!vigente) return;
         if (!resultado.ok) {
           setSerie(null);
-          setFallo(resultado.mensaje);
+          setSerieFallida({ clave: claveSerie, mensaje: resultado.mensaje });
           return;
         }
-        setFallo('');
+        setSerieFallida(null);
         setSerie({ clave: claveSerie, firma: resultado.firma, sesiones: resultado.sesiones, excluir: [], aceptar: [] });
         setValue('firma', resultado.firma);
       } catch {
-        if (vigente) setFallo(t('agenda.alta.serie.error'));
+        if (vigente) setSerieFallida({ clave: claveSerie, mensaje: t('agenda.alta.serie.error') });
       }
     })();
     return () => {
       vigente = false;
     };
-  }, [claveSerie, serie?.clave, paciente, profesionalId, centroId, tipoId, fecha, hora, periodicidad, sesionesTotales, setValue]);
+  }, [claveSerie, serie?.clave, serieFallida?.clave, paciente, profesionalId, centroId, tipoId, fecha, hora, periodicidad, sesionesTotales, setValue]);
 
   const serieVigente = claveSerie !== null && serie?.clave === claveSerie ? serie : null;
+  const falloSerie = claveSerie !== null && serieFallida?.clave === claveSerie ? serieFallida.mensaje : null;
 
   function elegirHueco(clave: string, etiqueta: string) {
     setElegido({ clave, etiqueta });
@@ -207,18 +211,20 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   /** Lo enseñado ya no corresponde a lo elegido: ni previsualización ni firma hasta que llegue otra. */
   function invalidarSerie() {
     setSerie(null);
+    setSerieFallida(null);
     setValue('firma', null);
   }
 
   /**
    * Un cambio que altera los huecos (tipo, profesional, centro) se comprueba contra el hueco ya
    * elegido; si está en otra semana, se pide esa: si no, no se sabría si todavía cabe y el guardado
-   * diría «acaba de ocuparse» sin que nadie lo haya ocupado.
+   * diría «acaba de ocuparse» sin que nadie lo haya ocupado. Se compara con la semana PEDIDA (`foco`),
+   * no con la pintada: con otra semana en vuelo, la pintada aún es la vieja (H19).
    */
   function volverAlElegido() {
     if (!elegido) return;
     const lunes = lunesDe(elegido.clave.slice(0, 10));
-    if (lunes !== vista.calendario.desde) setFoco(lunes);
+    if (lunes !== foco) setFoco(lunes);
   }
 
   function cambiarPeriodicidad(valor: (typeof PERIODICIDADES)[number]) {
@@ -245,8 +251,10 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     invalidarSerie();
   }
 
-  // Una serie solo se guarda con la previsualización vigente: mientras se recalcula, no.
-  const esperandoSerie = periodicidad !== 'suelta' && serieVigente === null;
+  // Una serie solo se guarda con la previsualización vigente. Se espera solo mientras está en vuelo: si
+  // no se puede pedir (sin tipo, sin hueco, sesiones fuera de 2-52) Guardar valida y enseña por qué, y
+  // si falló, Guardar la vuelve a pedir.
+  const esperandoSerie = claveSerie !== null && serieVigente === null && falloSerie === null;
 
   async function enviar(datos: DatosAltaCita) {
     if (esperandoSerie) return;
@@ -301,7 +309,14 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   return (
     <form
       noValidate
-      onSubmit={handleSubmit(enviar)}
+      onSubmit={(evento) => {
+        if (falloSerie !== null) {
+          evento.preventDefault();
+          setSerieFallida(null);
+          return;
+        }
+        void handleSubmit(enviar)(evento);
+      }}
       className="flex flex-col gap-5"
       aria-label={t('agenda.alta.titulo')}
     >
@@ -460,6 +475,11 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
       <div role="status" className="text-sm">
         {aviso}
       </div>
+      {falloSerie && (
+        <p role="alert" className="text-destructive text-sm">
+          {falloSerie}
+        </p>
+      )}
       {fallo && (
         <p role="alert" className="text-destructive text-sm">
           {fallo}

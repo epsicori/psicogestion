@@ -225,9 +225,10 @@ describe('FormularioAlta · hueco elegido fuera de la semana visible (H8)', () =
   const SIN_EL_HUECO = vistaCon([bloque('2026-10-06', '17:00', 'ocupado'), bloque('2026-10-06', '18:00', 'libre')]);
 
   it('al cambiar la duración con el elegido en otra semana, se comprueba también ese hueco y no se dice «acaba de ocuparse» al guardar', async () => {
-    m.recalcularAlta.mockImplementation(async (entrada: { fechaFoco: string | null }) => {
+    m.recalcularAlta.mockImplementation(async (entrada: { fechaFoco: string | null; tipoTerapiaId: string | null }) => {
       if (entrada.fechaFoco === '2026-10-12') return { ok: true, vista: SEMANA_2, duracionMinutos: 50 };
-      if (entrada.fechaFoco === '2026-10-05') return { ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 };
+      // La semana del elegido con la duración larga: ya no cabe.
+      if (entrada.fechaFoco === '2026-10-05' && entrada.tipoTerapiaId === TIPO_B) return { ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 };
       return { ok: true, vista: VISTA, duracionMinutos: 50 };
     });
     pinta();
@@ -458,3 +459,104 @@ describe('FormularioAlta · profesional por defecto al elegir paciente (H9)', ()
     expect((screen.getByLabelText('Profesional') as HTMLSelectElement).value).toBe(PROFESIONAL);
   });
 });
+
+// H19 (ronda 3) y el salto a la semana de hoy: la semana que cuenta es la pedida, no la pintada.
+describe('FormularioAlta · semana pedida y semana pintada (H19)', () => {
+  const SEMANA_13 = {
+    ...VISTA,
+    calendario: construirCalendarioAlta({
+      fechaFoco: '2026-10-13',
+      zona: 'Europe/Madrid',
+      hoy: '2026-10-04',
+      sugerencias: { modo: 'enFrio', sugerencias: [] },
+      bloques: [bloque('2026-10-13', '10:00', 'libre')],
+    }),
+  };
+
+  it('con la semana siguiente todavía en vuelo, cambiar de tipo vuelve a pedir la semana del elegido', async () => {
+    m.recalcularAlta.mockImplementation(
+      (entrada: { fechaFoco: string | null }) =>
+        entrada.fechaFoco === '2026-10-12'
+          ? new Promise(() => {})
+          : Promise.resolve({ ok: true, vista: VISTA, duracionMinutos: 50 }),
+    );
+    pinta();
+    await elegirTipoYHueco(TIPO_A);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Semana siguiente' }));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
+    });
+
+    await waitFor(() => expect(m.recalcularAlta).toHaveBeenLastCalledWith(expect.objectContaining({ fechaFoco: '2026-10-05', tipoTerapiaId: TIPO_B })));
+  });
+
+  it('si la página se abrió en otra semana (?inicio=), elegir el tipo no salta a la semana de hoy', async () => {
+    pinta({ vista: SEMANA_13 });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_A } });
+    });
+
+    await waitFor(() => expect(m.recalcularAlta).toHaveBeenCalled());
+    expect(m.recalcularAlta).toHaveBeenLastCalledWith(expect.objectContaining({ fechaFoco: '2026-10-12' }));
+  });
+});
+
+// H15 (ronda 3): esperar a la serie no puede esconder los errores ni dejar sin salida un fallo.
+describe('FormularioAlta · la espera de la serie (H15)', () => {
+  const SESIONES = [
+    { fecha: '2026-10-06', fechaLarga: 'Martes, 6 de octubre de 2026', hora: '17:00', estado: 'normal' as const, alternativa: null, horaResultante: null },
+    { fecha: '2026-10-13', fechaLarga: 'Martes, 13 de octubre de 2026', hora: '17:00', estado: 'normal' as const, alternativa: null, horaResultante: null },
+  ];
+
+  it('con semanal y 1 sesión, Guardar está activo y enseña el error del número de sesiones', async () => {
+    pinta();
+    await elegirTipoYHueco();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '1' } });
+
+    const guardar = screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement;
+    expect(guardar.disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(guardar);
+    });
+
+    expect(await screen.findByText('Una serie tiene entre 2 y 52 sesiones.')).toBeTruthy();
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+  });
+
+  it('si la previsualización falla por transporte, Guardar sigue activo y volver a pulsarlo la reintenta', async () => {
+    m.previsualizarAltaSerie.mockRejectedValueOnce(new Error('red')).mockResolvedValue({ ok: true, firma: 'a'.repeat(64), sesiones: SESIONES });
+    pinta();
+    await elegirTipoYHueco();
+    // Las 8 sesiones por defecto: una sola petición, la que falla.
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('No se ha podido calcular la serie'));
+    const guardar = screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement;
+    expect(guardar.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(guardar);
+    });
+
+    expect(await screen.findByText('Así quedaría la serie')).toBeTruthy();
+    expect(m.previsualizarAltaSerie).toHaveBeenCalledTimes(2);
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+  });
+
+  it('mientras la serie está en vuelo, Guardar sigue desactivado', async () => {
+    m.previsualizarAltaSerie.mockImplementation(() => new Promise(() => {}));
+    pinta();
+    await elegirTipoYHueco();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '2' } });
+
+    await waitFor(() => expect(m.previsualizarAltaSerie).toHaveBeenCalled());
+    expect((screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+

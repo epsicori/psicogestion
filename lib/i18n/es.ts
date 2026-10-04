@@ -1034,7 +1034,7 @@ export const es = {
         todas: 'Todas',
         titulo: 'Así quedaría la serie',
         vacio: 'Elige un hueco y una periodicidad para ver la serie.',
-        error: 'No se ha podido calcular la serie.',
+        error: 'No se ha podido calcular la serie. Pulsa Guardar para volver a intentarlo.',
         incluirSesion: 'Incluir la sesión del {fecha}',
         aceptarAlternativaSesion: 'Aceptar la alternativa de la sesión del {fecha}',
         todasLasSesiones: 'Incluir todas las sesiones',
