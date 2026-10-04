@@ -6,10 +6,13 @@
 //
 // CB1 · Contenido ⇒ rastro. `rpc/exportar_nota` se llama como AUT (autora, sin motivo) y como ADM
 // (con `peticion_paciente`) en seis formas: S1 POST, S2 `Accept` de objeto, S3 `Prefer: tx=rollback`,
-// S4 `Prefer: handling=strict, max-affected=0`, S5 GET y S6 POST con `Accept` de objeto y un filtro
-// `?exportacion_id=eq.<uuid>`. Invariante por llamada: si el cuerpo trae `MARCA-CUERPO-1` o un
-// `exportacion_id`, entonces Δexportaciones = +1, Δaccesos_historia (exportacion) = +1 y
-// Δnotificaciones de ese origen = +2 (ADM) o 0 (AUT); si no trae nada de eso, las tres Δ son 0.
+// S4 `Prefer: handling=strict, max-affected=0`, S5 GET, S6 POST con `Accept` de objeto y un filtro
+// que no casa `?pgrst_scalar->>exportacion_id=eq.<uuid>`, y S6b con uno que casa (`not.is.null`).
+// El filtro va sobre `pgrst_scalar` porque una columna inexistente (`?exportacion_id=`) recibe un
+// 42703 de PostgREST sin llegar a llamar a la función (revisión A-H1). Invariante por llamada: si el
+// cuerpo trae `MARCA-CUERPO-1` o un `exportacion_id`, entonces Δexportaciones = +1,
+// Δaccesos_historia (exportacion) = +1 y Δnotificaciones de ese origen = +2 (ADM) o 0 (AUT); si no
+// trae nada de eso, las tres Δ son 0, salvo S6, donde rastro sin entrega es lo permitido.
 //
 // CB7 · Registro concurrente. Una sesión `psql` como `postgres` inserta el fichero de una exportación
 // de AUT y no confirma; AUT llama por HTTP a `registrar_fichero_exportado`, que espera; el bloqueador
@@ -250,9 +253,17 @@ try {
     S4: { descripcion: "POST con Prefer: handling=strict, max-affected=0", metodo: "POST", opciones: { extra: { Prefer: "handling=strict, max-affected=0" } } },
     S5: { descripcion: "GET con los parámetros en la consulta", metodo: "GET", opciones: {} },
     S6: {
-      descripcion: "POST con Accept: objeto singular y ?exportacion_id=eq.<uuid aleatorio>",
+      descripcion: "POST con Accept: objeto singular y ?pgrst_scalar->>exportacion_id=eq.<uuid aleatorio>",
       metodo: "POST",
-      opciones: { extra: { Accept: "application/vnd.pgrst.object+json" }, consulta: `?exportacion_id=eq.${randomUUID()}` },
+      opciones: {
+        extra: { Accept: "application/vnd.pgrst.object+json" },
+        consulta: `?pgrst_scalar->>exportacion_id=eq.${randomUUID()}`,
+      },
+    },
+    S6b: {
+      descripcion: "POST con Accept: objeto singular y ?pgrst_scalar->>exportacion_id=not.is.null (el filtro casa)",
+      metodo: "POST",
+      opciones: { extra: { Accept: "application/vnd.pgrst.object+json" }, consulta: "?pgrst_scalar->>exportacion_id=not.is.null" },
     },
   };
 
@@ -278,7 +289,13 @@ try {
         delta,
         cuerpo: contenido ? `(${r.cuerpo.length} caracteres con contenido; no se copia)` : r.cuerpo.slice(0, 300),
       };
-      const esperado = contenido ? { exportaciones: 1, accesos: 1, avisos: a.avisos } : { exportaciones: 0, accesos: 0, avisos: 0 };
+      const lleno = { exportaciones: 1, accesos: 1, avisos: a.avisos };
+      const vacio = { exportaciones: 0, accesos: 0, avisos: 0 };
+      // S6: el filtro sobre `pgrst_scalar` SÍ llega a la función y la transacción confirma sin
+      // entregar (revisión A-H1): rastro sin contenido es la dirección permitida. Lo prohibido, en
+      // cualquier forma, es contenido sin rastro.
+      const rastroSinEntrega = nombre === "S6" && JSON.stringify(delta) === JSON.stringify(lleno);
+      const esperado = contenido || rastroSinEntrega ? lleno : vacio;
       exigir(
         JSON.stringify(delta) === JSON.stringify(esperado),
         `CB1 · ${actor} ${nombre} (${forma.descripcion}): ${r.estado}, contenido ${contenido}, Δ ${JSON.stringify(delta)} = ${JSON.stringify(esperado)}`,
@@ -293,6 +310,21 @@ try {
           `CB1 · ${actor} S5: 4xx con «exige una transacción de escritura» (${r.estado} ${r.cuerpo.slice(0, 120)})`,
         );
       }
+      if (nombre === "S6" || nombre === "S6b") {
+        // Que el filtro se aplique de verdad: ni 42703 (columna inexistente: PostgREST responde sin
+        // llamar a la función, y el Δ 0 no prueba nada) ni 406 (un PostgREST que tratara «objeto y
+        // 0 filas» como en un setof desharía acceso y exportación: el filtro sería un oráculo sin rastro).
+        exigir(
+          !r.cuerpo.includes("42703") && (r.estado === 200 || r.estado === 416),
+          `CB1 · ${actor} ${nombre}: el filtro sobre pgrst_scalar se aplica (200 o 416; ni 406 ni 42703): ${r.estado} ${contenido ? "" : r.cuerpo.slice(0, 120)}`,
+        );
+        exigir(
+          delta.exportaciones === 1,
+          `CB1 · ${actor} ${nombre}: la función se ejecutó y confirmó (Δexportaciones = 1; medido ${delta.exportaciones})`,
+        );
+      }
+      if (nombre === "S6") exigir(!contenido, `CB1 · ${actor} S6: el filtro que no casa no entrega contenido`);
+      if (nombre === "S6b") exigir(contenido && r.estado === 200, `CB1 · ${actor} S6b: el filtro que casa entrega, con su rastro (${r.estado})`);
       if (nombre === "S1") evidencia.cb1[actor].exportacion_s1 = exportacionDe(r);
     }
   }

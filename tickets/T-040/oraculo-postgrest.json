@@ -1,13 +1,13 @@
 {
   "ticket": "T-040",
   "fijacion": {
-    "C": "d49ff488-e618-4b8f-ae9f-fe4fe553f5eb",
-    "ADM": "d604def9-05a4-49c8-b3c8-ca90f4be744e",
-    "TIT": "80ae876e-631b-4406-bf98-867561980579",
-    "AUT": "8d5484a6-ce72-4f9b-90a5-aa36e366ddd1",
-    "PA": "8a44e137-2204-44a0-a9e2-fdd986c87b56",
-    "E": "3157c2a5-66fd-44d7-8d77-ef08151d7735",
-    "N": "9a461fea-6188-484f-ade5-178f07ec872e"
+    "C": "afac1ae6-d76c-4f90-af5d-13c8b93d3f6a",
+    "ADM": "ddf6e78f-3cc1-4540-b6c7-7f31c31c03be",
+    "TIT": "b541431d-37fb-402b-a18c-1f7a4ba9b902",
+    "AUT": "324b01f5-397b-407c-8066-aa030f556cc0",
+    "PA": "b8ae6b0b-b0d4-4d78-a015-7033eb0b3e63",
+    "E": "36f88949-aa9f-4957-a4a1-7e1f0a64bc0d",
+    "N": "3b2a8f42-8496-42f3-a1ae-c9b64adf2d16"
   },
   "cb1": {
     "AUT": {
@@ -22,7 +22,7 @@
         },
         "cuerpo": "(1927 caracteres con contenido; no se copia)"
       },
-      "exportacion_s1": "7cbf999e-d4c7-4683-8f25-db9028359a34",
+      "exportacion_s1": "62fc3ad3-32ca-4590-9c00-8cd89ff6c56b",
       "S2": {
         "descripcion": "POST con Accept: objeto singular",
         "estado": 200,
@@ -32,7 +32,7 @@
           "accesos": 1,
           "avisos": 0
         },
-        "cuerpo": "(1926 caracteres con contenido; no se copia)"
+        "cuerpo": "(1927 caracteres con contenido; no se copia)"
       },
       "S3": {
         "descripcion": "POST con Prefer: tx=rollback",
@@ -43,7 +43,7 @@
           "accesos": 1,
           "avisos": 0
         },
-        "cuerpo": "(1927 caracteres con contenido; no se copia)"
+        "cuerpo": "(1926 caracteres con contenido; no se copia)"
       },
       "tx_rollback_ignorado": true,
       "S4": {
@@ -69,15 +69,26 @@
         "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La exportación exige una transacción de escritura.\"}"
       },
       "S6": {
-        "descripcion": "POST con Accept: objeto singular y ?exportacion_id=eq.<uuid aleatorio>",
-        "estado": 400,
+        "descripcion": "POST con Accept: objeto singular y ?pgrst_scalar->>exportacion_id=eq.<uuid aleatorio>",
+        "estado": 200,
         "contenido": false,
         "delta": {
-          "exportaciones": 0,
-          "accesos": 0,
+          "exportaciones": 1,
+          "accesos": 1,
           "avisos": 0
         },
-        "cuerpo": "{\"code\":\"42703\",\"details\":null,\"hint\":null,\"message\":\"column exportar_nota.exportacion_id does not exist\"}"
+        "cuerpo": "null"
+      },
+      "S6b": {
+        "descripcion": "POST con Accept: objeto singular y ?pgrst_scalar->>exportacion_id=not.is.null (el filtro casa)",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 0
+        },
+        "cuerpo": "(1927 caracteres con contenido; no se copia)"
       }
     },
     "ADM": {
@@ -92,7 +103,7 @@
         },
         "cuerpo": "(1248 caracteres con contenido; no se copia)"
       },
-      "exportacion_s1": "c1b89289-636d-4df8-8ff8-20379e37b127",
+      "exportacion_s1": "68e9a8d4-ee88-4fb7-b18d-68a980ee8fa6",
       "S2": {
         "descripcion": "POST con Accept: objeto singular",
         "estado": 200,
@@ -139,20 +150,31 @@
         "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La exportación exige una transacción de escritura.\"}"
       },
       "S6": {
-        "descripcion": "POST con Accept: objeto singular y ?exportacion_id=eq.<uuid aleatorio>",
-        "estado": 400,
+        "descripcion": "POST con Accept: objeto singular y ?pgrst_scalar->>exportacion_id=eq.<uuid aleatorio>",
+        "estado": 200,
         "contenido": false,
         "delta": {
-          "exportaciones": 0,
-          "accesos": 0,
-          "avisos": 0
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 2
         },
-        "cuerpo": "{\"code\":\"42703\",\"details\":null,\"hint\":null,\"message\":\"column exportar_nota.exportacion_id does not exist\"}"
+        "cuerpo": "null"
+      },
+      "S6b": {
+        "descripcion": "POST con Accept: objeto singular y ?pgrst_scalar->>exportacion_id=not.is.null (el filtro casa)",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 2
+        },
+        "cuerpo": "(1248 caracteres con contenido; no se copia)"
       }
     }
   },
   "cb7": {
-    "exportacion": "7cbf999e-d4c7-4683-8f25-db9028359a34",
+    "exportacion": "62fc3ad3-32ca-4590-9c00-8cd89ff6c56b",
     "en_espera": 1,
     "respuesta": {
       "estado": 409,
