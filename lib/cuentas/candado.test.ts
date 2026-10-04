@@ -63,6 +63,24 @@ describe('desbloquearHistoria · dos pasos', () => {
     expect(await desbloquearHistoria(b.sesion, PIN)).toMatchObject({ desbloqueado: false, motivo: 'error' });
   });
 
+  it('si el paso dos falla, en consola solo va el código del error (B1-H5)', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { sesion } = sesionFingida({
+      error: { code: 'PGRST301', message: 'DETALLE-NO-DEBE-SALIR', details: 'DETALLE-NO-DEBE-SALIR', hint: 'DETALLE-NO-DEBE-SALIR' },
+    });
+    await desbloquearHistoria(sesion, PIN);
+    const registrado = JSON.stringify(consola.mock.calls);
+    expect(registrado).not.toContain('DETALLE-NO-DEBE-SALIR');
+    expect(registrado).toContain('PGRST301');
+  });
+
+  it('si el paso dos no devuelve fila y no hay error, en consola va «sin fila» (B1-H5)', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { sesion } = sesionFingida({ data: [] });
+    await desbloquearHistoria(sesion, PIN);
+    expect(JSON.stringify(consola.mock.calls)).toContain('sin fila');
+  });
+
   it('un éxito no registra nada en consola', async () => {
     const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { sesion } = sesionFingida({ data: [FILA_OK] });

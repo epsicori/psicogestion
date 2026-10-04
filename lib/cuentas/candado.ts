@@ -76,7 +76,7 @@ export async function desbloquearHistoria(
   const { data, error } = await sesion.supabase.rpc('desbloquear_historia');
   const fila = data?.[0];
   if (error || !fila) {
-    console.error('desbloquearHistoria: fallo al llamar desbloquear_historia()', error);
+    console.error('desbloquearHistoria: fallo al llamar desbloquear_historia()', error?.code ?? 'sin fila');
     return { desbloqueado: false, motivo: 'error', caducaEn: null, bloqueadoHasta: null };
   }
   return {

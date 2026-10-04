@@ -141,7 +141,7 @@ export async function canjearCodigoRecuperacion(
   const { data, error } = await sesion.supabase.rpc('canjear_codigo_recuperacion');
   const fila = data?.[0];
   if (error || !fila) {
-    console.error('canjearCodigoRecuperacion: fallo al llamar canjear_codigo_recuperacion()', error);
+    console.error('canjearCodigoRecuperacion: fallo al llamar canjear_codigo_recuperacion()', error?.code ?? 'sin fila');
     return { canjeado: false, motivo: 'error', bloqueadoHasta: null };
   }
 
