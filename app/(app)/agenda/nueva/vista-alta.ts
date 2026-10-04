@@ -3,9 +3,9 @@ import { es as localeEs } from 'date-fns/locale';
 import { TZDate, tz } from '@date-fns/tz';
 
 import type { ResultadoSugerencias } from '@/lib/agenda/sugerencias';
-import type { BloqueAlta } from '@/lib/citas/alta';
+import type { BloqueAlta, PrevisualizacionAlta } from '@/lib/citas/alta';
 import { diaDeLaSemana, sumarDias } from '@/lib/fechas/calendario';
-import { formatearFechaLarga, formatearRango } from '@/lib/fechas/formato';
+import { formatearFechaLarga, formatearHora, formatearRango } from '@/lib/fechas/formato';
 import { t, tCon } from '@/lib/i18n';
 
 import { textoMotivo } from './motivo';
@@ -165,6 +165,37 @@ export function construirCalendarioAlta(entrada: {
     eje: { desdeMinuto, hastaMinuto, horas },
     huecos,
   };
+}
+
+export type SesionVista = {
+  /** `AAAA-MM-DD` original de la sesión: la clave de «excluir» y «aceptar alternativa». */
+  fecha: string;
+  fechaLarga: string;
+  hora: string | null;
+  estado: 'normal' | 'festivo' | 'ausencia' | 'ocupada' | 'cambioDeHora';
+  alternativa: string | null;
+  horaResultante: string | null;
+};
+
+/**
+ * Una fila por sesión de la serie, ya escrita. Un bloqueo no enseña hora; una hora inexistente o
+ * ambigua es un cambio de hora y dice a cuál queda. Solo formatea lo que la base devolvió.
+ */
+export function presentarSerie(previa: PrevisualizacionAlta, zona: string): SesionVista[] {
+  return previa.sesiones.map((s) => {
+    const alternativa = s.alternativa
+      ? `${formatearFechaLarga(new Date(s.alternativa.inicio), zona)}, ${formatearHora(new Date(s.alternativa.inicio), zona)}`
+      : null;
+    const cambio = !s.bloqueo && s.clasificacion !== 'normal';
+    return {
+      fecha: s.fecha,
+      fechaLarga: mayuscula(formatearFechaLarga(alMediodia(s.fecha, zona), zona)),
+      hora: s.bloqueo ? null : s.horaLocal,
+      estado: s.bloqueo ?? (cambio ? 'cambioDeHora' : 'normal'),
+      alternativa,
+      horaResultante: cambio ? formatearHora(new Date(s.inicio), zona) : null,
+    };
+  });
 }
 
 /** Las tarjetas de sugerencia: fecha larga, hora y motivo escrito. Nunca el tipo ni una cifra de acierto. */

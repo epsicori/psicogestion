@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   esquemaAlcance,
   esquemaAltaCita,
+  esquemaBuscarPacientes,
   esquemaCancelarCita,
   esquemaCrearSerie,
   esquemaEditarSerie,
+  esquemaPrevisualizarAltaSerie,
+  esquemaRecalcularAlta,
   esquemaReprogramarCita,
 } from './esquemas';
 
@@ -321,5 +324,68 @@ describe('esquemaAltaCita', () => {
 
   it('no existe periodicidad «diaria»', () => {
     expect(esquemaAltaCita.safeParse({ ...base, periodicidad: 'diaria' }).success).toBe(false);
+  });
+});
+
+const UUID_A = '6f1c1b4e-2a1d-4c7e-9a3b-0d2e5f8a9b10';
+const UUID_B = '7f1c1b4e-2a1d-4c7e-9a3b-0d2e5f8a9b10';
+
+describe('esquemaRecalcularAlta', () => {
+  const inicial = {
+    pacienteId: null,
+    profesionalId: UUID_A,
+    centroId: UUID_B,
+    tipoTerapiaId: null,
+    fechaFoco: null,
+    excluir: [],
+  };
+
+  it('acepta el alta sin paciente, sin tipo y sin semana (valores iniciales)', () => {
+    expect(esquemaRecalcularAlta.safeParse(inicial).success).toBe(true);
+  });
+
+  it('exige uuid de profesional y de centro, fecha real y claves AAAA-MM-DDTHH:MM', () => {
+    expect(esquemaRecalcularAlta.safeParse({ ...inicial, profesionalId: 'x' }).success).toBe(false);
+    expect(esquemaRecalcularAlta.safeParse({ ...inicial, centroId: 'x' }).success).toBe(false);
+    expect(esquemaRecalcularAlta.safeParse({ ...inicial, fechaFoco: '2027-02-30' }).success).toBe(false);
+    expect(esquemaRecalcularAlta.safeParse({ ...inicial, excluir: ['2027-02-10 10:00'] }).success).toBe(false);
+    expect(esquemaRecalcularAlta.safeParse({ ...inicial, excluir: ['2027-02-10T10:00'] }).success).toBe(true);
+  });
+
+  it('no deja pasar una duración del cliente: la descarta', () => {
+    const r = esquemaRecalcularAlta.parse({ ...inicial, duracionMinutos: 5 });
+    expect('duracionMinutos' in r).toBe(false);
+  });
+});
+
+describe('esquemaPrevisualizarAltaSerie', () => {
+  const serieBase = {
+    pacienteId: UUID_A,
+    profesionalId: UUID_A,
+    centroId: UUID_B,
+    tipoTerapiaId: UUID_B,
+    fecha: '2027-02-09',
+    horaLocal: '10:00',
+    periodicidad: 'semanal',
+    sesionesTotales: 8,
+  };
+
+  it('acepta una serie semanal de 8', () => {
+    expect(esquemaPrevisualizarAltaSerie.safeParse(serieBase).success).toBe(true);
+  });
+
+  it('«suelta» no se previsualiza, el tipo es obligatorio y las sesiones van de 2 a 52', () => {
+    expect(esquemaPrevisualizarAltaSerie.safeParse({ ...serieBase, periodicidad: 'suelta' }).success).toBe(false);
+    expect(esquemaPrevisualizarAltaSerie.safeParse({ ...serieBase, tipoTerapiaId: null }).success).toBe(false);
+    expect(esquemaPrevisualizarAltaSerie.safeParse({ ...serieBase, sesionesTotales: 1 }).success).toBe(false);
+    expect(esquemaPrevisualizarAltaSerie.safeParse({ ...serieBase, sesionesTotales: 53 }).success).toBe(false);
+  });
+});
+
+describe('esquemaBuscarPacientes', () => {
+  it('pide al menos dos caracteres tras recortar', () => {
+    expect(esquemaBuscarPacientes.safeParse({ texto: ' a ' }).success).toBe(false);
+    expect(esquemaBuscarPacientes.safeParse({ texto: 'an' }).success).toBe(true);
+    expect(esquemaBuscarPacientes.safeParse({ texto: 'a'.repeat(101) }).success).toBe(false);
   });
 });

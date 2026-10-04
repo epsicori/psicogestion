@@ -291,3 +291,42 @@ export const esquemaAltaCita = z
   });
 
 export type DatosAltaCita = z.infer<typeof esquemaAltaCita>;
+
+/** `AAAA-MM-DDTHH:MM`, hora local: la clave de un hueco del calendario de selección. */
+const CLAVE_HUECO = z.string().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/, 'Esa clave de hueco no es válida.');
+
+/**
+ * Recalcular el calendario y las sugerencias (T-028). Ni duración ni nombre de tipo: la
+ * duración la lee el servidor del catálogo y, sin tipo, es la inicial (E1.3, E1.5).
+ */
+export const esquemaRecalcularAlta = z.object({
+  pacienteId: z.uuid('Elige un paciente.').nullable(),
+  profesionalId: z.uuid('Selecciona un profesional válido.'),
+  centroId: z.uuid('Selecciona un centro válido.'),
+  tipoTerapiaId: z.uuid('Elige un tipo de terapia.').nullable(),
+  fechaFoco: FECHA_REAL.nullable(),
+  excluir: z.array(CLAVE_HUECO).max(10, 'Hay demasiados huecos excluidos.'),
+});
+
+export type DatosRecalcularAlta = z.infer<typeof esquemaRecalcularAlta>;
+
+/** Previsualizar la serie antes de guardarla: la duración sale del tipo, en el servidor. */
+export const esquemaPrevisualizarAltaSerie = z.object({
+  pacienteId: z.uuid('Elige un paciente.'),
+  profesionalId: z.uuid('Selecciona un profesional válido.'),
+  centroId: z.uuid('Selecciona un centro válido.'),
+  tipoTerapiaId: z.uuid('Elige un tipo de terapia.'),
+  fecha: FECHA_REAL,
+  horaLocal: z.string('Introduce la hora.').regex(HHMM, 'La hora debe tener forma HH:MM.'),
+  periodicidad: esquemaPeriodicidad,
+  sesionesTotales: z
+    .int('El número de sesiones debe ser un entero.')
+    .min(2, 'Una serie tiene entre 2 y 52 sesiones.')
+    .max(52, 'Una serie tiene entre 2 y 52 sesiones.'),
+});
+
+export type DatosPrevisualizarAltaSerie = z.infer<typeof esquemaPrevisualizarAltaSerie>;
+
+export const esquemaBuscarPacientes = z.object({
+  texto: z.string().trim().min(2, 'Escribe al menos dos letras.').max(100, 'El texto es demasiado largo.'),
+});

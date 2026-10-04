@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BloqueAlta } from '@/lib/citas/alta';
+import type { BloqueAlta, PrevisualizacionAlta } from '@/lib/citas/alta';
 import type { ResultadoSugerencias } from '@/lib/agenda/sugerencias';
 
-import { construirCalendarioAlta, construirTarjetas, lunesDe } from './vista-alta';
+import { construirCalendarioAlta, construirTarjetas, lunesDe, presentarSerie } from './vista-alta';
 
 const ZONA = 'Europe/Madrid';
 
@@ -104,6 +104,56 @@ describe('construirCalendarioAlta', () => {
     expect(ancho.eje.desdeMinuto).toBe(6 * 60);
     expect(ancho.eje.hastaMinuto).toBe(22 * 60);
     expect(ancho.eje.horas[0]).toBe('06:00');
+  });
+});
+
+describe('presentarSerie', () => {
+  const sesion = (extra: Partial<PrevisualizacionAlta['sesiones'][number]> = {}): PrevisualizacionAlta['sesiones'][number] => ({
+    fecha: '2026-10-06',
+    horaLocal: '10:00',
+    inicio: '2026-10-06T08:00:00.000Z',
+    fin: '2026-10-06T08:50:00.000Z',
+    clasificacion: 'normal',
+    bloqueo: null,
+    alternativa: null,
+    ...extra,
+  });
+
+  it('una sesión normal lleva fecha larga y hora, sin alternativa', () => {
+    expect(presentarSerie({ zonaHoraria: ZONA, sesiones: [sesion()] }, ZONA)).toEqual([
+      { fecha: '2026-10-06', fechaLarga: 'Martes, 6 de octubre de 2026', hora: '10:00', estado: 'normal', alternativa: null, horaResultante: null },
+    ]);
+  });
+
+  it('un bloqueo no lleva hora y su alternativa se escribe con día y hora; sin alternativa, null', () => {
+    const [con, sin] = presentarSerie(
+      {
+        zonaHoraria: ZONA,
+        sesiones: [
+          sesion({
+            bloqueo: 'festivo',
+            alternativa: { fecha: '2026-10-08', inicio: '2026-10-08T10:00:00.000Z', fin: '2026-10-08T10:50:00.000Z' },
+          }),
+          sesion({ fecha: '2026-10-13', bloqueo: 'ocupada' }),
+        ],
+      },
+      ZONA,
+    );
+
+    expect(con).toMatchObject({ estado: 'festivo', hora: null, alternativa: 'jueves, 8 de octubre de 2026, 12:00' });
+    expect(sin).toMatchObject({ estado: 'ocupada', hora: null, alternativa: null });
+  });
+
+  it('una hora inexistente o ambigua es un cambio de hora y dice la hora en que queda', () => {
+    const [s] = presentarSerie(
+      {
+        zonaHoraria: ZONA,
+        sesiones: [sesion({ fecha: '2026-03-29', horaLocal: '02:30', clasificacion: 'inexistente', inicio: '2026-03-29T01:00:00.000Z', fin: '2026-03-29T01:50:00.000Z' })],
+      },
+      ZONA,
+    );
+
+    expect(s).toMatchObject({ estado: 'cambioDeHora', hora: '02:30', horaResultante: '03:00' });
   });
 });
 

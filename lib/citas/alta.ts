@@ -83,7 +83,9 @@ export async function leerUltimasCitasPaciente(
   rol: string,
   entrada: { pacienteId: string; profesionalId: string; antesDe: Date },
 ): Promise<ResultadoCitas<{ citas: CitaPasadaAlta[] }>> {
-  const tabla = rol === 'tecnico_administrativo' ? 'citas_agenda' : 'citas';
+  // `citas_agenda` es la vista del técnico con las mismas columnas que se leen aquí; el tipo
+  // generado no sabe que son intercambiables, así que se fija al de `citas`.
+  const tabla = (rol === 'tecnico_administrativo' ? 'citas_agenda' : 'citas') as 'citas';
   const { data, error } = await sesion.supabase
     .from(tabla)
     .select('inicio, zona_horaria')
