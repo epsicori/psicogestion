@@ -52,7 +52,7 @@ function pinta(extra: Partial<Parameters<typeof FormularioAlta>[0]> = {}) {
   const props = {
     rol: 'profesional_sanitario' as const,
     centros: [{ id: CENTRO, nombre: 'Centro Sur' }],
-    profesionales: [{ id: PROFESIONAL, nombre: 'Dra. Ruiz' }],
+    profesionales: [{ id: PROFESIONAL, nombre: 'Dra. Ruiz', centroId: CENTRO }],
     tipos: TIPOS,
     inicial: { paciente: PACIENTE, centroId: CENTRO, profesionalId: PROFESIONAL, clave: null },
     vista: VISTA,
@@ -120,6 +120,20 @@ describe('FormularioAlta · campos por rol', () => {
     fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
 
     expect(screen.getByText('Duración: 90 min')).toBeTruthy();
+  });
+});
+
+describe('FormularioAlta · hueco de entrada', () => {
+  it('un hueco libre que llega de la URL entra elegido', () => {
+    pinta({ inicial: { paciente: PACIENTE, centroId: CENTRO, profesionalId: PROFESIONAL, clave: '2026-10-06T17:00' } });
+
+    expect(screen.getByRole('button', { name: /17:00, libre.*elegida/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('uno ocupado o inexistente se ignora', () => {
+    pinta({ inicial: { paciente: PACIENTE, centroId: CENTRO, profesionalId: PROFESIONAL, clave: '2026-10-06T03:00' } });
+
+    expect(screen.queryByRole('button', { name: /elegida/ })).toBeNull();
   });
 });
 

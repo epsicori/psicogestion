@@ -24,10 +24,10 @@ type Opcion = { id: string; nombre: string };
 /** El catálogo que ve quien agenda: el id y el nombre sirven para elegir; no vuelven del servidor. */
 export type TipoOfrecido = { id: string; nombre: string; duracionMinutos: number };
 
-type Props = {
+export type PropsFormularioAlta = {
   rol: RolUsuario;
   centros: Opcion[];
-  profesionales: Opcion[];
+  profesionales: (Opcion & { centroId: string })[];
   tipos: TipoOfrecido[];
   inicial: { paciente: PacienteElegido | null; centroId: string; profesionalId: string; clave: string | null };
   vista: VistaAlta;
@@ -51,12 +51,15 @@ function vacioANulo(valor: unknown): string | null {
  * (paciente, profesional, centro, tipo, semana) vuelve a pedirlos al servidor; el que llega tarde
  * se descarta. Sin modalidad ni episodio (ADR-075): esos no son del alta.
  */
-export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vista: vistaInicial, alTerminar, alCancelar }: Props) {
+export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vista: vistaInicial, alTerminar, alCancelar }: PropsFormularioAlta) {
   const prefijo = useId();
   const [paciente, setPaciente] = useState<PacienteElegido | null>(inicial.paciente);
   const [foco, setFoco] = useState<string | null>(null);
   const [excluirHuecos, setExcluirHuecos] = useState<string[]>([]);
-  const [elegido, setElegido] = useState<Elegido | null>(null);
+  const [elegido, setElegido] = useState<Elegido | null>(() => {
+    const hueco = vistaInicial.calendario.huecos.find((h) => h.clave === inicial.clave && h.estado === 'libre');
+    return hueco ? { clave: hueco.clave, etiqueta: hueco.etiqueta } : null;
+  });
   const [serie, setSerie] = useState<Serie | null>(null);
   const [aviso, setAviso] = useState('');
   const [fallo, setFallo] = useState('');
@@ -75,8 +78,8 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
       profesionalId: inicial.profesionalId,
       centroId: inicial.centroId,
       tipoTerapiaId: undefined,
-      fecha: undefined,
-      horaLocal: undefined,
+      fecha: elegido?.clave.slice(0, 10),
+      horaLocal: elegido?.clave.slice(11),
       periodicidad: 'suelta',
       sesionesTotales: null,
       sala: null,
@@ -275,7 +278,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
           <Seleccion
             id={`${prefijo}-profesional`}
             etiqueta={t('agenda.alta.campos.profesional')}
-            opciones={profesionales.map((p) => ({ valor: p.id, texto: p.nombre }))}
+            opciones={profesionales.filter((p) => p.centroId === centroId).map((p) => ({ valor: p.id, texto: p.nombre }))}
             textoVacio={t('agenda.alta.campos.profesional')}
             value={profesionalId}
             onChange={(evento) => {
@@ -293,7 +296,12 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             textoVacio={t('agenda.alta.campos.centro')}
             value={centroId}
             onChange={(evento) => {
-              setValue('centroId', evento.target.value);
+              const nuevo = evento.target.value;
+              setValue('centroId', nuevo);
+              const delCentro = profesionales.filter((p) => p.centroId === nuevo);
+              if (rol !== 'profesional_sanitario' && !delCentro.some((p) => p.id === profesionalId) && delCentro[0]) {
+                setValue('profesionalId', delCentro[0].id);
+              }
               setSerie(null);
             }}
           />
