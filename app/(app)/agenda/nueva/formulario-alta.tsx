@@ -202,26 +202,36 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     elegirHueco(clave, tarjeta ? `${tarjeta.fecha}, ${tarjeta.hora}` : clave);
   }
 
-  function cambiarPeriodicidad(valor: (typeof PERIODICIDADES)[number]) {
-    setValue('periodicidad', valor);
+  /** Lo enseñado ya no corresponde a lo elegido: ni previsualización ni firma hasta que llegue otra. */
+  function invalidarSerie() {
     setSerie(null);
     setValue('firma', null);
+  }
+
+  function cambiarPeriodicidad(valor: (typeof PERIODICIDADES)[number]) {
+    setValue('periodicidad', valor);
+    invalidarSerie();
     setValue('sesionesTotales', valor === 'suelta' ? null : (sesionesTotales ?? SESIONES_POR_DEFECTO));
   }
 
   function elegirPaciente(nuevo: PacienteElegido | null) {
     setPaciente(nuevo);
     setValue('pacienteId', nuevo?.id as string, { shouldValidate: false });
-    setSerie(null);
+    invalidarSerie();
   }
 
+  // Una serie solo se guarda con la previsualización vigente: mientras se recalcula, no.
+  const esperandoSerie = periodicidad !== 'suelta' && serieVigente === null;
+
   async function enviar(datos: DatosAltaCita) {
+    if (esperandoSerie) return;
     setGuardando(true);
     setFallo('');
     setAviso('');
     try {
       const resultado = await guardarAlta({
         ...datos,
+        firma: serieVigente?.firma ?? null,
         notaOperativa: rol === 'tecnico_administrativo' ? null : datos.notaOperativa,
         excluir: serieVigente?.excluir ?? [],
         aceptarAlternativas: serieVigente?.aceptar ?? [],
@@ -283,7 +293,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             value={profesionalId}
             onChange={(evento) => {
               setValue('profesionalId', evento.target.value);
-              setSerie(null);
+              invalidarSerie();
             }}
           />
         )}
@@ -302,7 +312,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
               if (rol !== 'profesional_sanitario' && !delCentro.some((p) => p.id === profesionalId) && delCentro[0]) {
                 setValue('profesionalId', delCentro[0].id);
               }
-              setSerie(null);
+              invalidarSerie();
             }}
           />
         )}
@@ -321,7 +331,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             errores={errors.tipoTerapiaId ? [errors.tipoTerapiaId.message ?? ''] : undefined}
             onChange={(evento) => {
               setValue('tipoTerapiaId', evento.target.value, { shouldValidate: false });
-              setSerie(null);
+              invalidarSerie();
             }}
           />
         )}
@@ -379,7 +389,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
               onChange={(evento) => {
                 const valor = evento.target.value;
                 setValue('sesionesTotales', valor === '' ? null : Number(valor), { shouldValidate: false });
-                setSerie(null);
+                invalidarSerie();
               }}
             />
             <p className="text-muted-foreground text-sm">{t('agenda.alta.campos.sesionesAyuda')}</p>
@@ -432,7 +442,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         <Button type="button" variante="contorno" onClick={alCancelar}>
           {t('comunes.cancelar')}
         </Button>
-        <Button type="submit" disabled={guardando || catalogoVacio}>
+        <Button type="submit" disabled={guardando || catalogoVacio || esperandoSerie}>
           {guardando ? t('agenda.alta.guardando') : t('agenda.alta.guardar')}
         </Button>
       </div>

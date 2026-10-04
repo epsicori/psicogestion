@@ -263,6 +263,55 @@ describe('FormularioAlta · serie', () => {
     );
   });
 
+  // H3 (revisión del corte B): la firma enseñada era de otro profesional; mientras llega la nueva
+  // previsualización no se puede guardar con la vieja.
+  it('al cambiar de profesional anula la firma y no deja guardar hasta que llega la previsualización nueva', async () => {
+    const OTRO = '66666666-6666-4666-8666-666666666666';
+    const FIRMA_A = 'a'.repeat(64);
+    const FIRMA_B = 'b'.repeat(64);
+    const sesiones = [
+      { fecha: '2026-10-06', fechaLarga: 'Martes, 6 de octubre de 2026', hora: '17:00', estado: 'normal' as const, alternativa: null, horaResultante: null },
+      { fecha: '2026-10-13', fechaLarga: 'Martes, 13 de octubre de 2026', hora: '17:00', estado: 'normal' as const, alternativa: null, horaResultante: null },
+    ];
+    let resolverNueva: (valor: unknown) => void = () => {};
+    m.previsualizarAltaSerie
+      .mockImplementation(({ profesionalId }: { profesionalId: string }) =>
+        profesionalId === OTRO
+          ? new Promise((resolver) => (resolverNueva = resolver))
+          : Promise.resolve({ ok: true, firma: FIRMA_A, sesiones }),
+      );
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Serie guardada.', fecha: '2026-10-06' });
+    pinta({
+      rol: 'administrador',
+      profesionales: [
+        { id: PROFESIONAL, nombre: 'Dra. Ruiz', centroId: CENTRO },
+        { id: OTRO, nombre: 'Dr. Soto', centroId: CENTRO },
+      ],
+    });
+
+    await elegirTipoYHueco();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '2' } });
+    await screen.findByText('Así quedaría la serie');
+
+    fireEvent.change(screen.getByLabelText('Profesional'), { target: { value: OTRO } });
+    await waitFor(() => expect(m.previsualizarAltaSerie).toHaveBeenLastCalledWith(expect.objectContaining({ profesionalId: OTRO })));
+
+    const guardar = screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement;
+    expect(guardar.disabled).toBe(true);
+    fireEvent.submit(guardar.closest('form') as HTMLFormElement);
+    await act(async () => {});
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolverNueva({ ok: true, firma: FIRMA_B, sesiones });
+    });
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(m.guardarAlta).toHaveBeenCalledTimes(1));
+    expect(m.guardarAlta).toHaveBeenCalledWith(expect.objectContaining({ profesionalId: OTRO, firma: FIRMA_B }));
+  });
+
   it('si la serie cambió mientras se revisaba, enseña la nueva y no guarda', async () => {
     const NUEVA = 'b'.repeat(64);
     m.previsualizarAltaSerie.mockResolvedValue({
