@@ -838,3 +838,337 @@ La alternativa elegida es la **trazabilidad**.
   80 % del área de `<main>` queda bajo alguna fila de la marca. Lo mide una prueba de Playwright sobre el fichero de muestra.
   El método (rejilla repetida, filas centradas o `repeating` por CSS) lo elige el implementador; la capa sigue siendo
   `aria-hidden`, sin eventos, fija y presente al imprimir.
+
+---
+
+## B0 · Puesta al día del corte B (04-10-2026)
+
+Arquitecto, 04-10-2026, contra `main` en `5eb1519` (T-042 integrado). Las secciones anteriores no se
+tocan. **Donde B0 las contradice, manda B0**, y cada punto dice qué apartado sustituye. Lo que B0 no
+menciona sigue vigente tal cual.
+
+### B0.1 · Hechos re-verificados contra `main`
+
+| # | Estado | Lo que hay hoy (con ruta) |
+|---|---|---|
+| Precondición de la cabecera | **Cumplida** | T-015 está integrado. `notificaciones.titulo`, `origen_tabla`, `origen_id` y el check `notificaciones_origen_completo` están en `20261006120000_avisos_y_escalado.sql:12-17`; el índice `notificaciones_origen_unico (perfil_id, tipo, origen_tabla, origen_id) where origen_id is not null` en `:20-22`. Las políticas son solo de `select` y `update` (`:65-74`): nadie de `authenticated` inserta. **Nuevo**: el disparador `auditar_notificaciones … fn_auditar('id')` (`:76-79`) copia el `detalle` entero a `auditoria`, otra razón para que no lleve ni paciente ni referencia. `notificaciones.tipos` existe en `lib/i18n/es.ts:1026-1035` **sin** `exportacion_por_administracion`: se añade. |
+| H1 | Vigente | El enum está en `20260822094547_…:80-85` (no `:82`). Sin más cambios. |
+| H2, H4 | Vigentes | `:799-802` y `20260822160000_…:1269-1277`, sin redefinir (`grep -ln "policy accesos_historia_alta"` da un solo fichero). |
+| H3 | **Vigente con una corrección** | El orden de `registrar_acceso_historia` sigue siendo el patrón (rol o asignación antes del candado). **Su forma de conceder permisos no lo es.** Solo hace `revoke … from public`, y en este proyecto los privilegios por defecto se retiraron para tablas (`20260822094547_…:1593`) y secuencias (`:1602`), **no para funciones**. Supabase concede `EXECUTE` a `anon` directamente, no a través de `PUBLIC`. Se copia lo que hace T-042 (`20261009120000`): `revoke execute … from public, anon` y `grant execute … to authenticated`. Las funciones internas también revocan a `authenticated`. |
+| H5 | Vigente | `rol_actual()` `20260822160000_…:38-49`; `es_profesional_asignado` `:93-113`. **Nunca devuelve NULL**: es `exists(…) and exists(…)`, y el `in (p.profesional_id, s.profesional_id)` con `s` nulo deja la fila fuera, sin propagar el nulo. `rol_actual()` **sí** es NULL con el perfil no activo. |
+| H6 | Vigente | `notas_clinicas_lectura` (`:1117-1130`) y `notas_clinicas_versiones_lectura` (`:1152`) tienen **una sola definición** en todo `supabase/migrations/`. Desde `20260929120000:32`, `notas_clinicas.episodio_id` es NOT NULL y la rama `episodio_id is not null` siempre es cierta. `notas_para_copia` la copia igualmente tal cual: el predicado tiene que ser el de la política, no una versión simplificada. |
+| H7 | **Ampliado** | Desde el diseño, la cabecera ganó `cita_id` (`20260906120000:395`), `episodio_id` NOT NULL (`20260929120000:32`), `coprofesional_id` (`20260929120000:38-45`) y `borrador_abierta_en` (`20261002120000:18`). En las versiones (`20260822094547_…:640-675`): `cuerpo text not null`, `anotaciones_reservadas` admite nulo, `motivo_cambio` solo es nulo en la v1, y `huella_anterior bytea not null` (la génesis son 32 ceros, `20260829210000:73`). `esquema_version` vale 4 por defecto (`20261001120000:645`) y `ESQUEMA_VERSION = 4` está en `lib/huella/sobre.ts:33`. |
+| H8 | Vigente | `lib/notas/servidor.ts:268-287`. `citas.zona_horaria` es NOT NULL y `organizacion.zona_horaria` es `not null default 'Europe/Madrid'` (`20260822094547_…:116`). `exportar_nota` resuelve igual que el servidor (cita → organización → `'Europe/Madrid'`), **no** con `centros.zona_horaria`, para que la frase del sello coincida con la del editor. |
+| H9 | Vigente | `pacientes.apellidos text not null` (`20260815192424_…:40`); `perfiles` no tiene `apellidos` (A-H2); `perfiles.estado` está en `20260822094547_…:229-233`. |
+| H10 | Vigente | `episodio_participantes` está en `:541-549`, con `papel text not null`. |
+| H11 | **Ampliado** | `accesos_historia` **también se audita**: el bucle de `20260829150000_…:313-364` colgó `auditar_accesos_historia` de toda tabla de `public` que existía entonces. La `justificacion`, y con ella la referencia, llega a `auditoria` por dos sitios: la fila de `exportaciones` y la de `accesos_historia`. Lo trata P-B1. |
+| H12 | **Corregido** | La regla 5 del linter (`scripts/lint-migraciones.ts:310-358`) solo exige sellos únicos y en el orden del listado. Lo que de verdad obliga es la aplicación **incremental** de CI (`migration up`): un sello anterior al último aplicado no entra. El sello tiene que ser posterior al último de `main` **cuando se integre**. |
+| H13 | Vigente | El precedente comentado de `eventos_salientes` está en `scripts/rls/11-cobertura.sql:53`. |
+| H14 | **Desfasado → cerrado** | Ya no es «T-015 le añade»: está integrado (fila «Precondición»). |
+| H15 | **Desfasado** | El 22 es `22-avisos.sql`, el 23 `23-cita-en-episodio.sql` y el **24 `24-pin-y-canje-dos-pasos.sql`** (T-042). Además, el **25 lo reserva T-041** (`scripts/rls/25-altas-de-centro.sql`, `tickets/T-041/diseno.md`) y el **26 T-021** (`26-economico.sql`). Sellos: `20261008120000` es de T-038 y `20261009120000`, el que proponía §1.1, **es de T-042**. T-041 reserva `20261010120000` y T-021 `20261011120000`. Ver B0.2. |
+| H16 | Vigente, líneas movidas | `abrirPestanaDeHistoria` en `app/(app)/pacientes/[id]/acciones.ts:73-110` y `leerNotas` en `:112-118`. En `panel-historia.tsx`: `ListaDeNotas` en `:20`, `notas` en `:50`, `:194` y `:224-236`. |
+| H17 | Vigente | `ModeloDeNota` en `lib/notas/servidor.ts:55-80`, `abrirEditorDeNota` en `:466-517`. `lecturaConjunta = asignado !== true` para quien no es autor (`:298-312`), así que el administrador asignado que no es autor **no** está en lectura conjunta y ve «Descargar copia», que es lo que dice la tabla del propietario. |
+| H18 | Vigente | `historia/notas/acciones.ts:1-38`. |
+| H19, H20, H21, H23 | Vigentes | `server-actions.md:83` y `:91`; Node `v24.14.1`; sin dependencias de PDF, ZIP ni Argon2; `scripts/t012-nota.ts` existe. |
+| H22 | Vigente, referencia movida | El fallo de `useDevolucionDeFoco` sigue abierto, hoy en `docs/state.md:66` («Foco candado»). |
+| **H24** (nuevo) | — | Desde T-042, `public.desbloquear_historia(text)` **no existe**: el PIN va en dos pasos (`comprobar_pin_historia(text)` y después `desbloquear_historia()`). El banco abre el candado **solo** con `pg_temp.desbloquear_historia(p_pin)` (`scripts/rls/00-ayudantes.sql:248`), nunca insertando a mano en `desbloqueos_historia` (`.claude/rules/supabase.md:44`). |
+| **H25** (nuevo) | — | `npm run test:rls` concatena **todos** los bancos en orden alfabético dentro de **una sola** transacción (`scripts/rls/README.md`, «Cómo funciona»). Lo que deja el banco de T-040 (filas, sesión, candado abierto) lo ven los bancos que vayan detrás. El 25006 se prueba con el patrón `savepoint` + `set local transaction_read_only = on` + `rollback to savepoint` de `24-pin-y-canje-dos-pasos.sql:486-497`. |
+| **H26** (nuevo) | — | El contrato de la respuesta es **el código de `lib/exportaciones/formato.ts`** (corte A, integrado), más estricto que la tabla de §1.2. Lo detalla B0.3.1, regla R7. |
+| **H27** (nuevo) | — | Una función plpgsql `volatile` toma **una instantánea nueva por sentencia** en `read committed`. Dos `select` sobre `notas_clinicas_versiones` en el mismo cuerpo pueden ver filas distintas si alguien firma entre medias. **El riesgo 9 de §4 («siempre coinciden») es falso tal como estaba escrito.** Lo corrige B0.3.1, paso 8. |
+| **H28** (nuevo) | — | El oráculo HTTP de T-042 (`scripts/t042-oraculo.mjs:252-297`) prueba cinco formas de llamar a PostgREST: S1 POST, S2 `Accept: application/vnd.pgrst.object+json`, S3 `Prefer: tx=rollback`, S4 `Prefer: handling=strict, max-affected=0` y S5 GET. Su evidencia dice que **PostgREST ignora `tx=rollback` y confirma**. Una GET corre en una transacción de solo lectura. |
+| **H29** (nuevo) | — | El ADR de cifrado ya existe: `docs/decisions/ADR-076.md` (corte A). El corte B no escribe ningún ADR. |
+
+### B0.2 · Sello, banco y territorio
+
+**Sello: `supabase/migrations/20261009180000_exportaciones.sql`.** Sustituye la propuesta de §1.1.
+- Va después de `20261009120000` (T-042, el último de `main`) y antes de `20261010120000`, que reserva
+  T-041. Así no se mueve el sello de nadie.
+- La cola es T-040 B → T-041 → T-028 B → T-021, así que cada sello queda en orden de integración (H12).
+- **Regla para el implementador:** si al empezar `ls supabase/migrations | tail -1` es posterior a
+  `20261009180000` (otro ticket se adelantó), se toma el primer sello libre posterior a ese, y se anota en
+  la bitácora.
+
+**Banco: `scripts/rls/27-exportaciones.sql`.** Sustituye a «24» en §1.3 (`constantes.ts`, «banco 24
+§A»), §1.6, §3 («Banco = …», «Fijación del banco 24») y §6.
+- El 25 y el 26 están reservados (H15). Tomar el 25 obligaría a reescribir el diseño de T-041, que no es
+  de este ticket.
+- El número no tiene que seguir el orden de integración: los bancos no dependen del número, sino de no
+  dejar rastro (H25). Por eso, al **final** del banco 27:
+  - `call pg_temp.reset_sesion()`;
+  - el candado de sus actores cerrado con `bloquear_historia()`;
+  - y todas sus aserciones de recuento como **diferencia antes/después filtrada por sus propios ids**,
+    nunca como totales de tabla (el banco de T-041 o el de T-021 pueden ir detrás y meter filas antes).
+- Los ids de la fijación son UUID propios del banco, con un prefijo que no use ningún otro (por ejemplo
+  `40400000-…`).
+
+**Territorio (sustituye el bloque de §6):**
+
+```yaml
+territorio:
+  - supabase/migrations/20261009180000_exportaciones.sql   # o el sello libre siguiente (regla de B0.2)
+  - scripts/rls/27-exportaciones.sql
+  - scripts/rls/README.md                     # solo la fila del 27 (la del 24, según P-B3)
+  - scripts/rls/11-cobertura.sql              # solo el comentario de tablas sin política
+  - scripts/lint-migraciones.ts
+  - scripts/lint-migraciones.test.ts          # solo si fija la lista
+  - scripts/t040-exportacion.ts
+  - scripts/t040-oraculo.mjs                  # nuevo: el oráculo HTTP de B0.3.5
+  - tickets/T-040/oraculo-postgrest.json      # salida del oráculo, como T-042
+  - tickets/T-040/mutantes.json               # registro de mutantes, como T-042
+  - lib/supabase/tipos-bd.ts                  # solo regenerado con `npm run tipos`
+  - lib/exportaciones/**
+  - lib/i18n/es.ts
+  - app/(app)/pacientes/[id]/historia/**
+  - app/(app)/pacientes/[id]/acciones.ts
+  - app/(app)/pacientes/[id]/acciones.test.ts
+  - app/(app)/pacientes/[id]/panel-historia.tsx
+  - app/(app)/pacientes/[id]/panel-historia.test.tsx
+  - app/(app)/pacientes/[id]/lista-de-notas.tsx
+  - app/(app)/pacientes/[id]/lista-de-notas.test.tsx
+  - accesibilidad/**
+  - docs/architecture.md
+  - docs/state.md
+  - docs/bitacora/T-040*.md
+```
+
+Sale respecto a §6: las tres líneas de ADR (`docs/decisions/ADR-0*.md`, `docs/decisions.md`,
+`docs/decisions/INDEX.md`), porque el ADR ya lo integró el corte A (H29). `lib/notas/**`,
+`package.json`, `components/ui/**` y `next.config.ts` siguen fuera. `lib/cuentas/contenedor-proyecto.ts`
+solo se **importa** desde el oráculo, como hace `t042-oraculo.mjs:21`, y no se modifica.
+
+### B0.3 · Lecciones de T-038 y T-042 aplicadas
+
+Las lecciones, tal como las anotan `docs/bitacora/T-042.md` («Lecciones») y `docs/state.md:36`:
+1. **El orden de guardas en una RPC definer.** Primero sesión, después solo lectura (25006), y solo
+   entonces lo demás. Ningún `if` que dependa de un objeto puede ir antes que una guarda que no depende de
+   ninguno.
+2. **Un fallo que se devuelve sin lanzar** deja una puerta: con `Accept` de objeto singular y un filtro,
+   PostgREST responde 406 y **deshace las escrituras**.
+3. **`crypt` con NULL**, y en general cualquier booleano que puede ser NULL dentro de un `if not (…)`: el
+   NULL no entra en la rama del fallo.
+4. **Los secretos y los datos fuera de `raise`, `format` e `insert`.**
+
+`exportar_nota` **no** sigue el patrón de dos pasos de T-038 y T-042, y es a propósito: allí se
+cotejaba un secreto y el peligro era un oráculo sobre el secreto. Aquí no hay secreto que cotejar. El
+peligro es el contrario: **contenido sin rastro**. Se cierra con escrituras y lectura en la misma
+transacción, un retorno escalar y la guarda de solo lectura. Con eso, toda respuesta que lleva contenido
+ha confirmado su rastro.
+
+#### B0.3.1 · `exportar_nota`: el orden nuevo (sustituye la tabla «Orden obligatorio» de §1.1)
+
+La firma, los grants y el `volatile security definer set search_path = ''` no cambian. Cada `raise` lleva
+un mensaje propio **sin ningún `%`**: ningún mensaje interpola un parámetro ni un dato.
+
+| Paso | Qué hace | Error |
+|---|---|---|
+| 0 | `v_uid := auth.uid()`; si es nulo, falla. | 42501 «No hay sesión.» |
+| 1 | **Solo lectura**: `if current_setting('transaction_read_only') = 'on'`, falla **antes de leer nada**. | 25006 «La exportación exige una transacción de escritura.» |
+| 2 | `v_rol := rol_actual()`; `if v_rol is null or v_rol not in ('administrador', 'profesional_sanitario')`, falla. | 42501 «No puede exportar notas clínicas.» |
+| 3 | **Parámetros, sin tocar ninguna tabla.** (a) `p_paciente_id is null or p_nota_id is null`. (b) `(p_motivo is null) <> (p_referencia is null)`. (c) `p_referencia is not null and char_length(btrim(p_referencia)) not between 3 and 200`. | 22023: (a) «Faltan el paciente o la nota.» (b) «El motivo y la referencia van juntos.» (c) «La referencia tiene que medir entre 3 y 200 caracteres.» |
+| 4 | **El motivo exige el rol**, sin tocar ninguna tabla: `if p_motivo is not null and v_rol <> 'administrador'`, falla. Es D8. | 42501 «Solo la administración pide copias con motivo.» |
+| 5 | **La nota**: `select … into v_nota from public.notas_clinicas n where n.id = p_nota_id and n.paciente_id = p_paciente_id`, y `v_existe := found`. La coincidencia del paciente va en el `where` como igualdad, **nunca** como `<>` dentro de un `if`. | (ninguno aquí) |
+| 6 | **Autorización.** Sin motivo: `v_ok := v_existe and coalesce(v_nota.autor_id = v_uid or public.es_profesional_asignado(v_nota.paciente_id), false)`. Si `not v_ok`: el administrador recibe «Falta el motivo»; cualquier otro, «Sin acceso». Con motivo: `if not v_existe`, falla con «Sin acceso». | 42501 «Falta el motivo de la copia.» / «Sin acceso a esa nota.» |
+| 7 | **Candado**: `if not coalesce(public.historia_desbloqueada(), false)`, falla. Va **después** de la autorización (D13). | 42501 «La historia no está desbloqueada.» |
+| 8 | **Una sola lectura del contenido**: un único `select … into v_carga` construye todo el `jsonb` de §1.2 (paciente, nota, zona, `exportada_por` y el `jsonb_agg` de las versiones con sus dos ramas). Después: `if coalesce(jsonb_array_length(v_carga->'versiones'), 0) = 0`, falla. `v_versiones int[]` sale **de `v_carga`** (`jsonb_array_elements`), no de otro `select`. Sustituye «del mismo `select` que el paso 10» de §1.1 paso 8 y el riesgo 9 de §4 (H27). | 22023 «La nota no tiene versiones firmadas.» |
+| 9 | `insert into accesos_historia`, igual que el paso 7 de §1.1, con `btrim(p_referencia)` en la `justificacion`. Devuelve `v_acceso`. | |
+| 10 | `insert into exportaciones`, igual que el paso 8 de §1.1, con `versiones = v_versiones` y `referencia = btrim(p_referencia)`. Devuelve `v_exportacion`. | |
+| 11 | Avisos, igual que el paso 9 de §1.1. Los argumentos del `format()` son **solo** tres: el `nombre_completo` del actor, `to_char(fecha_sesion, 'DD/MM/YYYY')` y la etiqueta del motivo. | |
+| 12 | `return v_carga \|\| jsonb_build_object('exportacion_id', v_exportacion)`. | |
+
+**Por qué este orden, frente al de §1.1.** En §1.1, el paso 2 (la nota) iba **antes** que el 3 (los
+parámetros). Un PRO4 sin acceso que mandara una referencia sin motivo recibía 22023 si la nota existía y
+era de ese paciente, y 42501 si no. Era un **oráculo de existencia** que no pedía ningún permiso. Ahora
+los pasos 0 a 4 no leen ninguna tabla salvo `perfiles` (a través de `rol_actual()`). Para un
+profesional, «no existe», «es de otro paciente» y «no la puedes leer» dan el mismo 42501 con el mismo
+texto. Para el administrador, el mensaje sin motivo es «Falta el motivo» **exista o no** la nota. Con
+motivo, la existencia de la nota no es un secreto para él: la tabla del propietario le deja pedir copia
+de cualquiera.
+
+**Reglas estructurales** (las comprueba B0.3.5; el revisor las lee en la migración):
+- **R1 · Retorno escalar.** `returns jsonb`, nunca `setof`, `table` ni `record`. Un retorno de filas admite
+  filtros de PostgREST: con un filtro que deja cero filas y `Accept` de objeto, la respuesta es 406 y se
+  deshace el acceso, la exportación y el aviso. Quien llama aprende si el filtro casaba con el contenido,
+  y no queda rastro.
+- **R2 · Todo fallo lanza.** No hay `return null`, ni `return '{}'`, ni ningún bloque `exception when` en
+  las tres funciones nuevas. Un fallo que no lanza confirma las escrituras de los pasos anteriores, o, si
+  lanza más tarde otra cosa, cambia el código.
+- **R3 · Nada del llamante en los mensajes.** Ningún `raise` lleva `%`. El único `format()` es el
+  `detalle` del paso 11. Ni `p_referencia`, ni `p_agente`, ni ningún nombre de paciente, ni contenido
+  pasan por `raise`, `format` o `notice`.
+- **R4 · El NULL, explícito.** Igualdad en el `where` para cotejar ids, `is null` explícito para los
+  parámetros, y `coalesce(…, false)` en todo booleano dentro de un `if not (…)`. Hoy los dos `coalesce`
+  son defensivos: `es_profesional_asignado` y `historia_desbloqueada` nunca dan NULL (H5). Un mutante que
+  los quite es **equivalente** y así se anota en `mutantes.json`; se quedan para el día en que una de las
+  dos funciones cambie.
+- **R5 · Escrituras antes que el retorno.** Entre el paso 8 y el `return` solo hay `insert`. No hay
+  `return` anticipado después del paso 8.
+- **R6 · Los instantes en ISO con desfase.** `to_jsonb(ts)` para `generada_en` (`now()`, el mismo valor que
+  `exportaciones.creada_en`) y para cada `creada_en`. **Nunca `ts::text`**, que da `2026-10-04 10:00:00+00`
+  y no pasa `z.iso.datetime({offset: true})` (`formato.ts:28`). Para `fecha_sesion`, `to_jsonb(fecha_sesion)`:
+  una fecha antes de Cristo sale con « BC» y falla el Zod (`fechaIso`), en vez de pasar como otra fecha
+  (`.claude/rules/supabase.md:49`).
+- **R7 · Las claves de cada rama, presentes; las listas, nunca nulas.** Cada rama se construye con
+  `jsonb_build_object` nombrando **todas** las claves que `camposExigidos` (`formato.ts:56-64`) le exige,
+  aunque el valor sea `null`. **Nunca `jsonb_strip_nulls`.** `participantes` se construye con
+  `coalesce(jsonb_agg(…), '[]'::jsonb)`: `jsonb_agg` sin filas da NULL, y `participantes: null` no pasa
+  `z.array().optional()`. Las huellas, con `encode(…, 'hex')` (minúsculas, `hex32`). `exportada_por` es
+  `{nombre_completo, rol}`, y `rol` sale de `v_rol`. `cifrado` lleva los literales de `constantes.ts`.
+- **R8 · Permisos.** `exportar_nota`, `registrar_fichero_exportado` y `notas_para_copia`:
+  `revoke execute … from public, anon` y `grant execute … to authenticated`.
+  `etiqueta_motivo_exportacion`: `revoke execute … from public, anon, authenticated`. Solo la llaman las
+  definer (H3).
+
+#### B0.3.2 · `registrar_fichero_exportado` (sustituye su lista de §1.1)
+
+| Paso | Qué hace | Error |
+|---|---|---|
+| 0 | Sin `auth.uid()`, falla. | 42501 «No hay sesión.» |
+| 1 | En solo lectura, falla. | 25006 «El registro de la copia exige una transacción de escritura.» |
+| 2 | `rol_actual() is null`, falla: un perfil de baja no registra. | 42501 «No puede exportar notas clínicas.» |
+| 3 | `p_exportacion_id is null or p_huella_hex is null or p_huella_hex !~ '^[0-9a-f]{64}$'`. **El `is null` va escrito**: `NULL !~ …` es NULL, el `if` no entra, y se llegaría al `insert` con un 23502 que no es el error del contrato. | 22023 «La huella del fichero no es válida.» |
+| 4 | `if not exists (select 1 from public.exportaciones e where e.id = p_exportacion_id and e.perfil_id = v_uid and e.creada_en > now() - interval '15 minutes')`, falla. | 42501 «Esa exportación no es tuya o ha caducado.» |
+| 5 | `insert into public.exportaciones_ficheros (exportacion_id, huella_fichero) values (p_exportacion_id, decode(p_huella_hex, 'hex')) on conflict (exportacion_id) do nothing`; `if not found`, falla. **No hay comprobación previa de duplicado**: con dos llamadas a la vez, las dos la pasarían y la segunda caería en el 23505 genérico de la pk, con otro texto. `on conflict do nothing` espera a la primera y da siempre el mensaje propio. No se puede bloquear la fila del padre con `for update` ni con `for share`: los dos piden `UPDATE` sobre `exportaciones`, que `postgres` no tiene (la misma razón por la que no hay FK). | 23505 «Esa copia ya tiene fichero registrado.» |
+
+#### B0.3.3 · `notas_para_copia` (§1.1, sin cambios de fondo)
+
+No escribe nada. Las tres puertas de PostgREST (406, `tx=rollback` y GET) no deshacen nada porque no hay
+nada que deshacer, y devolver cero filas a quien no cumple es correcto, no un «fallo sin lanzar».
+
+Tres precisiones:
+- toda tabla del cuerpo lleva alias, porque es `returns table` (`.claude/rules/supabase.md:32`);
+- cuenta solo versiones firmadas (`count(*)` de `notas_clinicas_versiones` por `nota_id`, con `> 0`);
+- los permisos, los de R8.
+
+#### B0.3.4 · §1.2: lo que exige `formato.ts` y la tabla no decía
+
+Se añade a §1.2, sin quitar nada:
+- `exportada_por: {nombre_completo, rol}` (A-H2), con `rol` en `profesional_sanitario | administrador`;
+- `referencia` es la recortada (`btrim`): la misma en la respuesta, en `exportaciones` y en `justificacion`;
+- `generada_en`, `creada_en` y `fecha_sesion` siguen R6; `huella` y `huella_anterior` son hex de 64
+  minúsculas, sin nulos (H7);
+- en la rama del profesional, `motivo_cambio` y `anotaciones_reservadas` van **presentes** aunque sean
+  `null`;
+- en la rama del paciente individual, `motivo_cambio` presente (`null` en la v1);
+- en la conjunta, `participantes` siempre es un array, aunque esté vacío;
+- `sello`: las siete claves de §1.2. En un sobre de otra era, las claves que falten salen `null` y
+  `formato.ts:193` lo pinta «ilegible». No se filtra en SQL.
+
+#### B0.3.5 · Criterios y mutantes nuevos (se añaden a §3; las letras del banco siguen tras la J)
+
+| # | Qué demuestra | Cómo |
+|---|---|---|
+| **CB1** | **Contenido ⇒ rastro, por HTTP.** Nunca hay contenido sin fila. | `scripts/t040-oraculo.mjs`, con el patrón de `t042-oraculo.mjs`: JWT real de PostgREST, recuentos con `psql` como `postgres` por `docker exec`, salida en `tickets/T-040/oraculo-postgrest.json`. Llama a `rpc/exportar_nota` como PRO3 (autor, sin motivo) y como ADM (con `peticion_paciente`), en seis formas: S1 a S5 de H28, más **S6** = POST con `Accept` de objeto **y** un filtro `?exportacion_id=eq.<uuid aleatorio>`. **Invariante, por llamada**: si el cuerpo contiene `MARCA-CUERPO-1` o un `exportacion_id`, entonces Δ`exportaciones` = +1, Δ`accesos_historia` (`tipo = 'exportacion'`) = +1 y Δ`notificaciones` con ese origen = +2 para ADM o 0 para PRO. Si no contiene nada de eso, las tres Δ son 0. **Esperado además**: S1, S2 y S3 dan 200 con contenido y filas (S3 demuestra que `tx=rollback` se ignora); S5 da 4xx con el texto «exige una transacción de escritura» y +0. S4 y S6 solo tienen que cumplir el invariante. |
+| **CB2** | **La guarda de solo lectura, y su posición.** | Banco §K, con el `savepoint` de H25. Como PRO3 con el candado abierto, `exportar_nota(P, N1)` da 25006 con el fragmento «La exportación exige una transacción de escritura». Como **TEC** da el **mismo** 25006, no 42501: la guarda va antes del rol. Igual para `registrar_fichero_exportado` con su texto. Tras `rollback to savepoint`, Δ = 0 en las tres tablas. Por HTTP, CB1 S5. |
+| **CB3** | **Los parámetros nulos.** | Banco §K. `exportar_nota(null, N1)` y `exportar_nota(P, null)` dan 22023 «Faltan el paciente o la nota». `registrar_fichero_exportado(null, <hex válido>)` y `registrar_fichero_exportado(<id propio>, null)` dan 22023 «La huella del fichero no es válida». Cada uno deja Δ = 0, y cada uno con su gemela positiva. |
+| **CB4** | **Sin oráculo de existencia.** | Banco §K, con la misma entrada sobre N1 (existe, es de P) y sobre un uuid aleatorio, y **el mismo código y el mismo texto** en los dos casos. PRO4 con referencia y sin motivo: 22023 «van juntos». PRO4 sin motivo ni referencia: 42501 «Sin acceso a esa nota». PRO4 con motivo y referencia válidos: 42501 «Solo la administración». ADM sin motivo: 42501 «Falta el motivo». PRO3 con N1 y `p_paciente_id` = el paciente de otra nota: 42501 «Sin acceso a esa nota», igual que con un uuid aleatorio. |
+| **CB5** | **La referencia no sale de su sitio.** | Banco §K. Con `p_referencia = 'REF-T040-SECRETA'`, se provoca cada fallo alcanzable **después** del paso 3: rol de PRO4 (paso 4), candado cerrado (paso 7) y nota sin versiones (paso 8). Un bloque `do` **del banco** captura `sqlerrm` y comprueba que `position('REF-T040-SECRETA' in sqlerrm) = 0`. En el banco el `exception when` está permitido; la prohibición de R2 es para las funciones. Con el camino que funciona: `position(…)` = 0 en todo `notificaciones.detalle` de ese origen, y la referencia **sí** está en `exportaciones.referencia` y en `accesos_historia.justificacion`, que es su sitio. |
+| **CB6** | **La forma de las funciones**, por catálogo. | Banco §K. `pg_get_function_result('public.exportar_nota(uuid,uuid,public.motivo_exportacion,text,inet,text)'::regprocedure) = 'jsonb'`, y `proretset = false`. Ninguna de las tres funciones contiene `exception` en `prosrc`, ni `%` en una línea con `raise`. En `exportar_nota`, `notas_clinicas_versiones` aparece **una sola vez** (paso 8, H27). `has_function_privilege('anon', f, 'execute')` es falso para las cuatro funciones, y `has_function_privilege('authenticated', 'public.etiqueta_motivo_exportacion(public.motivo_exportacion)', 'execute')` también. Se lee con `pg_get_functiondef` y `\gset`, como el banco 14 §C, nunca de una copia a mano. |
+| **CB7** | **El registro concurrente da el mensaje propio.** | Oráculo, C1, con el bloqueador real de T-042 C4: una sesión `psql` como `postgres` abre `begin; insert into exportaciones_ficheros (…) values (<id>, …)` y **no confirma**. Mientras tanto, el dueño llama por HTTP a `registrar_fichero_exportado(<id>, …)`, que espera. El bloqueador confirma y la llamada responde 23505 con «Esa copia ya tiene fichero registrado», **no** con `duplicate key value violates unique constraint`. Se registra `en_espera` como en T-042. |
+| **CB8** | **La carga se lee una vez**: lo entregado coincide con lo registrado. | Banco §E (ya existía), reforzado: `exportaciones.versiones` = la lista de `numero_version` de la respuesta, elemento a elemento, en las dos proyecciones. La carrera en sí no se reproduce en el banco; la cubre CB6, con una sola lectura de `notas_clinicas_versiones`. |
+
+**Mutantes** (`tickets/T-040/mutantes.json`, en el formato de T-042). Cada uno se aplica sobre la función
+desplegada (`create or replace` en una copia), se corre lo que se indica, **tiene que ponerse en rojo
+por la aserción nombrada** y se restaura.
+
+| Mutante | Rojo esperado |
+|---|---|
+| MB1 · `returns setof jsonb` (o `table (r jsonb)`) | CB6 (`proretset`); CB1 S6 si el filtro llega a aplicarse |
+| MB2 · sin la guarda 25006 | CB2: TEC recibe 42501 en vez de 25006, y PRO3 recibe el 25006 genérico de Postgres sin el fragmento propio |
+| MB3 · sin el `is null` del paso 3a | CB3: `exportar_nota(null, N1)` da 42501 «Sin acceso» en vez de 22023 |
+| MB4 · el paso 3 movido después del 5 (la nota antes que los parámetros) | CB4: PRO4 recibe 22023 sobre N1 y 42501 sobre el uuid aleatorio |
+| MB5 · la coincidencia del paciente como `if v_nota.paciente_id <> p_paciente_id` en vez de en el `where`, sin el paso 3a | CB3: con `p_paciente_id` nulo, la exportación **funciona** |
+| MB6 · `raise exception 'La referencia % …', p_referencia` en cualquier fallo posterior al paso 3 | CB5 y CB6 |
+| MB7 · `exportaciones.versiones` sacada de un segundo `select` | CB6 (dos apariciones de `notas_clinicas_versiones`) |
+| MB8 · paso 5 de B0.3.2 con comprobación previa y un `insert` sin `on conflict` | CB7 (el texto de la pk) |
+| MB9 · `registrar_fichero_exportado` sin el `is null` de `p_huella_hex` | CB3 (23502 en vez de 22023) |
+| MB10 · `etiqueta_motivo_exportacion` sin el `revoke` a `authenticated` | CB6 |
+| Equivalentes, anotados y no contados | quitar los `coalesce` de los pasos 6 y 7 (R4) |
+
+**§5 gana estas casillas** (para el revisor y para la autoevaluación):
+- [ ] Los pasos 0-4 de `exportar_nota` no leen ninguna tabla clínica: solo `auth.uid()`,
+      `current_setting` y `rol_actual()`.
+- [ ] No hay `exception when` en la migración (`grep -n "exception when"` vacío) ni `%` en ningún `raise`.
+- [ ] El retorno es `jsonb` escalar; ninguna de las tres funciones devuelve el contenido por otra vía
+      (`raise notice`, `out`).
+- [ ] Un solo `select` de `notas_clinicas_versiones` en `exportar_nota`, y `v_versiones` sale de `v_carga`.
+- [ ] El banco 27 cierra el candado, resetea la sesión y cuenta por diferencias filtradas por sus ids (H25).
+- [ ] El banco abre el candado con `pg_temp.desbloquear_historia(pin)` (H24), nunca a mano.
+- [ ] `oraculo-postgrest.json` tiene las seis formas para los dos actores, y C1 con `en_espera`.
+- [ ] Cada mutante está en `mutantes.json` con la aserción que lo mató y la salida; los equivalentes,
+      marcados.
+
+**§4 cambia:** el riesgo 2 queda en **media**. T-015 ya está, pero T-041 y T-021 tienen sellos y bancos
+reservados (H15) y la regla de B0.2 lo resuelve. El riesgo 9 se sustituye por: «**Baja**, mitigada por
+construcción: una sola lectura (H27, paso 8)». Se añade uno: «**Media**. El banco 27 deja estado a los
+bancos que van detrás en la misma transacción (H25). Mitigación: cierre explícito y recuentos por
+diferencia.»
+
+### B0.4 · Delegable en el corte B
+
+| Pieza | `delegable: volumen` | Por qué |
+|---|---|---|
+| Migración, banco 27, oráculo, mutantes | **No** | RLS, auditoría, permisos y orden de guardas. |
+| `lib/exportaciones/servidor.ts` y su prueba | **No** | Traduce errores por código y fragmento, recorta registros y valida con Zod. |
+| `esquemas-copia.ts`, `acciones-copia.ts` | **No** | Formularios y Server Actions. El `strictObject` es la garantía estructural de C5. |
+| `dialogo-de-copia.tsx`, `boton-de-copia.tsx` | **No** | Foco, ARIA, estados, cancelación y la contraseña en memoria (`.claude/rules/pipeline.md`: los diálogos con foco fallaron tres veces delegados). |
+| `historia/notas/acciones.ts`, `editor-de-nota.tsx`, `acciones.ts` y `panel-historia.tsx` de la ficha | **No** | Ramas de autorización (`solo_copia`, `lecturaConjunta`). |
+| `lista-de-notas.tsx` (segunda lista) | **No** | El estado vacío depende de las dos listas; es comportamiento. |
+| `copia-por-motivo.tsx`, **solo el marcado** | **Sí**, si se quiere | Un encabezado con tres datos por props y un botón que recibe `onClick` por props. Su prueba (`solo_copia` en el editor) la escribe la fábrica. |
+| `lib/i18n/es.ts`, `scripts/t040-exportacion.ts`, `accesibilidad/**`, `docs/architecture.md` | **No** | Textos de producto, sesión real, axe y teclado, documento de arquitectura. |
+
+**Recomendación: no delegar nada.** La única pieza que cumple es un componente de unas 30 líneas cuya
+prueba hay que escribir igualmente en la fábrica, y el encargo, la rama y la integración cuestan más que
+la pieza. Si el orquestador aplica su regla de encargar lo delegable sin preguntar, el encargo es
+**solo** el marcado de `copia-por-motivo.tsx`, con estas props fijas:
+`{fechaSesion: string; autor: string; versiones: number; alPedirCopia: () => void}`.
+
+### B0.5 · Preguntas para el propietario
+
+Ninguna bloquea el diseño: el corte B sigue la recomendación de cada una, y cada pregunta dice qué cambia
+si la respuesta es otra.
+
+**P-B1 · ¿La referencia del administrador se guarda también en `auditoria`?** Hoy llegaría por dos sitios
+(H11): el `fn_auditar` de `exportaciones` y el de `accesos_historia` (por la `justificacion`).
+- (a) **Sí, tal cual.** La referencia es la justificación de la copia, y la auditoría existe para eso (D6).
+  `auditoria_lectura_propia` solo enseña a cada uno lo suyo (`20260829180000:31`). El campo ya avisa: «No
+  escribas datos de salud».
+- (b) Recortarla de la fila de `exportaciones` (`fn_auditar('id', 'referencia')`). La de
+  `accesos_historia` seguiría llegando por la `justificacion`. Para cerrarla habría que recrear su
+  disparador, que es de T-004 y comparten todos los accesos.
+- (c) Sacar la referencia de la `justificacion` y dejarla solo en `exportaciones` recortada. Entonces
+  `accesos_historia` diría solo el motivo, y la auditoría destacada (D6) tendría que unir las dos tablas
+  para saber qué solicitud justificó la copia.
+
+**Recomendación: (a).** Si se elige (b) o (c), cambian el paso 9 o el disparador de `exportaciones` y una
+aserción de CB5.
+
+**P-B2 · ¿Entra en el corte B el hallazgo R3-H1** (la opacidad y el color de la marca de agua no tienen
+prueba; `docs/bitacora/T-040.md`, `docs/state.md:51`)?
+- (a) **Sí.** Es de este ticket y está en su territorio (`lib/exportaciones/**`, `accesibilidad/**`).
+  Basta una aserción sobre el estilo calculado de una fila de la capa, en la prueba de Playwright de A-H3
+  que ya abre el fichero de muestra: opacidad dentro de un rango cerrado y el color fijado.
+- (b) No. Queda abierto en `state.md`.
+
+**Recomendación: (a).** Cuesta una aserción, y el corte B es la última vez que el ticket toca el visor.
+
+**P-B3 · ¿Se añade a `scripts/rls/README.md` la fila del banco 24**, que T-042 no escribió?
+- (a) Sí, en el corte B, de paso: una línea, en un fichero que ya está en el territorio.
+- (b) **No.** Se anota en `docs/state.md` §Hallazgos para un ticket de documentación, como manda la
+  constitución (regla 2: lo que no está en el ticket se anota y se sigue).
+
+**Recomendación: (b).** La regla 2 no tiene excepción por tamaño, y la fila del 24 describe un trabajo
+que este ticket no ha revisado. Si se elige (a), solo cambia la nota del territorio de B0.2.
+
+**Decisión del arquitecto, revocable** (no es del propietario, pero se dice): el banco es el **27** y no
+el 25 (B0.2). Si el orquestador prefiere que la numeración siga el orden de integración, T-040 toma el 25
+y el diseño de T-041 pasa al 27. Eso exige reabrir `tickets/T-041/diseno.md`, que no es de este ticket.
+
+### B0.6 · Lo que no entra en B0
+
+- **Las reglas propuestas en las bitácoras de T-038 y T-042** para `.claude/rules/supabase.md` y
+  `.claude/guard.json`. Este diseño las **aplica** a T-040, pero escribirlas en las reglas es decisión del
+  usuario y del arquitecto fuera de este ticket (`docs/state.md:36`).
+- **El ADR del patrón de dos pasos.** `exportar_nota` no lo usa: no coteja ningún secreto (B0.3).
+- **Cerrar `accesos_historia_alta` a `tipo = 'exportacion'`.** Sigue como en D7.
+- **`scripts/t002-rls.sql` y `t004-auditoria.sql` rotos desde T-042.** Están anotados en `state.md:37`, y
+  este ticket no los usa.
