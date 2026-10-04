@@ -28,6 +28,7 @@ const BOTON_SEMANA =
  */
 export function SelectorHueco({ calendario, elegido, alElegir, alCambiarSemana }: Props) {
   const diaInicial = diaPorDefecto(calendario.dias, calendario.huecos, elegido);
+  // `key` por semana: cada semana abre en el día del elegido (o el primero con huecos), no en el que tenía la anterior.
   const seleccion = { huecos: calendario.huecos, elegido, alElegir };
 
   return (
@@ -44,6 +45,7 @@ export function SelectorHueco({ calendario, elegido, alElegir, alCambiarSemana }
 
       <div className="hidden md:block">
         <RejillaSemana
+          key={calendario.desde}
           titulo={calendario.titulo}
           dias={calendario.dias}
           eje={calendario.eje}
@@ -52,7 +54,7 @@ export function SelectorHueco({ calendario, elegido, alElegir, alCambiarSemana }
         />
       </div>
       <div className="md:hidden">
-        <ListaDia dias={calendario.dias} diaInicial={diaInicial} seleccion={seleccion} />
+        <ListaDia key={calendario.desde} dias={calendario.dias} diaInicial={diaInicial} seleccion={seleccion} />
       </div>
 
       <LeyendaSeleccion />

@@ -58,4 +58,22 @@ describe('SelectorHueco', () => {
     expect(props.alCambiarSemana).toHaveBeenNthCalledWith(1, '2026-09-28');
     expect(props.alCambiarSemana).toHaveBeenNthCalledWith(2, '2026-10-12');
   });
+
+  // H12 (ronda 3): al llegar otra semana, la lista abre en el día del elegido, no en el que tenía.
+  it('al cambiar de semana, la lista vuelve al día del hueco elegido', () => {
+    const { rerender, props } = pinta();
+    const siguiente = construirCalendarioAlta({
+      fechaFoco: '2026-10-13',
+      zona: 'Europe/Madrid',
+      hoy: '2026-10-04',
+      sugerencias: { modo: 'enFrio', sugerencias: [] },
+      bloques: [bloque('2026-10-13', '10:00', 'libre'), bloque('2026-10-15', '12:00', 'libre')],
+    });
+
+    rerender(<SelectorHueco {...props} calendario={siguiente} elegido="2026-10-15T12:00" />);
+
+    const lista = document.querySelector('[class~="md:hidden"]') as HTMLElement;
+    expect(lista.querySelector('[data-dia][aria-pressed="true"]')?.getAttribute('data-dia')).toBe('2026-10-15');
+    expect(lista.querySelector('button[data-hueco="2026-10-15T12:00"]')).not.toBeNull();
+  });
 });
