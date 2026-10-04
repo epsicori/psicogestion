@@ -1,12 +1,115 @@
 {
   "ticket": "T-028",
-  "resumen": "Corte A, segunda verificacion (commit 08af1e6, ronda 1 de arreglos E12-E15). vitest lib/agenda 114/114; npm test 106 ficheros, 1308/1308; lint 0 errores (2 warnings ajenos en lib/cuentas/accesos.test.ts); tsc solo el error previo LayoutProps de app/layout.tsx; territorio.mjs OK (2 ficheros tocados, dentro del territorio). Guion tsx propio con 12 comprobaciones calculadas a mano desde 1.B + E12-E15 antes de ejecutarlo: 12/12 coinciden. Guion borrado, worktree limpio. Criterios de pantalla, servidor y T-028a son de los cortes B y C: NO_VERIFICABLE.",
+  "resumen": "Corte B (rama worktree-agent-a1549876942c02f5f, HEAD 74747fc). npm test 167 ficheros / 2107 tests verdes; npm run lint 0 errores (2 warnings ajenos en lib/cuentas/accesos.test.ts). npm run build (Turbopack) FALLA en el worktree: 'Could not find the Next.js package (next/package.json) ... Resolved from .../agent-a1549876942c02f5f/app' (fallo conocido de la junction de node_modules, ajeno al ticket); `npx next build --webpack` COMPILA y genera /agenda/nueva y /(.)agenda/nueva. `next dev --webpack` da 500 en /login por 'node:crypto' (lib/cuentas/codigo-totp.ts, preexistente), asi que la prueba en navegador se hizo con `next start` sobre el build webpack, SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo, Playwright chromium contra Supabase local real. Limitacion de entorno: la cuenta ana@ tiene su factor TOTP 'unverified' en la base compartida (probable efecto del otro ticket) y no entra; se uso tecnico@ (que pide tipo y no ve nota) con Lucia Marquez (seis martes a las 12), Hugo Vidal (sin citas), Mateo y Sofia. Por eso quedan NO_VERIFICABLE: la entrada desde la ficha (corte C), el desbloqueo vigente con PIN, el rol profesional con PIN y el verificador de accesibilidad sobre la ruta nueva (ningun spec de accesibilidad/ la cubre y ana@ no entra). Hallazgos no bloqueantes: (1) con `?inicio=` en otro mes el calendario sigue pintando la semana actual aunque el hueco elegido sea de marzo de 2027; (2) tras un conflicto aparece durante unos segundos 'Con esta duracion el hueco elegido ya no cabe.' antes de 'Ese hueco acaba de ocuparse'; (3) guardar tarda ~15 s en el conflicto en `next start` local. Las citas de prueba creadas (Mateo x3, Hugo x8 quincenal, Sofia 2) quedan en la base local; db reset las borra.",
   "criterios": [
-    {"id": "A1", "texto": "sugerirHuecos: tres sugerencias por moda del intervalo, dia y franja habituales (ADR-049c), arranque en frio y excluir", "veredicto": "PASA", "comando": "npx vitest run lib/agenda; npx tsx ver028.mts (guion propio, borrado)", "evidencia": "vitest: Test Files 4 passed, Tests 114 passed. Guion (hoy=2026-10-02 salvo indicacion), todos OK: mensual con objetivo 10-20 ocupado -> [10-27 diaHabitual, 10-06 primerHueco, 10-13 primerHueco] (b nunca antes del objetivo, E12); sesion doble semanal (6 pasadas, 12:00/13:00) -> habitual [10-06 12:00 cadaIntervalo dias=7, 10-13 12:00 diaHabitual, 10-06 13:00 primerHueco] (E13); dos dias con sesion doble -> enFrio; seis martes en orden descendente == ascendente [10-06 comoLasUltimas n=6, 10-13 diaHabitual, 10-20 primerHueco] y pasadas/libres de entrada sin mutar (E15); ocho pasadas (2 jueves + 6 martes) -> 1.a 10-06 comoLasUltimas n=6; hoy '2026-10-2' y '2026-02-30' lanzan con mensaje que contiene 'hoy'; libres desordenados con pasadas vacias -> enFrio [10-06T09:00, 10-06T13:00, 10-07T10:00] descartando bloques <= hoy; excluir descarta el hueco; cruce de anio (martes 12-08..12-29, hoy 2026-12-30) -> habitual [2027-01-05 comoLasUltimas n=4, 2027-01-12 diaHabitual, 2027-01-19 primerHueco]. Salida: 'fallos 0', exit 0."},
-    {"id": "A2", "texto": "Ninguna cifra de puntuacion: solo n y dias salen en motivos", "veredicto": "PASA", "comando": "salida del guion tsx (JSON de motivos)", "evidencia": "Los motivos serializados solo contienen tipo, n, dias, diaSemana y hora; ningun campo de puntuacion."},
-    {"id": "A3", "texto": "Ningun motivo nombra el tipo de terapia: sugerirHuecos no lo recibe", "veredicto": "PASA", "comando": "salida del guion tsx; la firma de entrada solo admite pasadas, libres, hoy, excluir", "evidencia": "Las entradas del guion no llevan tipo ni modalidad y los motivos son las 4 variantes sin tipo."},
-    {"id": "R1", "texto": "Lint, tests, tsc, territorio", "veredicto": "PASA", "comando": "npm test; npm run lint; npx tsc --noEmit; node ~/.claude/pipeline/territorio.mjs T-028", "evidencia": "npm test: Test Files 106 passed, Tests 1308 passed. lint: 0 errors, 2 warnings ajenos (lib/cuentas/accesos.test.ts). tsc: solo app/layout.tsx(45,50) LayoutProps (previo, ajeno). territorio: 'T-028: 2 fichero(s) tocado(s), todos dentro de ...'."},
-    {"id": "B1", "texto": "Criterios manuales de pantalla, servidor y T-028a (ficha, recarga, PIN, tarjetas en pantalla, tecnico en DOM, serie, festivo, dos pestanas, teclado, 360 px, modalidad, build + a11y)", "veredicto": "NO_VERIFICABLE", "motivo": "Son de los cortes B y C; el corte A solo entrega la funcion pura. Se verifican con el E2E y el guion manual del diseno 3 cuando existan."}
+    {
+      "id": "auto-1",
+      "texto": "npm run lint && npm run build limpios",
+      "veredicto": "FALLA",
+      "comando": "npm run lint; npm run build; npx next build --webpack",
+      "evidencia": "lint: '0 errors, 2 warnings' (accesos.test.ts, ajeno). npm run build: 'Turbopack build failed ... Could not find the Next.js package (next/package.json) Resolved from ...\\.claude\\worktrees\\agent-a1549876942c02f5f\\app'. next build --webpack: 'Generating static pages (22/22)' y rutas '/agenda/nueva', '/(.)agenda/nueva' listadas.",
+      "reproduccion": "En el worktree: npm run build. El fallo es de entorno (junction de node_modules), no del codigo; el build webpack demuestra que compila. Hay que repetir npm run build en un clon con node_modules real para cerrarlo."
+    },
+    {
+      "id": "auto-2",
+      "texto": "Verificador de accesibilidad de T-009 en verde sobre la ruta nueva",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "git diff main..HEAD no toca accesibilidad/ y `grep -rl agenda/nueva accesibilidad` esta vacio: ninguna prueba de T-009 cubre /agenda/nueva. Ademas los specs existentes entran con ana@, cuyo factor esta 'unverified' en la base compartida. Hace falta anadir la ruta al spec y sembrar de nuevo antes de correr `npm run test:a11y`. Lo estructural (sin desbordamiento a 360 px, objetivos >= 44 px) si se midio, ver criterio 360 px."
+    },
+    {
+      "id": "man-1",
+      "texto": "Desde la ficha, pestana Resumen, 'Nueva cita' abre el dialogo con el paciente fijado; recargar deja la misma pantalla",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "El boton de la ficha es corte C (panel-resumen.tsx). Parte comprobada en el navegador: desde /agenda, el enlace 'Nueva cita' abre role=dialog en /agenda/nueva; recargar en esa URL deja la pagina completa con formulario y Guardar (dialogo=0); /pacientes y /agenda siguen en 200 tras navegacion dura; /agenda/nueva?paciente=<uuid> muestra el paciente fijado ('Paciente elegido / Lucia Marquez / Cambiar'). Falta ejercer la entrada desde la ficha cuando exista el boton."
+    },
+    {
+      "id": "man-2",
+      "texto": "Con desbloqueo de historia vigente la pantalla no muestra dato clinico",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "No se pudo abrir un desbloqueo (PIN) con una cuenta profesional: ana@ no entra. Comprobado sin PIN: el texto de /agenda/nueva?paciente=Lucia no contiene diagnostico|episodio|motivo de consulta|historia clinica (regex false); grep de lib/notas|episodio|diagnost|historia|exigirDesbloqueo|candado en app/(app)/agenda/nueva y lib/citas/alta.ts solo da comentarios. Falta repetirlo con PIN vigente.",
+      "comando": "playwright: regex /diagn[oó]stic|episodio|motivo de consulta|historia cl/i sobre body.innerText -> false"
+    },
+    {
+      "id": "man-3",
+      "texto": "/agenda/nueva sin PIN funciona entero, incluida la creacion de la serie",
+      "veredicto": "PASA",
+      "comando": "playwright (next start, Supabase local): login tecnico@, sin PIN, alta suelta (Mateo 5 oct 10:00), serie de 3 sesiones semanales de Sofia con la segunda desmarcada, serie quincenal de 8 de Hugo; consulta SQL a citas",
+      "evidencia": "BD tras guardar: Mateo 2026-10-05 09:00/10:00/11:00 'Sesion individual' 50 min; Sofia 2026-11-10 12:00 y 2026-11-24 12:00 (la del 17 desmarcada no existe); Hugo 8 citas quincenales 05-oct ... 11-ene-2027 a las 12:00. Tras guardar la pantalla vuelve a /agenda. grep de exigirDesbloqueo|candado en el arbol: vacio."
+    },
+    {
+      "id": "man-4",
+      "texto": "Seis citas los martes a las 12: primera sugerencia martes 12 con motivo 'como las seis ultimas'; sin cifra de puntuacion",
+      "veredicto": "PASA",
+      "comando": "playwright: /agenda/nueva?paciente=<Lucia> como tecnico@; texto de tarjetas y body",
+      "evidencia": "Tarjetas: 'Martes, 6 de octubre de 2026 / 12:00 / Como las seis ultimas'; 'Martes, 13 de octubre de 2026 / 12:00 / martes a las 12:00, su dia habitual'; 'Lunes, 5 de octubre de 2026 / 09:00 / Primer hueco libre'. Sin * ni %; numeros sueltos del body solo horas y fechas (12,00,13,12,00,12,00,09,00,28,28,29,30)."
+    },
+    {
+      "id": "man-5",
+      "texto": "Paciente sin citas previas: 'primeros huecos libres' con esas palabras, ninguna tarjeta habla de hora habitual",
+      "veredicto": "PASA",
+      "comando": "playwright: /agenda/nueva?paciente=<Hugo> como tecnico@",
+      "evidencia": "cabecera 'Primeros huecos libres' (true); tarjetas 'Lunes, 5 de octubre de 2026 / 09:00|10:00|11:00 / Primer hueco libre'; habitualEnTarjetas=false. La frase de ayuda 'Aun no hay citas suficientes para saber su hora habitual.' esta en la cabecera, aceptada por E17."
+    },
+    {
+      "id": "man-6",
+      "texto": "Tecnico administrativo: el campo de tipo de terapia esta en el formulario y lista solo el catalogo activo; tras guardar ni agenda, ni ficha de cita, ni previsualizacion lo ensenan; ningun motivo lo nombra (enmienda ADR-074)",
+      "veredicto": "PASA",
+      "comando": "playwright como tecnico@: opciones del select de tipo; tarjetas; /agenda?semana=2026-10-05, 2026-10-12 y /agenda tras guardar; grep tipo_terapia",
+      "evidencia": "Select 'Tipo de terapia': Elige el tipo / Sesion breve de seguimiento / Sesion de pareja / Sesion individual (el inactivo 'Sesion de grupo' no sale). Motivos sin nombres de tipo (regex individual|pareja|seguimiento|grupo sobre tarjetas: false). Agenda tras guardar: pareja=false individual=false seguimiento=false; panel 'Proximas citas' muestra solo 'Hugo V. Programada'. La previsualizacion de serie no muestra tipo. BD: la cita queda con el tipo elegido y su duracion (Hugo 'Sesion breve de seguimiento' 30 min; Mateo 'Sesion individual' 50 min). grep: tipo_terapia solo en argumentos p_tipo_terapia_id de rpc en lib/citas/alta.ts:217,265; ningun from('citas'|'series_cita'). Matiz: la ficha de cita (panel de la cita abierta) no se pudo abrir (las citas de la semana no son botones para este rol); solo se comprobo la lista de agenda."
+    },
+    {
+      "id": "man-7",
+      "texto": "En /agenda/nueva no hay ningun control ni texto de modalidad (criterio nuevo ADR-075)",
+      "veredicto": "PASA",
+      "comando": "playwright /modalidad/i sobre body; grep -rni modalidad app/(app)/agenda/nueva lib/citas/alta.ts lib/citas/esquemas.ts",
+      "evidencia": "modalidad=false en el texto de pantalla; el grep solo encuentra comentarios ('Sin modalidad (ADR-075)') y una prueba negativa; ningun control ni clave de interfaz."
+    },
+    {
+      "id": "man-8",
+      "texto": "Semanal x ocho sesiones cruzando el ultimo domingo de marzo: ocho filas con la misma hora local y marca de la afectada por la anomalia",
+      "veredicto": "PASA",
+      "comando": "playwright: /agenda/nueva?paciente=<Lucia>&inicio=2027-03-23T12:00, tipo individual, periodicidad Semanal, 8 sesiones",
+      "evidencia": "Previsualizacion: martes 23 mar, 30 mar, 6 abr, 13, 20, 27 abr, 4 may, 11 may 2027, todas '12:00' con 'Incluir'. El cambio de hora es el 28 mar 2027. Ninguna sesion cae en la hora inexistente (02:00-03:00), asi que no hay fila marcada: es la lectura P3 del diseno aceptada por el propietario. El marcado 'Cambio de hora' solo se ejerce por prueba unitaria (previsualizacion-serie.test.tsx, en verde), no en navegador."
+    },
+    {
+      "id": "man-9",
+      "texto": "Serie que pisa un festivo de disponibilidad: sesion marcada con alternativa propuesta, nunca encima",
+      "veredicto": "PASA",
+      "comando": "playwright: /agenda/nueva?paciente=<Lucia>&inicio=2026-10-06T12:00, semanal (festivo sembrado 2026-10-20 de Ana)",
+      "evidencia": "Fila: 'Martes, 20 de octubre de 2026 / Festivo / Alternativa: miercoles, 21 de octubre de 2026, 12:00 / Aceptar alternativa' sin hora ni casilla 'Incluir' en esa fila; las demas con 12:00 e 'Incluir'."
+    },
+    {
+      "id": "man-10",
+      "texto": "Dos pestanas, mismo hueco: 'Ese hueco acaba de ocuparse' con sugerencias nuevas y el resto del formulario conservado",
+      "veredicto": "PASA",
+      "comando": "playwright, un contexto, dos paginas: Mateo y Hugo con el mismo primer hueco (5 oct 10:00), guardar en la primera y luego en la segunda",
+      "evidencia": "Servidor: 'agenda_crear_cita() fallo ... 23P01 citas_sin_solape_profesional' (no se crea la cita de Hugo). Segunda pagina a los 15 s: role=status 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.'; sugerencias nuevas 'Lunes, 5 de octubre de 2026 12:00 / 13:00 / 16:00' (sin 10:00 ni 11:00, ya ocupados) y calendario en la semana 5-11 oct; Sala='Sala C 7' y tipo conservados. Defectos menores: 'Con esta duracion el hueco elegido ya no cabe.' aparece unos segundos antes del mensaje correcto y la respuesta tarda ~15 s."
+    },
+    {
+      "id": "man-11",
+      "texto": "Recorrido completo con teclado, foco visible siempre y de vuelta al boton de origen",
+      "veredicto": "PASA",
+      "comando": "playwright solo con teclado desde /agenda: focus en 'Nueva cita', Enter, Tab, escribir, Enter, guardar",
+      "evidencia": "Foco inicial en el enlace; al abrir pasa a 'Cerrar' dentro del dialogo; Tab llega a buscador, boton 'Hugo Vidal' (Enter), select de tipo, tarjeta de hueco (Enter -> 'Hueco elegido: Lunes, 5 de octubre de 2026, 12:00'), select de periodicidad (Quincenal -> aparece 'Asi quedaria la serie'), 'Guardar' (Enter). Dialogo cerrado, URL /agenda, foco final en 'Nueva cita'. En todos los pasos el foco lleva boxShadow (anillo) con outline none. Trampa de foco: 75 Tab/Shift+Tab sin salir del dialogo (tabsFuera=0). Escape cierra y devuelve el foco a 'Nueva cita' (A|/agenda/nueva). Nota: el teclado eligio 'Sesion breve' al teclear 'Sesion de pareja' por la busqueda por prefijo del select; no es defecto."
+    },
+    {
+      "id": "man-12",
+      "texto": "A 360 px la pantalla se reorganiza, toda accion de escritorio disponible, ningun objetivo tactil bajo 44 px",
+      "veredicto": "PASA",
+      "comando": "playwright viewport 360x740: /agenda/nueva?paciente=<Lucia>, tipo individual, Semanal; medicion de getBoundingClientRect de main button/a/input/select/textarea",
+      "evidencia": "scrollWidth - clientWidth = 0; lista de elementos con alto o ancho < 44 px: [] (tambien [] a 1280 px en alto). Presentes a 360 px: Sugerencias, Periodicidad, 'Asi quedaria la serie', Guardar, Cancelar, Cambiar, Semana siguiente, Sala. Captura movil.png generada. Matiz: las casillas 'Incluir' de la previsualizacion estan dentro de main y entran en la medicion; ninguna salio por debajo de 44."
+    },
+    {
+      "id": "man-13",
+      "texto": "/agenda/nueva junto a /prototipo: mismo vocabulario visual, sin controles de adorno",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Comparacion visual subjetiva que debe hacer una persona. Guion: abrir /prototipo y /agenda/nueva en dos ventanas, comparar tipografia, tarjetas, botones y malva de seleccion, y comprobar que cada control tiene accion. Se dispone de capturas (modal.png, conflicto.png, movil.png) en el scratchpad de la sesion."
+    }
   ],
-  "regresiones": []
+  "regresiones": [
+    "npm run build con Turbopack falla en el worktree por resolucion de next a traves de la junction de node_modules (ajeno al ticket).",
+    "next dev --webpack da 500 en /login: 'UnhandledSchemeError node:crypto' en lib/cuentas/codigo-totp.ts (preexistente, T-033; se usa next dev por defecto con Turbopack).",
+    "ana@psicogestion.test tiene el factor TOTP 'unverified' en la base compartida: no puede entrar con el segundo factor automatico; hace falta db reset + seed (afecta tambien a los specs de accesibilidad existentes).",
+    "La rama borra tickets/T-040/diseno.md respecto a main (la rama partio antes de ese commit); verificar que no se arrastra al integrar."
+  ]
 }

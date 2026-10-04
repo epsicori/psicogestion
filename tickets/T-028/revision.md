@@ -258,3 +258,163 @@ hora a favor de 12:00 en las dos lecturas.
   con su prueba. Además, ningún `sort` ni `slice` sobre `pasadas` o `libres` en el llamante.
 - `sugerirHuecos` ahora **lanza** si `hoy` no es válida. El corte B tiene que llevar ese error
   al estado `agenda.alta.sugerencias.error` (§1.F) y no dejar que tumbe el render de la página.
+
+
+---
+
+# T-028 · Revisión del corte B (pantalla del alta de cita)
+
+**Sin hallazgos ALTA.** 5 MEDIA, 3 BAJA.
+
+- **Diff revisado:** `git diff main...worktree-agent-a1549876942c02f5f`, con 14 commits y 52 ficheros.
+- **Contra qué:** el contrato `tickets/T-028-alta-de-cita.md` y el diseño `tickets/T-028/diseno.md`. Mandan E1-E17, y §5 se aplica según E6/E16.
+- **Lo que no he usado:** ni la evidencia ni el informe del verificador. Tampoco he consultado la base local, que está compartida con T-040 B.
+
+## Lista «Qué revisar» (§5 + E6), punto por punto
+
+- **Entradas que elige el llamante (E6).** Sin hallazgo.
+  - `tipoTerapiaId` lo elige cualquier rol, y la duración sale del catálogo en el servidor (`estado-alta.ts:53-62`).
+  - `esquemaAltaCita` no tiene `duracionMinutos`: `z.object` la descarta.
+  - La nota del técnico se fuerza a `null` en la acción (`aplicarRol`) y en el cliente, y la base da 42501. Son dos capas.
+  - Con rol profesional, `profesionalId = usuario.id`.
+- **Pruebas que deben fallar por el motivo exacto.**
+  - `formulario-alta.test.tsx:78` («el tipo está para los tres roles») cae si se vuelve a esconder el selector por rol. El fixture trae tipos a los tres roles.
+  - `acciones.test.ts:115` cae si se quita el forzado de la nota a `null`.
+  - No existe la prueba «el selector empieza vacío con citas pasadas en el fixture». Pero el formulario no recibe ninguna entrada de la que pudiera salir un tipo inicial (`tipoTerapiaId: undefined` fijo, `formulario-alta.tsx:79`), y la comprobación «Duración: elige un tipo» lo cubre. Hoy no hay escenario de fallo.
+- **Lectura del tipo por otra puerta.** El hueco está en la prueba, no en el código: ver H7.
+  - El catálogo se pide con tres columnas (`contenido-alta.tsx:35`).
+  - `leerUltimasCitasPaciente` lee solo `inicio, zona_horaria`.
+  - Ningún resultado de acción lleva el id ni el nombre del tipo.
+- **Puertas al dato clínico.** Sin hallazgo. El grep no encuentra ningún `import` de `lib/notas`, historia, episodios ni diagnósticos, ni en `app/(app)/agenda/nueva/**` ni en `lib/citas/alta.ts`.
+- **Cero `new Date()` en cliente.** Sin hallazgo. Solo aparece en `estado-alta.ts` y `vista-alta.ts`, que son de servidor, y en ningún fichero `'use client'`. Navegar de semana es `recalcularAlta`.
+- **Periodicidad.** Sin hallazgo: suelta y las tres del ADR-034.
+- **Duplicados.** Guardar se deshabilita con `guardando`, y la base tiene el índice de exclusión. Pero Guardar sigue activo mientras se recalcula la previsualización: ver H3.
+- **`excluir ∩ aceptarAlternativas` vacío.** Lo exige el esquema. Lo que falla es la firma, que no cubre ni el paciente, ni el profesional, ni el centro, ni el tipo: ver H3.
+- **Sin cifra; contraste.** Sin hallazgo. El par «habitual» está en `lib/contraste/tokens.ts`.
+- **Modalidad (E3).** Sin hallazgo. No hay ni control ni texto, y lo comprueba `formulario-alta.test.tsx:102`.
+
+## Puntos de atención del orquestador
+
+- **ADR-074.** Correcto: el técnico elige el tipo y no vuelve a leerlo (ver arriba).
+- **Nada clínico en el alta.** Correcto.
+- **Diálogo y foco.** Sin hallazgo con escenario.
+  - Se usa la primitiva `Dialogo`, con su devolución de foco.
+  - Escape y la «X» hacen `router.back()`, y hay prueba.
+  - El diálogo es `max-w-3xl` y el diseño pedía `max-w-5xl`. Es cosmético y lo descarto.
+- **Server Actions con el mismo esquema Zod que el cliente.** Sí: `esquemaAltaCita` en las dos capas, y `safeParse` en cada acción.
+- **Aviso de «hueco raro».** No es lo que pide el diseño: es un desvío (H4).
+- **Pruebas nacidas en verde.** H7, y las citadas arriba.
+
+## MEDIA
+
+### H1 · `app/(app)/agenda/nueva/contenido-alta.tsx:40` — el administrador nunca aparece como profesional elegible
+
+**Qué pasa.**
+- El directorio se filtra con `.eq('rol', 'profesional_sanitario')`.
+- La decisión D de T-028a (`alta_exigir_profesional`, migración `20261005120000:208-226`) admite como profesional de una cita a un `profesional_sanitario` **o a un `administrador`** activo.
+- El filtro lo dicta el propio diseño (§1.E, línea 254). El diseño choca con la decisión D, y el implementador siguió el diseño.
+
+**Escenario.** Una consulta de una sola psicóloga cuyo perfil es `administrador`, sin ningún `profesional_sanitario` activo en el centro:
+- la lista `profesionales` sale vacía;
+- la línea 66 devuelve `agenda.alta.error.sinProfesionales`;
+- la pantalla de alta queda inutilizable para todos los roles.
+
+Si el centro tiene más profesionales, el administrador que atiende pacientes no puede citarse a sí mismo, ni el técnico citarle a él, aunque `agenda_crear_cita` lo aceptaría.
+
+**Qué falta.** Decisión del propietario: ¿el directorio incluye a los administradores? Es el mismo patrón que T-034, el rol usado como señal de quién es clínico.
+
+### H2 · `app/(app)/agenda/nueva/contenido-alta.tsx:44,64-65` — el profesional por defecto no es el asignado del paciente
+
+**Qué piden.** El contrato (línea 133) dice «profesional —por defecto el asignado—», y el diseño §1.E (línea 253) manda leer `pacientes.profesional_id`.
+
+**Qué hace el código.**
+- El paciente se lee con `select('id, nombre, apellidos')`, sin `profesional_id`.
+- El valor por defecto es `profesionales.find(p => p.centroId === centroId)?.id`, es decir, el primero que devuelve `directorio_perfiles`, sin `.order`.
+
+**Escenario.** Un técnico abre `/agenda/nueva?paciente=X`, y X está asignado a la Dra. B. El desplegable entra con la Dra. A, que es la primera del directorio:
+- las sugerencias se calculan con A, «en frío», porque X no tiene citas con A;
+- si el técnico no mira el desplegable, la cita se guarda a nombre de A.
+
+La prueba `contenido-alta.test.tsx:84` («entra el primero») fija este comportamiento equivocado.
+
+### H3 · `app/(app)/agenda/nueva/formulario-alta.tsx:212-216,284-287` (y `lib/citas/alta.ts:146-156`) — una firma vieja valida una serie que el usuario no ha visto
+
+**Qué pasa.** Tres huecos que se suman:
+- Al cambiar de paciente, profesional, centro o tipo, se hace `setSerie(null)`, pero `firma` no vuelve a `null`. Solo lo hace `cambiarPeriodicidad` (línea 208).
+- La firma cubre la periodicidad, la hora, la duración, la zona, y las fechas e instantes de las sesiones. No cubre ni el paciente, ni el profesional, ni el centro, ni el tipo.
+- Guardar sigue activo mientras la nueva previsualización está en vuelo.
+
+**Escenario.**
+1. Serie semanal de 8 sesiones con la Dra. A. El usuario desmarca 2 fechas por vacaciones.
+2. Cambia el profesional a la Dra. B, que tiene libres esas fechas, o cambia el tipo por otro de la misma duración.
+3. Pulsa Guardar antes de que llegue la nueva previsualización. El envío lleva la `firma` de A y `excluir: []`, porque `serieVigente` es `null`.
+4. `guardarAlta` vuelve a previsualizar para B. La firma sale idéntica: mismas fechas, misma hora, misma duración.
+
+**Efecto.** Se crea la serie de 8 sesiones a nombre de B, incluidas las 2 fechas que el usuario había desmarcado, sin que haya visto ninguna previsualización de B.
+
+Si la firma se anulara al cambiar, el esquema lo habría frenado: su `superRefine` exige `firma` en una serie.
+
+### H4 · `app/(app)/agenda/nueva/vista-alta.ts` (pieza ausente; contrato:169, diseño §1.F:309-313) — el aviso de hueco raro se retiró en silencio
+
+**Qué pasa.**
+- El contrato lo exige como criterio, con alternativas y «Agendar igualmente».
+- El implementador añadió sus claves en `a2ce801` y las quitó en `92e41d4`.
+- Solo queda una línea en el mensaje del commit: nada en `docs/state.md` §Hallazgos, ni en una decisión, ni en el código.
+
+**Por qué la premisa del diseño no se cumple (comprobado).** El diseño dice que el hueco raro es «el tramo libre que no generó bloque». Pero `agenda_bloques_profesional` (migración `20261005120000:850-996`) funciona así:
+- emite el bloque «ocupado» en la rejilla del cursor (`inicio = cursor`, `fin = cursor + dur`), no con las horas de la cita real;
+- después salta a `upper(rango_bloqueante)`.
+
+Por eso el tramo libre anterior a una cita queda tragado por el bloque ocupado, y no se puede distinguir en la salida.
+
+**Lo que tocaba.** Parar y anotarlo (regla 2), o pedir a T-028a la consulta que falta. No borrar la pieza en silencio.
+
+**Escenario.** Franja de 9:00 a 14:00, una cita a las 10:20 y sesiones de 50 minutos. Se elige el hueco libre de las 9:00. Entre su fin y las 10:20 queda un tramo más corto que una sesión y más largo que el descanso. No sale aviso ni alternativas, y el criterio del contrato queda sin cubrir sin que nadie lo sepa.
+
+### H5 · `app/(app)/agenda/nueva/calendario-seleccion.tsx:45` — calendario nuevo en vez de `RejillaSemana`/`ListaDia` en modo selección
+
+**Qué piden.**
+- El contrato (línea 116) dice «Es la vista semanal de T-014 en modo selección, **no un calendario nuevo**».
+- El diseño §1.F (línea 278) fija una prop `seleccion?` sobre `RejillaSemana` y `ListaDia`, con la misma geometría (`minutoPared`, `PX_MIN`).
+
+**Qué hace el código.**
+- `CalendarioSeleccion` es un componente nuevo: siete botones de día y la lista del día elegido, también desde `md`.
+- No hay decisión escrita, y `docs/interfaz.md` describe el resultado sin decir que se aparta.
+
+**Escenario.**
+- Desde `md`, el técnico que busca hueco entre martes y jueves no ve la semana, sino un día cada vez, y tiene que ir cambiando de día para comparar. En la agenda de T-014 los vería uno al lado del otro.
+- El primer cambio en `RejillaSemana` (pintar festivos o ausencias, por ejemplo) no llegará al alta. Los dos vocabularios divergen, que es justo lo que el contrato quería evitar.
+
+## BAJA
+
+### H6 · `app/(app)/agenda/nueva/formulario-navegable.tsx:19` — el éxito no se anuncia ni lleva a la semana de la cita
+
+**Qué pasa.**
+- El diseño (línea 308) pide, en la página, ir a `/agenda?semana=<fecha>`.
+- El código hace `router.push('/agenda')` e ignora la `fecha` que devuelve la acción.
+- El propio comentario reconoce que no se anuncia.
+
+**Escenario.** Desde la URL directa, se guarda una cita para dentro de tres semanas. Se vuelve a la semana actual: no se ve la cita ni hay ningún mensaje, así que el usuario no tiene confirmación de que exista.
+
+### H7 · `app/(app)/agenda/nueva/acciones.test.ts:234-252` — «ningún resultado lleva el nombre del tipo» no prueba nada sobre el nombre
+
+**Qué pasa.** El mock de `tipos_terapia` (línea 56) devuelve solo `{ duracion_minutos }`, aunque el fixture traiga `nombre`.
+
+**Escenario.** Un mutante cambia `duracionDeTipo` para hacer `select('nombre, duracion_minutos')` y compone `anuncio` con el nombre. El mock le da `nombre: undefined`, y `not.toContain(NOMBRE_TIPO)` sigue en verde. La mitad «nombre» de ADR-074.2 no está probada.
+
+### H8 · `app/(app)/agenda/nueva/formulario-alta.tsx:128-131` — «el hueco ya no cabe» solo se comprueba si el día elegido está en la semana visible
+
+**Escenario.**
+1. Se elige el martes a las 17:00 con un tipo de 50 minutos.
+2. Se navega a la semana siguiente.
+3. Se cambia a un tipo de 90 minutos, que choca con la cita de las 18:00.
+4. El recálculo no trae el martes, así que el elegido sigue marcado y no hay aviso.
+5. Guardar choca en la base, y la pantalla dice «Ese hueco acaba de ocuparse». Es falso: nadie lo ha ocupado, es que ya no cabe.
+
+## Descartados
+
+- **Propuestas nulas en `crearSerieAlta`.** La base inicializa las listas a `'[]'` (migración, líneas 524-525 y 700-705).
+- **Doble `router.back()`.** Sin un escenario que se pueda reproducir.
+- **«Fijado y no editable» desde la ficha.** El enlace de la ficha no forma parte de este corte.
+- **La marca de habitual depende de la tarjeta (b).** Sin un escenario cerrado.
+- **Ancho del diálogo.** Cosmético.
