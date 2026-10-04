@@ -211,6 +211,73 @@ describe('FormularioAlta · guardar', () => {
   });
 });
 
+describe('FormularioAlta · hueco elegido fuera de la semana visible (H8)', () => {
+  const SEMANA_2 = {
+    ...VISTA,
+    calendario: construirCalendarioAlta({
+      fechaFoco: '2026-10-13',
+      zona: 'Europe/Madrid',
+      hoy: '2026-10-04',
+      sugerencias: { modo: 'enFrio', sugerencias: [] },
+      bloques: [bloque('2026-10-13', '10:00', 'libre')],
+    }),
+  };
+  const SIN_EL_HUECO = vistaCon([bloque('2026-10-06', '17:00', 'ocupado'), bloque('2026-10-06', '18:00', 'libre')]);
+
+  it('al cambiar la duración con el elegido en otra semana, se comprueba también ese hueco y no se dice «acaba de ocuparse» al guardar', async () => {
+    m.recalcularAlta.mockImplementation(async (entrada: { fechaFoco: string | null }) => {
+      if (entrada.fechaFoco === '2026-10-12') return { ok: true, vista: SEMANA_2, duracionMinutos: 50 };
+      if (entrada.fechaFoco === '2026-10-05') return { ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 };
+      return { ok: true, vista: VISTA, duracionMinutos: 50 };
+    });
+    pinta();
+    await elegirTipoYHueco(TIPO_A);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Semana siguiente' }));
+    });
+    await screen.findAllByRole('button', { name: /10:00, libre/ });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain('Con esta duración el hueco elegido ya no cabe.'),
+    );
+    expect(screen.queryByRole('button', { name: /elegida/ })).toBeNull();
+    expect(m.recalcularAlta).toHaveBeenLastCalledWith(expect.objectContaining({ fechaFoco: '2026-10-05' }));
+  });
+
+  it('si el guardado dice que el hueco se ocupó mientras se recalcula la duración, queda el mensaje del conflicto y no el de «no cabe»', async () => {
+    let resolverRecalculo: (valor: unknown) => void = () => {};
+    m.recalcularAlta
+      .mockResolvedValueOnce({ ok: true, vista: VISTA, duracionMinutos: 50 })
+      .mockImplementationOnce(() => new Promise((resolver) => (resolverRecalculo = resolver)))
+      .mockResolvedValue({ ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 });
+    m.guardarAlta.mockResolvedValue({
+      ok: false,
+      motivo: 'hueco_ocupado',
+      mensaje: 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.',
+      vista: SIN_EL_HUECO,
+    });
+    pinta();
+    await elegirTipoYHueco(TIPO_A);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    });
+    await act(async () => {
+      resolverRecalculo({ ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 });
+    });
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Ese hueco acaba de ocuparse'));
+    expect(screen.getByRole('status').textContent).not.toContain('ya no cabe');
+  });
+});
+
 describe('FormularioAlta · duración y hueco', () => {
   it('si con la nueva duración el hueco elegido ya no cabe, se desmarca y se dice', async () => {
     const sinElHueco = vistaCon([bloque('2026-10-06', '17:00', 'ocupado'), bloque('2026-10-06', '18:00', 'libre')]);

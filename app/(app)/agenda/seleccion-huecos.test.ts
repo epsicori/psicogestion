@@ -44,4 +44,10 @@ describe('diaPorDefecto', () => {
     expect(diaPorDefecto(dias, [hueco(3, 600, 50, 'ocupado')])).toBe(2);
     expect(diaPorDefecto(dias.map((d) => ({ ...d, esHoy: false })), [])).toBe(0);
   });
+
+  it('con un hueco elegido que está en la semana, el de su día (viene de ?inicio= en otro mes)', () => {
+    const huecos = [hueco(1, 600, 50), hueco(4, 600, 50)];
+    expect(diaPorDefecto(dias, huecos, huecos[1].clave)).toBe(4);
+    expect(diaPorDefecto(dias, huecos, 'otra-semana')).toBe(1);
+  });
 });

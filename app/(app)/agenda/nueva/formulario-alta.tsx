@@ -208,6 +208,17 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     setValue('firma', null);
   }
 
+  /**
+   * Un cambio que altera los huecos (tipo, profesional, centro) se comprueba contra el hueco ya
+   * elegido; si está en otra semana, se pide esa: si no, no se sabría si todavía cabe y el guardado
+   * diría «acaba de ocuparse» sin que nadie lo haya ocupado.
+   */
+  function volverAlElegido() {
+    if (!elegido) return;
+    const lunes = lunesDe(elegido.clave.slice(0, 10));
+    if (lunes !== vista.calendario.desde) setFoco(lunes);
+  }
+
   function cambiarPeriodicidad(valor: (typeof PERIODICIDADES)[number]) {
     setValue('periodicidad', valor);
     invalidarSerie();
@@ -293,6 +304,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             value={profesionalId}
             onChange={(evento) => {
               setValue('profesionalId', evento.target.value);
+              volverAlElegido();
               invalidarSerie();
             }}
           />
@@ -308,6 +320,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             onChange={(evento) => {
               const nuevo = evento.target.value;
               setValue('centroId', nuevo);
+              volverAlElegido();
               const delCentro = profesionales.filter((p) => p.centroId === nuevo);
               if (rol !== 'profesional_sanitario' && !delCentro.some((p) => p.id === profesionalId) && delCentro[0]) {
                 setValue('profesionalId', delCentro[0].id);
@@ -331,6 +344,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             errores={errors.tipoTerapiaId ? [errors.tipoTerapiaId.message ?? ''] : undefined}
             onChange={(evento) => {
               setValue('tipoTerapiaId', evento.target.value, { shouldValidate: false });
+              volverAlElegido();
               invalidarSerie();
             }}
           />

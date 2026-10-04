@@ -27,7 +27,7 @@ const BOTON_SEMANA =
  * ocupa un hueco. Todo llega escrito del servidor (ADR-034).
  */
 export function SelectorHueco({ calendario, elegido, alElegir, alCambiarSemana }: Props) {
-  const diaInicial = diaPorDefecto(calendario.dias, calendario.huecos);
+  const diaInicial = diaPorDefecto(calendario.dias, calendario.huecos, elegido);
   const seleccion = { huecos: calendario.huecos, elegido, alElegir };
 
   return (

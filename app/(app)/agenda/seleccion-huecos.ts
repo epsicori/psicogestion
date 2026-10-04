@@ -52,8 +52,13 @@ export function carrilesDeHuecos(huecos: HuecoVista[]): Map<string, Carril> {
   return resultado;
 }
 
-/** El día con que se abre el calendario: el primero con un hueco libre; si no, hoy; si no, el primero. */
-export function diaPorDefecto(dias: DiaAlta[], huecos: HuecoVista[]): number {
+/**
+ * El día con que se abre el calendario: el del hueco ya elegido si está en esta semana; si no, el
+ * primero con un hueco libre; si no, hoy; si no, el primero.
+ */
+export function diaPorDefecto(dias: DiaAlta[], huecos: HuecoVista[], elegido: string | null = null): number {
+  const delElegido = elegido === null ? undefined : huecos.find((h) => h.clave === elegido);
+  if (delElegido) return delElegido.diaIndice;
   const libres = huecos.filter((h) => h.estado === 'libre').map((h) => h.diaIndice);
   if (libres.length > 0) return Math.min(...libres);
   const hoy = dias.findIndex((d) => d.esHoy);
