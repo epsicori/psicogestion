@@ -1,7 +1,7 @@
 {
   "ticket": "T-040",
   "fecha": "2026-10-04",
-  "nota": "Mutantes MB1–MB10 de la tabla del diseño. Cada mutante SQL se aplica dentro de begin … rollback (create or replace; MB1 drop+create con los mismos revoke/grant) y en la misma transacción se ejecutan scripts/rls/00-ayudantes.sql y 27-exportaciones.sql: nada queda en la base compartida. La línea base (sin mutar) sale verde. MB8 es de concurrencia (CB7) y el banco no la puede ver: se aplicó fuera de transacción, se pasó scripts/t040-oraculo.mjs y se restauró la definición de la migración (comprobado en pg_proc: prosrc vuelve a llevar `on conflict (exportacion_id) do nothing`). MB4 tal como está escrito (paso 3 detrás del 5 pero delante del 6) es EQUIVALENTE: el select del paso 5 no escribe ni lanza y la autorización sigue después de los parámetros; no se cuenta. Su variante MB4b (paso 3 detrás de la autorización, paso 6) sí la mata el banco. El mutante equivalente del coalesce de los pasos 6–7 que anota el diseño no se cuenta.",
+  "nota": "Mutantes MB1–MB10 de la tabla del diseño. Cada mutante SQL se aplica dentro de begin … rollback (create or replace; MB1 drop+create con los mismos revoke/grant) y en la misma transacción se ejecutan scripts/rls/00-ayudantes.sql y 27-exportaciones.sql: nada queda en la base compartida. La línea base (sin mutar) sale verde. MB8 es de concurrencia (CB7) y el banco no la puede ver: se aplicó fuera de transacción, se pasó scripts/t040-oraculo.mjs y se restauró la definición de la migración (comprobado en pg_proc: prosrc vuelve a llevar `on conflict (exportacion_id) do nothing`). MB4 no es equivalente (ronda 2, revisión A-H2): con el paso 3 detrás del 5, el paso 4 se adelanta al 3; lo mata 27.K13b, añadida en la ronda 2. MB4b (paso 3 detrás del 6) lo mata K6. El mutante equivalente del coalesce de los pasos 6–7 que anota el diseño no se cuenta.",
   "sql_banco": {
     "MB1": {
       "mutacion": "exportar_nota con `returns setof jsonb` y `return next`",
@@ -19,9 +19,9 @@
       "falla": "ASERCIÓN FALLIDA (lanzó 42501 en vez de 22023): 27.K6 (CB3) paciente nulo — Sin acceso a esa nota."
     },
     "MB4": {
-      "mutacion": "el paso 3 (parámetros) movido detrás del paso 5 (la nota), delante del 6",
-      "rojo": false,
-      "falla": "EQUIVALENTE: el select del paso 5 no escribe ni lanza; el orden observable no cambia. No se cuenta."
+      "mutacion": "el paso 3 (parámetros) movido detrás del paso 5 (la nota), delante del 6: el paso 4 queda delante del 3",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA: 27.K13b (CB4) SIN con motivo y sin referencia o con una corta: el 22023 del paso 3 llega antes que el 42501 del paso 4. (Ronda 1 lo declaró equivocadamente equivalente: revisión A-H2; la ronda 2 añade K13b.)"
     },
     "MB4b": {
       "mutacion": "el paso 3 (parámetros) movido detrás del paso 6 (autorización)",

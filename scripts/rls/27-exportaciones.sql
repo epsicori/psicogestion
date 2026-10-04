@@ -737,6 +737,15 @@ select pg_temp.assert(
   and pg_temp.t40_err(:E_SIN, format('select public.exportar_nota(%L, %L, %L, %L)', :E_P, :E_N1, 'traspaso_caso', 'Una referencia'))
       = '42501 Solo la administración pide copias con motivo.',
   '27.K13 (CB4) SIN con motivo: 42501 «Solo la administración», exista o no la nota');
+-- El orden de B0.3.1: los parámetros (paso 3) van ANTES que el motivo de la administración (paso 4).
+-- Un no administrador con motivo y la referencia ausente o corta recibe el 22023 del paso 3, no el
+-- 42501 del 4 (revisión A-H2: con el paso 3 detrás del 5, el 4 se adelanta y esto cambia).
+select pg_temp.assert(
+  pg_temp.t40_err(:E_SIN, format('select public.exportar_nota(%L, %L, %L, null)', :E_P, :E_RND, 'traspaso_caso'))
+    = '22023 El motivo y la referencia van juntos.'
+  and pg_temp.t40_err(:E_SIN, format('select public.exportar_nota(%L, %L, %L, %L)', :E_P, :E_RND, 'traspaso_caso', 'x'))
+    = '22023 La referencia tiene que medir entre 3 y 200 caracteres.',
+  '27.K13b (CB4) SIN con motivo y sin referencia o con una corta: el 22023 del paso 3 llega antes que el 42501 del paso 4');
 select pg_temp.assert(
   pg_temp.t40_err(:E_ADM, format('select public.exportar_nota(%L, %L)', :E_P, :E_N1))
   = pg_temp.t40_err(:E_ADM, format('select public.exportar_nota(%L, %L)', :E_P, :E_RND))
