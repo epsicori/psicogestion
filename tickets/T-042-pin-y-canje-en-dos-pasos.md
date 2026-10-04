@@ -6,7 +6,8 @@ riesgo: alto
 fase: 1
 prioridad: alta
 depende_de: [T-038]
-estado: pendiente
+estado: hecho
+completado: 2026-10-04
 delegable: no                         # todo es candado, contador o secreto; ver diseño §7
 territorio:
   - supabase/migrations/*_pin_y_canje_en_dos_pasos.sql   # cola de un solo dueño: justo detrás de T-038

@@ -12,7 +12,6 @@
 
 ## En curso
 
-- **T-042**: integrado; queda el documentalista (bitácora y frontmatter). Pendiente de usuario/arquitecto: regla `crypt`+NULL en `.claude/rules/supabase.md` y ADR del patrón de dos pasos.
 - **T-040 A**: R3-H1 abierto (opacidad/color sin prueba). Corte B: migración, banco 24, interfaz.
 - **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). T-023 sube a riesgo alto (vista definer del pendiente).
 - **T-028 B/C**: desbloqueados. E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod.
@@ -34,7 +33,7 @@ Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5
 - **T-042 R2-H1 (BAJA)**: el predicado del `update` de `bloquear_historia()` (migración `20261009120000:442`) no tiene prueba ni mutante; sin él cada «Bloquear» escribe una fila `UPDATE` en `auditoria` y `test:rls` sigue verde. Arreglo: aserción en CA-R2.2 de que bloquear con `0/0/false` no cambia el recuento.
 - **T-038 A3-H1=B3-H2 (BAJA)**: `lib/cuentas/totp.ts:57` marca `reentrar` ante cualquier 42501; `generar_codigos_recuperacion()` lo lanza por cuatro causas (Q3(B) incluida) y la vista afirma «hace más de cinco minutos». La salida sí resuelve.
 - **T-038 R4-H1 (BAJA)**: `app/(app)/cuenta/formulario-regenerar.test.tsx:160-161` niega dos frases concretas, no cualquier condición sobre el aviso; «… salvo que en tus avisos ya salga…» pasa. Arreglo: negar la etiqueta del aviso.
-- **T-038 lecciones**: reglas por ruta propuestas para `.claude/rules/supabase.md` (orden de guardas en RPC definer, fallo sin lanzar, `p_contrasena` fuera de raise/format) en `docs/bitacora/T-038.md`; decide usuario/arquitecto.
+- **T-038 y T-042 lecciones**: reglas por ruta propuestas para `.claude/rules/supabase.md` (orden de guardas en RPC definer, fallo sin lanzar, `p_contrasena` fuera de raise/format, `crypt`+NULL en `coalesce`), una comprobación para `guard.json` y el ADR del patrón de dos pasos, en `docs/bitacora/T-038.md` y `T-042.md`; decide usuario/arquitecto.
 - **T-042 notas**: `canjearCodigo` sin Zod en servidor; `scripts/t002-rls.sql` y `t004-auditoria.sql` llaman a la firma de un paso, que ya no existe (ningún `npm run` los usa).
 - **T-038 nota de despliegue (Q1)**: los ajustes de registro de Postgres que exige `registro_postgres_seguro()` viven solo en `docs/bitacora/T-038.md`; no hay manual de despliegue.
 - **`app/page.tsx` en `next dev`**: el `redirect('/agenda')` hace saltar «Route "/": Could not validate `instant`» (Cache Components) en cada visita a `/`; sale en el indicador de errores de desarrollo. Funciona, pero ensucia el registro.
