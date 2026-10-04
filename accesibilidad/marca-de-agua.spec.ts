@@ -170,3 +170,36 @@ test.describe('T-040 · la marca de agua cubre <main> (píxeles reales)', () => 
     await exigirCobertura(page, 'de 1366×768 a 5120×1440');
   });
 });
+
+test.describe('T-040 · R3-H1: la opacidad y el color de la marca están fijados', () => {
+  test.describe.configure({ timeout: 180_000 });
+
+  test('cada fila tiene una opacidad efectiva entre 0,10 y 0,14 y un color negro propio, no heredado', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await abrir(page);
+    // Se lee el estilo calculado ANTES de tocar nada (la medición de cobertura lo neutraliza).
+    const filas = await page.evaluate(() => {
+      const capa = document.querySelector<HTMLElement>('.marca-capa');
+      if (!capa || !capa.firstElementChild) throw new Error('no hay capa de marca');
+      // La opacidad efectiva es el producto de la de cada antecesor: un `opacity` en el bloque
+      // girado o en el <body> también la cambia.
+      return (Array.from(capa.firstElementChild.children) as HTMLElement[]).map((fila) => {
+        let opacidad = 1;
+        for (let n: HTMLElement | null = fila; n; n = n.parentElement) {
+          opacidad *= Number(getComputedStyle(n).opacity);
+        }
+        return { opacidad, color: getComputedStyle(fila).color, colorEnLinea: fila.style.color };
+      });
+    });
+    expect(filas.length, 'la capa no tiene filas').toBeGreaterThan(0);
+    for (const [i, fila] of filas.entries()) {
+      expect(fila.opacidad, `fila ${i}: opacidad efectiva`).toBeGreaterThanOrEqual(0.1);
+      expect(fila.opacidad, `fila ${i}: opacidad efectiva`).toBeLessThanOrEqual(0.14);
+      expect(fila.color, `fila ${i}: color calculado`).toBe('rgb(0, 0, 0)');
+      // Fijado en la propia fila: el <body> del visor es #1f2328 y no puede decidir el color.
+      expect(fila.colorEnLinea, `fila ${i}: color en línea`).not.toBe('');
+    }
+  });
+});
