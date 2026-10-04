@@ -27,7 +27,10 @@ const props = {
   vista: {} as never,
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  document.querySelector('[data-anuncio-global]')?.remove();
+});
 
 describe('FormularioNavegable', () => {
   it('en el diálogo, terminar y cancelar vuelven atrás (a donde se estaba)', () => {
@@ -40,14 +43,36 @@ describe('FormularioNavegable', () => {
     expect(m.push).not.toHaveBeenCalled();
   });
 
-  it('en la página, terminar y cancelar llevan a la agenda', () => {
+  it('en la página, cancelar lleva a la agenda y terminar, a la semana de la cita', () => {
     render(<FormularioNavegable {...props} modo="pagina" />);
 
     fireEvent.click(screen.getByText('terminar'));
     fireEvent.click(screen.getByText('cancelar'));
 
-    expect(m.push).toHaveBeenCalledTimes(2);
-    expect(m.push).toHaveBeenCalledWith('/agenda');
+    expect(m.push).toHaveBeenNthCalledWith(1, '/agenda?fecha=2026-10-06');
+    expect(m.push).toHaveBeenNthCalledWith(2, '/agenda');
     expect(m.back).not.toHaveBeenCalled();
+  });
+
+  it('el éxito se anuncia en una región de estado que sobrevive a la navegación; cancelar no anuncia nada', () => {
+    const { unmount } = render(<FormularioNavegable {...props} modo="pagina" />);
+
+    fireEvent.click(screen.getByText('cancelar'));
+    expect(document.querySelector('[data-anuncio-global]')?.textContent ?? '').toBe('');
+
+    fireEvent.click(screen.getByText('terminar'));
+    unmount();
+
+    const region = document.querySelector('[data-anuncio-global]') as HTMLElement;
+    expect(region.getAttribute('role')).toBe('status');
+    expect(region.textContent).toBe('Cita guardada.');
+  });
+
+  it('también en el diálogo se anuncia al cerrar', () => {
+    render(<FormularioNavegable {...props} modo="dialogo" />);
+
+    fireEvent.click(screen.getByText('terminar'));
+
+    expect(document.querySelector('[data-anuncio-global]')?.textContent).toBe('Cita guardada.');
   });
 });
