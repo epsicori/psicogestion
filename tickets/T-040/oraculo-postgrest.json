@@ -1,0 +1,164 @@
+{
+  "ticket": "T-040",
+  "fijacion": {
+    "C": "0f9c9d04-8678-40b8-be8b-6613e9081cc7",
+    "ADM": "d4968945-bb6f-43b8-a63c-f710ccdc7f30",
+    "TIT": "8247b9de-d035-4127-a10f-8682976013dd",
+    "AUT": "f3207171-5e1a-4377-b6b2-c61190a60998",
+    "PA": "440d7ccd-f07a-499f-b875-44ab79b16898",
+    "E": "b7db8bcc-ddb9-4a75-87fd-337118f71b73",
+    "N": "2211dcd3-04ce-4066-b7b1-265e320597ea"
+  },
+  "cb1": {
+    "AUT": {
+      "S1": {
+        "descripcion": "POST normal",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 0
+        },
+        "cuerpo": "(1926 caracteres con contenido; no se copia)"
+      },
+      "exportacion_s1": "7f9acc7a-472c-4602-a3c4-70a8bbd4ad07",
+      "S2": {
+        "descripcion": "POST con Accept: objeto singular",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 0
+        },
+        "cuerpo": "(1927 caracteres con contenido; no se copia)"
+      },
+      "S3": {
+        "descripcion": "POST con Prefer: tx=rollback",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 0
+        },
+        "cuerpo": "(1927 caracteres con contenido; no se copia)"
+      },
+      "tx_rollback_ignorado": true,
+      "S4": {
+        "descripcion": "POST con Prefer: handling=strict, max-affected=0",
+        "estado": 400,
+        "contenido": false,
+        "delta": {
+          "exportaciones": 0,
+          "accesos": 0,
+          "avisos": 0
+        },
+        "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+      },
+      "S5": {
+        "descripcion": "GET con los parámetros en la consulta",
+        "estado": 405,
+        "contenido": false,
+        "delta": {
+          "exportaciones": 0,
+          "accesos": 0,
+          "avisos": 0
+        },
+        "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La exportación exige una transacción de escritura.\"}"
+      },
+      "S6": {
+        "descripcion": "POST con Accept: objeto singular y ?exportacion_id=eq.<uuid aleatorio>",
+        "estado": 400,
+        "contenido": false,
+        "delta": {
+          "exportaciones": 0,
+          "accesos": 0,
+          "avisos": 0
+        },
+        "cuerpo": "{\"code\":\"42703\",\"details\":null,\"hint\":null,\"message\":\"column exportar_nota.exportacion_id does not exist\"}"
+      }
+    },
+    "ADM": {
+      "S1": {
+        "descripcion": "POST normal",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 2
+        },
+        "cuerpo": "(1248 caracteres con contenido; no se copia)"
+      },
+      "exportacion_s1": "15055ae5-c152-4121-85e1-83ec935ea088",
+      "S2": {
+        "descripcion": "POST con Accept: objeto singular",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 2
+        },
+        "cuerpo": "(1248 caracteres con contenido; no se copia)"
+      },
+      "S3": {
+        "descripcion": "POST con Prefer: tx=rollback",
+        "estado": 200,
+        "contenido": true,
+        "delta": {
+          "exportaciones": 1,
+          "accesos": 1,
+          "avisos": 2
+        },
+        "cuerpo": "(1248 caracteres con contenido; no se copia)"
+      },
+      "tx_rollback_ignorado": true,
+      "S4": {
+        "descripcion": "POST con Prefer: handling=strict, max-affected=0",
+        "estado": 400,
+        "contenido": false,
+        "delta": {
+          "exportaciones": 0,
+          "accesos": 0,
+          "avisos": 0
+        },
+        "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+      },
+      "S5": {
+        "descripcion": "GET con los parámetros en la consulta",
+        "estado": 405,
+        "contenido": false,
+        "delta": {
+          "exportaciones": 0,
+          "accesos": 0,
+          "avisos": 0
+        },
+        "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La exportación exige una transacción de escritura.\"}"
+      },
+      "S6": {
+        "descripcion": "POST con Accept: objeto singular y ?exportacion_id=eq.<uuid aleatorio>",
+        "estado": 400,
+        "contenido": false,
+        "delta": {
+          "exportaciones": 0,
+          "accesos": 0,
+          "avisos": 0
+        },
+        "cuerpo": "{\"code\":\"42703\",\"details\":null,\"hint\":null,\"message\":\"column exportar_nota.exportacion_id does not exist\"}"
+      }
+    }
+  },
+  "cb7": {
+    "exportacion": "7f9acc7a-472c-4602-a3c4-70a8bbd4ad07",
+    "en_espera": 1,
+    "respuesta": {
+      "estado": 409,
+      "cuerpo": "{\"code\":\"23505\",\"details\":null,\"hint\":null,\"message\":\"Esa copia ya tiene fichero registrado.\"}"
+    },
+    "veredicto": "PASA"
+  },
+  "fallos": []
+}
