@@ -6,7 +6,8 @@ import { t } from '@/lib/i18n';
 
 import { buscarPacientes } from './acciones';
 
-export type PacienteElegido = { id: string; nombre: string };
+/** `profesionalId`: el asignado, solo para proponerlo por defecto al agendar; no se pinta. */
+export type PacienteElegido = { id: string; nombre: string; profesionalId?: string | null };
 
 type Props = {
   paciente: PacienteElegido | null;

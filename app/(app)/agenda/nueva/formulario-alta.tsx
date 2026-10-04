@@ -64,6 +64,8 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   const [aviso, setAviso] = useState('');
   const [fallo, setFallo] = useState('');
   const [guardando, setGuardando] = useState(false);
+  // Si alguien eligió profesional a mano, elegir paciente no se lo cambia.
+  const [profesionalManual, setProfesionalManual] = useState(false);
 
   const {
     register,
@@ -228,6 +230,18 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   function elegirPaciente(nuevo: PacienteElegido | null) {
     setPaciente(nuevo);
     setValue('pacienteId', nuevo?.id as string, { shouldValidate: false });
+    // Por defecto, su profesional asignado, si trabaja en este centro y nadie eligió otro a mano.
+    const asignado = nuevo?.profesionalId;
+    if (
+      rol !== 'profesional_sanitario' &&
+      !profesionalManual &&
+      asignado &&
+      asignado !== profesionalId &&
+      profesionales.some((p) => p.id === asignado && p.centroId === centroId)
+    ) {
+      setValue('profesionalId', asignado);
+      volverAlElegido();
+    }
     invalidarSerie();
   }
 
@@ -304,6 +318,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             value={profesionalId}
             onChange={(evento) => {
               setValue('profesionalId', evento.target.value);
+              setProfesionalManual(true);
               volverAlElegido();
               invalidarSerie();
             }}

@@ -35,7 +35,7 @@ const FIRMA = 'a'.repeat(64);
 type Tablas = {
   rol?: string | null;
   tipo?: { id: string; nombre: string; duracion_minutos: number } | null;
-  pacientes?: { id: string; nombre: string; apellidos: string }[];
+  pacientes?: { id: string; nombre: string; apellidos: string; profesional_id?: string | null }[];
 };
 
 /** Un cliente que contesta por tabla y recuerda cada llamada. */
@@ -349,14 +349,15 @@ describe('buscarPacientes', () => {
 
   it('devuelve como mucho diez, solo id y nombre, y el filtro no deja pasar comodines ni comas', async () => {
     const cliente = prepara({
-      pacientes: [{ id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez' }],
+      pacientes: [{ id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez', profesional_id: PROFESIONAL }],
     });
 
     const r = await buscarPacientes({ texto: ' an%,(a) ' });
 
-    expect(r).toEqual({ ok: true, pacientes: [{ id: PACIENTE, nombre: 'Ana Pérez' }] });
+    // El profesional asignado viaja para proponerlo por defecto (H9); nada clínico más.
+    expect(r).toEqual({ ok: true, pacientes: [{ id: PACIENTE, nombre: 'Ana Pérez', profesionalId: PROFESIONAL }] });
     expect(cliente.llamadas['pacientes.limit']).toHaveBeenCalledWith(10);
-    expect(cliente.llamadas['pacientes.select']).toHaveBeenCalledWith('id, nombre, apellidos');
+    expect(cliente.llamadas['pacientes.select']).toHaveBeenCalledWith('id, nombre, apellidos, profesional_id');
     expect(cliente.llamadas['pacientes.or']).toHaveBeenCalledWith('nombre.ilike.%ana%,apellidos.ilike.%ana%');
   });
 });

@@ -46,7 +46,7 @@ export type ResultadoGuardarAlta =
   | Fallo;
 
 export type ResultadoBuscarPacientes =
-  | { ok: true; pacientes: { id: string; nombre: string }[] }
+  | { ok: true; pacientes: { id: string; nombre: string; profesionalId: string | null }[] }
   | { ok: false; mensaje: string };
 
 function falla(motivo: MotivoAlta, mensaje?: string): Fallo {
@@ -230,7 +230,7 @@ export async function buscarPacientes(entrada: unknown): Promise<ResultadoBuscar
 
   const { data, error } = await sesion.supabase
     .from('pacientes')
-    .select('id, nombre, apellidos')
+    .select('id, nombre, apellidos, profesional_id')
     .or(`nombre.ilike.%${texto}%,apellidos.ilike.%${texto}%`)
     .order('apellidos')
     .limit(10);
@@ -239,5 +239,6 @@ export async function buscarPacientes(entrada: unknown): Promise<ResultadoBuscar
     return { ok: false, mensaje: t('agenda.alta.error.buscar') };
   }
 
-  return { ok: true, pacientes: (data ?? []).map((p) => ({ id: p.id, nombre: `${p.nombre} ${p.apellidos}`.trim() })) };
+  return { ok: true, pacientes: (data ?? []).map((p) => ({ id: p.id, nombre: `${p.nombre} ${p.apellidos}`.trim(), profesionalId: p.profesional_id ?? null })),
+  };
 }

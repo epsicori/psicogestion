@@ -411,3 +411,50 @@ describe('FormularioAlta · serie', () => {
     expect(screen.getByText('Hueco ocupado')).toBeTruthy();
   });
 });
+
+// H9 (ronda 3): al elegir paciente con el buscador, su profesional asignado pasa a ser el de por defecto.
+describe('FormularioAlta · profesional por defecto al elegir paciente (H9)', () => {
+  const ASIGNADO = '99999999-9999-4999-8999-999999999999';
+  const profesionales = [
+    { id: PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO },
+    { id: ASIGNADO, nombre: 'Luis Soto', centroId: CENTRO },
+  ];
+
+  async function buscarYElegir() {
+    m.buscarPacientes.mockResolvedValue({ ok: true, pacientes: [{ id: 'p-2', nombre: 'Bea Gil', profesionalId: ASIGNADO }] });
+    fireEvent.change(screen.getByLabelText('Buscar paciente por nombre'), { target: { value: 'be' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bea Gil' }));
+  }
+
+  it('entra el asignado y las sugerencias se recalculan con él', async () => {
+    pinta({ rol: 'tecnico_administrativo', profesionales, inicial: { paciente: null, centroId: CENTRO, profesionalId: PROFESIONAL, clave: null } });
+
+    await buscarYElegir();
+
+    expect((screen.getByLabelText('Profesional') as HTMLSelectElement).value).toBe(ASIGNADO);
+    await waitFor(() =>
+      expect(m.recalcularAlta).toHaveBeenLastCalledWith(expect.objectContaining({ pacienteId: 'p-2', profesionalId: ASIGNADO })),
+    );
+  });
+
+  it('si el usuario ya eligió profesional a mano, no se lo cambia', async () => {
+    pinta({ rol: 'tecnico_administrativo', profesionales, inicial: { paciente: null, centroId: CENTRO, profesionalId: PROFESIONAL, clave: null } });
+    fireEvent.change(screen.getByLabelText('Profesional'), { target: { value: PROFESIONAL } });
+
+    await buscarYElegir();
+
+    expect((screen.getByLabelText('Profesional') as HTMLSelectElement).value).toBe(PROFESIONAL);
+  });
+
+  it('si el asignado no trabaja en el centro elegido, se queda el que había', async () => {
+    pinta({
+      rol: 'tecnico_administrativo',
+      profesionales: [{ id: PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO }],
+      inicial: { paciente: null, centroId: CENTRO, profesionalId: PROFESIONAL, clave: null },
+    });
+
+    await buscarYElegir();
+
+    expect((screen.getByLabelText('Profesional') as HTMLSelectElement).value).toBe(PROFESIONAL);
+  });
+});
