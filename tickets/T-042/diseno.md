@@ -1344,3 +1344,5 @@ Para cada mutante:
   pueden solaparse.
 - **Auditar los fallos del canje.** No lo pide ningún hallazgo ni el contrato.
 - **B1-H2**, que lo resuelve el usuario, y **`docs/state.md`**, excluido de esta ronda.
+
+**Respuesta del propietario a P-R2-1 (04-10-2026)**: conservar la guarda `usado_en is null` y dar M10 por probado con la CA5.5b (estado forjado), como recomienda el diseño.
