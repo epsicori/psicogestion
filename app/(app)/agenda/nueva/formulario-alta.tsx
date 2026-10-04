@@ -14,7 +14,7 @@ import { t, tCon } from '@/lib/i18n';
 
 import { guardarAlta, previsualizarAltaSerie, recalcularAlta } from './acciones';
 import { BuscadorPaciente, type PacienteElegido } from './buscador-paciente';
-import { CalendarioSeleccion } from './calendario-seleccion';
+import { SelectorHueco } from './selector-hueco';
 import type { VistaAlta } from './estado-alta';
 import { PrevisualizacionSerie } from './previsualizacion-serie';
 import { TarjetasSugerencia } from './tarjetas-sugerencia';
@@ -348,8 +348,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         alElegir={elegirTarjeta}
       />
 
-      <CalendarioSeleccion
-        key={vista.calendario.desde}
+      <SelectorHueco
         calendario={vista.calendario}
         elegido={elegido?.clave ?? null}
         alElegir={elegirHueco}

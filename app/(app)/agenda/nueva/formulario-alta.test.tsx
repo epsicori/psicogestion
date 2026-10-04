@@ -65,7 +65,8 @@ function pinta(extra: Partial<Parameters<typeof FormularioAlta>[0]> = {}) {
 
 async function elegirTipoYHueco(tipo = TIPO_A) {
   fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: tipo } });
-  fireEvent.click(await screen.findByRole('button', { name: /17:00, libre/ }));
+  // Sin CSS, la rejilla (md+) y la lista (móvil) están las dos en el DOM: vale la primera.
+  fireEvent.click((await screen.findAllByRole('button', { name: /17:00, libre/ }))[0]);
 }
 
 beforeEach(() => {
@@ -127,7 +128,7 @@ describe('FormularioAlta · hueco de entrada', () => {
   it('un hueco libre que llega de la URL entra elegido', () => {
     pinta({ inicial: { paciente: PACIENTE, centroId: CENTRO, profesionalId: PROFESIONAL, clave: '2026-10-06T17:00' } });
 
-    expect(screen.getByRole('button', { name: /17:00, libre.*elegida/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getAllByRole('button', { name: /17:00, libre.*elegida/ })[0].getAttribute('aria-pressed')).toBe('true');
   });
 
   it('uno ocupado o inexistente se ignora', () => {
@@ -176,7 +177,7 @@ describe('FormularioAlta · guardar', () => {
   it('sin tipo elegido no llama al servidor y lo pide', async () => {
     pinta();
 
-    fireEvent.click(await screen.findByRole('button', { name: /17:00, libre/ }));
+    fireEvent.click((await screen.findAllByRole('button', { name: /17:00, libre/ }))[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
     expect(await screen.findByText('Elige un tipo de terapia.')).toBeTruthy();
@@ -219,7 +220,7 @@ describe('FormularioAlta · duración y hueco', () => {
     pinta();
 
     await elegirTipoYHueco(TIPO_A);
-    expect(screen.getByRole('button', { name: /17:00, libre.*elegida/ })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /17:00, libre.*elegida/ })[0]).toBeTruthy();
 
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });

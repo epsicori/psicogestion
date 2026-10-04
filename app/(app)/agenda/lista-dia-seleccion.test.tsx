@@ -2,10 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { BloqueAlta } from '@/lib/citas/alta';
-import type { ResultadoSugerencias } from '@/lib/agenda/sugerencias';
 
-import { CalendarioSeleccion } from './calendario-seleccion';
-import { construirCalendarioAlta } from './vista-alta';
+import { ListaDia } from './lista-dia';
+import { construirCalendarioAlta } from './nueva/vista-alta';
 
 function bloque(fecha: string, horaLocal: string, estado: BloqueAlta['estado']): BloqueAlta {
   const [h, m] = horaLocal.split(':').map(Number);
@@ -13,54 +12,55 @@ function bloque(fecha: string, horaLocal: string, estado: BloqueAlta['estado']):
   return { fecha, horaLocal, inicio: inicio.toISOString(), fin: new Date(inicio.getTime() + 50 * 60_000).toISOString(), estado };
 }
 
-const SUGERENCIAS: ResultadoSugerencias = {
-  modo: 'habitual',
-  sugerencias: [{ fecha: '2026-10-06', horaLocal: '17:00', motivo: { tipo: 'diaHabitual', diaSemana: 2, hora: '17:00' } }],
-};
-
 const calendario = construirCalendarioAlta({
   fechaFoco: '2026-10-06',
   zona: 'Europe/Madrid',
   hoy: '2026-10-04',
-  sugerencias: SUGERENCIAS,
-  bloques: [
-    bloque('2026-10-06', '17:00', 'libre'),
-    bloque('2026-10-06', '18:00', 'ocupado'),
-    bloque('2026-10-07', '10:00', 'libre'),
-  ],
+  sugerencias: {
+    modo: 'habitual',
+    sugerencias: [{ fecha: '2026-10-06', horaLocal: '17:00', motivo: { tipo: 'diaHabitual', diaSemana: 2, hora: '17:00' } }],
+  },
+  bloques: [bloque('2026-10-06', '17:00', 'libre'), bloque('2026-10-06', '18:00', 'ocupado'), bloque('2026-10-07', '10:00', 'libre')],
 });
 
-function pinta(extra: Partial<Parameters<typeof CalendarioSeleccion>[0]> = {}) {
-  const props = { calendario, elegido: null, alElegir: vi.fn(), alCambiarSemana: vi.fn(), ...extra };
-  return { ...render(<CalendarioSeleccion {...props} />), props };
+function montar(diaInicial = 1, elegido: string | null = null) {
+  const alElegir = vi.fn();
+  const resultado = render(
+    <ListaDia dias={calendario.dias} diaInicial={diaInicial} seleccion={{ huecos: calendario.huecos, elegido, alElegir }} />,
+  );
+  return { alElegir, ...resultado };
 }
 
-describe('CalendarioSeleccion', () => {
+describe('ListaDia · modo selección', () => {
   it('un hueco libre es un botón con su etiqueta en palabras; uno ocupado no se puede enfocar', () => {
-    pinta({ diaInicial: 1 });
+    montar();
 
     const libre = screen.getByRole('button', { name: /17:00, libre, sugerida, habitual/ });
     expect(libre.getAttribute('aria-pressed')).toBe('false');
     const ocupado = screen.getByText('18:00 – 18:50').parentElement as HTMLElement;
     expect(ocupado.textContent).toContain('Ocupado');
     expect(ocupado.closest('button')).toBeNull();
-    expect(ocupado.getAttribute('tabindex')).toBeNull();
     expect(screen.queryAllByRole('button', { name: /18:00/ })).toHaveLength(0);
   });
 
-  it('elegir un hueco libre avisa con su clave; el elegido queda pulsado y dice «elegida»', () => {
-    const { props, rerender } = pinta({ diaInicial: 1 });
+  it('elegir un hueco libre avisa con su clave', () => {
+    const { alElegir } = montar();
 
     fireEvent.click(screen.getByRole('button', { name: /17:00, libre/ }));
-    expect(props.alElegir).toHaveBeenCalledWith('2026-10-06T17:00', expect.stringContaining('17:00'));
 
-    rerender(<CalendarioSeleccion {...props} elegido="2026-10-06T17:00" diaInicial={1} />);
+    expect(alElegir).toHaveBeenCalledWith('2026-10-06T17:00', expect.stringContaining('17:00'));
+  });
+
+  it('el elegido sale pulsado y dice «elegida»', () => {
+    montar(1, '2026-10-06T17:00');
+
     const elegido = screen.getByRole('button', { name: /17:00, libre.*elegida/ });
     expect(elegido.getAttribute('aria-pressed')).toBe('true');
+    expect(elegido.textContent).toContain('Elegida');
   });
 
   it('cambiar de día enseña sus huecos', () => {
-    pinta({ diaInicial: 1 });
+    montar();
     expect(screen.queryByRole('button', { name: /10:00, libre/ })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /miércoles, 7 de octubre/i }));
@@ -68,18 +68,8 @@ describe('CalendarioSeleccion', () => {
     expect(screen.getByRole('button', { name: /10:00, libre/ })).toBeTruthy();
   });
 
-  it('las semanas anterior y siguiente piden su lunes', () => {
-    const { props } = pinta();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Semana anterior' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Semana siguiente' }));
-
-    expect(props.alCambiarSemana).toHaveBeenNthCalledWith(1, '2026-09-28');
-    expect(props.alCambiarSemana).toHaveBeenNthCalledWith(2, '2026-10-12');
-  });
-
   it('un día sin huecos lo dice', () => {
-    pinta({ diaInicial: 4 });
+    montar(4);
 
     expect(screen.getByText('No hay huecos libres en esta semana.')).toBeTruthy();
   });

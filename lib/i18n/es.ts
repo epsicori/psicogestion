@@ -980,8 +980,10 @@ export const es = {
         etiquetaElegida: 'Elegida',
         etiquetaOcupado: 'Ocupado',
         vacio: 'No hay huecos libres en esta semana.',
-        diasDeLaSemana: 'Días de la semana',
         huecosDelDia: 'Huecos del día',
+        sinLibres: 'sin huecos libres',
+        unLibre: 'un hueco libre',
+        variosLibres: '{n} huecos libres',
       },
       error: {
         tipoNoValido: 'Ese tipo de terapia ya no está disponible. Elige otro.',
