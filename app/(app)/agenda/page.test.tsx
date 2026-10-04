@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { isValidElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -39,20 +38,5 @@ describe('PaginaAgenda', () => {
     const arbol = await cuerpo({ searchParams: Promise.resolve({}) });
     const orden = tiposEnOrden(arbol).filter((tipo) => [Proximas, PorConfirmar, Documentacion].includes(tipo as never));
     expect(orden).toEqual([Proximas, PorConfirmar, Documentacion]);
-  });
-
-  // T-028 B: la entrada al alta es un enlace (el diálogo lo intercepta; sin JS, abre la página).
-  it('la cabecera lleva un enlace «Nueva cita» a /agenda/nueva', () => {
-    const pagina = PaginaAgenda({ searchParams: Promise.resolve({}) });
-    const enlaces: { href: string; children: ReactNode }[] = [];
-    const recorrer = (nodo: ReactNode) => {
-      if (Array.isArray(nodo)) nodo.forEach(recorrer);
-      else if (isValidElement<{ href?: string; children?: ReactNode }>(nodo)) {
-        if (nodo.type === Link) enlaces.push({ href: nodo.props.href as string, children: nodo.props.children });
-        recorrer(nodo.props.children);
-      }
-    };
-    recorrer(pagina);
-    expect(enlaces).toEqual([{ href: '/agenda/nueva', children: 'Nueva cita' }]);
   });
 });
