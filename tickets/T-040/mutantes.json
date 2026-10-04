@@ -1,0 +1,62 @@
+{
+  "ticket": "T-040",
+  "fecha": "2026-10-04",
+  "nota": "Mutantes MB1–MB10 de la tabla del diseño. Cada mutante SQL se aplica dentro de begin … rollback (create or replace; MB1 drop+create con los mismos revoke/grant) y en la misma transacción se ejecutan scripts/rls/00-ayudantes.sql y 27-exportaciones.sql: nada queda en la base compartida. La línea base (sin mutar) sale verde. MB8 es de concurrencia (CB7) y el banco no la puede ver: se aplicó fuera de transacción, se pasó scripts/t040-oraculo.mjs y se restauró la definición de la migración (comprobado en pg_proc: prosrc vuelve a llevar `on conflict (exportacion_id) do nothing`). MB4 tal como está escrito (paso 3 detrás del 5 pero delante del 6) es EQUIVALENTE: el select del paso 5 no escribe ni lanza y la autorización sigue después de los parámetros; no se cuenta. Su variante MB4b (paso 3 detrás de la autorización, paso 6) sí la mata el banco. El mutante equivalente del coalesce de los pasos 6–7 que anota el diseño no se cuenta.",
+  "sql_banco": {
+    "MB1": {
+      "mutacion": "exportar_nota con `returns setof jsonb` y `return next`",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA: 27.K22 (CB6) exportar_nota devuelve jsonb escalar (R1)"
+    },
+    "MB2": {
+      "mutacion": "sin la guarda 25006 (paso 1) de exportar_nota",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA (lanzó 25006 con el código correcto pero desde OTRA comprobación; el mensaje no contiene «La exportación exige una transacción de escritura»): 27.K1 (CB2) AUT, candado abierto, solo lectura: 25006 propio — mensaje real: cannot execute INSERT in a read-only transaction"
+    },
+    "MB3": {
+      "mutacion": "sin el `p_paciente_id is null` del paso 3",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA (lanzó 42501 en vez de 22023): 27.K6 (CB3) paciente nulo — Sin acceso a esa nota."
+    },
+    "MB4": {
+      "mutacion": "el paso 3 (parámetros) movido detrás del paso 5 (la nota), delante del 6",
+      "rojo": false,
+      "falla": "EQUIVALENTE: el select del paso 5 no escribe ni lanza; el orden observable no cambia. No se cuenta."
+    },
+    "MB4b": {
+      "mutacion": "el paso 3 (parámetros) movido detrás del paso 6 (autorización)",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA (lanzó 42501 en vez de 22023): 27.K6 (CB3) paciente nulo — Sin acceso a esa nota."
+    },
+    "MB5": {
+      "mutacion": "el paciente se coteja con un `if <>` después del select, no en el where; sin el `is null` del paciente",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA (lanzó 22023 con el código correcto pero desde OTRA comprobación; el mensaje no contiene «Faltan el paciente o la nota»): 27.K6 (CB3) paciente nulo — mensaje real: La nota no tiene versiones firmadas."
+    },
+    "MB6": {
+      "mutacion": "los «Sin acceso» posteriores al paso 3 llevan la referencia en el mensaje",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA: 27.K12 (CB4) SIN sin motivo: 42501 «Sin acceso», exista o no la nota"
+    },
+    "MB7": {
+      "mutacion": "exportaciones.versiones sale de un segundo select sobre notas_clinicas_versiones",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA: 27.K25 (CB6) exportar_nota lee notas_clinicas_versiones UNA sola vez (H27)"
+    },
+    "MB8": {
+      "mutacion": "registrar_fichero_exportado con comprobación previa e insert sin on conflict",
+      "rojo": true,
+      "falla": "oráculo (no banco): FALLO CB7 · 23505 con el mensaje propio (409 {\"code\":\"23505\",\"details\":\"Key (exportacion_id)=(…) already exists.\",\"message\":\"duplicate key value violates uniq…\"}); FALLO CB7 · no sale el texto de la clave primaria. El banco 27 sigue verde con este mutante."
+    },
+    "MB9": {
+      "mutacion": "registrar_fichero_exportado sin el `p_huella_hex is null`",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA (lanzó 23502 en vez de 22023): 27.K9 (CB3) huella nula — null value in column \"huella_fichero\" of relation \"exportaciones_ficheros\" violates not-null constraint"
+    },
+    "MB10": {
+      "mutacion": "etiqueta_motivo_exportacion ejecutable por authenticated",
+      "rojo": true,
+      "falla": "ASERCIÓN FALLIDA: 27.I2 anon no ejecuta ninguna; authenticated las tres públicas y no la etiqueta"
+    }
+  }
+}
