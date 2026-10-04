@@ -146,7 +146,7 @@ describe('FormularioAlta · guardar', () => {
     await elegirTipoYHueco();
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
-    await waitFor(() => expect(props.alTerminar).toHaveBeenCalledWith({ anuncio: 'Cita guardada.', fecha: '2026-10-06' }));
+    await waitFor(() => expect(props.alTerminar).toHaveBeenCalledWith({ anuncio: 'Cita guardada.', fecha: '2026-10-06', centroId: CENTRO }));
     expect(m.guardarAlta).toHaveBeenCalledWith({
       pacienteId: PACIENTE.id,
       profesionalId: PROFESIONAL,

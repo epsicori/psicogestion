@@ -1,12 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const CENTRO = '33333333-3333-4333-8333-333333333333';
 const m = vi.hoisted(() => ({ back: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ back: m.back, push: m.push }) }));
 vi.mock('./formulario-alta', () => ({
-  FormularioAlta: ({ alTerminar, alCancelar }: { alTerminar: (r: { anuncio: string; fecha: string }) => void; alCancelar: () => void }) => (
+  FormularioAlta: ({ alTerminar, alCancelar }: { alTerminar: (r: { anuncio: string; fecha: string; centroId: string }) => void; alCancelar: () => void }) => (
     <>
-      <button type="button" onClick={() => alTerminar({ anuncio: 'Cita guardada.', fecha: '2026-10-06' })}>
+      <button type="button" onClick={() => alTerminar({ anuncio: 'Cita guardada.', fecha: '2026-10-06', centroId: CENTRO })}>
         terminar
       </button>
       <button type="button" onClick={alCancelar}>
@@ -49,7 +50,8 @@ describe('FormularioNavegable', () => {
     fireEvent.click(screen.getByText('terminar'));
     fireEvent.click(screen.getByText('cancelar'));
 
-    expect(m.push).toHaveBeenNthCalledWith(1, '/agenda?fecha=2026-10-06');
+    // H17: con el centro de la cita; si no, la agenda abre el de la cookie y la cita no se ve.
+    expect(m.push).toHaveBeenNthCalledWith(1, `/agenda?fecha=2026-10-06&centro=${CENTRO}`);
     expect(m.push).toHaveBeenNthCalledWith(2, '/agenda');
     expect(m.back).not.toHaveBeenCalled();
   });

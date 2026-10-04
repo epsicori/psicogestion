@@ -31,7 +31,7 @@ export type PropsFormularioAlta = {
   tipos: TipoOfrecido[];
   inicial: { paciente: PacienteElegido | null; centroId: string; profesionalId: string; clave: string | null };
   vista: VistaAlta;
-  alTerminar: (resultado: { anuncio: string; fecha: string }) => void;
+  alTerminar: (resultado: { anuncio: string; fecha: string; centroId: string }) => void;
   alCancelar: () => void;
 };
 
@@ -271,7 +271,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
       });
       if (resultado.ok) {
         setAviso(resultado.anuncio);
-        alTerminar({ anuncio: resultado.anuncio, fecha: resultado.fecha });
+        alTerminar({ anuncio: resultado.anuncio, fecha: resultado.fecha, centroId: datos.centroId });
         return;
       }
       if (resultado.motivo === 'hueco_ocupado' && 'vista' in resultado) {
