@@ -1,7 +1,8 @@
 import { NotebookPen } from 'lucide-react';
 import Link from 'next/link';
 import { PildoraDeEstado } from './historia/notas/estado-de-nota';
-import { EstadoVacio } from '@/components/ui/piezas';
+import { Button } from '@/components/ui/button';
+import { AvisoDeError, EstadoVacio } from '@/components/ui/piezas';
 import { t, tCon } from '@/lib/i18n';
 import type { NotaParaCopia } from '@/lib/exportaciones/servidor';
 import type { EstadoNota } from '@/lib/notas/estado';
@@ -17,16 +18,21 @@ export type NotaDeLista = {
 };
 
 // T-040 · P2-a: `paraCopia` son las notas de otros profesionales que la administración solo
-// puede pedir por motivo; van en una lista aparte, sin estado ni contenido.
+// puede pedir por motivo; van en una lista aparte, sin estado ni contenido. `null` es una
+// lectura fallida (a quien no administra, la base le devuelve una lista vacía, no un error):
+// se avisa con un reintento y nunca se dice «no hay notas» (revisión B-H1).
 export function ListaDeNotas({
   notas,
-  paraCopia = null,
+  paraCopia = [],
+  alReintentarCopias,
 }: {
   notas: NotaDeLista[];
   paraCopia?: NotaParaCopia[] | null;
+  alReintentarCopias?: () => void;
 }) {
   const otras = paraCopia ?? [];
-  if (notas.length === 0 && otras.length === 0) {
+  const copiasFallidas = paraCopia === null;
+  if (notas.length === 0 && otras.length === 0 && !copiasFallidas) {
     return (
       <EstadoVacio
         icono={<NotebookPen aria-hidden="true" className="size-5" />}
@@ -82,6 +88,18 @@ export function ListaDeNotas({
             ))}
           </ul>
         </section>
+      )}
+      {copiasFallidas && (
+        <AvisoDeError
+          mensaje={t('exportaciones.lista.noSePudoLeer')}
+          accion={
+            alReintentarCopias && (
+              <Button variante="contorno" onClick={alReintentarCopias}>
+                {t('notas.aviso.reintentar')}
+              </Button>
+            )
+          }
+        />
       )}
     </div>
   );

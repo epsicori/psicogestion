@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import { ListaDeNotas } from './lista-de-notas';
 import { t, tCon } from '@/lib/i18n';
 
@@ -124,8 +125,25 @@ describe('ListaDeNotas · otras notas (solo copia por motivo)', () => {
     expect(screen.queryByRole('heading', { name: t('exportaciones.lista.otras') })).not.toBeInTheDocument();
   });
 
-  it('sin notas para copia no hay segunda lista', () => {
-    render(<ListaDeNotas notas={[nota]} paraCopia={null} />);
+  it('sin notas para copia (lista vacía) no hay segunda lista ni aviso', () => {
+    render(<ListaDeNotas notas={[nota]} paraCopia={[]} />);
     expect(screen.queryByRole('heading', { name: t('exportaciones.lista.otras') })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  // Revisión B-H1: `null` es una lectura fallida, no «no hay»: ni silencio ni el estado vacío.
+  it('si la lectura de las notas para copia falló, avisa con un reintento y no dice que no hay notas', async () => {
+    const alReintentar = vi.fn();
+    render(<ListaDeNotas notas={[]} paraCopia={null} alReintentarCopias={alReintentar} />);
+    expect(screen.queryByText(t('notas.lista.vacia'))).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(t('exportaciones.lista.noSePudoLeer'));
+    await userEvent.click(screen.getByRole('button', { name: t('notas.aviso.reintentar') }));
+    expect(alReintentar).toHaveBeenCalledTimes(1);
+  });
+
+  it('con notas propias y la lectura de copias fallida, pinta las propias y el aviso', () => {
+    render(<ListaDeNotas notas={[nota]} paraCopia={null} alReintentarCopias={() => {}} />);
+    expect(screen.getByRole('link', { name: /15\/01\/2024/ })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(t('exportaciones.lista.noSePudoLeer'));
   });
 });

@@ -38,7 +38,8 @@ function abierta(
   minutos: number,
   vistas = 1,
   notas: Extract<ResultadoDeApertura, { abierta: true }>['notas'] = [],
-  notasParaCopia: Extract<ResultadoDeApertura, { abierta: true }>['notasParaCopia'] = null,
+  // `[]` y no `null`: `null` es una lectura fallida (revisión B-H1), y pinta un aviso.
+  notasParaCopia: Extract<ResultadoDeApertura, { abierta: true }>['notasParaCopia'] = [],
 ): ResultadoDeApertura {
   return {
     abierta: true,
@@ -270,5 +271,30 @@ describe('PanelHistoria', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /02\/02\/2026/ })).toHaveAttribute('href', expect.stringContaining('?nota=n9'));
     expect(screen.queryByText('Todavía no hay notas')).not.toBeInTheDocument();
+  });
+
+  // Revisión B-H1: la lectura de las notas para copia falló → aviso y reintento, que vuelve a
+  // pasar por la acción (y por su registro); al volver bien, el aviso se va.
+  it('notas para copia null avisa y «Volver a intentarlo» vuelve a pedir la pestaña', async () => {
+    const usuario = userEvent.setup();
+    abrirPestanaDeHistoria.mockResolvedValue(abierta(15, 1, [], null));
+    render(<PanelHistoria pacienteId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Ansiedad ante exámenes');
+    await usuario.click(screen.getByRole('tab', { name: 'Notas clínicas' }));
+
+    const aviso = await screen.findByText(
+      'No se pudieron leer las otras notas de este paciente (las de copia por motivo).',
+    );
+    expect(aviso).toBeInTheDocument();
+    expect(screen.queryByText('Todavía no hay notas')).not.toBeInTheDocument();
+    const llamadas = abrirPestanaDeHistoria.mock.calls.length;
+
+    abrirPestanaDeHistoria.mockResolvedValue(abierta(15, 2, [], []));
+    await usuario.click(screen.getByRole('button', { name: 'Volver a intentarlo' }));
+
+    await waitFor(() => expect(abrirPestanaDeHistoria).toHaveBeenCalledTimes(llamadas + 1));
+    expect(abrirPestanaDeHistoria).toHaveBeenLastCalledWith('11111111-1111-4111-8111-111111111111', 'notas_clinicas');
+    expect(await screen.findByText('Todavía no hay notas')).toBeInTheDocument();
   });
 });

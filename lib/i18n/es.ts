@@ -1044,6 +1044,7 @@ export const es = {
     },
     lista: {
       otras: 'Otras notas de este paciente (solo copia por motivo)',
+      noSePudoLeer: 'No se pudieron leer las otras notas de este paciente (las de copia por motivo).',
     },
   },
 

@@ -196,6 +196,7 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
               historial={apertura.historial}
               notas={apertura.notas}
               notasParaCopia={apertura.notasParaCopia}
+              alReintentar={() => setIntento((n) => n + 1)}
             />
           </div>
         )}
@@ -227,11 +228,14 @@ function Contenido({
   historial,
   notas,
   notasParaCopia,
+  alReintentar,
 }: {
   subPestana: SubPestana;
   historial: ContenidoDelHistorial | null;
   notas: Apertura['notas'];
   notasParaCopia: Apertura['notasParaCopia'];
+  /** Vuelve a pedir la sub-pestaña: una lectura nueva, y la vista que cuenta la ventana. */
+  alReintentar: () => void;
 }) {
   if (subPestana === 'historial_clinico') {
     return historial ? <HistorialClinico contenido={historial} /> : <Cargando filas={3} />;
@@ -241,7 +245,7 @@ function Contenido({
     return notas === null ? (
       <AvisoDeError mensaje={t('notas.lista.noSePudoLeer')} />
     ) : (
-      <ListaDeNotas notas={notas} paraCopia={notasParaCopia} />
+      <ListaDeNotas notas={notas} paraCopia={notasParaCopia} alReintentarCopias={alReintentar} />
     );
   }
 
