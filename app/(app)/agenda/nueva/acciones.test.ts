@@ -215,6 +215,8 @@ describe('guardarAlta · lo que vuelve', () => {
       excluir: ['2026-10-13'],
       aceptarAlternativas: ['2026-10-20'],
     });
+    // H13: la firma que se compara se calcula con el tipo (si no, cambiar de tipo no invalida la serie enseñada).
+    expect(m.previsualizarAlta.mock.calls[0][1]).toMatchObject({ tipoTerapiaId: TIPO });
   });
 
   it('si quedan propuestas sin resolver, el anuncio lo dice', async () => {
@@ -322,6 +324,7 @@ describe('previsualizarAltaSerie', () => {
 
     expect(r).toEqual({ ok: true, sesiones: [], firma: FIRMA });
     expect(m.previsualizarAlta.mock.calls[0][1]).toMatchObject({
+      tipoTerapiaId: TIPO,
       duracionMinutos: 80,
       diaSemana: 2,
       horaLocal: '17:00',
