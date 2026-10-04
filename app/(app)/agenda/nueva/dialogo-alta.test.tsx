@@ -20,7 +20,7 @@ describe('DialogoAlta', () => {
     const dialogo = screen.getByRole('dialog', { name: 'Nueva cita' });
     expect(dialogo.getAttribute('aria-modal')).toBe('true');
     expect(dialogo.textContent).toContain('Formulario');
-    expect(dialogo.className).toContain('max-w-3xl');
+    expect(dialogo.className).toContain('max-w-5xl');
   });
 
   it('Escape y la «X» cierran volviendo atrás', async () => {

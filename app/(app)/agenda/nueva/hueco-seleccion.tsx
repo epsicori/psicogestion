@@ -13,6 +13,8 @@ type Props = {
   className?: string;
   style?: CSSProperties;
   alTeclear?: (evento: KeyboardEvent<HTMLElement>) => void;
+  /** Hay otro hueco al lado (carriles): solo la hora de inicio, y el rango entero en `title`. */
+  compacto?: boolean;
 };
 
 /**
@@ -21,7 +23,7 @@ type Props = {
  * ve además del color: sugerida = borde discontinuo y texto; habitual = barra de 3 px y texto
  * (D7); elegida = fondo secundario y texto. No es parada de Tab: ver `teclado-huecos.ts`.
  */
-export function HuecoSeleccion({ hueco, elegido, alElegir, className, style, alTeclear }: Props) {
+export function HuecoSeleccion({ hueco, elegido, alElegir, className, style, alTeclear, compacto = false }: Props) {
   if (hueco.estado === 'ocupado') {
     return (
       <div className={cn('bg-muted text-muted-foreground min-h-11 overflow-hidden rounded-lg p-2 text-sm', className)} style={style}>
@@ -43,6 +45,7 @@ export function HuecoSeleccion({ hueco, elegido, alElegir, className, style, alT
       onKeyDown={alTeclear}
       aria-pressed={elegido}
       aria-label={elegido ? `${hueco.etiqueta}, ${t('agenda.alta.seleccion.elegida')}` : hueco.etiqueta}
+      title={compacto ? `${hueco.rango}` : undefined}
       onClick={() => alElegir(hueco.clave, hueco.etiqueta)}
       className={cn(
         'border-border focus-visible:ring-ring/50 min-h-11 w-full overflow-hidden rounded-lg border p-2 text-left text-sm outline-none focus-visible:ring-2',
@@ -53,7 +56,13 @@ export function HuecoSeleccion({ hueco, elegido, alElegir, className, style, alT
       )}
       style={style}
     >
-      <span className="font-mono">{hueco.rango}</span>
+      <span className="font-mono">{compacto ? hueco.horaLocal : hueco.rango}</span>
+      {/* «Elegida» primero: si el hueco es bajo, lo que se corta es lo secundario, no la elección. */}
+      {elegido && (
+        <span aria-hidden="true" className="block text-xs font-medium">
+          {t('agenda.alta.seleccion.etiquetaElegida')}
+        </span>
+      )}
       {hueco.sugerida !== null && (
         <span aria-hidden="true" className="text-muted-foreground block text-xs">
           {tCon('agenda.alta.seleccion.etiquetaSugerida', { n: hueco.sugerida })}
@@ -62,11 +71,6 @@ export function HuecoSeleccion({ hueco, elegido, alElegir, className, style, alT
       {hueco.habitual && (
         <span aria-hidden="true" className="text-muted-foreground block text-xs">
           {t('agenda.alta.seleccion.etiquetaHabitual')}
-        </span>
-      )}
-      {elegido && (
-        <span aria-hidden="true" className="block text-xs font-medium">
-          {t('agenda.alta.seleccion.etiquetaElegida')}
         </span>
       )}
     </button>

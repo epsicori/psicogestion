@@ -151,4 +151,32 @@ describe('RejillaSemana · modo selección', () => {
       expect((document.activeElement as HTMLElement).getAttribute('data-dia')).toBe('2026-10-07');
     });
   });
+
+  // H11 (ronda 3): con huecos que se pisan, la hora sigue siendo legible y «Elegida» siempre se ve.
+  describe('legibilidad (H11)', () => {
+    it('dos huecos que se pisan escriben solo la hora de inicio, sin recorte, y el rango completo en el title', () => {
+      montar([bloque('2026-10-06', '17:00', 'libre', 90), bloque('2026-10-06', '18:00', 'libre', 90)]);
+
+      const [a, b] = Array.from(document.querySelectorAll<HTMLElement>('button[data-hueco]'));
+      expect(a.querySelector('.font-mono')?.textContent).toBe('17:00');
+      expect(b.querySelector('.font-mono')?.textContent).toBe('18:00');
+      expect(a.getAttribute('title')).toContain('17:00');
+    });
+
+    it('un hueco que no se pisa con nadie sigue enseñando su rango entero', () => {
+      montar([bloque('2026-10-06', '17:00', 'libre')]);
+
+      const hueco = document.querySelector<HTMLElement>('button[data-hueco]') as HTMLElement;
+      expect(hueco.querySelector('.font-mono')?.textContent).toBe('17:00 – 17:50');
+    });
+
+    it('«Elegida» va antes que «Sugerida» y «Habitual»: es la que no se puede perder si el hueco es bajo', () => {
+      montar([bloque('2026-10-06', '17:00', 'libre')], '2026-10-06T17:00');
+
+      const texto = (document.querySelector('button[data-hueco]') as HTMLElement).textContent ?? '';
+      expect(texto.indexOf('Elegida')).toBeGreaterThan(-1);
+      expect(texto.indexOf('Elegida')).toBeLessThan(texto.indexOf('Sugerida'));
+      expect(texto.indexOf('Elegida')).toBeLessThan(texto.indexOf('Habitual'));
+    });
+  });
 });

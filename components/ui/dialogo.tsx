@@ -55,7 +55,7 @@ export function Dialogo({ abierto, alCerrar, titulo, focoInicial, ancho = 'norma
         className={cn(
           'relative w-full rounded-xl border border-border bg-card p-6',
           'text-card-foreground shadow-lg outline-none',
-          ancho === 'amplio' ? 'max-h-[calc(100dvh-2rem)] max-w-3xl overflow-y-auto' : 'max-w-lg',
+          ancho === 'amplio' ? 'max-h-[calc(100dvh-2rem)] max-w-5xl overflow-y-auto' : 'max-w-lg',
         )}
       >
         <h2 id={idTitulo} className="pr-12 font-serif text-lg">

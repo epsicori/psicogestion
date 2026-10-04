@@ -177,7 +177,7 @@ describe('Dialogo con focoInicial', () => {
       </Dialogo>,
     );
     const amplio = screen.getByRole('dialog').className;
-    expect(amplio).toContain('max-w-3xl');
+    expect(amplio).toContain('max-w-5xl');
     expect(amplio).not.toContain('max-w-lg');
     expect(amplio).toContain('overflow-y-auto');
     expect(amplio).toContain('max-h-[calc(100dvh-2rem)]');
