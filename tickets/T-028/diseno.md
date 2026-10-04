@@ -997,3 +997,22 @@ caer antes del objetivo» (E12) e «intervalo 0 no es habitual» (E13).
 **Territorio:** sin cambios. La línea `territorio:` de §6 + E7 pasa al frontmatter del contrato
 `tickets/T-028-alta-de-cita.md`, en lista de bloque y sin líneas de solo comentario, porque
 `territorio.mjs` deja de leer el bloque en la primera línea que no empieza por `-`.
+
+### E17 · Piezas P1–P5 de MiniMax (04-10-2026) y la prueba de «habitual» en frío
+
+- **Contradicción en §7·P2.** La clave `sugerencias.enFrioAyuda` («Aún no hay citas suficientes
+  para saber su hora habitual.») contiene la palabra «habitual», y la prueba pedía que no
+  apareciera en ningún texto. Se mantiene el texto y se acota la prueba de la pieza: el
+  encabezado es exactamente «Primeros huecos libres» y, **fuera de la frase de ayuda**, nada en
+  la cabecera dice «habitual». La garantía de §4 («sin citas, nada de habitual») se prueba en
+  la columna, no en la cabecera: en `modo: 'enFrio'` ningún motivo de tarjeta contiene
+  «habitual». Esa prueba es del implementador, en el componente de sugerencias.
+- **Entrega.** La respuesta está en `minimax/respuestas/T-028b.md`. La fábrica la ha corregido
+  antes de entregarla:
+  - P1: `<span>` en vez de `<div>`, porque va dentro de un `<button>`;
+  - P2: fuera el `tCon` sin usar;
+  - P3: sin triplicar la rama de bloqueo, y con la prueba de cinco textos distintos;
+  - P4: la leyenda sale de una tabla, con `shrink-0` en la muestra;
+  - P5: `import type`.
+  El implementador recibe los ficheros corregidos y el bloque de catálogo; no los reescribe,
+  los integra y los hace pasar.
