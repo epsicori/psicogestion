@@ -12,9 +12,9 @@
 
 ## En curso
 
-- **T-040 A**: R3-H1 abierto (opacidad/color sin prueba). Corte B: migración, banco 24, interfaz.
+- **T-040 B**: arquitecto pone al día el diseño (§B0: banco 24 ocupado por T-042, lecciones T-038/T-042). R3-H1 del corte A abierto.
 - **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). T-023 sube a riesgo alto (vista definer del pendiente).
-- **T-028 B/C**: desbloqueados. E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod.
+- **T-028 B**: implementador en worktree, en paralelo con T-040 B (no toca `supabase/`). E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod. Comparte `lib/i18n/es.ts` con T-040 B. Después, corte C.
 - **T-041**: diseño cerrado; espera turno en `supabase/`.
 
 ## Bloqueos
@@ -24,7 +24,7 @@
 
 ## Siguiente paso
 
-Cola `supabase/`: T-040 B → T-041 → T-028 B → T-021. Ticket corto de interfaz: enlace a `/recuperar` (ver Hallazgos).
+Cola `supabase/`: T-040 B → T-041 → T-021. En paralelo (sin base): T-028 B → C, que cierra el prototipo clínico. Ticket corto de interfaz: enlace a `/recuperar` (ver Hallazgos).
 Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5`, quitando antes la junction de `node_modules`.
 
 ## Hallazgos anotados
