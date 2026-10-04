@@ -841,3 +841,506 @@ canje» de `state.md` debe decir ya «y el PIN nulo abre».
 - **P2 → por lote, en la fila centinela, como hoy.**
 - **P3 → (a).** No hay ninguna instancia con datos reales: el PIN nulo se arregla dentro de T-042,
   el siguiente de la cola de `supabase/` cuando T-038 esté en `main`.
+
+---
+
+## R2 · Ronda 2 (04-10-2026)
+
+Ronda corta que el propietario aprobó el 04-10-2026 sobre la revisión combinada de la ronda 1
+(`tickets/T-042/revision.md`: 0 ALTA, 2 MEDIA, 6 BAJA).
+
+- Las secciones 0-9 de arriba no se tocan. Donde esta R2 las contradice, **manda esta R2**
+  (la lista está en R2.8).
+- Base de trabajo: rama `worktree-agent-a9f0330c3f05f9a94`, HEAD 8693cf1.
+- **B1-H2 queda fuera**: lo resuelve el usuario al integrar.
+- **Esta ronda no toca `docs/state.md`.**
+
+### R2.0 · Hechos verificados para esta ronda
+
+- **`comprobar_pin_historia`** (migración `20261009120000`, sección c):
+  - `select … for update` en las líneas 87-90.
+  - `if v_hasta > now() then return` en la línea 97.
+  - Una sola `update … set intentos_fallidos = … ph.intentos_fallidos + 1 …` en 107-119. Relee
+    la fila (EvalPlanQual).
+  - Tres `insert … where` en 123-137: `PIN_FALLIDO` si `not v_ok`; `PIN_BLOQUEADO` y el aviso
+    `pin_bloqueado` si `v_bloqueo is not null`.
+  - **Sin el `for update`**: tres PIN malos a la vez desde `intentos = 4` leen todos `v_hasta`
+    nulo y comparan. La `update` los encadena a 5, 6 y 7: tres `PIN_FALLIDO`, tres
+    `PIN_BLOQUEADO` y tres avisos.
+  - **Con el `for update`**: 5, y +1 de cada. Las dos peticiones que esperan ven el bloqueo y
+    salen en la línea 97.
+  - C1 («tres malos suman tres») da lo mismo en las dos versiones. Por eso sobrevivió M-H4.
+- **`comprobar_codigo_recuperacion`** (sección e):
+  - `pg_advisory_xact_lock(hashtextextended('codigos_recuperacion:' || v_uid::text, 0))` en
+    la línea 256.
+  - Centinela con `for update` en 259-264.
+  - `if v_hasta > now() then return`.
+  - `update` de la centinela con `c.intentos_fallidos + 1` (relee la fila) en 284-291.
+  - Misma forma que el PIN, pero con **dos** serializadores.
+- **Timeouts.** `authenticated` y `authenticator` tienen `statement_timeout = 8s` y
+  `lock_timeout = 8s` (medido en la ronda 1). PostgREST no fija `PGRST_DB_POOL`, así que el
+  pool es de 10.
+- **`bloquear_historia()`.** Única definición en
+  `20260822160000_rls_funciones_y_politicas.sql:441-468`, con el comentario en la línea 470.
+  Revoca los `desbloqueos_historia` vigentes y devuelve cuántos.
+- **`fijar_pin_historia(text)`.** Vigente en
+  `20260830090000_cuentas_invitacion_baja_totp.sql:859-891`, con el comentario en la 893.
+  - Su `on conflict do update` pone `hash`, `intentos_fallidos = 0`, `bloqueado_hasta = null`
+    y `actualizado_en`.
+  - **No** toca `desbloqueos_autorizados` ni `autorizado_hasta`.
+  - Ni esta función ni `bloquear_historia()` están en una migración de T-042.
+- **Quién escribe `codigos_recuperacion_totp.usado_en`:**
+  - `dar_de_baja_perfil` (`20260830090000:464`): todo el lote.
+  - `generar_codigos_recuperacion` y `regenerar_codigos_recuperacion` (`20261008120000`): todo
+    el lote.
+  - `canjear_codigo_recuperacion()` (T-042): un código, en la misma transacción en la que
+    consume la autorización.
+  - `registrar_reposicion_totp` (última versión en `20261008120000:553`) **no** caduca códigos.
+  - No existe ninguna función para desactivar el 2FA.
+- **`fn_auditar` en `UPDATE`.** Escribe `estado_anterior = to_jsonb(old)` y
+  `estado_posterior = to_jsonb(new)`, sin las columnas que el disparador pasa como argumentos 2
+  en adelante.
+  - `auditar_pines_historia` = `fn_auditar('perfil_id', 'hash')` (bucle de
+    `20260829150000:357-359`). Ahí `registro_id` es `perfil_id`.
+  - `auditar_codigos_recuperacion_totp` = `fn_auditar('id', 'codigo_hash')`
+    (`20260830090000:172-174`). Ahí `registro_id` es `id`.
+  - En las dos, `actor_id = auth.uid()` y `ocurrido_en` lleva `default now()`.
+- **El `console.error` del paso dos.** `lib/cuentas/candado.ts:79` y el paso dos de
+  `canjearCodigoRecuperacion` en `lib/cuentas/totp.ts` (~144) pasan el objeto `error` entero.
+  El paso uno de `candado.ts` (68-74) ya registra solo `.code`.
+- **`lib/cuentas/totp.test.ts`.** `adminFingida()` devuelve `listFactors` con `factors: []` y un
+  `deleteFactor: vi.fn()` que no expone. En las pruebas, `borrarFactoresTotp` (`totp.ts:6-21`)
+  nunca llega a `deleteFactor`, y no hay ningún caso `sin_codigos`.
+- **Banco.**
+  - Todo `npm run test:rls` corre en **una** transacción.
+  - `auth.mfa_factors` tiene un único global sobre `last_challenged_at`. El banco ya usa estos
+    desfases: 1-6 s, 21-25 s, 10 min y 17 min. **43 s está libre.**
+  - PRO1 tiene el PIN `111111` (`01-fijacion.sql:211`) y un factor verificado desde la fijación.
+- **La migración `20261009120000`** no está en `main` (que llega a `20261008120000`), pero sí
+  está aplicada en la base local compartida.
+
+### R2.1 · A1-H1 (MEDIA) · la serialización del paso uno, probada con solape real
+
+**Dónde.** En el oráculo HTTP `scripts/t042-oraculo.mjs` (territorio `scripts/t042-*`).
+- No en el banco 24: corre en una sola transacción y una sola sesión, así que no puede tener
+  dos peticiones en vuelo.
+- Tampoco en un banco nuevo con dos conexiones psql. El oráculo ya tiene el UID propio, la
+  fijación, `llamar()` y los contadores, y la CA10 es una propiedad de la frontera HTTP.
+
+**Qué se añade.** Dos casos nuevos después de C3: **C4 (PIN)** y **C5 (canje)**. C1 se conserva
+tal cual: es la letra de la CA10 («tres comprobaciones malas a la vez suman tres») y sigue
+siendo cierta.
+
+**Pieza común.** Una función `conBloqueador(sqlRetener, patronFuncion, lanzar)` (nombre
+orientativo) en el mismo fichero:
+
+1. **Bloqueador.** Se lanza con `spawn` **asíncrono** (no `spawnSync`, que bloquearía el bucle de
+   eventos con peticiones en vuelo):
+   `docker exec -i -e PGAPPNAME=t042-bloqueador <contenedor> psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1`.
+   Con la stdin abierta, se escribe `begin;` + `sqlRetener` + un salto de línea, y la stdin
+   **no** se cierra. psql ejecuta cada sentencia completa según llega, y la transacción queda
+   abierta.
+2. **Esperar a que retenga.** Un psql asíncrono sondea cada 50 ms, durante 3 s como máximo,
+   hasta que esta consulta dé 1:
+   `select count(*) from pg_stat_activity where application_name = 't042-bloqueador' and state = 'idle in transaction'`.
+   No se lee el búfer de stdout del bloqueador.
+3. **Ráfaga.** Se lanzan las 3 llamadas sin `await`. El `Promise.all` se espera más tarde.
+4. **Esperar al solape.** Se sondea cada 50 ms, durante 4 s como máximo (por debajo de los 8 s
+   de `lock_timeout` y `statement_timeout`), hasta que esta consulta dé **3**:
+   `select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query ilike '%<patronFuncion>%' and pid <> pg_backend_pid()`.
+   - Con el código bueno, las tres esperan en el serializador.
+   - Con el mutante, esperan en la `update` de la fila que el bloqueador retiene con
+     `for update`.
+   - La precondición se cumple en las dos versiones, así que la prueba compara lo mismo.
+5. **Soltar.** Se escribe `commit;`, se cierra la stdin y se esperan el `exit` del proceso y las
+   tres respuestas.
+6. **No concluyente = rojo.** Si en el paso 2 o en el 4 no se llega al número esperado:
+   - se escribe `rollback;` y se esperan las respuestas;
+   - se lanza `Parada('C4 no concluyente: N/3 en espera')`, y el caso queda en **FALLA**;
+   - nunca da verde sin haber visto las tres peticiones en espera;
+   - el `finally` mata el proceso si sigue vivo.
+
+**C4 · PIN.**
+- **Preparación.**
+  - `reiniciar()` y luego **4 `comprobarPin(PIN_MALO)` secuenciales**. Los cuatro intentos los
+    hace la función bajo prueba, no un `update` por psql (regla de T-013a).
+  - C4 no llama a `cuidarse()`, que pararía al llegar a 4.
+  - Se leen las líneas base: `estadoPin()`, `nAud('PIN_FALLIDO')`, `nAud('PIN_BLOQUEADO')` y los
+    avisos (`select count(*) from public.notificaciones where perfil_id = UID and tipo = 'pin_bloqueado'`).
+  - Antes de seguir se exige `intentos = 4`.
+- **`sqlRetener`:** `select 1 from public.pines_historia where perfil_id = '<UID>' for update;`
+- **`patronFuncion`:** `comprobar_pin_historia`.
+- **Ráfaga:** 3 `comprobarPin(PIN_MALO)`.
+- **Lo que se exige:**
+  - las tres peticiones responden 204;
+  - `intentos_fallidos = 5` y `bloqueado_hasta` no nulo;
+  - `PIN_FALLIDO` = base + 1, `PIN_BLOQUEADO` = base + 1 y avisos = base + 1.
+- **Cierre:** `reiniciar()`, que quita el bloqueo y deja la fila limpia para C5 y para otras
+  ejecuciones.
+
+**C5 · canje.**
+- **Preparación:** `reiniciar()` y **4 `comprobarCod(COD_MALO)` secuenciales**. Se exige que la
+  centinela tenga `intentos = 4` (`estadoCanje()`).
+- **`sqlRetener`:** dos sentencias, en este orden.
+  - `select pg_advisory_xact_lock(hashtextextended('codigos_recuperacion:' || '<UID>', 0));`
+  - `select 1 from public.codigos_recuperacion_totp where id = '<CENT>' for update;`
+  - Tiene que retener las dos para que la precondición del paso 4 valga contra cualquiera de los
+    mutantes.
+- **`patronFuncion`:** `comprobar_codigo_recuperacion`.
+- **Ráfaga:** 3 `comprobarCod(COD_MALO)`.
+- **Lo que se exige:** las tres peticiones responden 204; la centinela tiene
+  `intentos_fallidos = 5` y `bloqueado_hasta` no nulo. El canje no audita los fallos (sección e),
+  así que no se cuentan filas de auditoría.
+- **Cierre:** `reiniciar()`.
+
+**Mutantes** (se registran en `tickets/T-042/mutantes.json`):
+- **M-H4** (ya existe): quitar el `for update` de la línea 90. Pasa de «rojo: false» a
+  **«rojo: true» por C4**: da `intentos = 7`, y +3 en cada contador.
+- **M-H5** (nuevo): quitar **a la vez** el `perform pg_advisory_xact_lock(…)` de la línea 256 y
+  el `for update` de la 264. Rojo por C5: `intentos = 7`.
+- **Equivalentes.** Quitar solo uno de los dos serializadores del canje es un mutante
+  equivalente por construcción, porque el otro sigue serializando.
+  - Se registran como `equivalente: true`, con esa razón: M-H5a (sin el candado) y M-H5b (sin el
+    `for update`).
+  - Se ejecutan igual, y C5 debe salir verde con los dos. Así queda documentado que el canje
+    tiene dos defensas.
+
+**Salida.** `oraculo-postgrest.json` gana `C4` y `C5` con
+`{ en_espera: 3, base, final, veredicto }`, para que la evidencia muestre que hubo solape.
+
+### R2.2 · A1-H2 (BAJA) · bloquear y fijar el PIN anulan la autorización pendiente
+
+**Dónde.** En una sección nueva, **«h)»**, al final de
+`supabase/migrations/20261009120000_pin_y_canje_en_dos_pasos.sql`, después de los grants (g).
+- Es la migración de T-042, no está en `main` y el propietario permite editarla («en la
+  migración de T-042 o en una nueva del mismo ticket»).
+- **No se editan** ni `20260822160000` ni `20260830090000`.
+- Las dos funciones se redefinen con `create or replace function`, que conserva los grants y el
+  propietario. Al final de h) no hacen falta grants nuevos, pero sí repetir los dos
+  `comment on function`.
+
+**`bloquear_historia()`.** El cuerpo exacto de `20260822160000:441-468`, con esta sentencia
+añadida **antes** del `return v_n`:
+```
+update public.pines_historia ph
+   set desbloqueos_autorizados = 0,
+       autorizado_hasta = null,
+       actualizado_en = now()
+ where ph.perfil_id = v_uid
+   and (ph.desbloqueos_autorizados > 0 or ph.autorizado_hasta is not null);
+```
+- **El predicado no es decorativo.** Sin él, cada «bloquear» de un perfil sin autorización
+  escribiría una fila `UPDATE` de auditoría vacía y movería `actualizado_en`. Eso podría romper
+  las cuentas exactas de los bancos 03 y 09, que llaman a `bloquear_historia()`.
+- El valor de retorno no cambia: sigue siendo el número de ventanas revocadas.
+- Comentario: el actual, más «Desde T-042, anula también la autorización pendiente del paso
+  dos.».
+
+**`fijar_pin_historia(p_pin text)`.** El cuerpo exacto de `20260830090000:859-891`, con dos
+columnas más en el `on conflict (perfil_id) do update set`:
+`desbloqueos_autorizados = 0, autorizado_hasta = null`.
+- En la rama del `insert`, los valores por defecto de las columnas (sección a) ya dan 0 y nulo.
+- Comentario: el de `20260830090000:893`, más la misma frase de T-042.
+
+**Canje: sin cambios. Decidido, con su porqué.** La autorización del canje vive en la
+centinela (`canje_autorizado_id`, `canje_autorizado_hasta`), y consumirla exige que la centinela
+siga vigente (`usado_en is null`).
+- Generar, regenerar y dar de baja caducan **todo** el lote, centinela incluida, así que la
+  autorización ya muere con ellos. Limpiarla además sería código muerto.
+- No hay ninguna función para desactivar el 2FA.
+- La reposición del administrador no caduca los códigos, y esos códigos siguen siendo válidos
+  para su titular. Una autorización sobrante de 60 s solo puede canjear un código del propio
+  titular, que además ya acertó.
+- Por eso, para A1-H2 no hay en el canje ni cambio, ni prueba, ni mutante.
+
+**Prueba.** Un bloque nuevo en el banco 24, «T-042 CA-R2.2», antes del `t42_pin_reset` final.
+
+1. **Gemela positiva.** `select pg_temp.t42_pin_reset(:PRO1);`. Como PRO1, en la misma sesión que
+   usa la CA1: `comprobar_pin_historia('111111')` dos veces y `t42_p2_pin() = 'ok'` una vez.
+   Se comprueba `t42_pin(:PRO1) = '0/1/false'`: queda exactamente una autorización viva.
+2. **Bloquear.** `select public.bloquear_historia();`. Se exige:
+   - `historia_desbloqueada()` falso;
+   - `t42_pin(:PRO1) = '0/0/false'`;
+   - `t42_p2_pin() = 'pin_incorrecto'`, con `historia_desbloqueada()` todavía falso.
+3. **Preparar la fijación.** `reset_sesion()` y, como postgres:
+   `update auth.mfa_factors set last_challenged_at = now() - interval '43 seconds' where id = (select id from auth.mfa_factors where user_id = :PRO1 and status = 'verified' order by created_at limit 1);`
+   - Se actualiza un solo factor en lugar de llamar a `dar_segundo_factor`, porque ese
+     procedimiento choca con el nombre único del factor de PRO1. Ningún otro módulo usa 43 s.
+   - Después, como PRO1 con `como_con_2fa`: `comprobar_pin_historia('111111')` dos veces, y se
+     comprueba `t42_pin(:PRO1) = '0/2/false'`.
+   - Por último, `fijar_pin_historia('111111')`. Es el mismo PIN, así que no hay nada que
+     restaurar.
+4. **Comprobar la fijación.** Se exige `t42_pin(:PRO1) = '0/0/false'` y
+   `t42_p2_pin() = 'pin_incorrecto'`, con `historia_desbloqueada()` falso. Después,
+   `reset_sesion()` y `t42_pin_reset(:PRO1)`.
+
+**Mutantes.**
+- **M21:** quitar la `update` añadida a `bloquear_historia()`. Sale rojo en el paso 2: la fila
+  se queda en `0/1/false` y el paso dos da `ok`.
+- **M22:** quitar las dos columnas añadidas al `on conflict` de `fijar_pin_historia`. Sale rojo
+  en el paso 4: la fila se queda en `0/2/false`.
+
+**Aplicación.**
+- Editar una migración que ya está aplicada en la base local obliga a un
+  `npx supabase db reset`. Como la base es compartida, el momento lo coordina el orquestador.
+- Mientras tanto, el implementador puede aplicar la sección h) sobre la base local con
+  `docker exec -i … psql -f -`: `create or replace` es idempotente.
+- La evidencia final se toma **después** del `db reset`, para demostrar que el orden funciona
+  desde cero.
+
+### R2.3 · A1-H3 (BAJA) · la CA4 mira también las filas `UPDATE` de `fn_auditar`
+
+**Dónde.** `scripts/rls/24-pin-y-canje-dos-pasos.sql`. La aserción «ninguna entrada de auditoría
+lleva el PIN ni el hash» (~294-298) se sustituye por las aserciones de abajo. La de
+`PIN_FALLIDO` y `PIN_BLOQUEADO` se queda como está.
+
+1. **No vacía.** Primero se exige que haya filas que mirar. Esta consulta debe dar más de 0:
+   `select count(*) from public.auditoria a where a.tabla = 'pines_historia' and a.registro_id = :'PRO1' and a.operacion = 'UPDATE' and a.ocurrido_en = now()`.
+   Si diera 0, la aserción siguiente saldría verde sin probar nada.
+2. **Sin hash.** Sobre esas mismas filas (`operacion in ('INSERT', 'UPDATE')`), ninguna fila
+   puede cumplir alguna de estas condiciones:
+   - `coalesce(a.estado_anterior, '{}') ? 'hash'`
+   - `coalesce(a.estado_posterior, '{}') ? 'hash'`
+   - `coalesce(a.estado_anterior::text, '') ~ '\$2[abxy]?\$'`
+   - `coalesce(a.estado_posterior::text, '') ~ '\$2[abxy]?\$'`
+3. **Lo mismo para el canje.** Va en el bloque de la CA de canje que ya crea el lote con
+   `t42_lote`:
+   - `tabla = 'codigos_recuperacion_totp'`;
+   - solo las filas del lote de PRO1:
+     `registro_id in (select id::text from public.codigos_recuperacion_totp where perfil_id = :PRO1)`;
+   - la clave buscada es `codigo_hash`;
+   - también con la aserción de «no vacía» delante.
+
+**Mutantes.**
+- **M23:** `drop trigger auditar_pines_historia on public.pines_historia;` y volver a crearlo con
+  `fn_auditar('perfil_id')`, sin `'hash'`. Sale rojo en el punto 2.
+- **M23b:** lo mismo con `auditar_codigos_recuperacion_totp` y `fn_auditar('id')`. Sale rojo en
+  el punto 3.
+- Los dos se aplican como postgres dentro de una ejecución del banco y se revierten. Si algo
+  queda a medias, el `db reset` devuelve el original.
+
+### R2.4 · A1-H4 (BAJA) · M10 sin estado forjado
+
+**Hecho.** M10 relaja una guarda que solo actúa en un estado: «la autorización apunta a un
+código ya usado». Por la API ese estado **no se puede alcanzar**:
+- la autorización solo la consume `canjear_codigo_recuperacion()`, en la misma transacción en la
+  que marca el código;
+- todos los demás escritores de `usado_en` caducan el lote entero, centinela incluida, y la
+  centinela vieja deja de ser «la vigente más reciente».
+
+Por tanto, no hay ninguna prueba que distinga M10 sin forjar el estado.
+- La CA5.5 (lote nuevo entre los dos pasos) no mata M10. El rechazo lo produce la guarda del
+  consumo, porque la centinela nueva nace con `canje_autorizado_id` nulo; no lo produce el
+  `usado_en is null` del código.
+
+**Cambio, si el propietario acepta P-R2-1.** Solo en `scripts/rls/24-pin-y-canje-dos-pasos.sql`.
+- **CA5.5b:** se queda como la prueba oficial de M10, con este comentario encima: «Estado
+  inalcanzable por la API (A1-H4, R2.4): se forja como postgres para probar la defensa en
+  profundidad del `usado_en is null`. No borrar.».
+- **CA5.5:** el mensaje de la aserción pasa a decir su motivo real: «la centinela del lote nuevo
+  no lleva autorización: la guarda del consumo rechaza». Antes del paso dos se añade una
+  aserción que lo demuestra:
+  `select canje_autorizado_id is null from codigos_recuperacion_totp where id = pg_temp.t42_cent_id(:PRO1)`.
+- **Mutante:** M10 sigue registrado como muerto por la CA5.5b, con `forjado: true` en
+  `mutantes.json`.
+
+**P-R2-1 (para el propietario).** ¿Aceptas que M10 se dé por probado con la CA5.5b, que forja
+el estado como postgres porque por la API no se puede alcanzar? ¿O prefieres quitar del canje la
+guarda `usado_en is null` por inalcanzable?
+- **Recomendación: aceptar la CA5.5b forjada y conservar la guarda.**
+  - Cuesta una línea.
+  - Cubre el día en que un escritor futuro de `usado_en` marque un solo código sin caducar el
+    lote.
+  - Quitarla dejaría la integridad del canje colgando de un invariante que la base no hace
+    cumplir.
+- La alternativa (quitarla) haría desaparecer M10, pero cambia código de producción por motivos
+  de prueba.
+- **Si no hay respuesta antes de implementar,** el implementador aplica la recomendación. Solo
+  toca comentarios y la aserción de la CA5.5, sin efecto en producción.
+
+### R2.5 · B1-H5 (BAJA) · el paso dos registra solo `.code`
+
+**Qué se cambia.**
+- En `lib/cuentas/candado.ts:79`:
+  `console.error('desbloquearHistoria: fallo al llamar desbloquear_historia()', error?.code ?? 'sin fila')`.
+- En `lib/cuentas/totp.ts`, el `console.error` del paso dos de `canjearCodigoRecuperacion` (~144):
+  la misma forma, `error?.code ?? 'sin fila'`.
+- El texto fijo del mensaje no cambia.
+- El paso dos puede caer por «sin fila», con `error` nulo, si `data` llega vacío. En ese caso el
+  segundo argumento es la cadena `'sin fila'`.
+- Las dos ediciones están dentro del territorio: `candado.ts` entero, y de `totp.ts` solo
+  `canjearCodigoRecuperacion`.
+
+**Pruebas.**
+- En `lib/cuentas/candado.test.ts`, caso «paso dos falla» (58-64). El error fingido pasa a ser:
+  `{ code: 'PGRST301', message: 'DETALLE-NO-DEBE-SALIR', details: 'DETALLE-NO-DEBE-SALIR', hint: 'DETALLE-NO-DEBE-SALIR' }`.
+- La consola se espía con `vi.spyOn(console, 'error').mockImplementation(() => {})`. Se exige
+  que `JSON.stringify(espia.mock.calls)`:
+  - **no contenga** `'DETALLE-NO-DEBE-SALIR'`;
+  - **sí contenga** `'PGRST301'`.
+- Lo mismo en `lib/cuentas/totp.test.ts`, en el caso «paso dos falla» del `describe` del canje.
+  - El caso ya existe, así que se ajusta.
+  - El territorio dice «solo casos nuevos del canje». Se lee como «solo el `describe` del
+    canje», que es donde vive este caso, y esa lectura se anota en la bitácora.
+
+**Mutantes.**
+- **M24:** volver a pasar `error` entero en `candado.ts`. Sale rojo por el «no contiene».
+- **M24b:** lo mismo en `totp.ts`.
+
+### R2.6 · B1-H6 (BAJA) · `deleteFactor` se ejecuta en las pruebas, y `sin_codigos` no borra
+
+**Dónde.** Solo en `lib/cuentas/totp.test.ts`, dentro del `describe` del canje (desde la
+línea 139).
+
+**Qué se cambia.** `adminFingida()`, o una variante local del `describe`:
+- `listFactors` pasa a ser
+  `vi.fn().resolves({ data: { factors: [{ id: 'f-1' }] }, error: null })`. La forma exacta se
+  copia del uso real en `totp.ts:6-21`, que es el que manda.
+- `deleteFactor` se expone para poder hacer aserciones sobre él (por ejemplo,
+  `vi.fn().resolves({ data: null, error: null })`).
+
+**Pruebas.**
+- **Caso `ok` (ya existe), ampliado:** `deleteFactor` se llama **una vez**, con
+  `{ id: 'f-1', userId: 'u-1' }` (el `userId` que ya usa el caso).
+- **Caso nuevo, `sin_codigos`:** el paso uno responde bien y el paso dos devuelve
+  `[{ motivo: 'sin_codigos' }]`. Se exige:
+  - que la función devuelva lo mismo que ya devuelve para ese motivo;
+  - que **no se llame ni a `listFactors` ni a `deleteFactor`**.
+- **Casos `codigo_invalido` y `bloqueado` (ya existen):** ganan la misma aserción negativa,
+  `deleteFactor` no llamado.
+
+**Mutantes.**
+- **M25:** en `totp.ts`, cambiar la guarda `fila.motivo === 'ok'` por
+  `fila.motivo !== 'codigo_invalido' && fila.motivo !== 'bloqueado'`. Sale rojo en el caso
+  `sin_codigos`, porque se llama a `listFactors` y a `deleteFactor`.
+- **M25b:** quitar la llamada a `deleteFactor` dentro de `borrarFactoresTotp`. Sale rojo en el
+  caso `ok`.
+
+### R2.7 · B1-H4 (BAJA) · columnas nuevas en `tipos-bd.ts`: solo se anota
+
+**Hecho.** `supabase gen types` introspecciona todas las tablas de `public` sin mirar los
+grants.
+- Por eso las columnas `desbloqueos_autorizados`, `autorizado_hasta`, `canje_autorizado_id` y
+  `canje_autorizado_hasta` salen en `lib/supabase/tipos-bd.ts`, aunque `authenticated` no pueda
+  leerlas.
+- Es la salida legítima del generador, no un fallo. La frase de §1.2 que decía lo contrario era
+  falsa.
+
+**Dónde se anota y dónde no.**
+- (a) Aquí, en R2.8, como corrección de §1.2 y del texto de la CA15.
+- (b) En `docs/bitacora/T-042.md`, en la entrada de la ronda 2.
+- (c) En la evidencia de la CA15 de la ronda 2, citando esta R2.7. Que esas columnas no se puedan
+  leer lo prueban la CA7 y la CA8 del banco (los grants), no los tipos.
+- No va en `docs/state.md`, que esta ronda tiene excluido.
+- No hay cambio de código, ni prueba, ni mutante.
+
+### R2.8 · Correcciones a las secciones anteriores (mandan sobre ellas)
+
+- **§1.2:** donde dice que las columnas nuevas no aparecen en los tipos, léase R2.7.
+- **§3, fila CA10:** M-H4 ya no queda «no observado».
+  - Lo mata C4 (R2.1).
+  - M-H5 lo mata C5.
+  - M-H5a y M-H5b son equivalentes por construcción.
+- **§4, riesgo 5, y «Lo que no entra»:** la línea que aceptaba que `fijar_pin_historia` (y
+  `bloquear_historia`) dejaran viva la autorización queda **superada** por R2.2.
+- **§5:**
+  - La CA5.5 no prueba el `usado_en is null` (R2.4).
+  - La frase «la reposición caduca el lote» es inexacta: `registrar_reposicion_totp` no caduca
+    códigos (R2.0). La conclusión de seguridad no cambia, por el razonamiento de R2.2.
+
+### R2.9 · Territorio de esta ronda
+
+| Fichero | ¿Dentro del `territorio:`? |
+|---|---|
+| `supabase/migrations/20261009120000_pin_y_canje_en_dos_pasos.sql` (sección h) | Sí |
+| `scripts/rls/24-pin-y-canje-dos-pasos.sql` | Sí (`scripts/rls/**`) |
+| `scripts/t042-oraculo.mjs` | Sí (`scripts/t042-*`) |
+| `lib/cuentas/candado.ts` y `candado.test.ts` | Sí |
+| `lib/cuentas/totp.ts` (solo `canjearCodigoRecuperacion`) | Sí |
+| `lib/cuentas/totp.test.ts` (solo el `describe` del canje) | Sí, con la lectura de R2.5 |
+| `docs/bitacora/T-042.md` | Sí |
+| `tickets/T-042/mutantes.json`, `evidencia*` y `oraculo-postgrest.json` | **No: no casan con el glob.** Son artefactos de evidencia que la ronda 1 ya escribió y que exige el gate. Se señala para que el usuario lo sepa; no se amplía el contrato. |
+| `docs/state.md` | Está en el glob, pero el propietario lo **excluyó** de esta ronda |
+| `lib/supabase/tipos-bd.ts` | No se toca: la sección h) no cambia el esquema |
+
+Nada de R2 exige salir del territorio. `bloquear_historia` y `fijar_pin_historia` se redefinen
+dentro de la migración de T-042.
+
+### R2.10 · Cómo se cierra la ronda
+
+| Punto | Comprobación | Mutante que debe salir en rojo |
+|---|---|---|
+| A1-H1 | `node scripts/t042-oraculo.mjs` después del `db reset`: C1-C5 PASA, y C4 y C5 con `en_espera: 3` | M-H4 (C4) y M-H5 (C5). M-H5a y M-H5b son equivalentes |
+| A1-H2 | `npm run test:rls`: CA-R2.2 PASA | M21 y M22 |
+| A1-H3 | `npm run test:rls`: CA4 PASA, con las dos aserciones de «no vacía» | M23 y M23b |
+| A1-H4 | `npm run test:rls`: CA5.5 y CA5.5b PASA, con el comentario y la aserción nueva | M10 (CA5.5b, estado forjado) |
+| B1-H5 | `npm test` | M24 y M24b |
+| B1-H6 | `npm test` | M25 y M25b |
+| B1-H4 | La entrada en la bitácora y la cita en la evidencia de la CA15 | — |
+| Todo | `npm run lint`, `npm run lint:migraciones`, `npm run build`, y el banco completo sobre la base vacía y sobre la sembrada | — |
+
+Para cada mutante:
+- se aplica;
+- se comprueba que sale en rojo **por el motivo indicado** (no por un error de sintaxis ni por
+  un 23505 ajeno);
+- se revierte;
+- se registra en `mutantes.json`, con el comando y la línea de salida.
+
+### R2.11 · Riesgos de la ronda, por probabilidad
+
+1. **Base local compartida y `db reset` (alta).** Editar la migración aplicada obliga a un
+   reset, que borra el estado de quien esté usando la base y obliga a volver a correr el seed.
+   - Mitigación: el orquestador coordina el momento; mientras tanto, h) se aplica con psql.
+2. **Sondeo frágil en C4 y C5 (media).** Si PostgREST tarda en abrir la conexión o el contenedor
+   va lento, puede que no se vean las 3 esperas en 4 s.
+   - El resultado es «no concluyente», en rojo; nunca un falso verde. Se puede repetir.
+   - El umbral de 4 s está por debajo de los 8 s de los timeouts. Si se queda corto de forma
+     reproducible, se sube a 6 s, y nunca por encima de 7 s.
+3. **Choque con el único de `last_challenged_at` o con el nombre del factor (media).** Por eso se
+   actualiza un solo factor, con 43 s (R2.2, paso 3).
+   - Si otro ticket usa ese desfase, la prueba muere con 23505: un fallo ruidoso, no silencioso.
+4. **Cuentas exactas en los bancos 03 y 09 (baja).** El predicado de la `update` de
+   `bloquear_historia` evita filas de auditoría nuevas cuando no hay autorización.
+   - Si aun así algo se rompe, es que el banco ya tenía una autorización viva. Hay que comprobarlo
+     antes de tocar la prueba ajena.
+5. **psql por stdin en Windows (baja).** `docker exec -i` con la stdin en pipe ejecuta línea a
+   línea.
+   - Si el bloqueador no aparece como `idle in transaction` en 3 s, el caso sale «no
+     concluyente», no verde.
+
+### R2.12 · Qué revisar en esta ronda
+
+- **Que C4 y C5 vieron el solape.**
+  - El JSON muestra `en_espera: 3` y el mutante da 7. Un C4 verde sin `en_espera` registrado no
+    vale.
+  - Los 4 intentos previos los hace `comprobarPin`, no psql.
+- **Que el bloqueador del canje retiene las dos cosas**: el candado de consejo y la centinela. Si
+  solo retuviera una, la precondición podría fallar con uno de los mutantes y la prueba no
+  compararía lo mismo.
+- **Sección h).** Los cuerpos copiados son idénticos a los originales, salvo lo añadido:
+  - `fijar_pin_historia` se compara contra `20260830090000:859-891`: la guarda del segundo
+    factor, el formato, `bf 12` y `set search_path = ''`;
+  - `bloquear_historia` se compara contra `20260822160000:441-468`, con el retorno sin cambios;
+  - h) va al final de la migración, después de los grants.
+- **Que la `update` de `bloquear_historia` lleva su predicado**, y que el cambio de
+  `fijar_pin_historia` está en el `on conflict`. Sin el predicado salen filas de auditoría de
+  ruido.
+- **Que la CA-R2.2 tiene su gemela positiva** (`0/1/false` y `0/2/false` antes) y comprueba el
+  paso dos real, no solo la fila.
+- **CA4 de auditoría.** Va primero la aserción de «no vacía». Se miran `estado_anterior` y
+  `estado_posterior`, y todo se repite para `codigo_hash`.
+- **B1-H5.** El texto centinela está en `message`, `details` y `hint` a la vez. La aserción es
+  «no contiene», no un `toHaveBeenCalledWith`, que pasaría con argumentos de más.
+- **B1-H6.** El caso `sin_codigos` comprueba que **no** se llame a `listFactors`, no solo a
+  `deleteFactor`.
+- **Que no se ha tocado:** `docs/state.md`, B1-H2 ni las secciones 0-9 de este diseño.
+
+### R2 · Lo que no entra, y por qué
+
+- **Limpiar la autorización del canje** en generar, regenerar, la baja o la reposición. Ya la
+  matan el caducado del lote o el invariante de titularidad (R2.2). Sería código sin un estado
+  alcanzable que probar.
+- **Una prueba de concurrencia en el banco SQL.** Una sola transacción y una sola sesión no
+  pueden solaparse.
+- **Auditar los fallos del canje.** No lo pide ningún hallazgo ni el contrato.
+- **B1-H2**, que lo resuelve el usuario, y **`docs/state.md`**, excluido de esta ronda.
