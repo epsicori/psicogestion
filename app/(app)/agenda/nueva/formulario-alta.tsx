@@ -74,6 +74,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     register,
     handleSubmit,
     setValue,
+    clearErrors,
     control,
     formState: { errors },
   } = useForm<DatosAltaCita>({
@@ -183,6 +184,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         setSerieFallida(null);
         setSerie({ clave: claveSerie, firma: resultado.firma, sesiones: resultado.sesiones, excluir: [], aceptar: [] });
         setValue('firma', resultado.firma);
+        clearErrors('firma');
       } catch {
         if (vigente) setSerieFallida({ clave: claveSerie, mensaje: t('agenda.alta.serie.error') });
       }
@@ -190,7 +192,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     return () => {
       vigente = false;
     };
-  }, [claveSerie, serie?.clave, serieFallida?.clave, paciente, profesionalId, centroId, tipoId, fecha, hora, periodicidad, sesionesTotales, setValue]);
+  }, [claveSerie, serie?.clave, serieFallida?.clave, paciente, profesionalId, centroId, tipoId, fecha, hora, periodicidad, sesionesTotales, setValue, clearErrors]);
 
   const serieVigente = claveSerie !== null && serie?.clave === claveSerie ? serie : null;
   const falloSerie = claveSerie !== null && serieFallida?.clave === claveSerie ? serieFallida.mensaje : null;
@@ -199,6 +201,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     setElegido({ clave, etiqueta });
     setValue('fecha', clave.slice(0, 10), { shouldValidate: false });
     setValue('horaLocal', clave.slice(11), { shouldValidate: false });
+    clearErrors(['fecha', 'horaLocal']);
     setAviso('');
     if (!vista.calendario.huecos.some((h) => h.clave === clave)) setFoco(lunesDe(clave.slice(0, 10)));
   }
@@ -231,11 +234,13 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     setValue('periodicidad', valor);
     invalidarSerie();
     setValue('sesionesTotales', valor === 'suelta' ? null : (sesionesTotales ?? SESIONES_POR_DEFECTO));
+    clearErrors(['sesionesTotales', 'firma']);
   }
 
   function elegirPaciente(nuevo: PacienteElegido | null) {
     setPaciente(nuevo);
     setValue('pacienteId', nuevo?.id as string, { shouldValidate: false });
+    if (nuevo) clearErrors('pacienteId');
     // Por defecto, su profesional asignado, si trabaja en este centro y nadie eligió otro a mano.
     const asignado = nuevo?.profesionalId;
     if (
@@ -378,6 +383,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             errores={errors.tipoTerapiaId ? [errors.tipoTerapiaId.message ?? ''] : undefined}
             onChange={(evento) => {
               setValue('tipoTerapiaId', evento.target.value, { shouldValidate: false });
+              if (evento.target.value) clearErrors('tipoTerapiaId');
               volverAlElegido();
               invalidarSerie();
             }}
@@ -437,6 +443,8 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
               onChange={(evento) => {
                 const valor = evento.target.value;
                 setValue('sesionesTotales', valor === '' ? null : Number(valor), { shouldValidate: false });
+                // Un error de las sesiones no sobrevive a un numero que ya es valido (2-52).
+                if (valor !== '' && Number(valor) >= 2 && Number(valor) <= 52) clearErrors('sesionesTotales');
                 invalidarSerie();
               }}
             />

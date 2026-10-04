@@ -315,6 +315,47 @@ describe('FormularioAlta · tamano de los campos (man-12)', () => {
   });
 });
 
+// Observacion del verificador (ronda 3): un error de validacion se va en cuanto el campo ya es valido, sin esperar a otro envio.
+describe('FormularioAlta · los errores se limpian al corregir', () => {
+  const error = (sufijo: string) => document.querySelector(`[id$="-${sufijo}-error"]`);
+  const avisoHueco = () => screen.queryAllByRole('alert').some((a) => a.textContent === 'Elige un hueco libre del calendario.');
+  const enviarVacio = async () => {
+    fireEvent.submit(document.querySelector('form') as HTMLElement);
+    await waitFor(() => expect(error('tipo')).not.toBeNull());
+  };
+
+  it('el error del tipo desaparece al elegir uno', async () => {
+    pinta();
+    await enviarVacio();
+
+    fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_A } });
+
+    await waitFor(() => expect(error('tipo')).toBeNull());
+  });
+
+  it('el aviso de hueco desaparece al elegir un hueco', async () => {
+    pinta();
+    await enviarVacio();
+    expect(avisoHueco()).toBe(true);
+
+    fireEvent.click((await screen.findAllByRole('button', { name: /17:00, libre/ }))[0]);
+
+    await waitFor(() => expect(avisoHueco()).toBe(false));
+  });
+
+  it('el error de las sesiones desaparece al poner un numero valido', async () => {
+    pinta();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '1' } });
+    fireEvent.submit(document.querySelector('form') as HTMLElement);
+    await waitFor(() => expect(error('sesiones')).not.toBeNull());
+
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '5' } });
+
+    await waitFor(() => expect(error('sesiones')).toBeNull());
+  });
+});
+
 describe('FormularioAlta · serie', () => {
   it('con periodicidad semanal pide la previsualización y guarda con su firma', async () => {
     const FIRMA = 'a'.repeat(64);
