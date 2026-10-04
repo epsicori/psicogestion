@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({ buscarPacientes: vi.fn() }));
 vi.mock('./acciones', () => ({ buscarPacientes: m.buscarPacientes }));
 
-import { BuscadorPaciente } from './buscador-paciente';
+import { BuscadorPaciente, type PacienteElegido } from './buscador-paciente';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -51,5 +52,40 @@ describe('BuscadorPaciente', () => {
     expect(screen.queryByLabelText('Buscar paciente por nombre')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cambiar' }));
     expect(alElegir).toHaveBeenCalledWith(null);
+  });
+});
+
+// man-11 (ronda 3, FALLA del verificador): el botón que se pulsa desaparece al cambiar de vista; el foco no puede caer a body.
+function ConEstado({ inicial = null }: { inicial?: PacienteElegido | null }) {
+  const [paciente, setPaciente] = useState<PacienteElegido | null>(inicial);
+  return <BuscadorPaciente paciente={paciente} alElegir={setPaciente} />;
+}
+
+describe('BuscadorPaciente · foco (man-11)', () => {
+  it('al elegir un paciente el foco pasa al botón «Cambiar»', async () => {
+    render(<ConEstado />);
+    fireEvent.change(screen.getByLabelText('Buscar paciente por nombre'), { target: { value: 'an' } });
+    const resultado = await screen.findByRole('button', { name: 'Ana Pérez' });
+    resultado.focus();
+
+    fireEvent.click(resultado);
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cambiar' }));
+  });
+
+  it('al pulsar «Cambiar» el foco vuelve al campo de búsqueda', () => {
+    render(<ConEstado inicial={{ id: 'p1', nombre: 'Ana Pérez' }} />);
+    const cambiar = screen.getByRole('button', { name: 'Cambiar' });
+    cambiar.focus();
+
+    fireEvent.click(cambiar);
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Buscar paciente por nombre'));
+  });
+
+  it('un paciente que ya llega elegido no roba el foco al abrir', () => {
+    render(<ConEstado inicial={{ id: 'p1', nombre: 'Ana Pérez' }} />);
+
+    expect(document.activeElement).toBe(document.body);
   });
 });

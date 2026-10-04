@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { t } from '@/lib/i18n';
 
@@ -27,6 +27,21 @@ export function BuscadorPaciente({ paciente, alElegir }: Props) {
   const id = useId();
   const [texto, setTexto] = useState('');
   const [busqueda, setBusqueda] = useState<Busqueda | null>(null);
+  const campo = useRef<HTMLInputElement>(null);
+  const cambiar = useRef<HTMLButtonElement>(null);
+  // El botón que se pulsa desaparece al cambiar de vista: el foco va al que lo sustituye y no cae a body (man-11).
+  const moverFoco = useRef(false);
+
+  useEffect(() => {
+    if (!moverFoco.current) return;
+    moverFoco.current = false;
+    (paciente ? cambiar.current : campo.current)?.focus();
+  }, [paciente]);
+
+  function elegir(nuevo: PacienteElegido | null) {
+    moverFoco.current = true;
+    alElegir(nuevo);
+  }
 
   const limpio = texto.trim();
   const suficiente = limpio.length >= 2;
@@ -57,8 +72,9 @@ export function BuscadorPaciente({ paciente, alElegir }: Props) {
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm">{paciente.nombre}</span>
           <button
+            ref={cambiar}
             type="button"
-            onClick={() => alElegir(null)}
+            onClick={() => elegir(null)}
             className="border-border hover:bg-muted focus-visible:ring-ring/50 min-h-11 rounded-lg border px-3 text-sm outline-none focus-visible:ring-2"
           >
             {t('agenda.alta.campos.pacienteCambiar')}
@@ -77,6 +93,7 @@ export function BuscadorPaciente({ paciente, alElegir }: Props) {
       </label>
       <input
         id={id}
+        ref={campo}
         type="search"
         autoComplete="off"
         value={texto}
@@ -95,7 +112,7 @@ export function BuscadorPaciente({ paciente, alElegir }: Props) {
             <li key={p.id}>
               <button
                 type="button"
-                onClick={() => alElegir(p)}
+                onClick={() => elegir(p)}
                 className="border-border hover:bg-muted focus-visible:ring-ring/50 min-h-11 w-full rounded-lg border px-3 text-left text-sm outline-none focus-visible:ring-2"
               >
                 {p.nombre}
