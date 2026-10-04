@@ -237,6 +237,14 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     clearErrors(['sesionesTotales', 'firma']);
   }
 
+  function cambiarSesiones(valor: string) {
+    const numero = valor === '' ? null : Number(valor);
+    setValue('sesionesTotales', numero, { shouldValidate: false });
+    // Un error de las sesiones no sobrevive a un numero que ya es valido (2-52).
+    if (numero !== null && numero === Math.min(52, Math.max(2, numero))) clearErrors('sesionesTotales');
+    invalidarSerie();
+  }
+
   function elegirPaciente(nuevo: PacienteElegido | null) {
     setPaciente(nuevo);
     setValue('pacienteId', nuevo?.id as string, { shouldValidate: false });
@@ -400,6 +408,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         error={vista.errorSugerencias}
         elegida={elegido?.clave ?? null}
         alElegir={elegirTarjeta}
+        cargando={calculo.clave !== claveCalculo}
       />
 
       <SelectorHueco
@@ -440,13 +449,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
               max={52}
               value={typeof sesionesTotales === 'number' ? sesionesTotales : ''}
               errores={errors.sesionesTotales ? [errors.sesionesTotales.message ?? ''] : undefined}
-              onChange={(evento) => {
-                const valor = evento.target.value;
-                setValue('sesionesTotales', valor === '' ? null : Number(valor), { shouldValidate: false });
-                // Un error de las sesiones no sobrevive a un numero que ya es valido (2-52).
-                if (valor !== '' && Number(valor) >= 2 && Number(valor) <= 52) clearErrors('sesionesTotales');
-                invalidarSerie();
-              }}
+              onChange={(evento) => cambiarSesiones(evento.target.value)}
             />
             <p className="text-muted-foreground text-sm">{t('agenda.alta.campos.sesionesAyuda')}</p>
           </div>

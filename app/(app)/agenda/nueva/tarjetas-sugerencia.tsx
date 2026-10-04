@@ -16,20 +16,26 @@ type Props = {
   /** La clave de la tarjeta que coincide con el hueco elegido, si alguna. */
   elegida: string | null;
   alElegir: (clave: string) => void;
+  /** Hay un recálculo en vuelo: lo que se ve puede ser de antes, y «sin huecos» aún no se puede afirmar. */
+  cargando?: boolean;
 };
 
 /**
  * Hasta tres sugerencias de hueco. Elegir una es elegir ese hueco del calendario. Los motivos
  * llegan escritos: aquí no se calcula nada ni se nombra el tipo de terapia (D8).
  */
-export function TarjetasSugerencia({ modo, tarjetas, error, elegida, alElegir }: Props) {
+export function TarjetasSugerencia({ modo, tarjetas, error, elegida, alElegir, cargando = false }: Props) {
   if (error) return <ErrorPieza mensaje={t('agenda.alta.sugerencias.error')} />;
+
+  const sinTarjetas = tarjetas.length === 0;
 
   return (
     <section className="flex flex-col gap-3">
       <CabeceraSugerencias modo={modo} />
-      {tarjetas.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{t('agenda.alta.sugerencias.vacio')}</p>
+      {sinTarjetas ? (
+        <p role={cargando ? 'status' : undefined} className="text-muted-foreground text-sm">
+          {t(cargando ? 'agenda.alta.sugerencias.cargando' : 'agenda.alta.sugerencias.vacio')}
+        </p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-3">
           {tarjetas.map((tarjeta) => (

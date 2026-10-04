@@ -356,6 +356,24 @@ describe('FormularioAlta · los errores se limpian al corregir', () => {
   });
 });
 
+describe('FormularioAlta · sugerencias en vuelo', () => {
+  it('mientras se recalcula no dice que no hay huecos, y cuando llega el resultado vacio si', async () => {
+    let llega: (valor: unknown) => void = () => {};
+    m.recalcularAlta.mockReturnValue(new Promise((resolver) => (llega = resolver)));
+    pinta();
+    expect(screen.getByText('Sin huecos libres en las próximas cuatro semanas.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_A } });
+
+    await waitFor(() => expect(screen.getByText('Buscando huecos libres…')).toBeTruthy());
+    expect(screen.queryByText('Sin huecos libres en las próximas cuatro semanas.')).toBeNull();
+
+    llega({ ok: true, vista: VISTA, duracionMinutos: 50 });
+
+    await waitFor(() => expect(screen.getByText('Sin huecos libres en las próximas cuatro semanas.')).toBeTruthy());
+  });
+});
+
 describe('FormularioAlta · serie', () => {
   it('con periodicidad semanal pide la previsualización y guarda con su firma', async () => {
     const FIRMA = 'a'.repeat(64);

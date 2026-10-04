@@ -1021,6 +1021,7 @@ export const es = {
         enFrio: 'Primeros huecos libres',
         enFrioAyuda: 'Aún no hay citas suficientes para saber su hora habitual.',
         vacio: 'Sin huecos libres en las próximas cuatro semanas.',
+        cargando: 'Buscando huecos libres…',
         error: 'No se han podido calcular las sugerencias.',
       },
       serie: {

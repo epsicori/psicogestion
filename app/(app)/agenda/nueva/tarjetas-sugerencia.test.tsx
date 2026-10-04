@@ -69,6 +69,20 @@ describe('TarjetasSugerencia', () => {
     expect(screen.getByText('Sin huecos libres en las próximas cuatro semanas.')).toBeTruthy();
   });
 
+  // Observacion del verificador (ronda 3): mientras se recalculan, «sin huecos» no es verdad todavia.
+  it('mientras se calculan no dice que no hay huecos: dice que los busca', () => {
+    pinta({ modo: 'enFrio', sugerencias: [] }, { cargando: true });
+
+    expect(screen.queryByText('Sin huecos libres en las próximas cuatro semanas.')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('Buscando huecos libres…');
+  });
+
+  it('con tarjetas anteriores a la vista, las deja mientras se recalcula', () => {
+    pinta(HABITUAL, { cargando: true });
+
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+  });
+
   it('si el cálculo falló, una alerta y no tarjetas', () => {
     render(<TarjetasSugerencia modo="habitual" tarjetas={[]} error elegida={null} alElegir={() => {}} />);
 
