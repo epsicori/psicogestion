@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useFocoRodante } from '@/components/ui/rejilla-foco';
 import { t } from '@/lib/i18n';
@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { ContenidoCita } from './contenido-cita';
 import { HuecoSeleccion } from './nueva/hueco-seleccion';
 import type { SeleccionHuecos } from './nueva/seleccion-huecos';
+import { alTeclearHueco, enfocarPrimerHueco } from './nueva/teclado-huecos';
 import type { CitaVista, DiaVista } from './vista';
 
 type Props = {
@@ -35,6 +36,16 @@ function cabeceraDeHora(minuto: number): string {
 export function ListaDia({ dias, citas = [], diaInicial, alAbrirCita, seleccion }: Props) {
   const [elegido, setElegido] = useState(diaInicial);
   const { activo, setActivo, alTeclear, refDe } = useFocoRodante(dias.length, diaInicial, 7);
+  const botonesDia = useRef<(HTMLButtonElement | null)[]>([]);
+  const seccionHuecos = useRef<HTMLElement | null>(null);
+  // Flecha abajo en un día que aún no es el visible: se cambia de día y, ya pintado, se entra en sus huecos.
+  const entrarEnHuecos = useRef(false);
+
+  useEffect(() => {
+    if (!entrarEnHuecos.current) return;
+    entrarEnHuecos.current = false;
+    enfocarPrimerHueco(seccionHuecos.current);
+  }, [elegido]);
 
   const delDia = citas
     .filter((c) => c.diaIndice === elegido)
@@ -72,12 +83,27 @@ export function ListaDia({ dias, citas = [], diaInicial, alAbrirCita, seleccion 
             key={dia.fecha}
             type="button"
             data-dia={dia.fecha}
-            ref={refDe(i)}
+            ref={(el) => {
+              botonesDia.current[i] = el;
+              refDe(i)(el);
+            }}
             tabIndex={i === activo ? 0 : -1}
             aria-label={dia.etiquetaLarga}
             aria-pressed={i === elegido}
             aria-current={dia.esHoy ? 'date' : undefined}
-            onKeyDown={alTeclear}
+            onKeyDown={(evento) => {
+              // En selección, Flecha abajo entra en los huecos del día (la única parada de Tab es el día).
+              if (seleccion && evento.key === 'ArrowDown') {
+                evento.preventDefault();
+                if (i === elegido) enfocarPrimerHueco(seccionHuecos.current);
+                else {
+                  entrarEnHuecos.current = true;
+                  setElegido(i);
+                }
+                return;
+              }
+              alTeclear(evento);
+            }}
             onFocus={() => setActivo(i)}
             onClick={() => setElegido(i)}
             className={cn(
@@ -95,7 +121,7 @@ export function ListaDia({ dias, citas = [], diaInicial, alAbrirCita, seleccion 
       </div>
 
       {seleccion ? (
-        <section aria-label={t('agenda.alta.seleccion.huecosDelDia')} className="flex flex-col gap-3">
+        <section ref={seccionHuecos} aria-label={t('agenda.alta.seleccion.huecosDelDia')} className="flex flex-col gap-3">
           {gruposDeHuecos.length === 0 ? (
             <p className="text-muted-foreground text-sm">{t('agenda.alta.seleccion.vacio')}</p>
           ) : (
@@ -105,7 +131,14 @@ export function ListaDia({ dias, citas = [], diaInicial, alAbrirCita, seleccion 
                 <ul className="flex flex-col gap-1">
                   {grupo.huecos.map((hueco) => (
                     <li key={hueco.clave}>
-                      <HuecoSeleccion hueco={hueco} elegido={hueco.clave === seleccion.elegido} alElegir={seleccion.alElegir} />
+                      <HuecoSeleccion
+                        hueco={hueco}
+                        elegido={hueco.clave === seleccion.elegido}
+                        alElegir={seleccion.alElegir}
+                        alTeclear={(evento) =>
+                          alTeclearHueco(evento, { contenedor: seccionHuecos.current, dia: botonesDia.current[elegido] ?? null })
+                        }
+                      />
                     </li>
                   ))}
                 </ul>

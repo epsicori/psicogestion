@@ -105,4 +105,50 @@ describe('RejillaSemana · modo selección', () => {
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /10:00, libre/ }));
   });
+
+  // H10 (ronda 3): una sola parada de Tab; flechas para moverse; Tab para salir.
+  describe('teclado (H10)', () => {
+    const bloques = [
+      bloque('2026-10-06', '10:00', 'libre'),
+      bloque('2026-10-06', '12:00', 'libre'),
+      bloque('2026-10-06', '16:00', 'libre'),
+      bloque('2026-10-08', '10:00', 'libre'),
+      bloque('2026-10-08', '12:00', 'libre'),
+    ];
+    const paradasDeTab = () =>
+      Array.from(document.querySelectorAll<HTMLElement>('button, [tabindex]')).filter((e) => e.getAttribute('tabindex') !== '-1');
+
+    it('con cinco huecos libres en dos días, la rejilla tiene una sola parada de Tab: el día activo', () => {
+      montar(bloques);
+
+      const paradas = paradasDeTab();
+      expect(paradas).toHaveLength(1);
+      expect(paradas[0].getAttribute('data-dia')).toBe('2026-10-06');
+    });
+
+    it('Flecha abajo en el día entra en sus huecos y recorre uno a uno; Escape vuelve al día', () => {
+      montar(bloques);
+      const dia = document.querySelector<HTMLElement>('[data-dia="2026-10-06"]') as HTMLElement;
+      dia.focus();
+
+      fireEvent.keyDown(dia, { key: 'ArrowDown' });
+      expect((document.activeElement as HTMLElement).getAttribute('data-hueco')).toBe('2026-10-06T10:00');
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowDown' });
+      expect((document.activeElement as HTMLElement).getAttribute('data-hueco')).toBe('2026-10-06T12:00');
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowUp' });
+      expect((document.activeElement as HTMLElement).getAttribute('data-hueco')).toBe('2026-10-06T10:00');
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+      expect(document.activeElement).toBe(dia);
+    });
+
+    it('Flecha derecha desde un hueco pasa al día siguiente', () => {
+      montar(bloques);
+      const hueco = document.querySelector<HTMLElement>('[data-hueco="2026-10-06T10:00"]') as HTMLElement;
+      hueco.focus();
+
+      fireEvent.keyDown(hueco, { key: 'ArrowRight' });
+
+      expect((document.activeElement as HTMLElement).getAttribute('data-dia')).toBe('2026-10-07');
+    });
+  });
 });

@@ -73,4 +73,33 @@ describe('ListaDia · modo selección', () => {
 
     expect(screen.getByText('No hay huecos libres en esta semana.')).toBeTruthy();
   });
+
+  // H10 (ronda 3): una sola parada de Tab en el selector de día; los huecos se recorren con flechas.
+  it('con varios huecos libres, solo el día activo es parada de Tab', () => {
+    render(
+      <ListaDia
+        dias={calendario.dias}
+        diaInicial={1}
+        seleccion={{ huecos: calendario.huecos, elegido: null, alElegir: vi.fn() }}
+      />,
+    );
+
+    const paradas = Array.from(document.querySelectorAll<HTMLElement>('button, [tabindex]')).filter(
+      (e) => e.getAttribute('tabindex') !== '-1',
+    );
+    expect(paradas).toHaveLength(1);
+    expect(paradas[0].getAttribute('data-dia')).toBe('2026-10-06');
+  });
+
+  it('Flecha abajo en un día entra en sus huecos; Escape vuelve al día', () => {
+    montar();
+    const dia = document.querySelector<HTMLElement>('[data-dia="2026-10-07"]') as HTMLElement;
+    dia.focus();
+
+    fireEvent.keyDown(dia, { key: 'ArrowDown' });
+
+    expect((document.activeElement as HTMLElement).getAttribute('data-hueco')).toBe('2026-10-07T10:00');
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+    expect(document.activeElement).toBe(dia);
+  });
 });

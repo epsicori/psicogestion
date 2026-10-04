@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
 
 import { t, tCon } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -12,15 +12,16 @@ type Props = {
   /** Colocación (rejilla) o ancho (lista). */
   className?: string;
   style?: CSSProperties;
+  alTeclear?: (evento: KeyboardEvent<HTMLElement>) => void;
 };
 
 /**
  * Un hueco del calendario del alta (T-028 D11): libre = botón con su etiqueta completa y
  * `aria-pressed`; ocupado = texto que no se enfoca y que nunca dice qué lo ocupa. Cada estado se
  * ve además del color: sugerida = borde discontinuo y texto; habitual = barra de 3 px y texto
- * (D7); elegida = fondo secundario y texto.
+ * (D7); elegida = fondo secundario y texto. No es parada de Tab: ver `teclado-huecos.ts`.
  */
-export function HuecoSeleccion({ hueco, elegido, alElegir, className, style }: Props) {
+export function HuecoSeleccion({ hueco, elegido, alElegir, className, style, alTeclear }: Props) {
   if (hueco.estado === 'ocupado') {
     return (
       <div className={cn('bg-muted text-muted-foreground min-h-11 overflow-hidden rounded-lg p-2 text-sm', className)} style={style}>
@@ -37,6 +38,9 @@ export function HuecoSeleccion({ hueco, elegido, alElegir, className, style }: P
     <button
       type="button"
       data-hueco={hueco.clave}
+      // Una sola parada de Tab por rejilla o lista (el día activo): los huecos se recorren con flechas (H10).
+      tabIndex={-1}
+      onKeyDown={alTeclear}
       aria-pressed={elegido}
       aria-label={elegido ? `${hueco.etiqueta}, ${t('agenda.alta.seleccion.elegida')}` : hueco.etiqueta}
       onClick={() => alElegir(hueco.clave, hueco.etiqueta)}

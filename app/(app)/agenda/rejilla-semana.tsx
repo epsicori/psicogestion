@@ -10,6 +10,7 @@ import { PX_MIN, destinoDeArrastre, horaDeMinuto } from './arrastre';
 import { ContenidoCita } from './contenido-cita';
 import { HuecoSeleccion } from './nueva/hueco-seleccion';
 import { carrilesDeHuecos, type SeleccionHuecos } from './nueva/seleccion-huecos';
+import { alTeclearHueco, enfocarPrimerHueco } from './nueva/teclado-huecos';
 import type { CitaVista, DiaVista, VistaCalendario } from './vista';
 
 /** Lo que hay que mover el puntero antes de que un clic se convierta en arrastre. */
@@ -227,13 +228,19 @@ export function RejillaSemana({ titulo, dias, eje, citas = [], diaInicial, alAbr
                   }}
                   tabIndex={i === activo ? 0 : -1}
                   aria-current={dia.esHoy ? 'date' : undefined}
-                  onKeyDown={alTeclear}
+                  onKeyDown={(evento) => {
+                    // En selección, Flecha abajo entra en los huecos del día (la única parada de Tab es el día).
+                    if (seleccion && evento.key === 'ArrowDown') {
+                      if (enfocarPrimerHueco(evento.currentTarget.closest('[role="gridcell"]'))) evento.preventDefault();
+                      return;
+                    }
+                    alTeclear(evento);
+                  }}
                   onFocus={() => setActivo(i)}
                   onClick={(evento) => {
                     if (!seleccion) return alAbrirDia?.(dia, evento.currentTarget);
                     // En selección el día no abre panel: lleva al primer hueco libre que tiene.
-                    const celda = evento.currentTarget.closest('[role="gridcell"]');
-                    celda?.querySelector<HTMLButtonElement>('button[data-hueco]')?.focus();
+                    enfocarPrimerHueco(evento.currentTarget.closest('[role="gridcell"]'));
                   }}
                   className={cn(
                     'hover:bg-muted focus-visible:ring-ring/50 flex h-11 w-full items-center justify-center gap-1 text-sm outline-none focus-visible:ring-2',
@@ -296,6 +303,13 @@ export function RejillaSemana({ titulo, dias, eje, citas = [], diaInicial, alAbr
                         hueco={hueco}
                         elegido={hueco.clave === seleccion?.elegido}
                         alElegir={seleccion?.alElegir ?? (() => {})}
+                        alTeclear={(evento) =>
+                          alTeclearHueco(evento, {
+                            contenedor: evento.currentTarget.closest('[data-cuerpo]'),
+                            dia: botonesDia.current[i] ?? null,
+                            alLado: (delta) => botonesDia.current[i + delta] ?? null,
+                          })
+                        }
                         className="absolute min-h-0"
                         style={{
                           top: (hueco.minutoPared - eje.desdeMinuto) * PX_MIN,
