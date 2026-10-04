@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils';
 
 import { PX_MIN, destinoDeArrastre, horaDeMinuto } from './arrastre';
 import { ContenidoCita } from './contenido-cita';
-import { HuecoSeleccion } from './hueco-seleccion';
-import { carrilesDeHuecos, type SeleccionHuecos } from './seleccion-huecos';
+import { HuecoSeleccion } from './nueva/hueco-seleccion';
+import { carrilesDeHuecos, type SeleccionHuecos } from './nueva/seleccion-huecos';
 import type { CitaVista, DiaVista, VistaCalendario } from './vista';
 
 /** Lo que hay que mover el puntero antes de que un clic se convierta en arrastre. */

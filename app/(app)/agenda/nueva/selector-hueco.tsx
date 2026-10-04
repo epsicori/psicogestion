@@ -4,7 +4,7 @@ import { t } from '@/lib/i18n';
 
 import { ListaDia } from '../lista-dia';
 import { RejillaSemana } from '../rejilla-semana';
-import { diaPorDefecto } from '../seleccion-huecos';
+import { diaPorDefecto } from './seleccion-huecos';
 import { LeyendaSeleccion } from './leyenda-seleccion';
 import type { CalendarioAlta } from './vista-alta';
 

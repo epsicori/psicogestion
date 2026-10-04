@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { carrilesDeHuecos, diaPorDefecto } from './seleccion-huecos';
-import type { DiaAlta, HuecoVista } from './nueva/vista-alta';
+import type { DiaAlta, HuecoVista } from './vista-alta';
 
 function hueco(diaIndice: number, minutoPared: number, duracionMinutos: number, estado: HuecoVista['estado'] = 'libre'): HuecoVista {
   const clave = `d${diaIndice}-${minutoPared}`;

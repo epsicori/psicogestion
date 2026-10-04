@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { BloqueAlta } from '@/lib/citas/alta';
 
-import { PX_MIN } from './arrastre';
-import { construirCalendarioAlta } from './nueva/vista-alta';
-import { RejillaSemana } from './rejilla-semana';
+import { PX_MIN } from '../arrastre';
+import { construirCalendarioAlta } from './vista-alta';
+import { RejillaSemana } from '../rejilla-semana';
 
 function bloque(fecha: string, horaLocal: string, estado: BloqueAlta['estado'], minutos = 50): BloqueAlta {
   const [h, m] = horaLocal.split(':').map(Number);

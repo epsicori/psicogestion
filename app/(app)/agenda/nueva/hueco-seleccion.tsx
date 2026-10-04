@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { t, tCon } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
-import type { HuecoVista } from './nueva/vista-alta';
+import type { HuecoVista } from './vista-alta';
 
 type Props = {
   hueco: HuecoVista;

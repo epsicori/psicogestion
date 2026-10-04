@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { BloqueAlta } from '@/lib/citas/alta';
 
-import { ListaDia } from './lista-dia';
-import { construirCalendarioAlta } from './nueva/vista-alta';
+import { ListaDia } from '../lista-dia';
+import { construirCalendarioAlta } from './vista-alta';
 
 function bloque(fecha: string, horaLocal: string, estado: BloqueAlta['estado']): BloqueAlta {
   const [h, m] = horaLocal.split(':').map(Number);

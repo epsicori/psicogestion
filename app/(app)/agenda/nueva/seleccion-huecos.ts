@@ -1,4 +1,4 @@
-import type { DiaAlta, HuecoVista } from './nueva/vista-alta';
+import type { DiaAlta, HuecoVista } from './vista-alta';
 
 /**
  * El modo selección de la semana (T-028 B, ronda 2 · H5): la misma rejilla y la misma lista por

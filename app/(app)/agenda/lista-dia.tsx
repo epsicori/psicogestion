@@ -7,8 +7,8 @@ import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 import { ContenidoCita } from './contenido-cita';
-import { HuecoSeleccion } from './hueco-seleccion';
-import type { SeleccionHuecos } from './seleccion-huecos';
+import { HuecoSeleccion } from './nueva/hueco-seleccion';
+import type { SeleccionHuecos } from './nueva/seleccion-huecos';
 import type { CitaVista, DiaVista } from './vista';
 
 type Props = {
