@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { t } from '@/lib/i18n';
 import type { ModeloDeNota, VersionDeVista } from '@/lib/notas/servidor';
 
 const abrirEditorDeNota = vi.fn();
@@ -1501,6 +1502,67 @@ describe('EditorDeNota', () => {
       expect(screen.getByRole('button', { name: 'Pedir copia por motivo' })).toBeInTheDocument();
       expect(screen.queryByText('Esta nota no está disponible.')).not.toBeInTheDocument();
       expect(descargar()).not.toBeInTheDocument();
+    });
+
+    const SOLO_COPIA = {
+      estado: 'solo_copia' as const,
+      nota: { id: NOTA, fechaSesion: '02/02/2026', autor: 'Dr. Ruiz', versiones: 2, href: '/x' },
+    };
+
+    // Revisión B-H2: la vista de solo copia no tiene reloj ni PIN; si la base dice «bloqueada»,
+    // el error tiene que llevar a un PIN de verdad, y tras el PIN se vuelve a la vista de copia.
+    it('solo_copia con la historia bloqueada: «Desbloquear con el PIN» lleva al PIN y vuelve a la copia', async () => {
+      const { pedirCopiaDeNota } = await import('./acciones-copia');
+      vi.mocked(pedirCopiaDeNota).mockResolvedValue({ ok: false, motivo: 'bloqueada' });
+      abrirEditorDeNota.mockResolvedValue(SOLO_COPIA);
+      render(<EditorDeNota pacienteId={PACIENTE} citaId={null} notaId={NOTA} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Abrir el editor' }));
+      await vaciar();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Pedir copia por motivo' }));
+      await vaciar();
+      const dialogo = screen.getByRole('dialog');
+      fireEvent.click(within(dialogo).getByLabelText(t('exportaciones.copia.motivos.traspaso_caso')));
+      fireEvent.change(within(dialogo).getByLabelText(t('exportaciones.dialogo.referencia')), { target: { value: 'EXP-12' } });
+      fireEvent.change(within(dialogo).getByLabelText(t('exportaciones.dialogo.contrasena')), { target: { value: 'caballo-bateria-grapa' } });
+      fireEvent.change(within(dialogo).getByLabelText(t('exportaciones.dialogo.repeticion')), { target: { value: 'caballo-bateria-grapa' } });
+      fireEvent.click(within(dialogo).getByLabelText(t('exportaciones.dialogo.entendido')));
+      fireEvent.submit(within(dialogo).getByRole('button', { name: 'Cifrar y descargar' }).closest('form')!);
+      await vaciar();
+      await vaciar();
+      expect(within(dialogo).getByRole('alert')).toBeInTheDocument();
+
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Desbloquear con el PIN' }));
+      await vaciar();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByLabelText('PIN')).toBeInTheDocument();
+
+      const { abrirHistoria } = await import('@/app/(app)/candado/acciones');
+      vi.mocked(abrirHistoria).mockResolvedValue({ abierta: true } as never);
+      fireEvent.change(screen.getByLabelText('PIN'), { target: { value: '111111' } });
+      fireEvent.submit(screen.getByLabelText('PIN').closest('form')!);
+      await vaciar();
+      await vaciar();
+      expect(screen.getByRole('button', { name: 'Pedir copia por motivo' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('PIN')).toBeNull();
+    });
+
+    // Revisión B-H6: con la nota abierta, una recarga que devuelve solo_copia no deja el texto
+    // ni el botón del modo profesional: pasa a la vista de solo copia, con su motivo.
+    it('una recarga que devuelve solo_copia pasa a la vista de solo copia, sin el contenido ni «Descargar copia»', async () => {
+      // Una firma sin nota de vuelta deja el botón «Recargar»: la recarga es la que trae solo_copia.
+      firmarNota.mockResolvedValue({ ok: true, nota: null, caducaEn: null });
+      await montar();
+      await confirmar(await abrirDialogoDeFirma());
+      abrirEditorDeNota.mockResolvedValue(SOLO_COPIA);
+      fireEvent.click(screen.getByRole('button', { name: 'Recargar' }));
+      await vaciar();
+      await vaciar();
+
+      expect(screen.getByRole('button', { name: 'Pedir copia por motivo' })).toBeInTheDocument();
+      expect(screen.queryByRole('textbox', { name: 'Nota' })).toBeNull();
+      expect(descargar()).toBeNull();
+      expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Pedir una copia por motivo' }));
     });
   });
 });

@@ -998,6 +998,7 @@ export const es = {
       cifrarYDescargar: 'Cifrar y descargar',
       cerrar: 'Cerrar',
       cancelar: 'Cancelar',
+      desbloquear: 'Desbloquear con el PIN',
     },
     dialogo: {
       tituloProfesional: 'Descargar una copia cifrada',

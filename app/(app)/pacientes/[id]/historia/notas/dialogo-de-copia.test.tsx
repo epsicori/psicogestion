@@ -114,6 +114,23 @@ describe('DialogoDeCopia · profesional', () => {
     expect(document.body.innerHTML).not.toContain(CONTRASENA);
   });
 
+  // Revisión B-H3: tras la descarga el formulario ya no está montado, así que la prueba de arriba
+  // no ve nada. Tras un error SÍ sigue montado: ahí se mira el valor de cada campo.
+  it('tras un error, con el formulario montado, los campos de contraseña están vacíos', async () => {
+    pedirCopiaDeNota.mockResolvedValue({ ok: false, motivo: 'error' });
+    const usuario = userEvent.setup();
+    render(<Montaje modo="profesional" />);
+    await usuario.click(screen.getByRole('button', { name: 'Abrir' }));
+    await rellenar(usuario);
+    await enviar(usuario);
+    await screen.findByRole('alert');
+    const campos = [t('exportaciones.dialogo.contrasena'), t('exportaciones.dialogo.repeticion')].map(
+      (etiqueta) => screen.getByLabelText(etiqueta) as HTMLInputElement,
+    );
+    for (const campo of campos) expect(campo.value).toBe('');
+    expect(pedirCopiaDeNota).toHaveBeenCalledTimes(1);
+  });
+
   it('los campos de contraseña son de tipo password y piden una nueva', async () => {
     const usuario = userEvent.setup();
     render(<Montaje modo="profesional" />);
@@ -201,6 +218,25 @@ describe('DialogoDeCopia · profesional', () => {
     expect(registrarFicheroDeCopia).not.toHaveBeenCalled();
     expect(crearUrl).not.toHaveBeenCalled();
   });
+
+  // Revisión B-H4: Escape mientras Argon2id trabaja; el cifrado termina después y nada sigue.
+  it('si se cierra mientras cifra, al terminar el cifrado ni se registra ni se descarga', async () => {
+    let terminar: (v: unknown) => void = () => {};
+    cifrarCopia.mockReturnValue(new Promise((r) => (terminar = r)));
+    const usuario = userEvent.setup();
+    render(<Montaje modo="profesional" />);
+    await usuario.click(screen.getByRole('button', { name: 'Abrir' }));
+    await rellenar(usuario);
+    await enviar(usuario);
+    await waitFor(() => expect(cifrarCopia).toHaveBeenCalledTimes(1));
+    await usuario.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    terminar({ html: '<html>cifrado</html>', huellaHex: HUELLA });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(registrarFicheroDeCopia).not.toHaveBeenCalled();
+    expect(crearUrl).not.toHaveBeenCalled();
+    expect(descargas).toEqual([]);
+  });
 });
 
 describe('DialogoDeCopia · motivo', () => {
@@ -236,6 +272,37 @@ describe('DialogoDeCopia · motivo', () => {
     await screen.findByText(t('exportaciones.estado.descargada'));
     expect(pedirCopiaDeNota).toHaveBeenCalledWith({ pacienteId: P, notaId: N, motivo: 'traspaso_caso', referencia: 'EXP-12' });
     expect(loQueSubio()).not.toContain(CONTRASENA);
+  });
+
+  // Revisión B-H2: «vuelve a desbloquearla con tu PIN» tiene que llevar a un PIN.
+  it('si la historia se bloqueó, el error ofrece desbloquear con el PIN: cierra y avisa a la vista', async () => {
+    pedirCopiaDeNota.mockResolvedValue({ ok: false, motivo: 'bloqueada' });
+    const alCerrar = vi.fn();
+    const alBloquearse = vi.fn();
+    const usuario = userEvent.setup();
+    render(
+      <DialogoDeCopia pacienteId={P} notaId={N} modo="motivo" abierto alCerrar={alCerrar} alBloquearse={alBloquearse} />,
+    );
+    await usuario.click(screen.getByLabelText(t('exportaciones.copia.motivos.traspaso_caso')));
+    await usuario.type(screen.getByLabelText(t('exportaciones.dialogo.referencia')), 'EXP-12');
+    await rellenar(usuario);
+    await enviar(usuario);
+    expect(await screen.findByRole('alert')).toHaveTextContent(t('exportaciones.error.bloqueada'));
+    await usuario.click(screen.getByRole('button', { name: t('exportaciones.boton.desbloquear') }));
+    expect(alCerrar).toHaveBeenCalledTimes(1);
+    expect(alBloquearse).toHaveBeenCalledTimes(1);
+  });
+
+  it('con otro error no hay botón de desbloquear', async () => {
+    pedirCopiaDeNota.mockResolvedValue({ ok: false, motivo: 'error' });
+    const usuario = userEvent.setup();
+    render(<DialogoDeCopia pacienteId={P} notaId={N} modo="motivo" abierto alCerrar={() => {}} alBloquearse={() => {}} />);
+    await usuario.click(screen.getByLabelText(t('exportaciones.copia.motivos.traspaso_caso')));
+    await usuario.type(screen.getByLabelText(t('exportaciones.dialogo.referencia')), 'EXP-12');
+    await rellenar(usuario);
+    await enviar(usuario);
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('button', { name: t('exportaciones.boton.desbloquear') })).not.toBeInTheDocument();
   });
 });
 

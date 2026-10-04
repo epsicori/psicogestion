@@ -216,10 +216,11 @@ function reducir(estado: Estado, accion: Accion): Estado {
         case 'elegir_episodio':
           return { fase: 'elegir_episodio', episodios: r.episodios };
         case 'solo_copia':
+          // B-H6: quien la tenía abierta y ahora solo puede pedir copia por motivo pasa a esa
+          // vista; dejar la abierta con su texto y «Descargar copia» ofrecería lo que la base niega.
+          return { fase: 'solo_copia', nota: r.nota };
         case 'no_disponible':
-          if (estado.fase !== 'abierta') {
-            return r.estado === 'solo_copia' ? { fase: 'solo_copia', nota: r.nota } : { fase: 'no_disponible' };
-          }
+          if (estado.fase !== 'abierta') return { fase: 'no_disponible' };
           // Quien tenía la nota abierta y deja de leerla la ve como no disponible, como hasta ahora.
           return enCaminoDeRecarga(estado)
             ? { ...estado, aviso: 'noDisponible', enfoqueAviso: estado.enfoqueAviso + 1 }
@@ -429,7 +430,8 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
         abriendo.current = false;
       }
       // Un fallo al recargar deja la vista y su botón donde estaban: no hay nada que enfocar.
-      const noDisponible = resultado.estado === 'no_disponible' || resultado.estado === 'solo_copia';
+      // solo_copia no cuenta: reemplaza la vista (B-H6), así que vacía la sesión y pide foco.
+      const noDisponible = resultado.estado === 'no_disponible';
       const sigueLaVista = Boolean(opciones.reabrir) && (resultado.estado === 'error' || noDisponible);
       pedirFoco.current = (resultado.estado !== 'bloqueada' || Boolean(opciones.trasPin)) && !sigueLaVista;
       if (resultado.estado === 'abierta') sesion.current = sesionDesdeNota(resultado.nota);
@@ -799,7 +801,14 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
     return (
       <Contenedor refRaiz={refRaiz}>
         <div tabIndex={-1} role="group" aria-label={t('exportaciones.dialogo.tituloMotivo')} className="outline-none">
-          <CopiaPorMotivo pacienteId={pacienteId} nota={estado.nota} />
+          <CopiaPorMotivo
+            pacienteId={pacienteId}
+            nota={estado.nota}
+            alBloquearse={() => {
+              sesion.current = null;
+              dispatch({ tipo: 'cerrada', mensaje: 'ficha.historiaBloqueadaExplicacion' });
+            }}
+          />
         </div>
       </Contenedor>
     );

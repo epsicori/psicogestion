@@ -42,6 +42,12 @@ type Props = {
   modo: 'profesional' | 'motivo';
   abierto: boolean;
   alCerrar: () => void;
+  /**
+   * Si la base dice que la historia está bloqueada, el error ofrece «Desbloquear con el PIN»:
+   * cierra el diálogo y llama aquí para que la vista pinte su campo de PIN (revisión B-H2).
+   * Sin él, el error no ofrece nada que la vista no tenga.
+   */
+  alBloquearse?: () => void;
 };
 
 const VACIO: ValoresDialogoCopia = {
@@ -91,7 +97,7 @@ const claseCampo = cn(
   'aria-invalid:border-destructive aria-invalid:ring-destructive/20',
 );
 
-export function DialogoDeCopia({ pacienteId, notaId, modo, abierto, alCerrar }: Props) {
+export function DialogoDeCopia({ pacienteId, notaId, modo, abierto, alCerrar, alBloquearse }: Props) {
   const titulo =
     modo === 'motivo'
       ? t('exportaciones.dialogo.tituloMotivo')
@@ -100,16 +106,23 @@ export function DialogoDeCopia({ pacienteId, notaId, modo, abierto, alCerrar }: 
   // cerrar, el contenido se desmonta y lo que estuviera en vuelo deja de ser vigente.
   return (
     <Dialogo abierto={abierto} alCerrar={alCerrar} titulo={titulo}>
-      <ContenidoDeCopia pacienteId={pacienteId} notaId={notaId} modo={modo} alCerrar={alCerrar} />
+      <ContenidoDeCopia
+        pacienteId={pacienteId}
+        notaId={notaId}
+        modo={modo}
+        alCerrar={alCerrar}
+        alBloquearse={alBloquearse}
+      />
     </Dialogo>
   );
 }
 
-function ContenidoDeCopia({ pacienteId, notaId, modo, alCerrar }: Omit<Props, 'abierto'>) {
+function ContenidoDeCopia({ pacienteId, notaId, modo, alCerrar, alBloquearse }: Omit<Props, 'abierto'>) {
   const prefijo = useId();
   const id = (campo: string) => `${prefijo}-${campo}`;
   const [fase, setFase] = useState<Fase>('editando');
   const [mensajeDeError, setMensajeDeError] = useState('');
+  const [bloqueada, setBloqueada] = useState(false);
   const refError = useRef<HTMLParagraphElement>(null);
   const refCerrar = useRef<HTMLButtonElement>(null);
   // Cada envío lleva su número; si el diálogo se cierra o se vuelve a enviar, el anterior deja de
@@ -158,6 +171,7 @@ function ContenidoDeCopia({ pacienteId, notaId, modo, alCerrar }: Omit<Props, 'a
     reset({ ...VACIO, motivo: datos.motivo, referencia: datos.referencia });
 
     setMensajeDeError('');
+    setBloqueada(false);
     setFase('pidiendo');
     try {
       const pedida = await pedirCopiaDeNota({
@@ -167,7 +181,10 @@ function ContenidoDeCopia({ pacienteId, notaId, modo, alCerrar }: Omit<Props, 'a
         referencia,
       });
       if (!vigente()) return;
-      if (!pedida.ok) return fallar(MENSAJE_DE_FALLO[pedida.motivo]);
+      if (!pedida.ok) {
+        setBloqueada(pedida.motivo === 'bloqueada');
+        return fallar(MENSAJE_DE_FALLO[pedida.motivo]);
+      }
 
       setFase('cifrando');
       const { html, huellaHex } = await cifrarCopia(pedida.copia, contrasena, derivarEnTrabajador);
@@ -327,6 +344,18 @@ function ContenidoDeCopia({ pacienteId, notaId, modo, alCerrar }: Omit<Props, 'a
           )}
 
           <div className="flex flex-wrap justify-end gap-2">
+            {fase === 'error' && bloqueada && alBloquearse && (
+              <Button
+                type="button"
+                variante="contorno"
+                onClick={() => {
+                  alCerrar();
+                  alBloquearse();
+                }}
+              >
+                {t('exportaciones.boton.desbloquear')}
+              </Button>
+            )}
             <Button type="button" variante="contorno" onClick={alCerrar}>
               {t('exportaciones.boton.cancelar')}
             </Button>

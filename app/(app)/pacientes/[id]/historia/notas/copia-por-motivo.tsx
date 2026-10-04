@@ -14,7 +14,16 @@ import { DialogoDeCopia } from './dialogo-de-copia';
  * sesión, el autor y cuántas versiones firmadas tiene. Nada del contenido. Desde aquí solo se
  * puede pedir una copia cifrada por motivo, que queda registrada y avisa a los profesionales.
  */
-export function CopiaPorMotivo({ pacienteId, nota }: { pacienteId: string; nota: NotaParaCopia }) {
+export function CopiaPorMotivo({
+  pacienteId,
+  nota,
+  alBloquearse,
+}: {
+  pacienteId: string;
+  nota: NotaParaCopia;
+  /** La historia está bloqueada: la vista que la contiene pinta su campo de PIN (revisión B-H2). */
+  alBloquearse?: () => void;
+}) {
   const [abierto, setAbierto] = useState(false);
   const versiones =
     nota.versiones === 1
@@ -41,6 +50,7 @@ export function CopiaPorMotivo({ pacienteId, nota }: { pacienteId: string; nota:
         modo="motivo"
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
+        alBloquearse={alBloquearse}
       />
     </section>
   );
