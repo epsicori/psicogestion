@@ -26,7 +26,7 @@ export function PrevisualizacionSerie({ sesiones, excluir, aceptar, alCambiar }:
   const conHora = sesiones.filter((s) => s.hora !== null);
   const incluidas = conHora.filter((s) => !excluir.includes(s.fecha)).length;
   const todas = conHora.length > 0 && incluidas === conHora.length;
-  const algunas = incluidas > 0 && incluidas < conHora.length;
+  const algunas = 0 < incluidas && incluidas < conHora.length;
 
   return (
     <section aria-label={t('agenda.alta.serie.titulo')} className="flex flex-col gap-2">

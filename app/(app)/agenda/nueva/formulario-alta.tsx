@@ -151,7 +151,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   // La serie: se pide cuando hay paciente, tipo, hueco y un número de sesiones válido.
   const fecha = elegido?.clave.slice(0, 10);
   const hora = elegido?.clave.slice(11);
-  const piden = periodicidad !== 'suelta' && paciente && tipoId && fecha && hora && typeof sesionesTotales === 'number' && sesionesTotales >= 2 && sesionesTotales <= 52;
+  const piden = periodicidad !== 'suelta' && paciente && tipoId && fecha && hora && typeof sesionesTotales === 'number' && 2 <= sesionesTotales && 52 >= sesionesTotales;
   const claveSerie = piden ? [paciente.id, profesionalId, centroId, tipoId, fecha, hora, periodicidad, sesionesTotales].join('|') : null;
 
   useEffect(() => {

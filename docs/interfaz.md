@@ -451,6 +451,15 @@ Tres cosas del prototipo de la agenda no tienen dato detrás (T-014):
   trazabilidad documental esperan a que haya facturación, una definición de abandono y
   trazabilidad. Sigue siendo solo para administrador y profesional sanitario (choque 6).
 
+**El alta de cita** (`/agenda/nueva`, T-028 B) se abre desde «Nueva cita» de la cabecera de la
+agenda como diálogo (ruta interceptada `@modal`) y, por URL directa o recarga, como página. No
+pinta modalidad ni episodio (ADR-075): el **tipo de terapia** es obligatorio para todos los
+roles y fija la duración, y ni su id ni su nombre vuelven de las acciones (ADR-074). El
+calendario de elección solo distingue **libre** y **ocupado** (D7, D11): el hueco habitual lleva
+barra de 3 px a la izquierda **y** el texto «Habitual»; el color nunca va solo (choque 4: los
+motivos de las sugerencias no nombran el tipo, D8). El profesional solo agenda a su nombre; el
+administrador y el técnico eligen profesional, y la nota operativa no se enseña al técnico.
+
 **La forma a 360 px** (WCAG 1.4.10, reflujo): la semana por debajo de `md` es una tira de
 7 días y, debajo, la lista de las citas del día por hora, sin arrastre; la rejilla de 7
 columnas solo desde `md`. Es una decisión de diseño **pendiente de confirmar en un teléfono
