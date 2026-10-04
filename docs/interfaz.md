@@ -455,10 +455,16 @@ Tres cosas del prototipo de la agenda no tienen dato detrás (T-014):
 agenda como diálogo (ruta interceptada `@modal`) y, por URL directa o recarga, como página. No
 pinta modalidad ni episodio (ADR-075): el **tipo de terapia** es obligatorio para todos los
 roles y fija la duración, y ni su id ni su nombre vuelven de las acciones (ADR-074). El
-calendario de elección solo distingue **libre** y **ocupado** (D7, D11): el hueco habitual lleva
+calendario de elección **es la semana de la agenda** (`RejillaSemana` desde `md`, `ListaDia`
+por debajo) en modo selección: en lugar de citas pinta los huecos del alta con la misma
+geometría, sin arrastre ni panel de día (el botón del día lleva al primer hueco libre); los
+huecos que se pisan se reparten el ancho. Solo distingue **libre** y **ocupado** (D7, D11): el hueco habitual lleva
 barra de 3 px a la izquierda **y** el texto «Habitual»; el color nunca va solo (choque 4: los
 motivos de las sugerencias no nombran el tipo, D8). El profesional solo agenda a su nombre; el
 administrador y el técnico eligen profesional, y la nota operativa no se enseña al técnico.
+Al guardar desde la página se va a `/agenda?fecha=<día de la cita>` y el éxito se anuncia en
+una región de estado global (también al cerrar el diálogo). El aviso de «hueco raro» **no** es
+de este ticket: va aparte.
 
 **La forma a 360 px** (WCAG 1.4.10, reflujo): la semana por debajo de `md` es una tira de
 7 días y, debajo, la lista de las citas del día por hora, sin arrastre; la rejilla de 7
