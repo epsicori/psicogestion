@@ -1,28 +1,233 @@
 {
   "ticket": "T-028",
-  "corte": "A",
+  "corte": "B",
   "ronda": 2,
-  "diff": "ae73156..08af1e6",
+  "diff": "74747fc..HEAD (worktree-agent-a1549876942c02f5f), sin tickets/** ni docs/state.md del merge de main",
   "altas": 0,
-  "medias": 0,
-  "bajas": 2,
-  "cerrados_de_la_ronda_1": ["H1", "H2", "H3", "H4", "H5", "H6", "H7"],
+  "medias": 3,
+  "bajas": 8,
+  "cerrados_de_la_ronda_1": [
+    "H1",
+    "H3",
+    "H5",
+    "H6",
+    "H7",
+    "H8"
+  ],
+  "parciales_de_la_ronda_1": {
+    "H2": "cerrado con ?paciente=; la otra puerta es H9",
+    "H4": "trasladado sin código; el registro del traslado es H18"
+  },
+  "mutantes_medidos": {
+    "firma sin tipoTerapiaId": "rojo",
+    "Guardar sin esperandoSerie": "rojo",
+    "contenido-alta delCentro[0]": "rojo",
+    "volverAlElegido sin setFoco": "rojo",
+    "acciones sin tipoTerapiaId": "verde (H13)"
+  },
   "hallazgos": [
     {
-      "id": "H8",
-      "severidad": "BAJA",
-      "archivo": "lib/agenda/sugerencias.ts",
-      "linea": 83,
-      "descripcion": "Ninguna prueba pasa más de seis pasadas fuera de orden, así que sobreviven los mutantes «recorte antes de ordenar» y «pasadas ordenadas solo por fecha».",
-      "escenario": "Ocho pasadas descendentes (seis martes a las 12:00 y dos jueves a las 10:00): el código da 10-06 comoLasUltimas{n:6} y el mutante que recorta antes de ordenar da cadaIntervalo{dias:7}. Siete pasadas con el corte dentro del día doble 09-08, con las 13:00 antes que las 12:00 en la entrada: el código da 10-06 13:00 y el mutante cuyo comparador no mira la hora da 10-06 12:00. Con los dos mutantes, las 41 pruebas siguen en verde (medido)."
+      "id": "H9",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 228,
+      "descripcion": "El arreglo de H2 solo pone el profesional asignado cuando el paciente llega por ?paciente=; al elegirlo con el buscador (buscarPacientes devuelve id y nombre; elegirPaciente no toca profesionalId) el profesional no cambia, y la única entrada de este corte (agenda/page.tsx:120) no lleva paciente.",
+      "escenario": "Un técnico pulsa «Nueva cita» en la agenda, busca y elige a X, cuyo asignado es Luis Soto: el profesional se queda en Ana Ruiz, la primera del orden alfabético, las sugerencias salen en frío y la cita se guarda a nombre de Ana Ruiz si no se mira el desplegable."
     },
     {
-      "id": "H9",
+      "id": "H10",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
+      "linea": 37,
+      "descripcion": "En modo selección, los huecos de todos los días son paradas de Tab: no tienen tabIndex por día activo ni Escape al día, cuando el contrato:116 pide la misma navegación de teclado que la agenda (rejilla-semana.tsx:267, tabIndex={i === activo ? 0 : -1}).",
+      "escenario": "Una semana con 8 libres al día de lunes a viernes: unos 40 Tab para salir de la rejilla y llegar a Periodicidad y Guardar. Medido con una sonda: los libres del martes y del jueves salen los dos con tabIndex=0."
+    },
+    {
+      "id": "H11",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/rejilla-semana.tsx",
+      "linea": 299,
+      "descripcion": "Con el diálogo max-w-3xl, cada día mide unos 95 px. Cuando dos huecos se pisan, la hora queda cortada; con un carril, el rango se parte en dos líneas y «Elegida» queda fuera de un hueco de 50 minutos sugerido y habitual. El diseño pedía max-w-5xl. Calculado, no medido en navegador.",
+      "escenario": "Un tipo de 50 minutos y una cita de 30 a las 9:00 dan un ocupado de 9:00 a 9:50 y un libre de 9:40 a 10:30, en dos carriles de unos 47 px: «09:40» (42 px de Geist Mono) se ve como «09:». Si se elige la primera tarjeta (sugerida y habitual) en un hueco de 50 minutos (80 px), «Elegida» cae entre los 81 y los 97 px, y la elección solo se ve por el fondo."
+    },
+    {
+      "id": "H12",
       "severidad": "BAJA",
-      "archivo": "lib/agenda/sugerencias.ts",
-      "linea": 112,
-      "descripcion": "Ninguna prueba distingue que el día y la hora habituales se calculan sobre todas las pasadas (E16) y no sobre una por fecha.",
-      "escenario": "Lunes 09-07, jueves 09-10 doble, lunes 09-14, jueves 09-17 doble: el código da (b) = 10-08 diaHabitual{4} y el mutante que cuenta el día una vez por fecha da 10-12 diaHabitual{1}. 09-15 doble, 09-22 doble y 09-29 a las 13:00: el código da 10-06 13:00 y el mutante que cuenta la hora una vez por fecha da 10-06 12:00. Con los dos mutantes, las 41 pruebas siguen en verde (medido)."
+      "archivo": "app/(app)/agenda/lista-dia.tsx",
+      "linea": 36,
+      "descripcion": "Sin key por semana en SelectorHueco, ListaDia conserva el índice del día en useState(diaInicial): diaPorDefecto(…, elegido) solo se aplica al montar.",
+      "escenario": "Medido con una sonda: se monta la semana del 6 con el martes y se vuelve a pintar la del 13 con el elegido el jueves 15 a las 12:00. La lista móvil muestra el martes 13 («10:00 – 10:50») y no el hueco elegido."
+    },
+    {
+      "id": "H13",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/acciones.ts",
+      "linea": 116,
+      "descripcion": "Ninguna prueba ve que tipoTerapiaId llega a la firma desde previsualizarAltaSerie y guardarAlta, porque el campo es opcional en EntradaPrevisualizarAlta.",
+      "escenario": "Medido: el mutante que borra «tipoTerapiaId: datos.tipoTerapiaId» en las líneas 116 y 191 deja verdes 276 de 276 pruebas; la parte «tipo» de H3 vuelve a abrirse en el servidor sin que nada se ponga en rojo."
+    },
+    {
+      "id": "H14",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/anunciar.ts",
+      "linea": 8,
+      "descripcion": "La región role=status se crea y se rellena en el mismo instante y, en el diálogo, bajo un aria-modal todavía abierto: el primer anuncio de la sesión puede no oírse. Las pruebas solo leen textContent.",
+      "escenario": "Primer guardado de la sesión desde el diálogo de la agenda, con NVDA o VoiceOver: no se oye «Cita guardada»; del segundo guardado en adelante sí, porque la región ya existe."
+    },
+    {
+      "id": "H15",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 235,
+      "descripcion": "esperandoSerie trata igual «en vuelo», «no se puede pedir» y «falló»: Guardar queda desactivado sin que salgan los errores de validación ni haya forma de reintentar.",
+      "escenario": "Con «Semanal» y 1 sesión, Guardar queda desactivado sin el error de Zod en el campo ni la alerta «sin hueco». Si la previsualización falla por transporte, no se puede guardar salvo cambiar un campo y volver a ponerlo como estaba."
+    },
+    {
+      "id": "H16",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/lista-dia.tsx",
+      "linea": 100,
+      "descripcion": "El vacío de un día dice «No hay huecos libres en esta semana.» (lo fija lista-dia-seleccion.test.tsx:71), y desde md una semana sin huecos es una rejilla en blanco sin texto.",
+      "escenario": "En el móvil se mira el sábado, se lee «esta semana» y se pasa a la siguiente aunque el martes tenía huecos. Desde md, una semana de vacaciones no dice nada."
+    },
+    {
+      "id": "H17",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-navegable.tsx",
+      "linea": 25,
+      "descripcion": "La salida /agenda?fecha= no lleva centro, así que leerParametros toma el de la cookie.",
+      "escenario": "Con la cookie en el centro A, un técnico abre el alta como página, cambia el centro a B y guarda: llega a la semana correcta del centro A y no ve la cita."
+    },
+    {
+      "id": "H18",
+      "severidad": "BAJA",
+      "archivo": "docs/interfaz.md",
+      "linea": 467,
+      "descripcion": "El traslado de H4 (contrato:169) a un ticket de la cola de supabase/ no consta en ningún ticket ni en docs/state.md; solo dice «va aparte». Le toca al orquestador.",
+      "escenario": "T-028 se cierra con el criterio contrato:169 sin cumplir y nada en la cola lo recoge."
+    },
+    {
+      "id": "H19",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 216,
+      "descripcion": "volverAlElegido compara con la semana pintada (vista.calendario.desde) y no con la pedida (foco).",
+      "escenario": "Con el martes 6 a las 17:00 elegido, se pulsa «Semana siguiente» y, antes de que llegue, se cambia a un tipo de 90 minutos: no se comprueba el elegido y al guardar sale «Ese hueco acaba de ocuparse», que es falso."
+    }
+  ],
+  "rondas_anteriores": [
+    {
+      "ticket": "T-028",
+      "corte": "B",
+      "ronda": 1,
+      "diff": "main...worktree-agent-a1549876942c02f5f",
+      "altas": 0,
+      "medias": 5,
+      "bajas": 3,
+      "hallazgos": [
+        {
+          "id": "H1",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
+          "linea": 40,
+          "descripcion": "El directorio de profesionales se filtra con rol = 'profesional_sanitario' y excluye al administrador, que la decisión D de T-028a (alta_exigir_profesional) admite como profesional de una cita; el filtro lo dicta el diseño §1.E:254.",
+          "escenario": "Consulta de una sola psicóloga con perfil administrador y ningún profesional_sanitario activo: profesionales = [] y la línea 66 devuelve sinProfesionales; el alta es inutilizable. Con más profesionales, el administrador-clínico no puede citarse ni ser citado por el técnico aunque agenda_crear_cita lo aceptaría."
+        },
+        {
+          "id": "H2",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
+          "linea": 64,
+          "descripcion": "El profesional por defecto es el primero del directorio (sin order) y no el asignado del paciente; el paciente se lee sin profesional_id, contra el contrato:133 y el diseño §1.E:253.",
+          "escenario": "Técnico abre /agenda/nueva?paciente=X con X asignado a la Dra. B: entra preseleccionada la Dra. A, las sugerencias salen en frío y la cita se guarda con A si no se mira el desplegable. contenido-alta.test.tsx:84 fija el comportamiento."
+        },
+        {
+          "id": "H3",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 212,
+          "descripcion": "Cambiar paciente, profesional, centro o tipo hace setSerie(null) pero deja la firma vieja, que no cubre esos campos, y Guardar sigue activo mientras la nueva previsualización está en vuelo.",
+          "escenario": "Serie de 8 con la Dra. A, el usuario desmarca 2 fechas, cambia a la Dra. B (agenda libre) o a un tipo de igual duración y pulsa Guardar antes de la nueva previa: va firma de A con excluir [], la re-previsualización da la misma firma y se crean 8 sesiones para B, incluidas las 2 desmarcadas, sin previa vista."
+        },
+        {
+          "id": "H4",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/vista-alta.ts",
+          "linea": 1,
+          "descripcion": "El aviso de hueco raro (contrato:169, diseño §1.F:309-313) se retiró en silencio (claves añadidas en a2ce801 y quitadas en 92e41d4) sin anotarlo en state.md; la premisa del diseño no casa con agenda_bloques_profesional, que emite el ocupado en la rejilla del cursor y traga el tramo previo a la cita, pero lo debido era parar y escalar.",
+          "escenario": "Franja 9:00-14:00, cita a las 10:20, sesión de 50: elegir el libre de las 9:00 deja hasta las 10:20 un tramo menor que una sesión y mayor que el descanso; no hay aviso ni alternativas y el criterio queda sin cubrir sin que conste en ningún sitio."
+        },
+        {
+          "id": "H5",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/calendario-seleccion.tsx",
+          "linea": 45,
+          "descripcion": "El calendario de selección es un componente nuevo (botones de día + lista) y no RejillaSemana/ListaDia en modo selección como piden el contrato:116 y el diseño §1.F:278, sin decisión escrita.",
+          "escenario": "Desde md el técnico ve un solo día y no la semana, y debe ir día a día para comparar martes y jueves; el siguiente cambio de RejillaSemana (festivos, ausencias) no llega al alta y los dos vocabularios divergen."
+        },
+        {
+          "id": "H6",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-navegable.tsx",
+          "linea": 19,
+          "descripcion": "Tras guardar, la página va a /agenda sin ?semana=<fecha> (diseño:308) y no anuncia el éxito; la fecha devuelta se ignora.",
+          "escenario": "Por URL directa se guarda una cita para dentro de tres semanas: se vuelve a la semana actual sin la cita a la vista ni mensaje alguno de confirmación."
+        },
+        {
+          "id": "H7",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/acciones.test.ts",
+          "linea": 234,
+          "descripcion": "La prueba «ningún resultado lleva el nombre del tipo» es vacua para el nombre: el mock de tipos_terapia (línea 56) solo devuelve duracion_minutos.",
+          "escenario": "Mutante que en duracionDeTipo selecciona nombre y lo mete en el anuncio: el mock da nombre undefined y not.toContain(NOMBRE_TIPO) sigue en verde."
+        },
+        {
+          "id": "H8",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 128,
+          "descripcion": "El aviso «con esta duración el hueco ya no cabe» solo se evalúa si el día del elegido está en la semana visible.",
+          "escenario": "Elegir martes 17:00 con 50 min, navegar a la semana siguiente y cambiar a un tipo de 90 que choca con la cita de las 18:00: el elegido sigue marcado sin aviso y Guardar dice falsamente «Ese hueco acaba de ocuparse»."
+        }
+      ]
+    }
+  ],
+  "cortes_anteriores": [
+    {
+      "ticket": "T-028",
+      "corte": "A",
+      "ronda": 2,
+      "diff": "ae73156..08af1e6",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 2,
+      "cerrados_de_la_ronda_1": [
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "H7"
+      ],
+      "hallazgos": [
+        {
+          "id": "H8",
+          "severidad": "BAJA",
+          "archivo": "lib/agenda/sugerencias.ts",
+          "linea": 83,
+          "descripcion": "Ninguna prueba pasa más de seis pasadas fuera de orden, así que sobreviven los mutantes «recorte antes de ordenar» y «pasadas ordenadas solo por fecha».",
+          "escenario": "Ocho pasadas descendentes (seis martes a las 12:00 y dos jueves a las 10:00): el código da 10-06 comoLasUltimas{n:6} y el mutante que recorta antes de ordenar da cadaIntervalo{dias:7}. Siete pasadas con el corte dentro del día doble 09-08, con las 13:00 antes que las 12:00 en la entrada: el código da 10-06 13:00 y el mutante cuyo comparador no mira la hora da 10-06 12:00. Con los dos mutantes, las 41 pruebas siguen en verde (medido)."
+        },
+        {
+          "id": "H9",
+          "severidad": "BAJA",
+          "archivo": "lib/agenda/sugerencias.ts",
+          "linea": 112,
+          "descripcion": "Ninguna prueba distingue que el día y la hora habituales se calculan sobre todas las pasadas (E16) y no sobre una por fecha.",
+          "escenario": "Lunes 09-07, jueves 09-10 doble, lunes 09-14, jueves 09-17 doble: el código da (b) = 10-08 diaHabitual{4} y el mutante que cuenta el día una vez por fecha da 10-12 diaHabitual{1}. 09-15 doble, 09-22 doble y 09-29 a las 13:00: el código da 10-06 13:00 y el mutante que cuenta la hora una vez por fecha da 10-06 12:00. Con los dos mutantes, las 41 pruebas siguen en verde (medido)."
+        }
+      ]
     }
   ]
 }

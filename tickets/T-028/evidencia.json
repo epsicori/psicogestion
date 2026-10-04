@@ -1,12 +1,175 @@
 {
   "ticket": "T-028",
-  "resumen": "Corte A, segunda verificacion (commit 08af1e6, ronda 1 de arreglos E12-E15). vitest lib/agenda 114/114; npm test 106 ficheros, 1308/1308; lint 0 errores (2 warnings ajenos en lib/cuentas/accesos.test.ts); tsc solo el error previo LayoutProps de app/layout.tsx; territorio.mjs OK (2 ficheros tocados, dentro del territorio). Guion tsx propio con 12 comprobaciones calculadas a mano desde 1.B + E12-E15 antes de ejecutarlo: 12/12 coinciden. Guion borrado, worktree limpio. Criterios de pantalla, servidor y T-028a son de los cortes B y C: NO_VERIFICABLE.",
+  "resumen": "Corte B, ronda 2 (rama worktree-agent-a1549876942c02f5f, HEAD 6f83cc6). Build Turbopack limpio en clon real: PASA. H2, H3, H5 (escritorio y 360 px), H6, H8 y ?inicio= en otro mes: PASAN. H1 FALLA: el administrador NO aparece como profesional con los datos sembrados porque la consulta filtra por centro_id y el administrador tiene centro_id null. H4 (aviso de hueco raro) trasladado a ticket aparte por decision del propietario. Ficha/corte C/PIN y comparacion con prototipo siguen NO_VERIFICABLE. No se hizo db reset (BD compartida con T-040 B).",
   "criterios": [
-    {"id": "A1", "texto": "sugerirHuecos: tres sugerencias por moda del intervalo, dia y franja habituales (ADR-049c), arranque en frio y excluir", "veredicto": "PASA", "comando": "npx vitest run lib/agenda; npx tsx ver028.mts (guion propio, borrado)", "evidencia": "vitest: Test Files 4 passed, Tests 114 passed. Guion (hoy=2026-10-02 salvo indicacion), todos OK: mensual con objetivo 10-20 ocupado -> [10-27 diaHabitual, 10-06 primerHueco, 10-13 primerHueco] (b nunca antes del objetivo, E12); sesion doble semanal (6 pasadas, 12:00/13:00) -> habitual [10-06 12:00 cadaIntervalo dias=7, 10-13 12:00 diaHabitual, 10-06 13:00 primerHueco] (E13); dos dias con sesion doble -> enFrio; seis martes en orden descendente == ascendente [10-06 comoLasUltimas n=6, 10-13 diaHabitual, 10-20 primerHueco] y pasadas/libres de entrada sin mutar (E15); ocho pasadas (2 jueves + 6 martes) -> 1.a 10-06 comoLasUltimas n=6; hoy '2026-10-2' y '2026-02-30' lanzan con mensaje que contiene 'hoy'; libres desordenados con pasadas vacias -> enFrio [10-06T09:00, 10-06T13:00, 10-07T10:00] descartando bloques <= hoy; excluir descarta el hueco; cruce de anio (martes 12-08..12-29, hoy 2026-12-30) -> habitual [2027-01-05 comoLasUltimas n=4, 2027-01-12 diaHabitual, 2027-01-19 primerHueco]. Salida: 'fallos 0', exit 0."},
-    {"id": "A2", "texto": "Ninguna cifra de puntuacion: solo n y dias salen en motivos", "veredicto": "PASA", "comando": "salida del guion tsx (JSON de motivos)", "evidencia": "Los motivos serializados solo contienen tipo, n, dias, diaSemana y hora; ningun campo de puntuacion."},
-    {"id": "A3", "texto": "Ningun motivo nombra el tipo de terapia: sugerirHuecos no lo recibe", "veredicto": "PASA", "comando": "salida del guion tsx; la firma de entrada solo admite pasadas, libres, hoy, excluir", "evidencia": "Las entradas del guion no llevan tipo ni modalidad y los motivos son las 4 variantes sin tipo."},
-    {"id": "R1", "texto": "Lint, tests, tsc, territorio", "veredicto": "PASA", "comando": "npm test; npm run lint; npx tsc --noEmit; node ~/.claude/pipeline/territorio.mjs T-028", "evidencia": "npm test: Test Files 106 passed, Tests 1308 passed. lint: 0 errors, 2 warnings ajenos (lib/cuentas/accesos.test.ts). tsc: solo app/layout.tsx(45,50) LayoutProps (previo, ajeno). territorio: 'T-028: 2 fichero(s) tocado(s), todos dentro de ...'."},
-    {"id": "B1", "texto": "Criterios manuales de pantalla, servidor y T-028a (ficha, recarga, PIN, tarjetas en pantalla, tecnico en DOM, serie, festivo, dos pestanas, teclado, 360 px, modalidad, build + a11y)", "veredicto": "NO_VERIFICABLE", "motivo": "Son de los cortes B y C; el corte A solo entrega la funcion pura. Se verifican con el E2E y el guion manual del diseno 3 cuando existan."}
+    {
+      "id": "auto-1",
+      "texto": "npm run lint && npm run build limpios (Turbopack, clon limpio de la rama)",
+      "veredicto": "PASA",
+      "comando": "git clone de la rama en el scratchpad; npm ci; npm run lint; npm run build; npm test",
+      "evidencia": "lint: '2 problems (0 errors, 2 warnings)' (accesos.test.ts, ajeno al ticket). build Turbopack termina y lista las rutas, incluidas /agenda/nueva y la interceptada (.)agenda/nueva, '/primera-vez', '/prototipo', '/recuperar', 'ƒ Proxy (Middleware)'. npm test: 'Test Files 170 passed (170); Tests 2132 passed (2132)'."
+    },
+    {
+      "id": "auto-2",
+      "texto": "Verificador de accesibilidad de T-009 en verde sobre la ruta nueva",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "El spec de accesibilidad exige la cuenta ana@ con segundo factor verificado; en la BD compartida esta 'unverified' y no se puede hacer db reset sin romper a T-040 B. Hace falta db reset + seed y npm run test:e2e sobre el spec de a11y."
+    },
+    {
+      "id": "H1",
+      "texto": "El administrador es elegible: aparece en el selector de profesional (decision del propietario H1)",
+      "veredicto": "FALLA",
+      "comando": "Playwright, sesion admin@ (y tecnico@), /agenda/nueva?paciente=<Lucia>; lectura REST de directorio_perfiles con token de la propia cuenta",
+      "reproduccion": "1) Entrar con admin@psicogestion.test (segundo factor local automatico). 2) Abrir /agenda/nueva. 3) El selector Profesional lista solo profesionales sanitarios; no hay ningun administrador. Causa visible en app/(app)/agenda/nueva/contenido-alta.tsx lineas 34-47: la consulta usa .in('rol',['profesional_sanitario','administrador']) pero ademas .in('centro_id', centros.map(c=>c.id)), y en el seed los administradores tienen centro_id = null en directorio_perfiles, asi que el filtro por centro los excluye. La condicion funciona solo si el administrador tuviera centro_id asignado."
+    },
+    {
+      "id": "H2",
+      "texto": "Con ?paciente= el profesional asignado al paciente queda preseleccionado",
+      "veredicto": "PASA",
+      "comando": "Playwright: /agenda/nueva?paciente=<Lucia (Ana)> y <Diego (Bruno)>",
+      "evidencia": "Lucia (profesional Ana) abre con 'Profesional: Ana Márquez' preseleccionado (captura m360b.png). Diego Ferrer, de Bruno, abre con Bruno preseleccionado, no el primero alfabetico."
+    },
+    {
+      "id": "H3",
+      "texto": "Cambiar de profesional anula la previsualizacion de la serie; Guardar no crea sesiones no vistas",
+      "veredicto": "PASA",
+      "comando": "Playwright: elegir hueco, Semanal, ver 'Así quedaría la serie'; cambiar Profesional; comprobar vista previa y Guardar",
+      "evidencia": "Tras cambiar de profesional la vista previa desaparece y la periodicidad exige volver a previsualizar; Guardar sin nueva vista previa no crea sesiones (captura h3.png; recuento de citas del paciente sin cambios por REST)."
+    },
+    {
+      "id": "H5-escritorio",
+      "texto": "El hueco se elige en la vista semanal T-014 en modo seleccion, en escritorio",
+      "veredicto": "PASA",
+      "comando": "node v10.mjs (1280x900, tecnico@, Lucia, ?inicio=2026-10-06T12:00)",
+      "evidencia": "'desktop huecos libres accesibles: 38' ; clic en 'lunes, 5 de octubre de 2026, 12:40, libre, sugerida' -> 'Hueco elegido: lunes, 5 de octubre de 2026, 12:40, libre, sugerida'; Semanal -> serie previsualizada: true; overflow horizontal 0."
+    },
+    {
+      "id": "H5-360",
+      "texto": "A 360 px el hueco se elige en la tira de dias + lista del dia; sin desbordamiento y objetivos tactiles >= 44 px",
+      "veredicto": "PASA",
+      "comando": "node v10.mjs y v11.mjs (360x740, tecnico@)",
+      "evidencia": "Tira de 7 dias; clic en 'mié 7' -> 9 huecos libres en lista; clic en 'miércoles, 7 de octubre de 2026, 09:00, libre' -> 'Hueco elegido: miércoles, 7 de octubre de 2026, 09:00, libre'; serie true; scrollWidth-clientWidth = 0. Casillas de la serie: input 20x20 dentro de un label de 268x44 (area tactil 44). Controles de la cabecera comun (Cerrar menu 32x32, Abrir menu 36x36) pertenecen al shell y no al ticket; se anota como hallazgo ajeno."
+    },
+    {
+      "id": "H6",
+      "texto": "Guardar como pagina lleva a /agenda?fecha= y anuncia 'Cita guardada'",
+      "veredicto": "PASA",
+      "comando": "Playwright: /agenda/nueva (pagina completa), elegir paciente, tipo, hueco, Guardar",
+      "evidencia": "Redireccion a /agenda?fecha=<fecha de la cita> y region de estado con 'Cita guardada' visible."
+    },
+    {
+      "id": "H8",
+      "texto": "Cambiar tipo de terapia con hueco elegido: si el hueco ya no cabe, mensaje claro y seleccion limpia",
+      "veredicto": "PASA",
+      "comando": "Playwright: elegir hueco 16:40 con tipo de 30 min, cambiar a tipo de 50 min",
+      "evidencia": "Aparece el aviso de que el hueco ya no cabe con la nueva duracion y se limpia la seleccion; no se permite guardar hasta elegir otro hueco."
+    },
+    {
+      "id": "inicio-otro-mes",
+      "texto": "?inicio= en otro mes abre la semana del hueco",
+      "veredicto": "PASA",
+      "comando": "Playwright: ?paciente=<Lucia>&inicio=2026-10-06T12:00 estando en septiembre",
+      "evidencia": "'semana al abrir con inicio: 5 oct – 11 oct 2026' en escritorio y a 360 px; el hueco queda elegido. Tras elegir el tipo la semana mostrada pasa a '28 sep – 4 oct 2026' mientras 'Hueco elegido' sigue siendo martes 6 de octubre (la vista salta a la semana de hoy aunque el hueco esta en la siguiente; ver regresiones)."
+    },
+    {
+      "id": "H4",
+      "texto": "Aviso de hueco raro al elegir una hora fuera de lo habitual",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "TRASLADADO: por decision del propietario (04-10-2026) va a otro ticket; no cuenta como FALLA de T-028."
+    },
+    {
+      "id": "man-1",
+      "texto": "Desde la ficha, pestana Resumen, 'Nueva cita' abre el dialogo con el paciente fijado; recargar deja la misma pantalla",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Corresponde al corte C (ficha) y la pestana Resumen no esta en la rama. Guion: abrir una ficha, pulsar Nueva cita, comprobar paciente fijado, recargar."
+    },
+    {
+      "id": "man-2",
+      "texto": "Con desbloqueo de historia vigente la pantalla no muestra dato clinico",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Depende del PIN/desbloqueo (corte C). Guion: desbloquear historia y abrir /agenda/nueva; no debe aparecer ningun dato clinico."
+    },
+    {
+      "id": "man-3",
+      "texto": "/agenda/nueva sin PIN funciona entero, incluida la creacion de la serie",
+      "veredicto": "PASA",
+      "comando": "Playwright (tecnico@): flujo completo hasta Guardar de una serie semanal",
+      "evidencia": "Sin ningun desbloqueo la pantalla permite elegir paciente, tipo, hueco, previsualizar serie y guardar."
+    },
+    {
+      "id": "man-4",
+      "texto": "Seis citas los martes a las 12: primera sugerencia martes 12 con motivo 'como las seis ultimas'",
+      "veredicto": "PASA",
+      "comando": "Playwright: Lucia (seed) con Sesion individual",
+      "evidencia": "Tarjetas: 'Martes, 6 de octubre de 2026 12:00 Como las seis últimas'; 'Martes, 13 de octubre de 2026 12:00 martes a las 12:00, su día habitual'; 'Lunes, 5 de octubre de 2026 12:40 Primer hueco libre'. Sin cifra de puntuacion."
+    },
+    {
+      "id": "man-5",
+      "texto": "Paciente sin citas previas: 'primeros huecos libres', sin hora habitual",
+      "veredicto": "PASA",
+      "comando": "Playwright: paciente del seed sin historial",
+      "evidencia": "Texto 'primeros huecos libres' presente; ninguna tarjeta habla de hora habitual (comprobacion de ronda 1, sin cambios de codigo en esa zona)."
+    },
+    {
+      "id": "man-6",
+      "texto": "Tecnico administrativo: el tipo se elige pero no se muestra despues (ADR-074)",
+      "veredicto": "PASA",
+      "comando": "Playwright con tecnico@",
+      "evidencia": "El selector 'Tipo de terapia' esta en el formulario con el catalogo activo; tras guardar ni la agenda ni la ficha de cita ni la previsualizacion lo nombran (ronda 1 confirmada en ronda 2 en la pantalla de alta)."
+    },
+    {
+      "id": "man-7",
+      "texto": "Sin ningun control ni texto de modalidad (ADR-075)",
+      "veredicto": "PASA",
+      "comando": "Playwright: busqueda de 'modalidad|presencial|online' en el cuerpo de /agenda/nueva",
+      "evidencia": "Sin coincidencias; el formulario muestra Paciente, Profesional, Tipo de terapia, Sugerencias, calendario, Periodicidad y Sala."
+    },
+    {
+      "id": "man-8",
+      "texto": "Semanal x ocho sesiones cruzando el ultimo domingo de marzo: misma hora local y marca de anomalia",
+      "veredicto": "PASA",
+      "comando": "Verificacion de ronda 1; la rama no cambio lib/citas/**",
+      "evidencia": "Ocho filas con la misma hora local y marca de la afectada por la anomalia (ronda 1). Sin cambios en la logica de series desde entonces."
+    },
+    {
+      "id": "man-9",
+      "texto": "Serie que pisa un festivo de disponibilidad: sesion marcada con alternativa propuesta",
+      "veredicto": "PASA",
+      "comando": "Verificacion de ronda 1; sin cambios en lib/citas/**",
+      "evidencia": "Sesion marcada con alternativa propuesta, nunca encima (ronda 1)."
+    },
+    {
+      "id": "man-10",
+      "texto": "Dos pestanas, mismo hueco: 'Ese hueco acaba de ocuparse'",
+      "veredicto": "PASA",
+      "comando": "Verificacion de ronda 1 con dos contextos de Playwright",
+      "evidencia": "Mensaje 'Ese hueco acaba de ocuparse' con sugerencias nuevas y formulario conservado (ronda 1; no se repitio en ronda 2 porque el codigo de guardado no cambio)."
+    },
+    {
+      "id": "man-11",
+      "texto": "Recorrido con teclado, foco visible y de vuelta al boton de origen",
+      "veredicto": "PASA",
+      "comando": "node v12.mjs (teclado en el dialogo interceptado, tecnico@)",
+      "evidencia": "Enter en 'Nueva cita' abre dialog con foco en 'Cerrar' (dlg=true); Tab recorre Hugo Vidal, tipo, Semana siguiente, hueco, periodicidad, Cancelar, Guardar, Cerrar sin salir del dialogo; Enter sobre hueco -> 'Hueco elegido: lunes, 5 de octubre de 2026, 12:40, libre, sugerida'; Escape -> url /agenda, dialog 0, foco de vuelta en 'Nueva cita'. Nota: las flechas no mueven el foco entre huecos (Tab si)."
+    },
+    {
+      "id": "man-12",
+      "texto": "A 360 px la pantalla se reorganiza y ningun objetivo tactil baja de 44 px",
+      "veredicto": "PASA",
+      "comando": "node v10.mjs / v11.mjs (360 px)",
+      "evidencia": "overflow 0; controles propios del ticket >= 44 px de area tactil (selects 40 de alto con label, casillas dentro de label 44). Ver H5-360."
+    },
+    {
+      "id": "man-13",
+      "texto": "/agenda/nueva junto a /prototipo: mismo vocabulario visual",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Comparacion visual humana. Guion: abrir /prototipo y /agenda/nueva a 1280 y 360 px y comparar tipografia, colores de huecos (libre/ocupado/sugerida/habitual/elegida) y ausencia de controles de adorno."
+    }
   ],
-  "regresiones": []
+  "regresiones": [
+    "H1 sigue sin cumplirse con los datos sembrados: administrador con centro_id null excluido por el filtro .in('centro_id') de contenido-alta.tsx.",
+    "Tras elegir el tipo de terapia con ?inicio= en otra semana, el calendario salta a la semana de hoy (28 sep - 4 oct) aunque 'Hueco elegido' sigue siendo el de la semana siguiente; el hueco elegido queda fuera de la vista hasta navegar. Cosmetico, no bloquea.",
+    "ana@psicogestion.test tiene el factor TOTP 'unverified' en la base compartida: no puede entrar; se verifico con tecnico@, bruno@ y admin@.",
+    "El shell comun (Cerrar menu 32x32, Abrir menu 36x36, Cerrar sesion 32x32) tiene objetivos tactiles bajo 44 px; ajeno al ticket."
+  ]
 }

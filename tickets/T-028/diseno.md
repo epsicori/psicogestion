@@ -1016,3 +1016,13 @@ caer antes del objetivo» (E12) e «intervalo 0 no es habitual» (E13).
   - P5: `import type`.
   El implementador recibe los ficheros corregidos y el bloque de catálogo; no los reescribe,
   los integra y los hace pasar.
+
+## Decisiones del propietario sobre la revisión del corte B (04-10-2026)
+
+| Hallazgo | Decisión |
+|---|---|
+| H1 · Profesional elegible | **El administrador activo también es elegible**, como en la base (T-028a, D). El directorio carga `rol in ('profesional_sanitario', 'administrador')` y `estado = 'activo'`. Sustituye al filtro de §1.E:254. |
+| H4 · Aviso de hueco raro | **Sale de T-028 a un ticket aparte**, que va en la cola de `supabase/`: la consulta de bloques que distingue el tramo libre anterior a la cita, más el aviso. T-028 B se integra sin aviso, y el criterio del contrato:169 queda **trasladado, no cumplido**. No se pinta ningún hueco preparado. |
+| H5 · Calendario de selección | **Se reutiliza la vista semanal de T-014 en modo selección**, como piden el contrato:116 y §1.F:278. `calendario-seleccion.tsx` se retira. |
+
+H2, H3, H6, H7 y H8 se arreglan en la ronda 2 tal como los describe `revision.md` (corte B). No hace falta ninguna decisión.
