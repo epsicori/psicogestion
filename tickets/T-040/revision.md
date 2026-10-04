@@ -266,3 +266,24 @@ Los mutantes se miden en una copia aparte (`git archive f8990c2` al scratchpad d
 | B-H6 | BAJA | `app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx:966` | Si la recarga devuelve `solo_copia` con la vista abierta, sigue el `BotonDeCopia` en modo profesional, sin campo de motivo: da 42501 «Falta el motivo». |
 
 Antes de copiarlas, he cotejado las nueve líneas citadas con `git show worktree-agent-a9325d705ce4db36b:<ruta>`, y también las auxiliares `editor-de-nota.tsx:489` y `dialogo-de-copia.tsx:158` y `:174`. Todas coinciden y no he corregido ninguna. Los escenarios completos están en `revision.json`, y el corte A, ronda 3, queda dentro de `cortes_anteriores`.
+
+## Corte B · ronda 2 (04-10-2026)
+
+**Sin hallazgos ALTA. 0 ALTA, 1 MEDIA, 3 BAJA.** Rama `worktree-agent-a9325d705ce4db36b`, HEAD `55c6399`, diff `99fe720..55c6399` sin lo que entra por el merge de `main` (`1b61f93`). Dos revisores en paralelo. Los informes completos están en [revision-a.md](revision-a.md) y [revision-b.md](revision-b.md), en la sección «ronda 2» de cada uno.
+
+- **Revisor A, base de datos y oráculo (0 ALTA, 1 MEDIA, 0 BAJA).** Cierra A-H1 y A-H2. K13b fija el orden de los pasos 3 y 4: MB4 y MB4b dan rojo, medido en `begin … rollback` con la migración de HEAD, porque la base compartida estaba reseteada desde `main`. S6 y S6b ejecutan la función de verdad y su gemela demuestra que el filtro se aplica. Queda la otra mitad de A-H1: el canal 416 (R2A-H1).
+- **Revisor B, servidor, interfaz y cifrado (0 ALTA, 0 MEDIA, 3 BAJA).** Cierra B-H1 a B-H6 con mutantes medidos uno a uno. Corrige su B-H6 de la ronda 1: el escenario era inalcanzable, así que el arreglo es solo defensivo. Quedan tres residuos: el reintento no da señal (R2B-H1), la fase `registrando` no tiene prueba de cancelación (R2B-H2) y la vista abierta ante «bloqueada» no ofrece el PIN, ya anotado y aceptado (R2B-H3).
+- **A-H3 (ronda 1)** está anotado en `docs/state.md:52` de `main` (`6782ef1`), no en la rama. La rama no toca `docs/state.md` desde la base común `da64971`, así que el merge conserva la línea.
+
+| id | grav. | origen | fichero:línea | qué |
+|---|---|---|---|---|
+| R2A-H1 | MEDIA | A (`R2-H1`) | `scripts/t040-oraculo.mjs:318` | El oráculo no tiene la forma `offset` + `Prefer: count=exact`. Su 416 («only 1/0 rows») lleva un bit del cuerpo, y `conContenido` (`:159`) no lo cuenta como contenido. El 416 que acepta `:318` es letra muerta, porque ninguna forma de `:249-268` puede producirlo. Hoy confirma y deja rastro. Si PostgREST deshiciera ese 416, CB1 seguiría verde con Δ 0/0/0. |
+| R2B-H1 | BAJA | B | `app/(app)/pacientes/[id]/lista-de-notas.tsx:92` | «Volver a intentarlo» no da señal. Un fallo repetido reutiliza el mismo `role=alert` con el mismo texto y no se anuncia. Un reintento bueno desmonta el botón enfocado y el foco cae en `body`. Cada pulsación de más registra otro acceso. |
+| R2B-H2 | BAJA | B | `app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.tsx:199` | Quitar `if (!vigente()) return;` tras `registrarFicheroDeCopia` deja la suite en verde (17/17). Con ese mutante, Escape durante `registrando` cierra el diálogo y la copia cancelada se descarga igual. |
+| R2B-H3 | BAJA | B | `app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx:975` | En la vista abierta, `BotonDeCopia` no recibe `alBloquearse`: ante «bloqueada», el error pide el PIN y el diálogo no lo ofrece. Hay salida por «Cerrar historia». Está anotado en `docs/state.md:52` de `main` y se acepta. |
+
+**Comprobación propia, solo en lo que podía cambiar la gravedad.** Lo leí con `git show` en la rama, sin tocar el worktree. No consulté la base.
+- **R2A-H1.** En `t040-oraculo.mjs`, ninguna de las siete formas (`:249-268`) lleva `offset`, `Range` ni `count=exact`. `conContenido` (`:159`) solo busca `MARCA` o `"exportacion_id"`. `:318` admite 416 y `:321-324` exige Δexportaciones = 1. Es la mitad sin aplicar de A-H1, una MEDIA que ya nombraba el 416, así que se queda en **MEDIA**. No sube a ALTA, porque hoy la respuesta confirma y deja rastro, como se midió por HTTP en la ronda 1. Para cerrarla basta una de dos cosas: una forma S7 con su gemela, o la anotación del canal en el diseño o en `docs/state.md` con la versión de PostgREST.
+- **R2B-H2.** La guarda de `dialogo-de-copia.tsx:199` existe. La única prueba nueva de cancelación (`dialogo-de-copia.test.tsx:222-239`) deja pendiente `cifrarCopia` y no el registro. Se queda en **BAJA**: el código actual es correcto y la consecuencia de la regresión es descargar en local una copia ya registrada y auditada, sin nada fuera de rastro.
+
+Sin duplicados entre los dos informes. Los escenarios completos están en `revision.json`. La ronda 1 del corte B queda en `rondas_anteriores` y el corte A, en `cortes_anteriores`.

@@ -79,3 +79,68 @@ El diseño (`diseno.md:750-752`) lo da por «caso marginal y se anota», pero en
 ## Efecto lateral de esta revisión
 
 Para medir H1 hice dos llamadas reales por HTTP. Quedaron confirmadas en la base local compartida, sobre la fijación del oráculo (paciente `974f04a1-…`, nota `71f3acad-…`, ADM `2a449af3-…`): 2 filas en `exportaciones`, 2 en `accesos_historia` y 4 en `notificaciones`, con la referencia `SONDA-REVISOR-A`. Las dos primeras tablas son de solo adición y no se pueden borrar: se van con el próximo `db reset`. Los mutantes se midieron todos dentro de `begin … rollback`, y `exportar_nota` sigue siendo la de la migración (`position('n.paciente_id = p_paciente_id' in prosrc) > 0`).
+
+---
+
+# Corte B · ronda 2 · revisor A (base de datos y oráculo)
+
+Sin hallazgos ALTA. Ronda 2: 0 ALTA, 1 MEDIA, 0 BAJA. A-H1 y A-H2 de la ronda 1 quedan cerrados.
+
+Revisado: `git diff 99fe720..55c6399` en mi parte, sin lo que entra por el merge de main: `scripts/rls/27-exportaciones.sql` (K13b), `scripts/t040-oraculo.mjs` (S6 y S6b), `tickets/T-040/oraculo-postgrest.json` y `tickets/T-040/mutantes.json`. Lo he cotejado con la ronda 1 de este fichero y con B0.3.1 (orden y R1) y B0.3.5 del diseño. No he leído `evidencia.json` ni el informe del verificador.
+
+**Estado de la base compartida.** La base no tiene la migración del ticket: `max(version)` = `20261009120000` y `exportar_nota` no existe en `pg_proc`. Otro agente la ha reseteado desde `main`. Por eso he medido el banco aplicando, dentro de cada `begin … rollback`, la migración `20261009180000` de HEAD (con o sin mutar) seguida de `00-ayudantes.sql` y `27-exportaciones.sql`. Al acabar, `exportar_nota` sigue sin existir: no he dejado nada.
+
+## 1. K13b y MB4 (A-H2): cerrado
+
+- **El orden del diseño.** B0.3.1 pone el paso 3 (los parámetros, 22023) antes del paso 4 (el motivo de la administración, 42501), y la migración los tiene en ese orden (`20261009180000_exportaciones.sql:224-238`). Para SIN (profesional) con motivo, K13b exige el texto exacto en los dos casos:
+  - referencia `null` → `22023 El motivo y la referencia van juntos.`;
+  - referencia `'x'` → `22023 La referencia tiene que medir entre 3 y 200 caracteres.`
+- **Medido en `begin … rollback`** (migración + 00 + 27 + sonda):
+  - **Línea base:** «27-exportaciones: completo». La sonda devuelve los dos 22023 de arriba.
+  - **MB4** (orden 0 1 2 4 5 3 6): rojo. El primer fallo es `ASERCIÓN FALLIDA: 27.K13b …`, la misma salida que copia `mutantes.json`. Ninguna aserción anterior cae, así que el motivo del rojo es el que toca.
+  - **Intercambio directo 3↔4** (orden 0 1 2 4 3 5), una variante mía: rojo en K13b.
+  - **MB4b** (el paso 3 detrás del 6): rojo en `27.K6 (CB3) paciente nulo`, con «lanzó 42501 en vez de 22023», como dice `mutantes.json`.
+- **K13b solo usa `E_RND`.** No lo cuento como hueco: los pasos 3 y 4 no leen ninguna tabla, así que el resultado no puede depender de que la nota exista. La igualdad entre N1 y RND ya la fijan K11 a K13.
+
+## 2. S6 y S6b (A-H1): cerrado en lo que pedí; queda el canal 416 (R2-H1)
+
+- **¿Ejecutan de verdad la función?** Sí. Las dos exigen `delta.exportaciones === 1`, medido con `psql` y no deducido del cuerpo, y que el estado no sea 42703. En `oraculo-postgrest.json` las dos tienen Δ +1/+1/+0 con AUT y +1/+1/+2 con ADM.
+- **¿El filtro es vacuo?** No. S6 (`eq.<uuid aleatorio>`) da 200 `null` y S6b (`not.is.null`) da 200 con contenido, con la misma `Accept` y la misma expresión `pgrst_scalar->>exportacion_id`. Si PostgREST ignorara el filtro, S6 traería contenido y su `exigir(!contenido)` se pondría en rojo. S6b no basta por sí sola para saber si el filtro se aplica, pero hace de gemela: demuestra que el `null` de S6 lo produce el filtro, no la `Accept` ni una expresión mal formada.
+- **¿El invariante se pone en rojo con contenido sin rastro?** Lo he medido sin red. He extraído del fichero, tal cual, la lógica de decisión de CB1 (desde `conContenido(r)` hasta justo antes de `S1`) y le he pasado respuestas hipotéticas de PostgREST (`s6.mjs`, en el scratchpad de la sesión):
+
+  | Respuesta simulada | Resultado |
+  |---|---|
+  | La de hoy: S6 200 `null` con rastro; S6b 200 con contenido y rastro | verde |
+  | 406 que deshace (el caso de R1) | **rojo** (estado) |
+  | Vuelta al 42703 | **rojo** |
+  | Filtro ignorado (S6 entrega contenido) | **rojo** |
+  | S6b con contenido y Δ 0 | **rojo** |
+  | S6b con rastro parcial (sin avisos) | **rojo** |
+  | S6 sin contenido y con rastro parcial | **rojo** |
+  | S2 con contenido sin rastro | **rojo** |
+  | S6 con un 416 que deshace | **rojo** (Δexportaciones 0) |
+  | **Forma con `offset` y `count=exact` que da 416 y deshace** | **verde**: es R2-H1 |
+
+- **No he podido repetir por HTTP la sonda de S6.** La función no está en la base compartida. Para llamar a otra RPC escalar tendría que firmar un token, y el clasificador de permisos me ha denegado leer el secreto JWT de la pila local. Cuento con la medida HTTP de la ronda 1 (200 `null` y 416 confirmando; H1 de arriba). El `oraculo-postgrest.json` sellado es coherente con ella, pero no he podido volver a generarlo: sus filas desaparecieron con el reset.
+
+## MEDIA
+
+### R2-H1. Al oráculo le falta la forma que sí filtra un bit de contenido (el 416 con recuento): si PostgREST la deshiciera, CB1 seguiría en verde
+`scripts/t040-oraculo.mjs:249-268` (las formas) y `:318` (S6 y S6b aceptan el 416, pero ninguna de las dos puede producirlo).
+
+**Descripción.** En la ronda 1 conté dos respuestas que «nos protegen» sin que ninguna prueba las fije. El arreglo fija una: el `200 null` del filtro que no casa con `Accept` de objeto. La otra, el 416 PGRST103 de `offset` con `Prefer: count=exact`, sigue sin forma en el oráculo, y es justo el canal que medí en la ronda 1: «only 1 rows» o «only 0 rows» según el filtro case o no con el cuerpo de la nota. `conContenido` solo reconoce `MARCA-CUERPO-1` o `"exportacion_id"` en el cuerpo, así que un 416 cuyo `details` lleva el bit **no cuenta como contenido**. Además, el `416` que acepta `:318` es letra muerta: ni S6 ni S6b mandan `offset` ni `Range`. Esa línea da a entender una cobertura que no existe.
+
+**Escenario.** Como ADM, `POST rpc/exportar_nota?pgrst_scalar->versiones->0->cuerpo->>texto=like.*MARCA*&offset=1` con `Prefer: count=exact`.
+- **Hoy** responde 416 «only 1 rows» o «only 0 rows» y la transacción confirma (medido en la ronda 1). Es seguro, porque queda rastro.
+- **Si una versión de PostgREST deshiciera la transacción al responder 416**, como ya hace con PGRST116 en un `setof`, quien llama sabría si el cuerpo contiene el patrón sin dejar acceso, exportación ni aviso. CB1 seguiría en verde: con la lógica del oráculo, la respuesta `416 details «only 1 rows», Δ 0/0/0` da «sin contenido, Δ vacío = esperado».
+
+**Qué haría falta.** Una de estas dos cosas:
+- Una forma S7: POST con `Prefer: count=exact`, `offset=1` y un filtro `like` sobre `pgrst_scalar` que case, más su gemela que no case. Las dos exigirían 416 y `Δexportaciones = 1`, igual que S6.
+- Anotar en el diseño o en `docs/state.md` que el canal 416 queda sin fijar, con la versión de PostgREST que hoy lo confirma.
+
+## Lo demás de mi parte
+
+- **`mutantes.json` dice la verdad** en lo que he podido medir: la nota nueva, MB4 (rojo en K13b, salida literal) y MB4b (rojo en K6).
+- **MB1 sigue atribuido solo a K22.** Ahora que el filtro de S6 se aplica, S6 también lo mataría por lógica: con `setof` saldría un 406 con rollback, o un 42703 si la columna cambia de nombre, o contenido si el filtro se ignora. Los tres son rojo en la tabla de arriba. No está medido ni anotado, pero no lo cuento como hallazgo, porque ningún resultado lo deja en verde y a la vez inseguro.
+- **«Seis formas».** El comentario de cabecera del oráculo (`:8`) y la casilla de §5 dicen «seis formas», y ahora son siete. No hay escenario de fallo: queda como observación.
+- **H3 de la ronda 1** (el administrador coterapeuta) es de `docs/` y no entra en esta ronda.

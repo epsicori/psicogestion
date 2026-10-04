@@ -1,155 +1,91 @@
 {
   "ticket": "T-040",
-  "resumen": "Corte B (base, servidor e interfaz) verificado en la rama worktree-agent-a9325d705ce4db36b (HEAD 99fe720) tras db reset + seed en su worktree (migración 20261009180000 aplicada). test:rls exit 0 con 27-exportaciones completo; oráculo HTTP CB1/CB7 completo; guion t040 completo; npm test 155 ficheros / 2042 pruebas; lint:migraciones limpio; en clon limpio npm ci + lint (0 errores, 2 avisos preexistentes en lib/cuentas/accesos.test.ts) + build Turbopack OK. Playwright 9/9 (marca-de-agua y nota-clinica) con SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo y --workers=1 (sin eso, 3 specs caen en la pantalla del segundo factor: hallazgo ya anotado en state.md). Mutantes MB2 y MB10 repetidos: ambos mueren. Navegador real (Chromium, build webpack del worktree): autora descarga copia con 3 versiones, la abre con contraseña, orden 1-2-3, reservadas y marca de agua; administrador con motivo recibe copia sin reservadas y el titular ve el aviso; técnico no ve nada. Territorio: git diff --name-only main...rama está íntegramente dentro del YAML de B0.2. axe: NO_VERIFICABLE (sin @axe-core/playwright). Nota: la muestra de la autora tiene 3 versiones porque mis pasadas previas firmaron una segunda; el criterio pide al menos dos.",
+  "resumen": "Corte B ronda 2 BLOQUEADA, verificacion parcial. La base local compartida NO tiene aplicada la migracion 20261009180000 (max(version)=20261009120000; no existen exportaciones, exportar_nota ni notas_para_copia). Aplicarla (supabase migration up) fue denegado por el permiso de auto mode (recurso compartido). Sin ella no se pueden ejercer oraculo, banco 27, guion C4/C5 ni navegador. Pasan lint, npm test, lint:migraciones, build Turbopack en clon limpio y territorio. B-H3 y B-H4 verificados con mutantes (sin base).",
   "criterios": [
     {
-      "id": "C1",
-      "texto": "Autor y asignado exportan; sin asignación, técnico y lector por episodio conjunto reciben error desde la base",
+      "id": "lint",
+      "texto": "npm run lint limpio",
       "veredicto": "PASA",
-      "comando": "npm run test:rls (banco 27, §C y K) ; npx tsx scripts/t040-oraculo.mjs",
-      "evidencia": "test:rls EXIT=0, '27-exportaciones: completo.' Oráculo HTTP: 'OK CB1 · AUT S1 ... 200 con contenido, Δ exportaciones 1, accesos 1'; 4xx/42501 de PRO4/TEC/PRO2 cubiertos por el banco con sus gemelas positivas."
+      "comando": "npm run lint (worktree y clon limpio)",
+      "evidencia": "0 errors, 2 warnings en lib/cuentas/accesos.test.ts (no usados; fichero fuera del territorio del ticket, preexistente)"
     },
     {
-      "id": "C2",
-      "texto": "Administrador sin motivo recibe error; con petición del paciente la copia no contiene reservadas",
+      "id": "build",
+      "texto": "npm run build Turbopack en clon limpio tras npm ci",
       "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §C y §D) ; Playwright ad hoc como admin: sin motivo, luego 'Petición del paciente' + REF-VERIF-777; descifrado en el visor",
-      "evidencia": "UI sin motivo: 'Elige el motivo.' y no descarga. Con motivo: fichero admin-copia.html; visor: 'CONTIENE reservadas: false | MARCA-V2: true' (la v2 es individual, su cuerpo sí va); cabecera 'exportada por Álvaro Administrador (Administrador) ... Petición del paciente'. Fila: paciente|peticion_paciente|REF-VERIF-777|exportacion|'Petición del paciente: REF-VERIF-777'."
+      "comando": "git clone --branch worktree-agent-a9325d705ce4db36b; npm ci; npm run build (con .env.local copiado)",
+      "evidencia": "Build completo, ruta /pacientes/[id]/historia/notas generada; clon borrado"
     },
     {
-      "id": "C3",
-      "texto": "Cada exportación deja fila en exportaciones y en accesos_historia; update/delete como postgres fallan",
+      "id": "npm test",
+      "texto": "pruebas unitarias",
       "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §B y §E) ; oráculo CB1 ; select exportaciones join accesos_historia",
-      "evidencia": "Oráculo: Δ {exportaciones:1, accesos:1} por cada llamada con contenido y {0,0} en las fallidas (S4, S5, S6). Consulta: cada exportación enlaza con su fila de accesos_historia (tipo exportacion). Banco 27 §B verde (update/delete/truncate como postgres dan 42501)."
+      "comando": "npm test",
+      "evidencia": "Test Files 155 passed (155); Tests 2051 passed (2051)"
     },
     {
-      "id": "C4",
-      "texto": "La copia lleva todas las versiones en orden y la huella de cada una coincide con notas_clinicas_versiones",
+      "id": "lint:migraciones",
+      "texto": "lint de migraciones",
       "veredicto": "PASA",
-      "comando": "npx tsx scripts/t040-exportacion.ts ; npm run test:rls (27 §G)",
-      "evidencia": "'✓ C4 · dos versiones en orden, número, huella y huella anterior iguales a la tabla; huella del fichero 0694418fc9a2…'. En navegador, ORDEN: Versión 1, 2, 3; huella v1 566a533b…, v2 6f18dcfd… coinciden con las de la pantalla de la nota."
+      "comando": "npm run lint:migraciones",
+      "evidencia": "lint-migraciones: 28 migracion(es) limpias."
     },
     {
-      "id": "C5",
-      "texto": "Ni la contraseña ni el fichero en claro quedan en la base, Storage ni registros del servidor",
+      "id": "territorio",
+      "texto": "git diff --name-only main...rama dentro del YAML de B0.2",
       "veredicto": "PASA",
-      "comando": "npx tsx scripts/t040-exportacion.ts ; npm test",
-      "evidencia": "'✓ C5 · pg_dump --data-only de las cinco tablas (107617 caracteres): sin contraseña, sin reservadas, sin cuerpo'; docker logs supabase_db y supabase_rest: limpios; salida del propio guion limpia. npm test: acciones-copia, dialogo-de-copia, servidor y fuentes-copia en verde (2042 pruebas)."
+      "comando": "git diff --name-only main...HEAD | grep -v <patrones de B0.2>",
+      "evidencia": "Sin ficheros fuera de territorio (no hay tickets/T-040/diseno.md ni docs fuera de docs/**)"
     },
     {
-      "id": "C6",
-      "texto": "La exportación del administrador crea un aviso para el profesional titular",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §F) ; oráculo (Δ avisos = 2 para ADM, 0 para PRO) ; select notificaciones por origen_id ; navegador como Ana",
-      "evidencia": "Oráculo: 'ADM S1 ... Δ avisos 2 = 2' y 'AUT ... avisos 0'. Fila para ana@ (titular y autora a la vez, un solo aviso): 'Álvaro Administrador ha pedido una copia de una nota de la sesión del 23/08/2026. Motivo: Petición del paciente.' (sin nombre del paciente ni referencia). En la campana de Ana aparece ese mismo texto."
-    },
-    {
-      "id": "C7",
-      "texto": "Manual: descargar una nota con dos versiones y abrir el fichero con la contraseña con la herramienta del ADR",
-      "veredicto": "PASA",
-      "comando": "Playwright/Chromium contra next start del worktree (build webpack), usuaria ana@: Modificar, Guardar, Firmar con motivo, Descargar copia, contraseña de 20 caracteres; luego file://copia-de-nota-20261004-1925.html",
-      "evidencia": "Contraseña errónea: role=alert 'Contraseña incorrecta o fichero dañado.' con el foco en el campo. Contraseña buena: Versión 1, 2, 3 en orden, autor, fechas, sello, huellas, motivo del cambio 'MARCA-MOTIVO-AUT correccion', reservadas 'Impresión clínica preliminar...', cabecera 'Copia 31e98eb7-... exportada por Ana Márquez (Profesional sanitario) el 04/10/2026 19:25 · Copia profesional' y marca de agua diagonal visible en la captura visor-abierto.png. Solo Chromium; Edge y Firefox (que pide el diseño en C7) no se han probado: pendiente humano si se quiere esa cobertura."
-    },
-    {
-      "id": "C8",
-      "texto": "Manual: la misma vista enseña el botón solo a quien la tabla deja",
-      "veredicto": "PASA",
-      "comando": "Playwright ad hoc como ana@, admin@ y tecnico@ sobre /pacientes/<id>/historia/notas?nota=<id>; npm test (editor-de-nota.test.tsx, copia-por-motivo.test.tsx)",
-      "evidencia": "Ana (autora/asignada): botón 'Descargar copia'. Admin no asignado: 'No puedes leer esta nota... Pedir copia por motivo', sin texto clínico y sin 'Descargar copia'. Técnico: la ficha no trae pestaña Historia clínica; la URL de la nota solo pide PIN y, sin PIN, no muestra nada ni botón de copia. Las filas PRO2 por lectura conjunta y PRO4 las cubren el banco 27 y editor-de-nota.test.tsx; no se ejercieron en navegador."
-    },
-    {
-      "id": "C9",
-      "texto": "lint y build limpios; test:rls en verde",
-      "veredicto": "PASA",
-      "comando": "git clone + checkout de la rama; npm ci; npm run lint; npm run build; npm run test:rls; npm test; npm run lint:migraciones",
-      "evidencia": "LINT=0 (0 errores, 2 avisos preexistentes en lib/cuentas/accesos.test.ts); BUILD=0 con Turbopack, '/pacientes/[id]/historia/notas' en la tabla de rutas; test:rls EXIT=0; npm test 155 ficheros / 2042 pruebas; 'lint-migraciones: 28 migración(es) limpias.'"
-    },
-    {
-      "id": "CB1",
-      "texto": "Contenido implica rastro, por HTTP (oráculo PostgREST S1-S6)",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t040-oraculo.mjs",
-      "evidencia": "EXIT=0, 't040-oraculo: completa.' S1-S3 200 con contenido y filas (S3 ignora tx=rollback); S4 y S6 400 con Δ 0; S5 405 25006 'La exportación exige una transacción de escritura.' con Δ 0, para AUT y ADM."
-    },
-    {
-      "id": "CB2",
-      "texto": "Guarda de solo lectura y su posición",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §K); mutante MB2 aplicado en begin..rollback",
-      "evidencia": "Banco verde. Con MB2 (guarda neutralizada): 'ASERCIÓN FALLIDA ... 27.K1 (CB2) AUT, candado abierto, solo lectura: 25006 propio — mensaje real: cannot execute INSERT in a read-only transaction'. El mutante muere."
-    },
-    {
-      "id": "CB3",
-      "texto": "Parámetros nulos",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §K)",
-      "evidencia": "27-exportaciones: completo (incluye 27.K6 paciente nulo -> 22023 y gemelas)."
-    },
-    {
-      "id": "CB4",
-      "texto": "Sin oráculo de existencia",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §K, 27.K12)",
-      "evidencia": "27-exportaciones: completo (27.K12 mismo código y texto exista o no la nota)."
-    },
-    {
-      "id": "CB5",
-      "texto": "La referencia no sale de su sitio",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §K); npx tsx scripts/t040-exportacion.ts",
-      "evidencia": "'OK: 27.K20 (CB5) los tres fallos dejan Δ = 0'; aviso real sin la referencia: 'Álvaro Administrador ha pedido una copia ... Motivo: Petición del paciente.' (REF-VERIF-777 ausente)."
-    },
-    {
-      "id": "CB6",
-      "texto": "Forma de las funciones por catálogo",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §K, 27.K22-K25 e I2); mutantes MB10 (grant) aplicado en begin..rollback",
-      "evidencia": "Banco verde. Con MB10: 'ASERCIÓN FALLIDA: 27.I2 anon no ejecuta ninguna; authenticated las tres públicas y no la etiqueta'. El mutante muere. tickets/T-040/mutantes.json además registra MB1 muerto por 27.K22 y MB7 por 27.K25 (no repetidos por mí)."
-    },
-    {
-      "id": "CB7",
-      "texto": "El registro concurrente da el mensaje propio",
-      "veredicto": "PASA",
-      "comando": "npx tsx scripts/t040-oraculo.mjs",
-      "evidencia": "'OK CB7 · la llamada se vio en espera de un Lock (1)'; 'OK CB7 · 23505 con el mensaje propio (409 ... \"Esa copia ya tiene fichero registrado.\")'; 'OK CB7 · no sale el texto de la clave primaria'."
-    },
-    {
-      "id": "CB8",
-      "texto": "La carga se lee una vez: lo entregado coincide con lo registrado",
-      "veredicto": "PASA",
-      "comando": "npm run test:rls (27 §E, K25); npx tsx scripts/t040-exportacion.ts",
-      "evidencia": "Banco verde; guion 'C4 ... huella del fichero 0694418fc9a2…' coincide con exportaciones_ficheros.huella_fichero."
-    },
-    {
-      "id": "A11Y-1",
-      "texto": "Specs de Playwright marca-de-agua y nota-clinica (incluye diálogo con teclado)",
-      "veredicto": "PASA",
-      "comando": "SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo npx playwright test accesibilidad/marca-de-agua.spec.ts accesibilidad/nota-clinica.spec.ts --workers=1",
-      "evidencia": "9 passed (15.6s). Marca cubre <main> 99.8 % / 99.9 % a 1920, 1366, 390, 2560 y de 1366 a 5120; opacidad 0,10-0,14; foco atrapado en el diálogo, Escape lo cierra y el foco vuelve a 'Descargar copia'."
-    },
-    {
-      "id": "A11Y-2",
-      "texto": "axe sobre la pantalla y el diálogo",
+      "id": "A-H1",
+      "texto": "S6 y S6b filtran sobre pgrst_scalar sin 42703",
       "veredicto": "NO_VERIFICABLE",
-      "motivo": "@axe-core/playwright no está instalado y el ticket no lo nombra como dependencia. Hará falta que un ticket autorice añadirlo anclado, o una pasada manual con la extensión axe sobre /pacientes/<id>/historia/notas?nota=<id> (nota firmada, historia abierta) y el diálogo abierto."
+      "motivo": "Exige PostgREST con exportar_nota en la base; la migracion 20261009180000 no esta aplicada. Haria falta aplicarla (npx supabase migration up --local, aditiva) y ejecutar npx tsx scripts/t040-oraculo.mjs."
     },
     {
-      "id": "TERR",
-      "texto": "Territorio B0.2 respetado",
-      "veredicto": "PASA",
-      "comando": "git diff --name-only main...worktree-agent-a9325d705ce4db36b",
-      "evidencia": "38 ficheros, todos dentro del YAML de B0.2 (migración 20261009180000, banco 27, linter, guion y oráculo, mutantes.json, oraculo-postgrest.json, lib/exportaciones, es.ts, tipos-bd, historia/**, acciones, panel/lista, accesibilidad, README y 11-cobertura). Ninguno fuera. El worktree quedó limpio tras mis pruebas."
+      "id": "A-H2",
+      "texto": "K13b mata a MB4 (begin..rollback)",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Exige el banco 27 contra una base con la migracion aplicada."
     },
     {
-      "id": "MUT",
-      "texto": "Mutantes de tickets/T-040/mutantes.json: al menos dos repetidos y mueren",
+      "id": "B-H1",
+      "texto": "Fallo de lectura de notas muestra aviso con reintento",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Navegador contra la app con la migracion aplicada; las pruebas unitarias de la lista pasan pero no sustituyen el E2E."
+    },
+    {
+      "id": "B-H2",
+      "texto": "Copia por motivo con nota bloqueada vuelve al PIN",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Requiere navegador y base con la migracion."
+    },
+    {
+      "id": "B-H3/B-H4",
+      "texto": "Pruebas en rojo con sus mutantes",
       "veredicto": "PASA",
-      "comando": "begin; <mutación>; 00..27 de scripts/rls; rollback;  vía docker exec psql (MB2 y MB10)",
-      "evidencia": "MB2: ASERCIÓN FALLIDA 27.K1 (CB2). MB10: ASERCIÓN FALLIDA 27.I2. Ambos con ON_ERROR_STOP y sin rastro (rollback)."
+      "comando": "sed comenta dialogo-de-copia.tsx:171 (reset inicial) y :191 (if (!vigente()) return; tras cifrar); npx vitest run dialogo-de-copia.test.tsx; git checkout",
+      "evidencia": "Sin reset inicial: 2 failed (\"tras un error, con el formulario montado, los campos de contrasena estan vacios\"; \"con otro error no hay boton de desbloquear\"). Sin vigente() tras cifrar: 1 failed (\"si se cierra mientras cifra, al terminar el cifrado ni se registra ni se descarga\"). Base: 17 passed (17). Nota: el arbol del worktree lo estaba modificando otro proceso a la vez (editor-de-nota.tsx y un setBloqueada(false) en dialogo-de-copia.tsx); mis git checkout restauraron dialogo-de-copia.tsx a HEAD y podrian haber descartado trabajo sin confirmar de ese proceso."
+    },
+    {
+      "id": "B-H5",
+      "texto": "Specs Playwright con SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo y --workers=1",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Requiere servidor y base con la migracion."
+    },
+    {
+      "id": "B-H6",
+      "texto": "Recarga que devuelve solo_copia cambia la vista",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Requiere navegador y base con la migracion."
+    },
+    {
+      "id": "regresion-ronda1",
+      "texto": "test:rls, oraculo, scripts/t040-exportacion.ts (C4, C5), navegador autora/admin/tecnico",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Base sin la migracion; test:rls banco 27 y guion fallarian por falta de objetos, no por defecto del codigo."
     }
   ],
-  "regresiones": [
-    "Ninguna del ticket. Observaciones ajenas: (1) test:a11y y las specs de nota-clinica exigen SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo y --workers=1; sin eso fallan en la pantalla del segundo factor (ya anotado en docs/state.md). (2) Turbopack no arranca (next dev) ni compila en el worktree por la junction de node_modules; el build sale limpio en un clon. (3) La URL de la nota para el técnico muestra 'Abrir el editor' y pide PIN aunque no tenga historia que abrir; no hay botón de copia ni contenido, y no es del alcance del ticket."
-  ]
+  "regresiones": []
 }

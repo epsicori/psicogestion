@@ -2,57 +2,43 @@
   "ticket": "T-040",
   "corte": "B",
   "revisor": "B",
+  "ronda": 2,
+  "diff": "99fe720..55c6399 (sin el merge de main 1b61f93)",
   "altas": 0,
-  "medias": 2,
-  "bajas": 4,
+  "medias": 0,
+  "bajas": 3,
+  "cierre_ronda_1": {
+    "B-H1": "cerrado (mutantes: paraCopia por defecto null → muerto; sin alReintentarCopias en el panel → muerto)",
+    "B-H2": "cerrado (setBloqueada(true) → muerto; sin alBloquearse en el editor → muerto; sin alCerrar en el botón → muerto)",
+    "B-H3": "cerrado (quitar reset de la línea 171 → muerto)",
+    "B-H4": "cerrado en cifrando (quitar vigente de la línea 191 → muerto; quitar el incremento al desmontar → muerto); registrando sigue sin prueba → R2B-H2",
+    "B-H5": "cerrado en lo estático (spec no ejecutada por el revisor; desvío de axe declarado)",
+    "B-H6": "cerrado (reductor de R1 → muerto; noDisponible con solo_copia → muerto); corrección: el escenario de R1 era inalcanzable, el arreglo es defensivo"
+  },
   "hallazgos": [
     {
-      "id": "RB-H1",
-      "severidad": "MEDIA",
+      "id": "R2B-H1",
+      "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/lista-de-notas.tsx",
-      "linea": 28,
-      "descripcion": "La acción distingue null («no se pudo leer») de [], pero la lista los junta con paraCopia ?? [] y pinta el estado vacío. La prueba fija ese silencio como correcto.",
-      "escenario": "Un administrador no asignado no lee ninguna nota por RLS; notas_para_copia falla → notas=[], paraCopia=null → ve «Todavía no hay notas» en un paciente con notas firmadas, sin aviso ni reintento. Si hay notas legibles, la sección «Otras notas» desaparece en silencio."
+      "linea": 92,
+      "descripcion": "El reintento de B-H1 no da señal: no hay estado de «reintentando», un fallo repetido reutiliza el mismo role=alert con el mismo texto (no se anuncia) y un reintento bueno desmonta el botón enfocado (foco a body).",
+      "escenario": "Administrador no asignado con lector de pantalla; notas_para_copia falla dos veces → pulsa «Volver a intentarlo» y no oye ni ve cambio; lo pulsa tres veces más (cuatro accesos registrados más, «N veces en esta ventana» +4); cuando vuelve bien, el foco queda en body y «Otras notas» aparece sin anunciarse."
     },
     {
-      "id": "RB-H2",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 798,
-      "descripcion": "La vista solo_copia no tiene el reloj del candado (caducaEn existe solo en abierta, línea 489), así que nunca pasa a bloqueada ni ofrece el PIN que pide el mensaje de error.",
-      "escenario": "El administrador entra en solo_copia y redacta la referencia; caduca el desbloqueo y pulsa «Descargar copia» → 42501 → «Vuelve a desbloquearla con tu PIN y repite la copia», pero en la vista no hay campo de PIN. Reabrir el diálogo da el mismo error; solo sale recargando, y no se le dice."
-    },
-    {
-      "id": "RB-H3",
+      "id": "R2B-H2",
       "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
-      "linea": 104,
-      "descripcion": "La prueba de que la contraseña sale del formulario mira la fase descargada, en la que el formulario está desmontado: el bucle no da ninguna vuelta, e innerHTML no refleja value.",
-      "escenario": "Quitar reset(...) de dialogo-de-copia.tsx:158 deja la suite en verde. Con ese mutante, tras un error (sin_permiso, bloqueada, noRegistrada) la contraseña queda en el campo montado y en el estado de react-hook-form, recuperable desde las herramientas de desarrollo."
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.tsx",
+      "linea": 199,
+      "descripcion": "El arreglo de B-H4 prueba la cancelación durante cifrando, pero no durante registrando: el mutante que quita «if (!vigente()) return;» tras registrarFicheroDeCopia deja la suite en verde (medido 17/17).",
+      "escenario": "Con esa guarda quitada en un refactor: Escape mientras se registra → el diálogo se cierra → el registro vuelve ok → descargar() baja la copia que el usuario canceló, y ninguna prueba se pone roja."
     },
     {
-      "id": "RB-H4",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
-      "linea": 188,
-      "descripcion": "La cancelación a medio camino solo se prueba durante pidiendo; nada prueba cerrar durante cifrando.",
-      "escenario": "Quitar if (!vigente()) return; tras cifrarCopia (dialogo-de-copia.tsx:174) deja la suite en verde. Con ese mutante, Escape durante los 2-5 s de Argon2id cierra el diálogo, pero el código registra el fichero y descarga una copia que el usuario canceló."
-    },
-    {
-      "id": "RB-H5",
-      "severidad": "BAJA",
-      "archivo": "accesibilidad/nota-clinica.spec.ts",
-      "linea": 1,
-      "descripcion": "La spec no lleva axe, que pide §1.6, ni lo declara como desvío; no cubre el modo motivo ni el foco en «Cerrar» tras la descarga (§5).",
-      "escenario": "Una regresión que deje sin legend el grupo de radios del motivo, o que deje el foco en body al pasar a descargada (el lector no anuncia «Copia descargada» y el usuario de teclado pierde su sitio), no la caza ninguna prueba."
-    },
-    {
-      "id": "RB-H6",
+      "id": "R2B-H3",
       "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 966,
-      "descripcion": "Cuando la recarga devuelve solo_copia con la vista abierta, la vista caducada sigue mostrando BotonDeCopia en modo profesional, sin campo de motivo.",
-      "escenario": "Un administrador que era el asignado tiene la nota abierta, se reasigna el paciente y la recarga devuelve solo_copia. Pulsa «Descargar copia» → 42501 Falta el motivo → «hace falta un motivo», pero el diálogo no tiene dónde ponerlo. Es un control sin ninguna acción posible detrás."
+      "linea": 975,
+      "descripcion": "En la vista abierta, BotonDeCopia no recibe alBloquearse: ante «bloqueada» el error pide el PIN y el diálogo no lo ofrece. Anotada en docs/state.md:52 de main; aceptada como BAJA porque hay salida.",
+      "escenario": "Historia abierta en dos pestañas; se cierra en una; en la otra, con el reloj vigente, «Descargar copia» → 42501 → «Vuelve a desbloquearla con tu PIN» sin botón. Salida: cerrar el diálogo y «Cerrar historia» (:876) → PIN, o esperar a que caduque el reloj."
     }
   ]
 }

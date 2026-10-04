@@ -3,7 +3,7 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 04-10-2026 · T-042 integrado (2 rondas; prueba manual del propietario OK: PIN y canje en `/recuperar`).
+**Actualizado**: 04-10-2026 (cierre del día) · T-040 B ronda 2 revisada y sellada; T-028 B ronda 4 implementada.
 
 ## Dónde estamos
 
@@ -12,20 +12,22 @@
 
 ## En curso
 
-- **T-040 B**: ronda 1 sellada (todo PASA; 0 ALTA, 4 MEDIA, 5 BAJA). Ronda 2 implementada (rama `worktree-agent-a9325d705ce4db36b`, HEAD 55c6399); espera verificación y dos revisores, tras los de T-028. Sin hacer: `architecture.md` (Exportaciones).
-- **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). T-023 sube a riesgo alto (vista definer del pendiente).
-- **T-028 B**: ronda 3 implementada (rama `worktree-agent-a1549876942c02f5f`, HEAD 75be90b); en verificación y revisión. Comparte `lib/i18n/es.ts` con T-040 B. Después, corte C.
-- **T-041**: diseño cerrado; espera turno en `supabase/`.
+- **T-040 B** (rama `worktree-agent-a9325d705ce4db36b`, HEAD 55c6399): ronda 2 **revisada y sellada** (0 ALTA; 1 MEDIA R2A-H1: el 416 con `offset`+`count=exact` no tiene forma en el oráculo; 3 BAJA R2B-H1..H3). **Verificación a medias**: el `evidencia.json` sellado es la 1.ª pasada (BLOQUEADA, faltaba la migración); ya PASAN lint, build, `npm test`, `lint:migraciones`, territorio y B-H3/B-H4. Falta: oráculo S6/S6b, K13b/MB4, B-H1/H2/H6 en navegador, Playwright y la regresión de la ronda 1. La 2.ª pasada se cortó al parar (su `oraculo-postgrest.json` a medias se revirtió). Sin hacer: `architecture.md` (Exportaciones).
+- **T-028 B** (rama `worktree-agent-a1549876942c02f5f`): ronda 4 implementada (H20–H25, man-11, man-12; `npm test` 2180, lint 0, build webpack OK; sin base). Falta verificador + revisor, que sellará la ronda 4. Después, corte C.
+- **T-021**: listo para implementar (ADR-077). **T-041**: diseño cerrado; espera turno en `supabase/`.
 
 ## Bloqueos
 
-- BD local: `qr-prueba-…@psicogestion.test` (FK). Restaurada con `db reset` + `seed` el 04-10 (Ana vuelve a entrar).
+- **BD local**: lleva aplicada la migración de T-040 B (`20261009180000`, `migration up` sin reset, autorizado por el propietario el 04-10). Un `db reset` desde `main` la quita: antes de verificar T-040, mirar `max(version)`.
+- `.env.local` de `main` lleva `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` (propietario, 04-10).
 - winnat: `net stop winnat`.
 
 ## Siguiente paso
 
-Cola `supabase/`: T-040 B → T-041 → **ticket del aviso de hueco raro** (sale de T-028 por decisión del propietario: `agenda_bloques_profesional` se traga el tramo libre previo a la cita; contrato T-028:169; lo redacta el arquitecto) → T-021. En paralelo (sin base): T-028 B → C, que cierra el prototipo clínico. Ticket corto de interfaz: enlace a `/recuperar` (ver Hallazgos).
-Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5`, quitando antes la junction de `node_modules`.
+1. Relanzar el verificador de T-040 B ronda 2 solo con lo NO_VERIFICABLE (sin `git checkout` en el worktree). Decidir R2A-H1 (forma S7 o anotar). Prueba manual del propietario → merge → documentalista.
+2. En otra ventana de sellado: verificador + revisor de T-028 B ronda 4 → prueba manual → merge → corte C (cierra el prototipo clínico).
+3. Cola `supabase/`: T-041 → **ticket del aviso de hueco raro** (contrato T-028:169; lo redacta el arquitecto) → T-021. Ticket corto: enlace a `/recuperar`.
+4. Limpiar worktrees de T-038, T-042 y `agent-acac6bd68d6c681b5` (quitar antes la junction de `node_modules`).
 
 ## Hallazgos anotados
 
@@ -47,6 +49,8 @@ Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5
 - **T-039 R3-B-H3 (BAJA)**: `scripts/rls/README.md:49` dice «(V, S)»; faltan C, W, N, T.
 - **T-039 R3-A-H1 (BAJA)**: `fn_exigir_vinculo_agenda` solo `before insert`; un profesional pasa su cita suelta a un paciente ajeno (ADR-055). Arreglo: también `before update of paciente_id`.
 - **H25**: el técnico lee en su auditoría `tipo_terapia_id` y, desde T-039, `episodio_id`. Deduce parejas. **Bloquea producción**.
+- **T-028 R4 (implementador)**: `components/ui/foco.ts` (`useCierreExterior`) no mira `defaultPrevented`; H20 se parcheó en `dialogo.tsx`. `diseno.md` dice `?semana=`, el real es `fecha`.
+- **Sellos de T-028 y T-033**: el hook los reselló hoy sin que parara su revisor (T-033 integrado hace semanas); quedan sin commitear y los decide el usuario.
 - **T-034 SQL-H2**: reabrir esquiva D6, reloj; y reabrir es hoy la única salida de la nota de una cita cuyo episodio se cerró (banco 23.Z). Recomendación: no cerrar con citas no canceladas posteriores al cierre.
 - **T-040 R3-H1** (BAJA): opacidad/color de marca sin prueba.
 - **T-040 A-H3 (BAJA, anotado por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga). Y en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN (B-H2 solo cubrió solo_copia).
@@ -61,14 +65,11 @@ Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5
 - **T-014**: bandeja sin límite, ?centro, estado, 44px, 360px, ?semana, CRLF.
 - **T-012**: fallos recarga, cargarPaciente→404, PostgREST directo, coprofesional.
 - **T-028a**: marcada_realizada/por vacío; C18TEC; banco 21 año+3; deadlock DB14.
-- **T-033**: next start, URL inline, Suspense.
-- **T-011c**: ordinal último, sin candado.
-- **T-036**: drop if exists + inserts UUID.
+- **T-033**: next start, URL inline, Suspense. **T-011c**: ordinal último, sin candado. **T-036**: drop if exists + inserts UUID.
 - **16-series**: `test:rls` falla en `16-series.sql` también en main.
 - **Foco candado**: body, aria-describedby, useDevolucionDeFoco.
 - **Alertar sin firmar**: cualquier versión con cita_id.
-- **Fuera CI**: SQL crean sin episodio.
-- **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`.
+- **Fuera CI**: SQL crean sin episodio. **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`.
 - **Armazón**: login→/pacientes. T-031/T-032. **`@axe-core/playwright` no instalado**: «axe sin violaciones» de los diseños no se puede ejecutar.
 - **`perfiles` sin `apellidos`**: solo nombre_completo. **Armazón <44px** también Cerrar/Abrir menú y Cerrar sesión (T-028 B).
 - **`docs/decisions/INDEX.md`**: faltan ADR-060..075.

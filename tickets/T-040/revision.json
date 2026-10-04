@@ -1,110 +1,212 @@
 {
   "ticket": "T-040",
   "corte": "B",
-  "ronda": 1,
-  "head": "99fe720",
+  "ronda": 2,
+  "head": "55c6399",
   "rama": "worktree-agent-a9325d705ce4db36b",
   "fecha": "2026-10-04",
+  "diff": "99fe720..55c6399 (sin lo que entra por el merge de main 1b61f93)",
   "altas": 0,
-  "medias": 4,
-  "bajas": 5,
+  "medias": 1,
+  "bajas": 3,
   "informes": [
     "revision-a.md",
     "revision-a.json",
     "revision-b.md",
     "revision-b.json"
   ],
-  "lineas_comprobadas": "Las 9 citas (y las auxiliares editor-de-nota.tsx:489, dialogo-de-copia.tsx:158 y :174) cotejadas con git show worktree-agent-a9325d705ce4db36b:<ruta>: todas coinciden, ninguna corregida.",
-  "hallazgos": [
+  "lineas_comprobadas": "Cotejadas con git show worktree-agent-a9325d705ce4db36b:<ruta>, sin tocar el worktree. R2A-H1: t040-oraculo.mjs:159 (conContenido solo reconoce MARCA o \"exportacion_id\"), :249-268 (S1-S6b; ninguna forma lleva offset, Range ni count=exact) y :318 (acepta 416 que ninguna forma puede producir): coincide, MEDIA confirmada. R2B-H2: dialogo-de-copia.tsx:199 (if (!vigente()) return; tras registrarFicheroDeCopia) y dialogo-de-copia.test.tsx:222-239 (la única cancelación nueva deja pendiente cifrarCopia, no el registro): coincide, BAJA confirmada. Además lista-de-notas.tsx:92 y editor-de-nota.tsx:975 coinciden. La nota de docs/state.md:52 que cita R2B-H3 está en main (6782ef1), no en la rama; la rama no toca docs/state.md desde la base común da64971, así que el merge la conserva.",
+  "cerrados": [
     {
       "id": "A-H1",
-      "severidad": "MEDIA",
-      "archivo": "scripts/t040-oraculo.mjs",
-      "linea": 252,
-      "descripcion": "S6 filtra por una columna inexistente (exportacion_id): 42703 al analizar la consulta, la función no corre; en una RPC escalar la columna es pgrst_scalar y sus filtros sí se aplican, así que la premisa de R1 es falsa y lo que hoy evita el rollback (200 null / 416 sin deshacer) no lo fija ninguna prueba.",
-      "escenario": "Medido: exportar_nota como ADM con ?pgrst_scalar->versiones->0->>cuerpo=like.*MARCA-CUERPO*&offset=5 y count=exact → 416 'only 1 rows'; con un patrón ausente → 'only 0 rows'; las dos confirman (Δ 6/6/6 → 7/7/8 → 8/8/10). Si una versión de PostgREST respondiera 406 con objeto + 0 filas también en los escalares, el filtro desharía acceso, exportación y aviso y diría si casa con el cuerpo, sin rastro; S6 seguiría verde con su 42703. Con la forma correcta, el invariante del diseño (sin contenido ⇒ Δ 0) daría rojo en la dirección segura.",
-      "revisor": "A (base de datos)",
-      "id_original": "H1"
+      "como": "S6 y S6b filtran por pgrst_scalar y exigen Δexportaciones = 1; 406, 42703, filtro ignorado y contenido sin rastro dan rojo (medido sobre la lógica de decisión del oráculo). El canal 416 queda abierto como R2A-H1."
     },
     {
       "id": "A-H2",
-      "severidad": "MEDIA",
-      "archivo": "tickets/T-040/mutantes.json",
-      "linea": 21,
-      "descripcion": "MB4 se declara equivalente y no lo es: al mover el paso 3 detrás del 5 el paso 4 queda delante de los parámetros, y el banco 27 no tiene ningún no administrador con motivo y referencia ausente o corta.",
-      "escenario": "Medido en begin…rollback: SIN llama exportar_nota(P, uuid, 'traspaso_caso', null) → migración 22023 «van juntos», MB4 42501 «Solo la administración»; con la referencia 'x' → 22023 «3 y 200» frente a 42501. El banco 27 termina «completo» con el mutante.",
-      "revisor": "A (base de datos)",
-      "id_original": "H2"
+      "como": "K13b fija el paso 3 antes del 4; MB4 rojo en K13b y MB4b rojo en K6 (medidos en begin…rollback con la migración de HEAD)."
     },
     {
       "id": "A-H3",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261009180000_exportaciones.sql",
-      "linea": 500,
-      "descripcion": "El administrador coterapeuta no tiene camino para la copia por motivo (notas_para_copia la excluye y la vista conjunta no descarga); el diseño dice «se anota» y en mi parte del diff no hay anotación.",
-      "escenario": "ADM, titular de P2 y participante del episodio conjunto de P, lee N1 v2 por RLS; N1 no sale en notas_para_copia(P), y sin motivo exportar_nota da 42501 «Falta el motivo»: solo puede pedir la copia llamando a la RPC a mano. Si docs/state.md ya lo recoge (parte del revisor B), se descarta.",
-      "revisor": "A (base de datos)",
-      "id_original": "H3"
+      "como": "Anotado en docs/state.md:52 de main (6782ef1). No pasa por la rama."
     },
     {
       "id": "B-H1",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/pacientes/[id]/lista-de-notas.tsx",
-      "linea": 28,
-      "descripcion": "La acción distingue null («no se pudo leer») de [], pero la lista los junta con paraCopia ?? [] y pinta el estado vacío. La prueba fija ese silencio como correcto.",
-      "escenario": "Un administrador no asignado no lee ninguna nota por RLS; notas_para_copia falla → notas=[], paraCopia=null → ve «Todavía no hay notas» en un paciente con notas firmadas, sin aviso ni reintento. Si hay notas legibles, la sección «Otras notas» desaparece en silencio.",
-      "revisor": "B (servidor, interfaz y cifrado)",
-      "id_original": "RB-H1"
+      "como": "null separado de [], aviso con reintento; mutantes muertos. El reintento sin señal queda como R2B-H1."
     },
     {
       "id": "B-H2",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 798,
-      "descripcion": "La vista solo_copia no tiene el reloj del candado (caducaEn existe solo en abierta, línea 489), así que nunca pasa a bloqueada ni ofrece el PIN que pide el mensaje de error.",
-      "escenario": "El administrador entra en solo_copia y redacta la referencia; caduca el desbloqueo y pulsa «Descargar copia» → 42501 → «Vuelve a desbloquearla con tu PIN y repite la copia», pero en la vista no hay campo de PIN. Reabrir el diálogo da el mismo error; solo sale recargando, y no se le dice.",
-      "revisor": "B (servidor, interfaz y cifrado)",
-      "id_original": "RB-H2"
+      "como": "Botón «Desbloquear con el PIN» en solo_copia; tres mutantes muertos. La vista abierta queda como R2B-H3."
     },
     {
       "id": "B-H3",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
-      "linea": 104,
-      "descripcion": "La prueba de que la contraseña sale del formulario mira la fase descargada, en la que el formulario está desmontado: el bucle no da ninguna vuelta, e innerHTML no refleja value.",
-      "escenario": "Quitar reset(...) de dialogo-de-copia.tsx:158 deja la suite en verde. Con ese mutante, tras un error (sin_permiso, bloqueada, noRegistrada) la contraseña queda en el campo montado y en el estado de react-hook-form, recuperable desde las herramientas de desarrollo.",
-      "revisor": "B (servidor, interfaz y cifrado)",
-      "id_original": "RB-H3"
+      "como": "Prueba con el formulario montado; quitar el reset de la línea 171 la pone en rojo."
     },
     {
       "id": "B-H4",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
-      "linea": 188,
-      "descripcion": "La cancelación a medio camino solo se prueba durante pidiendo; nada prueba cerrar durante cifrando.",
-      "escenario": "Quitar if (!vigente()) return; tras cifrarCopia (dialogo-de-copia.tsx:174) deja la suite en verde. Con ese mutante, Escape durante los 2-5 s de Argon2id cierra el diálogo, pero el código registra el fichero y descarga una copia que el usuario canceló.",
-      "revisor": "B (servidor, interfaz y cifrado)",
-      "id_original": "RB-H4"
+      "como": "Cerrado en cifrando (dos mutantes muertos). La fase registrando queda como R2B-H2."
     },
     {
       "id": "B-H5",
-      "severidad": "BAJA",
-      "archivo": "accesibilidad/nota-clinica.spec.ts",
-      "linea": 1,
-      "descripcion": "La spec no lleva axe, que pide §1.6, ni lo declara como desvío; no cubre el modo motivo ni el foco en «Cerrar» tras la descarga (§5).",
-      "escenario": "Una regresión que deje sin legend el grupo de radios del motivo, o que deje el foco en body al pasar a descargada (el lector no anuncia «Copia descargada» y el usuario de teclado pierde su sitio), no la caza ninguna prueba.",
-      "revisor": "B (servidor, interfaz y cifrado)",
-      "id_original": "RB-H5"
+      "como": "Cerrado en lo estático: spec del modo motivo y del foco en «Cerrar»; desvío de axe declarado. La ejecución le toca al verificador."
     },
     {
       "id": "B-H6",
+      "como": "Reductor y noDisponible arreglados; dos mutantes muertos. El revisor B corrige su escenario de la ronda 1: era inalcanzable; el arreglo es defensivo."
+    }
+  ],
+  "duplicados": "Ninguno. R2B-H3 y A-H3 comparten la línea 52 de docs/state.md, pero son residuos distintos.",
+  "hallazgos": [
+    {
+      "id": "R2A-H1",
+      "severidad": "MEDIA",
+      "archivo": "scripts/t040-oraculo.mjs",
+      "linea": 318,
+      "descripcion": "El oráculo fija el 200 null del filtro con Accept de objeto, pero no tiene la forma offset + count=exact cuyo 416 lleva un bit del contenido («only 1/0 rows»); conContenido no lo reconoce como contenido y la aceptación de 416 en S6/S6b es letra muerta.",
+      "escenario": "ADM POST rpc/exportar_nota?pgrst_scalar->versiones->0->cuerpo->>texto=like.*MARCA*&offset=1 con Prefer: count=exact: hoy 416 y la transacción confirma (medido en ronda 1). Si una versión de PostgREST deshiciera la transacción en el 416, quien llama sabría si el cuerpo casa sin dejar rastro, y CB1 seguiría verde: medido con la lógica de decisión extraída del oráculo, '416 details only 1 rows, Δ 0/0/0' da verde.",
+      "revisor": "A (base de datos y oráculo)",
+      "id_original": "R2-H1"
+    },
+    {
+      "id": "R2B-H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/lista-de-notas.tsx",
+      "linea": 92,
+      "descripcion": "El reintento de B-H1 no da señal: no hay estado de «reintentando», un fallo repetido reutiliza el mismo role=alert con el mismo texto (no se anuncia) y un reintento bueno desmonta el botón enfocado (foco a body).",
+      "escenario": "Administrador no asignado con lector de pantalla; notas_para_copia falla dos veces → pulsa «Volver a intentarlo» y no oye ni ve cambio; lo pulsa tres veces más (cuatro accesos registrados más, «N veces en esta ventana» +4); cuando vuelve bien, el foco queda en body y «Otras notas» aparece sin anunciarse.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "R2B-H1"
+    },
+    {
+      "id": "R2B-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.tsx",
+      "linea": 199,
+      "descripcion": "El arreglo de B-H4 prueba la cancelación durante cifrando, pero no durante registrando: el mutante que quita «if (!vigente()) return;» tras registrarFicheroDeCopia deja la suite en verde (medido 17/17).",
+      "escenario": "Con esa guarda quitada en un refactor: Escape mientras se registra → el diálogo se cierra → el registro vuelve ok → descargar() baja la copia que el usuario canceló, y ninguna prueba se pone roja.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "R2B-H2"
+    },
+    {
+      "id": "R2B-H3",
       "severidad": "BAJA",
       "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
-      "linea": 966,
-      "descripcion": "Cuando la recarga devuelve solo_copia con la vista abierta, la vista caducada sigue mostrando BotonDeCopia en modo profesional, sin campo de motivo.",
-      "escenario": "Un administrador que era el asignado tiene la nota abierta, se reasigna el paciente y la recarga devuelve solo_copia. Pulsa «Descargar copia» → 42501 Falta el motivo → «hace falta un motivo», pero el diálogo no tiene dónde ponerlo. Es un control sin ninguna acción posible detrás.",
+      "linea": 975,
+      "descripcion": "En la vista abierta, BotonDeCopia no recibe alBloquearse: ante «bloqueada» el error pide el PIN y el diálogo no lo ofrece. Anotada en docs/state.md:52 de main; aceptada como BAJA porque hay salida.",
+      "escenario": "Historia abierta en dos pestañas; se cierra en una; en la otra, con el reloj vigente, «Descargar copia» → 42501 → «Vuelve a desbloquearla con tu PIN» sin botón. Salida: cerrar el diálogo y «Cerrar historia» (:876) → PIN, o esperar a que caduque el reloj.",
       "revisor": "B (servidor, interfaz y cifrado)",
-      "id_original": "RB-H6"
+      "id_original": "R2B-H3"
+    }
+  ],
+  "rondas_anteriores": [
+    {
+      "ticket": "T-040",
+      "corte": "B",
+      "ronda": 1,
+      "head": "99fe720",
+      "rama": "worktree-agent-a9325d705ce4db36b",
+      "fecha": "2026-10-04",
+      "altas": 0,
+      "medias": 4,
+      "bajas": 5,
+      "informes": [
+        "revision-a.md",
+        "revision-a.json",
+        "revision-b.md",
+        "revision-b.json"
+      ],
+      "lineas_comprobadas": "Las 9 citas (y las auxiliares editor-de-nota.tsx:489, dialogo-de-copia.tsx:158 y :174) cotejadas con git show worktree-agent-a9325d705ce4db36b:<ruta>: todas coinciden, ninguna corregida.",
+      "hallazgos": [
+        {
+          "id": "A-H1",
+          "severidad": "MEDIA",
+          "archivo": "scripts/t040-oraculo.mjs",
+          "linea": 252,
+          "descripcion": "S6 filtra por una columna inexistente (exportacion_id): 42703 al analizar la consulta, la función no corre; en una RPC escalar la columna es pgrst_scalar y sus filtros sí se aplican, así que la premisa de R1 es falsa y lo que hoy evita el rollback (200 null / 416 sin deshacer) no lo fija ninguna prueba.",
+          "escenario": "Medido: exportar_nota como ADM con ?pgrst_scalar->versiones->0->>cuerpo=like.*MARCA-CUERPO*&offset=5 y count=exact → 416 'only 1 rows'; con un patrón ausente → 'only 0 rows'; las dos confirman (Δ 6/6/6 → 7/7/8 → 8/8/10). Si una versión de PostgREST respondiera 406 con objeto + 0 filas también en los escalares, el filtro desharía acceso, exportación y aviso y diría si casa con el cuerpo, sin rastro; S6 seguiría verde con su 42703. Con la forma correcta, el invariante del diseño (sin contenido ⇒ Δ 0) daría rojo en la dirección segura.",
+          "revisor": "A (base de datos)",
+          "id_original": "H1"
+        },
+        {
+          "id": "A-H2",
+          "severidad": "MEDIA",
+          "archivo": "tickets/T-040/mutantes.json",
+          "linea": 21,
+          "descripcion": "MB4 se declara equivalente y no lo es: al mover el paso 3 detrás del 5 el paso 4 queda delante de los parámetros, y el banco 27 no tiene ningún no administrador con motivo y referencia ausente o corta.",
+          "escenario": "Medido en begin…rollback: SIN llama exportar_nota(P, uuid, 'traspaso_caso', null) → migración 22023 «van juntos», MB4 42501 «Solo la administración»; con la referencia 'x' → 22023 «3 y 200» frente a 42501. El banco 27 termina «completo» con el mutante.",
+          "revisor": "A (base de datos)",
+          "id_original": "H2"
+        },
+        {
+          "id": "A-H3",
+          "severidad": "BAJA",
+          "archivo": "supabase/migrations/20261009180000_exportaciones.sql",
+          "linea": 500,
+          "descripcion": "El administrador coterapeuta no tiene camino para la copia por motivo (notas_para_copia la excluye y la vista conjunta no descarga); el diseño dice «se anota» y en mi parte del diff no hay anotación.",
+          "escenario": "ADM, titular de P2 y participante del episodio conjunto de P, lee N1 v2 por RLS; N1 no sale en notas_para_copia(P), y sin motivo exportar_nota da 42501 «Falta el motivo»: solo puede pedir la copia llamando a la RPC a mano. Si docs/state.md ya lo recoge (parte del revisor B), se descarta.",
+          "revisor": "A (base de datos)",
+          "id_original": "H3"
+        },
+        {
+          "id": "B-H1",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/pacientes/[id]/lista-de-notas.tsx",
+          "linea": 28,
+          "descripcion": "La acción distingue null («no se pudo leer») de [], pero la lista los junta con paraCopia ?? [] y pinta el estado vacío. La prueba fija ese silencio como correcto.",
+          "escenario": "Un administrador no asignado no lee ninguna nota por RLS; notas_para_copia falla → notas=[], paraCopia=null → ve «Todavía no hay notas» en un paciente con notas firmadas, sin aviso ni reintento. Si hay notas legibles, la sección «Otras notas» desaparece en silencio.",
+          "revisor": "B (servidor, interfaz y cifrado)",
+          "id_original": "RB-H1"
+        },
+        {
+          "id": "B-H2",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+          "linea": 798,
+          "descripcion": "La vista solo_copia no tiene el reloj del candado (caducaEn existe solo en abierta, línea 489), así que nunca pasa a bloqueada ni ofrece el PIN que pide el mensaje de error.",
+          "escenario": "El administrador entra en solo_copia y redacta la referencia; caduca el desbloqueo y pulsa «Descargar copia» → 42501 → «Vuelve a desbloquearla con tu PIN y repite la copia», pero en la vista no hay campo de PIN. Reabrir el diálogo da el mismo error; solo sale recargando, y no se le dice.",
+          "revisor": "B (servidor, interfaz y cifrado)",
+          "id_original": "RB-H2"
+        },
+        {
+          "id": "B-H3",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
+          "linea": 104,
+          "descripcion": "La prueba de que la contraseña sale del formulario mira la fase descargada, en la que el formulario está desmontado: el bucle no da ninguna vuelta, e innerHTML no refleja value.",
+          "escenario": "Quitar reset(...) de dialogo-de-copia.tsx:158 deja la suite en verde. Con ese mutante, tras un error (sin_permiso, bloqueada, noRegistrada) la contraseña queda en el campo montado y en el estado de react-hook-form, recuperable desde las herramientas de desarrollo.",
+          "revisor": "B (servidor, interfaz y cifrado)",
+          "id_original": "RB-H3"
+        },
+        {
+          "id": "B-H4",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
+          "linea": 188,
+          "descripcion": "La cancelación a medio camino solo se prueba durante pidiendo; nada prueba cerrar durante cifrando.",
+          "escenario": "Quitar if (!vigente()) return; tras cifrarCopia (dialogo-de-copia.tsx:174) deja la suite en verde. Con ese mutante, Escape durante los 2-5 s de Argon2id cierra el diálogo, pero el código registra el fichero y descarga una copia que el usuario canceló.",
+          "revisor": "B (servidor, interfaz y cifrado)",
+          "id_original": "RB-H4"
+        },
+        {
+          "id": "B-H5",
+          "severidad": "BAJA",
+          "archivo": "accesibilidad/nota-clinica.spec.ts",
+          "linea": 1,
+          "descripcion": "La spec no lleva axe, que pide §1.6, ni lo declara como desvío; no cubre el modo motivo ni el foco en «Cerrar» tras la descarga (§5).",
+          "escenario": "Una regresión que deje sin legend el grupo de radios del motivo, o que deje el foco en body al pasar a descargada (el lector no anuncia «Copia descargada» y el usuario de teclado pierde su sitio), no la caza ninguna prueba.",
+          "revisor": "B (servidor, interfaz y cifrado)",
+          "id_original": "RB-H5"
+        },
+        {
+          "id": "B-H6",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+          "linea": 966,
+          "descripcion": "Cuando la recarga devuelve solo_copia con la vista abierta, la vista caducada sigue mostrando BotonDeCopia en modo profesional, sin campo de motivo.",
+          "escenario": "Un administrador que era el asignado tiene la nota abierta, se reasigna el paciente y la recarga devuelve solo_copia. Pulsa «Descargar copia» → 42501 Falta el motivo → «hace falta un motivo», pero el diálogo no tiene dónde ponerlo. Es un control sin ninguna acción posible detrás.",
+          "revisor": "B (servidor, interfaz y cifrado)",
+          "id_original": "RB-H6"
+        }
+      ]
     }
   ],
   "cortes_anteriores": [
