@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { registrarAccesoHistoria, type PestanaHistoria } from '@/lib/cuentas/accesos';
 import { bloquearHistoria, estadoDeCuenta, prolongarDesbloqueo } from '@/lib/cuentas/candado';
+import { notasParaCopia, type NotaParaCopia } from '@/lib/exportaciones/servidor';
 import { t } from '@/lib/i18n';
 import { listarNotasDelPaciente, type ResumenDeNota } from '@/lib/notas/servidor';
 import { exigirSesion } from '@/lib/supabase/sesion';
@@ -67,6 +68,11 @@ export type ResultadoDeApertura =
        * (o no es esa pestaña): nunca se pinta como «todavía no hay notas».
        */
       notas: ResumenDeNota[] | null;
+      /**
+       * T-040 · P2-a. Solo en `notas_clinicas`: las notas que quien llama no lee pero puede pedir
+       * en copia por motivo (la administración). Sin texto. `null` es «no se pudo leer».
+       */
+      notasParaCopia: NotaParaCopia[] | null;
     }
   | { abierta: false; mensaje: string };
 
@@ -106,6 +112,11 @@ export async function abrirPestanaDeHistoria(
       validado.data.pestana === 'notas_clinicas'
         ? await leerNotas(sesion, validado.data.pacienteId)
         : null,
+    // También después del registro: es la misma puerta.
+    notasParaCopia:
+      validado.data.pestana === 'notas_clinicas'
+        ? await leerNotasParaCopia(sesion, validado.data.pacienteId)
+        : null,
   };
 }
 
@@ -114,6 +125,14 @@ async function leerNotas(
   pacienteId: string,
 ): Promise<ResumenDeNota[] | null> {
   const lectura = await listarNotasDelPaciente(sesion, pacienteId);
+  return lectura.ok ? lectura.valor : null;
+}
+
+async function leerNotasParaCopia(
+  sesion: Awaited<ReturnType<typeof exigirSesion>>,
+  pacienteId: string,
+): Promise<NotaParaCopia[] | null> {
+  const lectura = await notasParaCopia(sesion, pacienteId);
   return lectura.ok ? lectura.valor : null;
 }
 

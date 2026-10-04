@@ -38,6 +38,7 @@ function abierta(
   minutos: number,
   vistas = 1,
   notas: Extract<ResultadoDeApertura, { abierta: true }>['notas'] = [],
+  notasParaCopia: Extract<ResultadoDeApertura, { abierta: true }>['notasParaCopia'] = null,
 ): ResultadoDeApertura {
   return {
     abierta: true,
@@ -45,6 +46,7 @@ function abierta(
     vistas,
     historial: CONTENIDO,
     notas,
+    notasParaCopia,
   };
 }
 
@@ -242,5 +244,31 @@ describe('PanelHistoria', () => {
 
     expect(await screen.findByText('No se pudo abrir esta historia.')).toBeInTheDocument();
     expect(screen.queryByText('Ansiedad ante exámenes')).not.toBeInTheDocument();
+  });
+
+  // T-040 · P2-a: el panel pasa a la lista las notas que solo admiten copia por motivo.
+  it('pasa a la lista las notas para copia por motivo, con su encabezado y su enlace', async () => {
+    const usuario = userEvent.setup();
+    abrirPestanaDeHistoria.mockResolvedValue(
+      abierta(15, 1, [], [
+        {
+          id: 'n9',
+          fechaSesion: '02/02/2026',
+          autor: 'Dr. Ruiz',
+          versiones: 2,
+          href: '/pacientes/11111111-1111-4111-8111-111111111111/historia/notas?nota=n9',
+        },
+      ]),
+    );
+    render(<PanelHistoria pacienteId="11111111-1111-4111-8111-111111111111" />);
+
+    await screen.findByText('Ansiedad ante exámenes');
+    await usuario.click(screen.getByRole('tab', { name: 'Notas clínicas' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Otras notas de este paciente (solo copia por motivo)' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /02\/02\/2026/ })).toHaveAttribute('href', expect.stringContaining('?nota=n9'));
+    expect(screen.queryByText('Todavía no hay notas')).not.toBeInTheDocument();
   });
 });

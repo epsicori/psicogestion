@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PanelDePestana, Pestanas } from '@/components/ui/pestanas';
 import { AvisoDeError, Cargando } from '@/components/ui/piezas';
 import { t, tCon } from '@/lib/i18n';
+import type { NotaParaCopia } from '@/lib/exportaciones/servidor';
 import type { ResumenDeNota } from '@/lib/notas/servidor';
 
 import {
@@ -48,6 +49,7 @@ type Apertura = {
   vistas: number;
   historial: ContenidoDelHistorial | null;
   notas: ResumenDeNota[] | null;
+  notasParaCopia: NotaParaCopia[] | null;
 };
 
 export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
@@ -91,6 +93,7 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
           vistas: resultado.vistas,
           historial: resultado.historial,
           notas: resultado.notas,
+          notasParaCopia: resultado.notasParaCopia,
         });
         return;
       }
@@ -192,6 +195,7 @@ export function PanelHistoria({ pacienteId }: { pacienteId: string }) {
               subPestana={subPestana}
               historial={apertura.historial}
               notas={apertura.notas}
+              notasParaCopia={apertura.notasParaCopia}
             />
           </div>
         )}
@@ -222,10 +226,12 @@ function Contenido({
   subPestana,
   historial,
   notas,
+  notasParaCopia,
 }: {
   subPestana: SubPestana;
   historial: ContenidoDelHistorial | null;
   notas: Apertura['notas'];
+  notasParaCopia: Apertura['notasParaCopia'];
 }) {
   if (subPestana === 'historial_clinico') {
     return historial ? <HistorialClinico contenido={historial} /> : <Cargando filas={3} />;
@@ -235,7 +241,7 @@ function Contenido({
     return notas === null ? (
       <AvisoDeError mensaje={t('notas.lista.noSePudoLeer')} />
     ) : (
-      <ListaDeNotas notas={notas} />
+      <ListaDeNotas notas={notas} paraCopia={notasParaCopia} />
     );
   }
 
