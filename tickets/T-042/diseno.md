@@ -834,3 +834,10 @@ canje» de `state.md` debe decir ya «y el PIN nulo abre».
   así. El límite de intentos, que ahora sí se cuenta, es la defensa.
 - **Una regla nueva en `.claude/rules/supabase.md`** («NULL en un `if` concede») y **un ADR del patrón
   de dos pasos**: le tocan al usuario y al arquitecto. Lo propongo en el informe.
+
+## 9 · Respuestas del propietario (04-10-2026)
+
+- **P1 → 60 s y 2 usos.**
+- **P2 → por lote, en la fila centinela, como hoy.**
+- **P3 → (a).** No hay ninguna instancia con datos reales: el PIN nulo se arregla dentro de T-042,
+  el siguiente de la cola de `supabase/` cuando T-038 esté en `main`.

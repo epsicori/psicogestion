@@ -1829,3 +1829,33 @@ No entra en T-038 por tres razones:
   (antes de T-040 B). Lleva `desbloquear_historia` y `canjear_codigo_recuperacion`.
 - **P4 → la regla de la adenda (DR7):** el umbral se compara con el `statement_timeout` en vigor en
   cada llamada.
+
+## R4 · Ronda 4: solo B3-H1 (04-10-2026)
+
+El propietario decide arreglar B3-H1 antes de integrar, y nada más (A3-H1 y A3-H2 quedan anotados en
+`state.md`; A3-H2 lo cierra el documentalista en la bitácora). Base: la rama de la ronda 3,
+`worktree-agent-a3f1df59a02f0397d` (b05d3e3).
+
+**Cambio.** `lib/i18n/es.ts:287` (`cuenta.errores.resultadoDesconocido`) pide el reintento **sin
+condición**. Texto:
+
+> No hemos recibido respuesta y no sabemos si se han regenerado. Si se regeneraron, la lista que
+> tienes en papel ya no vale y la nueva no se te ha enseñado. Vuelve a regenerarlos en cualquier
+> caso: así tendrás una lista nueva que sí vale.
+
+El aviso «Códigos de recuperación nuevos» deja de usarse como criterio: aparece para todo el que
+activó desde T-038 (`20261008120000:530`), así que no discrimina.
+
+**Prueba.** En `app/(app)/cuenta/formulario-regenerar.test.tsx`, el caso «B-H2 / B2-H4» comprueba la
+instrucción, no las palabras:
+
+- la descripción de la región contiene «Vuelve a regenerarlos en cualquier caso»;
+- no contiene «si no aparece» ni ninguna otra condición sobre el aviso;
+- sigue diciendo que la lista en papel puede haber dejado de valer (`/en papel[^.]*ya no val/`);
+- se quita la aserción de «lista de avisos».
+
+**Mutante.** Restaurar el texto de la ronda 3 deja la prueba en rojo.
+
+**Criterio para el verificador (CA-R4).** La prueba pasa con el texto nuevo y falla con el mutante;
+`npm test`, `npm run lint` y `npm run build` en verde en la rama. Nada fuera de `lib/i18n/es.ts` y
+de ese fichero de prueba.
