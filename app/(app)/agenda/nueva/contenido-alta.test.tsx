@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const CENTRO = '33333333-3333-4333-8333-333333333333';
 const USUARIO = '22222222-2222-4222-8222-222222222222';
 const OTRO_PROFESIONAL = '66666666-6666-4666-8666-666666666666';
+const ASIGNADO = '77777777-7777-4777-8777-777777777777';
 const PACIENTE = '11111111-1111-4111-8111-111111111111';
 
 const m = vi.hoisted(() => ({
@@ -63,7 +64,7 @@ beforeEach(() => {
   m.consultas.length = 0;
   m.tablas = {
     tipos_terapia: { data: [{ id: 't1', nombre: 'Individual', duracion_minutos: 50 }], error: null },
-    directorio_perfiles: { data: [{ id: OTRO_PROFESIONAL, nombre_completo: 'Dra. Ruiz', centro_id: CENTRO }], error: null },
+    directorio_perfiles: { data: [{ id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO }], error: null },
     pacientes: { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez' }, error: null },
   };
   m.cargarContexto.mockResolvedValue(contexto('administrador'));
@@ -81,14 +82,48 @@ describe('ContenidoAlta', () => {
     expect(tipos?.filtros).toContainEqual(['activo', true]);
   });
 
-  it('el administrador elige profesional: se ofrecen los activos del directorio, y entra el primero', async () => {
+  it('se ofrecen los activos del directorio, profesionales sanitarios y administradores (H1)', async () => {
     const elemento = await resolver();
 
-    expect(elemento.props.profesionales).toEqual([{ id: OTRO_PROFESIONAL, nombre: 'Dra. Ruiz', centroId: CENTRO }]);
-    expect(elemento.props.inicial).toMatchObject({ profesionalId: OTRO_PROFESIONAL, centroId: CENTRO });
+    expect(elemento.props.profesionales).toEqual([{ id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO }]);
     const directorio = m.consultas.find((c) => c.tabla === 'directorio_perfiles');
-    expect(directorio?.filtros).toContainEqual(['rol', 'profesional_sanitario']);
+    expect(directorio?.filtros).toContainEqual(['rol', ['profesional_sanitario', 'administrador']]);
     expect(directorio?.filtros).toContainEqual(['estado', 'activo']);
+  });
+
+  // H2 (revisión del corte B): el profesional por defecto es el asignado al paciente, no el primero.
+  it('por defecto entra el profesional asignado al paciente, aunque no sea el primero del directorio', async () => {
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO },
+        { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO },
+      ],
+      error: null,
+    };
+    m.tablas.pacientes = { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez', profesional_id: ASIGNADO }, error: null };
+
+    const elemento = await resolver({ paciente: PACIENTE });
+
+    expect(elemento.props.inicial).toMatchObject({ profesionalId: ASIGNADO });
+    expect(m.cargarVistaAlta.mock.calls[0][2]).toMatchObject({ profesionalId: ASIGNADO });
+  });
+
+  it('sin paciente, o con uno cuyo profesional no está en el centro, entra el primero en orden estable', async () => {
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO },
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO },
+      ],
+      error: null,
+    };
+
+    const sinPaciente = await resolver();
+    expect(sinPaciente.props.inicial).toMatchObject({ profesionalId: OTRO_PROFESIONAL });
+    expect((sinPaciente.props.profesionales as { nombre: string }[]).map((p) => p.nombre)).toEqual(['Ana Ruiz', 'Luis Soto']);
+
+    m.tablas.pacientes = { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez', profesional_id: 'ajeno' }, error: null };
+    const ajeno = await resolver({ paciente: PACIENTE });
+    expect(ajeno.props.inicial).toMatchObject({ profesionalId: OTRO_PROFESIONAL });
   });
 
   it('el profesional agenda a su nombre: no consulta el directorio y el profesional es él', async () => {
