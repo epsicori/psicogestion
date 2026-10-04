@@ -1,0 +1,427 @@
+{
+  "ticket": "T-042",
+  "usuario": "3b9cb58c-2069-4a63-9ed4-88099d14c26c",
+  "funciones": {
+    "pin": {
+      "formas": {
+        "S1": {
+          "descripcion": "POST normal",
+          "opciones": {},
+          "mala": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "buena": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizadas": 0
+          },
+          "trasMala": {
+            "intentos": 1,
+            "autorizadas": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizadas": 1
+          }
+        },
+        "S2": {
+          "descripcion": "POST con Accept: objeto singular",
+          "opciones": {
+            "extra": {
+              "Accept": "application/vnd.pgrst.object+json"
+            }
+          },
+          "mala": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "buena": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizadas": 0
+          },
+          "trasMala": {
+            "intentos": 1,
+            "autorizadas": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizadas": 1
+          }
+        },
+        "S3": {
+          "descripcion": "POST con Prefer: tx=rollback",
+          "opciones": {
+            "extra": {
+              "Prefer": "tx=rollback"
+            }
+          },
+          "mala": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "buena": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizadas": 0
+          },
+          "trasMala": {
+            "intentos": 1,
+            "autorizadas": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizadas": 1
+          }
+        },
+        "S4": {
+          "descripcion": "POST con Prefer: handling=strict, max-affected=0",
+          "opciones": {
+            "extra": {
+              "Prefer": "handling=strict, max-affected=0"
+            }
+          },
+          "mala": {
+            "estado": 400,
+            "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+          },
+          "buena": {
+            "estado": 400,
+            "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizadas": 0
+          },
+          "trasMala": {
+            "intentos": 0,
+            "autorizadas": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizadas": 0
+          }
+        },
+        "S5": {
+          "descripcion": "GET ?p_pin=…",
+          "mala": {
+            "estado": 405,
+            "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La comprobación del PIN exige una transacción de escritura.\"}"
+          },
+          "buena": {
+            "estado": 405,
+            "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La comprobación del PIN exige una transacción de escritura.\"}"
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizadas": 0
+          },
+          "despues": {
+            "intentos": 0,
+            "autorizadas": 0
+          }
+        }
+      }
+    },
+    "canje": {
+      "formas": {
+        "S1": {
+          "descripcion": "POST normal",
+          "opciones": {},
+          "mala": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "buena": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizado": 0
+          },
+          "trasMala": {
+            "intentos": 1,
+            "autorizado": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizado": 1
+          }
+        },
+        "S2": {
+          "descripcion": "POST con Accept: objeto singular",
+          "opciones": {
+            "extra": {
+              "Accept": "application/vnd.pgrst.object+json"
+            }
+          },
+          "mala": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "buena": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizado": 0
+          },
+          "trasMala": {
+            "intentos": 1,
+            "autorizado": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizado": 1
+          }
+        },
+        "S3": {
+          "descripcion": "POST con Prefer: tx=rollback",
+          "opciones": {
+            "extra": {
+              "Prefer": "tx=rollback"
+            }
+          },
+          "mala": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "buena": {
+            "estado": 204,
+            "cuerpo": ""
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizado": 0
+          },
+          "trasMala": {
+            "intentos": 1,
+            "autorizado": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizado": 1
+          }
+        },
+        "S4": {
+          "descripcion": "POST con Prefer: handling=strict, max-affected=0",
+          "opciones": {
+            "extra": {
+              "Prefer": "handling=strict, max-affected=0"
+            }
+          },
+          "mala": {
+            "estado": 400,
+            "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+          },
+          "buena": {
+            "estado": 400,
+            "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizado": 0
+          },
+          "trasMala": {
+            "intentos": 0,
+            "autorizado": 0
+          },
+          "trasBuena": {
+            "intentos": 0,
+            "autorizado": 0
+          }
+        },
+        "S5": {
+          "descripcion": "GET ?p_codigo=…",
+          "mala": {
+            "estado": 405,
+            "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La comprobación del código exige una transacción de escritura.\"}"
+          },
+          "buena": {
+            "estado": 405,
+            "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La comprobación del código exige una transacción de escritura.\"}"
+          },
+          "antes": {
+            "intentos": 0,
+            "autorizado": 0
+          },
+          "despues": {
+            "intentos": 0,
+            "autorizado": 0
+          }
+        }
+      }
+    }
+  },
+  "extra": {
+    "tx_rollback_ignorado_pin": true,
+    "tx_rollback_ignorado_canje": true,
+    "o4": {
+      "desbloquear": {
+        "estado": 404,
+        "cuerpo": "{\"code\":\"PGRST202\",\"details\":\"Searched for the function public.desbloquear_historia with parameter p_pin or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.\",\"hint\":null,\"message\":\"Could not find the function public.desbloquear_historia(p_pin) in the schema cache\"}"
+      },
+      "canjear": {
+        "estado": 404,
+        "cuerpo": "{\"code\":\"PGRST202\",\"details\":\"Searched for the function public.canjear_codigo_recuperacion with parameter p_codigo or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.\",\"hint\":null,\"message\":\"Could not find the function public.canjear_codigo_recuperacion(p_codigo) in the schema cache\"}"
+      }
+    },
+    "o5": {
+      "p2ok": {
+        "estado": 200,
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:29:58.493586+00:00\",\"bloqueado_hasta\":null}]"
+      },
+      "p2mal": {
+        "estado": 200,
+        "cuerpo": "[{\"desbloqueado\":false,\"motivo\":\"pin_incorrecto\",\"caduca_en\":null,\"bloqueado_hasta\":null}]"
+      },
+      "c2ok": {
+        "estado": 200,
+        "cuerpo": "[{\"canjeado\":true,\"motivo\":\"ok\",\"bloqueado_hasta\":null}]"
+      },
+      "c2mal": {
+        "estado": 200,
+        "cuerpo": "[{\"canjeado\":false,\"motivo\":\"codigo_invalido\",\"bloqueado_hasta\":null}]"
+      },
+      "usadosTrasOk": 1
+    },
+    "o6": {
+      "ataqueP": {
+        "estado": 406,
+        "cuerpo": "{\"code\":\"PGRST116\",\"details\":\"The result contains 0 rows\",\"hint\":null,\"message\":\"Cannot coerce the result to a single JSON object\"}"
+      },
+      "ataqueC": {
+        "estado": 406,
+        "cuerpo": "{\"code\":\"PGRST116\",\"details\":\"The result contains 0 rows\",\"hint\":null,\"message\":\"Cannot coerce the result to a single JSON object\"}"
+      },
+      "antesP": {
+        "intentos": 0,
+        "autorizadas": 0
+      },
+      "trasP": {
+        "intentos": 1,
+        "autorizadas": 0
+      },
+      "antesC": {
+        "intentos": 0,
+        "autorizado": 0
+      },
+      "trasC": {
+        "intentos": 1,
+        "autorizado": 0
+      }
+    },
+    "o7": {
+      "n": {
+        "estado": 204,
+        "cuerpo": ""
+      },
+      "p2": {
+        "estado": 200,
+        "cuerpo": "[{\"desbloqueado\":false,\"motivo\":\"pin_incorrecto\",\"caduca_en\":null,\"bloqueado_hasta\":null}]"
+      },
+      "antes": {
+        "intentos": 0,
+        "autorizadas": 0
+      },
+      "despues": {
+        "intentos": 1,
+        "autorizadas": 0
+      },
+      "vigentesAntes": 0,
+      "vigentesDespues": 0
+    }
+  },
+  "concurrencia": {
+    "c1": {
+      "antes": {
+        "intentos": 0,
+        "autorizadas": 0
+      },
+      "despues": {
+        "intentos": 3,
+        "autorizadas": 0
+      },
+      "aud_fallidos": 9
+    },
+    "c2": {
+      "a": {
+        "estado": 200,
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:30:01.005581+00:00\",\"bloqueado_hasta\":null}]"
+      },
+      "b": {
+        "estado": 200,
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:30:01.005526+00:00\",\"bloqueado_hasta\":null}]"
+      },
+      "estado": {
+        "intentos": 0,
+        "autorizadas": 0
+      },
+      "vigentes": 1
+    },
+    "c3": {
+      "a": {
+        "estado": 200,
+        "cuerpo": "[{\"canjeado\":false,\"motivo\":\"codigo_invalido\",\"bloqueado_hasta\":null}]"
+      },
+      "b": {
+        "estado": 200,
+        "cuerpo": "[{\"canjeado\":true,\"motivo\":\"ok\",\"bloqueado_hasta\":null}]"
+      },
+      "usados": 1,
+      "totp_repuesto": 1
+    },
+    "c4": {
+      "en_espera": 3,
+      "base": {
+        "intentos": 4,
+        "fallido": 13,
+        "bloqueado": 0,
+        "avisos": 0
+      },
+      "final": {
+        "intentos": 5,
+        "bloqueado": true,
+        "fallido": 14,
+        "bloqueos": 1,
+        "avisos": 1
+      },
+      "estados": [
+        204,
+        204,
+        204
+      ],
+      "veredicto": "PASA"
+    },
+    "c5": {
+      "en_espera": 3,
+      "base": {
+        "intentos": 4,
+        "autorizado": 0
+      },
+      "final": {
+        "intentos": 5,
+        "bloqueado": true
+      },
+      "estados": [
+        204,
+        204,
+        204
+      ],
+      "veredicto": "PASA"
+    }
+  },
+  "fallos": []
+}

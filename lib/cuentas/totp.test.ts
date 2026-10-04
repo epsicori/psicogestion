@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../supabase/administracion', () => ({ crearClienteAdministracion: vi.fn() }));
 
-import { generarCodigosRecuperacion, regenerarCodigosRecuperacion } from './totp';
+import { canjearCodigoRecuperacion, generarCodigosRecuperacion, regenerarCodigosRecuperacion } from './totp';
+import { crearClienteAdministracion } from '../supabase/administracion';
 import type { Sesion } from './tipos';
 
 const CONTRASENA = 'contrasena-que-no-debe-salir-nunca';
@@ -132,5 +133,95 @@ describe('generarCodigosRecuperacion · B2-H5', () => {
     expect(r.ok).toBe(false);
     expect(r).not.toHaveProperty('reentrar');
     consola.mockRestore();
+  });
+});
+
+describe('canjearCodigoRecuperacion · dos pasos (T-042)', () => {
+  const CODIGO = 'CODIGO-SECRETO-1234';
+  const sesionCanje = (paso2: { data?: unknown; error?: unknown }, paso1: { error?: unknown } = {}) => {
+    const rpc = vi.fn().mockImplementation(async (nombre: string) =>
+      nombre === 'comprobar_codigo_recuperacion'
+        ? { data: null, error: paso1.error ?? null }
+        : { data: paso2.data ?? null, error: paso2.error ?? null },
+    );
+    return { sesion: { supabase: { rpc }, usuario: { id: 'u-1' } } as unknown as Sesion, rpc };
+  };
+  const adminFingida = () => {
+    const listFactors = vi.fn().mockResolvedValue({ data: { factors: [{ id: 'f-1' }] }, error: null });
+    const deleteFactor = vi.fn().mockResolvedValue({ data: null, error: null });
+    vi.mocked(crearClienteAdministracion).mockReturnValue({
+      auth: { admin: { mfa: { listFactors, deleteFactor } } },
+    } as never);
+    return { listFactors, deleteFactor };
+  };
+
+  it('llama a dos RPC: el código solo en la primera, la segunda sin argumentos, y la Admin API solo con ok', async () => {
+    const { listFactors, deleteFactor } = adminFingida();
+    const { sesion, rpc } = sesionCanje({ data: [{ canjeado: true, motivo: 'ok', bloqueado_hasta: null }] });
+
+    const r = await canjearCodigoRecuperacion(sesion, CODIGO);
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0]).toEqual(['comprobar_codigo_recuperacion', { p_codigo: CODIGO }]);
+    expect(rpc.mock.calls[1]).toEqual(['canjear_codigo_recuperacion']);
+    expect(r).toEqual({ canjeado: true, motivo: 'ok', bloqueadoHasta: null });
+    expect(listFactors).toHaveBeenCalledTimes(1);
+    expect(deleteFactor).toHaveBeenCalledTimes(1);
+    expect(deleteFactor).toHaveBeenCalledWith({ id: 'f-1', userId: 'u-1' });
+  });
+
+  it('sin_codigos no toca la Admin API (B1-H6)', async () => {
+    const { listFactors, deleteFactor } = adminFingida();
+    const { sesion } = sesionCanje({ data: [{ canjeado: false, motivo: 'sin_codigos', bloqueado_hasta: null }] });
+    expect(await canjearCodigoRecuperacion(sesion, CODIGO)).toEqual({ canjeado: false, motivo: 'sin_codigos', bloqueadoHasta: null });
+    expect(listFactors).not.toHaveBeenCalled();
+    expect(deleteFactor).not.toHaveBeenCalled();
+  });
+
+  it('codigo_invalido y bloqueado no tocan la Admin API', async () => {
+    const { listFactors, deleteFactor } = adminFingida();
+    const a = sesionCanje({ data: [{ canjeado: false, motivo: 'codigo_invalido', bloqueado_hasta: null }] });
+    expect(await canjearCodigoRecuperacion(a.sesion, CODIGO)).toMatchObject({ canjeado: false, motivo: 'codigo_invalido' });
+    const hasta = '2026-10-09T10:15:00Z';
+    const b = sesionCanje({ data: [{ canjeado: false, motivo: 'bloqueado', bloqueado_hasta: hasta }] });
+    expect(await canjearCodigoRecuperacion(b.sesion, CODIGO)).toMatchObject({ motivo: 'bloqueado', bloqueadoHasta: hasta });
+    expect(listFactors).not.toHaveBeenCalled();
+    expect(deleteFactor).not.toHaveBeenCalled();
+  });
+
+  it('si el paso uno falla, es un error: sin paso dos, sin Admin API y sin el código en consola', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { listFactors } = adminFingida();
+    const { sesion, rpc } = sesionCanje(
+      { data: [{ canjeado: true, motivo: 'ok', bloqueado_hasta: null }] },
+      { error: { code: '25006', message: `codigo ${CODIGO}` } },
+    );
+
+    const r = await canjearCodigoRecuperacion(sesion, CODIGO);
+
+    expect(r).toEqual({ canjeado: false, motivo: 'error', bloqueadoHasta: null });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(listFactors).not.toHaveBeenCalled();
+    expect(JSON.stringify(consola.mock.calls)).not.toContain(CODIGO);
+  });
+
+  it('si el paso dos falla, es un error y no se toca la Admin API', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { listFactors } = adminFingida();
+    const { sesion } = sesionCanje({ error: { code: '57014', message: 'timeout' } });
+    expect(await canjearCodigoRecuperacion(sesion, CODIGO)).toMatchObject({ canjeado: false, motivo: 'error' });
+    expect(listFactors).not.toHaveBeenCalled();
+  });
+
+  it('si el paso dos falla, en consola solo va el código del error (B1-H5)', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    adminFingida();
+    const { sesion } = sesionCanje({
+      error: { code: 'PGRST301', message: 'DETALLE-NO-DEBE-SALIR', details: 'DETALLE-NO-DEBE-SALIR', hint: 'DETALLE-NO-DEBE-SALIR' },
+    });
+    await canjearCodigoRecuperacion(sesion, CODIGO);
+    const registrado = JSON.stringify(consola.mock.calls);
+    expect(registrado).not.toContain('DETALLE-NO-DEBE-SALIR');
+    expect(registrado).toContain('PGRST301');
   });
 });

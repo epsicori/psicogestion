@@ -146,7 +146,7 @@ select pg_temp.assert(
 --         dejaría pasar la casilla del cliente justo por el camino que usa la aplicación.
 call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   '20.B7 (preparación) PRO1 desbloquea su historia');
 insert into public.notas_clinicas
   (id, paciente_id, episodio_id, autor_id, borrador_contenido, borrador_autor_id,
@@ -166,7 +166,7 @@ update public.notas_clinicas
  where id = :NA;
 alter table public.notas_clinicas enable trigger tocar_borrador;
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   '20.B7 (preparación) PRO1 sigue desbloqueado');
 update public.notas_clinicas
    set borrador_contenido = '{"texto":"a"}',

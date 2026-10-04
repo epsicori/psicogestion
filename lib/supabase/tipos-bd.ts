@@ -437,6 +437,8 @@ export type Database = {
       codigos_recuperacion_totp: {
         Row: {
           bloqueado_hasta: string | null
+          canje_autorizado_hasta: string | null
+          canje_autorizado_id: string | null
           codigo_hash: string
           creado_en: string
           id: string
@@ -446,6 +448,8 @@ export type Database = {
         }
         Insert: {
           bloqueado_hasta?: string | null
+          canje_autorizado_hasta?: string | null
+          canje_autorizado_id?: string | null
           codigo_hash: string
           creado_en?: string
           id?: string
@@ -455,6 +459,8 @@ export type Database = {
         }
         Update: {
           bloqueado_hasta?: string | null
+          canje_autorizado_hasta?: string | null
+          canje_autorizado_id?: string | null
           codigo_hash?: string
           creado_en?: string
           id?: string
@@ -1847,24 +1853,30 @@ export type Database = {
       pines_historia: {
         Row: {
           actualizado_en: string
+          autorizado_hasta: string | null
           bloqueado_hasta: string | null
           creado_en: string
+          desbloqueos_autorizados: number
           hash: string
           intentos_fallidos: number
           perfil_id: string
         }
         Insert: {
           actualizado_en?: string
+          autorizado_hasta?: string | null
           bloqueado_hasta?: string | null
           creado_en?: string
+          desbloqueos_autorizados?: number
           hash: string
           intentos_fallidos?: number
           perfil_id: string
         }
         Update: {
           actualizado_en?: string
+          autorizado_hasta?: string | null
           bloqueado_hasta?: string | null
           creado_en?: string
+          desbloqueos_autorizados?: number
           hash?: string
           intentos_fallidos?: number
           perfil_id?: string
@@ -2968,7 +2980,7 @@ export type Database = {
         }[]
       }
       canjear_codigo_recuperacion: {
-        Args: { p_codigo: string }
+        Args: never
         Returns: {
           bloqueado_hasta: string
           canjeado: boolean
@@ -3029,10 +3041,15 @@ export type Database = {
           tabla: string
         }[]
       }
+      comprobar_codigo_recuperacion: {
+        Args: { p_codigo: string }
+        Returns: undefined
+      }
       comprobar_contrasena_para_regenerar: {
         Args: { p_contrasena: string }
         Returns: undefined
       }
+      comprobar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
       dar_de_baja_perfil: {
         Args: { p_motivo?: string; p_perfil_id: string }
         Returns: {
@@ -3041,7 +3058,7 @@ export type Database = {
         }[]
       }
       desbloquear_historia: {
-        Args: { p_pin: string }
+        Args: never
         Returns: {
           bloqueado_hasta: string
           caduca_en: string

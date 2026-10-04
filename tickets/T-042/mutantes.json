@@ -1,0 +1,195 @@
+{
+  "ticket": "T-042",
+  "fecha": "2026-10-04",
+  "nota": "Cada mutante se aplica con drop+create de las cuatro funciones sobre la base levantada (SQL) o editando el fichero (TS), se ejecuta la prueba y se revierte. Tras los SQL se volvió a pasar el banco entero (completo) y el oráculo (completo).",
+  "sql_banco": {
+    "M1": {
+      "mutacion": "se deja también desbloquear_historia(text)",
+      "rojo": true,
+      "falla": "CA1 · las firmas de un paso desbloquear_historia(text) y canjear_codigo_recuperacion(text) ya no existen"
+    },
+    "M2": {
+      "mutacion": "v_ok sin coalesce",
+      "rojo": true,
+      "falla": "CA2 · el PIN nulo deja una fila PIN_FALLIDO"
+    },
+    "M3": {
+      "mutacion": "el paso dos no resta la autorización",
+      "rojo": true,
+      "falla": "CA3.3 · un segundo paso dos da pin_incorrecto: la autorización se gastó"
+    },
+    "M4": {
+      "mutacion": "el paso dos sin autorizado_hasta > now()",
+      "rojo": true,
+      "falla": "CA3.6 · con la autorización caducada, el paso dos da pin_incorrecto"
+    },
+    "M5": {
+      "mutacion": "el fallo no pone a 0 las autorizaciones ni la caducidad",
+      "rojo": true,
+      "falla": "CA3.5 · un bueno y luego un malo dejan 0 autorizaciones (y un intento)"
+    },
+    "M6": {
+      "mutacion": "comprobar_pin_historia returns boolean",
+      "rojo": true,
+      "falla": "CA1 · las dos comprobaciones devuelven void"
+    },
+    "M7": {
+      "mutacion": "PIN_BLOQUEADO con where not v_ok",
+      "rojo": true,
+      "falla": "banco 03 · T-006: el bloqueo deja UNA entrada PIN_BLOQUEADO, no cinco"
+    },
+    "M8": {
+      "mutacion": "se quita if v_hasta > now() then return",
+      "rojo": true,
+      "falla": "banco 03 · T-006: el SEXTO intento, con el PIN CORRECTO, tampoco abre mientras el bloqueo esté vigente"
+    },
+    "M9": {
+      "mutacion": "el fallo del canje no limpia canje_autorizado_*",
+      "rojo": true,
+      "falla": "CA5.4 · un bueno y luego un malo: codigo_invalido"
+    },
+    "M10": {
+      "mutacion": "el paso dos del canje sin usado_en is null",
+      "rojo": true,
+      "falla": "CA5.5b · si el código autorizado ya no está vigente, el paso dos da codigo_invalido aunque la autorización siga viva",
+      "forjado": true,
+      "nota": "R2.4 (P-R2-1, respuesta del propietario): se conserva la guarda usado_en is null del paso dos y el estado se forja como postgres en CA5.5b (inalcanzable por la API). Vuelto a ejecutar en la ronda 2: sigue rojo."
+    },
+    "M11": {
+      "mutacion": "el canje sin canje_autorizado_hasta > now()",
+      "rojo": true,
+      "falla": "CA5.6 · con la autorización caducada, el paso dos da codigo_invalido"
+    },
+    "M12": {
+      "mutacion": "se exige segundo_factor_verificado_recientemente() en el paso uno del canje",
+      "rojo": true,
+      "falla": "42501 'sin 2FA' en el banco 13 (el canje desde una sesión sin 2FA deja de ser posible); el motivo es el correcto, aunque salta antes que la aserción del 24"
+    },
+    "M13": {
+      "mutacion": "se quita la guarda de solo lectura del PIN",
+      "rojo": true,
+      "falla": "CA7 · PIN bueno en solo lectura: 25006 con el texto propio (mensaje real: cannot execute SELECT FOR UPDATE in a read-only transaction)"
+    },
+    "M14": {
+      "mutacion": "un if después de extensions.crypt(",
+      "rojo": true,
+      "falla": "CA8 · después de extensions.crypt( no hay ningún if, return ni raise"
+    },
+    "M15": {
+      "mutacion": "la guarda de solo lectura pasa a después de crypt",
+      "rojo": true,
+      "falla": "CA7 · mismo texto ajeno que M13 (salta antes que la aserción de orden de CA8: el orden queda cubierto, pero la aserción de orden no se vio fallar sola)"
+    }
+  },
+  "oraculo_http": {
+    "M-H1/M-H3": {
+      "mutacion": "se recrea desbloquear_historia(text) de un paso (siempre ok), con recarga del esquema de PostgREST",
+      "rojo": true,
+      "falla": "O4 · desbloquear_historia con p_pin no existe (200 ... ok). O7 no falla: no pasa por esa función; los dos mutantes del diseño coinciden en este"
+    },
+    "M-H2": {
+      "mutacion": "comprobar_pin_historia devuelve boolean",
+      "rojo": true,
+      "falla": "O1 en S1, S2 y S3 · el malo (200 false) y el bueno (200 true) responden igual: deja de ser así"
+    },
+    "M-H4": {
+      "mutacion": "se quita el for update del paso uno del PIN",
+      "rojo": true,
+      "falla": "C4 (tres malos en cola detrás de un bloqueador, en_espera 3): intentos = 7 en vez de 5; PIN_FALLIDO 13 → 16, PIN_BLOQUEADO 0 → 3, avisos 0 → 3"
+    },
+    "M-H5": {
+      "mutacion": "se quitan a la vez el pg_advisory_xact_lock y el for update de comprobar_codigo_recuperacion",
+      "rojo": true,
+      "falla": "C5 (en_espera 3): intentos = 5 y bloqueado_hasta no nulo da (7, bloqueado true)"
+    },
+    "M-H5a": {
+      "mutacion": "solo se quita el pg_advisory_xact_lock de comprobar_codigo_recuperacion",
+      "rojo": false,
+      "equivalente": true,
+      "falla": "C5 sigue verde (en_espera 3): el for update de la centinela sigue serializando; el canje tiene dos defensas"
+    },
+    "M-H5b": {
+      "mutacion": "solo se quita el for update de la centinela de comprobar_codigo_recuperacion",
+      "rojo": false,
+      "equivalente": true,
+      "falla": "C5 sigue verde (en_espera 3): el pg_advisory_xact_lock sigue serializando; el canje tiene dos defensas"
+    }
+  },
+  "ts": {
+    "M16": {
+      "mutacion": "desbloquearHistoria llama al paso dos aunque el paso uno falle",
+      "rojo": true,
+      "falla": "candado.test.ts · si el paso uno falla, es un error y no se llama al paso dos (desbloqueado: true frente a false)"
+    },
+    "M17": {
+      "mutacion": "el paso uno con { get: true }",
+      "rojo": true,
+      "falla": "candado.test.ts · llama a dos RPC por POST: igualdad exacta de rpc.mock.calls[0]"
+    },
+    "M18": {
+      "mutacion": "el paso dos del canje recibe { p_codigo }",
+      "rojo": true,
+      "falla": "totp.test.ts · rpc.mock.calls[1] de un solo elemento"
+    },
+    "M19": {
+      "mutacion": "borrarFactoresTotp también con codigo_invalido",
+      "rojo": true,
+      "falla": "totp.test.ts · codigo_invalido y bloqueado no tocan la Admin API"
+    }
+  },
+  "playwright": {
+    "M20": {
+      "mutacion": "canjearCodigoRecuperacion se salta el paso uno (next build con la mutación)",
+      "rojo": true,
+      "falla": "recuperar.spec.ts · caso A: la URL se queda en /recuperar en vez de /primera-vez; caso B: intentos_fallidos 0 en vez de 1"
+    }
+  },
+  "ronda2": {
+    "fecha": "2026-10-04",
+    "nota": "Ronda 2. Mutantes SQL: create or replace de la función mutada (o drop+create del disparador) sobre la base levantada, prueba, y vuelta al original; tras todos se volvió a pasar el banco entero y el oráculo (completos). Los TS se aplican con sed y se revierten con git checkout.",
+    "sql_banco": {
+      "M21": {
+        "mutacion": "se quita la update añadida a bloquear_historia()",
+        "rojo": true,
+        "falla": "CA-R2.2 · bloquear deja 0 autorizaciones"
+      },
+      "M22": {
+        "mutacion": "se quitan desbloqueos_autorizados y autorizado_hasta del on conflict de fijar_pin_historia",
+        "rojo": true,
+        "falla": "CA-R2.2 · fijar el PIN deja 0 autorizaciones"
+      },
+      "M23": {
+        "mutacion": "auditar_pines_historia recreado con fn_auditar(perfil_id), sin hash",
+        "rojo": true,
+        "falla": "CA4 · ninguna fila INSERT/UPDATE de auditoría de pines_historia lleva la clave hash ni un hash bcrypt (con el banco entero salta antes la aserción vieja del módulo 03; con el banco sin el 03 se ve fallar sola la nueva)"
+      },
+      "M23b": {
+        "mutacion": "auditar_codigos_recuperacion_totp recreado con fn_auditar(id), sin codigo_hash",
+        "rojo": true,
+        "falla": "CA5.3 · ninguna fila INSERT/UPDATE de auditoría del lote lleva codigo_hash ni un hash bcrypt (con el banco entero salta antes la aserción vieja del módulo 13; con el banco sin el 13 se ve fallar sola la nueva)"
+      }
+    },
+    "ts": {
+      "M24": {
+        "mutacion": "candado.ts vuelve a pasar error entero a console.error",
+        "rojo": true,
+        "falla": "candado.test.ts · B1-H5: no contiene DETALLE-NO-DEBE-SALIR, y «sin fila» (2 pruebas rojas)"
+      },
+      "M24b": {
+        "mutacion": "totp.ts vuelve a pasar error entero a console.error",
+        "rojo": true,
+        "falla": "totp.test.ts · B1-H5: no contiene DETALLE-NO-DEBE-SALIR"
+      },
+      "M25": {
+        "mutacion": "totp.ts: fila.motivo === ok pasa a !== codigo_invalido && !== bloqueado",
+        "rojo": true,
+        "falla": "totp.test.ts · sin_codigos no toca la Admin API (B1-H6): listFactors llamado 1 vez"
+      },
+      "M25b": {
+        "mutacion": "se quita la llamada a deleteFactor de borrarFactoresTotp",
+        "rojo": true,
+        "falla": "totp.test.ts · caso ok: deleteFactor esperado 1 vez, 0 llamadas"
+      }
+    }
+  }
+}

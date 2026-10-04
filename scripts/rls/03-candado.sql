@@ -12,7 +12,7 @@
 
 -- --- Con desbloqueo: PRO1 ve su contenido bajo candado ---------------------------------
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')), 'El PIN de PRO1 debe desbloquear la historia (primer intento)');
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')), 'El PIN de PRO1 debe desbloquear la historia (primer intento)');
 
 select pg_temp.assert(pg_temp.contar(format('select * from public.episodios_asistenciales where id = %L', :EPI)) = 1,
   'PRO1 con desbloqueo SÍ ve el episodio');
@@ -33,7 +33,7 @@ call pg_temp.reset_sesion();
 
 -- --- Ventana caducada: se manipula la caducidad, no se espera 15 minutos -----------------
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 debe desbloquear de nuevo, tras el bloqueo de más arriba');
 call pg_temp.reset_sesion();
 
@@ -52,7 +52,7 @@ call pg_temp.reset_sesion();
 
 -- --- ADR-030: la nota conjunta se lee desde LOS DOS lados, con desbloqueo -----------------
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')),
   'El PIN de PRO2 debe desbloquear la historia');
 select pg_temp.assert(pg_temp.contar(format('select * from public.episodio_participantes where episodio_id = %L and paciente_id = %L', :EPI, :P2)) = 1,
   'PRO2 (no es el profesional del episodio) SÍ lee la participación de SU paciente P2, con desbloqueo (ADR-030)');
@@ -77,24 +77,24 @@ call pg_temp.reset_sesion();
 -- módulos siguientes (13-cuentas, 14-cadena-huellas) vuelven a desbloquear con él.
 call pg_temp.como(:PRO1);
 
-select pg_temp.assert((select motivo from public.desbloquear_historia('000001')) = 'pin_incorrecto',
+select pg_temp.assert((select motivo from pg_temp.desbloquear_historia('000001')) = 'pin_incorrecto',
   'T-006: intento 1/5 con PIN erróneo: pin_incorrecto, todavía no bloquea');
-select pg_temp.assert((select motivo from public.desbloquear_historia('000002')) = 'pin_incorrecto',
+select pg_temp.assert((select motivo from pg_temp.desbloquear_historia('000002')) = 'pin_incorrecto',
   'T-006: intento 2/5: pin_incorrecto');
-select pg_temp.assert((select motivo from public.desbloquear_historia('000003')) = 'pin_incorrecto',
+select pg_temp.assert((select motivo from pg_temp.desbloquear_historia('000003')) = 'pin_incorrecto',
   'T-006: intento 3/5: pin_incorrecto');
-select pg_temp.assert((select motivo from public.desbloquear_historia('000004')) = 'pin_incorrecto',
+select pg_temp.assert((select motivo from pg_temp.desbloquear_historia('000004')) = 'pin_incorrecto',
   'T-006: intento 4/5: pin_incorrecto');
-select pg_temp.assert((select motivo from public.desbloquear_historia('000005')) = 'bloqueado',
+select pg_temp.assert((select motivo from pg_temp.desbloquear_historia('000005')) = 'bloqueado',
   'T-006: el QUINTO fallo bloquea (motivo = bloqueado)');
 
 -- El sexto, con el PIN BUENO, también falla: el bloqueo se responde antes de comparar.
-select pg_temp.assert(not (select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert(not (select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'T-006: el SEXTO intento, con el PIN CORRECTO, tampoco abre mientras el bloqueo esté vigente');
 
 -- Quince minutos, no otra cosa, y sin esperarlos de verdad.
 select pg_temp.assert(
-  (select bloqueado_hasta from public.desbloquear_historia('111111')) between now() + interval '14 minutes' and now() + interval '15 minutes',
+  (select bloqueado_hasta from pg_temp.desbloquear_historia('111111')) between now() + interval '14 minutes' and now() + interval '15 minutes',
   'T-006: el bloqueo dura quince minutos');
 call pg_temp.reset_sesion();
 
@@ -130,7 +130,7 @@ update public.pines_historia
  where perfil_id = :PRO1;
 
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'T-006: levantado el bloqueo, el PIN de PRO1 vuelve a abrir — el estado queda como estaba');
 select public.bloquear_historia();
 call pg_temp.reset_sesion();

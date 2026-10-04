@@ -238,4 +238,29 @@ as $$
     '}';
 $$;
 
+-- T-042 · Los dos pasos de T-042, con la forma de la función vieja, para que las
+-- aserciones de T-003 a T-038 sigan leyéndose igual. La puerta de un paso
+-- (`public.desbloquear_historia(text)` y `public.canjear_codigo_recuperacion(text)`) ya no
+-- existe: cotejaba y devolvía en la misma transacción, y eso era el oráculo. Estos dos
+-- ayudantes llaman al paso uno (que coteja y confirma) y luego al paso dos (que no recibe
+-- el secreto). Son `security invoker`: corren con el rol y el JWT que fijó `como()`.
+-- El banco 24 NO los usa: llama a las funciones `public.*` directamente.
+create or replace function pg_temp.desbloquear_historia(p_pin text)
+returns table (desbloqueado boolean, motivo text, caduca_en timestamptz, bloqueado_hasta timestamptz)
+language plpgsql as $$
+begin
+  perform public.comprobar_pin_historia(p_pin);
+  return query select d.desbloqueado, d.motivo, d.caduca_en, d.bloqueado_hasta
+                 from public.desbloquear_historia() d;
+end $$;
+
+create or replace function pg_temp.canjear_codigo_recuperacion(p_codigo text)
+returns table (canjeado boolean, motivo text, bloqueado_hasta timestamptz)
+language plpgsql as $$
+begin
+  perform public.comprobar_codigo_recuperacion(p_codigo);
+  return query select c.canjeado, c.motivo, c.bloqueado_hasta
+                 from public.canjear_codigo_recuperacion() c;
+end $$;
+
 \echo '00-ayudantes: assert, assert_lanza, assert_no_lanza, contar, como() y sobre_prueba() definidos.'
