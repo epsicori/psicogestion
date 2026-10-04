@@ -13,11 +13,12 @@ export function enfocarPrimerHueco(contenedor: ParentNode | null): boolean {
 }
 
 /**
- * Teclado de un hueco libre en modo selección (T-028 B, H10). Los huecos no son parada de Tab: la
- * parada es el día activo, y desde él Flecha abajo entra en sus huecos. Aquí, dentro: arriba y
- * abajo recorren los del día (arriba desde el primero vuelve al día), Inicio y Fin saltan a los
- * extremos, Escape vuelve al día, y las flechas laterales pasan al día vecino si la rejilla lo
- * pide (`alLado`). Lo que no es de este patrón se deja pasar (Tab sale; Intro y Espacio eligen).
+ * Teclado de un hueco libre en modo selección (T-028 B, H10 y H21). Como las citas de la agenda:
+ * los huecos del día activo son parada de Tab (los de los demás días no), y las flechas son un
+ * extra: arriba y abajo recorren los del día (arriba desde el primero vuelve al día), Inicio y
+ * Fin saltan a los extremos, Escape vuelve al día (y no cierra el diálogo: lo ve `defaultPrevented`),
+ * y las flechas laterales pasan al día vecino si la rejilla lo pide (`alLado`). Lo que no es de
+ * este patrón se deja pasar (Tab sigue; Intro y Espacio eligen).
  */
 export function alTeclearHueco(
   evento: KeyboardEvent<HTMLElement>,

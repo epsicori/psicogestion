@@ -311,6 +311,7 @@ export function RejillaSemana({ titulo, dias, eje, citas = [], diaInicial, alAbr
                           })
                         }
                         compacto={lugar.carriles > 1}
+                        parada={i === activo}
                         className="absolute min-h-0 p-1"
                         style={{
                           top: (hueco.minutoPared - eje.desdeMinuto) * PX_MIN,

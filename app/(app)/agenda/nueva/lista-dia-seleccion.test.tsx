@@ -76,21 +76,14 @@ describe('ListaDia · modo selección', () => {
     expect(screen.queryByText('No hay huecos libres en esta semana.')).toBeNull();
   });
 
-  // H10 (ronda 3): una sola parada de Tab en el selector de día; los huecos se recorren con flechas.
-  it('con varios huecos libres, solo el día activo es parada de Tab', () => {
-    render(
-      <ListaDia
-        dias={calendario.dias}
-        diaInicial={1}
-        seleccion={{ huecos: calendario.huecos, elegido: null, alElegir: vi.fn() }}
-      />,
-    );
+  // H21: el dia activo y los huecos del dia visible son paradas de Tab; los de otros dias no se pintan.
+  it('Tab recorre el dia activo y los huecos del dia visible, y nada mas', () => {
+    montar();
 
-    const paradas = Array.from(document.querySelectorAll<HTMLElement>('button, [tabindex]')).filter(
-      (e) => e.getAttribute('tabindex') !== '-1',
-    );
-    expect(paradas).toHaveLength(1);
-    expect(paradas[0].getAttribute('data-dia')).toBe('2026-10-06');
+    const paradas = Array.from(document.querySelectorAll<HTMLElement>('button, [tabindex]'))
+      .filter((e) => e.getAttribute('tabindex') !== '-1')
+      .map((e) => e.getAttribute('data-hueco') ?? `dia ${e.getAttribute('data-dia')}`);
+    expect(paradas).toEqual(['dia 2026-10-06', '2026-10-06T17:00']);
   });
 
   it('Flecha abajo en un día entra en sus huecos; Escape vuelve al día', () => {

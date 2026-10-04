@@ -52,6 +52,10 @@ export function Dialogo({ abierto, alCerrar, titulo, focoInicial, ancho = 'norma
         aria-modal="true"
         aria-labelledby={idTitulo}
         tabIndex={-1}
+        // Un Escape que algo de dentro ya atendió (un hueco que devuelve el foco a su día) no cierra el diálogo (T-028 B, H20).
+        onKeyDown={(evento) => {
+          if (evento.key === 'Escape' && evento.defaultPrevented) evento.nativeEvent.stopPropagation();
+        }}
         className={cn(
           'relative w-full rounded-xl border border-border bg-card p-6',
           'text-card-foreground shadow-lg outline-none',

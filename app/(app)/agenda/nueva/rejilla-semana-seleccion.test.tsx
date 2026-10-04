@@ -106,7 +106,7 @@ describe('RejillaSemana · modo selección', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /10:00, libre/ }));
   });
 
-  // H10 (ronda 3): una sola parada de Tab; flechas para moverse; Tab para salir.
+  // H10 y H21: el dia activo y sus huecos son paradas de Tab (como las citas de la agenda); flechas como extra.
   describe('teclado (H10)', () => {
     const bloques = [
       bloque('2026-10-06', '10:00', 'libre'),
@@ -118,12 +118,24 @@ describe('RejillaSemana · modo selección', () => {
     const paradasDeTab = () =>
       Array.from(document.querySelectorAll<HTMLElement>('button, [tabindex]')).filter((e) => e.getAttribute('tabindex') !== '-1');
 
-    it('con cinco huecos libres en dos días, la rejilla tiene una sola parada de Tab: el día activo', () => {
+    it('Tab entra en los huecos del dia activo y los de los demas dias no son parada (H21)', () => {
       montar(bloques);
 
-      const paradas = paradasDeTab();
-      expect(paradas).toHaveLength(1);
-      expect(paradas[0].getAttribute('data-dia')).toBe('2026-10-06');
+      const paradas = paradasDeTab().map((e) => e.getAttribute('data-hueco') ?? `dia ${e.getAttribute('data-dia')}`);
+      expect(paradas).toEqual(['dia 2026-10-06', '2026-10-06T10:00', '2026-10-06T12:00', '2026-10-06T16:00']);
+      expect(document.querySelector('[data-hueco="2026-10-08T10:00"]')?.getAttribute('tabindex')).toBe('-1');
+    });
+
+    it('al pasar a otro dia con las flechas, sus huecos pasan a ser parada y los del anterior dejan de serlo (H21)', () => {
+      montar(bloques);
+      const lunes = document.querySelector<HTMLElement>('[data-dia="2026-10-06"]') as HTMLElement;
+      lunes.focus();
+
+      fireEvent.keyDown(lunes, { key: 'ArrowRight' });
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'ArrowRight' });
+
+      const paradas = paradasDeTab().map((e) => e.getAttribute('data-hueco') ?? `dia ${e.getAttribute('data-dia')}`);
+      expect(paradas).toEqual(['dia 2026-10-08', '2026-10-08T10:00', '2026-10-08T12:00']);
     });
 
     it('Flecha abajo en el día entra en sus huecos y recorre uno a uno; Escape vuelve al día', () => {
