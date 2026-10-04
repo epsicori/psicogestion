@@ -405,3 +405,94 @@ revoke execute on function public.comprobar_codigo_recuperacion(text) from publi
 grant  execute on function public.comprobar_codigo_recuperacion(text) to authenticated;
 revoke execute on function public.canjear_codigo_recuperacion() from public, anon;
 grant  execute on function public.canjear_codigo_recuperacion() to authenticated;
+
+-- =========================================================================
+-- h) Bloquear y fijar el PIN anulan la autorización pendiente del paso dos (R2.2 · A1-H2)
+-- =========================================================================
+-- Cuerpos idénticos a 20260822160000:441-468 (bloquear_historia) y 20260830090000:859-891
+-- (fijar_pin_historia), con solo lo añadido. create or replace conserva grants y propietario.
+
+create or replace function public.bloquear_historia()
+returns integer
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_n   integer;
+begin
+  if v_uid is null then
+    raise exception 'No hay sesión.' using errcode = '42501';
+  end if;
+
+  with revocados as (
+    update public.desbloqueos_historia
+       set revocado_en = now()
+     where perfil_id = v_uid
+       and revocado_en is null
+       and caduca_en > now()
+    returning 1
+  )
+  select count(*) into v_n from revocados;
+
+  -- T-042: la autorización pendiente del paso dos también muere. El predicado evita una fila
+  -- de auditoría vacía cuando no hay autorización que anular.
+  update public.pines_historia ph
+     set desbloqueos_autorizados = 0,
+         autorizado_hasta = null,
+         actualizado_en = now()
+   where ph.perfil_id = v_uid
+     and (ph.desbloqueos_autorizados > 0 or ph.autorizado_hasta is not null);
+
+  return v_n;
+end;
+$$;
+
+comment on function public.bloquear_historia() is
+  'Cierra el candado de la historia para el usuario actual (ADR-026). Desde T-042, anula '
+  'también la autorización pendiente del paso dos.';
+
+create or replace function public.fijar_pin_historia(p_pin text)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+begin
+  if v_uid is null then
+    raise exception 'No hay sesión.' using errcode = '42501';
+  end if;
+
+  if not (select public.segundo_factor_verificado_recientemente()) then
+    raise exception
+      'Se exige el segundo factor (TOTP) verificado hace menos de cinco minutos para fijar el PIN.'
+      using errcode = '42501';
+  end if;
+
+  if p_pin !~ '^[0-9]{6}$' then
+    raise exception 'El PIN debe ser exactamente seis dígitos.' using errcode = '22023';
+  end if;
+
+  insert into public.pines_historia (perfil_id, hash)
+  values (v_uid, extensions.crypt(p_pin, extensions.gen_salt('bf', 12)))
+  on conflict (perfil_id) do update
+    set hash                    = excluded.hash,
+        intentos_fallidos       = 0,
+        bloqueado_hasta         = null,
+        desbloqueos_autorizados = 0,
+        autorizado_hasta        = null,
+        actualizado_en          = now();
+end;
+$$;
+
+comment on function public.fijar_pin_historia(text) is
+  'Fija el PIN de historia del usuario actual. Sin parámetro de perfil: nadie establece '
+  'el PIN de otro (ADR-026). Exige segundo_factor_verificado_recientemente() (ALTA 2 de '
+  'la revisión del 30-08-2026): sin eso, el bloqueo de cinco intentos era reseteable sin '
+  'límite por el propio llamante. Desde T-042, anula también la autorización pendiente '
+  'del paso dos.';

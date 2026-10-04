@@ -296,6 +296,21 @@ select pg_temp.assert(
     where a.actor_id = :PRO1 and a.operacion in ('PIN_FALLIDO', 'PIN_BLOQUEADO')
       and (a.estado_posterior ? 'hash' or a.estado_posterior::text like '%111111%' or a.estado_posterior::text like '%999999%')) = 0,
   'T-042 CA4 · ninguna entrada de auditoría lleva el PIN ni el hash');
+-- A1-H3 (R2.3): las filas UPDATE de fn_auditar también. Primero, que haya filas que mirar.
+select pg_temp.assert(
+  (select count(*) from public.auditoria a
+    where a.tabla = 'pines_historia' and a.registro_id = :PRO1
+      and a.operacion = 'UPDATE' and a.ocurrido_en = now()) > 0,
+  'T-042 CA4 · hay filas UPDATE de auditoría de pines_historia que mirar (no vacía)');
+select pg_temp.assert(
+  (select count(*) from public.auditoria a
+    where a.tabla = 'pines_historia' and a.registro_id = :PRO1
+      and a.operacion in ('INSERT', 'UPDATE')
+      and (coalesce(a.estado_anterior, '{}') ? 'hash'
+        or coalesce(a.estado_posterior, '{}') ? 'hash'
+        or coalesce(a.estado_anterior::text, '') ~ '\$2[abxy]?\$'
+        or coalesce(a.estado_posterior::text, '') ~ '\$2[abxy]?\$')) = 0,
+  'T-042 CA4 · ninguna fila INSERT/UPDATE de auditoría de pines_historia lleva la clave hash ni un hash bcrypt');
 select pg_temp.t42_pin_reset(:PRO1);
 
 -- =========================================================================================
@@ -346,6 +361,21 @@ select pg_temp.assert(pg_temp.t42_n_aud(:PRO1, 'TOTP_REPUESTO') = :t42_tr0 + 1
         where a.actor_id = :PRO1 and a.operacion = 'TOTP_REPUESTO' order by a.ocurrido_en desc, a.id desc limit 1) = 'codigo_recuperacion'
   and pg_temp.t42_n_aviso(:PRO1, 'totp_repuesto') = :t42_ta0 + 1,
   'T-042 CA5.3 · TOTP_REPUESTO con via = codigo_recuperacion y el aviso totp_repuesto, una sola vez');
+-- A1-H3 (R2.3): la auditoría de los códigos no lleva codigo_hash. Primero, que haya filas.
+select pg_temp.assert(
+  (select count(*) from public.auditoria a
+    where a.tabla = 'codigos_recuperacion_totp' and a.operacion = 'UPDATE' and a.ocurrido_en = now()
+      and a.registro_id in (select c.id::text from public.codigos_recuperacion_totp c where c.perfil_id = :PRO1)) > 0,
+  'T-042 CA5.3 · hay filas UPDATE de auditoría del lote de PRO1 que mirar (no vacía)');
+select pg_temp.assert(
+  (select count(*) from public.auditoria a
+    where a.tabla = 'codigos_recuperacion_totp' and a.operacion in ('INSERT', 'UPDATE')
+      and a.registro_id in (select c.id::text from public.codigos_recuperacion_totp c where c.perfil_id = :PRO1)
+      and (coalesce(a.estado_anterior, '{}') ? 'codigo_hash'
+        or coalesce(a.estado_posterior, '{}') ? 'codigo_hash'
+        or coalesce(a.estado_anterior::text, '') ~ '\$2[abxy]?\$'
+        or coalesce(a.estado_posterior::text, '') ~ '\$2[abxy]?\$')) = 0,
+  'T-042 CA5.3 · ninguna fila INSERT/UPDATE de auditoría del lote lleva codigo_hash ni un hash bcrypt');
 
 -- (4) un bueno y luego un malo: codigo_invalido y el código sigue sin usar
 select pg_temp.t42_lote(:PRO1, 'T42C');
@@ -362,11 +392,18 @@ call pg_temp.como(:PRO1);
 select public.comprobar_codigo_recuperacion('T42DA');
 call pg_temp.reset_sesion();
 select pg_temp.t42_lote(:PRO1, 'T42E');   -- el administrador o el titular generan otro lote entre los dos pasos
+-- (como postgres: authenticated no puede leer canje_autorizado_id) el motivo real del rechazo
+select pg_temp.assert(
+  (select c.canje_autorizado_id is null from public.codigos_recuperacion_totp c where c.id = pg_temp.t42_cent_id(:PRO1)),
+  'T-042 CA5.5 · (fijación) la centinela del lote nuevo nace con canje_autorizado_id nulo');
 call pg_temp.como(:PRO1);
-select pg_temp.assert(pg_temp.t42_p2_canje() = 'codigo_invalido', 'T-042 CA5.5 · un lote nuevo entre los dos pasos: codigo_invalido');
+select pg_temp.assert(pg_temp.t42_p2_canje() = 'codigo_invalido',
+  'T-042 CA5.5 · la centinela del lote nuevo no lleva autorización: la guarda del consumo rechaza');
 call pg_temp.reset_sesion();
--- (5b) el código autorizado ya no está vigente aunque la autorización de la centinela siga viva
--- (estado forjado como postgres: la centinela lleva la autorización de OTRO código del lote, ya usado)
+-- (5b) Estado inalcanzable por la API (A1-H4, R2.4): se forja como postgres para probar la defensa
+-- en profundidad del `usado_en is null`. No borrar.
+-- El código autorizado ya no está vigente aunque la autorización de la centinela siga viva
+-- (la centinela lleva la autorización de OTRO código del lote, ya usado).
 select pg_temp.t42_lote(:PRO1, 'T42G');
 select pg_temp.t42_cent_id(:PRO1) as t42_g_cent, (select o.id from public.codigos_recuperacion_totp o where o.perfil_id = :PRO1 and o.usado_en is null and o.id <> pg_temp.t42_cent_id(:PRO1) limit 1) as t42_g_a \gset
 select pg_temp.assert(:'t42_g_cent' <> :'t42_g_a', 'T-042 CA5.5b · (fijación) el código A no es la centinela');
@@ -503,6 +540,49 @@ select pg_temp.assert(
   'T-042 CA8 · ninguna de las cuatro lleva exception when');
 
 drop table t42_def;
+
+-- =========================================================================================
+-- CA-R2.2 · bloquear_historia() y fijar_pin_historia() anulan la autorización pendiente
+-- =========================================================================================
+-- (1) gemela positiva: dos comprobaciones buenas y un paso dos dejan exactamente UNA autorización viva
+select pg_temp.t42_pin_reset(:PRO1);
+call pg_temp.como(:PRO1);
+select public.comprobar_pin_historia('111111');
+select public.comprobar_pin_historia('111111');
+select pg_temp.assert(pg_temp.t42_p2_pin() = 'ok', 'T-042 CA-R2.2 · (gemela) con la autorización viva, el paso dos abre: ok');
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_temp.t42_pin(:PRO1) = '0/1/false', 'T-042 CA-R2.2 · (gemela) queda exactamente una autorización viva (0/1/false)');
+
+-- (2) bloquear la anula: el paso dos ya no abre
+call pg_temp.como(:PRO1);
+select public.bloquear_historia();
+select pg_temp.assert(not public.historia_desbloqueada(), 'T-042 CA-R2.2 · tras bloquear, historia_desbloqueada() es falso');
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_temp.t42_pin(:PRO1) = '0/0/false', 'T-042 CA-R2.2 · bloquear deja 0 autorizaciones');
+call pg_temp.como(:PRO1);
+select pg_temp.assert(pg_temp.t42_p2_pin() = 'pin_incorrecto', 'T-042 CA-R2.2 · tras bloquear, el paso dos da pin_incorrecto');
+select pg_temp.assert(not public.historia_desbloqueada(), 'T-042 CA-R2.2 · y la historia sigue cerrada');
+call pg_temp.reset_sesion();
+
+-- (3) fijar el PIN la anula (el factor de PRO1 se retó hace 43 s: un desfase que ningún otro módulo usa)
+update auth.mfa_factors set last_challenged_at = now() - interval '43 seconds'
+ where id = (select f.id from auth.mfa_factors f where f.user_id = :PRO1 and f.status = 'verified' order by f.created_at limit 1);
+call pg_temp.como_con_2fa(:PRO1);
+select public.comprobar_pin_historia('111111');
+select public.comprobar_pin_historia('111111');
+call pg_temp.reset_sesion();
+select pg_temp.assert(pg_temp.t42_pin(:PRO1) = '0/2/false', 'T-042 CA-R2.2 · (gemela) antes de fijar hay 2 autorizaciones vivas (0/2/false)');
+call pg_temp.como_con_2fa(:PRO1);
+select public.fijar_pin_historia('111111');   -- el mismo PIN: nada que restaurar
+call pg_temp.reset_sesion();
+
+-- (4) lo que dejó la fijación
+select pg_temp.assert(pg_temp.t42_pin(:PRO1) = '0/0/false', 'T-042 CA-R2.2 · fijar el PIN deja 0 autorizaciones');
+call pg_temp.como(:PRO1);
+select pg_temp.assert(pg_temp.t42_p2_pin() = 'pin_incorrecto', 'T-042 CA-R2.2 · tras fijar, el paso dos da pin_incorrecto');
+select pg_temp.assert(not public.historia_desbloqueada(), 'T-042 CA-R2.2 · y la historia sigue cerrada tras fijar');
+call pg_temp.reset_sesion();
+select pg_temp.t42_pin_reset(:PRO1);
 
 -- Deja el PIN y el lote como los encontró 03/13: sin contadores ni autorizaciones.
 select pg_temp.t42_pin_reset(:PRO1);

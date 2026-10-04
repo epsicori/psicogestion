@@ -12,7 +12,7 @@
 // CONFIRMA filas: crea un usuario con UUID y correo aleatorios por pasada, así que se puede
 // repetir sin `db reset`. Escribe tickets/T-042/oraculo-postgrest.json.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -141,6 +141,81 @@ function reiniciar() {
            canje_autorizado_id = null, canje_autorizado_hasta = null
      where perfil_id = '${UID}';
   `);
+}
+
+// -- solape real (R2.1) ---------------------------------------------------------------------
+const PSQL_ARGS = ["exec", "-i", contenedor, "psql", "-U", "postgres", "-d", "postgres", "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1"];
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// psql asíncrono (no bloquea el bucle de eventos mientras hay peticiones en vuelo).
+function psqlAsync(sql) {
+  return new Promise((resolve, reject) => {
+    const p = spawn("docker", [...PSQL_ARGS, "-f", "-"]);
+    let out = "";
+    let err = "";
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    p.on("error", reject);
+    p.on("close", (c) => (c === 0 ? resolve(out.trim()) : reject(new Error(`psql salió con ${c}: ${err}`))));
+    p.stdin.end(sql);
+  });
+}
+
+async function esperarHasta(sql, esperado, maxMs) {
+  const limite = Date.now() + maxMs;
+  for (;;) {
+    const valor = Number(await psqlAsync(sql));
+    if (valor === esperado) return { ok: true, valor };
+    if (Date.now() >= limite) return { ok: false, valor };
+    await dormir(50);
+  }
+}
+
+// Retiene sqlRetener en una transacción abierta (psql con la stdin sin cerrar), lanza la ráfaga,
+// espera a ver las 3 peticiones en espera de un Lock y suelta. Si no ve el solape, FALLA (no
+// concluyente): nunca da verde sin haber visto las tres en espera.
+async function conBloqueador(nombre, sqlRetener, patronFuncion, lanzar) {
+  const bloq = spawn(
+    "docker",
+    ["exec", "-i", "-e", "PGAPPNAME=t042-bloqueador", contenedor, "psql", "-U", "postgres", "-d", "postgres", "-X", "-q", "-v", "ON_ERROR_STOP=1"],
+    { stdio: ["pipe", "ignore", "ignore"] },
+  );
+  const salida = new Promise((resolve) => bloq.on("close", resolve));
+  bloq.on("error", () => {});
+  let soltado = false;
+  const soltar = async (final) => {
+    if (soltado) return;
+    soltado = true;
+    bloq.stdin.write(`${final};\n`);
+    bloq.stdin.end();
+    await salida;
+  };
+  try {
+    bloq.stdin.write(`begin;\n${sqlRetener}\n`);
+    const ret = await esperarHasta(
+      "select count(*) from pg_stat_activity where application_name = 't042-bloqueador' and state = 'idle in transaction';",
+      1,
+      3000,
+    );
+    if (!ret.ok) throw new Parada(`${nombre} no concluyente: el bloqueador no retiene (${ret.valor}/1)`);
+    const promesas = lanzar(); // sin await: la ráfaga queda en vuelo
+    const espera = await esperarHasta(
+      `select count(*) from pg_stat_activity where wait_event_type = 'Lock' and query ilike '%${patronFuncion}%' and pid <> pg_backend_pid();`,
+      3,
+      4000,
+    );
+    if (!espera.ok) {
+      await soltar("rollback");
+      await Promise.allSettled(promesas);
+      throw new Parada(`${nombre} no concluyente: ${espera.valor}/3 en espera`);
+    }
+    await soltar("commit");
+    const respuestas = await Promise.all(promesas);
+    return { en_espera: espera.valor, respuestas };
+  } finally {
+    await soltar("rollback").catch(() => {});
+    if (bloq.exitCode === null) bloq.kill();
+  }
 }
 
 const fallos = [];
@@ -321,6 +396,61 @@ try {
     exigir(motivos[0] === "codigo_invalido" && motivos[1] === "ok", `C3 · exactamente un ok y un codigo_invalido (${motivos.join(", ")})`);
     exigir(usados() === 1, `C3 · un código con usado_en (${usados()})`);
     exigir(nAud("TOTP_REPUESTO") - tr0 === 1, `C3 · una fila TOTP_REPUESTO (${nAud("TOTP_REPUESTO") - tr0})`);
+  }
+  // C4 · tres PIN malos solapados desde intentos = 4: el for update los serializa (R2.1).
+  {
+    reiniciar();
+    for (let i = 0; i < 4; i++) await comprobarPin(PIN_MALO);
+    const avisos = () => Number(psql(`select count(*) from public.notificaciones where perfil_id = '${UID}' and tipo = 'pin_bloqueado';`));
+    const base = { intentos: estadoPin().intentos, fallido: nAud("PIN_FALLIDO"), bloqueado: nAud("PIN_BLOQUEADO"), avisos: avisos() };
+    exigir(base.intentos === 4, `C4 · preparación: el PIN está en intentos = 4 (${base.intentos})`);
+    const r = await conBloqueador(
+      "C4",
+      `select 1 from public.pines_historia where perfil_id = '${UID}' for update;`,
+      "comprobar_pin_historia",
+      () => [comprobarPin(PIN_MALO), comprobarPin(PIN_MALO), comprobarPin(PIN_MALO)],
+    );
+    const final = {
+      intentos: estadoPin().intentos,
+      bloqueado: psql(`select (bloqueado_hasta is not null) from public.pines_historia where perfil_id = '${UID}';`) === "t",
+      fallido: nAud("PIN_FALLIDO"),
+      bloqueos: nAud("PIN_BLOQUEADO"),
+      avisos: avisos(),
+    };
+    evidencia.concurrencia.c4 = { en_espera: r.en_espera, base, final, estados: r.respuestas.map((x) => x.estado) };
+    exigir(r.en_espera === 3, `C4 · se vieron 3 peticiones en espera de un Lock (${r.en_espera})`);
+    exigir(r.respuestas.every((x) => x.estado === 204), `C4 · las tres responden 204 (${r.respuestas.map((x) => x.estado).join(",")})`);
+    exigir(final.intentos === 5 && final.bloqueado, `C4 · intentos = 5 y bloqueado_hasta no nulo (${final.intentos}, bloqueado ${final.bloqueado})`);
+    exigir(final.fallido === base.fallido + 1, `C4 · PIN_FALLIDO = base + 1 (${base.fallido} → ${final.fallido})`);
+    exigir(final.bloqueos === base.bloqueado + 1, `C4 · PIN_BLOQUEADO = base + 1 (${base.bloqueado} → ${final.bloqueos})`);
+    exigir(final.avisos === base.avisos + 1, `C4 · avisos pin_bloqueado = base + 1 (${base.avisos} → ${final.avisos})`);
+    evidencia.concurrencia.c4.veredicto = fallos.some((m) => m.startsWith("C4")) ? "FALLA" : "PASA";
+    reiniciar();
+  }
+
+  // C5 · tres códigos malos solapados desde intentos = 4: candado de consejo + centinela (R2.1).
+  {
+    reiniciar();
+    for (let i = 0; i < 4; i++) await comprobarCod(COD_MALO);
+    const base = estadoCanje();
+    exigir(base.intentos === 4, `C5 · preparación: la centinela está en intentos = 4 (${base.intentos})`);
+    const idCent = psql(`select ${CENT};`);
+    const r = await conBloqueador(
+      "C5",
+      `select pg_advisory_xact_lock(hashtextextended('codigos_recuperacion:' || '${UID}', 0));\nselect 1 from public.codigos_recuperacion_totp where id = '${idCent}' for update;`,
+      "comprobar_codigo_recuperacion",
+      () => [comprobarCod(COD_MALO), comprobarCod(COD_MALO), comprobarCod(COD_MALO)],
+    );
+    const final = {
+      intentos: estadoCanje().intentos,
+      bloqueado: psql(`select (bloqueado_hasta is not null) from public.codigos_recuperacion_totp where id = '${idCent}';`) === "t",
+    };
+    evidencia.concurrencia.c5 = { en_espera: r.en_espera, base, final, estados: r.respuestas.map((x) => x.estado) };
+    exigir(r.en_espera === 3, `C5 · se vieron 3 peticiones en espera de un Lock (${r.en_espera})`);
+    exigir(r.respuestas.every((x) => x.estado === 204), `C5 · las tres responden 204 (${r.respuestas.map((x) => x.estado).join(",")})`);
+    exigir(final.intentos === 5 && final.bloqueado, `C5 · intentos = 5 y bloqueado_hasta no nulo (${final.intentos}, bloqueado ${final.bloqueado})`);
+    evidencia.concurrencia.c5.veredicto = fallos.some((m) => m.startsWith("C5")) ? "FALLA" : "PASA";
+    reiniciar();
   }
 } catch (e) {
   if (e instanceof Parada) {

@@ -1,6 +1,6 @@
 {
   "ticket": "T-042",
-  "usuario": "6628e212-30fa-4505-8675-9782e393ec27",
+  "usuario": "0cad1e8c-f3a0-4e2d-892a-d55099cfc1b3",
   "funciones": {
     "pin": {
       "formas": {
@@ -281,7 +281,7 @@
     "o5": {
       "p2ok": {
         "estado": 200,
-        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T10:46:16.382392+00:00\",\"bloqueado_hasta\":null}]"
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:18:07.378152+00:00\",\"bloqueado_hasta\":null}]"
       },
       "p2mal": {
         "estado": 200,
@@ -359,11 +359,11 @@
     "c2": {
       "a": {
         "estado": 200,
-        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T10:46:18.485142+00:00\",\"bloqueado_hasta\":null}]"
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:18:09.732861+00:00\",\"bloqueado_hasta\":null}]"
       },
       "b": {
         "estado": 200,
-        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T10:46:18.485095+00:00\",\"bloqueado_hasta\":null}]"
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:18:09.732807+00:00\",\"bloqueado_hasta\":null}]"
       },
       "estado": {
         "intentos": 0,
@@ -382,6 +382,45 @@
       },
       "usados": 1,
       "totp_repuesto": 1
+    },
+    "c4": {
+      "en_espera": 3,
+      "base": {
+        "intentos": 4,
+        "fallido": 13,
+        "bloqueado": 0,
+        "avisos": 0
+      },
+      "final": {
+        "intentos": 5,
+        "bloqueado": true,
+        "fallido": 14,
+        "bloqueos": 1,
+        "avisos": 1
+      },
+      "estados": [
+        204,
+        204,
+        204
+      ],
+      "veredicto": "PASA"
+    },
+    "c5": {
+      "en_espera": 3,
+      "base": {
+        "intentos": 4,
+        "autorizado": 0
+      },
+      "final": {
+        "intentos": 5,
+        "bloqueado": true
+      },
+      "estados": [
+        204,
+        204,
+        204
+      ],
+      "veredicto": "PASA"
     }
   },
   "fallos": []
