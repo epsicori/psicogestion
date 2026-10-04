@@ -75,4 +75,24 @@ describe('FormularioNavegable', () => {
 
     expect(document.querySelector('[data-anuncio-global]')?.textContent).toBe('Cita guardada.');
   });
+
+  // H14 (ronda 3): una región viva que nace ya con texto no se anuncia; tiene que existir antes.
+  it('la región de estado existe, vacía, en cuanto se monta el formulario (antes de cualquier anuncio)', () => {
+    render(<FormularioNavegable {...props} modo="dialogo" />);
+
+    const region = document.querySelector('[data-anuncio-global]') as HTMLElement;
+    expect(region).not.toBeNull();
+    expect(region.getAttribute('role')).toBe('status');
+    expect(region.textContent).toBe('');
+  });
+
+  it('el primer anuncio solo cambia el texto de la región que ya estaba, sin crear otra', () => {
+    render(<FormularioNavegable {...props} modo="dialogo" />);
+    const antes = document.querySelector('[data-anuncio-global]');
+
+    fireEvent.click(screen.getByText('terminar'));
+
+    expect(document.querySelectorAll('[data-anuncio-global]')).toHaveLength(1);
+    expect(document.querySelector('[data-anuncio-global]')).toBe(antes);
+  });
 });

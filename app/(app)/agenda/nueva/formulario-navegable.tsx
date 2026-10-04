@@ -1,8 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
-import { anunciar } from './anunciar';
+import { anunciar, prepararAnuncio } from './anunciar';
 import { FormularioAlta, type PropsFormularioAlta } from './formulario-alta';
 
 type Props = Omit<PropsFormularioAlta, 'alTerminar' | 'alCancelar'> & {
@@ -18,6 +19,10 @@ type Props = Omit<PropsFormularioAlta, 'alTerminar' | 'alCancelar'> & {
  */
 export function FormularioNavegable({ modo, ...props }: Props) {
   const router = useRouter();
+  // La región de estado tiene que existir antes del anuncio (H14).
+  useEffect(() => {
+    prepararAnuncio();
+  }, []);
   const cancelar = () => (modo === 'dialogo' ? router.back() : router.push('/agenda'));
   const terminar = ({ anuncio, fecha }: { anuncio: string; fecha: string }) => {
     anunciar(anuncio);
