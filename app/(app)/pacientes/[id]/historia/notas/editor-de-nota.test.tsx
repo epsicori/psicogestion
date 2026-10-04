@@ -23,6 +23,10 @@ vi.mock('../../acciones', () => ({
   cerrarHistoriaDelPaciente: () => cerrarHistoriaDelPaciente(),
 }));
 vi.mock('@/app/(app)/candado/acciones', () => ({ abrirHistoria: vi.fn() }));
+// T-040: el diálogo de la copia es real; lo que sale de él (acciones y cifrado), simulado.
+vi.mock('./acciones-copia', () => ({ pedirCopiaDeNota: vi.fn(), registrarFicheroDeCopia: vi.fn() }));
+vi.mock('@/lib/exportaciones/cifrar', () => ({ cifrarCopia: vi.fn() }));
+vi.mock('@/lib/exportaciones/derivar-en-trabajador', () => ({ derivarEnTrabajador: vi.fn() }));
 
 const { EditorDeNota } = await import('./editor-de-nota');
 
@@ -1452,6 +1456,51 @@ describe('EditorDeNota', () => {
       fireEvent.click(screen.getByRole('option', { name: 'Luis Gómez' }));
       await vaciar();
       expect(screen.getByText('Hecho. No se pudo recargar la nota.')).toBeInTheDocument();
+    });
+  });
+
+  describe('copia cifrada (T-040)', () => {
+    const descargar = () => screen.queryByRole('button', { name: 'Descargar copia' });
+
+    it('con versiones y sin lectura conjunta, «Descargar copia» en la sección de versiones', async () => {
+      await montar(modelo({ estado: 'firmada', borrador: null, versiones: [version(1)] }));
+      const boton = descargar();
+      expect(boton).toBeInTheDocument();
+      expect(boton!.closest('section')).toBe(screen.getByRole('region', { name: 'Versión vigente' }));
+    });
+
+    it('sin versiones, no hay botón', async () => {
+      await montar(modelo({ versiones: [] }));
+      expect(descargar()).not.toBeInTheDocument();
+    });
+
+    it('con lectura conjunta, no hay botón aunque haya versiones', async () => {
+      await montar(
+        modelo({
+          soyAutor: false,
+          estado: 'firmada',
+          borrador: null,
+          lecturaConjunta: true,
+          versiones: [version(1, { alcance: 'conjunta' })],
+        }),
+      );
+      expect(screen.getByText('Texto firmado 1')).toBeInTheDocument();
+      expect(descargar()).not.toBeInTheDocument();
+    });
+
+    it('solo_copia pinta la cabecera de la nota y «Pedir copia por motivo», sin contenido', async () => {
+      abrirEditorDeNota.mockResolvedValue({
+        estado: 'solo_copia',
+        nota: { id: NOTA, fechaSesion: '02/02/2026', autor: 'Dr. Ruiz', versiones: 2, href: '/x' },
+      });
+      render(<EditorDeNota pacienteId={PACIENTE} citaId={null} notaId={NOTA} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Abrir el editor' }));
+      await vaciar();
+      expect(screen.getByText('02/02/2026')).toBeInTheDocument();
+      expect(screen.getByText('Dr. Ruiz')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Pedir copia por motivo' })).toBeInTheDocument();
+      expect(screen.queryByText('Esta nota no está disponible.')).not.toBeInTheDocument();
+      expect(descargar()).not.toBeInTheDocument();
     });
   });
 });

@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers';
 
+import { notasParaCopia, type NotaParaCopia } from '@/lib/exportaciones/servidor';
 import * as servidor from '@/lib/notas/servidor';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
@@ -20,21 +21,35 @@ import {
  * entrada público: el formulario no es la única forma de llamarla.
  */
 
+/**
+ * T-040 · P2-a. La administración que no lee una nota la ve como `no_disponible`; si esa nota
+ * está entre las que puede pedir por motivo, el editor enseña solo la cabecera y «Pedir copia».
+ */
+export type ResultadoAperturaConCopia =
+  | servidor.ResultadoApertura
+  | { estado: 'solo_copia'; nota: NotaParaCopia };
+
 export async function abrirEditorDeNota(entrada: {
   pacienteId: string;
   citaId: string | null;
   notaId: string | null;
   episodioId: string | null;
-}): Promise<servidor.ResultadoApertura> {
+}): Promise<ResultadoAperturaConCopia> {
   const sesion = await exigirSesion();
   const validada = esquemaApertura.safeParse(entrada);
   if (!validada.success) return { estado: 'no_disponible' };
 
   const cabeceras = await headers();
-  return servidor.abrirEditorDeNota(sesion, validada.data, {
+  const resultado = await servidor.abrirEditorDeNota(sesion, validada.data, {
     ip: ipDeLaPeticion(cabeceras),
     agente: cabeceras.get('user-agent'),
   });
+  const { notaId, pacienteId } = validada.data;
+  if (resultado.estado !== 'no_disponible' || notaId === null) return resultado;
+
+  const lectura = await notasParaCopia(sesion, pacienteId);
+  const nota = lectura.ok ? lectura.valor.find((n) => n.id === notaId) : undefined;
+  return nota ? { estado: 'solo_copia', nota } : resultado;
 }
 
 export async function guardarBorrador(entrada: {

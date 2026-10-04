@@ -16,6 +16,9 @@ const servidor = {
 };
 vi.mock('@/lib/notas/servidor', () => servidor);
 
+const notasParaCopia = vi.fn();
+vi.mock('@/lib/exportaciones/servidor', () => ({ notasParaCopia: (...a: unknown[]) => notasParaCopia(...a) }));
+
 const acciones = await import('./acciones');
 
 const P = '11111111-1111-4111-8111-111111111111';
@@ -53,6 +56,40 @@ describe('abrirEditorDeNota', () => {
       ip: '203.0.113.7',
       agente: 'prueba/1',
     });
+  });
+});
+
+describe('abrirEditorDeNota · solo_copia (T-040)', () => {
+  const paraCopia = { id: N, fechaSesion: '02/02/2026', autor: 'Dr. Ruiz', versiones: 2, href: '/x' };
+  const porNota = { pacienteId: P, citaId: null, notaId: N, episodioId: null };
+
+  it('no_disponible con la nota entre las de copia por motivo da solo_copia con sus datos', async () => {
+    servidor.abrirEditorDeNota.mockResolvedValue({ estado: 'no_disponible' });
+    notasParaCopia.mockResolvedValue({ ok: true, valor: [paraCopia] });
+    const r = await acciones.abrirEditorDeNota(porNota);
+    expect(r).toEqual({ estado: 'solo_copia', nota: paraCopia });
+    expect(notasParaCopia).toHaveBeenCalledWith(sesion, P);
+  });
+  it('no_disponible con una nota que no está en la lista sigue siendo no_disponible', async () => {
+    servidor.abrirEditorDeNota.mockResolvedValue({ estado: 'no_disponible' });
+    notasParaCopia.mockResolvedValue({ ok: true, valor: [{ ...paraCopia, id: C }] });
+    expect(await acciones.abrirEditorDeNota(porNota)).toEqual({ estado: 'no_disponible' });
+  });
+  it('si la lectura de la lista falla, no_disponible', async () => {
+    servidor.abrirEditorDeNota.mockResolvedValue({ estado: 'no_disponible' });
+    notasParaCopia.mockResolvedValue({ ok: false });
+    expect(await acciones.abrirEditorDeNota(porNota)).toEqual({ estado: 'no_disponible' });
+  });
+  it('por cita (sin notaId) no consulta la lista', async () => {
+    servidor.abrirEditorDeNota.mockResolvedValue({ estado: 'no_disponible' });
+    const r = await acciones.abrirEditorDeNota({ pacienteId: P, citaId: C, notaId: null, episodioId: null });
+    expect(r).toEqual({ estado: 'no_disponible' });
+    expect(notasParaCopia).not.toHaveBeenCalled();
+  });
+  it('cualquier otro estado pasa tal cual y no consulta la lista', async () => {
+    servidor.abrirEditorDeNota.mockResolvedValue({ estado: 'bloqueada' });
+    expect(await acciones.abrirEditorDeNota(porNota)).toEqual({ estado: 'bloqueada' });
+    expect(notasParaCopia).not.toHaveBeenCalled();
   });
 });
 

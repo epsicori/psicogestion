@@ -22,11 +22,11 @@ import { Desplegable } from '@/components/ui/desplegable';
 import { Dialogo } from '@/components/ui/dialogo';
 import { PanelDePestana, Pestanas } from '@/components/ui/pestanas';
 import { AvisoDeError, EstadoVacio } from '@/components/ui/piezas';
+import type { NotaParaCopia } from '@/lib/exportaciones/servidor';
 import { t, tCon, type ClaveDeCatalogo } from '@/lib/i18n';
 import type {
   ModeloDeNota,
   MotivoFallo,
-  ResultadoApertura,
   ResultadoDeNota,
   ResultadoGuardado,
   VersionDeVista,
@@ -35,10 +35,19 @@ import type {
 import { ampliarLaVentana, cerrarHistoriaDelPaciente } from '../../acciones';
 import { FormularioPinHistoria } from '../../formulario-pin-historia';
 import { minutosRestantes } from '../../presentacion';
-import { abrirEditorDeNota, empezarModificacion, firmarNota, fijarCoprofesional, guardarBorrador } from './acciones';
+import {
+  abrirEditorDeNota,
+  empezarModificacion,
+  firmarNota,
+  fijarCoprofesional,
+  guardarBorrador,
+  type ResultadoAperturaConCopia,
+} from './acciones';
 import { AvisoReservadas } from './aviso-reservadas';
 import { BarraDeAcciones } from './barra-de-acciones';
+import { BotonDeCopia } from './boton-de-copia';
 import { Comparador } from './comparador';
+import { CopiaPorMotivo } from './copia-por-motivo';
 import { EsqueletoEditor } from './esqueleto-editor';
 import { esquemaFirma } from './esquemas';
 import { PildoraDeEstado } from './estado-de-nota';
@@ -130,6 +139,8 @@ type Estado =
   | { fase: 'cargando' }
   | { fase: 'sin_acceso' }
   | { fase: 'no_disponible' }
+  /** T-040 · P2-a: la administración que no lee la nota solo ve su cabecera y pide copia. */
+  | { fase: 'solo_copia'; nota: NotaParaCopia }
   | { fase: 'error' }
   /** `enfocar`: adónde va el foco al aparecer la vista (nunca se queda en `body`). */
   | { fase: 'bloqueada'; mensaje: MensajeDeBloqueo; enfocar: 'pin' | 'titulo' }
@@ -138,7 +149,7 @@ type Estado =
 
 type Accion =
   | { tipo: 'cargando' }
-  | { tipo: 'apertura'; resultado: ResultadoApertura; trasPin: boolean }
+  | { tipo: 'apertura'; resultado: ResultadoAperturaConCopia; trasPin: boolean }
   | { tipo: 'cerrada'; mensaje: MensajeDeBloqueo }
   | { tipo: 'texto'; valor: string }
   | { tipo: 'reservadas'; valor: string }
@@ -204,8 +215,12 @@ function reducir(estado: Estado, accion: Accion): Estado {
             : { fase: 'bloqueada', mensaje: 'ficha.historiaBloqueadaExplicacion', enfocar: 'pin' };
         case 'elegir_episodio':
           return { fase: 'elegir_episodio', episodios: r.episodios };
+        case 'solo_copia':
         case 'no_disponible':
-          if (estado.fase !== 'abierta') return { fase: 'no_disponible' };
+          if (estado.fase !== 'abierta') {
+            return r.estado === 'solo_copia' ? { fase: 'solo_copia', nota: r.nota } : { fase: 'no_disponible' };
+          }
+          // Quien tenía la nota abierta y deja de leerla la ve como no disponible, como hasta ahora.
           return enCaminoDeRecarga(estado)
             ? { ...estado, aviso: 'noDisponible', enfoqueAviso: estado.enfoqueAviso + 1 }
             : { ...estado, aviso: 'noDisponible' };
@@ -400,7 +415,7 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
       if (abriendo.current) return;
       abriendo.current = true;
       if (sesion.current === null) dispatch({ tipo: 'cargando' });
-      let resultado: ResultadoApertura;
+      let resultado: ResultadoAperturaConCopia;
       try {
         resultado = await abrirEditorDeNota({
           pacienteId,
@@ -414,10 +429,11 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
         abriendo.current = false;
       }
       // Un fallo al recargar deja la vista y su botón donde estaban: no hay nada que enfocar.
-      const sigueLaVista = Boolean(opciones.reabrir) && (resultado.estado === 'error' || resultado.estado === 'no_disponible');
+      const noDisponible = resultado.estado === 'no_disponible' || resultado.estado === 'solo_copia';
+      const sigueLaVista = Boolean(opciones.reabrir) && (resultado.estado === 'error' || noDisponible);
       pedirFoco.current = (resultado.estado !== 'bloqueada' || Boolean(opciones.trasPin)) && !sigueLaVista;
       if (resultado.estado === 'abierta') sesion.current = sesionDesdeNota(resultado.nota);
-      else if (resultado.estado !== 'error' && resultado.estado !== 'no_disponible') sesion.current = null;
+      else if (resultado.estado !== 'error' && !noDisponible) sesion.current = null;
       else if (!opciones.reabrir) sesion.current = null;
       dispatch({ tipo: 'apertura', resultado, trasPin: opciones.trasPin ?? false });
     },
@@ -779,6 +795,16 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
     );
   }
 
+  if (estado.fase === 'solo_copia') {
+    return (
+      <Contenedor refRaiz={refRaiz}>
+        <div tabIndex={-1} role="group" aria-label={t('exportaciones.dialogo.tituloMotivo')} className="outline-none">
+          <CopiaPorMotivo pacienteId={pacienteId} nota={estado.nota} />
+        </div>
+      </Contenedor>
+    );
+  }
+
   if (estado.fase === 'error') {
     return (
       <Contenedor refRaiz={refRaiz}>
@@ -935,6 +961,10 @@ export function EditorDeNota({ pacienteId, citaId, notaId }: Props) {
           vigente={vigente}
           lecturaConjunta={modelo.lecturaConjunta}
           refTitulo={refVigente}
+          botonDeCopia={
+            // T-040: la copia es de quien lee la nota como suya; la lectura conjunta no la da.
+            modelo.lecturaConjunta ? null : <BotonDeCopia pacienteId={pacienteId} notaId={modelo.notaId} />
+          }
         />
       )}
 
@@ -1122,12 +1152,14 @@ function VistaVigente({
   vigente,
   lecturaConjunta,
   refTitulo,
+  botonDeCopia,
 }: {
   estado: ModeloDeNota['estado'];
   versiones: VersionDeVista[];
   vigente: VersionDeVista;
   lecturaConjunta: boolean;
   refTitulo: React.RefObject<HTMLHeadingElement | null>;
+  botonDeCopia: React.ReactNode;
 }) {
   const idTitulo = useId();
   return (
@@ -1137,6 +1169,7 @@ function VistaVigente({
       </h2>
       <div className="flex flex-wrap items-center gap-2">
         <PildoraDeEstado estado={estado} />
+        {botonDeCopia}
       </div>
       <SelloDeNota frase={vigente.sello} enSesion={vigente.enSesion} />
       {vigente.margen !== null && <p className="text-muted-foreground text-sm">{vigente.margen}</p>}
