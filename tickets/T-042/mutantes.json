@@ -1,0 +1,36 @@
+{
+  "ticket": "T-042",
+  "fecha": "2026-10-04",
+  "nota": "Cada mutante se aplica con drop+create de las cuatro funciones sobre la base levantada (SQL) o editando el fichero (TS), se ejecuta la prueba y se revierte. Tras los SQL se volvió a pasar el banco entero (completo) y el oráculo (completo).",
+  "sql_banco": {
+    "M1": { "mutacion": "se deja también desbloquear_historia(text)", "rojo": true, "falla": "CA1 · las firmas de un paso desbloquear_historia(text) y canjear_codigo_recuperacion(text) ya no existen" },
+    "M2": { "mutacion": "v_ok sin coalesce", "rojo": true, "falla": "CA2 · el PIN nulo deja una fila PIN_FALLIDO" },
+    "M3": { "mutacion": "el paso dos no resta la autorización", "rojo": true, "falla": "CA3.3 · un segundo paso dos da pin_incorrecto: la autorización se gastó" },
+    "M4": { "mutacion": "el paso dos sin autorizado_hasta > now()", "rojo": true, "falla": "CA3.6 · con la autorización caducada, el paso dos da pin_incorrecto" },
+    "M5": { "mutacion": "el fallo no pone a 0 las autorizaciones ni la caducidad", "rojo": true, "falla": "CA3.5 · un bueno y luego un malo dejan 0 autorizaciones (y un intento)" },
+    "M6": { "mutacion": "comprobar_pin_historia returns boolean", "rojo": true, "falla": "CA1 · las dos comprobaciones devuelven void" },
+    "M7": { "mutacion": "PIN_BLOQUEADO con where not v_ok", "rojo": true, "falla": "banco 03 · T-006: el bloqueo deja UNA entrada PIN_BLOQUEADO, no cinco" },
+    "M8": { "mutacion": "se quita if v_hasta > now() then return", "rojo": true, "falla": "banco 03 · T-006: el SEXTO intento, con el PIN CORRECTO, tampoco abre mientras el bloqueo esté vigente" },
+    "M9": { "mutacion": "el fallo del canje no limpia canje_autorizado_*", "rojo": true, "falla": "CA5.4 · un bueno y luego un malo: codigo_invalido" },
+    "M10": { "mutacion": "el paso dos del canje sin usado_en is null", "rojo": true, "falla": "CA5.5b · si el código autorizado ya no está vigente, el paso dos da codigo_invalido aunque la autorización siga viva" },
+    "M11": { "mutacion": "el canje sin canje_autorizado_hasta > now()", "rojo": true, "falla": "CA5.6 · con la autorización caducada, el paso dos da codigo_invalido" },
+    "M12": { "mutacion": "se exige segundo_factor_verificado_recientemente() en el paso uno del canje", "rojo": true, "falla": "42501 'sin 2FA' en el banco 13 (el canje desde una sesión sin 2FA deja de ser posible); el motivo es el correcto, aunque salta antes que la aserción del 24" },
+    "M13": { "mutacion": "se quita la guarda de solo lectura del PIN", "rojo": true, "falla": "CA7 · PIN bueno en solo lectura: 25006 con el texto propio (mensaje real: cannot execute SELECT FOR UPDATE in a read-only transaction)" },
+    "M14": { "mutacion": "un if después de extensions.crypt(", "rojo": true, "falla": "CA8 · después de extensions.crypt( no hay ningún if, return ni raise" },
+    "M15": { "mutacion": "la guarda de solo lectura pasa a después de crypt", "rojo": true, "falla": "CA7 · mismo texto ajeno que M13 (salta antes que la aserción de orden de CA8: el orden queda cubierto, pero la aserción de orden no se vio fallar sola)" }
+  },
+  "oraculo_http": {
+    "M-H1/M-H3": { "mutacion": "se recrea desbloquear_historia(text) de un paso (siempre ok), con recarga del esquema de PostgREST", "rojo": true, "falla": "O4 · desbloquear_historia con p_pin no existe (200 ... ok). O7 no falla: no pasa por esa función; los dos mutantes del diseño coinciden en este" },
+    "M-H2": { "mutacion": "comprobar_pin_historia devuelve boolean", "rojo": true, "falla": "O1 en S1, S2 y S3 · el malo (200 false) y el bueno (200 true) responden igual: deja de ser así" },
+    "M-H4": { "mutacion": "se quita el for update del paso uno del PIN", "rojo": false, "falla": "no observado en 5 pasadas del oráculo (C1 siguió dando +3); el consumo lo cubre M3 y la serialización del paso dos, que mantiene su for update" }
+  },
+  "ts": {
+    "M16": { "mutacion": "desbloquearHistoria llama al paso dos aunque el paso uno falle", "rojo": true, "falla": "candado.test.ts · si el paso uno falla, es un error y no se llama al paso dos (desbloqueado: true frente a false)" },
+    "M17": { "mutacion": "el paso uno con { get: true }", "rojo": true, "falla": "candado.test.ts · llama a dos RPC por POST: igualdad exacta de rpc.mock.calls[0]" },
+    "M18": { "mutacion": "el paso dos del canje recibe { p_codigo }", "rojo": true, "falla": "totp.test.ts · rpc.mock.calls[1] de un solo elemento" },
+    "M19": { "mutacion": "borrarFactoresTotp también con codigo_invalido", "rojo": true, "falla": "totp.test.ts · codigo_invalido y bloqueado no tocan la Admin API" }
+  },
+  "playwright": {
+    "M20": { "mutacion": "canjearCodigoRecuperacion se salta el paso uno (next build con la mutación)", "rojo": true, "falla": "recuperar.spec.ts · caso A: la URL se queda en /recuperar en vez de /primera-vez; caso B: intentos_fallidos 0 en vez de 1" }
+  }
+}
