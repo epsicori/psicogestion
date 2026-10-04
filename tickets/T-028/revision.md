@@ -418,3 +418,130 @@ Por eso el tramo libre anterior a una cita queda tragado por el bloque ocupado, 
 - **«Fijado y no editable» desde la ficha.** El enlace de la ficha no forma parte de este corte.
 - **La marca de habitual depende de la tarjeta (b).** Sin un escenario cerrado.
 - **Ancho del diálogo.** Cosmético.
+
+# T-028 · Revisión del corte B, ronda 2 (arreglos de H1-H8)
+
+**Sin hallazgos ALTA.** 3 MEDIA (H9-H11), 8 BAJA (H12-H19). H1, H3, H5, H6, H7 y H8 quedan cerrados en lo que pedían. H2 solo está cerrado para la entrada con `?paciente=` (ver H9). H4 se ha trasladado y no queda código suyo, pero el traslado no consta en ningún sitio (ver H18).
+
+- **Diff revisado:** `git diff 74747fc..HEAD` en `worktree-agent-a1549876942c02f5f`: 9 commits y el merge `692a5db`. De lo que entró por el merge no se revisan `tickets/**` ni `docs/state.md`, que vienen de `main`.
+- **Contra qué:** los hallazgos H1-H8 de la ronda 1 y las «Decisiones del propietario sobre la revisión del corte B (04-10-2026)» del diseño.
+- **Lo que no he usado:** la evidencia, el informe del verificador y la base local. Esta ronda no toca SQL.
+- **Método:** lectura del diff, 6 mutantes y una sonda de render, todo medido con vitest en el worktree. Cada fichero se restauró con `git checkout` y el árbol queda limpio. Las suites `app/(app)/agenda` y `lib/citas/alta.test.ts` dan 46 ficheros y 423 pruebas en verde.
+- **Territorio:** `territorio.mjs T-028` en el worktree da 60 ficheros, todos dentro del territorio.
+
+## Cierre de la ronda 1
+
+| | Estado | Comprobación |
+|---|---|---|
+| H1 | Cerrado | `.in('rol', ['profesional_sanitario','administrador'])` casa con `alta_exigir_profesional`. La prueba afirma el filtro. |
+| H2 | **A medias** (H9) | Con `?paciente=` entra el asignado. Mutante `delCentro[0]`: **rojo** («por defecto entra el profesional asignado…»). El orden estable tiene su prueba. Pero la única entrada que tiene la app no lleva paciente. |
+| H3 | Cerrado | La firma cubre paciente, profesional, centro y tipo. Mutante sin `tipoTerapiaId` en el canónico: **rojo** (`la firma no cambia al cambiar tipoTerapiaId`). En el cliente, la firma sale de `serieVigente` y Guardar espera a la serie. Mutante que quita `esperandoSerie` del `disabled` y del `enviar`: **rojo**. El cableado del tipo en las acciones queda sin prueba (ver H13). |
+| H4 | Trasladado | Un grep de `raro`, `igualmente` y `agendarIgualmente` en `app/`, `lib/` y `components/` no encuentra nada del alta. No quedan claves ni hueco preparado. Ver H18. |
+| H5 | Cerrado en lo pedido | Se retira `calendario-seleccion.tsx`. `RejillaSemana` y `ListaDia` aceptan `seleccion?`. Lo nuevo va en H10, H11, H12 y H16. |
+| H6 | Cerrado | `fecha` es el parámetro real (`parametros.ts`, `leerParametros`); `semana` no existe. El desvío respecto al diseño está justificado. Lo nuevo va en H14 y H17. |
+| H7 | Cerrado | El mock devuelve `id`, `nombre` y `duracion_minutos`, y la prueba los busca. |
+| H8 | Cerrado | Mutante de `volverAlElegido` sin `setFoco`: **rojo** («al cambiar la duración con el elegido en otra semana…»). Queda otra puerta (ver H19). |
+
+**H3: busqué otro campo que dejara pasar una serie no vista y no hay ninguno.**
+- `fecha`, `diaSemana` y `sesionesTotales` cambian `sesiones[]`, que ya va firmado.
+- La duración va firmada y además sale del tipo.
+- `sala` y `notaOperativa` no forman parte de la serie y se ven en el formulario al guardar.
+- `excluir` y `aceptarAlternativas` son decisiones que se toman sobre la previa que se enseña.
+- En el cliente, `claveSerie` lleva los ocho campos que pide la previsualización.
+
+**H5: la agenda normal no cambia.** Los dos ficheros solo añaden ramas `if (!seleccion)`, `?.` sobre callbacks que la agenda siempre pasa y `citas = []` por defecto. `rejilla-semana.test.tsx` y `lista-dia.test.tsx` no se han tocado y siguen en verde.
+
+## MEDIA
+
+### H9 · `app/(app)/agenda/nueva/formulario-alta.tsx:228-232` (y `acciones.ts`, `buscarPacientes`) — el asignado solo entra por defecto cuando el paciente llega en la URL
+
+**Qué pasa.** El arreglo de H2 solo lee `pacientes.profesional_id` en `contenido-alta.tsx`, cuando hay `?paciente=`. Pero la única entrada a esta pantalla en este corte es `agenda/page.tsx:120`, que enlaza a `/agenda/nueva` sin paciente; el enlace desde la ficha es del corte C. En el formulario, el paciente se elige con `buscarPacientes`, que devuelve `id` y `nombre`, y `elegirPaciente` no toca `profesionalId`.
+
+**Escenario.** Un técnico pulsa «Nueva cita» en la agenda. Busca y elige a X, que tiene asignado a Luis Soto. El profesional se queda en el primero por orden alfabético, «Ana Ruiz». Las sugerencias salen en frío y, si el técnico no mira el desplegable, la cita se guarda a nombre de Ana Ruiz. Es el escenario de H2, por la puerta que sí se usa. La prueba nueva solo cubre la URL.
+
+### H10 · `app/(app)/agenda/nueva/hueco-seleccion.tsx:37` y `rejilla-semana.tsx:291-305` — en modo selección, Tab recorre todos los huecos de la semana
+
+**Qué pide el contrato (línea 116).** «Misma navegación de teclado (flechas entre días, Tab dentro del día)».
+
+**Qué hace la agenda normal.** Las citas de los días que no están activos llevan `tabIndex={i === activo ? 0 : -1}` (`rejilla-semana.tsx:267`), y Escape vuelve al día.
+
+**Qué hace el modo selección.** `HuecoSeleccion` no tiene `tabIndex` ni Escape. Medido con una sonda, con huecos libres el martes y el jueves y el martes como día activo: los dos botones salen con `tabIndex=0`.
+
+**Escenario.** Una semana con 8 huecos libres al día, de lunes a viernes. Quien use el teclado necesita unos 40 Tab para salir de la rejilla y llegar a «Periodicidad» y a «Guardar».
+
+### H11 · `app/(app)/agenda/rejilla-semana.tsx:297-303` (con `components/ui/dialogo.tsx`) — con unos 95 px por día, la hora de los huecos que se pisan queda cortada y la marca «Elegida» puede no verse
+
+**Calculado, no medido en un navegador.** Parto de un diálogo `max-w-3xl` (768 px) con `p-6`, un eje de `w-12` y 7 columnas de unos 95 px. La fuente es Geist Mono a 14 px (unos 8,4 px por carácter), con `PX_MIN` 1,6, `min-h-0` y `overflow-hidden`.
+
+- **Cuando dos huecos se pisan.** Pasa a menudo: `agenda_bloques_profesional` emite el ocupado como `[cursor, cursor+dur)` y salta a `upper(rango_bloqueante)`. Con un tipo de 50 minutos y una cita de 30 a las 9:00, el ocupado va de 9:00 a 9:50 y el libre de 9:40 a 10:30. Con dos carriles, cada botón mide unos 47 px y deja unos 29 px de texto. «09:40» ocupa 42 px y no tiene punto de corte, así que se ve «09:» y el resto queda cortado.
+- **Con un solo carril.** «10:00 – 10:50» ocupa 109 px y se parte en dos líneas. En un hueco de 50 minutos (80 px de alto) que es a la vez sugerido y habitual, la palabra «Elegida» cae entre los 81 y los 97 px y queda oculta. En la rejilla, la elección solo se distingue por el fondo. Es el caso más habitual (elegir la primera tarjeta). Lo atenúa la línea «Hueco: …» del formulario.
+
+**Escenario.** Un técnico abre el alta desde `md` con tipos de 30 y 50 minutos en la misma agenda. Ve horas cortadas en los libres que se pisan con un ocupado.
+
+**Por qué las pruebas no lo ven.** En jsdom, `textContent` contiene «Elegida» aunque no se pinte (capa visual probada por existencia).
+
+**Corrección mía.** El diseño pedía `amplio` = `max-w-5xl` (unos 132 px por día). En la ronda 1 descarté el ancho del diálogo como cosmético. Con la rejilla dentro, deja de serlo.
+
+## BAJA
+
+### H12 · `app/(app)/agenda/nueva/selector-hueco.tsx:46,55` y `lista-dia.tsx:36` — sin `key` por semana, la lista móvil se queda en el día que tenía
+
+**Qué pasa.** La ronda 1 remontaba la lista con `key={vista.calendario.desde}`; esa `key` se ha quitado. En la agenda normal, `page.tsx:56` sí la remonta con `key` por `fechaFoco`. `ListaDia` guarda el día en `useState(diaInicial)`, así que el `diaPorDefecto(…, elegido)` de b54a4ff («el calendario abre en el día del elegido») solo funciona al montar.
+
+**Medido con una sonda.** Se monta con la semana del 6 en el martes y se vuelve a pintar con la semana del 13 y el elegido en el jueves 15 a las 12:00. La lista muestra el martes 13 («10:00 – 10:50»).
+
+**Escenario.** A 360 px se pulsa la tarjeta «jueves 15, 12:00» viendo el martes 6. La semana cambia, pero no se ve el hueco elegido. La única prueba es la de la función pura.
+
+### H13 · `app/(app)/agenda/nueva/acciones.ts:116,191` — ninguna prueba ve que el tipo entra en la firma del servidor
+
+**Medido.** El mutante que borra `tipoTerapiaId: datos.tipoTerapiaId` en las dos acciones deja verdes las 276 pruebas de `app/(app)/agenda/nueva` y `lib/citas`. Compila porque el campo es opcional en `EntradaPrevisualizarAlta`. `alta.test.ts` llama a la función de firma directamente, y `acciones.test.ts` no mira `tipoTerapiaId`.
+
+**Escenario.** Un refactor quita las dos líneas. La parte «tipo» de H3 vuelve a quedar abierta en el servidor y nada se pone en rojo. Hoy lo tapa la guarda del cliente.
+
+### H14 · `app/(app)/agenda/nueva/anunciar.ts:8-17` — la región viva se crea y se rellena en el mismo instante, con el diálogo `aria-modal` todavía abierto
+
+**Qué pasa.** La primera llamada inserta el `role="status"` ya con el texto. Los lectores de pantalla no suelen anunciar una región que nace con contenido: tiene que existir antes del cambio. En el diálogo, además, el cambio ocurre fuera de un `aria-modal="true"` que sigue abierto, porque `router.back()` va después.
+
+**Escenario.** Primer guardado de la sesión en el diálogo de la agenda: con NVDA o VoiceOver no se oye «Cita guardada». A partir del segundo guardado sí se oye.
+
+**Lo que no pasa.** No hay duplicado ni choque con los `aria-live` que ya existen: el selector es único y el nodo, uno solo. Las pruebas solo leen `textContent`.
+
+### H15 · `app/(app)/agenda/nueva/formulario-alta.tsx:235,458` — `esperandoSerie` desactiva Guardar también cuando la serie no se puede pedir o ha fallado
+
+**Qué pasa.** `periodicidad !== 'suelta' && serieVigente === null` mezcla tres situaciones: la serie está en vuelo, no se puede pedir (sin tipo, sin hueco o con las sesiones fuera de 2-52) y la petición ha fallado.
+
+**Escenarios.**
+- Con «Semanal» y 1 sesión, Guardar queda desactivado y no aparece ni el error de Zod del campo ni la alerta «sin hueco», porque `handleSubmit` no llega a correr.
+- Si la previsualización falla por transporte (`catch`), Guardar queda desactivado y no hay forma de reintentar salvo cambiar un campo y volver a dejarlo como estaba.
+
+### H16 · `app/(app)/agenda/lista-dia.tsx:100` y `selector-hueco.tsx:46-54` — el mensaje de vacío dice «esta semana» cuando se refiere a un día, y desde `md` no hay mensaje
+
+**Qué pasa.**
+- A 360 px, un día sin bloques muestra «No hay huecos libres en esta semana.» aunque otros días tengan huecos. `lista-dia-seleccion.test.tsx:71` lo fija. Ya estaba en la ronda 1 y no lo vi.
+- Desde `md`, una semana sin huecos (vacaciones, o un profesional sin franja en ese centro) es una rejilla en blanco sin texto. Antes salía la frase. El contrato pide un estado vacío para el calendario.
+
+**Escenario.** En el móvil se mira el sábado, se lee «esta semana» y se pasa a la siguiente sin ver que el martes tenía huecos.
+
+### H17 · `app/(app)/agenda/nueva/formulario-navegable.tsx:25` — `/agenda?fecha=` no lleva el centro de la cita
+
+**Qué pasa.** Sin `centro`, `leerParametros` toma el de la cookie del armazón.
+
+**Escenario.** Un técnico con la cookie en el centro A abre el alta como página, cambia el centro a B y guarda. Llega a la semana correcta, pero del centro A, y no ve la cita. Solo ocurre con varios centros.
+
+### H18 · `docs/interfaz.md:467` — el traslado de H4 no consta en ningún ticket ni en `docs/state.md`
+
+**Qué pasa.** La decisión del propietario dice «sale a un ticket aparte, en la cola de `supabase/`». `interfaz.md` lo deja en «va aparte». No hay ningún ticket con ese aviso ni ninguna línea en `state.md`, ni en `main` ni en la rama.
+
+**Escenario.** T-028 se cierra con el criterio contrato:169 sin cumplir y nada en la cola lo recoge. Le toca al orquestador, no al implementador.
+
+### H19 · `app/(app)/agenda/nueva/formulario-alta.tsx:216-220` — `volverAlElegido` compara con la semana pintada (`vista`) y no con la pedida (`foco`)
+
+**Qué pasa.** Con una semana en vuelo, `foco` ya ha cambiado pero `vista` todavía no. `lunes === vista.calendario.desde` da cierto y no se pide la semana del elegido.
+
+**Escenario.** Con el martes 6 a las 17:00 elegido, se pulsa «Semana siguiente» y, antes de que llegue, se cambia a un tipo de 90 minutos. Se calcula la semana del 13, el elegido no está en ella y no se comprueba. Al guardar sale «Ese hueco acaba de ocuparse», que es falso. Es H8 por una ventana de latencia.
+
+## Descartados
+
+- **`carrilesDeHuecos` diverge de `colocarEnRejilla`.** Reutiliza carriles, lo que es mejor para huecos, y no tiene un escenario de fallo.
+- **Minuto de pared frente a minuto absoluto en los domingos con cambio de hora.** No hay escenario: no hay franjas en la madrugada de domingo.
+- **La región global se queda con el texto viejo.** Es el anuncio genérico y no lleva datos.
