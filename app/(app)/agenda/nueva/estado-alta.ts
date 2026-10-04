@@ -149,6 +149,15 @@ export async function cargarVistaAlta(
     errorSugerencias = true;
   }
 
+  // Sin fecha pedida (ni `?inicio=`) y sin un solo hueco libre desde hoy en esta semana, el calendario abre donde esta la
+  // primera sugerencia: abrir en una semana vacia con tarjetas arriba enseña dos cosas que se contradicen.
+  const primera = sugerencias.sugerencias[0];
+  // `bloquesSemana` trae el rango entero que se leyo de una vez: se acota a la semana.
+  const semanaVacia = !bloquesSemana.some((b) => b.estado === 'libre' && b.fecha >= hoy && b.fecha >= semanaDesde && b.fecha <= semanaHasta);
+  if (entrada.fechaFoco === null && semanaVacia && primera && lunesDe(primera.fecha) !== semanaDesde) {
+    return cargarVistaAlta(sesion, rol, { ...entrada, fechaFoco: lunesDe(primera.fecha) });
+  }
+
   const { modo, tarjetas } = construirTarjetas(sugerencias, zona);
   return {
     ok: true,
