@@ -1,20 +1,29 @@
 {
   "ticket": "T-038",
-  "ronda": 3,
-  "head": "b05d3e3",
+  "ronda": 4,
+  "head": "23526fb",
+  "base": "b05d3e3",
   "altas": 0,
-  "medias": 1,
-  "bajas": 2,
-  "cerrados_ronda_2": ["A2-H1", "A2-H2", "B2-H1", "B2-H2", "B2-H3", "B2-H4", "B2-H5"],
-  "duplicados": { "B3-H2": "A3-H1" },
+  "medias": 0,
+  "bajas": 3,
+  "cerrados_ronda_3": [
+    "B3-H1"
+  ],
+  "abiertos_de_ronda_3_fuera_de_esta_ronda": [
+    "A3-H1",
+    "A3-H2"
+  ],
+  "duplicados": {
+    "B3-H2": "A3-H1"
+  },
   "hallazgos": [
     {
-      "id": "B3-H1",
-      "severidad": "MEDIA",
-      "archivo": "lib/i18n/es.ts",
-      "linea": 287,
-      "descripcion": "El texto de resultado desconocido solo pide reintentar «si no aparece» «Códigos de recuperación nuevos». La activación inserta el mismo aviso (20261008120000:530), así que la condición nunca se cumple, y cuando la regeneración sí se confirmó no dice que haga falta otra lista.",
-      "escenario": "Ana activó el 05-10, y ese aviso está en su lista. El 20-11 la regeneración se rechaza por transporte después del commit. Pulsa Volver, la lista se refresca y aparece el aviso, así que no reintenta. Se queda sin códigos válidos: el papel caducó y el lote nuevo nunca se le enseñó. Si el paso dos no llegó, cree que su papel ya no vale, y sí vale. El texto anterior llevaba al reintento, que era lo correcto en los dos casos."
+      "id": "R4-H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/cuenta/formulario-regenerar.test.tsx",
+      "linea": 160,
+      "descripcion": "El diseño R4 pide que la descripción no contenga «si no aparece» ni ninguna otra condición sobre el aviso, pero las negativas solo excluyen dos frases literales (/si no aparece/i y «lista de avisos»): una condición sobre el aviso escrita de otra forma sigue en verde.",
+      "escenario": "Se retoca el texto a «… Vuelve a regenerarlos en cualquier caso, salvo que en tus avisos ya salga «Códigos de recuperación nuevos».» Las cuatro aserciones del caso se cumplen (medido con un script que las aplica al texto). Vuelve B3-H1: quien tiene el aviso de la activación no reintenta y, si el paso dos se confirmó, se queda sin ningún código válido."
     },
     {
       "id": "A3-H1",

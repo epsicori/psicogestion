@@ -1,4 +1,41 @@
-**Sin ALTA. Gate combinado: 0 ALTA** (revisores A y B, ronda 3: 0 ALTA, 1 MEDIA, 2 BAJA, una vez quitado el duplicado).
+**Sin ALTA. Gate combinado tras la ronda 4: 0 ALTA, 0 MEDIA, 3 BAJA** (B3-H1 cerrado; siguen abiertos A3-H1 y A3-H2 de la ronda 3, fuera de esta ronda; nuevo R4-H1, BAJA).
+
+# T-038 · Revisión, ronda 4 (solo B3-H1)
+
+Un solo revisor: la ronda es de riesgo bajo dentro de un ticket de riesgo alto.
+
+- **Diff revisado:** `b05d3e3...23526fb` (rama `worktree-agent-afb56cf928f6caf81`, commit `23526fb`). Contrato de la ronda: `tickets/T-038/diseno.md` §«R4 · Ronda 4: solo B3-H1».
+- **Ficheros del diff:** `lib/i18n/es.ts` (1 línea) y `app/(app)/cuenta/formulario-regenerar.test.tsx` (+5/−3). Nada más: se cumple «nada fuera de los dos ficheros».
+- **Ejecutado en el worktree, sin modificarlo:** `npx vitest run "app/(app)/cuenta/formulario-regenerar.test.tsx"`: 12 de 12. Los mutantes del texto se han evaluado con un script de node en el scratchpad de la sesión, que aplica las cuatro aserciones del caso a cada redacción, sin tocar el árbol. No se ha tocado la base ni se ha hecho `db reset`.
+
+## B3-H1: cerrado
+
+| Punto | Estado | Cómo se comprobó |
+|---|---|---|
+| El reintento se pide sin condición | **Sí** | `es.ts:288`: «Vuelve a regenerarlos en cualquier caso: así tendrás una lista nueva que sí vale». No queda ningún «si aparece», ni ninguna otra mención al aviso. El texto es el del diseño, palabra por palabra. |
+| No queda ningún criterio que no discrimine | **Sí** | El aviso «Códigos de recuperación nuevos» ya no aparece en el texto. `git grep` de «si no aparece», «lista de avisos de seguridad» y «ya no valdr» fuera de `tickets/`: solo sale en la aserción negativa de la prueba. |
+| «La lista que tienes en papel ya no vale» si se regeneraron | **Cierto** | El paso dos marca `usado_en = now()` en los códigos vigentes (`20261008120000:426-428`) antes de insertar el lote nuevo. |
+| «La nueva no se te ha enseñado» | **Cierto en el único camino que pinta el texto** | `resultadoDesconocido` solo se pinta en el `catch` de `formulario-regenerar.tsx:77-81`, es decir, cuando `regenerarCodigos` se rechaza. En ese caso no llega ningún `estado`, así que no llega ningún `codigos`, y la vista `codigos` no se monta. Si el paso dos no llegó, la frase va en condicional («Si se regeneraron…»), así que no afirma nada falso. |
+| El reintento funciona en los dos casos | **Sí** | (a) Si no se regeneró, regenerar es lo pedido. (b) Si se regeneró, el paso dos vuelve a caducar el lote vigente y da uno nuevo: Q3(B), «ya hay códigos vigentes», está solo en `generar_codigos_recuperacion()` (activación, `:465-510`), no en la regeneración. El bloqueo de 15 min solo cuenta contraseñas erróneas (`:333-335`), y un éxito pone el contador a 0, así que el reintento con la contraseña buena no se bloquea. |
+| La prueba mira la instrucción | **Sí, con un hueco: R4-H1** | Exige la frase imperativa «Vuelve a regenerarlos en cualquier caso», que es la instrucción y no una palabra suelta, y niega «si no aparece» y «lista de avisos». No niega una condición escrita de otra forma: lo recoge **R4-H1**. |
+| Mata el mutante del diseño | **Sí** | Con el texto de la ronda 3 la prueba sale **en rojo**: le falta «Vuelve a regenerarlos en cualquier caso», contiene «si no aparece» y contiene «lista de avisos» (tres aserciones en rojo). Con el texto nuevo, **en verde**. |
+
+## BAJA
+
+- **R4-H1** · `app/(app)/cuenta/formulario-regenerar.test.tsx:160-161`
+  - **Qué falla:** el diseño (R4, «Prueba») pide que la descripción «no contiene «si no aparece» **ni ninguna otra condición sobre el aviso**». Las dos negativas solo cubren dos frases concretas: `/si no aparece/i` y `'lista de avisos'`. Una condición sobre el aviso escrita de otra forma pasa las cuatro aserciones.
+  - **Escenario:** alguien retoca el texto a «… Vuelve a regenerarlos en cualquier caso, salvo que en tus avisos ya salga «Códigos de recuperación nuevos».» El caso sigue **en verde** (medido con el script: las cuatro aserciones se cumplen). Lo mismo pasa con «Si en tus avisos sale «Códigos de recuperación nuevos» con fecha de hoy, no hagas nada. Vuelve a regenerarlos en cualquier caso si no lo ves.». En los dos casos vuelve B3-H1: quien ya tiene el aviso de la activación no reintenta y, en el caso (b), se queda sin ningún código válido.
+  - **Arreglo posible:** que la negativa compruebe que el aviso no se nombra, sea cual sea la redacción: `not.toHaveAccessibleDescription(expect.stringContaining(t('…codigos_regenerados')))`, o la etiqueta literal «Códigos de recuperación nuevos». Si se quiere dejar el aviso como explicación, como propuso B3-H1, entonces hay que negar los conectores de condición junto al aviso (`/salvo|si (no )?(aparece|sale|ves)/i`).
+  - **Alcance:** el texto de hoy está bien. El hueco solo deja pasar una regresión.
+
+## Comprobado sin hallazgo
+
+- **Título y «Volver».** El título sigue siendo «No sabemos si se han regenerado los códigos» (`es.ts:300`), y «Volver» sigue refrescando en el caso desconocido. Esto ya no es un criterio de decisión, pero sí sirve: el aviso con la fecha de hoy explica lo que pasó. El comentario de `formulario-regenerar.tsx:118` («el aviso que lo delata») no forma parte del diff y no le dice nada al usuario.
+- **Territorio.** `lib/i18n/**` y `app/**` son de interfaz, que lleva la fábrica. El commit no toca `supabase/`, ni `docs/`, ni `tickets/`.
+
+## Para el documentalista (fuera del diff, sin contar)
+
+- `docs/bitacora/T-038.md:79` describe el arreglo de B2-H4 así: «nombra la lista en papel y la lista de avisos». Tras R4 el texto ya no nombra la lista de avisos. La fila es historia de la ronda 3, pero conviene añadir la línea de R4 (B3-H1: el reintento sin condición, mutante = texto de R3, en rojo) cuando se cierre A3-H2 en la misma bitácora.
 
 # T-038 · Revisión, ronda 3
 
