@@ -59,9 +59,10 @@ export function HuecoSeleccion({ hueco, elegido, alElegir, className, style, alT
       style={style}
     >
       <span className="font-mono">{compacto ? hueco.horaLocal : hueco.rango}</span>
-      {/* «Elegida» primero: si el hueco es bajo, lo que se corta es lo secundario, no la elección. */}
+      {/* «Elegida» en la linea de la hora (H25): un hueco de 30 minutos solo tiene una linea, y debajo se cortaba.
+          Va antes que «Sugerida» y «Habitual»: si el hueco es bajo, lo que se corta es lo secundario. */}
       {elegido && (
-        <span aria-hidden="true" className="block text-xs font-medium">
+        <span aria-hidden="true" className="ms-2 text-xs font-medium">
           {t('agenda.alta.seleccion.etiquetaElegida')}
         </span>
       )}

@@ -182,6 +182,15 @@ describe('RejillaSemana · modo selección', () => {
       expect(hueco.querySelector('.font-mono')?.textContent).toBe('17:00 – 17:50');
     });
 
+    // H25 (ronda 3): en un hueco de 30 minutos solo cabe una linea; «Elegida» va en la de la hora, no debajo.
+    it('«Elegida» comparte linea con la hora: no es un bloque aparte que un hueco bajo pueda cortar (H25)', () => {
+      montar([bloque('2026-10-06', '17:00', 'libre', 30)], '2026-10-06T17:00');
+
+      const etiqueta = Array.from(document.querySelectorAll<HTMLElement>('button[data-hueco] span')).find((e) => e.textContent === 'Elegida');
+      expect(etiqueta).toBeTruthy();
+      expect(etiqueta?.className.split(' ')).not.toContain('block');
+    });
+
     it('«Elegida» va antes que «Sugerida» y «Habitual»: es la que no se puede perder si el hueco es bajo', () => {
       montar([bloque('2026-10-06', '17:00', 'libre')], '2026-10-06T17:00');
 
