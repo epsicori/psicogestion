@@ -12,19 +12,19 @@
 
 ## En curso
 
-- **T-040 B**: arquitecto pone al día el diseño (§B0: banco 24 ocupado por T-042, lecciones T-038/T-042). R3-H1 del corte A abierto.
+- **T-040 B**: implementado (rama `worktree-agent-a9325d705ce4db36b`, sello `20261009180000`, banco 27); espera verificación y dos revisores. Sin hacer: `architecture.md` (Exportaciones). axe no instalado.
 - **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). T-023 sube a riesgo alto (vista definer del pendiente).
-- **T-028 B**: implementador en worktree, en paralelo con T-040 B (no toca `supabase/`). E15.3, `hoy`, H8/H9, previsualizar, cero sesiones → Zod. Comparte `lib/i18n/es.ts` con T-040 B. Después, corte C.
+- **T-028 B**: rama `worktree-agent-a1549876942c02f5f`; ronda 3 (H1 admin con `centro_id` null; H9–H19 de `revision.md`). Comparte `lib/i18n/es.ts` con T-040 B. Después, corte C.
 - **T-041**: diseño cerrado; espera turno en `supabase/`.
 
 ## Bloqueos
 
-- BD local: `qr-prueba-…@psicogestion.test` (FK).
+- BD local: `qr-prueba-…@psicogestion.test` (FK). `ana@` con TOTP `unverified` (factor sembrado sustituido): `db reset` + `seed` antes de Playwright como Ana.
 - winnat: `net stop winnat`.
 
 ## Siguiente paso
 
-Cola `supabase/`: T-040 B → T-041 → T-021. En paralelo (sin base): T-028 B → C, que cierra el prototipo clínico. Ticket corto de interfaz: enlace a `/recuperar` (ver Hallazgos).
+Cola `supabase/`: T-040 B → T-041 → **ticket del aviso de hueco raro** (sale de T-028 por decisión del propietario: `agenda_bloques_profesional` se traga el tramo libre previo a la cita; contrato T-028:169; lo redacta el arquitecto) → T-021. En paralelo (sin base): T-028 B → C, que cierra el prototipo clínico. Ticket corto de interfaz: enlace a `/recuperar` (ver Hallazgos).
 Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5`, quitando antes la junction de `node_modules`.
 
 ## Hallazgos anotados
@@ -67,8 +67,8 @@ Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5
 - **Alertar sin firmar**: cualquier versión con cita_id.
 - **Fuera CI**: SQL crean sin episodio.
 - **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`.
-- **Armazón**: <44px; login→/pacientes. T-031/T-032.
-- **`perfiles` sin `apellidos`**: solo nombre_completo.
+- **Armazón**: login→/pacientes. T-031/T-032. **`@axe-core/playwright` no instalado**: «axe sin violaciones» de los diseños no se puede ejecutar.
+- **`perfiles` sin `apellidos`**: solo nombre_completo. **Armazón <44px** también Cerrar/Abrir menú y Cerrar sesión (T-028 B).
 - **`docs/decisions/INDEX.md`**: faltan ADR-060..075.
 - **interfaz.md:67**: «Lista y alta, sin ficha».
 - **Scratchpad**: mutar.mjs paralelo.
