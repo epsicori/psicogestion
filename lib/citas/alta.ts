@@ -145,9 +145,21 @@ export type PrevisualizacionAlta = z.output<typeof esquemaPrevisualizacionAlta>;
 /** Huella de lo que se enseñó: si la serie cambia entre medias, `guardarAlta` no guarda. */
 export function firmarPrevisualizacionAlta(
   previa: PrevisualizacionAlta,
-  regla: { periodicidad: string; horaLocal: string; duracionMinutos: number },
+  regla: {
+    pacienteId: string;
+    profesionalId: string;
+    centroId: string;
+    tipoTerapiaId?: string | null;
+    periodicidad: string;
+    horaLocal: string;
+    duracionMinutos: number;
+  },
 ): string {
   const canonico = JSON.stringify([
+    regla.pacienteId,
+    regla.profesionalId,
+    regla.centroId,
+    regla.tipoTerapiaId ?? null,
     regla.periodicidad,
     regla.horaLocal,
     regla.duracionMinutos,
@@ -161,6 +173,8 @@ export type EntradaPrevisualizarAlta = {
   pacienteId: string;
   profesionalId: string;
   centroId: string;
+  /** Solo entra en la firma: la base no lo necesita para calcular las sesiones. */
+  tipoTerapiaId?: string | null;
   periodicidad: 'semanal' | 'quincenal' | 'mensual';
   diaSemana: number;
   horaLocal: string;

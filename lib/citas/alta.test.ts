@@ -182,6 +182,24 @@ describe('previsualizarAlta', () => {
     expect(ra.firma).not.toBe(rb.firma);
     expect(firmarPrevisualizacionAlta(ra.previa, ENTRADA_PREVIA)).toBe(ra.firma);
   });
+
+  // H3 (revisión del corte B): la firma tiene que cubrir a quién, con quién, dónde y qué tipo, no
+  // solo las fechas: con las mismas fechas, otra firma es otra serie.
+  it('la firma cubre paciente, profesional, centro y tipo de terapia', async () => {
+    const { sesion } = sesionFalsa({ rpc: { agenda_previsualizar_alta: { data: PREVIA_BD, error: null } } });
+    const base = await previsualizarAlta(sesion, { ...ENTRADA_PREVIA, tipoTerapiaId: 'tipo-a' });
+    if (!base.ok) throw new Error('inesperado');
+    const otros = {
+      pacienteId: '99999999-9999-4999-8999-999999999991',
+      profesionalId: '99999999-9999-4999-8999-999999999992',
+      centroId: '99999999-9999-4999-8999-999999999993',
+      tipoTerapiaId: 'tipo-b',
+    };
+    for (const [campo, valor] of Object.entries(otros)) {
+      const firma = firmarPrevisualizacionAlta(base.previa, { ...ENTRADA_PREVIA, tipoTerapiaId: 'tipo-a', [campo]: valor });
+      expect(firma, `la firma no cambia al cambiar ${campo}`).not.toBe(base.firma);
+    }
+  });
 });
 
 describe('crearSerieAlta', () => {
