@@ -36,6 +36,7 @@ function constructor(tabla: string) {
   cadena.order = devolver;
   cadena.in = (columna: string, valor: unknown) => (consulta.filtros.push([columna, valor]), cadena);
   cadena.or = (texto: string) => (consulta.filtros.push(['or', texto]), cadena);
+  cadena.is = (columna: string, valor: unknown) => (consulta.filtros.push([columna + ' is', valor]), cadena);
   cadena.eq = (columna: string, valor: unknown) => (consulta.filtros.push([columna, valor]), cadena);
   cadena.maybeSingle = () => Promise.resolve(m.tablas[tabla]);
   cadena.then = (alResolver: (v: unknown) => unknown) => Promise.resolve(m.tablas[tabla]).then(alResolver);
@@ -68,6 +69,7 @@ beforeEach(() => {
   m.tablas = {
     tipos_terapia: { data: [{ id: 't1', nombre: 'Individual', duracion_minutos: 50 }], error: null },
     directorio_perfiles: { data: [{ id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO }], error: null },
+    perfiles_centros: { data: [{ perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO }], error: null },
     pacientes: { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez' }, error: null },
   };
   m.cargarContexto.mockResolvedValue(contexto('administrador'));
@@ -111,6 +113,7 @@ describe('ContenidoAlta', () => {
       ],
       error: null,
     };
+    m.tablas.perfiles_centros = { data: [{ perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO }], error: null };
 
     const elemento = await resolver();
 
@@ -119,9 +122,61 @@ describe('ContenidoAlta', () => {
       { id: ADMIN, nombre: 'Zoe Admin', centroId: CENTRO },
       { id: ADMIN, nombre: 'Zoe Admin', centroId: CENTRO_B },
     ]);
-    // La consulta tampoco deja fuera al administrador sin centro.
+    // La consulta del directorio no acota por centro: lo decide la pertenencia (H23).
     const directorio = m.consultas.find((c) => c.tabla === 'directorio_perfiles');
-    expect(directorio?.filtros).toContainEqual(['or', `rol.eq.administrador,centro_id.in.(${CENTRO},${CENTRO_B})`]);
+    expect(directorio?.filtros.some(([columna]) => columna === 'or' || columna === 'centro_id')).toBe(false);
+  });
+
+  // H23 (ronda 3): la pertenencia a un centro es perfiles_centros (ADR-051); perfiles.centro_id es solo el principal.
+  it('un profesional que pasa consulta en dos centros se ofrece en los dos, y solo con pertenencia vigente (H23)', async () => {
+    m.cargarContexto.mockResolvedValue({
+      ...contexto('administrador'),
+      centros: [
+        { id: CENTRO, nombre: 'Madrid' },
+        { id: CENTRO_B, nombre: 'Las Palmas' },
+      ],
+    });
+    m.tablas.directorio_perfiles = {
+      data: [{ id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO, rol: 'profesional_sanitario' }],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO },
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO_B },
+      ],
+      error: null,
+    };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.profesionales).toEqual([
+      { id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO },
+      { id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO_B },
+    ]);
+    const pertenencias = m.consultas.find((c) => c.tabla === 'perfiles_centros');
+    expect(pertenencias?.filtros).toContainEqual(['hasta is', null]);
+  });
+
+  it('una pertenencia a un centro que quien mira no tiene no ofrece al profesional en ninguno de los suyos (H23)', async () => {
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO_B, rol: 'profesional_sanitario' },
+        { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO, rol: 'profesional_sanitario' },
+      ],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO_B },
+        { perfil_id: ASIGNADO, centro_id: CENTRO },
+      ],
+      error: null,
+    };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.profesionales).toEqual([{ id: ASIGNADO, nombre: 'Luis Soto', centroId: CENTRO }]);
   });
 
   // H2 (revisión del corte B): el profesional por defecto es el asignado al paciente, no el primero.
@@ -130,6 +185,13 @@ describe('ContenidoAlta', () => {
       data: [
         { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO },
         { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO },
+      ],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO },
+        { perfil_id: ASIGNADO, centro_id: CENTRO },
       ],
       error: null,
     };
@@ -146,6 +208,13 @@ describe('ContenidoAlta', () => {
       data: [
         { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO },
         { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO },
+      ],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: ASIGNADO, centro_id: CENTRO },
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO },
       ],
       error: null,
     };
@@ -173,6 +242,15 @@ describe('ContenidoAlta', () => {
 
     expect(elemento.props.inicial).toMatchObject({ paciente: { id: PACIENTE, nombre: 'Ana Pérez' }, clave: '2026-10-06T17:00' });
     expect(m.cargarVistaAlta.mock.calls[0][2]).toMatchObject({ pacienteId: PACIENTE, fechaFoco: '2026-10-06', duracionMinutos: 50 });
+  });
+
+  // H22 (ronda 3): el formulario necesita el asignado del paciente de la URL para proponerlo al cambiar de centro.
+  it('el paciente de la URL llega con su profesional asignado', async () => {
+    m.tablas.pacientes = { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez', profesional_id: ASIGNADO }, error: null };
+
+    const elemento = await resolver({ paciente: PACIENTE });
+
+    expect((elemento.props.inicial as { paciente: unknown }).paciente).toEqual({ id: PACIENTE, nombre: 'Ana Pérez', profesionalId: ASIGNADO });
   });
 
   it('un paciente que la RLS no deja ver no entra', async () => {

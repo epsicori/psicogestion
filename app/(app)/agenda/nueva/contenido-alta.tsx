@@ -31,17 +31,19 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
 
   const { supabase, usuario } = sesion;
 
-  const [tiposLeidos, profesionalesLeidos, pacienteLeido] = await Promise.all([
+  const [tiposLeidos, profesionalesLeidos, pertenenciasLeidas, pacienteLeido] = await Promise.all([
     supabase.from('tipos_terapia').select('id, nombre, duracion_minutos').eq('activo', true).order('nombre'),
     rol === 'profesional_sanitario'
       ? Promise.resolve(null)
       : supabase
           .from('directorio_perfiles')
-          .select('id, nombre_completo, centro_id, rol')
+          .select('id, nombre_completo, rol')
           .in('rol', ['profesional_sanitario', 'administrador'])
-          .eq('estado', 'activo')
-          // El administrador no pertenece a un centro (centro_id null): sale siempre; el profesional, solo en los suyos.
-          .or(`rol.eq.administrador,centro_id.in.(${centros.map((c) => c.id).join(',')})`),
+          .eq('estado', 'activo'),
+    // La pertenencia a un centro es esta relación (ADR-051): `perfiles.centro_id` es solo el principal. Vigente = `hasta is null`.
+    rol === 'profesional_sanitario'
+      ? Promise.resolve(null)
+      : supabase.from('perfiles_centros').select('perfil_id, centro_id').is('hasta', null),
     parametros.paciente
       ? supabase.from('pacientes').select('id, nombre, apellidos, profesional_id').eq('id', parametros.paciente).maybeSingle()
       : Promise.resolve(null),
@@ -49,6 +51,7 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
 
   if (tiposLeidos.error) console.error('Alta de cita: fallo al leer el catálogo de tipos', tiposLeidos.error);
   if (profesionalesLeidos?.error) console.error('Alta de cita: fallo al leer los profesionales', profesionalesLeidos.error);
+  if (pertenenciasLeidas?.error) console.error('Alta de cita: fallo al leer las pertenencias a centros', pertenenciasLeidas.error);
   if (pacienteLeido?.error) console.error('Alta de cita: fallo al leer el paciente', pacienteLeido.error);
 
   const tipos = (tiposLeidos.data ?? []).map((tipo) => ({
@@ -56,6 +59,12 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
     nombre: tipo.nombre,
     duracionMinutos: tipo.duracion_minutos,
   }));
+  // Cada pertenencia vigente a un centro que quien mira tiene es una opción: quien pasa consulta en dos centros sale en los dos.
+  const visibles = new Set(centros.map((c) => c.id));
+  const pertenencias = new Map<string, string[]>();
+  for (const fila of pertenenciasLeidas?.data ?? []) {
+    pertenencias.set(fila.perfil_id, [...(pertenencias.get(fila.perfil_id) ?? []), fila.centro_id]);
+  }
   const profesionales =
     rol === 'profesional_sanitario'
       ? []
@@ -63,12 +72,13 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
           .flatMap((p) => {
             if (!p.id) return [];
             const nombre = p.nombre_completo ?? '';
-            // Un administrador sin centro se ofrece en todos los centros a los que quien mira tiene acceso.
-            if (!p.centro_id) return p.rol === 'administrador' ? centros.map((c) => ({ id: p.id!, nombre, centroId: c.id })) : [];
-            return [{ id: p.id, nombre, centroId: p.centro_id }];
+            const suyos = pertenencias.get(p.id) ?? [];
+            // Un administrador sin ninguna pertenencia no es de un centro: se ofrece en todos los de quien mira.
+            if (suyos.length === 0) return p.rol === 'administrador' ? centros.map((c) => ({ id: p.id!, nombre, centroId: c.id })) : [];
+            return suyos.filter((c) => visibles.has(c)).map((centroDe) => ({ id: p.id!, nombre, centroId: centroDe }));
           })
           // Orden estable: por nombre y, a igualdad, por id. Sin él, «el primero» cambiaría de una carga a otra.
-          .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.id.localeCompare(b.id));
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.id.localeCompare(b.id) || a.centroId.localeCompare(b.centroId));
   const delCentro = profesionales.filter((p) => p.centroId === centroId);
   // Por defecto, el profesional asignado al paciente si trabaja en este centro; si no, el primero.
   const asignado = pacienteLeido?.data?.profesional_id;
@@ -79,7 +89,11 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
   if (!profesionalId) return <AvisoDeError mensaje={t('agenda.alta.error.sinProfesionales')} />;
 
   const paciente = pacienteLeido?.data
-    ? { id: pacienteLeido.data.id, nombre: `${pacienteLeido.data.nombre} ${pacienteLeido.data.apellidos}`.trim() }
+    ? {
+        id: pacienteLeido.data.id,
+        nombre: `${pacienteLeido.data.nombre} ${pacienteLeido.data.apellidos}`.trim(),
+        profesionalId: pacienteLeido.data.profesional_id,
+      }
     : null;
 
   const reloj = await relojDelCentro(sesion, centroId);
