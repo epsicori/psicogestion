@@ -113,7 +113,7 @@ call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); ca
 call pg_temp.como_con_2fa(:PRO2); select public.fijar_pin_historia('222222'); call pg_temp.reset_sesion();
 
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia');
 
 -- 19.2 · Sin episodio abierto propio: abre uno individual a nombre del llamante, en el centro pasado.
@@ -222,7 +222,7 @@ call pg_temp.reset_sesion();
 -- 19.17 · Gemela: el profesional de PC sí (PRO2). PC tiene dos episodios abiertos de PRO2
 -- (EJX y EC), así que sin elección daría EP001; se elige EC explícitamente (ver informe).
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')),
   'El PIN de PRO2 desbloquea la historia');
 select public.episodio_para_nota(:PC, :EC) as r17 \gset
 select pg_temp.assert(:'r17' = :EC, '19.17 PRO2 sí atiende a PC: elige EC');
@@ -237,7 +237,7 @@ select pg_temp.assert_lanza_codigo_msg(
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia (segunda vez)');
 
 -- 19.19 · La cita manda sobre el parámetro.
@@ -363,7 +363,7 @@ select pg_temp.assert(
 -- ADR-072 · D5 · El coprofesional
 -- ---------------------------------------------------------------------------
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia (tercera vez)');
 
 -- 19.32 · Positiva: un profesional sanitario distinto del autor con alta en el centro del episodio.
@@ -456,7 +456,7 @@ call pg_temp.reset_sesion();
 
 -- 19.40 · El coprofesional no lee: ninguna política mira coprofesional_id.
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')),
   'El PIN de PRO2 desbloquea la historia (19.40)');
 insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) values (:NPC, :PC, :EC, :PRO2);
 select pg_temp.assert(public.historia_desbloqueada(), '19.40 La historia de PRO2 está desbloqueada (el 0 de abajo no es el candado)');
@@ -475,7 +475,7 @@ call pg_temp.reset_sesion();
 -- ADR-072 · D6 · Episodio cerrado
 -- ---------------------------------------------------------------------------
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia (cuarta vez)');
 
 -- 19.42 · Gemela: 19.32 (ECO, abierto).
@@ -601,7 +601,7 @@ select pg_temp.assert(
 -- construida para que el disparador, si corriera, diera un 23514 que revelaría algo ajeno.
 -- ---------------------------------------------------------------------------
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia (ronda)');
 -- Sin el paso 2: autor PRO2 = dueño de ES pasa el paso 4, y PA no es de ES → 23514
 -- «no son del mismo paciente» (revela de qué paciente es ES).
@@ -690,7 +690,7 @@ select pg_temp.assert(
   or (now() at time zone 'Pacific/Pago_Pago')::date <> current_date,
   '19.53 Control: al menos una de las dos zonas está hoy en otra fecha que la sesión (la prueba discrimina)');
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia (19.53)');
 select public.episodio_para_nota(:PZ1, null, null, :CKI) as vz1 \gset
 select public.episodio_para_nota(:PZ2, null, null, :CPP) as vz2 \gset
@@ -712,7 +712,7 @@ select pg_temp.assert(
 -- ---------------------------------------------------------------------------
 call pg_temp.como_con_2fa(:ADM); select public.fijar_pin_historia('333333'); call pg_temp.reset_sesion();
 call pg_temp.como(:ADM);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('333333')),
   'El PIN de ADM desbloquea la historia (19.54)');
 select pg_temp.assert(public.es_profesional_asignado(:PADM),
   '19.54 Control: ADM es el profesional asignado de PADM');
@@ -733,7 +733,7 @@ select pg_temp.assert(
 -- revalida. Va la última: cierra el alta de PRO2 en CA.
 -- ---------------------------------------------------------------------------
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia (19.55)');
 -- Con el alta abierta, la nota de PJ1 en EJ (CA) con coprofesional PRO2 entra.
 insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id, coprofesional_id)
@@ -822,14 +822,14 @@ call pg_temp.como_con_2fa(:ADM); select public.fijar_pin_historia('333333'); cal
 
 -- Episodios por el camino de la aplicación (episodio_para_nota).
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 desbloquea la historia (T-035)');
 select public.episodio_para_nota(:P35A, null, null, :C35E) as e35a \gset
 select public.episodio_para_nota(:P35C, null, null, :C35F) as e35c \gset
 select public.episodio_para_nota(:P35D, null, null, :C35E) as e35d \gset
 call pg_temp.reset_sesion();
 call pg_temp.como(:ADM);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('333333')),
   'El PIN de ADM desbloquea la historia (T-035)');
 select public.episodio_para_nota(:P35B, null, null, :C35E) as e35b \gset
 call pg_temp.reset_sesion();

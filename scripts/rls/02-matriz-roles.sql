@@ -207,10 +207,10 @@ call pg_temp.reset_sesion();
 -- El desfase es distinto del de los demás por el único global sobre last_challenged_at.
 call pg_temp.dar_segundo_factor(:ADM, interval '3 seconds');
 call pg_temp.como_con_2fa(:ADM);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('999999')) is not true,
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('999999')) is not true,
   'ADM sin PIN fijado: desbloquear_historia() no puede dar true (control antes de fijarlo)');
 select public.fijar_pin_historia('999999');
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('999999')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('999999')),
   'ADM SÍ puede fijar y usar su propio PIN: fijar_pin_historia no tiene guarda de rol');
 select pg_temp.assert(pg_temp.contar('select * from public.notas_clinicas') = 0,
   'ADM CON el candado abierto SIGUE en cero: la causa es notas_clinicas_lectura sin rama de administrador, no el candado');

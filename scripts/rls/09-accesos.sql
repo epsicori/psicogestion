@@ -69,7 +69,7 @@ select pg_temp.assert(pg_temp.contar(format(
   'T-013a: y no ha escrito nada — el rechazo es antes del insert, no despues');
 
 -- --- Una apertura, N vistas, por el camino de verdad ------------------------------------
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'T-013a: PRO1 abre la ventana para registrar accesos');
 
 select pg_temp.assert(a.apertura and a.vistas = 1,
@@ -113,7 +113,7 @@ call pg_temp.reset_sesion();
 
 -- Y al reves, para que no dependa de quien sea el paciente: PRO2 tampoco llega a P1.
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')),
   'T-013a: PRO2 tiene su propia ventana abierta...');
 select pg_temp.assert_lanza_codigo(
   format($c$select * from public.registrar_acceso_historia(%L, 'notas_clinicas')$c$, :P1),
@@ -133,7 +133,7 @@ call pg_temp.reset_sesion();
 -- fueron la misma, y el paciente que pregunta «quien ha visto mi historial» leeria una sola.
 call pg_temp.como(:PRO1);
 select public.bloquear_historia();
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'T-013a: PRO1 cierra y vuelve a abrir — otra ventana');
 select pg_temp.assert(a.apertura and a.vistas = 1,
   'T-013a: en la ventana nueva vuelve a ser una APERTURA, no la vista del acceso anterior')
@@ -156,7 +156,7 @@ call pg_temp.como(:PRO1);
 select pg_temp.assert_lanza_codigo(
   format($c$select * from public.registrar_acceso_historia(%L, 'notas_clinicas')$c$, :P1),
   '42501', 'T-013a: con la ventana CADUCADA —no revocada— tampoco se registra nada');
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'T-013a: y al volver a teclear el PIN se abre una ventana nueva');
 select pg_temp.assert(a.apertura,
   'T-013a: que da un acceso NUEVO, no una vista del de la ventana caducada')

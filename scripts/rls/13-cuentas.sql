@@ -130,7 +130,7 @@ call pg_temp.reset_sesion();
 call pg_temp.dar_segundo_factor(:PROT6, interval '5 seconds');
 call pg_temp.como_con_2fa(:PROT6);
 select public.fijar_pin_historia('555555');
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('555555')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('555555')),
   'PROT6 desbloquea su historia con su PIN, antes de la baja');
 call pg_temp.reset_sesion();
 
@@ -301,7 +301,7 @@ call pg_temp.reset_sesion();
 -- CON el código correcto también falla, y el canje válido borra el lote y avisa.
 -- ---------------------------------------------------------------------------------------
 call pg_temp.como(:TEC1);
-select motivo from public.canjear_codigo_recuperacion('ZZZZZZZZZZ') \gset t6sc_
+select motivo from pg_temp.canjear_codigo_recuperacion('ZZZZZZZZZZ') \gset t6sc_
 select pg_temp.assert(:'t6sc_motivo' = 'sin_codigos',
   'canjear_codigo_recuperacion() sin lote generado: motivo = sin_codigos');
 call pg_temp.reset_sesion();
@@ -315,19 +315,19 @@ select pg_temp.assert((select count(*) from t6_codigos_pro2) = 10,
 select pg_temp.assert((select count(distinct codigo) from t6_codigos_pro2) = 10,
   'los diez códigos del lote son distintos entre sí');
 
-select motivo from public.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f1_
+select motivo from pg_temp.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f1_
 select pg_temp.assert(:'t6f1_motivo' = 'codigo_invalido', 'intento 1/5 con código inventado: codigo_invalido');
-select motivo from public.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f2_
+select motivo from pg_temp.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f2_
 select pg_temp.assert(:'t6f2_motivo' = 'codigo_invalido', 'intento 2/5: codigo_invalido');
-select motivo from public.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f3_
+select motivo from pg_temp.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f3_
 select pg_temp.assert(:'t6f3_motivo' = 'codigo_invalido', 'intento 3/5: codigo_invalido');
-select motivo from public.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f4_
+select motivo from pg_temp.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f4_
 select pg_temp.assert(:'t6f4_motivo' = 'codigo_invalido', 'intento 4/5: codigo_invalido');
-select motivo from public.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f5_
+select motivo from pg_temp.canjear_codigo_recuperacion('CODIGOINVENTADO') \gset t6f5_
 select pg_temp.assert(:'t6f5_motivo' = 'bloqueado', 'intento 5/5: el quinto fallo bloquea (motivo = bloqueado)');
 
 select codigo from t6_codigos_pro2 limit 1 \gset t6_
-select motivo from public.canjear_codigo_recuperacion(:'t6_codigo') \gset t6f6_
+select motivo from pg_temp.canjear_codigo_recuperacion(:'t6_codigo') \gset t6f6_
 select pg_temp.assert(:'t6f6_motivo' = 'bloqueado',
   'el SEXTO intento, con el código CORRECTO, también falla mientras el bloqueo esté vigente');
 
@@ -340,11 +340,11 @@ create temp table t6_codigos_pro1 as
   select codigo from public.generar_codigos_recuperacion() as codigo;
 
 select codigo from t6_codigos_pro1 limit 1 \gset t6b1_
-select canjeado, motivo from public.canjear_codigo_recuperacion(:'t6b1_codigo') \gset t6r_
+select canjeado, motivo from pg_temp.canjear_codigo_recuperacion(:'t6b1_codigo') \gset t6r_
 select pg_temp.assert((:'t6r_canjeado')::boolean, 'canjear_codigo_recuperacion() con código correcto: canjeado = true');
 select pg_temp.assert(:'t6r_motivo' = 'ok', 'canjear_codigo_recuperacion() con código correcto: motivo = ok');
 
-select motivo from public.canjear_codigo_recuperacion(:'t6b1_codigo') \gset t6r2_
+select motivo from pg_temp.canjear_codigo_recuperacion(:'t6b1_codigo') \gset t6r2_
 select pg_temp.assert(:'t6r2_motivo' = 'codigo_invalido',
   'el mismo código canjeado NO se puede volver a canjear');
 call pg_temp.reset_sesion();
@@ -1201,11 +1201,11 @@ select pg_temp.assert(
 -- ---------------------------------------------------------------------------------------
 call pg_temp.como_con_2fa(:PRO1);
 select motivo as motivo_viejo, canjeado::text as canjeado_viejo
-  from public.canjear_codigo_recuperacion(:'t38v_viejo') \gset t38cv_
+  from pg_temp.canjear_codigo_recuperacion(:'t38v_viejo') \gset t38cv_
 select pg_temp.assert(:'t38cv_canjeado_viejo' = 'false' and :'t38cv_motivo_viejo' = 'codigo_invalido',
   'CA3 · un código del lote anterior a la regeneración da canjeado = false, motivo = codigo_invalido');
 select motivo as motivo_nuevo, canjeado::text as canjeado_nuevo
-  from public.canjear_codigo_recuperacion(:'t38ok2_primero') \gset t38cn_
+  from pg_temp.canjear_codigo_recuperacion(:'t38ok2_primero') \gset t38cn_
 select pg_temp.assert(:'t38cn_canjeado_nuevo' = 'true' and :'t38cn_motivo_nuevo' = 'ok',
   'CA3 · gemela: un código del lote nuevo da canjeado = true, motivo = ok');
 call pg_temp.reset_sesion();

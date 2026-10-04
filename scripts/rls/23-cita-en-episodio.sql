@@ -998,7 +998,7 @@ call pg_temp.como(:PRO1);
 select pg_temp.assert_lanza_codigo_msg(
   format('select public.agenda_cambiar_episodio_cita(%L, %L)', :'c_e1', :EP39), '42501',
   'desbloquéala con el PIN para cambiar el episodio', '23.E1 sin el PIN desbloqueado, el profesional no cambia el episodio de una cita');
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')), '23.E1b PRO1 desbloquea la historia');
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')), '23.E1b PRO1 desbloquea la historia');
 select pg_temp.assert(public.agenda_cambiar_episodio_cita(:'c_e1'::uuid, :EP39) = :'c_e1'::uuid,
   '23.E2 con el PIN, PRO1 cambia E39 a EP39 en una cita sin notas de P39');
 select pg_temp.assert_lanza_codigo_msg(
@@ -1070,7 +1070,7 @@ select pg_temp.assert_no_lanza(format('update public.citas set modalidad_asisten
 -- ---------------------------------------------------------------------------
 
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')), '23.Y0 PRO1 desbloquea la historia');
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')), '23.Y0 PRO1 desbloquea la historia');
 select public.agenda_crear_cita(:P39, :PRO1, :CA, :TT39, pg_temp.dia39(10), time '09:00', p_episodio_id => :E39)::text as c_y1 \gset
 select public.agenda_crear_cita(:P39, :PRO1, :CA, :TT39, pg_temp.dia39(10), time '11:00', p_episodio_id => :E39)::text as c_y2 \gset
 select public.agenda_crear_cita(:P39, :PRO1, :CA, :TT39, pg_temp.dia39(10), time '13:00')::text as c_y3 \gset
@@ -1147,7 +1147,7 @@ select pg_temp.assert_no_lanza(format($f$
   '23.J1 la v1 de una nota conjunta con cita en EP39 se sella (6.21 y la cadena de huellas, intactas)');
 
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')), '23.J2 PRO2 desbloquea la historia');
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')), '23.J2 PRO2 desbloquea la historia');
 select pg_temp.assert(
   pg_temp.contar(format('select * from public.notas_clinicas where id = %L', 'f0390001-0000-4000-8000-000000000001')) = 1,
   '23.J3 PRO2 lee la nota conjunta desde el lado de su paciente (H39), con la cita puesta en el episodio');
@@ -1169,7 +1169,7 @@ select id as c_z from public.citas where paciente_id = :T39 and inicio = pg_temp
 update public.episodios_asistenciales set cerrado_en = current_date - 5 where id = :ET39;
 
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')), 'Z · PRO1 desbloquea la historia');
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')), 'Z · PRO1 desbloquea la historia');
 select pg_temp.assert_lanza_codigo_msg(
   format('select public.episodio_para_nota(%L, null, %L)', :T39, :'c_z'), '22023',
   'de la cita está cerrado', '23.Z1 B-H2 / T-034 SQL-H2 · el episodio de la cita se cerró después de darla: la nota no tiene salida');

@@ -18,7 +18,7 @@
 -- INSERT en sesión real ejerce la política `_alta`, no solo `_lectura`.
 -- ---------------------------------------------------------------------------------------
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 debe desbloquear la historia');
 
 insert into public.evaluaciones (id, paciente_id, episodio_id, instrumento, aplicado_por) values
@@ -86,7 +86,7 @@ select pg_temp.assert(pg_temp.contar(format('select * from public.informes where
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')),
   'El PIN de PRO2 debe desbloquear la historia');
 select pg_temp.assert(pg_temp.contar(format('select * from public.informes where id = %L', :INF)) = 1,
   'PRO2 (asignado tras la reasignación, NO autor) TAMBIÉN lee el informe: aísla la rama "es_profesional_asignado"');

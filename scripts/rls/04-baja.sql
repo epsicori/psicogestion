@@ -19,7 +19,7 @@ insert into public.episodios_asistenciales (id, paciente_id, profesional_id, cen
 call pg_temp.dar_segundo_factor(:PROBAJA, interval '4 seconds');
 call pg_temp.como_con_2fa(:PROBAJA);
 select public.fijar_pin_historia('333333');
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('333333')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('333333')),
   'El PIN de PROBAJA debe desbloquear la historia mientras sigue activo');
 
 -- T-036 (E.6): desde 6.17-6.24 un `authenticated` firma el borrador vivo de su nota, con el sobre
@@ -73,7 +73,7 @@ update public.pacientes set profesional_id = :PRO1 where id = :PBAJA;
 call pg_temp.reset_sesion();
 
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'El PIN de PRO1 debe desbloquear la historia');
 select pg_temp.assert(pg_temp.contar(format(
     'select * from public.notas_clinicas_versiones where nota_id = %L and autor_id = %L',

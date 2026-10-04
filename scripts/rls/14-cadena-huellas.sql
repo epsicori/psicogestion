@@ -901,7 +901,7 @@ call pg_temp.como_con_2fa(:PRO2); select public.fijar_pin_historia('222222'); ca
 -- con un sobre incoherente con la cabecera (NCADX, paciente de PDEMO), sobre una nota que
 -- no existe (NFANTASMA), y una versión `conjunta` de la nota que no existe.
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')),
   'C.perm · PRO2 desbloquea su historia (el paso 0 pide la historia desbloqueada, y la tiene)');
 select pg_temp.t012c_error(format($sql$insert into public.notas_clinicas_versiones (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en)
   values (%L, '{"t":"neg"}', %L, 'individual', %L, timestamptz '2026-08-29 09:37:00+00')$sql$, :N067B, :'sobre_b', :PRO2)) as err_b \gset
@@ -921,7 +921,7 @@ select pg_temp.assert(
 -- Ventana cerrada: PRO1 firma su propia nota, pero con la ventana caducada recibe el mismo error.
 savepoint t012c_perm;
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'C.perm · PRO1 desbloquea su historia');
 call pg_temp.reset_sesion();
 update public.desbloqueos_historia
@@ -977,7 +977,7 @@ select pg_temp.assert(pg_get_functiondef('public.fn_exigir_episodio_en_nota_conj
 -- Gemela positiva: la PRIMERA firma de un `authenticated` del banco. PRO1, autor de N067E,
 -- con la historia desbloqueada y un sobre de su nota, sí firma.
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'C.perm · PRO1 desbloquea su historia para firmar N067E');
 -- T-036 (E.6): desde 6.17-6.24 un `authenticated` solo firma el borrador vigente de su nota, fechado
 -- con el reloj de la base. El borrador lo deja postgres (como el guardado de la aplicación) y el
@@ -1853,7 +1853,7 @@ select pg_temp.assert(normalize(U&'o\0301', NFC) = U&'\00F3',
 -- El PIN y el desbloqueo de PRO1, fijados aquí (no se suponen los de otro módulo).
 call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'T036 · PRO1 desbloquea su historia para firmar');
 call pg_temp.reset_sesion();
 
@@ -2143,7 +2143,7 @@ call pg_temp.reset_sesion();
 -- texto que en C.perm, y no el «No hay borrador vivo» que delataría que la nota existe y está vacía.
 select pg_temp.t036_prep('B', :'t0');
 call pg_temp.como(:PRO2);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('222222')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('222222')),
   'T036.B4 · PRO2 desbloquea su historia');
 select pg_temp.t012c_error(pg_temp.t036_q(:N36B, :CX::jsonb, :'t0', p_autor => :PRO2)) as err_b4a \gset
 call pg_temp.reset_sesion();
@@ -2168,7 +2168,7 @@ call pg_temp.reset_sesion();
 select pg_temp.assert(pg_get_functiondef('public.fn_sellar_version_nota()'::regprocedure) = :'sellar_original_036',
   'T036.B4 · deshecho el mutante del paso 0, fn_sellar_version_nota() es idéntica a la guardada');
 call pg_temp.como(:PRO1);
-select pg_temp.assert((select desbloqueado from public.desbloquear_historia('111111')),
+select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')),
   'T036.B4 · PRO1 vuelve a desbloquear su historia');
 call pg_temp.reset_sesion();
 
