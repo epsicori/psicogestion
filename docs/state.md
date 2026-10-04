@@ -12,14 +12,14 @@
 
 ## En curso
 
-- **T-040 B**: implementado (rama `worktree-agent-a9325d705ce4db36b`, sello `20261009180000`, banco 27); espera verificación y dos revisores. Sin hacer: `architecture.md` (Exportaciones). axe no instalado.
+- **T-040 B**: ronda 1 sellada (todo PASA; 0 ALTA, 4 MEDIA, 5 BAJA). Ronda 2 implementada (rama `worktree-agent-a9325d705ce4db36b`, HEAD 55c6399); espera verificación y dos revisores, tras los de T-028. Sin hacer: `architecture.md` (Exportaciones).
 - **T-021**: listo para implementar (ADR-077; espejo y pendiente salen a T-026/T-023). T-023 sube a riesgo alto (vista definer del pendiente).
-- **T-028 B**: rama `worktree-agent-a1549876942c02f5f`; ronda 3 (H1 admin con `centro_id` null; H9–H19 de `revision.md`). Comparte `lib/i18n/es.ts` con T-040 B. Después, corte C.
+- **T-028 B**: ronda 3 implementada (rama `worktree-agent-a1549876942c02f5f`, HEAD 75be90b); en verificación y revisión. Comparte `lib/i18n/es.ts` con T-040 B. Después, corte C.
 - **T-041**: diseño cerrado; espera turno en `supabase/`.
 
 ## Bloqueos
 
-- BD local: `qr-prueba-…@psicogestion.test` (FK). `ana@` con TOTP `unverified` (factor sembrado sustituido): `db reset` + `seed` antes de Playwright como Ana.
+- BD local: `qr-prueba-…@psicogestion.test` (FK). Restaurada con `db reset` + `seed` el 04-10 (Ana vuelve a entrar).
 - winnat: `net stop winnat`.
 
 ## Siguiente paso
@@ -49,6 +49,8 @@ Limpiar los worktrees de T-038 y T-042 (rondas 1 y 2) y `agent-acac6bd68d6c681b5
 - **H25**: el técnico lee en su auditoría `tipo_terapia_id` y, desde T-039, `episodio_id`. Deduce parejas. **Bloquea producción**.
 - **T-034 SQL-H2**: reabrir esquiva D6, reloj; y reabrir es hoy la única salida de la nota de una cita cuyo episodio se cerró (banco 23.Z). Recomendación: no cerrar con citas no canceladas posteriores al cierre.
 - **T-040 R3-H1** (BAJA): opacidad/color de marca sin prueba.
+- **T-040 A-H3 (BAJA, anotado por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga). Y en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN (B-H2 solo cubrió solo_copia).
+- **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
 - **T-035 B-H1 → T-041**: suspendido.
 - **T-041 R3/R6**: funciones cuentas.
 - **T-025/T-026 (ADR-078)**: borradores en `docs/legal/` (consulta vinculante DGT con la lista del ADR-077 p.7; preguntas a Holded). Los envía el propietario tras revisión de asesor, antes de comercializar. Contratos sin tocar: los ajusta el arquitecto (vocabulario, 14.6, clave mínima).

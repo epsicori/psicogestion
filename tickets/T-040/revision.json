@@ -1,205 +1,317 @@
 {
   "ticket": "T-040",
-  "ronda": 3,
-  "corte": "A",
-  "commit": "f8990c2",
+  "corte": "B",
+  "ronda": 1,
+  "head": "99fe720",
+  "rama": "worktree-agent-a9325d705ce4db36b",
+  "fecha": "2026-10-04",
   "altas": 0,
-  "medias": 0,
-  "bajas": 1,
-  "cerrados": [
-    "A-H1",
-    "A-H2",
-    "A-H3",
-    "A-H4",
-    "A-H5",
-    "A-H6",
-    "A-H7",
-    "A-H8",
-    "B-H1",
-    "B-H2",
-    "B-H3",
-    "B-H4",
-    "B-H5",
-    "R2-H1",
-    "R2-H2",
-    "R2-H3",
-    "R2-H4",
-    "R2-H5"
+  "medias": 4,
+  "bajas": 5,
+  "informes": [
+    "revision-a.md",
+    "revision-a.json",
+    "revision-b.md",
+    "revision-b.json"
   ],
+  "lineas_comprobadas": "Las 9 citas (y las auxiliares editor-de-nota.tsx:489, dialogo-de-copia.tsx:158 y :174) cotejadas con git show worktree-agent-a9325d705ce4db36b:<ruta>: todas coinciden, ninguna corregida.",
   "hallazgos": [
     {
-      "id": "R3-H1",
-      "severidad": "BAJA",
-      "archivo": "accesibilidad/marca-de-agua.spec.ts",
-      "linea": 81,
-      "descripcion": "La spec de la marca fuerza opacity:1 en la capa y pinta de negro el fondo de las filas antes de medir: comprueba la geometría, pero no que la marca se vea. Ninguna prueba de vitest fija la opacidad (visor-js.ts:205) ni el color de la tinta (visor-js.ts:239).",
-      "escenario": "Medido en una copia aparte. Con s.opacity = '0', vitest de lib/exportaciones da 101/101 y la spec 5/5 (99,8 %). Con fila.style.color = '#fff', 101/101 y 5/5 (92,5 %). En los dos casos la copia se abre en Chromium sin marca visible, y una captura de la nota sale sin código: la clase de fallo de R2-H1 por otra vía."
-    }
-  ],
-  "rondas_anteriores": [
-    {
-      "ronda": 1,
-      "commit": "2a6daaf",
-      "ticket": "T-040",
-      "hallazgos": [
-        {
-          "id": "A-H1",
-          "severidad": "MEDIA",
-          "archivo": "lib/exportaciones/formato.ts",
-          "linea": 45,
-          "descripcion": "Los campos que §1.2 marca «sí» por rama (cuerpo y contenido_canonico en la profesional; cuerpo en la individual del paciente; participantes en la conjunta) son todos .optional() y el esquema no es estricto: si la base no los manda, o los manda con otra clave, la copia sale con el texto vacío y nadie se entera.",
-          "escenario": "Medido en una copia aparte: respuestaProfesional() con cuerpo→cuerpo_texto y sin contenido_canonico pasa safeParse, y proyectar da texto \"\" y contenidoCanonico \"\" en las dos versiones. Una conjunta sin participantes pasa con []. En el corte B, un alias mal escrito en el jsonb_build_object produce una copia para un juzgado con huellas y sello correctos y las notas en blanco. Arreglo: un refine por rama que exija los campos presentes (o un discriminatedUnion por proyección y alcance)."
-        },
-        {
-          "id": "A-H2",
-          "severidad": "MEDIA",
-          "archivo": "lib/exportaciones/formato.ts",
-          "linea": 120,
-          "descripcion": "El contrato de la marca exige exportada_por.apellidos, pero perfiles solo tiene nombre_completo (20260815192424_…:28-33). El esquema lo pide como z.string() obligatorio y el hallazgo vive solo en un comentario, no en el diseño ni en docs/state.md.",
-          "escenario": "En el corte B, quien escriba exportar_nota siguiendo el diseño ('apellidos', p.apellidos) choca con una columna inexistente; si lo arregla con 'apellidos', null u omitiéndolo, safeParse falla (medido: apellidos null → false; sin la clave → false) y TODAS las exportaciones devuelven error. Hay que anotar la decisión (nombre_completo en nombre, apellidos '') en state.md §Hallazgos o en el diseño para que el corte B la herede."
-        },
-        {
-          "id": "A-H3",
-          "severidad": "MEDIA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 187,
-          "descripcion": "La capa de marca no cubre el contenido en una pantalla de escritorio: cada fila es la frase tres veces (unos 1364 px) alineada a la izquierda dentro de un bloque girado del 200 % del ancho, así que en pantallas anchas la marca se queda en el margen izquierdo.",
-          "escenario": "Medido con Chromium sobre el fichero de muestra (contraseña de la prueba): a 1920×1080 la columna <main> tiene un 0,3 % de su área bajo la marca (la captura lo confirma: ninguna marca sobre el texto); a 1366×768, la mitad; a 390×844, toda. Una captura recortada a la nota en un portátil de escritorio no lleva el código, contra el contrato («una capa sobre el contenido») y contra ADR-076 («cada copia impresa o capturada lleva el código»). Las pruebas solo miran que la capa exista y lleve el código. Arreglo: repetir la frase hasta cubrir el ancho del giro (o centrar las filas)."
-        },
-        {
-          "id": "A-H4",
-          "severidad": "MEDIA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 125,
-          "descripcion": "La normalización NFC del lado del visor no tiene prueba: el diseño (§5 «Por la contraseña») exige NFC en los dos lados, pero la contraseña de visor-js.test.ts no lleva ningún carácter descompuesto y el caso «dos lados» de cifrar.test.ts descifra con un ayudante propio que ya normaliza.",
-          "escenario": "Mutante medido en una copia aparte: quitar .normalize('NFC') de VISOR_JS deja verdes visor-js.test.ts y cifrar.test.ts (26/26). En producción, una copia cifrada desde Windows con «contraseña» (ñ compuesta) y tecleada en macOS (ñ descompuesta) diría «Contraseña incorrecta» para siempre. Falta una prueba que cifre con NFC y abra el visor con la contraseña en NFD."
-        },
-        {
-          "id": "A-H5",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 238,
-          "descripcion": "La línea visible de la marca se inserta antes del h1, y el foco va al h1 (línea 269): quien usa lector de pantalla y lee hacia delante desde el foco nunca oye la marca.",
-          "escenario": "Usuario de NVDA abre la copia → el foco cae en «Copia de una nota clínica» → lee la ficha y las versiones sin oír «Copia … exportada por … el …». El contrato pide una línea «no oculta a lectores de pantalla»: no está oculta, pero queda detrás del punto de entrada. Arreglo: ponerla después del h1 o enfocar la línea."
-        },
-        {
-          "id": "A-H6",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 114,
-          "descripcion": "Con el visor bloqueado (sin crypto.subtle o con la cabecera dañada) el aviso se escribe en la región role=alert al cargar y al pulsar «Abrir» se reescribe con el mismo texto y sin mover el foco, así que no se anuncia.",
-          "escenario": "Fichero abierto como file:// en un navegador sin SubtleCrypto → el alert ya tiene el texto en la carga (no se anuncia) → el usuario de lector teclea la contraseña y pulsa «Abrir» → el campo se vacía y no oye nada. Arreglo: vaciar la región y escribir en el siguiente tick, o mover el foco al aviso."
-        },
-        {
-          "id": "A-H7",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 126,
-          "descripcion": "Cualquier excepción de Argon2 (por ejemplo, un RangeError al reservar los 64 MiB del Uint32Array) se muestra como «Contraseña incorrecta o fichero dañado».",
-          "escenario": "Móvil antiguo o pestaña con poca memoria → new Uint32Array falla → el visor dice «Contraseña incorrecta» → el destinatario reintenta con la contraseña correcta, falla siempre igual y pide otra copia (otro acceso y otra fila de auditoría). Arreglo: un texto propio para el fallo de memoria."
-        },
-        {
-          "id": "A-H8",
-          "severidad": "BAJA",
-          "archivo": "lib/i18n/es.ts",
-          "linea": 898,
-          "descripcion": "La etiqueta del motivo en i18n («Requerimiento judicial o de inspección») no coincide con la que el diseño fija para etiqueta_motivo_exportacion en SQL («Requerimiento judicial o inspección», diseño §1.1).",
-          "escenario": "La marca y la copia dicen «… o de inspección», y accesos_historia.justificacion y el aviso al titular dirán «… o inspección». Quien coteje la copia con el registro de accesos ve dos textos para el mismo motivo. Hay que fijar una de las dos antes del corte B."
-        },
-        {
-          "id": "B-H1",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/fichero.ts",
-          "linea": 17,
-          "descripcion": "El base64 por trozos (contrato del diseño §1.3) nunca se prueba con más de un trozo: ninguna carga de las pruebas pasa de 32 KiB, así que el bucle solo da una vuelta.",
-          "escenario": "Medido: el mutante `bytes.subarray(i, TROZO)` (que para i ≥ 32768 da un trozo vacío) deja 80/80 verde. La proyección profesional repite cada versión dos veces (texto y canónico), así que una nota de tres versiones de unos 6 KB ya pasa de 32 KiB. Con esa regresión, la carga se trunca, el fichero no abre nunca («Contraseña incorrecta o fichero dañado») y su huella ya se habría registrado. El código actual es correcto; falta una prueba de ida y vuelta con una carga de más de 64 KiB."
-        },
-        {
-          "id": "B-H2",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/nucleo-js.test.ts",
-          "linea": 89,
-          "descripcion": "Los seis cotejos de Argon2id con crypto.argon2Sync usan todos un m múltiplo de 4 y una sal de 16 bytes, así que tres desvíos del RFC 9106 sobreviven.",
-          "escenario": "Medido con los mismos seis casos: sobreviven `columnas = m` (sin el redondeo m′ = 4·⌊m/4⌋), H0 con m′ en vez de m, y `le32(16)` fijo en vez de `le32(sal.length)`. Con m = 10 o una sal de 32 bytes darían otra clave. En v1 son equivalentes (m = 65536 y sal de 16, fijados por el visor), pero la mitigación del riesgo 3 del diseño («una implementación que pase esas cinco con m distintos es Argon2id») no se cumple. Comprobé que el núcleo actual SÍ coincide con Node en m = 10, 1027 y 4099, sales de 8, 32 y 300 bytes, contraseña vacía y de 1024 bytes, y longitudes 4…1024. Bastaría con añadir dos de esos casos."
-        },
-        {
-          "id": "B-H3",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/nucleo-js.ts",
-          "linea": 265,
-          "descripcion": "De los lanzamientos del núcleo solo se prueba p = 2. Ni t ∈ [1, 64], ni m ≥ 8, ni la longitud, ni la sal corta, ni las cotas de m y t del visor (visor-js.ts:60) tienen una prueba.",
-          "escenario": "Medido: sin la guarda `entero(t, 1, 64)`, argon2id con t = 0 devuelve la MISMA clave para cualquier contraseña y sal (7636809c… para «contraseña uno» con sal 01… y para «otra distinta» con sal 09…). Si no hay pasadas, la memoria solo tiene los dos primeros bloques, y el último bloque, que es cero, da la clave. La única barrera en el camino del Worker (derivarEnTrabajador) es esa guarda, y quitarla deja la suite verde. Quitar las cotas `entero(k.m…)`/`entero(k.t…)` del visor también deja 80/80 verde."
-        },
-        {
-          "id": "B-H4",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/cifrar.ts",
-          "linea": 37,
-          "descripcion": "La longitud de la contraseña se mide en unidades UTF-16 (`.length`), no en caracteres como dicen el ADR-076 §7 y el mensaje de ErrorContrasena.",
-          "escenario": "`cifrarCopia(copia, '🔐'.repeat(6), …)` se acepta: son 6 caracteres y miden 12 unidades. Una contraseña de 200 emojis (200 caracteres) se rechaza, porque mide 400 unidades. Hay que contar con `Array.from(normalizada).length`, o el ADR tiene que decir «unidades»."
-        },
-        {
-          "id": "B-H5",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 122,
-          "descripcion": "`setTimeout(…, 0)` no garantiza que el navegador pinte «Abriendo…» antes de los segundos de Argon2id en el hilo principal.",
-          "escenario": "No está medido en un navegador; jsdom no pinta. El temporizador de 0 ms suele correr antes de la siguiente oportunidad de renderizado (~16 ms). Entonces el role=\"status\" y el botón deshabilitado no se ven ni se anuncian hasta que termina la derivación, y la página parece colgada de 2 a 5 s. La forma habitual de evitarlo es `requestAnimationFrame(() => setTimeout(f, 0))`. Conviene mirarlo en la prueba manual C7."
-        }
-      ],
-      "altas": 0,
-      "medias": 4,
-      "bajas": 9
+      "id": "A-H1",
+      "severidad": "MEDIA",
+      "archivo": "scripts/t040-oraculo.mjs",
+      "linea": 252,
+      "descripcion": "S6 filtra por una columna inexistente (exportacion_id): 42703 al analizar la consulta, la función no corre; en una RPC escalar la columna es pgrst_scalar y sus filtros sí se aplican, así que la premisa de R1 es falsa y lo que hoy evita el rollback (200 null / 416 sin deshacer) no lo fija ninguna prueba.",
+      "escenario": "Medido: exportar_nota como ADM con ?pgrst_scalar->versiones->0->>cuerpo=like.*MARCA-CUERPO*&offset=5 y count=exact → 416 'only 1 rows'; con un patrón ausente → 'only 0 rows'; las dos confirman (Δ 6/6/6 → 7/7/8 → 8/8/10). Si una versión de PostgREST respondiera 406 con objeto + 0 filas también en los escalares, el filtro desharía acceso, exportación y aviso y diría si casa con el cuerpo, sin rastro; S6 seguiría verde con su 42703. Con la forma correcta, el invariante del diseño (sin contenido ⇒ Δ 0) daría rojo en la dirección segura.",
+      "revisor": "A (base de datos)",
+      "id_original": "H1"
     },
     {
-      "ronda": 2,
-      "commit": "b483b47",
+      "id": "A-H2",
+      "severidad": "MEDIA",
+      "archivo": "tickets/T-040/mutantes.json",
+      "linea": 21,
+      "descripcion": "MB4 se declara equivalente y no lo es: al mover el paso 3 detrás del 5 el paso 4 queda delante de los parámetros, y el banco 27 no tiene ningún no administrador con motivo y referencia ausente o corta.",
+      "escenario": "Medido en begin…rollback: SIN llama exportar_nota(P, uuid, 'traspaso_caso', null) → migración 22023 «van juntos», MB4 42501 «Solo la administración»; con la referencia 'x' → 22023 «3 y 200» frente a 42501. El banco 27 termina «completo» con el mutante.",
+      "revisor": "A (base de datos)",
+      "id_original": "H2"
+    },
+    {
+      "id": "A-H3",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261009180000_exportaciones.sql",
+      "linea": 500,
+      "descripcion": "El administrador coterapeuta no tiene camino para la copia por motivo (notas_para_copia la excluye y la vista conjunta no descarga); el diseño dice «se anota» y en mi parte del diff no hay anotación.",
+      "escenario": "ADM, titular de P2 y participante del episodio conjunto de P, lee N1 v2 por RLS; N1 no sale en notas_para_copia(P), y sin motivo exportar_nota da 42501 «Falta el motivo»: solo puede pedir la copia llamando a la RPC a mano. Si docs/state.md ya lo recoge (parte del revisor B), se descarta.",
+      "revisor": "A (base de datos)",
+      "id_original": "H3"
+    },
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/pacientes/[id]/lista-de-notas.tsx",
+      "linea": 28,
+      "descripcion": "La acción distingue null («no se pudo leer») de [], pero la lista los junta con paraCopia ?? [] y pinta el estado vacío. La prueba fija ese silencio como correcto.",
+      "escenario": "Un administrador no asignado no lee ninguna nota por RLS; notas_para_copia falla → notas=[], paraCopia=null → ve «Todavía no hay notas» en un paciente con notas firmadas, sin aviso ni reintento. Si hay notas legibles, la sección «Otras notas» desaparece en silencio.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "RB-H1"
+    },
+    {
+      "id": "B-H2",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 798,
+      "descripcion": "La vista solo_copia no tiene el reloj del candado (caducaEn existe solo en abierta, línea 489), así que nunca pasa a bloqueada ni ofrece el PIN que pide el mensaje de error.",
+      "escenario": "El administrador entra en solo_copia y redacta la referencia; caduca el desbloqueo y pulsa «Descargar copia» → 42501 → «Vuelve a desbloquearla con tu PIN y repite la copia», pero en la vista no hay campo de PIN. Reabrir el diálogo da el mismo error; solo sale recargando, y no se le dice.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "RB-H2"
+    },
+    {
+      "id": "B-H3",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
+      "linea": 104,
+      "descripcion": "La prueba de que la contraseña sale del formulario mira la fase descargada, en la que el formulario está desmontado: el bucle no da ninguna vuelta, e innerHTML no refleja value.",
+      "escenario": "Quitar reset(...) de dialogo-de-copia.tsx:158 deja la suite en verde. Con ese mutante, tras un error (sin_permiso, bloqueada, noRegistrada) la contraseña queda en el campo montado y en el estado de react-hook-form, recuperable desde las herramientas de desarrollo.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "RB-H3"
+    },
+    {
+      "id": "B-H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx",
+      "linea": 188,
+      "descripcion": "La cancelación a medio camino solo se prueba durante pidiendo; nada prueba cerrar durante cifrando.",
+      "escenario": "Quitar if (!vigente()) return; tras cifrarCopia (dialogo-de-copia.tsx:174) deja la suite en verde. Con ese mutante, Escape durante los 2-5 s de Argon2id cierra el diálogo, pero el código registra el fichero y descarga una copia que el usuario canceló.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "RB-H4"
+    },
+    {
+      "id": "B-H5",
+      "severidad": "BAJA",
+      "archivo": "accesibilidad/nota-clinica.spec.ts",
+      "linea": 1,
+      "descripcion": "La spec no lleva axe, que pide §1.6, ni lo declara como desvío; no cubre el modo motivo ni el foco en «Cerrar» tras la descarga (§5).",
+      "escenario": "Una regresión que deje sin legend el grupo de radios del motivo, o que deje el foco en body al pasar a descargada (el lector no anuncia «Copia descargada» y el usuario de teclado pierde su sitio), no la caza ninguna prueba.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "RB-H5"
+    },
+    {
+      "id": "B-H6",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx",
+      "linea": 966,
+      "descripcion": "Cuando la recarga devuelve solo_copia con la vista abierta, la vista caducada sigue mostrando BotonDeCopia en modo profesional, sin campo de motivo.",
+      "escenario": "Un administrador que era el asignado tiene la nota abierta, se reasigna el paciente y la recarga devuelve solo_copia. Pulsa «Descargar copia» → 42501 Falta el motivo → «hace falta un motivo», pero el diálogo no tiene dónde ponerlo. Es un control sin ninguna acción posible detrás.",
+      "revisor": "B (servidor, interfaz y cifrado)",
+      "id_original": "RB-H6"
+    }
+  ],
+  "cortes_anteriores": [
+    {
       "ticket": "T-040",
+      "ronda": 3,
+      "corte": "A",
+      "commit": "f8990c2",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 1,
+      "cerrados": [
+        "A-H1",
+        "A-H2",
+        "A-H3",
+        "A-H4",
+        "A-H5",
+        "A-H6",
+        "A-H7",
+        "A-H8",
+        "B-H1",
+        "B-H2",
+        "B-H3",
+        "B-H4",
+        "B-H5",
+        "R2-H1",
+        "R2-H2",
+        "R2-H3",
+        "R2-H4",
+        "R2-H5"
+      ],
       "hallazgos": [
         {
-          "id": "R2-H1",
-          "severidad": "MEDIA",
-          "archivo": "lib/exportaciones/visor-js.test.ts",
-          "linea": 326,
-          "descripcion": "La decisión sobre A-H3 exige una prueba de Playwright sobre el fichero de muestra y no existe. La prueba de vitest repite la fórmula del código (6 px por carácter, filas de 72 px) en jsdom, y el guion del implementador, fuera del repo, modela el giro en vez de medirlo.",
-          "escenario": "Medido en Chromium. Con transform rotate(-30deg) translateX(40%), la suite queda verde y el guion del implementador da 100 % en los tres tamaños; con píxeles reales, <main> queda cubierto al 67,8 % a 390×844. Con fontSize 6px, la suite queda verde y el guion da 80,4 %; con píxeles reales, 71,7 % a 2560×1440. Una regresión de estilo vuelve a dejar la nota sin marca en una captura, y nada lo para."
-        },
-        {
-          "id": "R2-H2",
+          "id": "R3-H1",
           "severidad": "BAJA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 207,
-          "descripcion": "`lado` se fija una sola vez, al pintar, con la pantalla de ese momento. Si la ventana pasa después a una pantalla mucho más ancha, las filas, alineadas a la izquierda del bloque girado, no llegan al centro.",
-          "escenario": "Medido con píxeles reales. Se abre en 1366×768 o 1920×1080 y la ventana se arrastra y se maximiza en un ultrapanorámico de 5120×1440: queda bajo la marca el 35,5 % de <main>, y la captura de la mitad derecha de la nota sale sin código. Abriendo directamente en 5120×1440 se cubre el 99,8 %."
-        },
-        {
-          "id": "R2-H3",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/visor-js.test.ts",
-          "linea": 269,
-          "descripcion": "La prueba de B-H5 no distingue uno de dos fotogramas: ejecuta los fotogramas en bucle y solo comprueba que no se deriva antes del primero.",
-          "escenario": "El mutante window.requestAnimationFrame(f), con un solo rAF, deja la suite verde. Argon2id corre entonces en la retrollamada del fotograma, antes de que se pinte, y «Abriendo…» no se ve ni se anuncia durante 1-5 s: es el fallo de B-H5."
-        },
-        {
-          "id": "R2-H4",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/visor-js.ts",
-          "linea": 141,
-          "descripcion": "Cualquier excepción de Argon2id se presenta como falta de memoria, y el visor admite m hasta 1 GiB y t hasta 16, aunque v1 escribe siempre 65536 y 3. Una cabecera dañada en m se toma por un problema del dispositivo.",
-          "escenario": "Medido en Chromium con la contraseña correcta y \"m\":65536 cambiado a 655360 o a 1048576. En un dispositivo con poca memoria (simulado, 256 MiB), el aviso es «no tiene memoria libre suficiente… ábrela en otro ordenador». En un ordenador con memoria suficiente, a los 9,5-15 s, «Contraseña incorrecta o fichero dañado». En la ronda 1 este caso daba el mensaje correcto."
-        },
-        {
-          "id": "R2-H5",
-          "severidad": "BAJA",
-          "archivo": "lib/exportaciones/formato.ts",
-          "linea": 93,
-          "descripcion": "El .trim() de exportada_por.nombre_completo no tiene prueba, y perfiles.nombre_completo no tiene ningún check contra un valor solo de blancos.",
-          "escenario": "El mutante z.string().min(1), sin .trim(), deja formato.test.ts verde. Con esa regresión, un perfil con nombre_completo = \"  \" produce quien: \"\" y una copia «exportada por  (Profesional sanitario)», con la capa sin autor."
+          "archivo": "accesibilidad/marca-de-agua.spec.ts",
+          "linea": 81,
+          "descripcion": "La spec de la marca fuerza opacity:1 en la capa y pinta de negro el fondo de las filas antes de medir: comprueba la geometría, pero no que la marca se vea. Ninguna prueba de vitest fija la opacidad (visor-js.ts:205) ni el color de la tinta (visor-js.ts:239).",
+          "escenario": "Medido en una copia aparte. Con s.opacity = '0', vitest de lib/exportaciones da 101/101 y la spec 5/5 (99,8 %). Con fila.style.color = '#fff', 101/101 y 5/5 (92,5 %). En los dos casos la copia se abre en Chromium sin marca visible, y una captura de la nota sale sin código: la clase de fallo de R2-H1 por otra vía."
         }
       ],
-      "altas": 0,
-      "medias": 1,
-      "bajas": 4
+      "rondas_anteriores": [
+        {
+          "ronda": 1,
+          "commit": "2a6daaf",
+          "ticket": "T-040",
+          "hallazgos": [
+            {
+              "id": "A-H1",
+              "severidad": "MEDIA",
+              "archivo": "lib/exportaciones/formato.ts",
+              "linea": 45,
+              "descripcion": "Los campos que §1.2 marca «sí» por rama (cuerpo y contenido_canonico en la profesional; cuerpo en la individual del paciente; participantes en la conjunta) son todos .optional() y el esquema no es estricto: si la base no los manda, o los manda con otra clave, la copia sale con el texto vacío y nadie se entera.",
+              "escenario": "Medido en una copia aparte: respuestaProfesional() con cuerpo→cuerpo_texto y sin contenido_canonico pasa safeParse, y proyectar da texto \"\" y contenidoCanonico \"\" en las dos versiones. Una conjunta sin participantes pasa con []. En el corte B, un alias mal escrito en el jsonb_build_object produce una copia para un juzgado con huellas y sello correctos y las notas en blanco. Arreglo: un refine por rama que exija los campos presentes (o un discriminatedUnion por proyección y alcance)."
+            },
+            {
+              "id": "A-H2",
+              "severidad": "MEDIA",
+              "archivo": "lib/exportaciones/formato.ts",
+              "linea": 120,
+              "descripcion": "El contrato de la marca exige exportada_por.apellidos, pero perfiles solo tiene nombre_completo (20260815192424_…:28-33). El esquema lo pide como z.string() obligatorio y el hallazgo vive solo en un comentario, no en el diseño ni en docs/state.md.",
+              "escenario": "En el corte B, quien escriba exportar_nota siguiendo el diseño ('apellidos', p.apellidos) choca con una columna inexistente; si lo arregla con 'apellidos', null u omitiéndolo, safeParse falla (medido: apellidos null → false; sin la clave → false) y TODAS las exportaciones devuelven error. Hay que anotar la decisión (nombre_completo en nombre, apellidos '') en state.md §Hallazgos o en el diseño para que el corte B la herede."
+            },
+            {
+              "id": "A-H3",
+              "severidad": "MEDIA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 187,
+              "descripcion": "La capa de marca no cubre el contenido en una pantalla de escritorio: cada fila es la frase tres veces (unos 1364 px) alineada a la izquierda dentro de un bloque girado del 200 % del ancho, así que en pantallas anchas la marca se queda en el margen izquierdo.",
+              "escenario": "Medido con Chromium sobre el fichero de muestra (contraseña de la prueba): a 1920×1080 la columna <main> tiene un 0,3 % de su área bajo la marca (la captura lo confirma: ninguna marca sobre el texto); a 1366×768, la mitad; a 390×844, toda. Una captura recortada a la nota en un portátil de escritorio no lleva el código, contra el contrato («una capa sobre el contenido») y contra ADR-076 («cada copia impresa o capturada lleva el código»). Las pruebas solo miran que la capa exista y lleve el código. Arreglo: repetir la frase hasta cubrir el ancho del giro (o centrar las filas)."
+            },
+            {
+              "id": "A-H4",
+              "severidad": "MEDIA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 125,
+              "descripcion": "La normalización NFC del lado del visor no tiene prueba: el diseño (§5 «Por la contraseña») exige NFC en los dos lados, pero la contraseña de visor-js.test.ts no lleva ningún carácter descompuesto y el caso «dos lados» de cifrar.test.ts descifra con un ayudante propio que ya normaliza.",
+              "escenario": "Mutante medido en una copia aparte: quitar .normalize('NFC') de VISOR_JS deja verdes visor-js.test.ts y cifrar.test.ts (26/26). En producción, una copia cifrada desde Windows con «contraseña» (ñ compuesta) y tecleada en macOS (ñ descompuesta) diría «Contraseña incorrecta» para siempre. Falta una prueba que cifre con NFC y abra el visor con la contraseña en NFD."
+            },
+            {
+              "id": "A-H5",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 238,
+              "descripcion": "La línea visible de la marca se inserta antes del h1, y el foco va al h1 (línea 269): quien usa lector de pantalla y lee hacia delante desde el foco nunca oye la marca.",
+              "escenario": "Usuario de NVDA abre la copia → el foco cae en «Copia de una nota clínica» → lee la ficha y las versiones sin oír «Copia … exportada por … el …». El contrato pide una línea «no oculta a lectores de pantalla»: no está oculta, pero queda detrás del punto de entrada. Arreglo: ponerla después del h1 o enfocar la línea."
+            },
+            {
+              "id": "A-H6",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 114,
+              "descripcion": "Con el visor bloqueado (sin crypto.subtle o con la cabecera dañada) el aviso se escribe en la región role=alert al cargar y al pulsar «Abrir» se reescribe con el mismo texto y sin mover el foco, así que no se anuncia.",
+              "escenario": "Fichero abierto como file:// en un navegador sin SubtleCrypto → el alert ya tiene el texto en la carga (no se anuncia) → el usuario de lector teclea la contraseña y pulsa «Abrir» → el campo se vacía y no oye nada. Arreglo: vaciar la región y escribir en el siguiente tick, o mover el foco al aviso."
+            },
+            {
+              "id": "A-H7",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 126,
+              "descripcion": "Cualquier excepción de Argon2 (por ejemplo, un RangeError al reservar los 64 MiB del Uint32Array) se muestra como «Contraseña incorrecta o fichero dañado».",
+              "escenario": "Móvil antiguo o pestaña con poca memoria → new Uint32Array falla → el visor dice «Contraseña incorrecta» → el destinatario reintenta con la contraseña correcta, falla siempre igual y pide otra copia (otro acceso y otra fila de auditoría). Arreglo: un texto propio para el fallo de memoria."
+            },
+            {
+              "id": "A-H8",
+              "severidad": "BAJA",
+              "archivo": "lib/i18n/es.ts",
+              "linea": 898,
+              "descripcion": "La etiqueta del motivo en i18n («Requerimiento judicial o de inspección») no coincide con la que el diseño fija para etiqueta_motivo_exportacion en SQL («Requerimiento judicial o inspección», diseño §1.1).",
+              "escenario": "La marca y la copia dicen «… o de inspección», y accesos_historia.justificacion y el aviso al titular dirán «… o inspección». Quien coteje la copia con el registro de accesos ve dos textos para el mismo motivo. Hay que fijar una de las dos antes del corte B."
+            },
+            {
+              "id": "B-H1",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/fichero.ts",
+              "linea": 17,
+              "descripcion": "El base64 por trozos (contrato del diseño §1.3) nunca se prueba con más de un trozo: ninguna carga de las pruebas pasa de 32 KiB, así que el bucle solo da una vuelta.",
+              "escenario": "Medido: el mutante `bytes.subarray(i, TROZO)` (que para i ≥ 32768 da un trozo vacío) deja 80/80 verde. La proyección profesional repite cada versión dos veces (texto y canónico), así que una nota de tres versiones de unos 6 KB ya pasa de 32 KiB. Con esa regresión, la carga se trunca, el fichero no abre nunca («Contraseña incorrecta o fichero dañado») y su huella ya se habría registrado. El código actual es correcto; falta una prueba de ida y vuelta con una carga de más de 64 KiB."
+            },
+            {
+              "id": "B-H2",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/nucleo-js.test.ts",
+              "linea": 89,
+              "descripcion": "Los seis cotejos de Argon2id con crypto.argon2Sync usan todos un m múltiplo de 4 y una sal de 16 bytes, así que tres desvíos del RFC 9106 sobreviven.",
+              "escenario": "Medido con los mismos seis casos: sobreviven `columnas = m` (sin el redondeo m′ = 4·⌊m/4⌋), H0 con m′ en vez de m, y `le32(16)` fijo en vez de `le32(sal.length)`. Con m = 10 o una sal de 32 bytes darían otra clave. En v1 son equivalentes (m = 65536 y sal de 16, fijados por el visor), pero la mitigación del riesgo 3 del diseño («una implementación que pase esas cinco con m distintos es Argon2id») no se cumple. Comprobé que el núcleo actual SÍ coincide con Node en m = 10, 1027 y 4099, sales de 8, 32 y 300 bytes, contraseña vacía y de 1024 bytes, y longitudes 4…1024. Bastaría con añadir dos de esos casos."
+            },
+            {
+              "id": "B-H3",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/nucleo-js.ts",
+              "linea": 265,
+              "descripcion": "De los lanzamientos del núcleo solo se prueba p = 2. Ni t ∈ [1, 64], ni m ≥ 8, ni la longitud, ni la sal corta, ni las cotas de m y t del visor (visor-js.ts:60) tienen una prueba.",
+              "escenario": "Medido: sin la guarda `entero(t, 1, 64)`, argon2id con t = 0 devuelve la MISMA clave para cualquier contraseña y sal (7636809c… para «contraseña uno» con sal 01… y para «otra distinta» con sal 09…). Si no hay pasadas, la memoria solo tiene los dos primeros bloques, y el último bloque, que es cero, da la clave. La única barrera en el camino del Worker (derivarEnTrabajador) es esa guarda, y quitarla deja la suite verde. Quitar las cotas `entero(k.m…)`/`entero(k.t…)` del visor también deja 80/80 verde."
+            },
+            {
+              "id": "B-H4",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/cifrar.ts",
+              "linea": 37,
+              "descripcion": "La longitud de la contraseña se mide en unidades UTF-16 (`.length`), no en caracteres como dicen el ADR-076 §7 y el mensaje de ErrorContrasena.",
+              "escenario": "`cifrarCopia(copia, '🔐'.repeat(6), …)` se acepta: son 6 caracteres y miden 12 unidades. Una contraseña de 200 emojis (200 caracteres) se rechaza, porque mide 400 unidades. Hay que contar con `Array.from(normalizada).length`, o el ADR tiene que decir «unidades»."
+            },
+            {
+              "id": "B-H5",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 122,
+              "descripcion": "`setTimeout(…, 0)` no garantiza que el navegador pinte «Abriendo…» antes de los segundos de Argon2id en el hilo principal.",
+              "escenario": "No está medido en un navegador; jsdom no pinta. El temporizador de 0 ms suele correr antes de la siguiente oportunidad de renderizado (~16 ms). Entonces el role=\"status\" y el botón deshabilitado no se ven ni se anuncian hasta que termina la derivación, y la página parece colgada de 2 a 5 s. La forma habitual de evitarlo es `requestAnimationFrame(() => setTimeout(f, 0))`. Conviene mirarlo en la prueba manual C7."
+            }
+          ],
+          "altas": 0,
+          "medias": 4,
+          "bajas": 9
+        },
+        {
+          "ronda": 2,
+          "commit": "b483b47",
+          "ticket": "T-040",
+          "hallazgos": [
+            {
+              "id": "R2-H1",
+              "severidad": "MEDIA",
+              "archivo": "lib/exportaciones/visor-js.test.ts",
+              "linea": 326,
+              "descripcion": "La decisión sobre A-H3 exige una prueba de Playwright sobre el fichero de muestra y no existe. La prueba de vitest repite la fórmula del código (6 px por carácter, filas de 72 px) en jsdom, y el guion del implementador, fuera del repo, modela el giro en vez de medirlo.",
+              "escenario": "Medido en Chromium. Con transform rotate(-30deg) translateX(40%), la suite queda verde y el guion del implementador da 100 % en los tres tamaños; con píxeles reales, <main> queda cubierto al 67,8 % a 390×844. Con fontSize 6px, la suite queda verde y el guion da 80,4 %; con píxeles reales, 71,7 % a 2560×1440. Una regresión de estilo vuelve a dejar la nota sin marca en una captura, y nada lo para."
+            },
+            {
+              "id": "R2-H2",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 207,
+              "descripcion": "`lado` se fija una sola vez, al pintar, con la pantalla de ese momento. Si la ventana pasa después a una pantalla mucho más ancha, las filas, alineadas a la izquierda del bloque girado, no llegan al centro.",
+              "escenario": "Medido con píxeles reales. Se abre en 1366×768 o 1920×1080 y la ventana se arrastra y se maximiza en un ultrapanorámico de 5120×1440: queda bajo la marca el 35,5 % de <main>, y la captura de la mitad derecha de la nota sale sin código. Abriendo directamente en 5120×1440 se cubre el 99,8 %."
+            },
+            {
+              "id": "R2-H3",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/visor-js.test.ts",
+              "linea": 269,
+              "descripcion": "La prueba de B-H5 no distingue uno de dos fotogramas: ejecuta los fotogramas en bucle y solo comprueba que no se deriva antes del primero.",
+              "escenario": "El mutante window.requestAnimationFrame(f), con un solo rAF, deja la suite verde. Argon2id corre entonces en la retrollamada del fotograma, antes de que se pinte, y «Abriendo…» no se ve ni se anuncia durante 1-5 s: es el fallo de B-H5."
+            },
+            {
+              "id": "R2-H4",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/visor-js.ts",
+              "linea": 141,
+              "descripcion": "Cualquier excepción de Argon2id se presenta como falta de memoria, y el visor admite m hasta 1 GiB y t hasta 16, aunque v1 escribe siempre 65536 y 3. Una cabecera dañada en m se toma por un problema del dispositivo.",
+              "escenario": "Medido en Chromium con la contraseña correcta y \"m\":65536 cambiado a 655360 o a 1048576. En un dispositivo con poca memoria (simulado, 256 MiB), el aviso es «no tiene memoria libre suficiente… ábrela en otro ordenador». En un ordenador con memoria suficiente, a los 9,5-15 s, «Contraseña incorrecta o fichero dañado». En la ronda 1 este caso daba el mensaje correcto."
+            },
+            {
+              "id": "R2-H5",
+              "severidad": "BAJA",
+              "archivo": "lib/exportaciones/formato.ts",
+              "linea": 93,
+              "descripcion": "El .trim() de exportada_por.nombre_completo no tiene prueba, y perfiles.nombre_completo no tiene ningún check contra un valor solo de blancos.",
+              "escenario": "El mutante z.string().min(1), sin .trim(), deja formato.test.ts verde. Con esa regresión, un perfil con nombre_completo = \"  \" produce quien: \"\" y una copia «exportada por  (Profesional sanitario)», con la capa sin autor."
+            }
+          ],
+          "altas": 0,
+          "medias": 1,
+          "bajas": 4
+        }
+      ]
     }
   ]
 }

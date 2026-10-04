@@ -245,3 +245,24 @@ Los mutantes se miden en una copia aparte (`git archive f8990c2` al scratchpad d
 - `sinMemoriaPara` solo intercepta reservas de 64 MiB o más. La gemela cuenta una sola reserva, así que el núcleo usa la del visor.
 - **Node ≥ 24.7.** La spec usa `crypto.argon2Sync`, como las pruebas de vitest de `lib/exportaciones`. `ci.yml` fija Node 20, pero el diseño ya lo anota (riesgos, «fijar Node en `engines`») y `state.md` dice que la CI nunca ha corrido. No es nuevo de esta ronda.
 - La ronda no toca docs, ADR, `package.json` ni `.github`. `accesibilidad/**` está en el territorio de §6. El worktree queda limpio (`git status` vacío).
+
+## Corte B · ronda 1 (04-10-2026)
+
+**Sin hallazgos ALTA. 0 ALTA, 4 MEDIA, 5 BAJA.** Rama `worktree-agent-a9325d705ce4db36b`, HEAD `99fe720`. Dos revisores en paralelo; los informes completos están en [revision-a.md](revision-a.md) (base de datos) y [revision-b.md](revision-b.md) (servidor, interfaz y cifrado).
+
+- **Revisor A, base de datos (0 ALTA, 2 MEDIA, 1 BAJA).** La RPC cumple la lista «Qué atacar»: los pasos 0 a 4 no leen tablas clínicas, hay una sola lectura de versiones, la referencia no aparece en ningún error, los grants son correctos y la regla 6 tiene tres capas. Fallan dos pruebas. S6 filtra por una columna que no existe, así que no prueba lo que dice (A-H1). MB4 se declara equivalente y no lo es (A-H2). Además, el administrador coterapeuta no tiene camino para la copia por motivo y nadie lo ha anotado (A-H3).
+- **Revisor B, servidor, interfaz y cifrado (0 ALTA, 2 MEDIA, 4 BAJA).** La contraseña no entra en el servidor, el contenido clínico solo viaja para cifrarse y los cuatro desvíos declarados son aceptables. Las MEDIA son dos. La lista aplana el `null` de `notas_para_copia` y pinta el estado vacío (B-H1). La vista `solo_copia` no tiene el reloj del candado y su error pide un PIN que no hay (B-H2). Las BAJA son pruebas que no discriminan (B-H3, B-H4), una spec sin axe (B-H5) y un botón sin acción posible cuando la recarga pasa a `solo_copia` (B-H6).
+
+| id | grav. | fichero:línea | qué |
+|---|---|---|---|
+| A-H1 | MEDIA | `scripts/t040-oraculo.mjs:252` | S6 filtra por `exportacion_id`, que no existe. Da 42703 y la función no llega a correr. Ninguna prueba fija que el filtro sobre `pgrst_scalar` deje de confirmar (200 null / 416). |
+| A-H2 | MEDIA | `tickets/T-040/mutantes.json:21` | MB4 no es equivalente: el banco 27 no tiene ningún no administrador con motivo y referencia ausente o corta (22023 frente a 42501). |
+| A-H3 | BAJA | `supabase/migrations/20261009180000_exportaciones.sql:500` | El administrador coterapeuta no tiene camino para la copia por motivo. El diseño dice «se anota» y `docs/state.md` de la rama no lo recoge. |
+| B-H1 | MEDIA | `app/(app)/pacientes/[id]/lista-de-notas.tsx:28` | `paraCopia ?? []` junta «no se pudo leer» con «no hay»: se pinta «Todavía no hay notas» sin aviso ni reintento. |
+| B-H2 | MEDIA | `app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx:798` | `solo_copia` no tiene el reloj del candado. Al caducar, el error pide el PIN, pero no hay campo para escribirlo. |
+| B-H3 | BAJA | `app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx:104` | La prueba de «la contraseña sale del formulario» mira el formulario desmontado. Quitar el `reset` (`dialogo-de-copia.tsx:158`) deja la suite en verde. |
+| B-H4 | BAJA | `app/(app)/pacientes/[id]/historia/notas/dialogo-de-copia.test.tsx:188` | Cerrar durante `cifrando` no se prueba. Quitar `if (!vigente()) return;` (`:174`) deja la suite en verde y descarga una copia cancelada. |
+| B-H5 | BAJA | `accesibilidad/nota-clinica.spec.ts:1` | Sin axe (§1.6) y sin declararlo como desvío. No cubre el modo motivo ni el foco en «Cerrar» tras la descarga. |
+| B-H6 | BAJA | `app/(app)/pacientes/[id]/historia/notas/editor-de-nota.tsx:966` | Si la recarga devuelve `solo_copia` con la vista abierta, sigue el `BotonDeCopia` en modo profesional, sin campo de motivo: da 42501 «Falta el motivo». |
+
+Antes de copiarlas, he cotejado las nueve líneas citadas con `git show worktree-agent-a9325d705ce4db36b:<ruta>`, y también las auxiliares `editor-de-nota.tsx:489` y `dialogo-de-copia.tsx:158` y `:174`. Todas coinciden y no he corregido ninguna. Los escenarios completos están en `revision.json`, y el corte A, ronda 3, queda dentro de `cortes_anteriores`.
