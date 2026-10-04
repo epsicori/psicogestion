@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const CENTRO = '33333333-3333-4333-8333-333333333333';
 const USUARIO = '22222222-2222-4222-8222-222222222222';
 const OTRO_PROFESIONAL = '66666666-6666-4666-8666-666666666666';
+const CENTRO_B = '44444444-4444-4444-8444-444444444444';
+const ADMIN = '88888888-8888-4888-8888-888888888888';
 const ASIGNADO = '77777777-7777-4777-8777-777777777777';
 const PACIENTE = '11111111-1111-4111-8111-111111111111';
 
@@ -33,6 +35,7 @@ function constructor(tabla: string) {
   cadena.select = devolver;
   cadena.order = devolver;
   cadena.in = (columna: string, valor: unknown) => (consulta.filtros.push([columna, valor]), cadena);
+  cadena.or = (texto: string) => (consulta.filtros.push(['or', texto]), cadena);
   cadena.eq = (columna: string, valor: unknown) => (consulta.filtros.push([columna, valor]), cadena);
   cadena.maybeSingle = () => Promise.resolve(m.tablas[tabla]);
   cadena.then = (alResolver: (v: unknown) => unknown) => Promise.resolve(m.tablas[tabla]).then(alResolver);
@@ -89,6 +92,36 @@ describe('ContenidoAlta', () => {
     const directorio = m.consultas.find((c) => c.tabla === 'directorio_perfiles');
     expect(directorio?.filtros).toContainEqual(['rol', ['profesional_sanitario', 'administrador']]);
     expect(directorio?.filtros).toContainEqual(['estado', 'activo']);
+  });
+
+  // H1 (ronda 3, FALLA del verificador): en la siembra el administrador tiene centro_id null.
+  it('el administrador activo sale siempre, también con centro_id null; un profesional sin centro no', async () => {
+    m.cargarContexto.mockResolvedValue({
+      ...contexto('administrador'),
+      centros: [
+        { id: CENTRO, nombre: 'Centro Sur' },
+        { id: CENTRO_B, nombre: 'Centro Norte' },
+      ],
+    });
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO, rol: 'profesional_sanitario' },
+        { id: ADMIN, nombre_completo: 'Zoe Admin', centro_id: null, rol: 'administrador' },
+        { id: 'sin-centro', nombre_completo: 'Sin Centro', centro_id: null, rol: 'profesional_sanitario' },
+      ],
+      error: null,
+    };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.profesionales).toEqual([
+      { id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO },
+      { id: ADMIN, nombre: 'Zoe Admin', centroId: CENTRO },
+      { id: ADMIN, nombre: 'Zoe Admin', centroId: CENTRO_B },
+    ]);
+    // La consulta tampoco deja fuera al administrador sin centro.
+    const directorio = m.consultas.find((c) => c.tabla === 'directorio_perfiles');
+    expect(directorio?.filtros).toContainEqual(['or', `rol.eq.administrador,centro_id.in.(${CENTRO},${CENTRO_B})`]);
   });
 
   // H2 (revisión del corte B): el profesional por defecto es el asignado al paciente, no el primero.

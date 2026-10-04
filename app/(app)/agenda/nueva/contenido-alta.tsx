@@ -37,10 +37,11 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
       ? Promise.resolve(null)
       : supabase
           .from('directorio_perfiles')
-          .select('id, nombre_completo, centro_id')
+          .select('id, nombre_completo, centro_id, rol')
           .in('rol', ['profesional_sanitario', 'administrador'])
           .eq('estado', 'activo')
-          .in('centro_id', centros.map((c) => c.id)),
+          // El administrador no pertenece a un centro (centro_id null): sale siempre; el profesional, solo en los suyos.
+          .or(`rol.eq.administrador,centro_id.in.(${centros.map((c) => c.id).join(',')})`),
     parametros.paciente
       ? supabase.from('pacientes').select('id, nombre, apellidos, profesional_id').eq('id', parametros.paciente).maybeSingle()
       : Promise.resolve(null),
@@ -59,7 +60,13 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
     rol === 'profesional_sanitario'
       ? []
       : (profesionalesLeidos?.data ?? [])
-          .flatMap((p) => (p.id && p.centro_id ? [{ id: p.id, nombre: p.nombre_completo ?? '', centroId: p.centro_id }] : []))
+          .flatMap((p) => {
+            if (!p.id) return [];
+            const nombre = p.nombre_completo ?? '';
+            // Un administrador sin centro se ofrece en todos los centros a los que quien mira tiene acceso.
+            if (!p.centro_id) return p.rol === 'administrador' ? centros.map((c) => ({ id: p.id!, nombre, centroId: c.id })) : [];
+            return [{ id: p.id, nombre, centroId: p.centro_id }];
+          })
           // Orden estable: por nombre y, a igualdad, por id. Sin él, «el primero» cambiaría de una carga a otra.
           .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.id.localeCompare(b.id));
   const delCentro = profesionales.filter((p) => p.centroId === centroId);
