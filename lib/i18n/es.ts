@@ -983,12 +983,6 @@ export const es = {
         diasDeLaSemana: 'Días de la semana',
         huecosDelDia: 'Huecos del día',
       },
-      avisoRaro: {
-        titulo: 'Hueco poco habitual',
-        explicacion: 'Aquí cabe una cita más corta que el hueco entero, pero no una de esta duración.',
-        alternativa: 'Alternativa: {cuando}',
-        agendarIgualmente: 'Agendar igualmente',
-      },
       error: {
         tipoNoValido: 'Ese tipo de terapia ya no está disponible. Elige otro.',
         previsualizacionCaducada: 'La serie ha cambiado mientras la revisabas. Revisa de nuevo las fechas.',
