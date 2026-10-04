@@ -1,0 +1,42 @@
+{
+  "ticket": "T-042",
+  "revisor": "A",
+  "ronda": 1,
+  "altas": 0,
+  "medias": 1,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261009120000_pin_y_canje_en_dos_pasos.sql",
+      "linea": 90,
+      "descripcion": "Ninguna prueba falla si se quita el for update del paso uno del PIN: la C1 del oráculo (scripts/t042-oraculo.mjs:290-297) comprueba +3, y eso sale igual sin candado porque el UPDATE de READ COMMITTED vuelve a evaluar intentos_fallidos+1; el candado lo que protege es que el bloqueo se mire antes de comparar.",
+      "escenario": "Se quita el for update y todas las suites siguen en verde. Con intentos_fallidos=4, diez POST /rpc/comprobar_pin_historia concurrentes, cada uno con un PIN distinto, leen bloqueado_hasta=null y cotejan los diez: quedan 10 PIN_FALLIDO en vez de 1 más el bloqueo, y si uno acierta pone el contador a 0 y borra el bloqueo. Prueba que discrimina: partir de 4, lanzar 10 malos concurrentes y exigir exactamente 5 intentos y 1 PIN_FALLIDO nuevo."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261009120000_pin_y_canje_en_dos_pasos.sql",
+      "linea": 185,
+      "descripcion": "Una autorización pendiente (desbloqueos_autorizados>0 y autorizado_hasta en el futuro) sobrevive a bloquear_historia() y a fijar_pin_historia, que no la limpian.",
+      "escenario": "Reproducido en rollback: dos pasos uno buenos (doble pulsación, tope 2) y un paso dos ok; luego bloquear_historia() devuelve 1 y historia_desbloqueada() da f. Dentro de los 60 s, POST /rpc/desbloquear_historia con {} desde la sesión desatendida devuelve ok y historia_desbloqueada() vuelve a t sin que nadie haya escrito el PIN."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/24-pin-y-canje-dos-pasos.sql",
+      "linea": 294,
+      "descripcion": "La aserción de la CA4 «ni el PIN ni el hash en la auditoría» solo mira estado_posterior de PIN_FALLIDO y PIN_BLOQUEADO, que llevan un JSON fijo; no mira las filas UPDATE de fn_auditar ni estado_anterior, que es por donde se colaría el hash.",
+      "escenario": "Una migración posterior recrea el disparador como fn_auditar('perfil_id') sin excluir 'hash'. Cada comprobar_pin_historia escribe el bcrypt en auditoria (en estado_anterior y en estado_posterior) y la CA4 sigue en verde."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/24-pin-y-canje-dos-pasos.sql",
+      "linea": 360,
+      "descripcion": "La CA5.5 (lote nuevo entre los dos pasos) falla en la guarda del consumo de la centinela nueva y nunca llega al usado_en is null; solo la 5.5b, con un estado forjado, discrimina M10, y la §5 del diseño atribuye ese resultado al usado_en is null por error.",
+      "escenario": "Con M10 aplicado (el paso dos sin usado_en is null), la CA5.5 sigue en verde: da codigo_invalido por canje_autorizado_hasta. Si se retira la 5.5b por forjada, la cláusula queda sin ninguna prueba."
+    }
+  ]
+}

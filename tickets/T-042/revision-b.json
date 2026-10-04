@@ -1,0 +1,62 @@
+{
+  "ticket": "T-042",
+  "ronda": 1,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 2,
+  "bajas": 4,
+  "hallazgos": [
+    {
+      "id": "B1-H1",
+      "severidad": "MEDIA",
+      "archivo": "tickets/T-042/mutantes.json",
+      "linea": 25,
+      "descripcion": "C1 no puede matar M-H4 (el UPDATE con ph.intentos_fallidos + 1 ya serializa la suma en READ COMMITTED), así que el for update del paso uno del PIN queda sin prueba, y el registro lo presenta como «no observado» y «cubierto por M3».",
+      "escenario": "Si se quita el for update (migración:90), la suite sigue en verde. N POST /rpc/comprobar_pin_historia simultáneos leen bloqueado_hasta nulo y producen N cotejos y N PIN_FALLIDO en una sola oleada: el límite de cinco del ADR-026 se salta. La prueba que lo mataría: con intentos=4, tres malos a la vez deben dejar 1 PIN_FALLIDO e intentos=5."
+    },
+    {
+      "id": "B1-H2",
+      "severidad": "MEDIA",
+      "archivo": "docs/state.md",
+      "linea": 15,
+      "descripcion": "El state.md de la rama choca con el de main 037f0a0 (git merge-tree da CONFLICT), y tomar el lado de la rama pisa hallazgos abiertos.",
+      "escenario": "Si se resuelve con el lado de la rama: vuelve «T-038 ronda 4 en implementación», revive A3-H2 (cerrado) y desaparecen T-038 R4-H1 (BAJA abierto) y «T-038 lecciones». La línea 33, «Se cierra al integrar», queda falsa en main."
+    },
+    {
+      "id": "B1-H3",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/candado.ts",
+      "linea": 76,
+      "descripcion": "Si el paso dos falla tras un paso uno bueno, el reintento deja una autorización sobrante de 60 s que bloquear_historia() no borra.",
+      "escenario": "Medido en begin…rollback. Paso uno bueno, el paso dos se pierde y la pantalla dice «PIN incorrecto». El reintento abre y deja 1 autorización. Al pulsar «Cerrar historia», historia_desbloqueada()=f. Antes de 60 s, POST /rpc/desbloquear_historia {} desde esa sesión devuelve ok y la historia vuelve a estar abierta, sin PIN."
+    },
+    {
+      "id": "B1-H4",
+      "severidad": "BAJA",
+      "archivo": "lib/supabase/tipos-bd.ts",
+      "linea": 440,
+      "descripcion": "El regenerado añade las cuatro columnas nuevas a dos tablas. Es salida legítima del generador (idéntica byte a byte), pero contradice CA15 y §1.2, y no está anotado en ningún sitio.",
+      "escenario": "Un verificador que aplica CA15 al pie de la letra lo marca FALLA, o lo da por bueno sin dejar constancia de por qué no se cumple."
+    },
+    {
+      "id": "B1-H5",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/candado.ts",
+      "linea": 79,
+      "descripcion": "El console.error del paso dos sigue registrando el objeto error entero, aquí y en totp.ts:144, en contra de §1.4 y §5, que piden registrar .code.",
+      "escenario": "Un fallo de desbloquear_historia() o canjear_codigo_recuperacion() vuelca message, details y hint al registro, y el punto de §5 no se cumple. Hoy no lleva el secreto: es una desviación del diseño, no una fuga."
+    },
+    {
+      "id": "B1-H6",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/totp.test.ts",
+      "linea": 170,
+      "descripcion": "Faltan casos de §1.4: ninguno con sin_codigos, y deleteFactor nunca se ejecuta porque listFactors devuelve factors: [].",
+      "escenario": "El mutante que borra el factor salvo con codigo_invalido o bloqueado sigue en verde. Con él, quien solo tiene la contraseña de una cuenta sin lote recibe sin_codigos en /recuperar y le borra el TOTP al titular."
+    }
+  ],
+  "comprobado_sin_hallazgo": [
+    "El 42501 «La historia no está desbloqueada» de nota-clinica.spec.ts es la sonda de abrirEditorDeNota con el candado cerrado (servidor.ts:474, accesos.ts:51, fuera del diff). Sesión de Ana a las 10:38:19.67, PIN y ventana a las 10:38:20.6, test 2 con la ventana ya abierta: un solo mensaje. desbloquearHistoria solo da true con la fila del paso dos, en la misma transacción que la ventana.",
+    "Dato para el orquestador: hay un PIN_FALLIDO confirmado de 1111… a las 10:38:14 sin ninguna sesión de GoTrue de Ana. Parece una medida hecha fuera de rollback."
+  ]
+}
