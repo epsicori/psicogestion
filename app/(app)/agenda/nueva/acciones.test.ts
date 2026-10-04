@@ -53,7 +53,7 @@ function clienteFalso(tablas: Tablas) {
     c.maybeSingle = async () => {
       if (tabla === 'perfiles') return { data: tablas.rol === null ? null : { rol: tablas.rol ?? 'profesional_sanitario' }, error: null };
       if (tabla === 'tipos_terapia') {
-        return { data: tablas.tipo === undefined ? { duracion_minutos: 80 } : tablas.tipo && { duracion_minutos: tablas.tipo.duracion_minutos }, error: null };
+        return { data: tablas.tipo === undefined ? { id: TIPO, nombre: NOMBRE_TIPO, duracion_minutos: 80 } : tablas.tipo, error: null };
       }
       return { data: null, error: null };
     };
