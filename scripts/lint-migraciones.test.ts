@@ -207,6 +207,8 @@ describe('constantes exportadas', () => {
       'accesos_historia',
       'accesos_historia_vistas',
       'facturas',
+      'exportaciones',
+      'exportaciones_ficheros',
     ]);
   });
 });

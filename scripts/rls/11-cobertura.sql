@@ -53,6 +53,9 @@ declare
     -- T-011a · dominio Series de citas. eventos_salientes NO tiene ninguna
     -- política a propósito (RLS activada, cero políticas): solo escriben los
     -- disparadores security definer.
+    -- T-040 · exportaciones y exportaciones_ficheros NO tienen ninguna política
+    -- a propósito (RLS activada, cero políticas): solo escriben y leen
+    -- exportar_nota() y registrar_fichero_exportado(), security definer.
     'propuestas_cita_lectura',
     'representantes_paciente_alta', 'representantes_paciente_lectura', 'representantes_paciente_modificacion',
     'tablas_solo_adicion_lectura',
