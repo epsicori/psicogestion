@@ -112,3 +112,56 @@ test('a 1280 la barra de acciones se separa del contenido que pasa por debajo: s
   expect(barra.aireSuperior).toBeGreaterThanOrEqual(12);
   expect(barra.aireInferior).toBeGreaterThanOrEqual(12);
 });
+
+/**
+ * T-040 · El diálogo de la copia cifrada, con el teclado y en un navegador de verdad: «Descargar
+ * copia» lo abre con el foco dentro, Tab y Mayús+Tab no salen de él, Escape lo cierra y el foco
+ * vuelve a «Descargar copia». La nota es la firmada de Carmen, de Ana (una versión).
+ */
+const NOTA_FIRMADA = 'f0080001-0000-4000-8000-000000000002';
+
+test('T-040 · el diálogo de la copia se maneja con el teclado y devuelve el foco a «Descargar copia»', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/login');
+  await page.getByLabel('Correo').fill('ana@psicogestion.test');
+  await page.getByLabel('Contraseña').fill('psico1234');
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await page.waitForURL('**/pacientes');
+
+  await page.goto(`/pacientes/${PACIENTE}/historia/notas?nota=${NOTA_FIRMADA}`);
+  await page.getByRole('button', { name: 'Abrir el editor' }).click();
+  const campoPin = page.getByLabel('PIN');
+  const boton = page.getByRole('button', { name: 'Descargar copia' });
+  await expect(campoPin.or(boton)).toBeVisible();
+  if (await campoPin.isVisible()) {
+    await campoPin.fill('123456');
+    await page.getByRole('button', { name: 'Abrir', exact: true }).click();
+  }
+  await expect(boton).toBeVisible();
+
+  await boton.focus();
+  await page.keyboard.press('Enter');
+  const dialogo = page.getByRole('dialog', { name: 'Descargar una copia cifrada' });
+  await expect(dialogo).toBeVisible();
+  const dentro = () => dialogo.evaluate((d) => d.contains(document.activeElement));
+  expect(await dentro(), 'al abrir, el foco no entra en el diálogo').toBe(true);
+
+  // Una vuelta entera hacia delante y otra hacia atrás: el foco no sale nunca.
+  const enfocables = await dialogo.evaluate(
+    (d) => d.querySelectorAll('button:not([disabled]), input:not([disabled]), select, textarea, [href]').length,
+  );
+  for (let i = 0; i <= enfocables; i++) {
+    await page.keyboard.press('Tab');
+    expect(await dentro(), `Tab ${i + 1}: el foco salió del diálogo`).toBe(true);
+  }
+  for (let i = 0; i <= enfocables; i++) {
+    await page.keyboard.press('Shift+Tab');
+    expect(await dentro(), `Mayús+Tab ${i + 1}: el foco salió del diálogo`).toBe(true);
+  }
+
+  await page.keyboard.press('Escape');
+  await expect(dialogo).toBeHidden();
+  await expect(boton).toBeFocused();
+});
