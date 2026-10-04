@@ -44,6 +44,10 @@ export function SelectorHueco({ calendario, elegido, alElegir, alCambiarSemana }
       </div>
 
       <div className="hidden md:block">
+        {/* Desde `md` no hay lista que diga el vacío: lo dice aquí, por semana (H16). */}
+        {!calendario.huecos.some((h) => h.estado === 'libre') && (
+          <p className="text-muted-foreground mb-2 text-sm">{t('agenda.alta.seleccion.vacio')}</p>
+        )}
         <RejillaSemana
           key={calendario.desde}
           titulo={calendario.titulo}

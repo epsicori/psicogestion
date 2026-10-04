@@ -980,6 +980,7 @@ export const es = {
         etiquetaElegida: 'Elegida',
         etiquetaOcupado: 'Ocupado',
         vacio: 'No hay huecos libres en esta semana.',
+        vacioDia: 'No hay huecos libres este día.',
         huecosDelDia: 'Huecos del día',
         sinLibres: 'sin huecos libres',
         unLibre: 'un hueco libre',

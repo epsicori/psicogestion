@@ -76,4 +76,22 @@ describe('SelectorHueco', () => {
     expect(lista.querySelector('[data-dia][aria-pressed="true"]')?.getAttribute('data-dia')).toBe('2026-10-15');
     expect(lista.querySelector('button[data-hueco="2026-10-15T12:00"]')).not.toBeNull();
   });
+
+  // H16 (ronda 3): una semana sin huecos libres tiene que decirlo también desde `md`, donde no hay lista.
+  it('una semana sin ningún hueco libre lo dice; con alguno, no', () => {
+    const sinLibres = construirCalendarioAlta({
+      fechaFoco: '2026-10-06',
+      zona: 'Europe/Madrid',
+      hoy: '2026-10-04',
+      sugerencias: { modo: 'enFrio', sugerencias: [] },
+      bloques: [bloque('2026-10-06', '18:00', 'ocupado')],
+    });
+    const { unmount } = pinta({ calendario: sinLibres });
+    expect(screen.getByText('No hay huecos libres en esta semana.')).toBeTruthy();
+    unmount();
+
+    pinta();
+    expect(screen.queryByText('No hay huecos libres en esta semana.')).toBeNull();
+  });
 });
+

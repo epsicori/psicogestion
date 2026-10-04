@@ -123,7 +123,7 @@ export function ListaDia({ dias, citas = [], diaInicial, alAbrirCita, seleccion 
       {seleccion ? (
         <section ref={seccionHuecos} aria-label={t('agenda.alta.seleccion.huecosDelDia')} className="flex flex-col gap-3">
           {gruposDeHuecos.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{t('agenda.alta.seleccion.vacio')}</p>
+            <p className="text-muted-foreground text-sm">{t('agenda.alta.seleccion.vacioDia')}</p>
           ) : (
             gruposDeHuecos.map((grupo) => (
               <div key={grupo.hora} className="flex flex-col gap-1">

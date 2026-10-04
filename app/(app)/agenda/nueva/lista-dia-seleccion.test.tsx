@@ -71,7 +71,9 @@ describe('ListaDia · modo selección', () => {
   it('un día sin huecos lo dice', () => {
     montar(4);
 
-    expect(screen.getByText('No hay huecos libres en esta semana.')).toBeTruthy();
+    // H16: habla de ese día, no de la semana (otros días pueden tener huecos).
+    expect(screen.getByText('No hay huecos libres este día.')).toBeTruthy();
+    expect(screen.queryByText('No hay huecos libres en esta semana.')).toBeNull();
   });
 
   // H10 (ronda 3): una sola parada de Tab en el selector de día; los huecos se recorren con flechas.
