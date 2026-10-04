@@ -154,9 +154,11 @@ describe('FormularioRegenerar (T-038)', () => {
 
     const region = await screen.findByRole('region', { name: 'No sabemos si se han regenerado los códigos' });
     expect(document.activeElement).toBe(region);
-    // Dice que la lista en papel puede haber dejado de valer y dónde comprobarlo.
-    expect(region).toHaveAccessibleDescription(expect.stringMatching(/lista[^.]*en papel[^.]*ya no valdr/));
-    expect(region).toHaveAccessibleDescription(expect.stringContaining('lista de avisos'));
+    // Dice que la lista en papel puede haber dejado de valer y pide regenerar sin condición.
+    expect(region).toHaveAccessibleDescription(expect.stringMatching(/en papel[^.]*ya no val/));
+    expect(region).toHaveAccessibleDescription(expect.stringContaining('Vuelve a regenerarlos en cualquier caso'));
+    expect(region).not.toHaveAccessibleDescription(expect.stringMatching(/si no aparece/i));
+    expect(region).not.toHaveAccessibleDescription(expect.stringContaining('lista de avisos'));
     expect(screen.queryByText(/No se han regenerado/)).toBeNull();
 
     await usuario.click(screen.getByRole('button', { name: 'Volver' }));

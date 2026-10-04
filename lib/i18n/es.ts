@@ -285,7 +285,7 @@ export const es = {
       bloqueado: 'Demasiados intentos. Prueba de nuevo a las {hora}.',
       generico: 'No se han podido regenerar los códigos. Vuelve a intentarlo.',
       resultadoDesconocido:
-        'No hemos recibido respuesta y no sabemos si se han regenerado. Si se hubieran regenerado, la lista de códigos que tenías en papel ya no valdría. Comprueba en tu lista de avisos de seguridad si aparece «Códigos de recuperación nuevos»; si no aparece, vuelve a intentarlo.',
+        'No hemos recibido respuesta y no sabemos si se han regenerado. Si se regeneraron, la lista que tienes en papel ya no vale y la nueva no se te ha enseñado. Vuelve a regenerarlos en cualquier caso: así tendrás una lista nueva que sí vale.',
       registroInseguro:
         'Ahora mismo no es seguro enviar tu contraseña: avisa al administrador. No se ha cambiado nada.',
     },
