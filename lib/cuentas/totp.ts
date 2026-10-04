@@ -127,9 +127,18 @@ export async function canjearCodigoRecuperacion(
   sesion: Sesion,
   codigo: string,
 ): Promise<ResultadoCanjeCodigo> {
-  const { data, error } = await sesion.supabase.rpc('canjear_codigo_recuperacion', {
+  // Dos llamadas, ambas POST (T-042): `comprobar_codigo_recuperacion(p_codigo)` deja confirmado
+  // el intento en su propia transacción; `canjear_codigo_recuperacion()`, sin argumentos, lo lee.
+  // El código viaja solo en la primera y sin `{ get: true }`.
+  const { error: errorComprobacion } = await sesion.supabase.rpc('comprobar_codigo_recuperacion', {
     p_codigo: codigo,
   });
+  if (errorComprobacion) {
+    console.error('[canjearCodigoRecuperacion] comprobar', errorComprobacion.code);
+    return { canjeado: false, motivo: 'error', bloqueadoHasta: null };
+  }
+
+  const { data, error } = await sesion.supabase.rpc('canjear_codigo_recuperacion');
   const fila = data?.[0];
   if (error || !fila) {
     console.error('canjearCodigoRecuperacion: fallo al llamar canjear_codigo_recuperacion()', error);

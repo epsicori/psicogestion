@@ -53,12 +53,27 @@ export async function fijarPinHistoria(
   return { ok: true };
 }
 
-/** Verifica el PIN propio y abre (o no) la ventana de desbloqueo. Nunca lanza. */
+/**
+ * Verifica el PIN propio y abre (o no) la ventana de desbloqueo. Nunca lanza.
+ *
+ * Dos llamadas, ambas POST (T-042): `comprobar_pin_historia(p_pin)` comprueba el PIN y deja
+ * CONFIRMADO el intento (fallido o autorización de 60 s) en su propia transacción; después
+ * `desbloquear_historia()`, sin argumentos, lee esa autorización y abre la ventana. El PIN
+ * viaja solo en la primera y sin `{ get: true }`.
+ */
 export async function desbloquearHistoria(
   sesion: Sesion,
   pin: string,
 ): Promise<ResultadoDesbloqueo> {
-  const { data, error } = await sesion.supabase.rpc('desbloquear_historia', { p_pin: pin });
+  const { error: errorComprobacion } = await sesion.supabase.rpc('comprobar_pin_historia', {
+    p_pin: pin,
+  });
+  if (errorComprobacion) {
+    console.error('[desbloquearHistoria] comprobar', errorComprobacion.code);
+    return { desbloqueado: false, motivo: 'error', caducaEn: null, bloqueadoHasta: null };
+  }
+
+  const { data, error } = await sesion.supabase.rpc('desbloquear_historia');
   const fila = data?.[0];
   if (error || !fila) {
     console.error('desbloquearHistoria: fallo al llamar desbloquear_historia()', error);
