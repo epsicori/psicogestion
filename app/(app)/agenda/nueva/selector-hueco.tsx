@@ -28,7 +28,9 @@ const BOTON_SEMANA =
  */
 export function SelectorHueco({ calendario, elegido, alElegir, alCambiarSemana }: Props) {
   const diaInicial = diaPorDefecto(calendario.dias, calendario.huecos, elegido);
-  // `key` por semana: cada semana abre en el día del elegido (o el primero con huecos), no en el que tenía la anterior.
+  // Desde `md` no hay lista que diga el vacío: lo dice la semana entera (H16).
+  const semanaSinLibres = !calendario.huecos.some((h) => h.estado === 'libre');
+  // La rejilla y la lista llevan `key` por semana: cada semana abre en el día del elegido (o el primero con huecos), no en el que tenía la anterior (H12).
   const seleccion = { huecos: calendario.huecos, elegido, alElegir };
 
   return (
@@ -44,8 +46,7 @@ export function SelectorHueco({ calendario, elegido, alElegir, alCambiarSemana }
       </div>
 
       <div className="hidden md:block">
-        {/* Desde `md` no hay lista que diga el vacío: lo dice aquí, por semana (H16). */}
-        {!calendario.huecos.some((h) => h.estado === 'libre') && (
+        {semanaSinLibres && (
           <p className="text-muted-foreground mb-2 text-sm">{t('agenda.alta.seleccion.vacio')}</p>
         )}
         <RejillaSemana

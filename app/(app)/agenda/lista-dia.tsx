@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import { useFocoRodante } from '@/components/ui/rejilla-foco';
 import { t } from '@/lib/i18n';
@@ -40,6 +40,11 @@ export function ListaDia({ dias, citas = [], diaInicial, alAbrirCita, seleccion 
   const seccionHuecos = useRef<HTMLElement | null>(null);
   // Flecha abajo en un día que aún no es el visible: se cambia de día y, ya pintado, se entra en sus huecos.
   const entrarEnHuecos = useRef(false);
+
+  // Teclado de un hueco: las referencias solo se leen al teclear, nunca al pintar.
+  function teclearHueco(evento: KeyboardEvent<HTMLElement>) {
+    alTeclearHueco(evento, { contenedor: seccionHuecos.current, dia: botonesDia.current[elegido] ?? null });
+  }
 
   useEffect(() => {
     if (!entrarEnHuecos.current) return;
@@ -135,9 +140,7 @@ export function ListaDia({ dias, citas = [], diaInicial, alAbrirCita, seleccion 
                         hueco={hueco}
                         elegido={hueco.clave === seleccion.elegido}
                         alElegir={seleccion.alElegir}
-                        alTeclear={(evento) =>
-                          alTeclearHueco(evento, { contenedor: seccionHuecos.current, dia: botonesDia.current[elegido] ?? null })
-                        }
+                        alTeclear={teclearHueco}
                       />
                     </li>
                   ))}
