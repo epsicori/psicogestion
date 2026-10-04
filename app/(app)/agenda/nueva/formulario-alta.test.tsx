@@ -460,6 +460,85 @@ describe('FormularioAlta · profesional por defecto al elegir paciente (H9)', ()
   });
 });
 
+// H22 y H24 (ronda 4): el asignado del paciente por la puerta del centro, y la guarda de «trabaja en este centro».
+describe('FormularioAlta · el asignado y el centro (H22, H24)', () => {
+  const NORTE = '88888888-8888-4888-8888-888888888888';
+  const ANA_NORTE = '77777777-7777-4777-8777-777777777777';
+  const LUIS_NORTE = '99999999-9999-4999-8999-999999999999';
+  const centros = [
+    { id: CENTRO, nombre: 'Centro Sur' },
+    { id: NORTE, nombre: 'Centro Norte' },
+  ];
+  // Ana Abad es la primera de Norte; Luis Soto, el asignado de Bea.
+  const profesionales = [
+    { id: ANA_NORTE, nombre: 'Ana Abad', centroId: NORTE },
+    { id: LUIS_NORTE, nombre: 'Luis Soto', centroId: NORTE },
+    { id: PROFESIONAL, nombre: 'Dra. Ruiz', centroId: CENTRO },
+  ];
+  const BEA = { id: 'p-2', nombre: 'Bea Gil', profesionalId: LUIS_NORTE };
+  const sur = { paciente: null, centroId: CENTRO, profesionalId: PROFESIONAL, clave: null };
+
+  async function elegirBea() {
+    m.buscarPacientes.mockResolvedValue({ ok: true, pacientes: [BEA] });
+    fireEvent.change(screen.getByLabelText('Buscar paciente por nombre'), { target: { value: 'be' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bea Gil' }));
+  }
+
+  const profesionalElegido = () => (screen.getByLabelText('Profesional') as HTMLSelectElement).value;
+
+  it('H22: elegido el paciente en un centro donde no trabaja su asignado, al cambiar al centro del asignado entra el asignado y no el primero', async () => {
+    pinta({ rol: 'tecnico_administrativo', centros, profesionales, inicial: sur });
+    await elegirBea();
+    expect(profesionalElegido()).toBe(PROFESIONAL);
+
+    fireEvent.change(screen.getByLabelText('Centro'), { target: { value: NORTE } });
+
+    expect(profesionalElegido()).toBe(LUIS_NORTE);
+    await waitFor(() =>
+      expect(m.recalcularAlta).toHaveBeenLastCalledWith(
+        expect.objectContaining({ pacienteId: 'p-2', profesionalId: LUIS_NORTE, centroId: NORTE }),
+      ),
+    );
+  });
+
+  it('H22: si el profesional se eligió a mano, cambiar de centro no lo sustituye por el asignado (solo si ya no trabaja allí, por el primero)', async () => {
+    pinta({ rol: 'tecnico_administrativo', centros, profesionales, inicial: sur });
+    await elegirBea();
+    fireEvent.change(screen.getByLabelText('Profesional'), { target: { value: PROFESIONAL } });
+
+    fireEvent.change(screen.getByLabelText('Centro'), { target: { value: NORTE } });
+
+    expect(profesionalElegido()).toBe(ANA_NORTE);
+  });
+
+  it('H22: sin paciente elegido, cambiar de centro sigue entrando el primero del centro nuevo', () => {
+    pinta({ rol: 'tecnico_administrativo', centros, profesionales, inicial: sur });
+
+    fireEvent.change(screen.getByLabelText('Centro'), { target: { value: NORTE } });
+
+    expect(profesionalElegido()).toBe(ANA_NORTE);
+  });
+
+  it('H22: con ?paciente= (paciente de entrada con su asignado), cambiar de centro propone al asignado', () => {
+    pinta({ rol: 'tecnico_administrativo', centros, profesionales, inicial: { ...sur, paciente: BEA } });
+
+    fireEvent.change(screen.getByLabelText('Centro'), { target: { value: NORTE } });
+
+    expect(profesionalElegido()).toBe(LUIS_NORTE);
+  });
+
+  it('H24: el asignado de otro centro no entra al elegir paciente: el profesional sigue siendo el del centro actual', async () => {
+    pinta({ rol: 'tecnico_administrativo', centros, profesionales, inicial: sur });
+
+    await elegirBea();
+
+    await waitFor(() =>
+      expect(m.recalcularAlta).toHaveBeenLastCalledWith(expect.objectContaining({ pacienteId: 'p-2', profesionalId: PROFESIONAL })),
+    );
+    expect(m.recalcularAlta).not.toHaveBeenCalledWith(expect.objectContaining({ profesionalId: LUIS_NORTE }));
+  });
+});
+
 // H19 (ronda 3) y el salto a la semana de hoy: la semana que cuenta es la pedida, no la pintada.
 describe('FormularioAlta · semana pedida y semana pintada (H19)', () => {
   const SEMANA_13 = {
