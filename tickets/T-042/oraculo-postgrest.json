@@ -1,6 +1,6 @@
 {
   "ticket": "T-042",
-  "usuario": "0cad1e8c-f3a0-4e2d-892a-d55099cfc1b3",
+  "usuario": "3b9cb58c-2069-4a63-9ed4-88099d14c26c",
   "funciones": {
     "pin": {
       "formas": {
@@ -281,7 +281,7 @@
     "o5": {
       "p2ok": {
         "estado": 200,
-        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:18:07.378152+00:00\",\"bloqueado_hasta\":null}]"
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:29:58.493586+00:00\",\"bloqueado_hasta\":null}]"
       },
       "p2mal": {
         "estado": 200,
@@ -359,11 +359,11 @@
     "c2": {
       "a": {
         "estado": 200,
-        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:18:09.732861+00:00\",\"bloqueado_hasta\":null}]"
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:30:01.005581+00:00\",\"bloqueado_hasta\":null}]"
       },
       "b": {
         "estado": 200,
-        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:18:09.732807+00:00\",\"bloqueado_hasta\":null}]"
+        "cuerpo": "[{\"desbloqueado\":true,\"motivo\":\"ok\",\"caduca_en\":\"2026-10-04T12:30:01.005526+00:00\",\"bloqueado_hasta\":null}]"
       },
       "estado": {
         "intentos": 0,
