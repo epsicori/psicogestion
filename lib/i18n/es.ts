@@ -14,6 +14,7 @@ export const es = {
     abrirMenu: 'Abrir menú',
     cerrarMenu: 'Cerrar menú',
     cerrarSesion: 'Cerrar sesión',
+    miCuenta: 'Mi cuenta',
     perfilSinAsignar: 'Perfil sin asignar',
     sinPerfil: 'Sin perfil',
     proximamente: 'pronto',
@@ -243,6 +244,14 @@ export const es = {
       unaSolaVez:
         'Guárdalos ahora en un sitio seguro: son la única forma de entrar si pierdes el teléfono, y no se pueden volver a consultar.',
       guardados: 'Ya los he guardado',
+      fallo:
+        'No se han podido generar tus códigos de recuperación. No se volverán a ofrecer al entrar: puedes generarlos en Mi cuenta › Seguridad, con tu contraseña.',
+      reintentar: 'Reintentar',
+      sinRespuesta:
+        'No hemos podido contactar con el servidor: revisa tu conexión y vuelve a intentarlo. Si no sale, genera tus códigos en Mi cuenta › Seguridad.',
+      reentrar:
+        'Tu verificación en dos pasos se hizo hace más de cinco minutos y ya no vale para generar los códigos. Vuelve a entrar y genéralos en Mi cuenta › Seguridad, con tu contraseña.',
+      volverAEntrar: 'Volver a entrar',
     },
 
     pin: {
@@ -254,6 +263,48 @@ export const es = {
       fijar: 'Guardar el PIN',
       noCoinciden: 'Los dos PIN no coinciden.',
       fijado: 'PIN guardado.',
+    },
+  },
+
+  // --- T-038 · Mi cuenta ------------------------------------------------------
+
+  cuenta: {
+    titulo: 'Mi cuenta',
+    seguridad: 'Seguridad',
+    regenerar: {
+      titulo: 'Regenerar mis códigos de recuperación',
+      aviso: 'Los códigos que tienes ahora dejarán de valer.',
+      contrasena: 'Contraseña',
+      codigo: 'Código de la aplicación',
+      enviar: 'Regenerar códigos',
+    },
+    errores: {
+      contrasenaIncorrecta: 'La contraseña no es correcta.',
+      codigoNoValido: 'Ese código no es válido. Prueba con el siguiente que te dé la aplicación.',
+      sinFactor: 'No tienes la verificación en dos pasos activada.',
+      bloqueado: 'Demasiados intentos. Prueba de nuevo a las {hora}.',
+      generico: 'No se han podido regenerar los códigos. Vuelve a intentarlo.',
+      resultadoDesconocido:
+        'No hemos recibido respuesta y no sabemos si se han regenerado. Si se regeneraron, la lista que tienes en papel ya no vale y la nueva no se te ha enseñado. Vuelve a regenerarlos en cualquier caso: así tendrás una lista nueva que sí vale.',
+      registroInseguro:
+        'Ahora mismo no es seguro enviar tu contraseña: avisa al administrador. No se ha cambiado nada.',
+    },
+    codigos: {
+      titulo: 'Tus códigos de recuperación nuevos',
+      aviso:
+        'Guárdalos ahora en un sitio seguro: solo se enseñan esta vez y los anteriores ya no valen.',
+      guardados: 'Ya los he guardado',
+    },
+    fallo: {
+      titulo: 'No se han regenerado los códigos',
+      tituloDesconocido: 'No sabemos si se han regenerado los códigos',
+      volver: 'Volver',
+    },
+    avisos: {
+      titulo: 'Avisos de seguridad',
+      vacio: 'No hay avisos de seguridad.',
+      errorLectura: 'No se han podido cargar los avisos. Recarga la página para intentarlo de nuevo.',
+      sinLeer: 'Sin leer',
     },
   },
 

@@ -55,3 +55,20 @@ export const esquemaCodigoRecuperacion = z.object({
 });
 
 export type DatosCodigoRecuperacion = z.infer<typeof esquemaCodigoRecuperacion>;
+
+/**
+ * Regenerar los códigos de recuperación (T-038). La contraseña NO se recorta: los
+ * espacios del borde forman parte de ella, y el límite de 256 es el de un campo
+ * razonable, no una política. Los mensajes de error de Zod no incluyen el valor.
+ */
+export const esquemaRegenerarCodigos = z.object({
+  contrasena: z
+    .string('Introduce tu contraseña.')
+    .min(1, 'Introduce tu contraseña.')
+    .max(256, 'La contraseña no es válida.'),
+  codigo: z
+    .string('Introduce el código de tu app de autenticación.')
+    .regex(/^\d{6}$/, 'El código debe ser exactamente seis dígitos.'),
+});
+
+export type DatosRegenerarCodigos = z.infer<typeof esquemaRegenerarCodigos>;

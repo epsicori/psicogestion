@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { Activity, Menu, X } from 'lucide-react';
-import { useCallback, useState, type ReactNode } from 'react';
+import { Activity, Menu, X } from "lucide-react";
+import { useCallback, useState, type ReactNode } from "react";
 
-import { t } from '@/lib/i18n';
+import { t } from "@/lib/i18n";
 
-import { cn } from '@/lib/utils';
+import { cn } from "@/lib/utils";
 
-import { CajonContext } from './cajon';
+import { CajonContext } from "./cajon";
 
 type Props = {
   /**
@@ -48,52 +48,58 @@ export function ArmazonCliente({
       {menuAbierto && (
         <button
           type="button"
-          aria-label={t('armazon.cerrarMenu')}
+          aria-label={t("armazon.cerrarMenu")}
           onClick={() => setMenuAbierto(false)}
           className="bg-foreground/30 fixed inset-0 z-30 lg:hidden"
         />
       )}
 
-      <aside
-        className={cn(
-          'bg-card border-border fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r',
-          'transition-transform lg:static lg:translate-x-0',
-          menuAbierto ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="border-border flex h-20 items-center gap-3 border-b px-6">
-          <div className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-xl">
-            <Activity className="size-5" />
+      {/* El proveedor envuelve el <aside> ENTERO: «Mi cuenta» vive en el pie, fuera de la
+          navegación, y también tiene que cerrar el cajón (B-H1). */}
+      <CajonContext.Provider value={cerrarCajon}>
+        <aside
+          className={cn(
+            "bg-card border-border fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r",
+            "transition-transform lg:static lg:translate-x-0",
+            menuAbierto ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <div className="border-border flex h-20 items-center gap-3 border-b px-6">
+            <div className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-xl">
+              <Activity className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-serif text-lg font-semibold tracking-tight">
+                {t("marca")}
+              </p>
+              <p className="text-muted-foreground text-[11px] tracking-[0.18em] uppercase">
+                {t("lema")}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label={t("armazon.cerrarMenu")}
+              onClick={() => setMenuAbierto(false)}
+              className="hover:bg-muted rounded-lg p-2 lg:hidden"
+            >
+              <X className="size-4" />
+            </button>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-serif text-lg font-semibold tracking-tight">{t('marca')}</p>
-            <p className="text-muted-foreground text-[11px] tracking-[0.18em] uppercase">
-              {t('lema')}
-            </p>
+
+          <div className="flex flex-1 flex-col overflow-y-auto py-6">
+            {selectorCentro}
+
+            <div className="flex flex-col px-3">
+              <p className="text-muted-foreground px-3 pb-3 text-[11px] font-semibold tracking-[0.16em] uppercase">
+                {t("armazon.espacioDeTrabajo")}
+              </p>
+              {navegacion}
+            </div>
           </div>
-          <button
-            type="button"
-            aria-label={t('armazon.cerrarMenu')}
-            onClick={() => setMenuAbierto(false)}
-            className="hover:bg-muted rounded-lg p-2 lg:hidden"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
 
-        <div className="flex flex-1 flex-col overflow-y-auto py-6">
-          {selectorCentro}
-
-          <div className="flex flex-col px-3">
-            <p className="text-muted-foreground px-3 pb-3 text-[11px] font-semibold tracking-[0.16em] uppercase">
-              {t('armazon.espacioDeTrabajo')}
-            </p>
-            <CajonContext.Provider value={cerrarCajon}>{navegacion}</CajonContext.Provider>
-          </div>
-        </div>
-
-        <div className="border-border border-t p-4">{identidad}</div>
-      </aside>
+          <div className="border-border border-t p-4">{identidad}</div>
+        </aside>
+      </CajonContext.Provider>
 
       <section className="min-w-0 flex-1">
         <header className="border-border bg-card/90 flex h-20 items-center justify-between border-b gap-2 px-3 backdrop-blur sm:px-5 md:px-8">
@@ -102,7 +108,7 @@ export function ArmazonCliente({
               type="button"
               onClick={() => setMenuAbierto(true)}
               className="hover:bg-muted rounded-lg p-2 lg:hidden"
-              aria-label={t('armazon.abrirMenu')}
+              aria-label={t("armazon.abrirMenu")}
             >
               <Menu className="size-5" />
             </button>

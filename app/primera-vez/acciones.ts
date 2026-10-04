@@ -19,13 +19,13 @@ import { exigirSesion } from '@/lib/supabase/sesion';
  * permite con un reto TOTP reciente.
  */
 export async function generarCodigos(): Promise<
-  { ok: true; codigos: string[] } | { ok: false; mensaje: string }
+  { ok: true; codigos: string[] } | { ok: false; mensaje: string; reentrar?: true }
 > {
   const sesion = await exigirSesion();
   const resultado = await generarCodigosRecuperacion(sesion);
 
   if (!resultado.ok) {
-    return { ok: false, mensaje: resultado.mensaje };
+    return resultado;
   }
 
   return { ok: true, codigos: resultado.codigos };

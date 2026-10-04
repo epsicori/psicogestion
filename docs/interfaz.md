@@ -80,6 +80,7 @@ a una sección de Ajustes, donde su permiso ya coincidía.
 | Pacientes | `/pacientes` | Lista y alta, sin ficha |
 | Facturación | `/facturacion` | Pendiente |
 | Ajustes | `/ajustes` | Pendiente |
+| Mi cuenta | `/cuenta` | Regenerar mis códigos de recuperación y avisos de seguridad (T-038). No es un módulo de la navegación: se entra por el bloque de usuario del pie |
 
 Cada módulo abre con el mismo encabezado: versalitas en color principal, título en serif
 grande, subtítulo en gris y una acción primaria a la derecha.
@@ -180,6 +181,26 @@ SC 2.5.7 exige alternativa sin arrastre, y a 360 px arrastrar entre contenedores
 existe—, y **cambiar el centro de un técnico administrativo le cambia los pacientes que
 puede leer**, así que pasa por confirmación explícita y queda en auditoría. Al profesional
 **no** le cambia ninguno: sus pacientes son los suyos, no los de su centro.
+
+### Mi cuenta (`/cuenta`, T-038)
+
+**Ajustes y Mi cuenta no son lo mismo.** Ajustes es lo que se configura (y, para el administrador,
+lo que se administra); Mi cuenta es lo que cada persona hace sobre **su propio acceso**, igual para los
+tres roles y sin selector de perfil: regenerar los códigos de otra persona no existe. Se llega desde el
+bloque de usuario del pie de la barra (nombre y rol), que es un enlace con el nombre accesible
+«Mi cuenta …» y el mismo objetivo táctil de 44 px que el resto; el icono de salir sigue aparte.
+
+Contenido, en este orden:
+
+- **Seguridad › Regenerar mis códigos de recuperación**: contraseña y código de la aplicación, nada más
+  (el técnico administrativo no tiene PIN y no se le pide nada de él). Los códigos nuevos y los fallos
+  sustituyen al formulario en una región con nombre y descripción que recibe el foco; no hay
+  temporizadores: seguir es cosa de la persona. Tras «Ya los he guardado» el foco va al encabezado de
+  los avisos.
+- **Avisos de seguridad**: historial de los cuatro tipos de aviso de acceso (códigos regenerados,
+  regeneración bloqueada, TOTP repuesto, PIN bloqueado), con los leídos incluidos y la hora en la zona de
+  la organización. Solo lectura: marcar como leído es de la campana. Los no leídos llevan la marca
+  visible «Sin leer»; un fallo al leerlos se dice como fallo, nunca como lista vacía.
 
 ## De dónde sale cada pieza
 

@@ -1,0 +1,161 @@
+{
+  "ticket": "T-038",
+  "ronda": 2,
+  "criterio": "R2-2",
+  "usuario": "1e9b99df-9699-40cb-acd4-84b8b48690b8",
+  "formas": {
+    "S1": {
+      "descripcion": "POST normal",
+      "opciones": {},
+      "mala": {
+        "estado": 204,
+        "cuerpo": ""
+      },
+      "buena": {
+        "estado": 204,
+        "cuerpo": ""
+      },
+      "antes": {
+        "intentos": 0,
+        "autorizadas": 0
+      },
+      "trasMala": {
+        "intentos": 1,
+        "autorizadas": 0
+      },
+      "trasBuena": {
+        "intentos": 0,
+        "autorizadas": 1
+      }
+    },
+    "S2": {
+      "descripcion": "POST con Accept: objeto singular",
+      "opciones": {
+        "extra": {
+          "Accept": "application/vnd.pgrst.object+json"
+        }
+      },
+      "mala": {
+        "estado": 204,
+        "cuerpo": ""
+      },
+      "buena": {
+        "estado": 204,
+        "cuerpo": ""
+      },
+      "antes": {
+        "intentos": 0,
+        "autorizadas": 1
+      },
+      "trasMala": {
+        "intentos": 1,
+        "autorizadas": 0
+      },
+      "trasBuena": {
+        "intentos": 0,
+        "autorizadas": 1
+      }
+    },
+    "S3": {
+      "descripcion": "POST con Prefer: tx=rollback",
+      "opciones": {
+        "extra": {
+          "Prefer": "tx=rollback"
+        }
+      },
+      "mala": {
+        "estado": 204,
+        "cuerpo": ""
+      },
+      "buena": {
+        "estado": 204,
+        "cuerpo": ""
+      },
+      "antes": {
+        "intentos": 0,
+        "autorizadas": 1
+      },
+      "trasMala": {
+        "intentos": 1,
+        "autorizadas": 0
+      },
+      "trasBuena": {
+        "intentos": 0,
+        "autorizadas": 1
+      }
+    },
+    "S4": {
+      "descripcion": "POST con Prefer: handling=strict, max-affected=0",
+      "opciones": {
+        "extra": {
+          "Prefer": "handling=strict, max-affected=0"
+        }
+      },
+      "mala": {
+        "estado": 400,
+        "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+      },
+      "buena": {
+        "estado": 400,
+        "cuerpo": "{\"code\":\"PGRST128\",\"details\":null,\"hint\":null,\"message\":\"Function must return SETOF or TABLE when max-affected preference is used with handling=strict\"}"
+      },
+      "antes": {
+        "intentos": 0,
+        "autorizadas": 1
+      },
+      "trasMala": {
+        "intentos": 0,
+        "autorizadas": 1
+      },
+      "trasBuena": {
+        "intentos": 0,
+        "autorizadas": 1
+      }
+    },
+    "S5": {
+      "descripcion": "GET ?p_contrasena=…",
+      "mala": {
+        "estado": 405,
+        "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La comprobación de la contraseña exige una transacción de escritura.\"}"
+      },
+      "buena": {
+        "estado": 405,
+        "cuerpo": "{\"code\":\"25006\",\"details\":null,\"hint\":null,\"message\":\"La comprobación de la contraseña exige una transacción de escritura.\"}"
+      },
+      "antes": {
+        "intentos": 0,
+        "autorizadas": 1
+      },
+      "despues": {
+        "intentos": 0,
+        "autorizadas": 1
+      }
+    }
+  },
+  "extra": {
+    "tx_rollback_ignorado": true,
+    "o4": {
+      "estado": 404,
+      "cuerpo": "{\"code\":\"PGRST202\",\"details\":\"Searched for the function public.regenerar_codigos_recuperacion with parameter p_contrasena or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.\",\"hint\":null,\"message\":\"Could not find the function public.regenerar_codigos_recuperacion(p_contrasena) in the schema cache\"}"
+    },
+    "o5": {
+      "estado": 200,
+      "cuerpo": "true"
+    },
+    "o6": {
+      "b1": 204,
+      "m": 204,
+      "p2a": {
+        "estado": 200,
+        "motivo": "ok",
+        "codigos": 10
+      },
+      "p2b": {
+        "estado": 200,
+        "motivo": "contrasena_incorrecta",
+        "codigos": null
+      }
+    }
+  },
+  "fallos": []
+}

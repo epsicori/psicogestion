@@ -8,6 +8,8 @@ import { Field } from '@/components/ui/field';
 import { t } from '@/lib/i18n';
 import { crearClienteNavegador } from '@/lib/supabase/navegador';
 
+import { cerrarSesion } from '@/app/(app)/acciones';
+
 import { generarCodigos } from './acciones';
 
 type Props = {
@@ -49,10 +51,12 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   const [codigo, setCodigo] = useState('');
   const [codigos, setCodigos] = useState<string[] | null>(null);
   const [mensaje, setMensaje] = useState('');
-  // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue.
-  const [falloCodigos, setFalloCodigos] = useState<string | null>(null);
+  // Aviso de que los códigos no se pudieron generar: se queda hasta que el usuario sigue. Es un
+  // objeto nuevo en cada fallo, aunque el texto sea el mismo, para que el efecto del foco corra (B2-H2).
+  const [fallo, setFallo] = useState<{ mensaje: string; reentrar: boolean } | null>(null);
   const [trabajando, iniciarTransicion] = useTransition();
-  const vistaFallo = useRef<HTMLDivElement>(null);
+  const vistaFallo = useRef<HTMLElement>(null);
+  const vistaCodigos = useRef<HTMLElement>(null);
 
   const factorId = factorVerificadoId ?? enrolamiento?.factorId ?? null;
 
@@ -87,8 +91,33 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
   // la vista para que el lector de pantalla la lea antes de que se pulse «Aceptar»
   // (mismo patrón que zona-por-confirmar: contenedor con tabIndex -1 y foco explícito).
   useEffect(() => {
-    if (falloCodigos !== null) vistaFallo.current?.focus();
-  }, [falloCodigos]);
+    if (fallo !== null) vistaFallo.current?.focus();
+  }, [fallo]);
+
+  // Lo mismo con los códigos: son lo único que se enseña una vez, y el foco no puede caer en BODY.
+  useEffect(() => {
+    if (codigos !== null) vistaCodigos.current?.focus();
+  }, [codigos]);
+
+  // «Reintentar» (T-038): el factor ya está verificado, solo se vuelve a pedir el lote. No
+  // refresca: si sale, se enseña; si no, se queda el aviso con el mensaje nuevo.
+  const reintentar = () => {
+    iniciarTransicion(async () => {
+      // Sin esto, un rechazo de la acción (red caída) sube a la frontera de error y tumba la
+      // página entera, con el aviso de dónde generar los códigos dentro (B2-H1).
+      try {
+        const resultado = await generarCodigos();
+        if (!resultado.ok) {
+          setFallo({ mensaje: resultado.mensaje, reentrar: resultado.reentrar === true });
+          return;
+        }
+        setFallo(null);
+        setCodigos(resultado.codigos);
+      } catch {
+        setFallo({ mensaje: t('primeraVez.codigos.sinRespuesta'), reentrar: false });
+      }
+    });
+  };
 
   const verificar = () => {
     if (!factorId) return;
@@ -131,7 +160,7 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
         // El factor ya está verificado: el paso está superado aunque los códigos
         // fallen. Se avisa y se espera: refrescar aquí desmontaría el aviso sin que
         // se viera (D8, «avisa y deja seguir»); seguir es cosa del usuario.
-        setFalloCodigos(resultado.mensaje);
+        setFallo({ mensaje: resultado.mensaje, reentrar: resultado.reentrar === true });
         return;
       }
 
@@ -139,34 +168,68 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
     });
   };
 
-  if (falloCodigos !== null) {
+  if (fallo !== null) {
     return (
-      <div ref={vistaFallo} tabIndex={-1} className="flex flex-col gap-4 outline-none">
-        <h2 className="font-serif text-xl font-semibold tracking-tight">
+      <section
+        ref={vistaFallo}
+        tabIndex={-1}
+        aria-labelledby="fallo-codigos-titulo"
+        aria-describedby="fallo-codigos-descripcion"
+        className="flex flex-col gap-4 outline-none"
+      >
+        <h2 id="fallo-codigos-titulo" className="font-serif text-xl font-semibold tracking-tight">
           {t('primeraVez.totp.titulo')}
         </h2>
-        <p role="status" className="text-destructive text-sm">
-          {falloCodigos}
+        <p id="fallo-codigos-descripcion" className="text-muted-foreground text-sm">
+          {t('primeraVez.codigos.fallo')}
         </p>
-        <Button onClick={() => router.refresh()}>{t('comunes.aceptar')}</Button>
-      </div>
+        {/* Se vacía mientras se reintenta: un reintento que falla con el MISMO texto sigue
+            siendo un cambio y el lector de pantalla lo vuelve a anunciar (B-H10). */}
+        <p role="status" className="text-destructive text-sm">
+          {trabajando ? '' : fallo.reentrar ? t('primeraVez.codigos.reentrar') : fallo.mensaje}
+        </p>
+        <div className="flex gap-2">
+          {fallo.reentrar ? (
+            // Reintentar no puede funcionar: la base exige un segundo factor de menos de cinco
+            // minutos. La salida es volver a entrar (B2-H5).
+            <form action={cerrarSesion}>
+              <Button type="submit">{t('primeraVez.codigos.volverAEntrar')}</Button>
+            </form>
+          ) : (
+            <Button onClick={reintentar} disabled={trabajando}>
+              {trabajando ? t('comunes.cargando') : t('primeraVez.codigos.reintentar')}
+            </Button>
+          )}
+          <Button variante="secundario" onClick={() => router.refresh()}>
+            {t('comunes.aceptar')}
+          </Button>
+        </div>
+      </section>
     );
   }
 
   if (codigos) {
     return (
-      <div className="flex flex-col gap-4">
-        <h2 className="font-serif text-xl font-semibold tracking-tight">
+      <section
+        ref={vistaCodigos}
+        tabIndex={-1}
+        aria-labelledby="codigos-titulo"
+        aria-describedby="codigos-descripcion"
+        className="flex flex-col gap-4 outline-none"
+      >
+        <h2 id="codigos-titulo" className="font-serif text-xl font-semibold tracking-tight">
           {t('primeraVez.codigos.titulo')}
         </h2>
-        <p className="text-muted-foreground text-sm">{t('primeraVez.codigos.unaSolaVez')}</p>
+        <p id="codigos-descripcion" className="text-muted-foreground text-sm">
+          {t('primeraVez.codigos.unaSolaVez')}
+        </p>
         <ul className="border-border bg-muted grid grid-cols-2 gap-2 rounded-lg border p-4 font-mono text-sm">
           {codigos.map((uno) => (
             <li key={uno}>{uno}</li>
           ))}
         </ul>
         <Button onClick={() => router.refresh()}>{t('primeraVez.codigos.guardados')}</Button>
-      </div>
+      </section>
     );
   }
 

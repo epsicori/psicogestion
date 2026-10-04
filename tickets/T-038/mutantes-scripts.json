@@ -1,0 +1,49 @@
+{
+  "C-sin-candado-en-generar": {
+    "rojo": true,
+    "lineas": [
+      "FALLO C · una activación sale y la otra lanza 42501 (salen 2, rechazadas 0)",
+      "FALLO C · exactamente diez vigentes (hay 20)",
+      "FALLO C · un solo aviso (hay 2)"
+    ]
+  },
+  "C-caduca-antes-de-consumir": {
+    "rojo": true,
+    "lineas": [
+      "FALLO B · MEDICIÓN: diez vigentes sin candado de consejo (hay 20)"
+    ]
+  },
+  "R2-6-sin-revoke": {
+    "rojo": true,
+    "lineas": [
+      "psql:<stdin>:119: ERROR:  P0001: FALLO: la copia es ejecutable por anon"
+    ]
+  },
+  "R2-3-copia-D-no-sale": {
+    "rojo": true,
+    "lineas": [
+      "psql:<stdin>:109: ERROR:  P0001: FALLO: la copia sin candado de la activación no se pudo fabricar (¿cambió la forma del cuerpo?)"
+    ]
+  },
+  "O-M-A1c": {
+    "rojo": true,
+    "lineas": [
+      "FALLO O1 · S1 (POST normal): la mala (200 \"false\") y la buena (200 \"true\") responden igual",
+      "FALLO O1 · S2 (POST con Accept: objeto singular): la mala (200 \"false\") y la buena (200 \"true\") responden igual",
+      "FALLO O1 · S3 (POST con Prefer: tx=rollback): la mala (200 \"false\") y la buena (200 \"true\") responden igual"
+    ]
+  },
+  "O-M-A1e": {
+    "rojo": true,
+    "lineas": [
+      "FALLO O2 · S1: la buena confirma una autorización (regeneraciones_autorizadas = 0)",
+      "FALLO O6 · tras una buena, el paso dos da ok con diez (200 contrasena_incorrecta)"
+    ]
+  },
+  "O-ronda1-un-paso": {
+    "rojo": true,
+    "lineas": [
+      "FALLO O4 · regenerar_codigos_recuperacion con p_contrasena no existe (200 [{\"motivo\":\"contrasena_incorrecta\",\"bloqueado_hasta\":null,\"codigos\":null}])"
+    ]
+  }
+}

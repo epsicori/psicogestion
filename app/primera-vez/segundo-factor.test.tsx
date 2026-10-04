@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { Component, type ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +9,9 @@ const generarCodigos = vi.fn();
 vi.mock('./acciones', () => ({
   generarCodigos: (...argumentos: unknown[]) => generarCodigos(...argumentos),
 }));
+
+const cerrarSesion = vi.fn();
+vi.mock('@/app/(app)/acciones', () => ({ cerrarSesion: (...argumentos: unknown[]) => cerrarSesion(...argumentos) }));
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -40,6 +44,7 @@ describe('SegundoFactor (T-037)', () => {
     // Sin valor, el código previo rompería con un TypeError y la prueba fallaría por otra cosa.
     generarCodigos.mockResolvedValue({ ok: true, codigos: DIEZ });
     refresh.mockReset();
+    cerrarSesion.mockReset();
     enroll.mockReset();
     challenge.mockReset();
     challenge.mockResolvedValue({ data: { id: 'reto-1' }, error: null });
@@ -155,5 +160,172 @@ describe('SegundoFactor (T-037)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  describe('T-038: vistas de código y de fallo accesibles, y reintento', () => {
+    const FACTOR = {
+      data: {
+        id: 'factor-nuevo',
+        totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'SECRETO' },
+      },
+      error: null,
+    };
+
+    async function hastaElFallo() {
+      enroll.mockResolvedValue(FACTOR);
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'FALLO-CODIGOS' });
+      render(<SegundoFactor factorVerificadoId={null} />);
+      await screen.findByAltText('Código QR para configurar la verificación en dos pasos');
+      await teclearYVerificar();
+      await screen.findByText('FALLO-CODIGOS');
+    }
+
+    it('el fallo es una región con nombre y una descripción que dice dónde regenerar, con foco en ella (CA9)', async () => {
+      await hastaElFallo();
+
+      const region = screen.getByRole('region', { name: 'Verificación en dos pasos' });
+      expect(document.activeElement).toBe(region);
+      expect(region).toHaveAccessibleDescription(/Mi cuenta › Seguridad, con tu contraseña/);
+      // El mensaje de la acción sigue visible.
+      expect(region).toContainElement(screen.getByText('FALLO-CODIGOS'));
+    });
+
+    it('«Reintentar» vuelve a pedir los códigos y, si salen, los enseña en su región con foco (CA10)', async () => {
+      await hastaElFallo();
+      generarCodigos.mockResolvedValueOnce({ ok: true, codigos: DIEZ });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      const region = await screen.findByRole('region', { name: 'Tus códigos de recuperación' });
+      expect(generarCodigos).toHaveBeenCalledTimes(2);
+      await waitFor(() => expect(document.activeElement).toBe(region));
+      expect(region).toHaveAccessibleDescription(/no se pueden volver a consultar/);
+      for (const codigo of DIEZ) expect(screen.getByText(codigo)).toBeInTheDocument();
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it('si el reintento también falla, sigue en el fallo con el mensaje nuevo y sin refrescar (CA10)', async () => {
+      await hastaElFallo();
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'OTRO-FALLO' });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      expect(await screen.findByText('OTRO-FALLO')).toBeInTheDocument();
+      expect(generarCodigos).toHaveBeenCalledTimes(2);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeEnabled();
+    });
+
+    it('B-H4 · en la vista de fallo, antes y después de un reintento fallido, no hay temporizadores (CA11)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        await hastaElFallo();
+        expect(vi.getTimerCount()).toBe(0);
+
+        generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'OTRO-FALLO' });
+        await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(
+          screen.getByRole('button', { name: 'Reintentar' }),
+        );
+        await screen.findByText('OTRO-FALLO');
+
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('B-H10 · un reintento que falla con el MISMO texto se vuelve a anunciar: el aviso se vacía mientras trabaja', async () => {
+      await hastaElFallo();
+      let fallar!: (valor: { ok: false; mensaje: string }) => void;
+      generarCodigos.mockReturnValueOnce(new Promise((resolver) => (fallar = resolver)));
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      // Mientras está pendiente, la región de estado sigue montada y vacía: hay cambio que anunciar.
+      const estado = screen.getByRole('status');
+      expect(estado).toBeEmptyDOMElement();
+
+      await act(async () => {
+        fallar({ ok: false, mensaje: 'FALLO-CODIGOS' });
+      });
+
+      expect(screen.getByRole('status')).toHaveTextContent('FALLO-CODIGOS');
+    });
+
+    it('ni el fallo ni el reintento dejan temporizadores (CA11)', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        await hastaElFallo();
+        generarCodigos.mockResolvedValueOnce({ ok: true, codigos: DIEZ });
+        await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(
+          screen.getByRole('button', { name: 'Reintentar' }),
+        );
+        await screen.findByRole('region', { name: 'Tus códigos de recuperación' });
+
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    class Frontera extends Component<{ children: ReactNode }, { error: Error | null }> {
+      state = { error: null as Error | null };
+      static getDerivedStateFromError(error: Error) {
+        return { error };
+      }
+      render() {
+        return this.state.error ? <p>FRONTERA {this.state.error.message}</p> : this.props.children;
+      }
+    }
+
+    it('B2-H1 · si «Reintentar» se rechaza (red caída), la frontera de error no se activa y el fallo se anuncia en la página', async () => {
+      const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+      enroll.mockResolvedValue(FACTOR);
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'FALLO-CODIGOS' });
+      render(
+        <Frontera>
+          <SegundoFactor factorVerificadoId={null} />
+        </Frontera>,
+      );
+      await screen.findByAltText('Código QR para configurar la verificación en dos pasos');
+      await teclearYVerificar();
+      await screen.findByText('FALLO-CODIGOS');
+      generarCodigos.mockRejectedValueOnce(new Error('red caida'));
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/conexión/i));
+      expect(screen.queryByText(/FRONTERA/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeEnabled();
+      consola.mockRestore();
+    });
+
+    it('B2-H2 · tras un reintento fallido el foco vuelve a la vista aunque el navegador lo haya quitado y el mensaje sea el mismo', async () => {
+      await hastaElFallo();
+      const region = screen.getByRole('region', { name: 'Verificación en dos pasos' });
+      // jsdom no quita el foco al deshabilitar el botón; el navegador sí (lo manda a BODY). Se simula.
+      generarCodigos.mockImplementationOnce(async () => {
+        (document.activeElement as HTMLElement | null)?.blur();
+        return { ok: false, mensaje: 'FALLO-CODIGOS' };
+      });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('FALLO-CODIGOS'));
+      await waitFor(() => expect(document.activeElement).toBe(region));
+    });
+
+    it('B2-H5 · si el segundo factor es de hace más de cinco minutos, lo dice y ofrece volver a entrar en lugar de reintentar', async () => {
+      await hastaElFallo();
+      generarCodigos.mockResolvedValueOnce({ ok: false, mensaje: 'FALLO-CODIGOS', reentrar: true });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar' }));
+
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/hace más de cinco minutos/));
+      expect(screen.queryByRole('button', { name: 'Reintentar' })).toBeNull();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Volver a entrar' }));
+      expect(cerrarSesion).toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+    });
   });
 });

@@ -1,0 +1,46 @@
+{
+  "B-H1": {
+    "rojo": true,
+    "fallan": [
+      "ArmazonCliente · cajón y enlace de cuenta (B-H1) > pulsar «Mi cuenta» cierra el cajón: el velo desaparece"
+    ]
+  },
+  "B-H2": {
+    "rojo": true,
+    "fallan": [
+      "FormularioRegenerar (T-038) > B-H2 · si la acción se rechaza, la contraseña se borra, se dice como fallo y no queda rechazo sin tratar"
+    ]
+  },
+  "B-H9": {
+    "rojo": true,
+    "fallan": [
+      "FormularioRegenerar (T-038) > fallo bloqueado: región sustitutiva con nombre, descripción y foco, y «Volver» devuelve el formulario",
+      "FormularioRegenerar (T-038) > fallo error: región sustitutiva con nombre, descripción y foco, y «Volver» devuelve el formulario"
+    ]
+  },
+  "B-H3": {
+    "rojo": true,
+    "fallan": [
+      "ListaAvisos (T-038) > B-H3 · un fallo de lectura se dice como fallo, nunca como lista vacía"
+    ]
+  },
+  "B-H11": {
+    "rojo": true,
+    "fallan": [
+      "ListaAvisos (T-038) > B-H11 · el no leído lleva una marca visible «Sin leer», el leído no"
+    ]
+  },
+  "B-H10": {
+    "rojo": true,
+    "fallan": [
+      "SegundoFactor (T-037) > T-038: vistas de código y de fallo accesibles, y reintento > B-H10 · un reintento que falla con el MISMO texto se vuelve a anunciar: el aviso se vacía mientras trabaja",
+      "SegundoFactor (T-037) > T-038: vistas de código y de fallo accesibles, y reintento > ni el fallo ni el reintento dejan temporizadores (CA11)"
+    ]
+  },
+  "B-H8": {
+    "rojo": true,
+    "fallan": [
+      "regenerarCodigos (T-038 · CA7) > B-H8 · un error al listar los factores es un fallo general, no «sin factor», y no se verifica nada"
+    ]
+  }
+}

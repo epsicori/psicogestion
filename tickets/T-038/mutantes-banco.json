@@ -1,0 +1,136 @@
+{
+  "M-A1a": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:3093: ERROR:  ASERCIÓN FALLIDA: R2-1 punto 3 · un SEGUNDO paso dos con una sola autorización da contrasena_incorrecta (la autorización se gasta)"
+    ]
+  },
+  "M-A1b": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:3292: ERROR:  ASERCIÓN FALLIDA: R2-1 punto 6 · autorización caducada: el paso dos da contrasena_incorrecta y no toca el lote"
+    ]
+  },
+  "M-A1c": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2702: ERROR:  ASERCIÓN FALLIDA: R2-1 · la comprobación devuelve void: nada distinto en el acierto"
+    ]
+  },
+  "M-A1d": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2709: ERROR:  ASERCIÓN FALLIDA: R2-1 · la guarda de solo lectura y el candado van ANTES del cotejo con crypt"
+    ]
+  },
+  "M-A1e": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2715: ERROR:  ASERCIÓN FALLIDA: R2-1 · la comprobación escribe en UNA sola sentencia (insert … on conflict con case sobre v_ok), sin rama que dependa del acierto"
+    ]
+  },
+  "M-A1f": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2680: ERROR:  ASERCIÓN FALLIDA: R2-1 · la firma de un paso regenerar_codigos_recuperacion(text) ya no existe (la puerta con la contraseña a la vez cerrada)"
+    ]
+  },
+  "M-A1g": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:3279: ERROR:  ASERCIÓN FALLIDA: R2-1 punto 5 · buena y luego mala: regeneraciones_autorizadas = 0 y el paso dos da contrasena_incorrecta"
+    ]
+  },
+  "M-R4a": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2427: ERROR:  ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): R2-4 · un administrador que se repone a sí mismo lanza 42501 con «no puede reponer su propio TOTP»"
+    ]
+  },
+  "M-R4b": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2440: ERROR:  ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): R2-4 · una sesión sin perfil (rol nulo) tampoco repone el TOTP de otro: la guarda no se salta con un nulo"
+    ]
+  },
+  "M-C1": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2782: ERROR:  ASERCIÓN FALLIDA: R2-5 C1 · log_statement = all es inseguro"
+    ]
+  },
+  "M-C2": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2785: ERROR:  ASERCIÓN FALLIDA: R2-5 C2 · parámetros en el error (64) es inseguro"
+    ]
+  },
+  "M-C3": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2789: ERROR:  ASERCIÓN FALLIDA: R2-5 C3 · umbral 0 con parámetros sin límite es inseguro"
+    ]
+  },
+  "M-C4": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2798: ERROR:  ASERCIÓN FALLIDA: R2-5 C4 · muestreo con tasa > 0 y parámetros sin límite es inseguro"
+    ]
+  },
+  "M-C5": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2803: ERROR:  ASERCIÓN FALLIDA: R2-5 C5 · muestreo de transacciones > 0 con parámetros sin límite es inseguro (A-H2)"
+    ]
+  },
+  "M-C6": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2807: ERROR:  ASERCIÓN FALLIDA: R2-5 C6 · debug_print_parse = on es inseguro"
+    ]
+  },
+  "M-C7": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2812: ERROR:  ASERCIÓN FALLIDA: R2-5 C7 · auto_explain a 7999 ms con parámetros sin límite es inseguro"
+    ]
+  },
+  "M-C8": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2823: ERROR:  ASERCIÓN FALLIDA: R2-5 C8 · pgaudit con parámetros y algo que auditar (log) es inseguro"
+    ]
+  },
+  "M-N0": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2835: ERROR:  ASERCIÓN FALLIDA: R2-5 N0 · sin statement_timeout es inseguro aunque ningún umbral esté activo (solo N0 lo atrapa)"
+    ],
+    "nota": "1.a pasada VERDE (asercion enmascarada por C7); se anadio la asercion que solo N0 atrapa y quedo ROJO"
+  },
+  "M-N1a": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2843: ERROR:  ASERCIÓN FALLIDA: R2-5 N1 · auto_explain cargada y sin auto_explain.log_parameter_max_length es inseguro aunque el umbral esté apagado (solo N1 lo atrapa)"
+    ],
+    "nota": "1.a pasada VERDE (enmascarada por C7); se anadio la asercion que solo N1 atrapa y quedo ROJO"
+  },
+  "M-N1b": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2844: ERROR:  ASERCIÓN FALLIDA: R2-5 N1 · pgaudit cargada y sin pgaudit.log_parameter es inseguro"
+    ]
+  },
+  "M-coalesceC1": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2836: ERROR:  ASERCIÓN FALLIDA: R2-5 N0 · log_statement nulo es inseguro (un valor ilegible nunca es seguro)"
+    ]
+  },
+  "M-ventana": {
+    "rojo": true,
+    "errores": [
+      "psql:<stdin>:2814: ERROR:  ASERCIÓN FALLIDA: R2-5 C7 · statement_timeout = 0 (no corta nada) con auto_explain a 10000 es inseguro"
+    ]
+  }
+}

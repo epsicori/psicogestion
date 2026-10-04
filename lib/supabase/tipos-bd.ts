@@ -1163,6 +1163,48 @@ export type Database = {
           },
         ]
       }
+      intentos_regenerar_codigos: {
+        Row: {
+          actualizado_en: string
+          autorizado_hasta: string | null
+          bloqueado_hasta: string | null
+          intentos_fallidos: number
+          perfil_id: string
+          regeneraciones_autorizadas: number
+        }
+        Insert: {
+          actualizado_en?: string
+          autorizado_hasta?: string | null
+          bloqueado_hasta?: string | null
+          intentos_fallidos?: number
+          perfil_id: string
+          regeneraciones_autorizadas?: number
+        }
+        Update: {
+          actualizado_en?: string
+          autorizado_hasta?: string | null
+          bloqueado_hasta?: string | null
+          intentos_fallidos?: number
+          perfil_id?: string
+          regeneraciones_autorizadas?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intentos_regenerar_codigos_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: true
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intentos_regenerar_codigos_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: true
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notas_clinicas: {
         Row: {
           autor_id: string
@@ -2987,6 +3029,10 @@ export type Database = {
           tabla: string
         }[]
       }
+      comprobar_contrasena_para_regenerar: {
+        Args: { p_contrasena: string }
+        Returns: undefined
+      }
       dar_de_baja_perfil: {
         Args: { p_motivo?: string; p_perfil_id: string }
         Returns: {
@@ -3042,6 +3088,7 @@ export type Database = {
           tiene_pin: boolean
         }[]
       }
+      evaluar_registro_postgres: { Args: { p_ajustes: Json }; Returns: boolean }
       fecha_en_regla_nueva: {
         Args: {
           p_dia_semana: number
@@ -3127,6 +3174,14 @@ export type Database = {
           nivel3: number
         }[]
       }
+      regenerar_codigos_recuperacion: {
+        Args: never
+        Returns: {
+          bloqueado_hasta: string
+          codigos: string[]
+          motivo: string
+        }[]
+      }
       registrar_acceso_historia: {
         Args: {
           p_agente?: string
@@ -3157,6 +3212,7 @@ export type Database = {
         Args: { p_perfil_id: string }
         Returns: undefined
       }
+      registro_postgres_seguro: { Args: never; Returns: boolean }
       rellenar_episodio_de_citas: { Args: never; Returns: Json }
       resolver_hora_local: {
         Args: { p_local: string; p_zona: string }
