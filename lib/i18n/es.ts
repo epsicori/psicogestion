@@ -989,6 +989,9 @@ export const es = {
         generico: 'No se ha podido guardar la cita.',
         buscar: 'No se ha podido buscar pacientes.',
         calcular: 'No se han podido calcular los huecos.',
+        sinCentro: 'No tienes ningún centro asignado.',
+        sinProfesionales: 'No hay profesionales activos en este centro.',
+        cargar: 'No se ha podido preparar el formulario.',
       },
       motivo: {
         comoLasUltimas: 'Como las {n} últimas',

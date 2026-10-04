@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { AvisoDeError, Tarjeta } from '@/components/ui/piezas';
@@ -110,9 +111,17 @@ async function Cuerpo({ searchParams }: { searchParams: ParametrosDeBusqueda }) 
 export default function PaginaAgenda({ searchParams }: { searchParams: ParametrosDeBusqueda }) {
   return (
     <>
-      <div className="mb-7">
-        <p className="text-primary mb-2 text-xs font-semibold tracking-[0.18em] uppercase">{t('agenda.versalita')}</p>
-        <h2 className="font-serif text-3xl font-semibold tracking-tight md:text-4xl">{t('agenda.titulo')}</h2>
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-primary mb-2 text-xs font-semibold tracking-[0.18em] uppercase">{t('agenda.versalita')}</p>
+          <h2 className="font-serif text-3xl font-semibold tracking-tight md:text-4xl">{t('agenda.titulo')}</h2>
+        </div>
+        <Link
+          href="/agenda/nueva"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring/50 inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold shadow-sm transition outline-none focus-visible:ring-2"
+        >
+          {t('agenda.alta.abrir')}
+        </Link>
       </div>
 
       <Suspense fallback={<EsqueletoCalendario />}>

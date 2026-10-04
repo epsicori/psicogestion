@@ -1,0 +1,103 @@
+import { AvisoDeError } from '@/components/ui/piezas';
+import { t } from '@/lib/i18n';
+
+import { cargarContexto } from '../datos';
+import { cargarVistaAlta, DURACION_INICIAL, relojDelCentro } from './estado-alta';
+import { FormularioNavegable } from './formulario-navegable';
+import { leerParametrosAlta } from './parametros-alta';
+
+type Props = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  modo: 'dialogo' | 'pagina';
+};
+
+/**
+ * Lo que el alta de cita necesita para abrirse, leído en el servidor con la sesión de quien mira:
+ * centros, profesionales (solo el administrador y el técnico eligen), tipos de terapia activos
+ * (id, nombre y duración: el catálogo no es clínico), el paciente de la URL y la primera vista de
+ * huecos. Lo que falla se dice en una alerta; ni un `hoy` inválido ni unas sugerencias que no se
+ * calculan tumban el render (T-028 A E15.3).
+ */
+export async function ContenidoAlta({ searchParams, modo }: Props) {
+  const parametros = leerParametrosAlta(await searchParams);
+  const contexto = await cargarContexto(parametros.centro);
+  if (!contexto.ok) return <AvisoDeError mensaje={contexto.mensaje} />;
+  const { sesion, rol, centros } = contexto;
+  if (!rol) return <AvisoDeError mensaje={t('agenda.alta.error.cargar')} />;
+
+  const centroId =
+    (parametros.centro && centros.some((c) => c.id === parametros.centro) ? parametros.centro : contexto.centro) ?? centros[0]?.id;
+  if (!centroId) return <AvisoDeError mensaje={t('agenda.alta.error.sinCentro')} />;
+
+  const { supabase, usuario } = sesion;
+
+  const [tiposLeidos, profesionalesLeidos, pacienteLeido] = await Promise.all([
+    supabase.from('tipos_terapia').select('id, nombre, duracion_minutos').eq('activo', true).order('nombre'),
+    rol === 'profesional_sanitario'
+      ? Promise.resolve(null)
+      : supabase
+          .from('directorio_perfiles')
+          .select('id, nombre_completo, centro_id')
+          .eq('rol', 'profesional_sanitario')
+          .eq('estado', 'activo')
+          .in('centro_id', centros.map((c) => c.id)),
+    parametros.paciente
+      ? supabase.from('pacientes').select('id, nombre, apellidos').eq('id', parametros.paciente).maybeSingle()
+      : Promise.resolve(null),
+  ]);
+
+  if (tiposLeidos.error) console.error('Alta de cita: fallo al leer el catálogo de tipos', tiposLeidos.error);
+  if (profesionalesLeidos?.error) console.error('Alta de cita: fallo al leer los profesionales', profesionalesLeidos.error);
+  if (pacienteLeido?.error) console.error('Alta de cita: fallo al leer el paciente', pacienteLeido.error);
+
+  const tipos = (tiposLeidos.data ?? []).map((tipo) => ({
+    id: tipo.id,
+    nombre: tipo.nombre,
+    duracionMinutos: tipo.duracion_minutos,
+  }));
+  const profesionales =
+    rol === 'profesional_sanitario'
+      ? []
+      : (profesionalesLeidos?.data ?? []).flatMap((p) =>
+          p.id && p.centro_id ? [{ id: p.id, nombre: p.nombre_completo ?? '', centroId: p.centro_id }] : [],
+        );
+  const profesionalId =
+    rol === 'profesional_sanitario' ? usuario.id : (profesionales.find((p) => p.centroId === centroId)?.id ?? null);
+  if (!profesionalId) return <AvisoDeError mensaje={t('agenda.alta.error.sinProfesionales')} />;
+
+  const paciente = pacienteLeido?.data
+    ? { id: pacienteLeido.data.id, nombre: `${pacienteLeido.data.nombre} ${pacienteLeido.data.apellidos}`.trim() }
+    : null;
+
+  const reloj = await relojDelCentro(sesion, centroId);
+  if (!reloj.ok) return <AvisoDeError mensaje={reloj.mensaje} />;
+
+  const carga = await cargarVistaAlta(sesion, rol, {
+    pacienteId: paciente?.id ?? null,
+    profesionalId,
+    centroId,
+    duracionMinutos: DURACION_INICIAL,
+    fechaFoco: parametros.inicio?.fecha ?? null,
+    excluir: [],
+    zona: reloj.zona,
+    hoy: reloj.hoy,
+  });
+  if (!carga.ok) return <AvisoDeError mensaje={carga.mensaje} />;
+
+  return (
+    <FormularioNavegable
+      modo={modo}
+      rol={rol}
+      centros={centros}
+      profesionales={profesionales}
+      tipos={tipos}
+      inicial={{
+        paciente,
+        centroId,
+        profesionalId,
+        clave: parametros.inicio ? `${parametros.inicio.fecha}T${parametros.inicio.hora}` : null,
+      }}
+      vista={carga.vista}
+    />
+  );
+}
