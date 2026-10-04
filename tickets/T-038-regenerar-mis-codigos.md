@@ -6,7 +6,8 @@ riesgo: alto
 fase: 1
 prioridad: media
 depende_de: [T-037]
-estado: pendiente
+estado: hecho
+completado: 2026-10-04
 territorio:
   - supabase/migrations/*_regenerar_codigos_recuperacion.sql   # cola de un solo dueño (ver Notas)
   - scripts/rls/13-cuentas.sql
