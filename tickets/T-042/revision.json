@@ -1,98 +1,21 @@
 {
   "ticket": "T-042",
-  "ronda": 1,
-  "head": "8693cf1",
-  "base": "main",
+  "ronda": 2,
+  "head": "89b673c",
+  "base": "worktree-agent-a9f0330c3f05f9a94",
   "altas": 0,
-  "medias": 2,
-  "bajas": 6,
-  "fuentes": {
-    "A": {
-      "altas": 0,
-      "medias": 1,
-      "bajas": 3
-    },
-    "B": {
-      "altas": 0,
-      "medias": 2,
-      "bajas": 4
-    }
-  },
-  "duplicados": {
-    "B1-H1": "A1-H1",
-    "B1-H3": "A1-H2"
-  },
-  "decision_severidad": {
-    "A1-H2": "BAJA: medido en rollback que la doble pulsación normal consume ambas autorizaciones; los caminos de A y B son el mismo estado (paso dos perdido y reintento) y explotarlo exige además Bloquear y un RPC a mano en 60 s, sobre la propia sesión. Se arregla igual: bloquear_historia() y fijar_pin_historia deben poner desbloqueos_autorizados=0 y autorizado_hasta=null."
-  },
+  "medias": 0,
+  "bajas": 1,
+  "cerrados_ronda_1": ["A1-H1", "A1-H2", "A1-H3", "A1-H4", "B1-H4", "B1-H5", "B1-H6"],
+  "fuera_de_ronda": ["B1-H2"],
   "hallazgos": [
     {
-      "id": "A1-H1",
-      "severidad": "MEDIA",
-      "archivo": "supabase/migrations/20261009120000_pin_y_canje_en_dos_pasos.sql",
-      "linea": 90,
-      "descripcion": "Ninguna prueba falla si se quita el for update del paso uno del PIN: la C1 del oráculo (scripts/t042-oraculo.mjs:290-297) comprueba +3, y eso sale igual sin candado porque el UPDATE de READ COMMITTED vuelve a evaluar intentos_fallidos+1; el candado lo que protege es que el bloqueo se mire antes de comparar.",
-      "escenario": "Se quita el for update y todas las suites siguen en verde. Con intentos_fallidos=4, diez POST /rpc/comprobar_pin_historia concurrentes, cada uno con un PIN distinto, leen bloqueado_hasta=null y cotejan los diez: quedan 10 PIN_FALLIDO en vez de 1 más el bloqueo, y si uno acierta pone el contador a 0 y borra el bloqueo. Prueba que discrimina: partir de 4, lanzar 10 malos concurrentes y exigir exactamente 5 intentos y 1 PIN_FALLIDO nuevo. (B1-H1, mismo hallazgo: tickets/T-042/mutantes.json:25 presenta M-H4 como no observado y cubierto por M3.)"
-    },
-    {
-      "id": "B1-H2",
-      "severidad": "MEDIA",
-      "archivo": "docs/state.md",
-      "linea": 15,
-      "descripcion": "El state.md de la rama choca con el de main 037f0a0 (git merge-tree da CONFLICT), y tomar el lado de la rama pisa hallazgos abiertos.",
-      "escenario": "Si se resuelve con el lado de la rama: vuelve «T-038 ronda 4 en implementación», revive A3-H2 (cerrado) y desaparecen T-038 R4-H1 (BAJA abierto) y «T-038 lecciones». La línea 33, «Se cierra al integrar», queda falsa en main."
-    },
-    {
-      "id": "A1-H2",
+      "id": "R2-H1",
       "severidad": "BAJA",
       "archivo": "supabase/migrations/20261009120000_pin_y_canje_en_dos_pasos.sql",
-      "linea": 185,
-      "descripcion": "Una autorización pendiente (desbloqueos_autorizados>0 y autorizado_hasta en el futuro) sobrevive a bloquear_historia() y a fijar_pin_historia, que no la limpian.",
-      "escenario": "Reproducido en rollback: dos pasos uno buenos (doble pulsación, tope 2) y un paso dos ok; luego bloquear_historia() devuelve 1 y historia_desbloqueada() da f. Dentro de los 60 s, POST /rpc/desbloquear_historia con {} desde la sesión desatendida devuelve ok y historia_desbloqueada() vuelve a t sin que nadie haya escrito el PIN. (B1-H3, mismo hallazgo desde lib/cuentas/candado.ts:76: Medido en begin…rollback. Paso uno bueno, el paso dos se pierde y la pantalla dice «PIN incorrecto». El reintento abre y deja 1 autorización. Al pulsar «Cerrar historia», historia_desbloqueada()=f. Antes de 60 s, POST /rpc/desbloquear_historia {} desde esa sesión devuelve ok y la historia vuelve a estar abierta, sin PIN.) Severidad BAJA tras medir que la doble pulsación normal (s1,s1,s2,s2 y s1,s2,s1,s2) no deja sobrante: hace falta un paso dos perdido + Bloquear + RPC a mano en 60 s."
-    },
-    {
-      "id": "A1-H3",
-      "severidad": "BAJA",
-      "archivo": "scripts/rls/24-pin-y-canje-dos-pasos.sql",
-      "linea": 294,
-      "descripcion": "La aserción de la CA4 «ni el PIN ni el hash en la auditoría» solo mira estado_posterior de PIN_FALLIDO y PIN_BLOQUEADO, que llevan un JSON fijo; no mira las filas UPDATE de fn_auditar ni estado_anterior, que es por donde se colaría el hash.",
-      "escenario": "Una migración posterior recrea el disparador como fn_auditar('perfil_id') sin excluir 'hash'. Cada comprobar_pin_historia escribe el bcrypt en auditoria (en estado_anterior y en estado_posterior) y la CA4 sigue en verde."
-    },
-    {
-      "id": "A1-H4",
-      "severidad": "BAJA",
-      "archivo": "scripts/rls/24-pin-y-canje-dos-pasos.sql",
-      "linea": 360,
-      "descripcion": "La CA5.5 (lote nuevo entre los dos pasos) falla en la guarda del consumo de la centinela nueva y nunca llega al usado_en is null; solo la 5.5b, con un estado forjado, discrimina M10, y la §5 del diseño atribuye ese resultado al usado_en is null por error.",
-      "escenario": "Con M10 aplicado (el paso dos sin usado_en is null), la CA5.5 sigue en verde: da codigo_invalido por canje_autorizado_hasta. Si se retira la 5.5b por forjada, la cláusula queda sin ninguna prueba."
-    },
-    {
-      "id": "B1-H4",
-      "severidad": "BAJA",
-      "archivo": "lib/supabase/tipos-bd.ts",
-      "linea": 440,
-      "descripcion": "El regenerado añade las cuatro columnas nuevas a dos tablas. Es salida legítima del generador (idéntica byte a byte), pero contradice CA15 y §1.2, y no está anotado en ningún sitio.",
-      "escenario": "Un verificador que aplica CA15 al pie de la letra lo marca FALLA, o lo da por bueno sin dejar constancia de por qué no se cumple."
-    },
-    {
-      "id": "B1-H5",
-      "severidad": "BAJA",
-      "archivo": "lib/cuentas/candado.ts",
-      "linea": 79,
-      "descripcion": "El console.error del paso dos sigue registrando el objeto error entero, aquí y en totp.ts:144, en contra de §1.4 y §5, que piden registrar .code.",
-      "escenario": "Un fallo de desbloquear_historia() o canjear_codigo_recuperacion() vuelca message, details y hint al registro, y el punto de §5 no se cumple. Hoy no lleva el secreto: es una desviación del diseño, no una fuga."
-    },
-    {
-      "id": "B1-H6",
-      "severidad": "BAJA",
-      "archivo": "lib/cuentas/totp.test.ts",
-      "linea": 170,
-      "descripcion": "Faltan casos de §1.4: ninguno con sin_codigos, y deleteFactor nunca se ejecuta porque listFactors devuelve factors: [].",
-      "escenario": "El mutante que borra el factor salvo con codigo_invalido o bloqueado sigue en verde. Con él, quien solo tiene la contraseña de una cuenta sin lote recibe sin_codigos en /recuperar y le borra el TOTP al titular."
+      "linea": 442,
+      "descripcion": "El predicado anti-ruido de la update nueva de bloquear_historia() no tiene prueba ni mutante: ningún banco cuenta filas UPDATE de pines_historia (el 03 solo cuenta PIN_FALLIDO/PIN_BLOQUEADO, el 09 solo llama, y la «no vacía» del 24 es > 0), en contra de la justificación de R2.2.",
+      "escenario": "Se quita el «and (desbloqueos_autorizados > 0 or autorizado_hasta is not null)». Cada pulsación de «Bloquear» sin autorización pendiente escribe una fila UPDATE en auditoria (solo adición, imborrable) y mueve actualizado_en, y npm run test:rls sigue verde."
     }
-  ],
-  "comprobado_sin_hallazgo": [
-    "El 42501 «La historia no está desbloqueada» de nota-clinica.spec.ts es la sonda de abrirEditorDeNota con el candado cerrado (servidor.ts:474, accesos.ts:51, fuera del diff). Sesión de Ana a las 10:38:19.67, PIN y ventana a las 10:38:20.6, test 2 con la ventana ya abierta: un solo mensaje. desbloquearHistoria solo da true con la fila del paso dos, en la misma transacción que la ventana.",
-    "Dato para el orquestador: hay un PIN_FALLIDO confirmado de 1111… a las 10:38:14 sin ninguna sesión de GoTrue de Ana. Parece una medida hecha fuera de rollback."
   ]
 }
