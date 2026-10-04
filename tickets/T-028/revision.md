@@ -545,3 +545,94 @@ Por eso el tramo libre anterior a una cita queda tragado por el bloque ocupado, 
 - **`carrilesDeHuecos` diverge de `colocarEnRejilla`.** Reutiliza carriles, lo que es mejor para huecos, y no tiene un escenario de fallo.
 - **Minuto de pared frente a minuto absoluto en los domingos con cambio de hora.** No hay escenario: no hay franjas en la madrugada de domingo.
 - **La región global se queda con el texto viejo.** Es el anuncio genérico y no lleva datos.
+
+---
+
+# T-028 · Revisión del corte B, ronda 3 (arreglos de H1 FALLA y H9-H19)
+
+**Sin hallazgos ALTA.** 4 MEDIA (H20-H23) y 2 BAJA (H24-H25). H1, H9, H11-H17 y H19 quedan cerrados en lo que pedían. H10 está cerrado en el número de paradas, pero con un patrón de teclado que no es el del contrato (H21) y con un Escape que choca con el del diálogo (H20). H18 lo recoge `docs/state.md` de `main`; el ticket lo redacta el arquitecto.
+
+- **Diff revisado:** `git diff 6f83cc6..75be90b` en `worktree-agent-a1549876942c02f5f`, sin lo que entra por el merge `fcf1ab2` (`tickets/**` y `docs/state.md` vienen de `main`). En la práctica, `fcf1ab2..75be90b`: 11 commits y 22 ficheros.
+- **Contra qué:** la ronda 2 (H9-H19), el FALLA de H1 de la evidencia (el administrador con `centro_id` null) y las «Decisiones del propietario» del diseño.
+- **Lo que no he usado:** la evidencia (salvo el FALLA que cita el encargo), el informe del verificador y la base local, que está usando el verificador.
+- **Método:** 15 mutantes y 3 sondas, todo medido con vitest en el worktree. Cada fichero se restauró con `git checkout` y el árbol queda limpio. Las suites `app/(app)/agenda` y `components/ui/dialogo.test.tsx` dan 46 ficheros y 440 pruebas en verde.
+- **Territorio:** `territorio.mjs T-028` en el worktree: 61 ficheros, todos dentro del territorio.
+
+## Cierre de la ronda 2
+
+| | Estado | Comprobación |
+|---|---|---|
+| H1 (FALLA) | Cerrado | `.or('rol.eq.administrador,centro_id.in.(…)')` se suma (AND) a `.in('rol', […])` y a `.eq('estado','activo')`. Un profesional de otro centro no pasa. Un administrador inactivo tampoco. La vista y la sesión son las de antes, así que el seguimiento de RLS no cambia. El administrador sale una vez por centro en `profesionales`, pero el selector filtra por `centroId` (`formulario-alta.tsx:331`) y en cada centro aparece **una sola vez**: no se duplica ni hay `key` repetida. Mutantes: `.or`→`.in('centro_id')`, `flatMap` sin el administrador y `flatMap` con cualquier rol sin centro: **los tres en rojo**. Ojo: el mock guarda la cadena del `.or` sin evaluarla, así que el AND con los otros filtros se juzga leyendo, no con la prueba. Queda otra puerta (H23). |
+| H9 | Cerrado por el buscador | Mutante sin `setValue('profesionalId', asignado)`: **rojo**. Mutante sin `!profesionalManual`: **rojo**. Mutante sin `p.centroId === centroId`: **verde** (H24). Queda la puerta del cambio de centro (H22). |
+| H10 | **A medias** (H20, H21) | Ahora hay una parada de Tab. Mutantes: sin `tabIndex={-1}`, sin Flecha abajo en la rejilla, sin Flecha abajo en la lista, sin Escape, sin `alLado`, y sin el efecto que entra en los huecos de otro día de la lista: **los seis en rojo**. La agenda normal no cambia: los cambios de `rejilla-semana.tsx` y `lista-dia.tsx` van tras `seleccion &&`, el efecto nuevo de la lista no hace nada sin `entrarEnHuecos`, y `rejilla-semana.test.tsx` y `lista-dia.test.tsx` no se han tocado y siguen en verde. |
+| H11 | Cerrado en lo pedido | Mutante `max-w-5xl`→`3xl`: **rojo** (2). Mutante `compacto={false}`: **rojo**. «Elegida» va antes que «Sugerida» y «Habitual». Queda un residuo entre `md` y unos 946 px (H25). |
+| H12 | Cerrado | `key={calendario.desde}` en la rejilla y en la lista. El commit trae el rojo previo. |
+| H13 | Cerrado | El commit trae el mutante en rojo. No lo he vuelto a medir. |
+| H14 | Cerrado en lo medible | `prepararAnuncio` corre en un `useEffect` de `FormularioNavegable`, así que la región existe vacía antes del primer anuncio. **Carreras:** el camino de los 100 ms solo se da si la región no existe. Con el formulario montado, siempre existe. Si se dieran dos anuncios en esos 100 ms, el primero pisaría al segundo, pero ninguna ruta llama dos veces. **Regiones duplicadas:** ninguna. `querySelector` encuentra la que ya hay, y el doble efecto de StrictMode no crea otra. Lo del `aria-modal`, que sigue abierto mientras se anuncia (`anunciar` va antes de `router.back()`), queda igual. Sin un lector de pantalla no le encuentro un escenario medible. |
+| H15 | Cerrado | `esperandoSerie` ahora exige `claveSerie !== null`. Con «Semanal» y 1 sesión, Zod enseña el error. Tras un fallo, Guardar reintenta. Con serie, `firma: null` sigue cayendo en el `superRefine`. |
+| H16 | Cerrado | `vacioDia` en la lista y `vacio` sobre la rejilla desde `md`. |
+| H17 | Cerrado | `/agenda?fecha=…&centro=…`. `leerParametros` acepta `centro` (`parametros.ts:38`). |
+| H18 | En `main` | `docs/state.md:27` lo pone en la cola de `supabase/`. Todavía no hay ticket: lo redacta el arquitecto. No es del implementador. |
+| H19 | Cerrado | Mutante `lunes !== vista.calendario.desde`: **rojo**. |
+
+**Interpretación 1 (en la lista móvil hay dos paradas, la tira y la lista de huecos).** La aceptaría: es lo que pide el contrato:116 («Tab dentro del día») y lo que hace la lista normal, donde cada cita del día visible es una parada. **Pero el código no la implementa.** Medido con una sonda sobre `ListaDia` en selección con dos huecos libres: hay una sola parada (el día) y los huecos tienen `tabIndex` -1. La prueba `lista-dia-seleccion.test.tsx:80` fija justo eso, una parada. Lo desarrollo en H21.
+
+## MEDIA
+
+### H20 · `app/(app)/agenda/nueva/teclado-huecos.ts:47-49` (con `components/ui/foco.ts:106` y `dialogo-alta.tsx:17`) — Escape en un hueco devuelve el foco al día y además cierra el diálogo del alta
+
+**Qué pasa.** `alTeclearHueco` hace `preventDefault` y mueve el foco al día, pero no detiene la propagación. `useCierreExterior` escucha `keydown` en `document` y llama a `alCerrar` sin mirar `defaultPrevented`. En el alta, `alCerrar` es `router.back()`.
+
+**Medido con una sonda.** Monto `<Dialogo abierto alCerrar={fn}>` con `RejillaSemana` en selección, enfoco el hueco del martes a las 10:00 y pulso Escape. El foco acaba en `data-dia="2026-10-06"` y `alCerrar` se llama **1 vez**.
+
+**Escenario.** Desde la agenda, un técnico abre «Nueva cita» (ruta interceptada, diálogo). Elige paciente, tipo y periodicidad y baja con flechas por los huecos del martes. Pulsa Escape para volver al día, como hace con las citas en la agenda normal (`alTeclearCita`) y como promete el comentario de `teclado-huecos.ts`. El diálogo se cierra y se pierde todo lo rellenado, sin confirmación. Pasa igual en la lista móvil.
+
+**Por qué las pruebas no lo ven.** Las dos pruebas de «Escape vuelve al día» (`rejilla-semana-seleccion.test.tsx:129` y `lista-dia-seleccion.test.tsx:96`) montan la rejilla y la lista sin el `Dialogo`, que es justo donde se usan.
+
+### H21 · `app/(app)/agenda/nueva/hueco-seleccion.tsx:44` (con `lista-dia.tsx:139-144`) — H10 se arregla con un teclado distinto del de la agenda: Tab no entra en el día y en la lista ningún hueco se alcanza con Tab
+
+**Qué pide el contrato (línea 116 y §1.F:282 del diseño).** «Misma navegación de teclado (flechas entre días, Tab dentro del día)».
+
+**Qué hace la agenda normal.**
+- En la rejilla, las citas del día activo llevan `tabIndex` 0 y las demás -1 (`rejilla-semana.tsx:274`).
+- En la lista, todas las citas del día visible son paradas de Tab.
+
+**Qué hace el arreglo.** Todos los huecos llevan `tabIndex` -1, y solo se entra con Flecha abajo desde el día. En la rejilla también se entra con Intro, porque el `onClick` del día enfoca el primer hueco. En la lista, Intro solo elige el día. Ningún texto ni `aria-describedby` dice que hay que usar Flecha abajo.
+
+**Escenario.** Un usuario de teclado con el navegador al 400 % (WCAG 1.4.10), que deja la ventana por debajo de `md` y por tanto ve la lista, tabula hasta «mar 6» y pulsa Tab. El foco salta a «Periodicidad» sin pasar por ningún hueco. Con Intro tampoco entra. Solo puede elegir hueco si se le ocurre probar Flecha abajo. En la agenda, Tab sí recorre las citas del día.
+
+**Arreglo coherente con el contrato.** En la rejilla, los huecos del día activo con `tabIndex` 0 y los demás con -1, igual que las citas. En la lista, los huecos del día visible son paradas, y eso ya está acotado a un día. Las pruebas de una sola parada (`lista-dia-seleccion.test.tsx:80` y la de la rejilla) habría que cambiarlas. Es la «interpretación 1», que hoy no está en el código.
+
+### H22 · `app/(app)/agenda/nueva/formulario-alta.tsx:350-357` — al cambiar de centro después de elegir paciente, entra el primero del centro nuevo y no el asignado que trabaja en él
+
+**Qué pasa.** `elegirPaciente` solo propone el asignado si trabaja en el centro de ese momento. El `onChange` del centro, si el profesional actual no está en el centro nuevo, pone `delCentro[0]` sin mirar el asignado del paciente. Con `?paciente=` pasa lo mismo, porque `contenido-alta.tsx:81-83` construye el paciente sin `profesionalId`.
+
+**Medido con una sonda.** Técnico con los centros Sur y Norte. Está en Sur con «Dra. Ruiz». Elige a Bea Gil, cuyo asignado es Luis Soto, de Norte: el profesional sigue siendo Ruiz, que es correcto. Cambia el centro a Norte y el profesional pasa a ser «Ana Abad», el primero de Norte, en vez de Luis Soto.
+
+**Escenario.** Clínica con dos centros. El formulario se rellena de arriba abajo: paciente, profesional, centro. El técnico elige paciente y luego centro. Las sugerencias se calculan para Ana Abad y la cita se guarda a su nombre si no mira el desplegable. Es H2 y H9 por la tercera puerta, la que sigue el orden natural de los campos.
+
+### H23 · `app/(app)/agenda/nueva/contenido-alta.tsx:44,67-68` — un profesional que pasa consulta en dos centros solo se ofrece en su centro principal
+
+**Qué pasa.** Desde el ADR-051, la pertenencia a un centro es la relación `perfiles_centros`, con vigencia. `perfiles.centro_id`, y con él `directorio_perfiles.centro_id`, es solo el espejo del **principal**. El filtro `centro_id.in.(…)`, que el arreglo de H1 mantiene y comenta como «el profesional, solo en los suyos», deja fuera las pertenencias que no son la principal. La base (`alta_exigir_profesional`) no pone ninguna condición de centro.
+
+**Escenario con la siembra.** En `seed-completo.sql:210-229`, Ana pasa consulta en Madrid (principal) y en Las Palmas. El administrador abre «Nueva cita» y cambia a Centro Las Palmas: Ana no aparece en el selector. No se le puede dar cita en Las Palmas desde la pantalla del administrador o del técnico, y si el paciente es suyo, H9 y H2 caen al primero de Las Palmas sin avisar. Es una lista de elección más estrecha que la regla. Ni yo ni nadie lo vimos en las rondas 1 y 2.
+
+## BAJA
+
+### H24 · `app/(app)/agenda/nueva/formulario-alta.tsx:246` — la guarda «el asignado trabaja en este centro» no tiene ninguna prueba que la distinga
+
+**Medido.** El mutante que deja `profesionales.some((p) => p.id === asignado)` sin `p.centroId === centroId` mantiene en verde las 25 pruebas de `formulario-alta.test.tsx`. La prueba «si el asignado no trabaja en el centro elegido» (`:450`) no incluye al asignado en `profesionales`, así que el `some` sale falso con guarda o sin ella: le falta el caso que la pone a prueba.
+
+**Escenario.** Un refactor quita la condición del centro. Al elegir a un paciente cuyo asignado es de Norte estando en Sur, `profesionalId` pasa a ser Luis. El `<select>` no tiene esa opción y enseña otra, pero la cita se guarda con Luis en Sur. Nada se pone en rojo.
+
+### H25 · `app/(app)/agenda/nueva/hueco-seleccion.tsx:59-61` (con `components/ui/dialogo.tsx:58`) — entre `md` y unos 946 px de ancho, un hueco de 30 minutos sigue escondiendo «Elegida»
+
+**Calculado, no medido en un navegador.** El diálogo mide `min(1024, ancho de la ventana − 32)` menos `p-6` y el eje `w-12`. A 768 px quedan unos 91 px por día y, con `p-1`, unos 83 px de texto. «10:00 – 10:30» ocupa unos 109 px en Geist Mono a 14 px, así que se parte en dos líneas: 40 px más 8 px de relleno. Un hueco de 30 minutos mide 48 px (`PX_MIN` 1,6), de modo que la línea de «Elegida», aunque ahora vaya primero tras el rango, cae entre los 48 y los 64 px y `overflow-hidden` la corta. Para que el rango quepa en una línea hacen falta unos 117 px por día, es decir, una ventana de al menos unos 947 px.
+
+**Escenario.** Un iPad en vertical (768-820 px) con un tipo de 30 minutos. El hueco elegido solo se distingue por el fondo. Lo atenúa la línea «Hueco: …» del formulario.
+
+## Descartados
+
+- **El administrador con `centro_id` no nulo de otro centro solo se ofrece en ese centro.** En la siembra el administrador no tiene centro, y no encuentro una ruta que se lo ponga. No tengo un escenario.
+- **El `title` del hueco compacto se suma al `aria-label` como descripción.** El lector repite el rango. Es verbosidad, no un fallo.
+- **Al cambiar a otro paciente, el profesional se queda en el asignado del anterior.** Para el paciente nuevo, sin asignado en el centro, no hay un valor por defecto «correcto» que contraponer.

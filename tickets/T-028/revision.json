@@ -1,121 +1,221 @@
 {
   "ticket": "T-028",
   "corte": "B",
-  "ronda": 2,
-  "diff": "74747fc..HEAD (worktree-agent-a1549876942c02f5f), sin tickets/** ni docs/state.md del merge de main",
+  "ronda": 3,
+  "diff": "6f83cc6..75be90b (worktree-agent-a1549876942c02f5f), sin lo del merge fcf1ab2 (tickets/** y docs/state.md de main); en la práctica fcf1ab2..75be90b",
   "altas": 0,
-  "medias": 3,
-  "bajas": 8,
-  "cerrados_de_la_ronda_1": [
-    "H1",
-    "H3",
-    "H5",
-    "H6",
-    "H7",
-    "H8"
+  "medias": 4,
+  "bajas": 2,
+  "cerrados_de_la_ronda_2": [
+    "H1 (FALLA)",
+    "H9",
+    "H11",
+    "H12",
+    "H13",
+    "H14",
+    "H15",
+    "H16",
+    "H17",
+    "H19"
   ],
-  "parciales_de_la_ronda_1": {
-    "H2": "cerrado con ?paciente=; la otra puerta es H9",
-    "H4": "trasladado sin código; el registro del traslado es H18"
+  "parciales_de_la_ronda_2": {
+    "H9": "cerrado por el buscador; la puerta del cambio de centro es H22 y la guarda de centro sin prueba es H24",
+    "H10": "una parada de Tab, pero Escape cierra el diálogo (H20) y el patrón no es «Tab dentro del día» del contrato:116 (H21)",
+    "H11": "cerrado en lo pedido; residuo entre md y ~946 px con tipos de 30 min (H25)",
+    "H18": "en docs/state.md:27 de main; el ticket lo redacta el arquitecto"
   },
+  "interpretacion_1": "aceptable frente a contrato:116, pero no está en el código: la lista tiene una sola parada (sonda y lista-dia-seleccion.test.tsx:80); ver H21",
   "mutantes_medidos": {
-    "firma sin tipoTerapiaId": "rojo",
-    "Guardar sin esperandoSerie": "rojo",
-    "contenido-alta delCentro[0]": "rojo",
-    "volverAlElegido sin setFoco": "rojo",
-    "acciones sin tipoTerapiaId": "verde (H13)"
+    "contenido-alta .or -> .in(centro_id)": "rojo",
+    "contenido-alta flatMap sin administrador": "rojo",
+    "contenido-alta flatMap con cualquier rol sin centro": "rojo",
+    "elegirPaciente sin setValue(profesionalId)": "rojo",
+    "elegirPaciente sin !profesionalManual": "rojo",
+    "elegirPaciente sin p.centroId === centroId": "verde (H24)",
+    "hueco-seleccion sin tabIndex -1": "rojo",
+    "rejilla sin Flecha abajo en el día": "rojo",
+    "lista sin Flecha abajo en el día": "rojo",
+    "teclado-huecos sin Escape": "rojo",
+    "teclado-huecos sin alLado(1)": "rojo",
+    "lista sin el efecto entrarEnHuecos": "rojo",
+    "dialogo max-w-5xl -> max-w-3xl": "rojo",
+    "rejilla compacto={false}": "rojo",
+    "volverAlElegido contra vista.calendario.desde": "rojo"
+  },
+  "sondas": {
+    "Escape en hueco dentro de Dialogo": "foco al día y alCerrar llamado 1 vez (H20)",
+    "ListaDia en selección, paradas de Tab": "1 parada (el día); huecos tabIndex -1 (H21)",
+    "cambio de centro tras elegir paciente con asignado en el centro nuevo": "entra el primero del centro nuevo, no el asignado (H22)"
   },
   "hallazgos": [
     {
-      "id": "H9",
+      "id": "H20",
       "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 228,
-      "descripcion": "El arreglo de H2 solo pone el profesional asignado cuando el paciente llega por ?paciente=; al elegirlo con el buscador (buscarPacientes devuelve id y nombre; elegirPaciente no toca profesionalId) el profesional no cambia, y la única entrada de este corte (agenda/page.tsx:120) no lleva paciente.",
-      "escenario": "Un técnico pulsa «Nueva cita» en la agenda, busca y elige a X, cuyo asignado es Luis Soto: el profesional se queda en Ana Ruiz, la primera del orden alfabético, las sugerencias salen en frío y la cita se guarda a nombre de Ana Ruiz si no se mira el desplegable."
+      "archivo": "app/(app)/agenda/nueva/teclado-huecos.ts",
+      "linea": 47,
+      "descripcion": "Escape en un hueco mueve el foco al día pero no detiene la propagación; useCierreExterior (components/ui/foco.ts:106) cierra el diálogo del alta (router.back()) sin mirar defaultPrevented.",
+      "escenario": "Diálogo «Nueva cita» desde la agenda, formulario rellenado, foco en un hueco del martes → Escape → el foco va al día y el diálogo se cierra; se pierde el alta a medio rellenar. Sonda: alCerrar llamado 1 vez. Las pruebas de «Escape vuelve al día» montan la rejilla/lista sin Dialogo."
     },
     {
-      "id": "H10",
+      "id": "H21",
       "severidad": "MEDIA",
       "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
-      "linea": 37,
-      "descripcion": "En modo selección, los huecos de todos los días son paradas de Tab: no tienen tabIndex por día activo ni Escape al día, cuando el contrato:116 pide la misma navegación de teclado que la agenda (rejilla-semana.tsx:267, tabIndex={i === activo ? 0 : -1}).",
-      "escenario": "Una semana con 8 libres al día de lunes a viernes: unos 40 Tab para salir de la rejilla y llegar a Periodicidad y Guardar. Medido con una sonda: los libres del martes y del jueves salen los dos con tabIndex=0."
+      "linea": 44,
+      "descripcion": "H10 se cierra con todos los huecos en tabIndex -1 y entrada por Flecha abajo, no con «Tab dentro del día» (contrato:116, diseño §1.F:282) como hacen las citas de la agenda; en la lista ningún hueco es alcanzable con Tab y nada anuncia la Flecha abajo.",
+      "escenario": "Teclado con zoom al 400 % (lista <md): Tab hasta «mar 6», Tab → foco a «Periodicidad» sin pasar por ningún hueco; Intro solo elige el día. Solo se elige hueco si se adivina Flecha abajo. La «interpretación 1» (tira + lista como dos paradas) sería conforme, pero el código y la prueba lista-dia-seleccion.test.tsx:80 fijan una sola parada."
     },
     {
-      "id": "H11",
+      "id": "H22",
       "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/rejilla-semana.tsx",
-      "linea": 299,
-      "descripcion": "Con el diálogo max-w-3xl, cada día mide unos 95 px. Cuando dos huecos se pisan, la hora queda cortada; con un carril, el rango se parte en dos líneas y «Elegida» queda fuera de un hueco de 50 minutos sugerido y habitual. El diseño pedía max-w-5xl. Calculado, no medido en navegador.",
-      "escenario": "Un tipo de 50 minutos y una cita de 30 a las 9:00 dan un ocupado de 9:00 a 9:50 y un libre de 9:40 a 10:30, en dos carriles de unos 47 px: «09:40» (42 px de Geist Mono) se ve como «09:». Si se elige la primera tarjeta (sugerida y habitual) en un hueco de 50 minutos (80 px), «Elegida» cae entre los 81 y los 97 px, y la elección solo se ve por el fondo."
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 354,
+      "descripcion": "Al cambiar de centro, si el profesional actual no está en el nuevo, entra delCentro[0] sin mirar el asignado del paciente (tampoco con ?paciente=, que llega sin profesionalId).",
+      "escenario": "Técnico en Sur elige a Bea Gil (asignada a Luis Soto, de Norte): sigue Dra. Ruiz (correcto). Cambia el centro a Norte → profesional = Ana Abad (primera de Norte), no Luis. Sugerencias y cita a nombre de Ana si no mira el desplegable. Medido con sonda."
     },
     {
-      "id": "H12",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/lista-dia.tsx",
-      "linea": 36,
-      "descripcion": "Sin key por semana en SelectorHueco, ListaDia conserva el índice del día en useState(diaInicial): diaPorDefecto(…, elegido) solo se aplica al montar.",
-      "escenario": "Medido con una sonda: se monta la semana del 6 con el martes y se vuelve a pintar la del 13 con el elegido el jueves 15 a las 12:00. La lista móvil muestra el martes 13 («10:00 – 10:50») y no el hueco elegido."
+      "id": "H23",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
+      "linea": 44,
+      "descripcion": "El filtro centro_id.in.(…) usa perfiles.centro_id, que es solo el espejo del centro principal (ADR-051, perfiles_centros); un profesional con pertenencia vigente no principal no se ofrece en ese centro, aunque la base no pone condición de centro.",
+      "escenario": "Siembra: Ana pasa consulta en Madrid (principal) y Las Palmas (seed-completo.sql:210-229). Administrador abre «Nueva cita» y cambia a Centro Las Palmas → Ana no está en el selector; no se le puede dar cita allí desde administrador/técnico, y para sus pacientes el valor por defecto cae al primero de Las Palmas."
     },
     {
-      "id": "H13",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/acciones.ts",
-      "linea": 116,
-      "descripcion": "Ninguna prueba ve que tipoTerapiaId llega a la firma desde previsualizarAltaSerie y guardarAlta, porque el campo es opcional en EntradaPrevisualizarAlta.",
-      "escenario": "Medido: el mutante que borra «tipoTerapiaId: datos.tipoTerapiaId» en las líneas 116 y 191 deja verdes 276 de 276 pruebas; la parte «tipo» de H3 vuelve a abrirse en el servidor sin que nada se ponga en rojo."
-    },
-    {
-      "id": "H14",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/anunciar.ts",
-      "linea": 8,
-      "descripcion": "La región role=status se crea y se rellena en el mismo instante y, en el diálogo, bajo un aria-modal todavía abierto: el primer anuncio de la sesión puede no oírse. Las pruebas solo leen textContent.",
-      "escenario": "Primer guardado de la sesión desde el diálogo de la agenda, con NVDA o VoiceOver: no se oye «Cita guardada»; del segundo guardado en adelante sí, porque la región ya existe."
-    },
-    {
-      "id": "H15",
+      "id": "H24",
       "severidad": "BAJA",
       "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 235,
-      "descripcion": "esperandoSerie trata igual «en vuelo», «no se puede pedir» y «falló»: Guardar queda desactivado sin que salgan los errores de validación ni haya forma de reintentar.",
-      "escenario": "Con «Semanal» y 1 sesión, Guardar queda desactivado sin el error de Zod en el campo ni la alerta «sin hueco». Si la previsualización falla por transporte, no se puede guardar salvo cambiar un campo y volver a ponerlo como estaba."
+      "linea": 246,
+      "descripcion": "La guarda p.centroId === centroId de elegirPaciente no tiene prueba que la distinga: la prueba «el asignado no trabaja en el centro» no incluye al asignado en profesionales.",
+      "escenario": "Mutante sin la condición de centro: 25/25 verdes. Un refactor la quita → asignado de Norte entra como profesionalId estando en Sur; el <select> no tiene esa opción y enseña otra, pero la cita se guarda con Luis en Sur."
     },
     {
-      "id": "H16",
+      "id": "H25",
       "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/lista-dia.tsx",
-      "linea": 100,
-      "descripcion": "El vacío de un día dice «No hay huecos libres en esta semana.» (lo fija lista-dia-seleccion.test.tsx:71), y desde md una semana sin huecos es una rejilla en blanco sin texto.",
-      "escenario": "En el móvil se mira el sábado, se lee «esta semana» y se pasa a la siguiente aunque el martes tenía huecos. Desde md, una semana de vacaciones no dice nada."
-    },
-    {
-      "id": "H17",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-navegable.tsx",
-      "linea": 25,
-      "descripcion": "La salida /agenda?fecha= no lleva centro, así que leerParametros toma el de la cookie.",
-      "escenario": "Con la cookie en el centro A, un técnico abre el alta como página, cambia el centro a B y guarda: llega a la semana correcta del centro A y no ve la cita."
-    },
-    {
-      "id": "H18",
-      "severidad": "BAJA",
-      "archivo": "docs/interfaz.md",
-      "linea": 467,
-      "descripcion": "El traslado de H4 (contrato:169) a un ticket de la cola de supabase/ no consta en ningún ticket ni en docs/state.md; solo dice «va aparte». Le toca al orquestador.",
-      "escenario": "T-028 se cierra con el criterio contrato:169 sin cumplir y nada en la cola lo recoge."
-    },
-    {
-      "id": "H19",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 216,
-      "descripcion": "volverAlElegido compara con la semana pintada (vista.calendario.desde) y no con la pedida (foco).",
-      "escenario": "Con el martes 6 a las 17:00 elegido, se pulsa «Semana siguiente» y, antes de que llegue, se cambia a un tipo de 90 minutos: no se comprueba el elegido y al guardar sale «Ese hueco acaba de ocuparse», que es falso."
+      "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
+      "linea": 59,
+      "descripcion": "Entre md y ~946 px de ventana, el rango «10:00 – 10:30» se parte en dos líneas y en un hueco de 30 min (48 px) la línea «Elegida» queda bajo overflow-hidden (calculado, no medido).",
+      "escenario": "iPad vertical (768-820 px), tipo de 30 min: el hueco elegido solo se distingue por el fondo en la rejilla; lo atenúa la línea «Hueco: …» del formulario."
     }
   ],
   "rondas_anteriores": [
+    {
+      "ticket": "T-028",
+      "corte": "B",
+      "ronda": 2,
+      "diff": "74747fc..HEAD (worktree-agent-a1549876942c02f5f), sin tickets/** ni docs/state.md del merge de main",
+      "altas": 0,
+      "medias": 3,
+      "bajas": 8,
+      "cerrados_de_la_ronda_1": [
+        "H1",
+        "H3",
+        "H5",
+        "H6",
+        "H7",
+        "H8"
+      ],
+      "parciales_de_la_ronda_1": {
+        "H2": "cerrado con ?paciente=; la otra puerta es H9",
+        "H4": "trasladado sin código; el registro del traslado es H18"
+      },
+      "mutantes_medidos": {
+        "firma sin tipoTerapiaId": "rojo",
+        "Guardar sin esperandoSerie": "rojo",
+        "contenido-alta delCentro[0]": "rojo",
+        "volverAlElegido sin setFoco": "rojo",
+        "acciones sin tipoTerapiaId": "verde (H13)"
+      },
+      "hallazgos": [
+        {
+          "id": "H9",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 228,
+          "descripcion": "El arreglo de H2 solo pone el profesional asignado cuando el paciente llega por ?paciente=; al elegirlo con el buscador (buscarPacientes devuelve id y nombre; elegirPaciente no toca profesionalId) el profesional no cambia, y la única entrada de este corte (agenda/page.tsx:120) no lleva paciente.",
+          "escenario": "Un técnico pulsa «Nueva cita» en la agenda, busca y elige a X, cuyo asignado es Luis Soto: el profesional se queda en Ana Ruiz, la primera del orden alfabético, las sugerencias salen en frío y la cita se guarda a nombre de Ana Ruiz si no se mira el desplegable."
+        },
+        {
+          "id": "H10",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
+          "linea": 37,
+          "descripcion": "En modo selección, los huecos de todos los días son paradas de Tab: no tienen tabIndex por día activo ni Escape al día, cuando el contrato:116 pide la misma navegación de teclado que la agenda (rejilla-semana.tsx:267, tabIndex={i === activo ? 0 : -1}).",
+          "escenario": "Una semana con 8 libres al día de lunes a viernes: unos 40 Tab para salir de la rejilla y llegar a Periodicidad y Guardar. Medido con una sonda: los libres del martes y del jueves salen los dos con tabIndex=0."
+        },
+        {
+          "id": "H11",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/rejilla-semana.tsx",
+          "linea": 299,
+          "descripcion": "Con el diálogo max-w-3xl, cada día mide unos 95 px. Cuando dos huecos se pisan, la hora queda cortada; con un carril, el rango se parte en dos líneas y «Elegida» queda fuera de un hueco de 50 minutos sugerido y habitual. El diseño pedía max-w-5xl. Calculado, no medido en navegador.",
+          "escenario": "Un tipo de 50 minutos y una cita de 30 a las 9:00 dan un ocupado de 9:00 a 9:50 y un libre de 9:40 a 10:30, en dos carriles de unos 47 px: «09:40» (42 px de Geist Mono) se ve como «09:». Si se elige la primera tarjeta (sugerida y habitual) en un hueco de 50 minutos (80 px), «Elegida» cae entre los 81 y los 97 px, y la elección solo se ve por el fondo."
+        },
+        {
+          "id": "H12",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/lista-dia.tsx",
+          "linea": 36,
+          "descripcion": "Sin key por semana en SelectorHueco, ListaDia conserva el índice del día en useState(diaInicial): diaPorDefecto(…, elegido) solo se aplica al montar.",
+          "escenario": "Medido con una sonda: se monta la semana del 6 con el martes y se vuelve a pintar la del 13 con el elegido el jueves 15 a las 12:00. La lista móvil muestra el martes 13 («10:00 – 10:50») y no el hueco elegido."
+        },
+        {
+          "id": "H13",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/acciones.ts",
+          "linea": 116,
+          "descripcion": "Ninguna prueba ve que tipoTerapiaId llega a la firma desde previsualizarAltaSerie y guardarAlta, porque el campo es opcional en EntradaPrevisualizarAlta.",
+          "escenario": "Medido: el mutante que borra «tipoTerapiaId: datos.tipoTerapiaId» en las líneas 116 y 191 deja verdes 276 de 276 pruebas; la parte «tipo» de H3 vuelve a abrirse en el servidor sin que nada se ponga en rojo."
+        },
+        {
+          "id": "H14",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/anunciar.ts",
+          "linea": 8,
+          "descripcion": "La región role=status se crea y se rellena en el mismo instante y, en el diálogo, bajo un aria-modal todavía abierto: el primer anuncio de la sesión puede no oírse. Las pruebas solo leen textContent.",
+          "escenario": "Primer guardado de la sesión desde el diálogo de la agenda, con NVDA o VoiceOver: no se oye «Cita guardada»; del segundo guardado en adelante sí, porque la región ya existe."
+        },
+        {
+          "id": "H15",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 235,
+          "descripcion": "esperandoSerie trata igual «en vuelo», «no se puede pedir» y «falló»: Guardar queda desactivado sin que salgan los errores de validación ni haya forma de reintentar.",
+          "escenario": "Con «Semanal» y 1 sesión, Guardar queda desactivado sin el error de Zod en el campo ni la alerta «sin hueco». Si la previsualización falla por transporte, no se puede guardar salvo cambiar un campo y volver a ponerlo como estaba."
+        },
+        {
+          "id": "H16",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/lista-dia.tsx",
+          "linea": 100,
+          "descripcion": "El vacío de un día dice «No hay huecos libres en esta semana.» (lo fija lista-dia-seleccion.test.tsx:71), y desde md una semana sin huecos es una rejilla en blanco sin texto.",
+          "escenario": "En el móvil se mira el sábado, se lee «esta semana» y se pasa a la siguiente aunque el martes tenía huecos. Desde md, una semana de vacaciones no dice nada."
+        },
+        {
+          "id": "H17",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-navegable.tsx",
+          "linea": 25,
+          "descripcion": "La salida /agenda?fecha= no lleva centro, así que leerParametros toma el de la cookie.",
+          "escenario": "Con la cookie en el centro A, un técnico abre el alta como página, cambia el centro a B y guarda: llega a la semana correcta del centro A y no ve la cita."
+        },
+        {
+          "id": "H18",
+          "severidad": "BAJA",
+          "archivo": "docs/interfaz.md",
+          "linea": 467,
+          "descripcion": "El traslado de H4 (contrato:169) a un ticket de la cola de supabase/ no consta en ningún ticket ni en docs/state.md; solo dice «va aparte». Le toca al orquestador.",
+          "escenario": "T-028 se cierra con el criterio contrato:169 sin cumplir y nada en la cola lo recoge."
+        },
+        {
+          "id": "H19",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 216,
+          "descripcion": "volverAlElegido compara con la semana pintada (vista.calendario.desde) y no con la pedida (foco).",
+          "escenario": "Con el martes 6 a las 17:00 elegido, se pulsa «Semana siguiente» y, antes de que llegue, se cambia a un tipo de 90 minutos: no se comprueba el elegido y al guardar sale «Ese hueco acaba de ocuparse», que es falso."
+        }
+      ]
+    },
     {
       "ticket": "T-028",
       "corte": "B",
