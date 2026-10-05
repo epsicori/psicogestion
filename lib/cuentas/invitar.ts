@@ -6,7 +6,7 @@ import type { Sesion } from './tipos';
 
 export type ResultadoInvitacion =
   | { ok: true; perfilId: string; altasSinDar: string[] }
-  | { ok: false; motivo: string; mensaje: string };
+  | { ok: false; motivo: string; mensaje: string; altasSinDar?: string[] };
 
 /**
  * Invita a un perfil nuevo. Encadena cuatro pasos, EN ESTE ORDEN, y ninguno se salta:
@@ -59,6 +59,27 @@ export async function invitarPerfil(
     }
   }
 
+  // `preparar_invitacion()` no mira `centros.activo` y el formulario se cargó antes de que
+  // otro administrador pudiera cerrar un centro: se comprueba aquí, antes de crear la cuenta.
+  // Un principal cerrado dejaría a la persona con sus pacientes futuros en un centro cerrado.
+  if (entrada.centrosIds.length > 0) {
+    const { data: abiertos, error: errorCentros } = await sesion.supabase
+      .from('centros')
+      .select('id, activo')
+      .in('id', entrada.centrosIds);
+    const todosAbiertos =
+      !errorCentros &&
+      entrada.centrosIds.every((id) => abiertos?.some((c) => c.id === id && c.activo));
+    if (!todosAbiertos) {
+      if (errorCentros) console.error('invitarPerfil: no se pudo leer centros', errorCentros);
+      return {
+        ok: false,
+        motivo: 'centro',
+        mensaje: 'Un centro elegido ya no está abierto. Recarga la pantalla y revisa los centros.',
+      };
+    }
+  }
+
   const administracion = crearClienteAdministracion();
   const { data, error: errorInvitar } = await administracion.auth.admin.inviteUserByEmail(
     entrada.correo,
@@ -90,10 +111,13 @@ export async function invitarPerfil(
     // El perfil ya existe (paso 2 tuvo éxito): no se deshace nada, se reporta el fallo
     // residual de auditoría para que quede constancia por otra vía si hace falta.
     console.error('invitarPerfil: registrar_invitacion() falló tras crear el perfil', errorRegistrar);
+    // Las altas adicionales no se intentan, y se dice cuáles: la persona existe solo con su
+    // principal y nada más la llevaría a Ajustes › Altas de centro.
     return {
       ok: false,
       motivo: 'registro',
       mensaje: 'La cuenta se creó, pero no se pudo dejar constancia de la invitación.',
+      altasSinDar: entrada.centrosIds.filter((id) => id !== entrada.centroPrincipalId),
     };
   }
 

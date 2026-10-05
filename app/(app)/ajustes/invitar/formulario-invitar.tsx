@@ -37,6 +37,8 @@ const ROLES: OpcionDesplegable[] = [
 export function FormularioInvitar({ centros }: Props) {
   const [enviando, iniciarTransicion] = useTransition();
   const [mensaje, setMensaje] = useState('');
+  // La invitación salió pero quedan altas por dar: no se pinta como éxito.
+  const [aviso, setAviso] = useState(false);
 
   const {
     register,
@@ -92,10 +94,12 @@ export function FormularioInvitar({ centros }: Props) {
 
   const enviar = handleSubmit((datos) => {
     setMensaje('');
+    setAviso(false);
     iniciarTransicion(async () => {
       const estado = (await invitar(datos)) ?? ESTADO_INICIAL;
       aplicarErroresDelServidor(estado, setError);
       setMensaje(estado.mensaje ?? '');
+      setAviso(Boolean(estado.avisoPendiente));
     });
   });
 
@@ -197,11 +201,20 @@ export function FormularioInvitar({ centros }: Props) {
         {enviando ? t('comunes.cargando') : t('invitar.formulario.enviar')}
       </Button>
 
-      {mensaje && (
-        <p role="status" className="text-sm">
-          {mensaje}
-        </p>
-      )}
+      {/* La región se monta siempre y se rellena después: una región viva que nace con el
+          texto dentro no se anuncia de forma fiable. */}
+      <div role="status">
+        {mensaje && (
+          <p
+            data-aviso={aviso || undefined}
+            className={
+              aviso ? 'border-destructive text-destructive border-l-2 pl-3 text-sm font-medium' : 'text-sm'
+            }
+          >
+            {mensaje}
+          </p>
+        )}
+      </div>
     </form>
   );
 }

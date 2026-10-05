@@ -32,7 +32,10 @@ async function exigirAdministrador() {
   return sesion;
 }
 
-export async function invitar(datos: unknown): Promise<EstadoFormulario> {
+/** `avisoPendiente`: la invitación salió pero quedan altas por dar; la pantalla no lo pinta como éxito. */
+export type EstadoInvitacion = EstadoFormulario & { avisoPendiente?: true };
+
+export async function invitar(datos: unknown): Promise<EstadoInvitacion> {
   const sesion = await exigirAdministrador();
   if (!sesion) return { ...ESTADO_INICIAL, mensaje: t('ajustes.permisos.soloAdministrador') };
 
@@ -47,26 +50,35 @@ export async function invitar(datos: unknown): Promise<EstadoFormulario> {
   }
 
   const invitacion = await invitarPerfil(sesion, resultado.data);
+
+  // T-041: la invitación (o la cuenta) ya salió aunque alguna alta adicional no se diera; se
+  // dice cuáles, por su nombre, para que el administrador la dé desde Ajustes › Altas de centro.
+  async function nombresDeCentros(ids: string[]): Promise<string> {
+    const { data: centros } = await sesion!.supabase.from('centros').select('id, nombre').in('id', ids);
+    return ids.map((id) => centros?.find((centro) => centro.id === id)?.nombre ?? id).join(', ');
+  }
+
   if (!invitacion.ok) {
+    if (invitacion.altasSinDar && invitacion.altasSinDar.length > 0) {
+      return {
+        ...ESTADO_INICIAL,
+        mensaje: tCon('invitar.resultados.registroConAltasPendientes', {
+          mensaje: invitacion.mensaje,
+          centros: await nombresDeCentros(invitacion.altasSinDar),
+        }),
+      };
+    }
     return { ...ESTADO_INICIAL, mensaje: invitacion.mensaje };
   }
 
-  // T-041: la invitación ya salió aunque alguna alta adicional fallara; se dice cuáles,
-  // por su nombre, para que el administrador la dé desde Ajustes › Altas de centro.
   if (invitacion.altasSinDar.length > 0) {
-    const { data: centros } = await sesion.supabase
-      .from('centros')
-      .select('id, nombre')
-      .in('id', invitacion.altasSinDar);
-    const nombres = invitacion.altasSinDar.map(
-      (id) => centros?.find((centro) => centro.id === id)?.nombre ?? id,
-    );
     return {
       ...ESTADO_INICIAL,
       mensaje: tCon('invitar.resultados.exitoConAltasPendientes', {
         correo: resultado.data.correo,
-        centros: nombres.join(', '),
+        centros: await nombresDeCentros(invitacion.altasSinDar),
       }),
+      avisoPendiente: true,
     };
   }
 

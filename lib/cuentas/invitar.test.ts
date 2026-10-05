@@ -16,6 +16,7 @@ import type { Sesion } from './tipos';
  */
 const A = 'c0000000-0000-4000-8000-00000000000a';
 const B = 'c0000000-0000-4000-8000-00000000000b';
+const C = 'c0000000-0000-4000-8000-00000000000c';
 const PERFIL = 'b0000000-0000-4000-8000-000000000001';
 
 type Respuesta = { data?: unknown; error?: { code?: string; message?: string } | null };
@@ -23,6 +24,9 @@ type Respuesta = { data?: unknown; error?: { code?: string; message?: string } |
 function preparar(opciones: {
   preparar?: (args: { p_centro_id: string | null }) => Respuesta;
   darAlta?: (args: { p_centro_id: string }) => Respuesta;
+  registrar?: () => Respuesta;
+  /** Centros que la lectura de centros devuelve como cerrados (por defecto, ninguno). */
+  cerrados?: string[];
 } = {}) {
   const orden: string[] = [];
   const rpc = vi.fn(async (nombre: string, args: Record<string, unknown>) => {
@@ -34,9 +38,22 @@ function preparar(opciones: {
     if (nombre === 'dar_alta_centro' && opciones.darAlta) {
       r = opciones.darAlta(args as { p_centro_id: string });
     }
+    if (nombre === 'registrar_invitacion' && opciones.registrar) r = opciones.registrar();
     return { data: r.data ?? null, error: r.error ?? null };
   });
-  const sesion = { supabase: { rpc }, usuario: { id: 'adm' } } as unknown as Sesion;
+  // from('centros').select(...).in('id', ids): la comprobación de que siguen abiertos.
+  const from = vi.fn((tabla: string) => ({
+    select: () => ({
+      in: async (_columna: string, ids: string[]) => {
+        orden.push(`leer:${tabla}`);
+        return {
+          data: ids.map((id) => ({ id, activo: !(opciones.cerrados ?? []).includes(id) })),
+          error: null,
+        };
+      },
+    }),
+  }));
+  const sesion = { supabase: { rpc, from }, usuario: { id: 'adm' } } as unknown as Sesion;
 
   // El cliente de administración NO tiene `rpc`: si invitar.ts lo usara para dar un alta,
   // la prueba lanzaría en vez de pasar.
@@ -78,6 +95,7 @@ describe('invitarPerfil (T-041)', () => {
     expect(orden).toEqual([
       `preparar_invitacion:${A}`,
       `preparar_invitacion:${B}`,
+      'leer:centros',
       'inviteUserByEmail',
       `registrar_invitacion:${PERFIL}`,
       `dar_alta_centro:${A}`,
@@ -126,6 +144,72 @@ describe('invitarPerfil (T-041)', () => {
     const r = await invitarPerfil(sesion, entrada({ centrosIds: [A, B], centroPrincipalId: B }));
 
     expect(r).toEqual({ ok: true, perfilId: PERFIL, altasSinDar: [A] });
+  });
+
+  it('(c2) con dos altas adicionales y la primera fallando: se intenta la segunda y solo la primera queda sin dar', async () => {
+    const { sesion, rpc } = preparar({
+      darAlta: ({ p_centro_id }) =>
+        p_centro_id === B ? { error: { code: '23514', message: 'El centro está cerrado.' } } : {},
+    });
+
+    const r = await invitarPerfil(sesion, entrada({ centrosIds: [A, B, C], centroPrincipalId: A }));
+
+    expect(r).toEqual({ ok: true, perfilId: PERFIL, altasSinDar: [B] });
+    expect(rpc.mock.calls.filter(([n]) => n === 'dar_alta_centro').map(([, a]) => a)).toEqual([
+      { p_perfil_id: PERFIL, p_centro_id: B },
+      { p_perfil_id: PERFIL, p_centro_id: C },
+    ]);
+  });
+
+  it('(c3) con las dos adicionales fallando, las dos quedan sin dar', async () => {
+    const { sesion } = preparar({ darAlta: () => ({ error: { code: '23514', message: 'cerrado' } }) });
+
+    const r = await invitarPerfil(sesion, entrada({ centrosIds: [A, B, C], centroPrincipalId: A }));
+
+    expect(r).toEqual({ ok: true, perfilId: PERFIL, altasSinDar: [B, C] });
+  });
+
+  it('B-H3: si registrar_invitacion falla, la cuenta existe y se devuelven las altas adicionales que no se dieron', async () => {
+    const { sesion, rpc } = preparar({
+      registrar: () => ({ error: { code: 'XX000', message: 'transitorio' } }),
+    });
+
+    const r = await invitarPerfil(sesion, entrada({ centrosIds: [A, B, C], centroPrincipalId: A }));
+
+    expect(r).toEqual({
+      ok: false,
+      motivo: 'registro',
+      mensaje: 'La cuenta se creó, pero no se pudo dejar constancia de la invitación.',
+      altasSinDar: [B, C],
+    });
+    expect(rpc.mock.calls.some(([n]) => n === 'dar_alta_centro')).toBe(false);
+  });
+
+  it('B-H3 (gemela): sin centros adicionales, el fallo de registro no lista altas', async () => {
+    const { sesion } = preparar({
+      registrar: () => ({ error: { code: 'XX000', message: 'transitorio' } }),
+    });
+
+    const r = await invitarPerfil(sesion, entrada({ centrosIds: [A], centroPrincipalId: A }));
+
+    expect(r).toMatchObject({ ok: false, motivo: 'registro', altasSinDar: [] });
+  });
+
+  it.each([
+    ['el principal', [A, B], A, [A]],
+    ['una adicional', [A, B], A, [B]],
+  ])('B-H4: si %s se cerró entre la carga y el envío, no se crea la cuenta', async (_que, centrosIds, principal, cerrados) => {
+    const { sesion, inviteUserByEmail, rpc } = preparar({ cerrados });
+
+    const r = await invitarPerfil(sesion, entrada({ centrosIds, centroPrincipalId: principal }));
+
+    expect(r).toEqual({
+      ok: false,
+      motivo: 'centro',
+      mensaje: 'Un centro elegido ya no está abierto. Recarga la pantalla y revisa los centros.',
+    });
+    expect(inviteUserByEmail).not.toHaveBeenCalled();
+    expect(rpc.mock.calls.some(([n]) => n === 'dar_alta_centro')).toBe(false);
   });
 
   it('(d) con [] una sola preparar_invitacion con centro nulo y ningún dar_alta_centro', async () => {

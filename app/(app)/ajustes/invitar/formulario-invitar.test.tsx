@@ -189,3 +189,38 @@ describe('FormularioInvitar', () => {
     );
   });
 });
+
+describe('FormularioInvitar: región de resultado (T-041, B-H7)', () => {
+  beforeEach(() => invitar.mockReset());
+
+  async function enviarProfesional() {
+    const usuario = userEvent.setup();
+    render(<FormularioInvitar centros={CENTROS} />);
+    // La región viva existe ANTES de que haya mensaje.
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    await rellenarNombreYCorreo('Pau Profesional', 'pau@ejemplo.es');
+    await usuario.click(screen.getByRole('button', { name: 'Enviar invitación' }));
+  }
+
+  it('un aviso de altas pendientes se pinta como aviso, dentro de la región montada de antes', async () => {
+    invitar.mockResolvedValue({
+      mensaje: 'Invitación enviada. No se pudo dar el alta en Sur.',
+      avisoPendiente: true,
+    });
+    await enviarProfesional();
+
+    const texto = await screen.findByText('Invitación enviada. No se pudo dar el alta en Sur.');
+    expect(screen.getByRole('status')).toContainElement(texto);
+    expect(texto).toHaveAttribute('data-aviso', 'true');
+    expect(texto).toHaveClass('text-destructive');
+  });
+
+  it('GEMELA: un éxito limpio no lleva marca de aviso', async () => {
+    invitar.mockResolvedValue({ mensaje: 'Invitación enviada a pau@ejemplo.es' });
+    await enviarProfesional();
+
+    const texto = await screen.findByText('Invitación enviada a pau@ejemplo.es');
+    expect(texto).not.toHaveAttribute('data-aviso');
+    expect(texto).not.toHaveClass('text-destructive');
+  });
+});
