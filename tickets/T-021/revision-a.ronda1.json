@@ -1,0 +1,65 @@
+{
+  "ticket": "T-021",
+  "revisor": "A",
+  "altas": 1,
+  "medias": 5,
+  "bajas": 1,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "ALTA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 1011,
+      "descripcion": "grant update (caducidad) sobre bonos y la política bonos_modificacion (968-987): admin, profesional asignado y técnico del centro reescriben en sitio, sin límite y en ambos sentidos, una condición de un bono pagado. Choca con la regla 6 (nada económico se modifica). Lo manda el diseño (A.5 punto 12, PA.5), no el contrato; decide el propietario: un ADR que la excluya, o versionarla.",
+      "escenario": "Bono de 10 sesiones y 500 € que caduca el 2027-06-30 → TEC1 ejecuta update bonos set caducidad='2026-01-01' (entra: las sesiones pagadas quedan caducadas) y luego set caducidad=null (entra); la fila solo guarda el último valor y los anteriores quedan solo en auditoria."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 889,
+      "descripcion": "borradores_factura_alta no exige creado_por = auth.uid(); las altas de tarifas, bonos y cobros sí lo exigen.",
+      "escenario": "PRO1 ejecuta insert into borradores_factura (paciente_id, profesional_id, creado_por) values (P1, PRO1, PRO2) → la fila entra con creado_por = PRO2: autoría falsificada en el registro preparatorio del art. 29.2.j."
+    },
+    {
+      "id": "H3",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 714,
+      "descripcion": "fn_cerrar_tarifa no pone cota inferior a vigente_hasta: una tarifa se cierra en el pasado y una tarifa nueva ocupa ese pasado.",
+      "escenario": "Tarifa de 60 € desde el 2026-01-01 → PRO1 hace update vigente_hasta='2026-01-02' y luego insert de una tarifa de 90 € desde el 2026-01-02; las dos sentencias entran, y todo lo cobrado a 60 € desde enero figura a 90 €: un borrador viejo ya no se explica con su tarifa."
+    },
+    {
+      "id": "H4",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 854,
+      "descripcion": "Las políticas de tarifas_paciente (y el paso 0 del sellado, 300-311) usan es_profesional_asignado sin comparar el rol, a diferencia de borradores_factura y citas_modificacion: un técnico puesto como titular lee, da de alta y cierra tarifas.",
+      "escenario": "El ADM ejecuta update pacientes set profesional_id = TEC1 where id = P1 (entra) → TEC1 obtiene es_profesional_asignado(P1) = true y select count(*) from tarifas_paciente where paciente_id = P1 le devuelve 1, cuando el contrato dice cero para el técnico."
+    },
+    {
+      "id": "H5",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 891,
+      "descripcion": "En la rama del administrador de borradores_factura_alta, el profesional_id de la cabecera no se valida (ni rol ni asignación), y la lectura de la cabecera y de sus versiones se concede solo por profesional_id = auth.uid().",
+      "escenario": "El ADM crea un borrador de P1 con profesional_id = PRO2 (entra) → PRO2, que no tiene asignado a P1, ve la cabecera (count = 1) y con ella las versiones: destinatario, líneas y cita_id de P1. También entra una cabecera con profesional_id = TEC1."
+    },
+    {
+      "id": "H6",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 220,
+      "descripcion": "citas.bono_id se puede cambiar en una cita pasada y realizada: fn_proteger_cita_pasada no la congela, y el consumo derivado de un bono pagado se reescribe hacia atrás.",
+      "escenario": "Cita de P1 de hace 30 días, realizada, con un bono de 10 sesiones → PRO1 ejecuta update citas set bono_id = null (entra) y la sesión desaparece del consumo; con otro bono_id del mismo paciente, la sesión pasa a otro bono."
+    },
+    {
+      "id": "H7",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 526,
+      "descripcion": "El sellado no ata la cuota a las líneas: se acepta una línea exenta con tipo de IVA distinto de 0, y base o cuota negativas aunque todas las líneas sean positivas.",
+      "escenario": "Línea exento_sanitario con tipo_iva_centesimas = 2100 → se sella como versión 2. Línea general de 100 € al 21 % con base = -50, cuota_iva = 150 y total = 100 → se sella como versión 3. El error queda sellado en la cadena."
+    }
+  ]
+}

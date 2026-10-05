@@ -1133,3 +1133,1001 @@ Nada, como en A.7.
 - **El espejo, los envíos y las anotaciones**: nacen en T-026 (ADR-077, punto 5).
 - **`pendiente_paciente`**: qué cuenta se decide en T-023 (P3.d).
 - **Comprobar dentro del banco que el espejo no existe**: rompería al integrarse T-026.
+
+---
+
+## Ronda 2 (05-10-2026)
+
+La ronda 1 dio ALTA en los dos revisores (A-H1 y B-H1: la caducidad y la vigencia se
+reescribían con UPDATE). El propietario cerró la cuestión el 05-10-2026: **solo añadir**.
+
+Esta sección **manda sobre todo lo anterior** donde choque. La migración
+`20261011120000_economico_esquema.sql` no está fusionada (rama
+`worktree-agent-a19ecdb63f2c1e386`), así que se edita **en sitio**: ni migraciones nuevas ni
+`drop column`. Se reescribe la definición, porque ninguna base la ha aplicado fuera de la rama.
+
+Las referencias `mig:N` y `26:N` son números de línea en la rama a HEAD `d20e33d`.
+
+### R2.0 · Hechos verificados contra el código
+
+**`bonos` y la clave ajena**
+- `citas.bono_id` es una clave ajena por contrato. Lo dice el contrato T-021 en Tareas, apartado
+  `bonos`: «`citas.bono_id` … nula, `references bonos(id)`».
+- Por eso **`bonos` no puede llevar capa 1**, y `postgres` conserva su privilegio de dueño. La
+  regla de `.claude/rules/supabase.md` lo explica: «una tabla de solo adición no puede ser destino
+  de una clave ajena: FOR KEY SHARE exige UPDATE/DELETE sobre el padre».
+- Las capas 2 (disparador de fila) y 3 (TRUNCATE) sí son compatibles con la clave ajena.
+- Sin `CASCADE`, `TRUNCATE` sobre una tabla referenciada comprueba las claves ajenas
+  (`heap_truncate_check_FKs`) antes de disparar `BEFORE TRUNCATE`. Por eso
+  `truncate public.bonos` da `0A000` («cannot truncate a table referenced in a foreign key
+  constraint») y no llega a la capa 3. La capa 3 de `bonos` se prueba por catálogo (R2.1.5, L8b).
+
+**El catálogo `tablas_solo_adicion`**
+- `cobertura_solo_adicion()` y `10-solo-adicion.sql` recorren el catálogo.
+- La capa 1 se comprueba en `information_schema.table_privileges`: nadie, ni siquiera
+  `postgres`, puede tener UPDATE ni DELETE sobre la tabla entera.
+- `10-solo-adicion.sql:13-55` concede update y delete a `postgres`, exige que el disparador
+  bloquee y vuelve a retirarlos. Necesita **una fila** por tabla del catálogo, que pone
+  `01-fijacion.sql`.
+- Consecuencia:
+  - `bonos` **no entra** en el catálogo: su capa 1 aparecería rota.
+  - `tarifas_paciente` y `bonos_caducidades` **sí entran**: nadie las referencia.
+- `fn_impedir_modificacion()` lanza `42501` con el texto `La tabla % es de solo adición`
+  (`20260815192424:141`).
+
+**Orden de comprobaciones en un INSERT**
+- Primero los disparadores `BEFORE`, por orden alfabético; luego `WITH CHECK` de la RLS; luego
+  `CHECK` y `NOT NULL`; por último los índices únicos.
+- Ejemplo: un llamante que no puede leer, cuyo disparador *invoker* calcula «primera fila», muere
+  en la RLS (`42501`) antes de llegar al único (`23505`).
+
+**Disparadores `BEFORE UPDATE` sobre `citas`**
+- Su orden alfabético es: `bono_de_la_cita` (mig:250), `calcular_rango_bloqueante`,
+  `marcar_cita_desviada` y `proteger_cita_pasada` (`20260910120000:387`).
+- La congelación va dentro de `fn_bono_de_la_cita()`, así que salta antes que cualquier otra
+  guarda de la cita.
+- `fn_proteger_cita_pasada()` (`20261007120000:540-592`) **no** incluye `bono_id` en su lista.
+  Hoy el `bono_id` de una cita pasada se cambia sin límite: es A-H6.
+
+**Asignación, centros y zona horaria**
+- `es_profesional_asignado()` (`20260822160000:85-115`) no mira el rol, a propósito: resuelve
+  la fusión en un salto y exige que el lector esté activo.
+- `pacientes.profesional_id` admite un técnico (A-H4, medido por el revisor A).
+- `fn_rellenar_centro_paciente()` (`20260822160000:595-623`) solo rellena `centro_id` si llega
+  nulo.
+- `centros_actuales()` (`20260829120000:208-221`) filtra `hasta is null`.
+- Pertenencias que dejan otros módulos del banco:
+  - `06-centro.sql:15,23` da a TEC1 una pertenencia en CB y la cierra con
+    `hasta = current_date`. A partir de 06, TEC1 **no** tiene CB vigente.
+  - `06-centro.sql:37` da a PRO1 una pertenencia en CB **sin cerrar**.
+  - `19-nota-en-episodio.sql:57,570` añade a PRO1 más centros.
+  - Por eso la prueba del `centro_id` de la versión **no** puede usar CB: usa un centro propio
+    de 26, CE26.
+- `zona_horaria_centro(uuid)` (`20260822094547:1009-1025`):
+  - es `security definer`;
+  - nunca devuelve nulo (busca centro, luego organización, luego `Europe/Madrid`);
+  - tiene `grant execute` a `authenticated` (`:1344`).
+
+**Banco**
+- Corre en **una** transacción (`scripts/rls/README.md:83`), así que `now()` es fijo durante
+  todo el banco y «hoy en el centro» no cambia entre pruebas.
+- `pg_temp.sobre_borrador()` (`00-ayudantes.sql:274-317`) escribe el sobre sin espacios
+  (`"total_centimos":7000`). Calcula `numero_version` como máximo + 1 en el momento de la
+  llamada, y lee la cabecera: se llama como `postgres` y con `\gset` justo antes del insert.
+- `assert_lanza_codigo_msg` (`00-ayudantes.sql:137-160`) busca el fragmento con
+  `position(fragmento in sqlerrm)`. El banco ya usa estos mensajes del motor:
+  - `permission denied for table X` (`16-series.sql:1693`);
+  - `row-level security` (`19-nota-en-episodio.sql:610`).
+- Columnas que usan las fijaciones, verificadas:
+  - `pacientes (id, nombre, apellidos, profesional_id, centro_id)` (`01-fijacion.sql:102`);
+  - `centros (id, nombre)` (`01-fijacion.sql:46`);
+  - `tipos_terapia (id, nombre)` (26:107);
+  - `cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por)` (`01-fijacion.sql:235`);
+  - `bonos (id, paciente_id, sesiones_totales, importe, caducidad, creado_por)` (26:127).
+
+**Criterio 12**
+- Sobre la migración de la rama, `grep -niE "serie|numeracion|qr|verifactu|registro_facturacion"`
+  devuelve **solo la línea 5**. Es el comentario obligatorio «no se crean…
+  `series_facturacion`…».
+- Quitando los comentarios `--` (`sed -E 's/--.*$//'`) da `0`, y `grep -c '/\*'` da `0`.
+
+**Linter y otros módulos**
+- La lista del linter está en `scripts/lint-migraciones.ts:26-36` (`TABLAS_SOLO_ADICION`), con
+  su prueba exacta en `scripts/lint-migraciones.test.ts:202-215`. Los dos ficheros están en el
+  `territorio:`.
+- Ningún otro fichero compara la lista del linter con el catálogo (grep de
+  `TABLAS_SOLO_ADICION|tablas_solo_adicion` fuera de las migraciones).
+- `11-cobertura.sql:22-27` declara las políticas de T-021, entre ellas `bonos_modificacion` y
+  `tarifas_paciente_cierre`. Las dos desaparecen.
+- `28-altas-de-centro.sql` cuenta `perfiles_centros` en relativo (antes y después) o por ids
+  propios (`:179-201`). Una pertenencia de PRO1 en CE26, cerrada al final de 26, no le rompe
+  ningún recuento.
+- `27-exportaciones.sql` no lee `citas`, `bonos` ni `tarifas`.
+
+### R2.1 · Las tres piezas rediseñadas
+
+#### R2.1.1 · `tarifas_paciente`: la vigencia se cierra al abrir la siguiente
+
+**Tabla** (mig §4.1, en sitio)
+- Se **quitan** tres cosas:
+  - la columna `vigente_hasta`;
+  - `tarifas_paciente_vigencia_ck`;
+  - la exclusión `tarifas_paciente_sin_solape`. El intervalo pasa a derivarse, no a guardarse,
+    así que la exclusión ya no tiene sentido. Era el único uso de `extensions.gist_uuid_ops` en
+    esta migración; la extensión es anterior y no se toca.
+- Se **añade** `orden integer not null`, con
+  `constraint tarifas_paciente_orden_uq unique (paciente_id, tipo_terapia_id, orden)`.
+- El resto queda igual: `id`, `paciente_id`, `tipo_terapia_id`, `importe` con
+  `tarifas_paciente_importe_ck`, `regimen_iva` sin valor por defecto, `vigente_desde`,
+  `creada_por` y `creada_en default now()`.
+- `comment on table`: «Precio pactado con un paciente para un tipo de terapia, desde
+  vigente_desde. Solo adición: cambiar el precio es dar de alta otra tarifa, que cierra la
+  anterior en su vigente_desde. La vigencia completa (vigente_hasta) la deriva la vista
+  tarifas_paciente_vigencias. orden lo pone la base y desempata dos altas del mismo día; sin FK
+  entrante, por la capa 1 (T-021, ronda 2).»
+- `comment on column orden`: «Posición de alta dentro de (paciente, tipo): 1, 2, 3… La calcula
+  fn_alta_tarifa(); no se manda.»
+
+**Función `fn_alta_tarifa()` y disparador `alta_tarifa`**
+- Características de la función:
+  - `returns trigger`, `language plpgsql`;
+  - **security invoker** (sin `security definer`);
+  - `set search_path = ''`;
+  - `revoke execute … from public`.
+- Disparador: `alta_tarifa before insert on public.tarifas_paciente for each row`.
+- Cuerpo, en este orden:
+  1. `perform pg_advisory_xact_lock(hashtextextended('tarifa:' || new.paciente_id::text || ':' || new.tipo_terapia_id::text, 0));`
+  2. `select max(t.orden) into v_max from public.tarifas_paciente t where t.paciente_id = new.paciente_id and t.tipo_terapia_id = new.tipo_terapia_id;`
+  3. `new.orden := coalesce(v_max, 0) + 1;`. Se hace siempre y para todo rol: lo que mande el
+     llamante se pisa.
+  4. Si `v_max is not null and current_setting('role', true) in ('authenticated', 'anon')`:
+     - `select p.centro_id into v_centro from public.pacientes p where p.id = new.paciente_id;`
+     - `v_hoy := (now() at time zone public.zona_horaria_centro(v_centro))::date;`
+     - si `new.vigente_desde < v_hoy`, lanza
+       `raise exception 'Una tarifa que sustituye a otra no puede empezar antes de hoy (fecha del centro): la anterior ya se aplicó (T-021)' using errcode = '23514';`
+       Fragmento único: **`no puede empezar antes de hoy`**.
+  5. `return new;`
+- **Por qué invoker.** Bajo la RLS del llamante, quien no puede leer las tarifas del paciente ve
+  `v_max` nulo. No hay guarda de fecha y la RLS lo rechaza con `42501`. Así no hay oráculo de
+  existencia (ADR-071.5) ni hace falta replicar permisos.
+  - Esto solo vale mientras `tarifas_paciente_lectura` tenga la misma condición que
+    `tarifas_paciente_alta`, sin contar `creada_por`. Es el invariante **I-T1** (R2.4).
+- **Por qué la primera fila de cada par queda exenta.** No cierra nada: fijar desde enero el
+  precio pactado no reescribe ningún hecho. La segunda y siguientes cierran la anterior; con una
+  fecha pasada reescribirían lo ya cobrado, que es A-H3 y B-H2.
+- **Por qué `postgres` y `service_role` quedan exentos.** Son la fijación y el futuro
+  importador, igual que en el paso 6.5 del sellado.
+
+**Vista `tarifas_paciente_vigencias`** (nueva, mig §7.3)
+- `with (security_invoker = true)`.
+- Columnas, en este orden:
+  - `t.id as tarifa_id`, `t.paciente_id`, `t.tipo_terapia_id`, `t.importe`, `t.regimen_iva`,
+    `t.vigente_desde`;
+  - `lead(t.vigente_desde) over (partition by t.paciente_id, t.tipo_terapia_id order by t.vigente_desde, t.orden) as vigente_hasta`;
+  - `t.orden`.
+- Semántica: el intervalo es `[vigente_desde, vigente_hasta)`, y `null` significa abierto.
+  - Una tarifa sustituida el mismo día queda con `vigente_hasta = vigente_desde`: es un
+    intervalo vacío, nunca estuvo vigente.
+  - En una fecha X, la tarifa vigente es la única con
+    `vigente_desde <= X < coalesce(vigente_hasta, 'infinity')`.
+- Esta es la `vigente_hasta` que nombra el contrato: existe, derivada y no editable, como pide
+  la decisión del propietario.
+- `comment on view`: «Vigencia de cada tarifa: vigente_hasta es el vigente_desde de la siguiente
+  del mismo paciente y tipo (null si es la última). security_invoker: ve lo que deja la RLS de
+  tarifas_paciente, que es por paciente entero, así que lead() nunca salta una fila oculta.»
+- `revoke all … from public, anon, authenticated, service_role;` y
+  `grant select … to authenticated;`.
+
+**Se elimina**
+- `fn_cerrar_tarifa()` (mig §6.3) y su disparador `cerrar_tarifa` (mig §8.3).
+- La política `tarifas_paciente_cierre`.
+- `grant update (vigente_hasta)`.
+- En la cabecera de la migración, «fn_cerrar_tarifa()» pasa a ser «fn_alta_tarifa()».
+
+**Solo adición, tres capas**
+- `revoke update, delete, truncate on table public.tarifas_paciente from postgres;`
+- `impedir_modificacion_tarifas_paciente` (`before update or delete … for each row`) e
+  `impedir_truncado_tarifas_paciente` (`before truncate … for each statement`), los dos con
+  `fn_impedir_modificacion()`.
+- Una fila en `tablas_solo_adicion` con el motivo: «Lo que se pactó cobrar no se reescribe:
+  cambiar el precio es una tarifa nueva que cierra la anterior al empezar (T-021, ronda 2).»
+
+**Políticas, con el rol en positivo (A-H4)**
+```
+tarifas_paciente_lectura  for select using:
+  (select public.rol_actual()) = 'administrador'
+  or ((select public.rol_actual()) = 'profesional_sanitario' and public.es_profesional_asignado(paciente_id))
+tarifas_paciente_alta     for insert with check:
+  creada_por = (select auth.uid()) and ( <la misma condición> )
+```
+
+**Grants**
+- `grant select on table public.tarifas_paciente to authenticated;`
+- `grant insert (id, paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por) on public.tarifas_paciente to authenticated;`
+
+**Auditoría**: `auditar_tarifas_paciente` se queda, con `fn_auditar('id')`.
+
+#### R2.1.2 · `bonos` y `bonos_caducidades`: la caducidad vigente es la última fila
+
+**`bonos`** (mig §4.5)
+- La columna `caducidad` **se queda**: es la caducidad **inicial**, la del alta.
+- `comment on table`: «Bono de N sesiones de un paciente. Solo adición: ninguna columna se
+  modifica. Las sesiones consumidas se derivan de las citas realizadas con este bono, y la
+  caducidad vigente es la última fila de bonos_caducidades (o esta columna si no hay ninguna).
+  Las dos las da bonos_consumo (T-021, ronda 2).»
+- `comment on column caducidad`: «Caducidad inicial, la del alta. Un cambio posterior es una
+  fila en bonos_caducidades; esta columna no se toca.»
+- Se **eliminan** `grant update (caducidad)` y la política `bonos_modificacion`.
+- **Capas 2 y 3, sin capa 1 y fuera del catálogo** (R2.0):
+  - `impedir_modificacion_bonos` (`before update or delete … for each row`);
+  - `impedir_truncado_bonos` (`before truncate … for each statement`);
+  - las dos con `fn_impedir_modificacion()`.
+  - **No** hay `revoke … from postgres`: lo necesitan las claves ajenas de `citas.bono_id` y de
+    `bonos_caducidades.bono_id`.
+- Políticas `bonos_lectura` y `bonos_alta`:
+  - la rama del profesional pasa a
+    `((select public.rol_actual()) = 'profesional_sanitario' and public.es_profesional_asignado(paciente_id))`;
+  - las ramas de administrador y de técnico quedan como están.
+- Grants:
+  - `grant select on table public.bonos to authenticated;`
+  - `grant insert (id, paciente_id, sesiones_totales, importe, caducidad, creado_por) on public.bonos to authenticated;`
+    (sin `creado_en`).
+
+**`bonos_caducidades`** (tabla nueva, mig §4.6, justo después de `bonos`)
+```
+id              uuid primary key default gen_random_uuid()
+bono_id         uuid not null references public.bonos (id)
+numero          integer not null
+caducidad       date                       -- null = sin caducidad desde este cambio
+registrada_por  uuid not null references public.perfiles (id)
+registrada_en   timestamptz not null default now()
+constraint bonos_caducidades_numero_uq unique (bono_id, numero)
+```
+- `enable row level security`.
+- `comment on table`: «Cada cambio de caducidad de un bono, de solo adición. Vale la de mayor
+  numero, y null significa sin caducidad. Prorrogar o acortar un bono es una fila nueva, nunca
+  un UPDATE. Sin FK entrante, por la capa 1 (T-021, ronda 2).»
+- La fecha **no** se valida contra hoy ni contra el alta (ver «Lo que no entra»).
+
+**Función `fn_numerar_caducidad_bono()` y disparador `numerar_caducidad_bono`**
+- La función es `language plpgsql`, **security invoker**, con `set search_path = ''` y
+  `revoke execute … from public`.
+- Disparador: `numerar_caducidad_bono before insert on public.bonos_caducidades for each row`.
+- Cuerpo:
+  1. `perform pg_advisory_xact_lock(hashtextextended('caducidad_bono:' || new.bono_id::text, 0));`
+  2. `select max(c.numero) into v_max from public.bonos_caducidades c where c.bono_id = new.bono_id;`
+  3. `new.numero := coalesce(v_max, 0) + 1;`
+  4. `return new;`
+- Es invoker por la misma razón que `fn_alta_tarifa()`. Su invariante es **I-B1** (R2.4).
+
+**Solo adición, tres capas**
+- `revoke update, delete, truncate on table public.bonos_caducidades from postgres;`
+- `impedir_modificacion_bonos_caducidades` e `impedir_truncado_bonos_caducidades`.
+- Una fila en `tablas_solo_adicion` con el motivo: «La caducidad de un bono pagado no se
+  reescribe: cada cambio es una fila y la vigente es la última (T-021, ronda 2).»
+
+**Políticas**
+```
+bonos_caducidades_lectura  for select using:
+  exists (select 1 from public.bonos b where b.id = bono_id)
+bonos_caducidades_alta     for insert with check:
+  registrada_por = (select auth.uid())
+  and exists (select 1 from public.bonos b where b.id = bono_id)
+```
+- El `exists` corre bajo la RLS de `bonos`, la del contrato: administrador, profesional (con el
+  rol en positivo) o técnico del centro.
+
+**Grants**
+- `revoke all on table public.bonos_caducidades from public, anon, authenticated, service_role;`
+- `grant select on table public.bonos_caducidades to authenticated;`
+- `grant insert (id, bono_id, caducidad, registrada_por) on public.bonos_caducidades to authenticated;`
+
+**Auditoría**
+- `auditar_bonos_caducidades after insert or update or delete … for each row execute function public.fn_auditar('id');`
+
+**Vista `bonos_consumo`** (mig §7.2)
+- Gana una **quinta columna al final**, `caducidad`.
+- Sigue siendo definer con `security_barrier`. Las cuatro columnas actuales y su orden no
+  cambian.
+```
+select b.id as bono_id, b.paciente_id, b.sesiones_totales,
+       (… sesiones_consumidas, igual que hoy …) as sesiones_consumidas,
+       (case when u.numero is not null then u.caducidad else b.caducidad end) as caducidad
+  from public.bonos b
+  left join lateral (
+    select c.numero, c.caducidad from public.bonos_caducidades c
+     where c.bono_id = b.id order by c.numero desc limit 1
+  ) u on true
+ where <el where de hoy, con la rama del profesional en positivo>
+```
+- **No** sirve `coalesce(u.caducidad, b.caducidad)`: si el último cambio es `null` («sin
+  caducidad»), debe ganar sobre la caducidad inicial. Lo prueba E16c.
+- En `comment on view`, añadir «y la caducidad vigente (la última fila de bonos_caducidades, o
+  la inicial)».
+
+#### R2.1.3 · `citas.bono_id`: congelado si la cita está realizada o es pasada
+
+- En **`fn_bono_de_la_cita()`** (mig:222-247) se añade como **primera** comprobación, antes de la
+  del paciente:
+  ```
+  if tg_op = 'UPDATE'
+     and old.bono_id is distinct from new.bono_id
+     and (old.estado = 'realizada'::public.estado_cita or old.fin <= now()) then
+    raise exception 'La cita realizada o pasada ya no se cambia de bono: el consumo de un bono pagado no se reescribe (T-021)'
+      using errcode = '42501';
+  end if;
+  ```
+  - Fragmento único: **`realizada o pasada ya no se cambia de bono`**.
+  - Vale para **todo rol**, `postgres` incluido: la regla 6 la impone la base, no la aplicación.
+  - Se miran `old.estado` y `old.fin`, nunca `new.*`. Así el llamante no puede abrirse paso
+    cambiando el estado o la hora en la misma sentencia.
+- Después sigue la comprobación de paciente que ya existe (`23514`). Que el bono exista lo sigue
+  garantizando la clave ajena (`23503`).
+- La definición del disparador no cambia (`before insert or update of bono_id, paciente_id`).
+- Un `INSERT` de una cita pasada con bono (el importador) sigue permitido, porque
+  `tg_op = 'INSERT'`.
+- Comentarios:
+  - `citas.bono_id`: «Bono del que descuenta esta cita cuando se realiza (T-021, D8). Debe ser
+    del mismo paciente, y queda congelado en cuanto la cita está realizada o ha terminado:
+    cambiarlo reescribiría el consumo de un bono pagado (ronda 2).»
+  - En la función se añade: «y 42501 si la cita (old) está realizada o ya terminó y el bono
+    cambia».
+- `grant update (bono_id) on public.citas to authenticated` **se queda**: en una cita futura no
+  realizada, el bono se asigna, se cambia y se quita.
+
+#### R2.1.4 · Fijación
+
+**`01-fijacion.sql`**
+
+Ids nuevos, junto a `BORR1` y `COB1`:
+```
+\set TIPO21 '\'a0210003-0000-4000-8000-000000000001\''
+\set TAR21  '\'a0210004-0000-4000-8000-000000000001\''
+\set BONO21 '\'a0210005-0000-4000-8000-000000000001\''
+\set CAD21  '\'a0210006-0000-4000-8000-000000000001\''
+```
+Después del insert del cobro COB1, como `postgres`:
+```
+-- T-021 ronda 2 · una fila en tarifas_paciente y otra en bonos_caducidades, que entran en
+-- tablas_solo_adicion: sin ellas 10-solo-adicion falla con "debía lanzar y no lanzó".
+insert into public.tipos_terapia (id, nombre) values (:TIPO21, 'Terapia de la fijación T-021');
+insert into public.tarifas_paciente (id, paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por)
+  values (:TAR21, :P1, :TIPO21, 60.00, 'exento_sanitario', date '2026-01-01', :ADM);
+insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad, creado_por)
+  values (:BONO21, :P1, 5, 275.00, null, :ADM);
+insert into public.bonos_caducidades (id, bono_id, caducidad, registrada_por)
+  values (:CAD21, :BONO21, date '2031-12-31', :ADM);
+```
+
+**`26-economico.sql`, ids nuevos** (prefijo `a0260001-`)
+```
+\set TAR3    '\'a0260001-0000-4000-8000-0000000000c3\''
+\set TAR4    '\'a0260001-0000-4000-8000-0000000000c4\''
+\set TAR5    '\'a0260001-0000-4000-8000-0000000000c5\''
+\set TARTEC  '\'a0260001-0000-4000-8000-0000000000c9\''
+\set BONO3   '\'a0260001-0000-4000-8000-0000000000d3\''
+\set BONOTEC '\'a0260001-0000-4000-8000-0000000000d9\''
+\set COBTEC  '\'a0260001-0000-4000-8000-0000000000e9\''
+\set CITAPAS '\'a0260001-0000-4000-8000-0000000000f5\''
+\set BORR3   '\'a0260001-0000-4000-8000-0000000000b3\''
+\set BORR4   '\'a0260001-0000-4000-8000-0000000000b4\''
+\set BORRTEC '\'a0260001-0000-4000-8000-0000000000b9\''
+\set PTEC    '\'a0260001-0000-4000-8000-000000000201\''
+\set PCE26   '\'a0260001-0000-4000-8000-000000000202\''
+\set CE26    '\'a0260001-0000-4000-8000-000000000301\''
+```
+Se repiten también `\set TIPO21`, `\set TAR21`, `\set BONO21` y `\set CAD21`, como ya se hace con
+`BORR1` y `COB1`.
+
+**Fijación propia de 26**, como `postgres`, después de la actual (26:105-145)
+1. `insert into public.centros (id, nombre) values (:CE26, 'Centro económico 26');`
+2. Dos pacientes:
+   `insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values (:PTEC, 'Teo', 'T021 Titular técnico', :TEC1, :CB), (:PCE26, 'Ceci', 'T021 Centro E', :PRO1, :CE26);`
+   - PTEC es el escenario de A-H4: el técnico TEC1 figura como `profesional_id`, en un centro
+     donde no tiene pertenencia vigente.
+3. Tarifa, bonos y cobro:
+   - tarifa `:TARTEC`: PTEC, TIPO26, 50.00, `'exento_sanitario'`, `date '2026-01-01'`, ADM;
+   - bono `:BONO3`: P1, 2 sesiones, 110.00, caducidad `date '2030-01-31'`, ADM;
+   - bono `:BONOTEC`: PTEC, 4 sesiones, 200.00, sin caducidad, ADM;
+   - cobro `:COBTEC`: PTEC, 50.00, `date '2026-10-02'`, `'efectivo'`, ADM.
+4. Cabeceras:
+   - `:BORR3` (P1, PRO1, `creado_por` PRO1) y `:BORR4` (PCE26, PRO1, PRO1) pasan el disparador
+     nuevo.
+   - `:BORRTEC` (PTEC, TEC1, TEC1) entra **con el disparador desactivado**:
+     ```
+     alter table public.borradores_factura disable trigger validar_cabecera_borrador;
+     insert into public.borradores_factura (id, paciente_id, profesional_id, creado_por) values (:BORRTEC, :PTEC, :TEC1, :TEC1);
+     alter table public.borradores_factura enable trigger validar_cabecera_borrador;
+     ```
+     Representa una cabecera anterior a la guarda. Sirve para probar que el paso 0 del sellado
+     no se apoya en la cabecera.
+5. Cita pasada `:CITAPAS`, programada y con `bono_id = :BONO3`:
+   - paciente P1, profesional PRO1, centro CA, zona `'Europe/Madrid'`;
+   - inicio `((current_date - 37) + time '07:05') at time zone 'Europe/Madrid'`;
+   - fin `((current_date - 37) + time '07:55') at time zone 'Europe/Madrid'`.
+   - Las 07:05 evitan las citas de PRO1 de otros módulos. Si aun así choca con el sin-solape del
+     profesional (`23P01`), se baja a `current_date - 38`. Es la única libertad de esta fijación.
+6. Captura de «hoy»:
+   `select (now() at time zone public.zona_horaria_centro(:CA))::date as hoy_ca, (now() at time zone public.zona_horaria_centro(:CB))::date as hoy_cb \gset`
+7. Precondiciones, con `pg_temp.assert`:
+   - «26.fij · TEC1 no tiene CB vigente»:
+     `not exists (select 1 from public.perfiles_centros where perfil_id = :TEC1 and centro_id = :CB and hasta is null)`;
+   - «26.fij · PRO1 no pertenece a CE26»:
+     `not exists (select 1 from public.perfiles_centros where perfil_id = :PRO1 and centro_id = :CE26)`;
+   - «26.fij · el disparador de la cabecera está activo»:
+     `(select tgenabled from pg_trigger where tgrelid = 'public.borradores_factura'::regclass and tgname = 'validar_cabecera_borrador') = 'O'`.
+
+**Limpieza final de 26**
+- Se añade:
+  `update public.perfiles_centros set hasta = current_date where perfil_id = :PRO1 and centro_id = :CE26 and hasta is null;`
+- La lista de citas que se cancelan no cambia: CITAPAS es pasada y no molesta en la agenda de
+  los módulos siguientes.
+
+#### R2.1.5 · Banco 26: qué cambia, prueba por prueba
+
+Toda negativa usa `assert_lanza_codigo_msg` con código y fragmento, salvo que se diga otra cosa,
+y nombra su gemela positiva. Cada sobre se construye justo antes de usarlo, como `postgres`, con
+`pg_temp.sobre_borrador()` y `\gset`.
+
+**A · Solo adición** (tras A9; como ADM salvo donde se indica)
+- A10, A11 y A12: `update … set importe = 1 where id = :TAR21`, `delete` y `truncate` sobre
+  `tarifas_paciente` dan `42501`.
+- A13, A14 y A15: lo mismo sobre `bonos_caducidades`, con `where id = :CAD21`, dan `42501`.
+- A16: `update public.bonos set importe = 1 where id = :BONO1` da `42501`,
+  `permission denied for table bonos`.
+- A17, como **postgres**: `update public.bonos set importe = importe where id = :BONO1` da
+  `42501`, `es de solo adición`. Es la capa 2, porque `postgres` conserva el UPDATE.
+- A18, como **postgres**: `delete from public.bonos where id = :BONOTEC` da `42501`,
+  `es de solo adición`. El disparador `BEFORE` salta antes que la clave ajena.
+- A19, como **postgres**: `truncate public.bonos` da `0A000` (con `assert_lanza_codigo`). Deja
+  escrito que, sin `CASCADE`, la clave ajena ya lo impide. La capa 3 se prueba en L8b.
+
+**B · Cadena**: nueva **B9b**, que cierra B-H4 y mata M6a
+- Va dentro del bloque con los cerrojos levantados: después de B13 y antes del
+  `enable trigger`.
+```
+select contenido_canonico as sobre_b2v1, encode(huella, 'hex') as huella_b2v1
+  from public.borradores_factura_versiones where borrador_id = :BORR2 and numero_version = 1 \gset
+update public.borradores_factura_versiones
+   set contenido_canonico = replace(contenido_canonico, '"total_centimos":7000', '"total_centimos":7100')
+ where borrador_id = :BORR2 and numero_version = 1;
+select pg_temp.assert(
+  (select position('"total_centimos":7100' in v.contenido_canonico) > 0
+     from public.borradores_factura_versiones v where v.borrador_id = :BORR2 and v.numero_version = 1),
+  '26.B9b.0 · control: el replace alteró el sobre');
+update public.borradores_factura_versiones v
+   set huella = extensions.digest(convert_to(v.contenido_canonico, 'UTF8') || v.huella_anterior, 'sha256')
+ where v.borrador_id = :BORR2 and v.numero_version = 1;
+select pg_temp.assert(
+  (select array_agg(r.motivo order by r.motivo) from public.verificar_cadena_borrador(:BORR2) r) = array['sobre_no_coincide_con_fila'],
+  '26.B9b · total del sobre alterado y huella recalculada: solo sobre_no_coincide_con_fila (mata M6a)');
+update public.borradores_factura_versiones
+   set contenido_canonico = :'sobre_b2v1', huella = decode(:'huella_b2v1', 'hex')
+ where borrador_id = :BORR2 and numero_version = 1;
+select pg_temp.assert((select count(*) from public.verificar_cadena_borrador(:BORR2)) = 0, '26.B9c · restaurado: 0 discrepancias');
+```
+- BORR2 tiene una sola versión, así que ningún eslabón posterior delata la huella recalculada.
+  La única discrepancia posible es `total_centimos` frente a `total`.
+- La columna `motivo` de `verificar_cadena_borrador()` está verificada (mig:577).
+
+**C · Cobros**: nueva **C8**
+- TEC1 ejecuta
+  `insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por, registrado_en) values (:P1, 5.00, current_date, 'efectivo', :TEC1, timestamptz '2025-01-01 00:00:00+00')`.
+- Da `42501`, `permission denied for table cobros`.
+- Gemela: el alta de cobro de TEC1 que ya hay en C.
+
+**D · Consumo**: sin cambios. D1 asigna bonos con las citas todavía programadas y futuras, antes
+de la congelación.
+
+**E · Bonos** (sustituye E16, E18 y E18b; E13, E14, E15 y E17 se quedan)
+- **E16**: TEC1 inserta en `bonos_caducidades (bono_id, caducidad, registrada_por)` los valores
+  `(:BONO1, date '2032-06-30', :TEC1)`. Debe pasar (`assert_no_lanza`).
+- **E16b**: TEC1 lee `(select caducidad from public.bonos_consumo where bono_id = :BONO1)` y
+  obtiene `date '2032-06-30'`.
+- **E16c**: TEC1 inserta otra fila `(:BONO1, null, :TEC1)`, que pasa. Después:
+  - `bonos_consumo.caducidad` de BONO1 es **null**: gana la última fila aunque sea nula;
+  - el `array_agg(numero order by numero)` de BONO1 en `bonos_caducidades`, leído por TEC1, es
+    `'{1,2}'::int[]`.
+- **E16d**: TEC1 `update public.bonos set caducidad = date '2033-01-01' where id = :BONO1` da
+  `42501`, `permission denied for table bonos`. TEC1 **sí** ve ese bono: el fallo es de
+  privilegio, no de RLS.
+- **E18**: TEC1, caducidad para `:BONO2` (de otro centro): `42501`, `row-level security`.
+- **E18b**, como ADM: `bonos_consumo.caducidad` de BONO2 es null, y BONO2 no tiene filas en
+  `bonos_caducidades`.
+- **E18c**: TEC1, caducidad para BONO1 con `registrada_por = :ADM`: `42501`,
+  `row-level security`.
+- **E18d**: TEC1, caducidad para BONO1 mandando `numero` (5): `42501`,
+  `permission denied for table bonos_caducidades`.
+- **E18e**: lo mismo mandando `registrada_en`: el mismo `42501` con el mismo fragmento.
+- Gemela de E18c, E18d y E18e: E16.
+- **E18f**: PRO1, caducidad para BONO1: pasa. PRO1, caducidad para BONO2: `42501`,
+  `row-level security`.
+- **E18g**: TEC1 inserta un bono de P1 mandando
+  `creado_en = timestamptz '2025-01-01 00:00:00+00'`: `42501`,
+  `permission denied for table bonos`. Gemela: E13.
+- **E19**, como ADM: `bonos_consumo.caducidad` de BONO3, sin filas en `bonos_caducidades`, es
+  `date '2030-01-31'`, la inicial.
+
+**F · Técnico**
+- F8 pasa a
+  `array['bono_id', 'paciente_id', 'sesiones_totales', 'sesiones_consumidas', 'caducidad']`.
+- Nueva **F3v**: TEC1 cuenta `tarifas_paciente_vigencias where tarifa_id = :TAR1` y obtiene 0.
+  Su gemela **F3vg**, como ADM, obtiene 1.
+- F10 añade `tarifas_paciente_vigencias` con `security_invoker=true`.
+
+**G · Cabecera**: G8 a G11 se quedan. Las pruebas nuevas van en N.
+
+**H · Auditoría**: H1 pasa a decir «las seis tablas» y añade dos `exists (…)` sobre
+`auditoria`:
+- `tabla = 'bonos_caducidades'`, `operacion = 'INSERT'`, `registro_id = :CAD21`;
+- `tabla = 'tarifas_paciente'`, `operacion = 'INSERT'`, `registro_id = :TAR21`.
+
+**J · Sellado** (como `postgres`, salvo J.auth, como hoy). Las pruebas nuevas van tras J40.
+- **J27b**: BORR1, una línea
+  `linea_borrador('Sesión de psicoterapia', 1, 6000, 'exento_sanitario', 2100)`, con base 60,
+  cuota 0 y total 60. Da `23514`, `una línea exento_sanitario lleva tipo_iva_centesimas 0`.
+  Gemela: B1.
+- **J27c**: BORR1, una línea `linea_borrador('Informe pericial', 1, 12100, 'general', 0)`, con
+  base 121, cuota 0 y total 121. Da `23514`,
+  `una línea general lleva tipo_iva_centesimas mayor que 0`. Gemela: B2.
+- **J31b**: BORR1, una línea `linea_borrador('Informe pericial', 1, 10000, 'general', 2100)`,
+  con base 100, cuota 0 y total 100. Da `23514`,
+  `con líneas en régimen general la cuota de IVA no puede ser 0`. Gemela: B2.
+- **J28b**: BORR1, una línea `linea_borrador(E'\t\n', 1, 6000)`. Da `23514`,
+  `El concepto de una línea`. Gemela: B1.
+  - Antes se comprueba con una aserción que el `concepto` del sobre es exactamente `E'\t\n'`.
+    Debe escribirse con el escape E de SQL, nunca con un carácter crudo
+    (`.claude/rules/supabase.md`, sobre el NUL).
+- **J41**: BORR3 v1 con `centro_id = :CE26`, coherente entre sobre y fila. Da `23514`,
+  `no es del paciente ni del profesional`: P1 está en CA y PRO1 no tiene CE26.
+- **J41p**: BORR4 v1 (PCE26) con `centro_id = :CE26`: pasa. Prueba la rama «centro del
+  paciente», porque PRO1 sigue sin CE26.
+- Después, como `postgres`:
+  `insert into public.perfiles_centros (perfil_id, centro_id, principal) values (:PRO1, :CE26, false);`
+- **J41q**: BORR3 v1 con `centro_id = :CE26`: pasa. Prueba la rama «centro del profesional»,
+  porque P1 sigue en CA.
+- **J42**: BORR1, una línea `linea_borrador('Informe pericial', 1, 10000, 'general', 2100)`,
+  con base −50.00, cuota 150.00 y total 100.00. Da `23514`,
+  `borradores_factura_versiones_signo_ck` (B-H6).
+- **J42g**: BORR3 v2 sin `centro_id`, una línea
+  `linea_borrador('Devolución de una sesión', 1, -6000)`, con base −60, cuota 0 y total −60.
+  Pasa: el total negativo sigue disponible para rectificar.
+
+**K · Bono y tarifas** (como ADM salvo donde se indica)
+- Sustituye K1, K3, K4, K5, K6 y K12. K2, K7, K9, K10, K11 y K13 se quedan, con los ajustes de
+  fecha que se indican.
+- **K1**: `update public.citas set bono_id = :BONO2 where id = :CITA3` da `23514`,
+  `el bono es de otro paciente`. CITA3 está cancelada y es futura, así que la congelación no
+  interviene. Antes la prueba usaba CITA1, que ahora está realizada y daría `42501`.
+- **K3**: tarifa de P1/TIPO26 desde `(:'hoy_ca'::date - 120)`. Da `23514`,
+  `no puede empezar antes de hoy`.
+- **K4** (sustituye a la K4 que cerraba en el pasado): tarifa `:TAR3` de P1/TIPO26, 65.00, desde
+  `(:'hoy_ca'::date + 30)`. Pasa. Después, en `tarifas_paciente_vigencias`, como ADM:
+  - TAR1 tiene `vigente_hasta = :'hoy_ca'::date + 30`;
+  - TAR3 tiene `vigente_hasta is null`.
+- **K5**: tarifa `:TAR4` de P1/TIPO26, 66.00, desde el **mismo** día (`:'hoy_ca'::date + 30`).
+  Pasa. Después:
+  - TAR3 tiene `vigente_hasta = vigente_desde`;
+  - TAR4 tiene `vigente_hasta is null`;
+  - el `orden` de TAR1, TAR3 y TAR4 es 1, 2 y 3.
+- **K5b**: tarifa `:TAR5` de P2/TIPO26 desde `(:'hoy_cb'::date - 1)`. Da `23514`,
+  `no puede empezar antes de hoy`.
+- **K5c**: la misma tarifa desde `:'hoy_cb'::date`. Pasa, y mata el cambio de `<` por `<=`.
+- **K6**: `update public.tarifas_paciente set vigente_desde = vigente_desde + 1 where id = :TAR1`
+  da `42501`, `permission denied for table tarifas_paciente`.
+- **K7** se queda: `update importe` da `42501`.
+- **K8**: la fecha pasa a `(:'hoy_cb'::date + 400)` y la aserción a
+  `assert_lanza_codigo_msg … '23514', 'tarifas_paciente_importe_ck'`. Así no puede quedar verde
+  por la guarda de fecha.
+- **K9**: la fecha pasa a `(:'hoy_cb'::date + 400)`; sigue esperando `23502`.
+- **K10** se queda: PRO1, PMENOR, `date '2026-01-01'`. Pasa, porque es la primera fila del par
+  (exención).
+- **K10b**: PRO1, PMENOR, el mismo tipo, `date '2026-02-01'`. Da `23514`,
+  `no puede empezar antes de hoy`: ya es la segunda fila.
+- **K11** y **K13** se quedan con `42501`. Ninguno de los dos ve las tarifas del paciente, así
+  que `v_max` es nulo, no hay guarda de fecha y los rechaza la RLS.
+- **K12** (sustituida): tarifa mandando `creada_en` da `42501`,
+  `permission denied for table tarifas_paciente`. Mandando `orden`, lo mismo. Gemela: K4.
+- **K14**: `update public.citas set bono_id = null where id = :CITAPAS` da `42501`,
+  `realizada o pasada ya no se cambia de bono`. Es la rama «pasada»: CITAPAS está programada.
+- **K15**: `update public.citas set bono_id = null where id = :CITA1` da el mismo `42501`. Es la
+  rama «realizada»: CITA1 es futura.
+- **K16**: `update public.citas set bono_id = :BONO2 where id = :CITAP2` pasa, y luego
+  `set bono_id = null` también pasa. CITAP2 es futura y está programada. Es la gemela de K14 y
+  K15.
+- **K17**, como **postgres**: `update public.citas set bono_id = :BONO1 where id = :CITAPAS` da
+  el mismo `42501`.
+- **K18**: tras K15, `bonos_consumo.sesiones_consumidas` de BONO1 sigue con el mismo valor que
+  tenía antes de K15. Se captura con `\gset` justo antes.
+
+**L · Catálogo**
+- **L4**, sobre `bonos`:
+  - ninguna columna tiene UPDATE para `authenticated`;
+  - `not has_column_privilege('authenticated', 'public.bonos', 'creado_en', 'INSERT')`;
+  - `has_column_privilege('authenticated', 'public.bonos', 'caducidad', 'INSERT')`.
+- **L5**, sobre `tarifas_paciente`:
+  - no hay columna `vigente_hasta` (en `information_schema.columns`);
+  - ninguna columna tiene UPDATE;
+  - `creada_en` y `orden` no tienen INSERT, y `vigente_desde` sí.
+- **L5b**:
+  - en `bonos_caducidades`, `numero` y `registrada_en` no tienen INSERT, y `caducidad` y
+    `bono_id` sí;
+  - `cobros.registrado_en` y `borradores_factura.creado_en` no tienen INSERT;
+  - `cobros.importe` y `borradores_factura.paciente_id` sí.
+- **L6 y L7**: las listas pasan a seis tablas y tres vistas, con `bonos_caducidades` y
+  `tarifas_paciente_vigencias` añadidas.
+- **L8**: el catálogo queda así, y deja fuera `bonos` y la cabecera:
+  ```
+  (select array_agg(t.tabla order by t.tabla) from public.tablas_solo_adicion t
+    where t.tabla in ('tarifas_paciente', 'borradores_factura', 'borradores_factura_versiones', 'cobros', 'bonos', 'bonos_caducidades'))
+  = array['bonos_caducidades', 'borradores_factura_versiones', 'cobros', 'tarifas_paciente']
+  ```
+- **L8b**: capas 2 y 3 de `bonos`, comprobadas en `pg_trigger` sobre `public.bonos`:
+  - existe `impedir_truncado_bonos`, con `tgenabled = 'O'` y
+    `tgfoid = 'public.fn_impedir_modificacion()'::regprocedure`;
+  - sus bits de `tgtype` son: TRUNCATE (32) activo, BEFORE (2) activo y ROW (1) inactivo;
+  - existe `impedir_modificacion_bonos`, con la misma función, ROW, BEFORE, UPDATE (16) y
+    DELETE (8).
+- **L9**: la RLS está activa en las **seis** tablas.
+- **L10**:
+  - `fn_validar_cabecera_borrador()` es definer con `search_path=""`;
+  - `fn_alta_tarifa()` y `fn_numerar_caducidad_bono()` son **invoker** (`not prosecdef`), con
+    `search_path=""`.
+
+**M · Rol en positivo (A-H4)**: bloque nuevo, después de L
+- **M1**: TEC1 cuenta 0 en `tarifas_paciente where id = :TARTEC` y 0 en
+  `tarifas_paciente_vigencias where tarifa_id = :TARTEC`. Gemela **M1g**: ADM cuenta 1 y 1.
+- **M2**: TEC1 cuenta 0 en `cobros` (COBTEC), en `bonos` (BONOTEC) y en `bonos_consumo`
+  (BONOTEC). Gemela **M2g**: TEC2, con CB vigente, ve los tres y cuenta **0** en TARTEC.
+- **M3**: TEC1 da de alta una tarifa de PTEC (TIPO26, desde `:'hoy_cb'::date + 10`): `42501`,
+  `row-level security`.
+- **M4**: TEC1 da de alta un cobro de PTEC con `registrado_por = :TEC1`: `42501`,
+  `row-level security`.
+- **M5**: TEC1 da de alta un bono de PTEC: `42501`, `row-level security`.
+- **M6**: TEC1 da de alta una caducidad de BONOTEC: `42501`, `row-level security`.
+- **M7**: TEC1 añade a BORRTEC una versión con sobre **coherente**. Da `42501`,
+  `No puedes añadir una versión a este borrador`.
+  - Sobre:
+    `sobre_borrador(:BORRTEC, :TEC1, now(), jsonb_build_array(linea_borrador('Sesión de psicoterapia', 1, 5000)), 50.00, 0.00, 50.00, 'Teo T021', null)`.
+  - Gemela: I7 (PRO1 sella en BORR1).
+
+**N · Cabecera (A-H2, A-H5, B-H3)**: bloque nuevo, después de M
+- **N1**: PRO1, cabecera (PMENOR, PRO1, `creado_por` **ADM**): `42501`,
+  `No puedes abrir este borrador`. Gemela: G8.
+- **N2**: PRO1, cabecera (PMENOR, PRO1, PRO1) mandando
+  `creado_en = timestamptz '2025-01-01 00:00:00+00'`: `42501`,
+  `permission denied for table borradores_factura`. Gemela: G8.
+- **N3**: ADM, cabecera (P1, **PRO2**, ADM): `23514`, `no atiende a ese paciente`.
+- **N4**: ADM, cabecera (PTEC, **TEC1**, ADM): `23514`,
+  `debe tener rol profesional_sanitario o administrador`.
+- **N5**: ADM, cabecera (P1, PRO1, ADM): pasa. Es la gemela de N3 y N4.
+- **N6**: ADM, cabecera (PFUS, PRO2, ADM): pasa. PFUS está fusionado en P2, que es de PRO2: un
+  salto de fusión.
+- **N7**: ADM, cabecera (P1, PRO1, `creado_por` **PRO1**): `42501`,
+  `No puedes abrir este borrador`.
+
+**Otros ficheros**
+- **`11-cobertura.sql`**: se quitan `'bonos_modificacion'` y `'tarifas_paciente_cierre'`, y se
+  añaden `'bonos_caducidades_lectura'` y `'bonos_caducidades_alta'`.
+- **`scripts/rls/README.md`**, fila 26: se añade «bonos_caducidades y tarifas_paciente_vigencias
+  (solo añadir, ronda 2), congelación de citas.bono_id, rol en positivo, validación de la
+  cabecera y del centro de la versión».
+- **Linter**:
+  - `TABLAS_SOLO_ADICION` gana, al final y en este orden, `'tarifas_paciente'`, `'bonos'` y
+    `'bonos_caducidades'`; su prueba exacta se actualiza;
+  - `bonos` sí entra en el linter: ninguna migración debe escribir `update`, `delete` ni
+    `truncate` sobre ella. Del catálogo queda fuera solo por la capa 1, que el linter no mira.
+- **Tipos**: `npx supabase db reset` y después `npm run tipos`. `lib/supabase/tipos-bd.ts` se
+  regenera, nunca se edita.
+
+### R2.2 · Una decisión por hallazgo
+
+| Hallazgo | Decisión | Cómo / por qué |
+|---|---|---|
+| A-H1, B-H1 (ALTA) | Arreglar | R2.1.1, R2.1.2 y R2.1.3. Las dos tablas nuevas llevan tres capas y entran en el catálogo; `bonos` lleva capas 2 y 3 |
+| A-H2, B-H3 | Arreglar | `borradores_factura_alta` gana `creado_por = (select auth.uid())` en las dos ramas, y `creado_en` sale del grant de insert. Pruebas N1, N2 y N7 |
+| A-H3, B-H2 | Arreglar | Guarda de fecha de `fn_alta_tarifa()` y grant por columnas (`creada_en`). Pruebas K3, K5b, K5c, K10b y K12 |
+| A-H4 | Arreglar | Rol en positivo en toda rama con `es_profesional_asignado`: `tarifas_paciente_lectura` y `_alta`, `cobros_lectura` y `_alta`, `bonos_lectura` y `_alta`, el `where` de `bonos_consumo`, `borradores_factura_versiones_alta` y el paso 0 del sellado (`or ((select public.rol_actual()) = 'profesional_sanitario' and exists (…))`). Pruebas M1 a M7 |
+| A-H5 | Arreglar | Disparador nuevo `validar_cabecera_borrador` (R2.2.1). Pruebas N3 a N6 |
+| A-H6 | Arreglar | Congelación en `fn_bono_de_la_cita()` (R2.1.3). Pruebas K14 a K18 |
+| A-H7.1, B-H5 | Arreglar | Por línea: exento ⇒ `tipo_iva_centesimas = 0`, general ⇒ `> 0`. En 6.4: si la suma de líneas generales ≠ 0, la cuota ≠ 0. Pruebas J27b, J27c y J31b. El redondeo **no** se repite (ver «Lo que no entra») |
+| A-H7.2, B-H6 | Arreglar | `constraint borradores_factura_versiones_signo_ck check (sign(base) in (0, sign(total)) and sign(cuota_iva) in (0, sign(total)))`, junto a la de `base + cuota_iva = total`. Pruebas J42 y J42g |
+| B-H4 (M6a) | Arreglar | Prueba B9b; en `mutantes.json`, M6a pasa a «muerto por 26.B9b». No era equivalente: el verificador no comprueba la coherencia interna del sobre |
+| B-H7 | Arreglar | Grants de insert por columnas, sin `cobros.registrado_en`, `borradores_factura.creado_en`, `bonos.creado_en`, `tarifas_paciente.creada_en` y `.orden`, ni `bonos_caducidades.numero` y `.registrada_en`. Las versiones siguen con su margen de ±1 minuto (6.5). Pruebas C8, E18d, E18e, E18g, K12, N2, L4, L5 y L5b |
+| B-H8 | Arreglar | Paso 6.2.bis del sellado (R2.2.2). Pruebas J41, J41p y J41q |
+| B-H9 | Aceptar y anotar | La prueba de dos conexiones necesita un guion y un script de `package.json` fuera del `territorio:`. La serialización copia la de la nota, que sí cubre `test:huellas`. Los índices únicos (`numero_version`, `orden`, `numero`) convierten una carrera en `23505`, nunca en un dato corrupto. Se anota en `docs/state.md` §Hallazgos |
+| B-H10 | Arreglar | Paso 6.3: `json_typeof(v_linea -> 'concepto') is distinct from 'string' or (v_linea ->> 'concepto') !~ '[^[:space:]]'`, con el mismo mensaje. Prueba J28b |
+| Descartes de B (números no canónicos, P0002, F7) | Nada | Los descartó el propio revisor después de medir |
+
+#### R2.2.1 · `fn_validar_cabecera_borrador()`
+
+- La función es `language plpgsql`, **security definer**, con `set search_path = ''` y
+  `revoke execute … from public`.
+- Disparador: `validar_cabecera_borrador before insert on public.borradores_factura for each row`.
+- **Paso 0**, solo si `current_setting('role', true) in ('authenticated', 'anon')`. Replica
+  exactamente la política `borradores_factura_alta` nueva:
+  ```
+  if not coalesce(
+       new.creado_por = (select auth.uid())
+       and ((select public.rol_actual()) = 'administrador'
+            or ((select public.rol_actual()) = 'profesional_sanitario'
+                and new.profesional_id = (select auth.uid())
+                and public.es_profesional_asignado(new.paciente_id))), false) then
+    raise exception 'No puedes abrir este borrador: lo abre el administrador o el profesional asignado al paciente, y a su propio nombre (T-021)'
+      using errcode = '42501';
+  end if;
+  ```
+- **Paso 1**, para todo rol:
+  ```
+  select p.profesional_id, s.profesional_id into v_prof, v_prof_fusion
+    from public.pacientes p left join public.pacientes s on s.id = p.fusionado_en
+   where p.id = new.paciente_id;
+  if not found
+     or (new.profesional_id is distinct from v_prof and new.profesional_id is distinct from v_prof_fusion) then
+    raise exception 'El profesional del borrador no atiende a ese paciente (T-021)' using errcode = '23514';
+  end if;
+  ```
+- **Paso 2**, para todo rol:
+  ```
+  select f.rol into v_rol from public.perfiles f where f.id = new.profesional_id;
+  if v_rol is null or v_rol not in ('profesional_sanitario'::public.rol_usuario, 'administrador'::public.rol_usuario) then
+    raise exception 'El profesional del borrador debe tener rol profesional_sanitario o administrador (T-021)' using errcode = '23514';
+  end if;
+  ```
+  - `perfiles.rol` es de tipo `public.rol_usuario` (`20260815192424:31`), verificado.
+- `return new;`
+- **Por qué un disparador definer y no la política.** La comprobación lee `pacientes` y
+  `perfiles` de otros profesionales, que la RLS del profesional no le deja ver. Además tiene que
+  valer también para `postgres` (la fijación y el importador).
+- El paso 0 va primero por ADR-071.5: así nadie sin permiso distingue «paciente inexistente» de
+  «profesional que no lo atiende».
+- La política se queda como segunda red. Como es idéntica al paso 0, el mutante que le quita una
+  rama es equivalente, y así se declara.
+
+#### R2.2.2 · Paso 6.2.bis del sellado: el `centro_id` de la versión
+
+Va justo después de la comprobación del `centro_id` del sobre (mig:397-400):
+```
+if new.centro_id is not null
+   and new.centro_id is distinct from (select p.centro_id from public.pacientes p where p.id = v_paciente_id)
+   and not exists (select 1 from public.perfiles_centros pc
+                    where pc.perfil_id = v_profesional_id and pc.centro_id = new.centro_id) then
+  raise exception 'El centro_id de la versión no es del paciente ni del profesional del borrador (T-021)'
+    using errcode = '23514';
+end if;
+```
+- `v_paciente_id` y `v_profesional_id` son las variables que ya rellena la lectura de la
+  cabecera (mig:267-268, 334), verificadas.
+- Las pertenencias cuentan **sin filtrar por `hasta`**: un borrador puede cubrir sesiones de una
+  pertenencia ya cerrada. Lo que se impide es un centro que no tenga que ver con ninguno de los
+  dos.
+- El fragmento `no es del paciente ni del profesional` no choca con `El centro_id del sobre no
+  coincide`.
+
+### R2.3 · Criterio 12: cómo se ejecuta sin tocar el contrato
+
+El contrato exige dos cosas a la vez:
+- un comentario que nombre las tablas que **no** se crean, `series_facturacion` incluida;
+- un grep literal que no devuelva nada.
+
+No pueden cumplirse las dos. El criterio 13 ya resolvió el mismo choque limitándose a «las
+líneas que no son comentario», y el criterio 12 se cierra igual. La evidencia recoge **las tres
+salidas**:
+
+```
+# 1 · El criterio, sobre el código (sin comentarios de línea):
+sed -E 's/--.*$//' supabase/migrations/20261011120000_economico_esquema.sql | grep -ciE "serie|numeracion|qr|verifactu|registro_facturacion"
+# → 0
+
+# 2 · No hay comentarios de bloque que el sed no quite:
+grep -c '/\*' supabase/migrations/20261011120000_economico_esquema.sql
+# → 0
+
+# 3 · El grep literal del contrato, para que conste qué devuelve y por qué:
+grep -niE "serie|numeracion|qr|verifactu|registro_facturacion" supabase/migrations/20261011120000_economico_esquema.sql
+# → exactamente una línea: el comentario de cabecera «no se crean … series_facturacion …» que exige el contrato (ADR-053)
+```
+
+- En `evidencia.json` el criterio 12 queda **PASA**, con la nota: «literal: 1 coincidencia, la
+  del comentario obligatorio; fuera de comentarios: 0».
+- Si (3) devuelve más de una línea, el criterio **falla**.
+- Por eso, ningún comentario, mensaje ni nombre nuevo de la ronda 2 puede contener `serie`,
+  `numeracion`, `qr`, `verifactu` ni `registro_facturacion`, ni `espejo` ni `proveedor` fuera de
+  comentarios (criterio 13).
+  - Ojo con «en serie» y con cualquier `…qr…` dentro de una palabra.
+  - El implementador repite (1), (3) y el grep del criterio 13 **después** de escribir los
+    comentarios nuevos.
+
+### R2.4 · Lista de comprobación de la ronda 2
+
+Para el revisor y para la autoevaluación del implementador.
+
+**Qué elige quien llama, y qué efecto tiene**
+- [ ] En `tarifas_paciente`, `authenticated` elige solo `paciente_id`, `tipo_terapia_id`,
+  `importe`, `regimen_iva`, `vigente_desde` y `creada_por`.
+  - `orden` lo pisa el disparador, y además no tiene grant.
+  - `creada_en` no tiene grant.
+  - `creada_por` lo ata la política.
+  - Un `vigente_desde` pasado solo entra si es la primera fila del par.
+- [ ] En `bonos_caducidades` elige `bono_id`, `caducidad` y `registrada_por`, este último atado
+  a `auth.uid()`. `numero` y `registrada_en` no los elige.
+- [ ] En `bonos` ya no hay UPDATE de ninguna columna (L4). En `cobros` y en la cabecera,
+  `registrado_en` y `creado_en` no se pueden insertar (L5b).
+- [ ] En la cabecera:
+  - el profesional solo puede poner `profesional_id` = él mismo;
+  - el administrador solo puede poner un profesional o administrador que atienda al paciente
+    (pasos 1 y 2);
+  - `creado_por` es siempre quien inserta.
+- [ ] En la versión, `centro_id` es null, el centro del paciente o una pertenencia del
+  profesional (6.2.bis).
+
+**Qué prueba debe fallar, y por qué motivo exacto**
+- [ ] K3, K5b y K10b fallan por `no puede empezar antes de hoy` y no por la RLS: las hace ADM o
+  el profesional asignado, y ya existe una fila anterior.
+- [ ] K8 falla por `tarifas_paciente_importe_ck` y no por la fecha, porque su fecha es futura.
+- [ ] K14 discrimina la rama «pasada» (CITAPAS, programada) y K15 la rama «realizada» (CITA1,
+  futura). Quitar una de las dos ramas tumba exactamente una de las dos pruebas.
+- [ ] K1 falla por `el bono es de otro paciente` sobre CITA3, que está cancelada y es futura: la
+  congelación no interviene.
+- [ ] E16c mata `coalesce(u.caducidad, b.caducidad)`, y E19 mata un `case` sin `else`.
+- [ ] M7 exige el fragmento del paso 0 (`No puedes añadir una versión`), no solo `42501`.
+  - Si se quita el rol del paso 0, la versión coherente se sella o muere en la política con
+    `row-level security`, y en los dos casos M7 se pone roja.
+  - Comprobar que el sobre de M7 es coherente: con uno incoherente moriría en 6.x con `23514`
+    por otra razón.
+- [ ] B9b lleva su aserción de control (el `replace` cambió el texto). Sin ella, un `replace`
+  que no casa deja la prueba verde sin probar nada.
+- [ ] J41 y J41q usan CE26, nunca CB, porque PRO1 tiene CB (`06-centro.sql:37`).
+- [ ] C8, E18d, E18e, E18g, K12 y N2 piden `permission denied for table …`, no
+  `row-level security`. Quien llama tiene permiso sobre la fila; lo que le falta es el de la
+  columna.
+- [ ] Cada mutante de R2.6 se ejecuta por separado, y el banco se pone rojo en la prueba
+  nombrada, no en otra.
+
+**Invariantes que se podrían saltar por otra puerta**
+- [ ] **I-T1**: `tarifas_paciente_lectura` tiene la misma condición que
+  `tarifas_paciente_alta`, sin contar `creada_por`. Si alguien amplía el alta sin ampliar la
+  lectura, `fn_alta_tarifa()` (invoker) calcula `max(orden)` sobre filas parciales: dará
+  `23505` o saltará la guarda de fecha.
+- [ ] **I-B1**: las caducidades se leen y se dan de alta a través del bono, con un `exists` bajo
+  la RLS de `bonos`.
+- [ ] **I-B2**: `bonos_lectura` y `bonos_alta` tienen las mismas ramas, sin contar
+  `creado_por`.
+- [ ] El `lead()` de la vista solo es correcto si la RLS de tarifas oculta pacientes enteros,
+  nunca filas sueltas de un paciente.
+- [ ] **Null**:
+  - se usa `old.bono_id is distinct from new.bono_id`, no `<>`: quitar el bono (`→ null`)
+    también está congelado;
+  - en el paso 1 de la cabecera, `is distinct from` contra las dos columnas: con `fusionado_en`
+    nulo, `v_prof_fusion` es null y no deja pasar a nadie;
+  - en el paso 2, un perfil inexistente da `v_rol` null y se rechaza;
+  - el paso 0 va envuelto en `coalesce(…, false)`.
+- [ ] **Duplicados**: `unique (paciente_id, tipo_terapia_id, orden)` y
+  `unique (bono_id, numero)`. Dos altas del mismo par el mismo día se ordenan por `orden`,
+  nunca por `creada_en`.
+- [ ] **Concurrencia**: el candado consultivo va antes de leer `max`, en las dos funciones. No
+  hay prueba de dos conexiones (B-H9, aceptado); la red son los índices únicos.
+- [ ] **`postgres` y TRUNCATE**:
+  - `tarifas_paciente` y `bonos_caducidades` tienen la capa 1 revocada también a `postgres`, y
+    las recorre `10-solo-adicion`;
+  - `bonos` tiene capas 2 y 3 (A17, A18 y L8b);
+  - `cobertura_solo_adicion()` sigue en 0 (B15) porque `bonos` no está en el catálogo. Comprobar
+    que nadie lo ha añadido «por coherencia»: rompería B15 y `10-solo-adicion`.
+- [ ] **Orden de disparadores en `citas`**: la congelación vive dentro de `bono_de_la_cita`, el
+  primero alfabéticamente. Que nadie la haya sacado a un disparador aparte que pueda quedar
+  detrás de `proteger_cita_pasada`.
+- [ ] **La congelación lee `old`**: `update citas set estado = 'programada', bono_id = …` sobre
+  una cita realizada sigue congelado.
+  - El camino en **dos** sentencias sobre una cita **futura** realizada no se cierra aquí (ver
+    «Lo que no entra»).
+  - En una cita pasada no hay puerta, porque decide `old.fin`.
+- [ ] **Permisos antes que cotejo en las definer**:
+  - `fn_validar_cabecera_borrador()` hace el paso 0 antes de leer `pacientes` y `perfiles`;
+  - el sellado mantiene su paso 0, ahora con el rol en positivo.
+- [ ] `bonos_consumo` sigue siendo definer con barrera, y su `where` coincide rama por rama con
+  `bonos_lectura`, incluido el rol del profesional.
+- [ ] Los greps de los criterios 12 y 13 se repiten sobre la migración final (R2.3).
+- [ ] `10-solo-adicion` y `cobertura_solo_adicion()` están en verde con las cuatro tablas de
+  T-021 en el catálogo. El banco entero (`npm run test:rls`) está en verde, no solo el
+  módulo 26.
+
+### R2.5 · Riesgos, por probabilidad
+
+1. **Alta**: que la fijación de 01 falle por el orden de los `\set` o por falta de
+   `tipos_terapia`, y entonces `10-solo-adicion` falle en las tablas nuevas.
+   - Mitigación: R2.1.4 da los ids y las filas exactas, y se corre el banco entero.
+2. **Media**: que CITAPAS choque con una cita de PRO1 de otro módulo (`23P01`).
+   - Mitigación: la franja de las 07:05 y una única alternativa permitida,
+     `current_date - 38`.
+3. **Media**: que la cobertura de otro módulo (`02-matriz-roles`, `11-cobertura` o
+   `12-resto-de-tablas`) enumere tablas o políticas y no conozca `bonos_caducidades`.
+   - Si el fichero está en el `territorio:` (`11-cobertura.sql`), se añade.
+   - Si está fuera, es un **bloqueo**: se anota en `state.md` y se para, sin tocar el fichero
+     ajeno.
+4. **Media**: que un ticket posterior (T-023, T-026) quiera una clave ajena hacia
+   `tarifas_paciente` o `bonos_caducidades`. La capa 1 lo impide: tendrá que usar una
+   referencia sin FK y un `exists` en la política. Queda escrito en el comentario de cada tabla.
+5. **Baja**: que cambie el idioma de los mensajes del motor (`lc_messages`) y los fragmentos
+   `permission denied` y `row-level security` dejen de casar. El banco ya depende de ellos en
+   16, 17, 19 y 21.
+6. **Baja**: que un fragmento nuevo sea prefijo de uno viejo. Están elegidos para que no:
+   - `mayor que 0` frente a `mayor o igual que 0`;
+   - `no es del paciente ni del profesional` frente a `del sobre no coincide`.
+
+### R2.6 · `mutantes.json` de la ronda 2
+
+- **M6a**: el resultado pasa a «muerto por 26.B9b», con la nota de B-H4.
+- Los mutantes nuevos, cada uno con la prueba que debe ponerse roja:
+
+| Id | Mutación | Muere en |
+|---|---|---|
+| M7 | quitar `or old.fin <= now()` de la congelación | K14, K17 |
+| M8 | quitar `old.estado = 'realizada' or` | K15 |
+| M9 | quitar la guarda de fecha de `fn_alta_tarifa()` | K3, K5b, K10b |
+| M10 | `<` → `<=` en la guarda | K5c |
+| M11 | aplicar la guarda también a la primera fila (sin `v_max is not null`) | K10 |
+| M12 | quitar el paso 1 de la cabecera | N3 |
+| M13 | quitar el paso 2 de la cabecera | N4 |
+| M14 | quitar el paso 0 de la cabecera | N1 (cambia el fragmento) |
+| M15 | quitar 6.2.bis | J41 |
+| M16 | 6.2.bis sin la rama del paciente | J41p |
+| M17 | 6.2.bis sin la rama del profesional | J41q |
+| M18 | quitar el rol en `tarifas_paciente_lectura` | M1 |
+| M19 | quitar el rol en la rama del profesional de `cobros_lectura` y `bonos_lectura` | M2 |
+| M20 | quitar el rol en el paso 0 del sellado | M7 |
+| M21 | quitar `borradores_factura_versiones_signo_ck` | J42 |
+| M22 | volver a `length(trim(…)) = 0` | J28b |
+| M23 | quitar «exento ⇒ tipo 0» | J27b |
+| M24 | quitar «general ⇒ tipo > 0» | J27c |
+| M25 | quitar «general ⇒ cuota ≠ 0» | J31b |
+| M26 | `coalesce(u.caducidad, b.caducidad)` en `bonos_consumo` | E16c |
+| M27 | quitar `impedir_modificacion_bonos` | A17, A18 |
+| M28 | quitar `impedir_truncado_bonos` | L8b |
+| M29 | quitar el candado de `fn_alta_tarifa()` o de `fn_numerar_caducidad_bono()` | **sobrevive**: no hay prueba de dos conexiones (B-H9, aceptado). Se declara superviviente, **no** equivalente |
+| M30 | quitar el rol en `borradores_factura_versiones_alta` | **equivalente**: el paso 0 del sellado tiene la misma condición y corre antes que la política para todo `authenticated`; `anon` no tiene grant |
+
+### R2.7 · Territorio y delegable
+
+- **Territorio**: sin cambios. Todos los ficheros de la ronda 2 ya están en el `territorio:` del
+  contrato:
+  - la migración;
+  - `01`, `11`, `26` y `README.md` de `scripts/rls/`;
+  - el linter y su prueba;
+  - `tipos-bd.ts`;
+  - `tickets/T-021/**`, la bitácora y `state.md`.
+- **No** se tocan `scripts/rls/10-solo-adicion.sql` ni `00-ayudantes.sql`: el bucle genérico ya
+  recorre las tablas nuevas.
+- **Delegable**: nada. Todo es RLS, privilegios, disparadores y dinero.
+
+### R2.8 · Memoria al cerrar
+
+- En la bitácora `docs/bitacora/T-021*.md`: la ronda 2, citando la decisión del propietario del
+  05-10-2026.
+- En `docs/state.md` §Hallazgos, dos entradas:
+  1. B-H9: falta una prueba de concurrencia de dos conexiones para el sellado del borrador, la
+     numeración de tarifas y la de caducidades. Patrón: `test:huellas`.
+  2. Las transiciones de estado de una cita realizada (pasarla a cancelada baja el consumo del
+     bono) no tienen guarda. Es de la misma familia que A-H6; se decide con la agenda.
+
+## Lo que no entra en la ronda 2, y por qué
+
+- **Capas de solo adición en la cabecera `borradores_factura`.** Ya no tiene ningún grant de
+  UPDATE ni DELETE (A7), y la capa 1 rompería la FK de las versiones (`borrador_id`). Se decide
+  con T-026.
+- **Una guarda para el estado de una cita realizada** (pasarla de realizada a cancelada baja el
+  consumo). La decisión del propietario habla de `bono_id`, no del estado, y
+  `fn_proteger_cita_pasada()` pertenece a la agenda. Va a `state.md`.
+- **El camino en dos sentencias sobre una cita futura realizada** (desmarcarla y después cambiar
+  el bono). Una sesión no se realiza antes de que ocurra, así que solo pasa en una cita en curso.
+  Lo cerrará la guarda de estado del punto anterior.
+- **Validar la fecha de una caducidad** (que no sea pasada ni anterior al alta) **y los límites
+  del bono** (consumir más sesiones de las compradas). Son reglas de negocio sin criterio en el
+  contrato.
+- **Corregir una tarifa con fecha pasada.** Con «solo añadir» la corrección empieza hoy. Es la
+  consecuencia buscada, no un hueco.
+- **La prueba de concurrencia de dos conexiones** (B-H9): está fuera del territorio y queda
+  aceptada arriba.
+- **Repetir el redondeo del IVA de `lib/dinero`** dentro del sellado. Las comprobaciones de la
+  ronda 2 son de categoría (tipo según régimen, cuota según régimen, signo), no aritméticas.
+- **Validar que el profesional de la cabecera esté activo.** Un profesional de baja ya no lee
+  nada (ADR-032), así que su cabecera no expone datos.
