@@ -3,12 +3,12 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 05-10-2026 · **T-041 hecho** (merge 80b6a06: altas de centro); **T-044, T-045** en verificación.
+**Actualizado**: 05-10-2026 · **T-041 hecho** (merge 80b6a06: altas de centro); **T-045 hecho** (dar de baja y reponer TOTP leen `directorio_perfiles`); **T-044** en verificación.
 
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 (A/B/C), T-016–T-020, T-029–T-042.
-- **En verificación**: T-044, T-045 (riesgo bajo).
+- **En verificación**: T-044 (riesgo bajo).
 - **Siguiente en `supabase/`**: T-021 (migración 20261011120000, riesgo alto, diseño hecho con respuestas del propietario), luego T-043 (migración 20261012120000, idem, va tras T-021).
 
 ## Bloqueos
@@ -18,7 +18,7 @@
 
 ## Siguiente paso
 
-1. T-044, T-045 en verificación y merge.
+1. T-044: verificación, revisión y merge.
 2. Ya se puede `npx supabase db reset` desde main (20261010120000 está en main).
 3. T-021 en implementación (riesgo alto, Opus).
 4. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
