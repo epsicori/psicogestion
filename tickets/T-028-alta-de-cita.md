@@ -31,6 +31,7 @@ territorio:
   - accesibilidad/**                        # solo para añadir /agenda/nueva a la lista de rutas
   - docs/interfaz.md                        # solo el choque 4 y §14 (diseño E7)
   - app/(app)/pacientes/[id]/panel-resumen.tsx   # corte C, tras integrar T-012
+  - app/(app)/pacientes/[id]/panel-resumen.test.tsx   # corte C, ampliado por el propietario (05-10, H36)
 ---
 
 # Enmienda por ADR-074 y ADR-075 (propietario, 02-10-2026)

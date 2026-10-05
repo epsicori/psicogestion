@@ -1,0 +1,100 @@
+{
+  "ticket": "T-028",
+  "resumen": "Corte B, ronda 6 (rama worktree-agent-a32189ff51a6d9558, HEAD 8f93b71; cambia solo vista-alta.ts y su prueba). La evidencia de la ronda 5 queda en tickets/T-028/evidencia.ronda5.json (el esquema no admite rondas_anteriores). db reset + seed desde el repo principal (max(version)=20261009180000, contenedor supabase_db_Psicogestion). Clon limpio npm ci: lint 0 errores, npm test 173 ficheros / 2193 pruebas verdes, build OK, territorio OK. Navegador en :3060: H34 PASA (Ocupado 09:00-09:40, libre desde 09:40, en rejilla 1280 y lista 360), man-4 PASA, man-8 PASA (provocado con franja temporal, retirada), H26/H28/H30/H31 sin regresion. Decisiones del propietario (05-10): man-13 aprobado, man-1 trasladado al corte C, H29 y auto-2 aceptados como NO_VERIFICABLE, desplegable de centro Madrid+Las Palmas para Ana correcto. Servidor :3060 parado (el :3028 de la ronda 5 no se toco). Datos escritos por la UI: cita de Lucia 19-10-2026 09:00 (sala P-H34), citas de Hugo/Mateo en 6-10-2026; la franja temporal de man-8 se borro.",
+  "criterios": [
+    {
+      "id": "auto-1",
+      "texto": "lint, npm test y build limpios en clon limpio tras npm ci (HEAD 8f93b71); territorio OK",
+      "veredicto": "PASA",
+      "comando": "npm ci; npm run lint; npm test; npm run build (clon); node ~/.claude/pipeline/territorio.mjs T-028 (desde el worktree)",
+      "evidencia": "lint: 0 errores, 2 warnings preexistentes (lib/cuentas/accesos.test.ts); npm test: Test Files 173 passed (173), Tests 2193 passed (2193); build Turbopack OK; territorio: T-028: 66 fichero(s) tocado(s), todos dentro del territorio."
+    },
+    {
+      "id": "H34",
+      "texto": "En el calendario de seleccion un bloque Ocupado termina como mucho donde empieza el siguiente tramo del dia: cita 9:00-9:30 (descanso 10 min) y tipo de 50 min -> Ocupado 9:00-9:40, libre desde 9:40, sin solape, en RejillaSemana y ListaDia",
+      "veredicto": "PASA",
+      "comando": "Cita real creada por la UI (Ana, Lucia, Centro Madrid, Sesion breve 30 min, lunes 19-10-2026 09:00; BD: 09:00-09:30). Luego alta con Sesion individual (50 min), semana 19-25 oct: node p6.mjs y p4.mjs a 1280 y 360 px (clon limpio en scratchpad (HEAD 8f93b71), next start :3060, Playwright)",
+      "evidencia": "1280 px (RejillaSemana): bloque Ocupado con texto '09:00 - 09:40 / Ocupado', style top:192px height:64px (40 min a 1,6 px/min); el boton libre siguiente 'lunes, 19 de octubre de 2026, 09:40, libre | 09:40 - 10:30' empieza en top=1082 = 1018+64: sin solape (captura p6_1280.png). 360 px (ListaDia): items '09:00 - 09:40 Ocupado' seguido de '09:40 - 10:30' libre (captura p6_360.png). Sin el cambio se habria pintado 09:00-09:50."
+    },
+    {
+      "id": "man-4",
+      "texto": "Paciente con seis citas los martes a las 12: primera sugerencia martes 12, motivo como las seis ultimas; sin cifra de puntuacion",
+      "veredicto": "PASA",
+      "comando": "BD: citas de Lucia (seis martes 12:00 del 25-08 al 29-09-2026, realizadas); node p6.mjs y p9.mjs (clon limpio en scratchpad (HEAD 8f93b71), next start :3060, Playwright)",
+      "evidencia": "Tras db reset + seed, alta de Lucia Marquez (Madrid): tarjeta 1 '12:00 / Como las seis ultimas', tarjeta 2 'Martes, 13 de octubre de 2026 12:00 / martes a las 12:00, su dia habitual', tarjeta 3 'Primer hueco libre'. Ninguna cifra de puntuacion, estrella ni barra (solo fechas y horas) en capturas ni en el texto."
+    },
+    {
+      "id": "man-8",
+      "texto": "Semanal x8 cruzando el ultimo domingo de marzo: ocho con la misma hora local y la afectada marcada",
+      "veredicto": "PASA",
+      "comando": "Franja temporal en disponibilidad (Ana, Madrid, domingo 01:00-06:00 desde 2027-03-01, motivo 'T-028 man-8 PRUEBA TEMPORAL'), navegar a la semana 8-14 mar 2027, elegir 14-03-2027 02:20, Periodicidad Semanal (node p8c.mjs, clon limpio en scratchpad (HEAD 8f93b71), next start :3060, Playwright); franja borrada (DELETE 1, count 0). No se guardo la serie.",
+      "evidencia": "Previsualizacion 'Asi quedaria la serie': ocho filas (14, 21, 28 marzo; 4, 11, 18, 25 abril; 2 mayo de 2027), todas a las 02:20 salvo la del 28 de marzo, marcada 'Cambio de hora: queda a las 03:00'."
+    },
+    {
+      "id": "H26",
+      "texto": "Escape en hueco no cierra el dialogo; Escape en campo cierra; emergente, panel anclado y desplegable siguen cerrando (regresion)",
+      "veredicto": "PASA",
+      "comando": "node r_h26.mjs, r_esc.mjs, r_esc3.mjs, r_esc5.mjs (clon limpio en scratchpad (HEAD 8f93b71), next start :3060, Playwright)",
+      "evidencia": "Dialogo: Escape sobre hueco -> dialogo presente 1, url /agenda/nueva, foco 'lun 5, 7 huecos libres'; Escape en Sala -> url /agenda, foco 'A | Nueva cita'. Ruta: Escape sobre hueco -> foco al dia. Campana: tras Escape foco Notificaciones, aria-expanded false. Panel de cita: cerrado y foco en el boton de la cita; panel de dia: cerrado, foco 'mar 6, 2 citas'. Desplegable /ajustes/invitar: expanded true/listbox 1 -> Escape -> false/0, foco en el combobox."
+    },
+    {
+      "id": "man-11c",
+      "texto": "Foco en Guardar tras conflicto hueco_ocupado y conflicto con sugerencias nuevas y formulario intacto (regresion; man-10)",
+      "veredicto": "PASA",
+      "comando": "node r_t10.mjs (ruta, dos sesiones) y r_t12.mjs (dialogo, teclado) (clon limpio en scratchpad (HEAD 8f93b71), next start :3060, Playwright)",
+      "evidencia": "Ruta: 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.'; foco 'BUTTON | Guardar | type=submit'; sugerencias nuevas 09:40, 10:20, 11:00; sala 'Sala conflicto-A', paciente y tipo conservados; la agenda del tecnico no muestra el tipo. Dialogo: Enter en Guardar -> conflicto, foco Guardar, disabled false; Tab -> Cerrar (foco dentro del dialogo)."
+    },
+    {
+      "id": "H28",
+      "texto": "Cambiar de centro con profesional elegido a mano: entra el asignado si trabaja alli (regresion)",
+      "veredicto": "PASA",
+      "comando": "node r_h28c.mjs (admin, Hugo, asignada Ana) (clon limpio en scratchpad (HEAD 8f93b71), next start :3060, Playwright)",
+      "evidencia": "Manual=Bruno (solo Madrid) -> Las Palmas -> Ana Marquez; manual=Alvaro (ambos) se conserva; manual=Ana se conserva. El desplegable de centro de Ana lista Madrid y Las Palmas: correcto segun el propietario (pertenece a ambos en el seed)."
+    },
+    {
+      "id": "H30",
+      "texto": "Region de estado fija en sugerencias vacias/cargando (regresion)",
+      "veredicto": "PASA",
+      "comando": "node r_h30.mjs (clon limpio en scratchpad (HEAD 8f93b71), next start :3060, Playwright)",
+      "evidencia": "{txt:'Buscando huecos libres...',mismo:true,role:'status'} -> {txt:'Sin huecos libres en las proximas cuatro semanas.',mismo:true,role:'status'}: mismo nodo, rol conservado."
+    },
+    {
+      "id": "H31",
+      "texto": "Pruebas que matan los clearErrors de paciente, firma y rango (regresion)",
+      "veredicto": "PASA",
+      "comando": "npm test en el clon de la ronda 6 (2193 verdes); los mutantes se verificaron en la ronda 5 sobre formulario-alta.tsx, que la ronda 6 no toca",
+      "evidencia": "Test Files 173 passed, Tests 2193 passed; formulario-alta.tsx sin cambios en c956428..8f93b71. No se repitieron los mutantes en esta ronda."
+    },
+    {
+      "id": "H29",
+      "texto": "Error al leer perfiles_centros se trata como error (no mapa vacio)",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Aceptado por el propietario (05-10): cubierto por prueba unitaria con mutante del revisor de la ronda 5; provocar el fallo de lectura en navegador exigiria romper la base compartida."
+    },
+    {
+      "id": "auto-2",
+      "texto": "Verificador de accesibilidad de T-009 en verde sobre /agenda/nueva",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Aceptado por el propietario (05-10): no existe spec en accesibilidad/ para /agenda/nueva; espera a un ticket de accesibilidad con @axe-core/playwright."
+    },
+    {
+      "id": "man-1",
+      "texto": "Desde la ficha, pestana Resumen, Nueva cita abre el dialogo con paciente fijado; recargar mantiene la pantalla",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Trasladado al corte C por decision del propietario (05-10): la entrada desde la ficha es panel-resumen.tsx, que es del corte C."
+    },
+    {
+      "id": "man-13",
+      "texto": "/agenda/nueva al lado de /prototipo: mismo vocabulario visual",
+      "veredicto": "PASA",
+      "comando": "Comparacion visual con /prototipo por el propietario (05-10)",
+      "evidencia": "Aprobado por el propietario. Prueba manual completa del corte B aprobada por el propietario (05-10-2026). No ejercido por el verificador."
+    }
+  ],
+  "regresiones": [
+    "Ninguna nueva.",
+    "man-2, man-3, man-5, man-6, man-7, man-9, man-11a/b, man-12 no se repitieron en esta ronda (la ronda 6 solo toca vista-alta.ts y su prueba); sus veredictos de la ronda 5 estan en evidencia.ronda5.json.",
+    "npm run test:rls no se ejecuto en esta ronda.",
+    "El db reset borro los datos de pruebas anteriores; esta ronda dejo citas nuevas (Lucia 19-10-2026 09:00, Hugo/Mateo 6-10-2026)."
+  ]
+}
