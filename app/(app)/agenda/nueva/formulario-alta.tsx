@@ -323,6 +323,11 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     <form
       noValidate
       onSubmit={(evento) => {
+        // `aria-disabled` no impide el envío (Intro en un campo, segundo clic): se corta aquí (H27).
+        if (guardando || catalogoVacio || esperandoSerie) {
+          evento.preventDefault();
+          return;
+        }
         if (falloSerie !== null) {
           evento.preventDefault();
           setSerieFallida(null);
@@ -507,7 +512,8 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         <Button type="button" variante="contorno" onClick={alCancelar}>
           {t('comunes.cancelar')}
         </Button>
-        <Button type="submit" disabled={guardando || catalogoVacio || esperandoSerie}>
+        {/* `aria-disabled` y no `disabled`: un botón `disabled` con el foco dentro lo suelta a `body` (H27). */}
+        <Button type="submit" aria-disabled={guardando || catalogoVacio || esperandoSerie} className="aria-disabled:cursor-default aria-disabled:opacity-50">
           {guardando ? t('agenda.alta.guardando') : t('agenda.alta.guardar')}
         </Button>
       </div>

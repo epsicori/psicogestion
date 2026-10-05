@@ -111,7 +111,7 @@ describe('FormularioAlta · campos por rol', () => {
     pinta({ tipos: [] });
 
     expect(screen.getByText('No hay tipos de terapia activos. Los da de alta el administrador.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Guardar' }).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('la duración sale del tipo elegido', () => {
@@ -440,7 +440,7 @@ describe('FormularioAlta · serie', () => {
     await waitFor(() => expect(m.previsualizarAltaSerie).toHaveBeenLastCalledWith(expect.objectContaining({ profesionalId: OTRO })));
 
     const guardar = screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement;
-    expect(guardar.disabled).toBe(true);
+    expect(guardar.getAttribute('aria-disabled')).toBe('true');
     fireEvent.submit(guardar.closest('form') as HTMLFormElement);
     await act(async () => {});
     expect(m.guardarAlta).not.toHaveBeenCalled();
@@ -448,7 +448,7 @@ describe('FormularioAlta · serie', () => {
     await act(async () => {
       resolverNueva({ ok: true, firma: FIRMA_B, sesiones });
     });
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar' }).getAttribute('aria-disabled')).not.toBe('true'));
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(m.guardarAlta).toHaveBeenCalledTimes(1));
     expect(m.guardarAlta).toHaveBeenCalledWith(expect.objectContaining({ profesionalId: OTRO, firma: FIRMA_B }));
@@ -671,7 +671,7 @@ describe('FormularioAlta · la espera de la serie (H15)', () => {
     fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '1' } });
 
     const guardar = screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement;
-    expect(guardar.disabled).toBe(false);
+    expect(guardar.getAttribute('aria-disabled')).not.toBe('true');
     await act(async () => {
       fireEvent.click(guardar);
     });
@@ -689,7 +689,7 @@ describe('FormularioAlta · la espera de la serie (H15)', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('No se ha podido calcular la serie'));
     const guardar = screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement;
-    expect(guardar.disabled).toBe(false);
+    expect(guardar.getAttribute('aria-disabled')).not.toBe('true');
 
     await act(async () => {
       fireEvent.click(guardar);
@@ -708,7 +708,63 @@ describe('FormularioAlta · la espera de la serie (H15)', () => {
     fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '2' } });
 
     await waitFor(() => expect(m.previsualizarAltaSerie).toHaveBeenCalled());
-    expect((screen.getByRole('button', { name: 'Guardar' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Guardar' }).getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
+// H27 (ronda 4): Guardar no se deshabilita con el foco dentro; si no, tras un rechazo el foco queda en body.
+describe('FormularioAlta · el foco no se pierde al guardar (H27)', () => {
+  const SALIDAS: Array<[string, () => void]> = [
+    [
+      'hueco_ocupado',
+      () => m.guardarAlta.mockResolvedValue({ ok: false, motivo: 'hueco_ocupado', mensaje: 'Ese hueco acaba de ocuparse.', vista: null }),
+    ],
+    [
+      'previsualizacion_caducada',
+      () =>
+        m.guardarAlta.mockResolvedValue({ ok: false, motivo: 'previsualizacion_caducada', mensaje: 'Caducó.', firma: 'a'.repeat(64), sesiones: [] }),
+    ],
+    ['fallo', () => m.guardarAlta.mockResolvedValue({ ok: false, motivo: 'fallo', mensaje: 'No se pudo guardar.' })],
+    ['catch', () => m.guardarAlta.mockRejectedValue(new Error('red'))],
+  ];
+
+  it.each(SALIDAS)('tras %s, Guardar sigue enfocado y activable', async (_nombre, preparar) => {
+    preparar();
+    pinta();
+    await elegirTipoYHueco();
+    const guardar = screen.getByRole('button', { name: /Guardar/ }) as HTMLButtonElement;
+    guardar.focus();
+
+    await act(async () => {
+      fireEvent.click(guardar);
+    });
+
+    await waitFor(() => expect(m.guardarAlta).toHaveBeenCalledTimes(1));
+    expect(guardar.disabled).toBe(false);
+    expect(guardar.getAttribute('aria-disabled')).not.toBe('true');
+    expect(document.activeElement).toBe(guardar);
+  });
+
+  it('mientras guarda no lleva disabled (aria-disabled) y un segundo envío no repite la acción', async () => {
+    let resolver: (v: unknown) => void = () => {};
+    m.guardarAlta.mockImplementation(() => new Promise((r) => (resolver = r)));
+    pinta();
+    await elegirTipoYHueco();
+    const guardar = screen.getByRole('button', { name: /Guardar/ }) as HTMLButtonElement;
+    guardar.focus();
+
+    await act(async () => {
+      fireEvent.click(guardar);
+    });
+    await waitFor(() => expect(guardar.getAttribute('aria-disabled')).toBe('true'));
+    expect(guardar.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.submit(guardar.closest('form') as HTMLFormElement);
+    });
+    expect(m.guardarAlta).toHaveBeenCalledTimes(1);
+
+    await act(async () => resolver({ ok: false, motivo: 'fallo', mensaje: 'x' }));
   });
 });
 
