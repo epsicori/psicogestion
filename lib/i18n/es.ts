@@ -287,6 +287,7 @@ export const es = {
       verificar: 'Verificar',
       codigoNoValido: 'Ese código no es válido. Prueba con el siguiente que te dé la aplicación.',
       noSePudoEnrolar: 'No se pudo preparar la verificación en dos pasos. Vuelve a intentarlo.',
+      perdisteLaAplicacion: '¿Has perdido el acceso a tu aplicación? Usa un código de recuperación',
     },
 
     codigos: {
@@ -387,6 +388,7 @@ export const es = {
     canjear: 'Usar el código',
     codigoNoValido: 'Ese código no es válido.',
     bloqueado: 'Demasiados intentos. Prueba de nuevo más tarde.',
+    volver: 'Volver a la verificación en dos pasos',
   },
 
   ficha: {

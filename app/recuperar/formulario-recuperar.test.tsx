@@ -64,4 +64,13 @@ describe('FormularioRecuperar', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Código de recuperación')).toHaveValue(''));
   });
+
+  it('ofrece volver a la verificación en dos pasos (T-044)', () => {
+    render(<FormularioRecuperar />);
+
+    expect(screen.getByRole('link', { name: 'Volver a la verificación en dos pasos' })).toHaveAttribute(
+      'href',
+      '/primera-vez',
+    );
+  });
 });

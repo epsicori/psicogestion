@@ -206,6 +206,20 @@ Contenido, en este orden:
   la organización. Solo lectura: marcar como leído es de la campana. Los no leídos llevan la marca
   visible «Sin leer»; un fallo al leerlos se dice como fallo, nunca como lista vacía.
 
+### Recuperar el acceso (`/recuperar`, T-044)
+
+Pantalla sin prototipo, igual para los tres roles (ADR-039). Llega quien perdió su aplicación de
+autenticación: tiene sesión `aal1` (entró con contraseña) y un factor TOTP ya verificado. Se llega por un
+solo camino, el enlace «¿Has perdido el acceso a tu aplicación? Usa un código de recuperación» que
+`/primera-vez` pinta bajo «Verificar» **solo cuando hay factor verificado**; en la activación (enrolar un
+factor nuevo) no sale, porque aún no hay códigos que canjear. No hay enlace en `/login`: sin sesión no se
+puede canjear.
+
+El canje **borra el factor TOTP** y obliga a enrolar uno nuevo (`app/recuperar/acciones.ts`): al acertar se
+lleva a `/primera-vez`. Un código inválido y uno agotado dan **el mismo mensaje**, para no contar nada de
+una cuenta que no es de quien prueba. Quien entra por error sale con el enlace «Volver a la verificación en
+dos pasos», que lleva a `/primera-vez`. Ambos enlaces son de texto, con caja de al menos 44 px (ADR-044).
+
 ## De dónde sale cada pieza
 
 **Todo a mano, sin librería de componentes** (ADR-040): ni shadcn/ui, ni Radix, ni Base UI.
