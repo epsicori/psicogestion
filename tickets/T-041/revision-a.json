@@ -1,0 +1,71 @@
+{
+  "ticket": "T-041",
+  "ronda": 1,
+  "revisor": "A (base de datos, RLS y seguridad)",
+  "head": "9e0033c",
+  "rama": "worktree-agent-ada3a424c2ef63d80",
+  "diff": "afbbfcc..9e0033c",
+  "fecha": "2026-10-05",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 4,
+  "mutantes": {
+    "muertos": [
+      "M1 dar <> (28.C6)",
+      "M1b retirar <> (28.C6)",
+      "M2 lista abierta (28.G2)",
+      "M10 disparador sin old.hasta (28.E1)"
+    ],
+    "supervivientes": [
+      "M3 estado = suspendido",
+      "M4 idempotencia sin hasta is null",
+      "M5 retirar sin hasta is null",
+      "M8 principal sin hasta is null",
+      "M6 dar sin for update",
+      "M11 retirar sin for update",
+      "M7 disparador sin id"
+    ]
+  },
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/28-altas-de-centro.sql",
+      "linea": 400,
+      "descripcion": "El banco nunca recorre dar → retirar → volver a dar → retirar sobre un mismo par: sobreviven los tres mutantes que quitan hasta is null (idempotencia :86, where de retirar :155 que el diseño §5 nombra, cálculo del principal :97).",
+      "escenario": "M5: ADM retira a Ana de Canarias y se la vuelve a dar; al retirarla otra vez el update alcanza también la fila cerrada, el disparador lanza 42501 y el alta queda sin poder retirarse (altas.ts lo pinta como permiso). M4: volver a dar devuelve el id cerrado sin insertar; la UI dice «alta dada» y 7c da 23514. M8: tras F10, la siguiente alta no es principal y el perfil queda sin principal. Una prueba del ciclo completo mata los tres."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
+      "linea": 185,
+      "descripcion": "El disparador «solo cierre» deja fechar el cierre en el pasado (cualquier hasta entre desde y hoy); medido: update hasta = desde sobre una vigente de 2026-09-01 pasa, y authenticated tiene UPDATE en las 7 columnas con la política del administrador.",
+      "escenario": "Ana coprofesional en notas firmadas el 20-09 con alta vigente en Madrid → el 05-10 un administrador hace PATCH perfiles_centros?id=eq.X {hasta:'2026-09-01'} → la pertenencia queda congelada diciendo que no tenía alta al firmar. La auditoría guarda el instante real (por eso BAJA); arreglo: exigir new.hasta = current_date o anotar que es legítimo."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/28-altas-de-centro.sql",
+      "linea": 381,
+      "descripcion": "El diseño §5 pide «suspendido o de baja → 23514» y F6 solo prueba suspendido; el mutante v_estado = 'suspendido' (M3) deja el banco verde.",
+      "escenario": "Con el mutante, ADM llama a rpc/dar_alta_centro sobre un perfil de baja → se inserta un alta vigente, principal si era la primera, y el espejo escribe perfiles.centro_id de un perfil de baja."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
+      "linea": 54,
+      "descripcion": "D7 (for update sobre perfiles) no tiene ninguna prueba: quitarlo de dar (M6) o de retirar (M11, :138) deja el banco verde; G4 ya usa el catálogo y aquí no.",
+      "escenario": "Una refactorización quita el for update con el banco en verde → dos administradores dan a la vez la primera alta a un perfil sin principal → ambas calculan principal = true → la segunda choca con perfiles_centros_un_principal_vigente y sale el 23505 que D7 quería dejar solo como red."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
+      "linea": 185,
+      "descripcion": "El cotejo new.id is distinct from old.id del disparador no tiene negativa: E2/E3 cubren centro_id, desde, perfil_id y creado_en, no id; el mutante sin esa línea (M7) deja el banco verde.",
+      "escenario": "Con el mutante, ADM hace PATCH perfiles_centros?id=eq.X {id:'<uuid nuevo>'} (el UPDATE de authenticated cubre id) → la fila vigente cambia de identidad y el INSERT auditado con registro_id = X ya no apunta a ninguna fila: el rastro del alta (ADR-051) pierde su enlace."
+    }
+  ]
+}

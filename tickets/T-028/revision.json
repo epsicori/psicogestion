@@ -1,55 +1,135 @@
 {
   "ticket": "T-028",
-  "corte": "B",
-  "ronda": 6,
-  "diff": "git diff c956428..8f93b71 en worktree-agent-a32189ff51a6d9558: 1 commit, app/(app)/agenda/nueva/vista-alta.ts y vista-alta.test.ts",
+  "corte": "C",
+  "ronda": 8,
+  "diff": "git diff worktree-agent-aa3cf8ef16a243549..worktree-agent-aae08223ceefe21b6 -- app (3883608); total del corte: git diff main...worktree-agent-aae08223ceefe21b6 (panel-resumen.tsx y panel-resumen.test.tsx)",
   "altas": 0,
   "medias": 0,
-  "bajas": 1,
-  "cerrados_de_la_ronda_5": [
-    "H34"
+  "bajas": 0,
+  "evidencia_leida": "No",
+  "cerrados_de_la_ronda_7": [
+    "H36",
+    "H37"
   ],
   "abiertos_sin_tocar": [
     "H32",
-    "H33"
+    "H33",
+    "H35"
   ],
-  "evidencia_leida": "No",
-  "desvio_de_alcance": "No: los dos ficheros en app/(app)/agenda/nueva/**; supabase/ intacto",
+  "desvio_de_alcance": "No",
   "comprobaciones_pedidas": {
-    "varios_ocupados": "OK: minimo posterior del dia; sonda 09:00 oc, 09:40 oc, 10:20 libre -> 09:00-09:40, 09:40-10:20",
-    "manana_tarde": "OK en codigo (cota siguiente < fin, estricta); sin prueba que la fije (H35)",
-    "orden_de_entrada": "Independiente del orden (filter + minimo); sonda barajada da los mismos rangos",
-    "cambio_de_hora": "Recorte por instantes; minutoPared sin cambios respecto a antes",
-    "cero_minutos": "Inalcanzable: filtro estricto, upper(rango) > cursor, horas HH:MM y descanso en minutos; minimo 1 min; rejilla min-h-0 overflow-hidden",
-    "consumidores": "carrilesDeHuecos, RejillaSemana (alto), HuecoSeleccion (rango), eje: solo encogen; sugerencias y previsualizacion leen bloques crudos",
-    "D11": "El fin recortado es el inicio de un tramo ya pintado; nada nuevo de la cita"
+    "H36": "Cerrado: tickets/T-028-alta-de-cita.md:35 incluye panel-resumen.test.tsx (cad615b); territorio.mjs en el worktree: 2 ficheros, todos dentro; zz-man1.mjs ya no existe",
+    "H37": "Cerrado segun decision del propietario: la rama citas===null (panel-resumen.tsx:103-117) pinta NuevaCita en la misma posicion que las otras ramas; comentario :171-176 actualizado",
+    "prueba_null_discrimina": "Si: quitar NuevaCita solo de la rama null -> 1 roja (la prueba de H37), 2 verdes; sin mutar 3/3 verdes; comprueba href exacto con uuid",
+    "quien_ve_que": "Sin cambios: null = sin rol o error de lectura; sin rol /agenda/nueva corta en contenido-alta.tsx:26 con AvisoDeError antes de leer; el enlace solo lleva el uuid del paciente de la ficha ya visible",
+    "lint": "eslint de los dos ficheros limpio"
   },
   "mutantes_medidos": {
-    "0 sin arreglo": "ROJO (1)",
-    "1 sin cota < fin": "VERDE (H35)",
-    "2 sin filtro de fecha": "VERDE (equivalente sin franjas que crucen medianoche)",
-    "3 > a >=": "ROJO (1)",
-    "4 recorta libres": "VERDE (equivalente: la base no emite libre pisado)",
-    "5 max en vez de min": "VERDE (H35)",
-    "6 primero de la entrada": "VERDE (equivalente con orden por franja)",
-    "7 ultimo de la entrada": "VERDE (H35)",
-    "8 rango sin recortar": "ROJO (1)",
-    "9 duracion sin recortar": "ROJO (1)"
+    "0 sin mutar": "VERDE (3/3)",
+    "1 sin boton en la rama null": "ROJO (1)"
   },
-  "sondas": {
-    "cuatro_casos": "varios tramos detras, manana/tarde, entrada barajada, ocupado de 5 min: codigo bueno verde; mutantes 1, 5 y 7 rojo"
-  },
-  "hallazgos": [
-    {
-      "id": "H35",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/vista-alta.test.ts",
-      "linea": 64,
-      "descripcion": "La prueba de H34 tiene un solo tramo detras del ocupado en su dia y ningun ocupado al final de una manana con tarde: sobreviven los mutantes 'maximo en vez de minimo', 'ultimo de la entrada' y 'sin la cota siguiente < fin' (11 verdes, medido).",
-      "escenario": "Con el mutante 'maximo': ocupado 09:00 (cita 30+10), libres 09:40 y 10:40 -> el ocupado vuelve a pintarse 09:00-09:50 encima del libre de las 09:40 (H34 reabierto) con todo verde. Con 'sin cota': ocupado 13:00 y tarde a las 16:00 -> 'Ocupado 13:00 - 16:00' cubre el mediodia."
-    }
-  ],
+  "hallazgos": [],
   "rondas_anteriores": [
+    {
+      "ticket": "T-028",
+      "corte": "C",
+      "ronda": 7,
+      "diff": "git diff main...worktree-agent-aa3cf8ef16a243549 (681cb0d): app/(app)/pacientes/[id]/panel-resumen.tsx y panel-resumen.test.tsx",
+      "altas": 0,
+      "medias": 1,
+      "bajas": 1,
+      "evidencia_leida": "No",
+      "abiertos_sin_tocar": [
+        "H32",
+        "H33",
+        "H35"
+      ],
+      "desvio_de_alcance": "No en contenido; la prueba nueva queda fuera del territorio declarado (H36)",
+      "comprobaciones_pedidas": {
+        "quien_ve_el_boton": "OK: los tres roles; contenido-alta.tsx:26 solo corta con rol nulo; profesional lee y agenda por el mismo es_profesional_asignado; tecnico por centros_actuales; sin tipo ni nota en el enlace",
+        "ocultar_con_null": "Lectura del implementador, sin dueno en contrato ni diseno; defendible con rol nulo, pero null tambien es fallo de lectura (H37)",
+        "prueba": "Discrimina: 6/6 mutantes en rojo",
+        "territorio": "panel-resumen.test.tsx FUERA (H36); zz-man1.mjs sin seguimiento en el worktree"
+      },
+      "mutantes_medidos": {
+        "1 href sin paciente": "ROJO (2)",
+        "2 paciente=x": "ROJO (2)",
+        "3 siempre visible (rama null)": "ROJO (1)",
+        "4 nunca visible": "ROJO (2)",
+        "5 sin boton en rama sin citas": "ROJO (1)",
+        "6 sin boton en rama con citas": "ROJO (1)"
+      },
+      "hallazgos": [
+        {
+          "id": "H36",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/pacientes/[id]/panel-resumen.test.tsx",
+          "linea": 1,
+          "descripcion": "La prueba nueva del boton no esta en el territorio: del ticket (solo panel-resumen.tsx para el corte C) y territorio.mjs T-028 la da FUERA.",
+          "escenario": "Se lanza territorio.mjs antes del merge -> FUERA; las salidas son revertir (se pierde la unica prueba automatica del boton, 6/6 mutantes muertos) o ampliar territorio: con aprobacion del propietario, como en la ronda 5 con foco.ts."
+        },
+        {
+          "id": "H37",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/pacientes/[id]/panel-resumen.tsx",
+          "linea": 173,
+          "descripcion": "El comentario dice que el boton se oculta donde la agenda no es visible, pero cargarCitasDelPaciente tambien devuelve null cuando falla la lectura, y el alta no depende de esa lectura.",
+          "escenario": "Fallo pasajero de PostgREST al leer citas del paciente -> la ficha dice «No puedes ver la agenda de este paciente» y ya no ofrece «Nueva cita»; recepcion concluye que no puede citarlo aunque /agenda -> Nueva cita -> buscar funciona."
+        }
+      ]
+    },
+    {
+      "ticket": "T-028",
+      "corte": "B",
+      "ronda": 6,
+      "diff": "git diff c956428..8f93b71 en worktree-agent-a32189ff51a6d9558: 1 commit, app/(app)/agenda/nueva/vista-alta.ts y vista-alta.test.ts",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 1,
+      "cerrados_de_la_ronda_5": [
+        "H34"
+      ],
+      "abiertos_sin_tocar": [
+        "H32",
+        "H33"
+      ],
+      "evidencia_leida": "No",
+      "desvio_de_alcance": "No: los dos ficheros en app/(app)/agenda/nueva/**; supabase/ intacto",
+      "comprobaciones_pedidas": {
+        "varios_ocupados": "OK: minimo posterior del dia; sonda 09:00 oc, 09:40 oc, 10:20 libre -> 09:00-09:40, 09:40-10:20",
+        "manana_tarde": "OK en codigo (cota siguiente < fin, estricta); sin prueba que la fije (H35)",
+        "orden_de_entrada": "Independiente del orden (filter + minimo); sonda barajada da los mismos rangos",
+        "cambio_de_hora": "Recorte por instantes; minutoPared sin cambios respecto a antes",
+        "cero_minutos": "Inalcanzable: filtro estricto, upper(rango) > cursor, horas HH:MM y descanso en minutos; minimo 1 min; rejilla min-h-0 overflow-hidden",
+        "consumidores": "carrilesDeHuecos, RejillaSemana (alto), HuecoSeleccion (rango), eje: solo encogen; sugerencias y previsualizacion leen bloques crudos",
+        "D11": "El fin recortado es el inicio de un tramo ya pintado; nada nuevo de la cita"
+      },
+      "mutantes_medidos": {
+        "0 sin arreglo": "ROJO (1)",
+        "1 sin cota < fin": "VERDE (H35)",
+        "2 sin filtro de fecha": "VERDE (equivalente sin franjas que crucen medianoche)",
+        "3 > a >=": "ROJO (1)",
+        "4 recorta libres": "VERDE (equivalente: la base no emite libre pisado)",
+        "5 max en vez de min": "VERDE (H35)",
+        "6 primero de la entrada": "VERDE (equivalente con orden por franja)",
+        "7 ultimo de la entrada": "VERDE (H35)",
+        "8 rango sin recortar": "ROJO (1)",
+        "9 duracion sin recortar": "ROJO (1)"
+      },
+      "sondas": {
+        "cuatro_casos": "varios tramos detras, manana/tarde, entrada barajada, ocupado de 5 min: codigo bueno verde; mutantes 1, 5 y 7 rojo"
+      },
+      "hallazgos": [
+        {
+          "id": "H35",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/vista-alta.test.ts",
+          "linea": 64,
+          "descripcion": "La prueba de H34 tiene un solo tramo detras del ocupado en su dia y ningun ocupado al final de una manana con tarde: sobreviven los mutantes 'maximo en vez de minimo', 'ultimo de la entrada' y 'sin la cota siguiente < fin' (11 verdes, medido).",
+          "escenario": "Con el mutante 'maximo': ocupado 09:00 (cita 30+10), libres 09:40 y 10:40 -> el ocupado vuelve a pintarse 09:00-09:50 encima del libre de las 09:40 (H34 reabierto) con todo verde. Con 'sin cota': ocupado 13:00 y tarde a las 16:00 -> 'Ocupado 13:00 - 16:00' cubre el mediodia."
+        }
+      ]
+    },
     {
       "ticket": "T-028",
       "corte": "B",

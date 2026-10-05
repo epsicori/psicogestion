@@ -983,3 +983,111 @@ No se guarda nada falso, porque Guardar queda bloqueado. Pero la pantalla dice a
 | 9 | `duracionMinutos` sin recortar | **Rojo** (1) |
 
 Contra la sonda de cuatro casos, los mutantes 1, 5 y 7 dan rojo. El 4 también, pero solo porque la sonda tiene dos libres que se pisan, cosa que la base no produce.
+
+---
+
+# T-028 · Revisión del corte C, ronda 7 (botón «Nueva cita» en la ficha)
+
+**Sin hallazgos ALTA. 0 ALTA, 1 MEDIA (H36), 1 BAJA (H37).**
+
+- Diff: `git diff main...worktree-agent-aa3cf8ef16a243549`, commit `681cb0d`. Dos ficheros: `app/(app)/pacientes/[id]/panel-resumen.tsx` (+21) y `panel-resumen.test.tsx` (nuevo, +55).
+- No he leído `evidencia.json` ni el informe del verificador.
+- H32, H33 y H35 (corte B) no se tocan en este diff y siguen como estaban.
+
+## Puntos pedidos
+
+| Punto | Resultado |
+|---|---|
+| Quién ve el botón | Coincide con lo que `/agenda/nueva` deja hacer. `contenido-alta.tsx:26` solo corta cuando `rol` es nulo, y los tres roles entran. El profesional lee la ficha por `es_profesional_asignado(id)` (`pacientes_lectura_profesional_asignado`), que es el mismo predicado que `fn_exigir_vinculo_agenda` exige para agendar: no hay ficha visible cuyo alta acabe en 42501 por vínculo. El técnico lee pacientes de `centros_actuales()` y agenda en esos centros. La arquitectura dice «El técnico administrativo agenda, pero no ve ni fija el tipo de terapia por la tabla» (`architecture.md:189`). El botón no lleva tipo ni nota, solo el uuid. El botón de la agenda (`agenda/page.tsx:119`) también se pinta sin condición de rol. |
+| Ocultarlo con `null` | **Es una lectura del implementador.** Ni el contrato ni el diseño (§1, «`<Link …>` en `panel-resumen.tsx:147`», corte C) dicen nada del caso `null`. La lectura se defiende para `rol` nulo, porque `/agenda/nueva` daría error. Pero `null` también es un fallo de lectura de `citas`, y el comentario solo nombra el primer caso: H37. |
+| Sitio | El diseño lo ponía dentro del bloque «Próxima cita», que solo existe con citas. El implementador lo saca encima, en las dos ramas no nulas. Así está también en «sin citas», que es la entrada que el ticket pide («con el paciente ya fijado») y donde más falta hace. `<NuevaCita>` ocupa la misma posición entre hermanos en las dos ramas. Cuando se guarda la primera cita, `revalidatePath('/pacientes/[id]', 'page')` (`acciones.ts:172`) cambia la ficha de rama sin desmontar el enlace al que vuelve el foco. |
+| Prueba | Discrimina. Medí 6 mutantes en un clon de `681cb0d`: **todos dan rojo** (tabla abajo). La negativa con `null` falla si se pinta el botón en esa rama, así que no es vacía. |
+| URL | `?paciente=<uuid>`, nunca el nombre. El uuid sale de `paciente.id` en la página. |
+| Fuera de alcance | Nada más. No toca `supabase/`, `lib/` ni `datos.ts`. |
+
+## MEDIA
+
+### H36 · `app/(app)/pacientes/[id]/panel-resumen.test.tsx:1` — la prueba nueva está fuera del `territorio:` del ticket
+
+**Qué pasa.** El ticket añade `panel-resumen.tsx` para el corte C, pero no su prueba. El diseño (§6) tampoco la nombra, y §3 cerraba el criterio de la ficha con una prueba manual más `contenido-alta.test.tsx`. Ejecutado en el worktree:
+
+```
+node ~/.claude/pipeline/territorio.mjs T-028
+T-028: 2 fichero(s) FUERA del territorio [...]:
+  - app/(app)/pacientes/[id]/panel-resumen.test.tsx
+  - zz-man1.mjs
+```
+
+**Escenario.** Se lanza el control de territorio antes del merge y devuelve FUERA. Las salidas legítimas de `pipeline.md` son dos:
+- revertir el fichero, con lo que se pierde la única prueba automática del botón: los tres casos, con 6 de 6 mutantes muertos;
+- ampliar `territorio:` con la aprobación del propietario, como se hizo con `components/ui/foco.ts` y `cierre-exterior-hidratado.test.tsx` en la ronda 5.
+
+No es ALTA ni desvío de alcance. Es la prueba del fichero que sí está en el territorio, prueba el criterio del propio ticket y no añade comportamiento. Pero el orquestador no puede cerrarlo solo. **Lo que cerraría:** una línea `- app/(app)/pacientes/[id]/panel-resumen.test.tsx   # corte C` en `territorio:`, con la aprobación del propietario.
+
+## BAJA
+
+### H37 · `app/(app)/pacientes/[id]/panel-resumen.tsx:173` (rama `:103`) — `null` también es un fallo de lectura, y el botón desaparece con él
+
+**Qué pasa.** `cargarCitasDelPaciente` (`datos.ts:130-144`) devuelve `null` en dos casos: sin rol, o cuando la lectura de `citas`/`citas_agenda` falla (`if (error) { console.error(...); return null; }`). El comentario de `NuevaCita` dice «Solo se pinta donde la agenda es visible (`citas !== null`)». Eso solo es cierto para el primer caso. El alta no depende de esa lectura: `/agenda/nueva` lee el paciente por su cuenta.
+
+**Escenario.** Un fallo pasajero de PostgREST al leer las citas del paciente (un timeout o un 503 durante un reinicio) llega a la ficha:
+- la rama `null` pinta «No puedes ver la agenda de este paciente», un texto que ya estaba antes y no es de este diff;
+- y ahora, además, quita «Nueva cita».
+
+Recepción concluye que a ese paciente no puede citarlo, aunque `/agenda` → «Nueva cita» → buscarlo funciona en ese mismo momento. Recargar lo arregla, y la otra entrada sigue abierta: por eso es BAJA.
+
+**Lo que cerraría.** Dentro del territorio, lo mínimo es que el comentario diga que el botón también se oculta cuando falla la lectura, y anotar en `docs/state.md` que distinguir las dos causas exige tocar `datos.ts`, que es de T-012/T-013. Si el propietario prefiere que el botón no dependa de esa lectura, se pinta también en la rama `null`. No hay riesgo de fuga: el alta lee el paciente por RLS.
+
+## Descartados y notas
+
+- **`zz-man1.mjs` sin seguimiento en la raíz del worktree.** Es un guion de Playwright del verificador para man-1. No está en el commit, pero `territorio.mjs` lo cuenta, y un `git add -A` antes del merge lo metería. Hay que borrarlo antes de integrar.
+- **Ficha de un paciente absorbido o traspasado.** El esquema define `fusionado_en is not null` como «solo lectura» y `traspasado_en is not null` como «cerrado a nueva actividad», pero no encuentro ninguna guarda de eso en `agenda_crear_cita`, en `agenda_crear_serie` ni en los disparadores de `citas`. Esa puerta ya estaba abierta por el buscador del corte B (`acciones.ts:232`, sin filtro), así que el botón no la abre. Es anterior a este diff y no lo he medido contra la base. Si el orquestador lo cree útil, va a `docs/state.md` §Hallazgos.
+- **La cadena de clases del botón está copiada de `agenda/page.tsx:121`.** No hay ninguna utilidad de botón en `components/ui` que se esté esquivando, y no tiene escenario de fallo.
+- **La devolución del foco en Safari** (los enlaces no reciben foco al pulsarlos) es una propiedad de `Dialogo` (H17, corte B), no de este diff.
+
+## Mutantes (6 contra `panel-resumen.test.tsx`, en un clon de `681cb0d`)
+
+| # | Mutante | Resultado |
+|---|---|---|
+| 0 | Sin mutar | Verde (3/3) |
+| 1 | `href="/agenda/nueva"`, sin `paciente` | **Rojo** (2) |
+| 2 | `?paciente=x`, sin el uuid | **Rojo** (2) |
+| 3 | Botón siempre visible (también en la rama `null`) | **Rojo** (1) |
+| 4 | Botón nunca visible (`NuevaCita` → `null`) | **Rojo** (2) |
+| 5 | Sin el botón en la rama «sin citas» | **Rojo** (1) |
+| 6 | Sin el botón en la rama con citas | **Rojo** (1) |
+
+---
+
+# T-028 · Revisión del corte C, ronda 8 (cierre de H36 y H37)
+
+**Sin hallazgos ALTA. 0 ALTA, 0 MEDIA, 0 BAJA.**
+
+- Diff de la ronda: `git diff worktree-agent-aa3cf8ef16a243549..worktree-agent-aae08223ceefe21b6 -- app` (commit `3883608`). Toca 2 ficheros: `panel-resumen.tsx` (+1 línea de JSX y el comentario) y `panel-resumen.test.tsx` (la negativa de `null` pasa a positiva).
+- Diff total del corte: `git diff main...worktree-agent-aae08223ceefe21b6`. Son los mismos 2 ficheros de `app/(app)/pacientes/[id]/` (+81). La rama no toca ningún fichero de `tickets/` respecto a la base común: lo que sale en el diff entre worktrees viene del merge de `main` (`d432fc8`).
+- No he leído `evidencia.json` ni el informe del verificador.
+- H32, H33 y H35 (corte B) no se tocan en este diff y siguen como estaban.
+
+## Puntos pedidos
+
+| Punto | Resultado |
+|---|---|
+| H36 (territorio de la prueba) | **Cerrado.** `tickets/T-028-alta-de-cita.md:35` lleva `app/(app)/pacientes/[id]/panel-resumen.test.tsx   # corte C, ampliado por el propietario (05-10, H36)`, en `main` (`cad615b`) y en la rama. `node ~/.claude/pipeline/territorio.mjs T-028`, ejecutado en el worktree limpio: «2 fichero(s) tocado(s), todos dentro». `zz-man1.mjs` ya no está en la raíz del worktree. |
+| H37 (botón con `null`) | **Cerrado según la decisión del propietario.** La rama `citas === null` (`panel-resumen.tsx:103-117`) pinta ahora `<NuevaCita>` en la misma posición que las otras dos ramas: tras la píldora documental y antes del bloque de actividad. El comentario de `NuevaCita` (`:171-176`) ya no dice «solo donde la agenda es visible», y da el motivo. |
+| La prueba de `null` discrimina | **Sí.** Mutante: quitar `<NuevaCita pacienteId={pacienteId} />` solo de la rama `null`, en el worktree, y después `git checkout` para devolverlo. Resultado: `× si la agenda no es visible (null), también se pinta (H37)`, 1 roja y 2 verdes. Sin mutar, 3/3 verdes. La aserción comprueba el `href` exacto con el uuid, así que tampoco pasa con un enlace sin paciente. |
+| Quién ve qué | Nada nuevo. `cargarCitasDelPaciente` (`datos.ts:130-144`) devuelve `null` en dos casos: sin rol, o con error de lectura. Una RLS que deniega devuelve `[]`, no error. Con rol, el botón lleva a un alta que los tres roles pueden usar (ronda 7). Sin rol, `/agenda/nueva` corta en `contenido-alta.tsx:26` con `agenda.alta.error.cargar` antes de leer nada. El enlace solo lleva el uuid del paciente cuya ficha ya se está viendo. No lleva tipo, nota ni nombre. |
+| Fuera de alcance | Nada. No toca `supabase/`, `lib/`, `datos.ts` ni los textos. `eslint` sobre los dos ficheros: limpio. |
+
+## Descartados y notas
+
+- **Con rol nulo, el botón lleva a una página de error.** Es la consecuencia directa de «siempre», que es lo que decidió el propietario. El destino es un `AvisoDeError` controlado: ni tumba el render ni filtra datos. Un usuario autenticado sin rol tampoco llega a una ficha útil. No lo cuento como hallazgo.
+- **Con un error de lectura, la rama `null` sigue diciendo «No puedes ver la agenda de este paciente».** El texto es anterior a este diff (ya se señaló en H37). Ahora convive con un botón que funciona, así que el usuario ya no se queda sin la acción. Distinguir el fallo de la falta de permiso exige tocar `datos.ts`, que está fuera del territorio. No hay escenario nuevo.
+
+## Mutantes (contra `panel-resumen.test.tsx`, en el worktree de `3883608`)
+
+| # | Mutante | Resultado |
+|---|---|---|
+| 0 | Sin mutar | Verde (3/3) |
+| 1 | Sin el botón en la rama `null` | **Rojo** (1: la prueba de H37) |
+
+Los mutantes 1, 2 y 4 a 6 de la ronda 7 no cambian: el componente y las otras dos pruebas son los mismos. El 3 («siempre visible») es ahora el comportamiento pedido.

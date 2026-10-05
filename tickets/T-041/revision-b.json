@@ -1,0 +1,89 @@
+{
+  "ticket": "T-041",
+  "revisor": "B",
+  "ronda": 1,
+  "head": "9e0033c",
+  "rama": "worktree-agent-ada3a424c2ef63d80",
+  "diff": "afbbfcc..9e0033c",
+  "fecha": "2026-10-05",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 7,
+  "dudas_del_implementador": {
+    "EstadoAlta = EstadoFormulario & { ok?: true }": "lectura del implementador (P6 dice EstadoFormulario); superconjunto compatible y necesario para distinguir éxito de rechazo; aceptable",
+    "altas vigentes en centros cerrados se listan": "lectura del implementador (P7 lee solo centros activos y calla); coherente con la base: retirar no mira centros.activo y tienePrincipal = v_principal; correcto",
+    "altasCentro.noGuardado": "lectura del implementador (no está en P8); reserva de la rama safeParse fallido; duplica MENSAJE_GENERICO; inocuo",
+    "de una casilla a dos el principal se vacía": "dueño: diseño P7 y D10; mutante (quitar la rama centrosIds.length <= 1) muere"
+  },
+  "mutantes": [
+    { "fichero": "lib/cuentas/invitar.ts:109", "mutante": "return tras el primer fallo de dar_alta_centro", "resultado": "sobrevive (6/6)" },
+    { "fichero": "app/(app)/ajustes/invitar/formulario-invitar.tsx:86", "mutante": "quitar la rama de uno a dos", "resultado": "muere (1 roja)" },
+    { "fichero": "app/(app)/ajustes/centros/gestion-altas.tsx:69", "mutante": "quitar estado.current?.focus()", "resultado": "muere (2 rojas)" }
+  ],
+  "hallazgos": [
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/ajustes/centros/gestion-altas.tsx",
+      "linea": 237,
+      "descripcion": "Confirmar y Cancelar con disabled={enviando}: el foco cae a BODY (medido en Chromium) y en la salida con error nadie lo recoloca; jsdom no lo ve.",
+      "escenario": "Retirar un alta que otro administrador ya retiró → P0002 → el role=alert se lee pero el foco está en body fuera del diálogo modal; Intro no hace nada y solo un Tab lo devuelve a la X."
+    },
+    {
+      "id": "B-H2",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/invitar.test.ts",
+      "linea": 121,
+      "descripcion": "La prueba (c) usa un solo centro adicional: el mutante que corta el bucle al primer fallo sobrevive (medido).",
+      "escenario": "Invitación con [Madrid principal, Canarias, Bilbao]; falla Canarias → el mutante no intenta Bilbao ni lo reporta, y el mensaje solo nombra Canarias."
+    },
+    {
+      "id": "B-H3",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/invitar.ts",
+      "linea": 89,
+      "descripcion": "Si registrar_invitacion falla, se devuelve antes del paso 4: las altas adicionales no se dan y el mensaje no las nombra.",
+      "escenario": "Invitación con [Madrid principal, Canarias]; registrar falla por un error transitorio → perfil solo con Madrid y mensaje «La cuenta se creó, pero no se pudo dejar constancia», sin mención a Canarias."
+    },
+    {
+      "id": "B-H4",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/invitar.ts",
+      "linea": 44,
+      "descripcion": "preparar_invitacion no mira centros.activo: un centro cerrado tras cargar el formulario entra como principal por los metadatos, y como adicional recibe un consejo sin salida.",
+      "escenario": "ADM1 cierra Canarias con el formulario de ADM2 abierto → como principal: alta principal en un centro cerrado, donde quedarán los pacientes futuros; como adicional: «dásela desde Ajustes › Altas de centro», que no ofrece centros cerrados."
+    },
+    {
+      "id": "B-H5",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/centros/page.tsx",
+      "linea": 52,
+      "descripcion": "Los errores de lectura se pintan como ausencia, y la ausencia de altas decide el aviso de principal de la confirmación.",
+      "escenario": "Falla la lectura de perfiles_centros → todos «Sin altas» y tienePrincipal=false → al dar a Pau (principal en Norte) un alta en Este, el diálogo dice «Será su centro principal…», y la base la inserta como no principal."
+    },
+    {
+      "id": "B-H6",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/centros/page.tsx",
+      "linea": 70,
+      "descripcion": "La derivación de tienePrincipal no tiene prueba; el mutante suyas.length > 0 sobrevive.",
+      "escenario": "Estado D5: a Pau se le retira el principal Norte y le queda Sur → se le da Este → la base hace principal a Este y la confirmación mutada no lo avisa."
+    },
+    {
+      "id": "B-H7",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/invitar/formulario-invitar.tsx",
+      "linea": 200,
+      "descripcion": "El aviso exitoConAltasPendientes sale en un role=status creado ya relleno y con el estilo del éxito.",
+      "escenario": "Invitación con un alta adicional fallida → NVDA no anuncia la región insertada, o la lee como un éxito → el administrador no da el alta pendiente."
+    },
+    {
+      "id": "B-H8",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/centros/gestion-altas.tsx",
+      "linea": 93,
+      "descripcion": "La transición del diálogo no tiene try/catch: un rechazo de transporte va al límite de error.",
+      "escenario": "Corte de red al pulsar Confirmar → la promesa se rechaza en la transición → pantalla de error de la ruta en lugar del mensaje dentro del diálogo."
+    }
+  ]
+}
