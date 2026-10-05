@@ -228,6 +228,17 @@ begin
           k_fecha_base::date, k_fecha_base)
   on conflict (id) do nothing;
 
+  -- El administrador atiende en Madrid (T-041). Tres cosas:
+  --  · Es PRINCIPAL porque no tenía ninguno, y no tiene pacientes: no cambia el
+  --    centro de nadie, solo el espejo `perfiles.centro_id` del propio administrador.
+  --  · Con esta alta, el selector de coprofesional de Ana lo ofrece en los episodios
+  --    de Madrid (7c), y hay con qué ver la regla funcionando.
+  --  · En una instalación real esta alta no se siembra: se da desde /ajustes/centros.
+  insert into public.perfiles_centros (id, perfil_id, centro_id, principal, desde, creado_en)
+  values ('a0080008-0000-4000-8000-000000000002', k_adm, k_c_madrid, true,
+          k_fecha_base::date, k_fecha_base)
+  on conflict (id) do nothing;
+
   -- -----------------------------------------------------------------------
   -- 4 · Pacientes: las dos titularidades, los dos centros
   --
