@@ -181,6 +181,10 @@ SC 2.5.7 exige alternativa sin arrastre, y a 360 px arrastrar entre contenedores
 existe—, y **cambiar el centro de un técnico administrativo le cambia los pacientes que
 puede leer**, así que pasa por confirmación explícita y queda en auditoría. Al profesional
 **no** le cambia ninguno: sus pacientes son los suyos, no los de su centro.
+Hecho en T-041 como `/ajustes/centros` («Altas de centro»): lista por persona con sus centros
+vigentes («principal» en texto y fecha), «Retirar» por centro y «Dar alta» debajo, todo con
+diálogo de confirmación; solo profesionales y administradores, el técnico queda fuera de esta
+pantalla.
 
 ### Mi cuenta (`/cuenta`, T-038)
 
