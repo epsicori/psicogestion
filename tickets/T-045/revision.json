@@ -1,0 +1,36 @@
+{
+  "ticket": "T-045",
+  "ronda": 1,
+  "altas": 0,
+  "medias": 0,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/reponer-totp/page.tsx",
+      "fichero": "app/(app)/ajustes/reponer-totp/page.tsx",
+      "linea": 18,
+      "descripcion": "El docstring sigue diciendo «RLS decide cuáles ve quien mira», pero la página lee ahora la vista definer directorio_perfiles: la RLS de perfiles no se aplica y el único filtro es rol_actual() is not null.",
+      "escenario": "Alguien añade una política de lectura sobre perfiles para que el técnico no salga en Reponer TOTP, fiándose del comentario → la lista no cambia, porque la vista definer no la consulta."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/perfiles-activos.test.ts",
+      "fichero": "app/(app)/ajustes/perfiles-activos.test.ts",
+      "linea": 25,
+      "descripcion": "El simulado resuelve en order() sin mirar la columna, y ninguna prueba fija el orden por nombre que el guion exige.",
+      "escenario": "Medido: con .order('nombre_completo') → .order('id') en perfiles-activos.ts:21, vitest sale 5 passed → el desplegable sale ordenado por uuid con la suite verde."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "fichero": "docs/state.md",
+      "linea": 31,
+      "descripcion": "El hallazgo nuevo termina con el estado del ticket («pendiente de verificación y merge») y reduce los lectores de la vista a tres pantallas de administrador.",
+      "escenario": "Tras el merge, state.md (que debe ser solo presente) dice que T-045 está pendiente, y el encargo del módulo de RLS deja fuera el alta de citas (contenido-alta.tsx) y las RPC de agenda, que también leen directorio_perfiles → podría probar solo al administrador."
+    }
+  ]
+}

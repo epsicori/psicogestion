@@ -6,7 +6,8 @@ riesgo: alto
 fase: 1
 prioridad: media
 depende_de: [T-035]
-estado: pendiente
+estado: hecho
+completado: 2026-10-05
 territorio:                           # provisional: lo cierra el diseño
   - supabase/migrations/*_altas_de_centro.sql   # solo si el diseño necesita función o política; cola de un solo dueño
   - supabase/seed.sql

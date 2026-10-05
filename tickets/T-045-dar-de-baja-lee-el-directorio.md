@@ -6,7 +6,8 @@ riesgo: bajo            # lectura de una vista que ya se concede a todo authenti
 fase: 1
 prioridad: alta         # hoy el administrador no puede dar de baja a nadie desde la interfaz
 depende_de: []          # no reutiliza código de T-041 (ver Notas); se integra antes o después
-estado: pendiente
+estado: hecho
+completado: 2026-10-05
 delegable: no
 territorio:
   - app/(app)/ajustes/perfiles-activos.ts         # nueva

@@ -205,6 +205,16 @@ se lee como «no ve el campo tipo», no como «no puede deducirlo». Residuo
 anotado: la cita C18TEC del banco 18 (`profesional_id` = un técnico) sigue legible por él
 (`citas_lectura`, 18 R1b) aunque ya no pueda modificarla.
 
+**Un alta de centro no amplía la matriz (T-041).** A un administrador o profesional, un alta en
+un centro no le abre ninguna celda: ninguna política suya sobre pacientes, notas, alertas o
+agenda mira el centro, y las de notas tampoco miran `coprofesional_id` (ADR-072). Añade dos
+capacidades de escritura sobre lo propio —abrir un episodio sin cita en ese centro y figurar
+como coprofesional en sus episodios— y, si el alta es su principal, decide el centro de los
+pacientes que dé de alta a partir de entonces; el técnico de ese centro los ve según su
+columna. Las altas solo las da y retira el administrador (`dar_alta_centro()`,
+`retirar_alta_centro()`); el técnico queda fuera, con su único centro, y una fila cerrada de
+`perfiles_centros` no se reabre (`perfiles_centros_solo_cierre`).
+
 **El secreto profesional es del profesional, no del cargo.** Ser administrador no da
 acceso a notas ajenas: existe un **acceso de emergencia** que exige justificación
 escrita, caduca solo, se audita de forma destacada y notifica al titular.
@@ -294,8 +304,10 @@ funciones auxiliares para que se lean como frases:
   «tengo perfil y estoy activo», y toda política que lo use hereda el corte por baja
 - `centros_actuales()` → **conjunto** de centros vigentes del perfil (ADR-033 + ADR-051).
   Es la que usan las políticas: `centro_id in (select public.centros_actuales())`.
-  **Acota al técnico administrativo y a nadie más**: vacío para administrador y profesional,
-  y es correcto
+  **La RLS solo lo usa para acotar al técnico administrativo.** Para administrador y
+  profesional contiene sus altas de centro (T-041, `dar_alta_centro()` desde
+  `/ajustes/centros`), y les sirve para dos cosas y nada más: (a) abrir episodios sin cita en
+  esos centros (`episodio_para_nota`) y (b) cumplir 7c como coprofesional (ADR-072)
 - `centro_actual()` → el centro **principal**, para lo que necesita exactamente uno —el alta
   de paciente, que decide la retención de esa historia durante veinticinco años (ADR-033)
 - `es_profesional_asignado(paciente_id)` → si el usuario actual atiende a ese paciente,
