@@ -209,6 +209,8 @@ describe('constantes exportadas', () => {
       'facturas',
       'exportaciones',
       'exportaciones_ficheros',
+      'borradores_factura_versiones',
+      'cobros',
     ]);
   });
 });
