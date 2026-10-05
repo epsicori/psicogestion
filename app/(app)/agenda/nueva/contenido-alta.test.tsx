@@ -271,6 +271,16 @@ describe('ContenidoAlta', () => {
     expect(m.cargarVistaAlta).not.toHaveBeenCalled();
   });
 
+  // H29 (ronda 4): un fallo al leer las pertenencias no puede pasar por «ningun profesional sanitario en ningun centro».
+  it('si falla la lectura de las pertenencias a centros, lo dice como error y no ofrece un selector cambiado', async () => {
+    m.tablas.perfiles_centros = { data: null, error: { message: 'fallo transitorio' } };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.mensaje).toBe('No se ha podido preparar el formulario.');
+    expect(m.cargarVistaAlta).not.toHaveBeenCalled();
+  });
+
   it('sin centro asignado lo dice', async () => {
     m.cargarContexto.mockResolvedValue({ ...contexto('administrador'), centros: [], centro: null });
 

@@ -63,6 +63,9 @@ function pinta(extra: Partial<Parameters<typeof FormularioAlta>[0]> = {}) {
   return { ...render(<FormularioAlta {...props} />), props };
 }
 
+// Con la region del estado vacio de las sugerencias (H30) hay mas de una region de estado: se leen todas.
+const avisos = () => screen.getAllByRole('status').map((e) => e.textContent).join(' | ');
+
 async function elegirTipoYHueco(tipo = TIPO_A) {
   fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: tipo } });
   // Sin CSS, la rejilla (md+) y la lista (móvil) están las dos en el DOM: vale la primera.
@@ -202,7 +205,7 @@ describe('FormularioAlta · guardar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toContain('Ese hueco acaba de ocuparse. Elige otro de los que quedan.'),
+      expect(avisos()).toContain('Ese hueco acaba de ocuparse. Elige otro de los que quedan.'),
     );
     expect(props.alTerminar).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /17:00, libre/ })).toBeNull();
@@ -243,7 +246,7 @@ describe('FormularioAlta · hueco elegido fuera de la semana visible (H8)', () =
     });
 
     await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toContain('Con esta duración el hueco elegido ya no cabe.'),
+      expect(avisos()).toContain('Con esta duración el hueco elegido ya no cabe.'),
     );
     expect(screen.queryByRole('button', { name: /elegida/ })).toBeNull();
     expect(m.recalcularAlta).toHaveBeenLastCalledWith(expect.objectContaining({ fechaFoco: '2026-10-05' }));
@@ -274,8 +277,8 @@ describe('FormularioAlta · hueco elegido fuera de la semana visible (H8)', () =
       resolverRecalculo({ ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 });
     });
 
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Ese hueco acaba de ocuparse'));
-    expect(screen.getByRole('status').textContent).not.toContain('ya no cabe');
+    await waitFor(() => expect(avisos()).toContain('Ese hueco acaba de ocuparse'));
+    expect(avisos()).not.toContain('ya no cabe');
   });
 });
 
@@ -295,7 +298,7 @@ describe('FormularioAlta · duración y hueco', () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByRole('status').textContent).toContain('Con esta duración el hueco elegido ya no cabe.'),
+      expect(avisos()).toContain('Con esta duración el hueco elegido ya no cabe.'),
     );
     expect(screen.queryByRole('button', { name: /elegida/ })).toBeNull();
   });
@@ -480,7 +483,7 @@ describe('FormularioAlta · serie', () => {
     await screen.findByText('Así quedaría la serie');
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
-    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('La serie ha cambiado mientras la revisabas.'));
+    await waitFor(() => expect(avisos()).toContain('La serie ha cambiado mientras la revisabas.'));
     expect(props.alTerminar).not.toHaveBeenCalled();
     expect(screen.getByText('Hueco ocupado')).toBeTruthy();
   });

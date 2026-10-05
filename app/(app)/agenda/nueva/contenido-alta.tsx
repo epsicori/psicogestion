@@ -52,6 +52,8 @@ export async function ContenidoAlta({ searchParams, modo }: Props) {
   if (tiposLeidos.error) console.error('Alta de cita: fallo al leer el catálogo de tipos', tiposLeidos.error);
   if (profesionalesLeidos?.error) console.error('Alta de cita: fallo al leer los profesionales', profesionalesLeidos.error);
   if (pertenenciasLeidas?.error) console.error('Alta de cita: fallo al leer las pertenencias a centros', pertenenciasLeidas.error);
+  // Sin las pertenencias, el selector cambiaría de significado (solo administradores, en todos los centros): es un error, no una ausencia (H29).
+  if (pertenenciasLeidas?.error) return <AvisoDeError mensaje={t('agenda.alta.error.cargar')} />;
   if (pacienteLeido?.error) console.error('Alta de cita: fallo al leer el paciente', pacienteLeido.error);
 
   const tipos = (tiposLeidos.data ?? []).map((tipo) => ({

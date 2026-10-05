@@ -77,6 +77,21 @@ describe('TarjetasSugerencia', () => {
     expect(screen.getByRole('status').textContent).toBe('Buscando huecos libres…');
   });
 
+  // H30 (ronda 4): una region viva se anuncia al cambiar su texto; si nace y muere con el, el lector no dice nada.
+  it('la region de estado es la misma al pasar de «buscando» a «sin huecos», y sigue siendo region de estado', () => {
+    const { modo, tarjetas } = construirTarjetas({ modo: 'enFrio', sugerencias: [] }, 'Europe/Madrid');
+    const props = { modo, tarjetas, error: false, elegida: null, alElegir: () => {} };
+    const { rerender } = render(<TarjetasSugerencia {...props} cargando />);
+    const region = screen.getByRole('status');
+    expect(region.textContent).toBe('Buscando huecos libres…');
+
+    rerender(<TarjetasSugerencia {...props} cargando={false} />);
+
+    const despues = screen.getByRole('status');
+    expect(despues).toBe(region);
+    expect(despues.textContent).toBe('Sin huecos libres en las próximas cuatro semanas.');
+  });
+
   it('con tarjetas anteriores a la vista, las deja mientras se recalcula', () => {
     pinta(HABITUAL, { cargando: true });
 

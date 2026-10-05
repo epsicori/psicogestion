@@ -27,13 +27,14 @@ type Props = {
 export function TarjetasSugerencia({ modo, tarjetas, error, elegida, alElegir, cargando = false }: Props) {
   if (error) return <ErrorPieza mensaje={t('agenda.alta.sugerencias.error')} />;
 
+  // El `<p>` lleva siempre `role="status"`: cambia el texto de una región viva ya montada, y así se anuncia (H30).
   const sinTarjetas = tarjetas.length === 0;
 
   return (
     <section className="flex flex-col gap-3">
       <CabeceraSugerencias modo={modo} />
       {sinTarjetas ? (
-        <p role={cargando ? 'status' : undefined} className="text-muted-foreground text-sm">
+        <p role="status" className="text-muted-foreground text-sm">
           {t(cargando ? 'agenda.alta.sugerencias.cargando' : 'agenda.alta.sugerencias.vacio')}
         </p>
       ) : (
