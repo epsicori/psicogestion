@@ -1,129 +1,102 @@
-**Sin hallazgos ALTA.** 0 ALTA · 1 MEDIA · 4 BAJA.
+**Sin hallazgos ALTA.** 0 ALTA · 0 MEDIA · 2 BAJA (A2-H1 coincide con B2-H4).
 
-# T-041 · Revisión A (base de datos, RLS y seguridad) — ronda 1
+# T-041 · Revisión A (base de datos, RLS y seguridad) — ronda 2
 
-- Diff: `git diff main...worktree-agent-ada3a424c2ef63d80`, base común `afbbfcc`, HEAD `9e0033c`.
-- Mi parte:
-  - `supabase/migrations/20261010120000_altas_de_centro.sql`;
-  - `scripts/rls/28-altas-de-centro.sql` y su línea del README;
-  - `supabase/seed-completo.sql`;
-  - `lib/supabase/tipos-bd.ts`;
-  - `lib/cuentas/{altas,invitar}.ts`, solo lo que llama a la base;
-  - `docs/architecture.md`.
-- La interfaz es del revisor B.
-- Todo medido en la base compartida dentro de `begin … rollback`, sin `db reset`.
-- Mutantes: cada uno con `create or replace` del cuerpo mutado justo después del `begin`, seguido del banco entero (`scripts/rls/*.sql` del worktree) y `rollback`.
-- Línea base: el banco entero en verde, con «28-altas-de-centro: completo.».
+- **Diff de la ronda:** `git diff worktree-agent-ada3a424c2ef63d80..worktree-agent-ae6f460142344cc25 -- . ':!tickets'`, de `9e0033c` a `1d6f244`.
+  - El commit propio es `e48ded8` (A-H1..H5).
+  - Mi foco también incluye `carga.ts` (`192a4ce`) y la lectura de `centros` en `invitar.ts` (`57889db`).
+  - `panel-resumen.tsx` y `docs/state.md` entran por el merge de main `d9865df` (T-028 C), así que no son de este ticket.
+- **Migración:** `20261010120000` se corrigió en su sitio. La base local ya tenía el cuerpo nuevo (`pg_get_functiondef(...) ~ 'fecha de hoy'` = t).
+- **Cómo medí:** todo en la base compartida, dentro de `begin … rollback` y sin `db reset`.
+  - Cada ejecución empieza por `create or replace` de las tres funciones de HEAD, con el texto tal cual sale de la migración.
+  - Si hay mutante, va a continuación el cuerpo mutado. Después corre el banco entero (`scripts/rls/*.sql` del worktree) y al final `rollback`.
+  - Uso `docker exec supabase_db_Psicogestion` directamente, porque hay dos `supabase_db_*` en marcha.
+- **Línea base:** banco entero en verde, con «28-altas-de-centro: completo.» (repetida al final, después del reinicio del contenedor).
+- **Incidencias de la base compartida:**
+  - Durante la medición alguien reinició el contenedor (`Up 9 minutes` a mitad de la tanda).
+  - Otro banco concurrente provocó un deadlock en la primera ejecución de M4.
+  - La primera de M11 se cortó en el módulo 21, sin ERROR y sin «completo».
+  - Ninguna de esas tres ejecuciones cuenta. Repetí M4, M11, M7 y M12 en una tanda limpia.
 
-## Lista «Qué revisar» del diseño (§5), lo que me toca
+## Cierre de la ronda 1
 
-| Punto | Resultado |
-|---|---|
-| Destino técnico → 22023 | Sí. Lista cerrada `not in ('profesional_sanitario','administrador')` en las dos RPC (`:60`, `:145`). Lo prueba F1, y G2/G3 la leen del catálogo. El mutante `= 'tecnico_administrativo'` muere en G2. |
-| Destino suspendido **o de baja** → 23514 | El código sí lo cumple (`v_estado <> 'activo'`, `:66`). El banco solo prueba `suspendido`. Ver **A-H3**. |
-| Centro inactivo → 23514 | Sí (`:78`, F4). |
-| Sin parámetro `p_principal` | Sí. La firma es `(uuid, uuid)` (G5) y la marca la calcula la función (`:93-97`). |
-| `retirar` no cierra filas de otro par: el `where` lleva `perfil_id`, `centro_id` y `hasta is null` | El código sí (`:151-155`). Pero quitar `hasta is null` deja el banco verde. Ver **A-H1**. |
-| Gemela del criterio 1: 23514 **con** el texto de 7c | Sí (A3, B3 y B5 con `assert_lanza_codigo_msg`). |
-| Criterio 3: 42501 y la fila no cambia | Sí (C1-C5). El mutante `<>` por `is distinct from` muere en C6, tanto en `dar` como en `retirar` (medido). |
-| Criterio 4: recuento global igual al de antes, el de P41 a 0 y la gemela de PRO1 | Sí (D0/D2/D3/D5). La versión de coterapia de PRO1 en el episodio de C41A existe (D5 = 1) y ADM no la ve. |
-| Disparador: un mutante por comprobación | Medido. Sin `old.hasta is not null` muere en E1. El de `centro_id` lo midió el implementador (README). **Sobrevive** el de `id`: ver **A-H5**. |
-| Nulos: `rol_actual()` nulo → 42501 y `p_centro_id` nulo → 23503 | Sí (C6, F3). `centro_id` es `not null` desde 0829. |
-| Duplicados: dar dos veces deja una fila (D6) | Sí (F7). Pero la idempotencia no distingue lo cerrado de lo vigente. Ver **A-H1**. |
-| Concurrencia: `for update` (D7) | El código lo tiene (`:54`, `:138`). Ninguna prueba lo defiende. Ver **A-H4**. |
-| Sin `grant delete`/`truncate` a `authenticated` | Sí (G7). La migración no añade grants de tabla ni políticas. |
-| `revoke … from public, anon`, y `search_path = ''` con todo cualificado | Sí: `public.` en todos los nombres, y el `execute` de la función del disparador revocado también a `authenticated`. |
-| `fn_exigir_episodio_coherente_en_nota` sin tocar | Sí: un solo fichero de migración nuevo, sin `create or replace` de 7c. |
-| Llamada con `sesion.supabase`, nunca con la clave de servicio | Sí (`altas.ts`, `invitar.ts` paso 4). |
-| TRUNCATE y DELETE como `postgres` | Aceptado en el diseño. No lo elevo: `perfiles_centros` no está en la invariante 6. |
+| Hallazgo | Arreglo | Mutante sobre el banco entero |
+|---|---|---|
+| A-H1 (MEDIA) ciclo dar → retirar → dar → retirar | 28.F11, F12 y F13 sobre INV2·C41A, después de F10 | M4 (idempotencia sin `hasta is null`) **muere** en 28.F11 · M5 (`where` de retirar sin `hasta is null`) **muere** en 28.F13 con el 42501 del disparador · M8 (principal sin `hasta is null`) **muere** en 28.F12 |
+| A-H2 (BAJA) cierre fechado en el pasado | El disparador exige `new.hasta = current_date` (`migración:195`). 28.E9 prueba ayer → 42501, mañana → 42501 y hoy (gemela) pasa | M12 (sin la comprobación de fecha) **muere** en 28.E9 «fecha pasada» |
+| A-H3 (BAJA) F6 solo con suspendido | 28.F6 «Destino de baja» | M3 (`= 'suspendido'`) **muere** en 28.F6 «de baja» |
+| A-H4 (BAJA) `for update` sin prueba | 28.G4b lee `for\s+update` en el catálogo de las dos RPC | M6 (dar) y M11 (retirar) **mueren** en 28.G4b |
+| A-H5 (BAJA) cotejo de `id` sin negativa | 28.E3 con `set id = gen_random_uuid()` → 42501 con el texto | M7 **muere** en 28.E3 «el id» |
 
-## Mutantes medidos (banco entero)
+Los cuatro que ya morían en la ronda 1 (M1, M1b, M2 y M10) siguen igual: sus pruebas no han cambiado y la línea base está verde.
 
-| Mutante | Resultado |
-|---|---|
-| M1 · `dar`: `is distinct from` → `<>` | Muere en 28.C6 (sale 23514 en lugar de 42501) |
-| M1b · `retirar`: ídem | Muere en 28.C6 («debía lanzar 42501 y no lanzó nada») |
-| M2 · `dar`: lista cerrada → `= 'tecnico_administrativo'` | Muere en 28.G2, solo en el catálogo, como pedía el diseño |
-| M10 · disparador sin `old.hasta is not null` | Muere en 28.E1 |
-| M3 · `dar`: `<> 'activo'` → `= 'suspendido'` | **Sobrevive** (A-H3) |
-| M4 · `dar`: idempotencia sin `hasta is null` | **Sobrevive** (A-H1) |
-| M5 · `retirar`: `where` sin `hasta is null` | **Sobrevive** (A-H1) |
-| M8 · `dar`: cálculo del principal sin `hasta is null` | **Sobrevive** (A-H1) |
-| M6 · `dar` sin `for update` | **Sobrevive** (A-H4) |
-| M11 · `retirar` sin `for update` | **Sobrevive** (A-H4) |
-| M7 · disparador sin `new.id is distinct from old.id` | **Sobrevive** (A-H5) |
-
-## MEDIA
-
-- **A-H1** `scripts/rls/28-altas-de-centro.sql:400`
-  - **Qué pasa:** el banco nunca recorre el ciclo «dar → retirar → volver a dar → retirar» en el mismo par. Por eso sobreviven los tres mutantes que quitan `hasta is null`:
-    - la idempotencia (M4, `migración:86`);
-    - el `where` de `retirar` (M5, `:155`), que el diseño §5 nombra expresamente;
-    - el cálculo del principal (M8, `:97`).
-  - **Escenario M5:**
-    1. ADM retira a Ana de Canarias el lunes y se la vuelve a dar el jueves. Hay dos filas del par: una cerrada y una vigente.
-    2. Al volver a retirarla, el `update` también toca la fila cerrada.
-    3. El disparador lanza 42501 «Una pertenencia cerrada no se modifica».
-    4. `altas.ts` traduce el 42501 como si el problema fuera el permiso, y el alta ya no se puede retirar nunca.
-  - **Escenario M4:** al volver a dar el alta, la función devuelve el id de la fila cerrada y no inserta nada. La pantalla dice «alta dada», pero 7c le da a Ana 23514 al ponerla de coprofesional.
-  - **Escenario M8:** a INV2 se le retira el principal (F10) y luego se le da otro centro. La fila nueva entra como no principal, cuando el diseño dice «la primera alta sin principal vigente lo es». El perfil queda sin principal y sus pacientes futuros, sin centro.
-  - **Arreglo:** una sola prueba con el ciclo completo sobre un par mata los tres mutantes. Debe comprobar:
-    - id distinto al volver a dar;
-    - dos filas del par, una cerrada y una vigente;
-    - el segundo `retirar` pasa y cierra la vigente;
-    - tras F10, la siguiente alta es principal.
+**Lo que el arreglo de A-H2 podía romper:**
+- Revisé todos los escritores de `perfiles_centros.hasta`. Usan `current_date`: la RPC (`:151`), `scripts/rls/06:23`, `12:220` y `19:742`.
+- Ninguna migración, ni `app/`, ni `lib/`, ni las siembras cierran filas.
+- `scripts/t002-enmienda-multicentro.sql:143` usa `current_date + 30`, pero queda fuera de CI y ya lo rechazaba el check `hasta <= current_date`.
+- Cambiar solo `principal` en una vigente sigue pasando (28.E4), porque la comprobación nueva solo actúa con `new.hasta is not null`.
+- La RPC y el disparador comparten transacción, así que comparten `current_date` y la zona de la sesión.
 
 ## BAJA
 
-- **A-H2** `supabase/migrations/20261010120000_altas_de_centro.sql:185`
-  - **Qué pasa:** el disparador «solo cierre» congela la fila después de cerrarla, pero deja que el cierre lleve cualquier fecha que pase los checks, incluida una anterior a lo que ocurrió con esa alta.
-  - **Medido:** en `begin … rollback`, `update perfiles_centros set hasta = desde` sobre una fila vigente con `desde = 2026-09-01` pasa (UPDATE 1).
-  - **Quién puede:** `authenticated` tiene UPDATE sobre las 7 columnas y la política `perfiles_centros_cierre_administrador` deja hacerlo al administrador.
+- **A2-H1** `lib/cuentas/invitar.ts:73` (= **B2-H4**)
+  - **Qué pasa:** si falla la lectura de `centros`, el administrador ve el mismo mensaje que si un centro estuviera cerrado.
   - **Escenario:**
-    1. Ana es coprofesional en notas firmadas el 20-09 en un episodio de Madrid, con alta vigente en Madrid.
-    2. El 05-10 un administrador hace `PATCH /perfiles_centros?id=eq.X {"hasta":"2026-09-01"}`.
-    3. La pertenencia dice ahora que Ana no tenía alta en Madrid cuando se firmaron esas notas, y la fila queda congelada así para siempre.
-  - **Por qué BAJA:** la auditoría guarda el UPDATE con su instante real, y antes de este ticket el UPDATE era libre del todo. No es una regresión, pero la garantía nueva («de una vigente solo cambia el cierre») no cubre el *cuándo*.
-  - **Arreglo:** exigir `new.hasta is null or new.hasta = current_date` en el disparador (la RPC ya usa `current_date`), o decidir y anotar que fechar el cierre en el pasado es legítimo.
-- **A-H3** `scripts/rls/28-altas-de-centro.sql:381`
-  - **Qué pasa:** el diseño §5 pide «suspendido **o de baja** → 23514», y F6 solo prueba `suspendido`. El mutante `if v_estado = 'suspendido'` (M3) deja el banco verde.
-  - **Escenario:** con el mutante, ADM llama a `rpc/dar_alta_centro` sobre un perfil de baja y la función inserta un alta vigente.
-    - Si es su primera alta, entra como principal y el espejo le escribe `perfiles.centro_id`.
-    - El perfil de baja aparece como «con alta» en lo que lea `perfiles_centros`.
-  - **Arreglo:** una prueba F6 con un perfil `estado = 'baja'`.
-- **A-H4** `supabase/migrations/20261010120000_altas_de_centro.sql:54`
-  - **Qué pasa:** D7 (el `for update` sobre `perfiles`) no tiene ninguna prueba. Quitarlo de `dar` (M6) o de `retirar` (M11, `:138`) deja el banco verde. El banco ya lee el catálogo para `is distinct from` (G4), así que la misma técnica sirve aquí.
-  - **Escenario:** alguien quita el `for update` en una refactorización y el banco sigue verde. Después, dos administradores (o dos pestañas) dan a la vez la primera alta a un perfil sin principal:
-    1. las dos ven «no hay principal» e insertan `principal = true`;
-    2. la segunda choca con `perfiles_centros_un_principal_vigente`;
-    3. sale el 23505 «Otro cambio se ha cruzado con este», que D7 quería dejar solo como red.
-  - **Arreglo:** una aserción G con `pg_get_functiondef(...) ~* 'for update'` para las dos RPC.
-- **A-H5** `supabase/migrations/20261010120000_altas_de_centro.sql:185`
-  - **Qué pasa:** el cotejo `new.id is distinct from old.id` no tiene prueba negativa. E2 y E3 cubren `centro_id`, `desde`, `perfil_id` y `creado_en`, pero no `id`, y el mutante sin esa línea (M7) deja el banco verde.
-  - **Escenario:** con el mutante, ADM hace `PATCH /perfiles_centros?id=eq.X {"id":"<uuid nuevo>"}` (el UPDATE de `authenticated` cubre `id`).
-    - La fila vigente cambia de identidad.
-    - El INSERT de la auditoría (`registro_id = X`) ya no apunta a ninguna fila.
-    - El rastro del alta (ADR-051) pierde su enlace.
-  - **Arreglo:** una línea más en E3 con `set id = gen_random_uuid()` → 42501.
+    1. El administrador envía una invitación con [Madrid principal, Canarias].
+    2. `GET /centros?id=in.(…)` falla de forma transitoria: corte o tiempo agotado de PostgREST.
+    3. `todosAbiertos` vale `false` y se devuelve «Un centro elegido ya no está abierto. Recarga la pantalla y revisa los centros.».
+    4. Al recargar, los dos centros siguen abiertos. El administrador busca un cierre que no existe.
+  - **Lo que sí está bien:**
+    - El fallo deja la cuenta sin crear, que es lo seguro, y queda en `console.error`.
+    - La prueba B-H4 solo simula `error: null`, así que la rama del error no tiene ninguna prueba.
+    - En la práctica esa rama equivale a la del centro cerrado: quitar `!errorCentros` no cambia el resultado.
+  - **Arreglo:** un `motivo` y un texto propios para la lectura fallida («No se pudo comprobar los centros; inténtalo de nuevo») y una prueba con `error` no nulo.
+- **A2-H2** `scripts/rls/README.md:51`
+  - **Qué pasa:** la línea del banco 28 no recoge lo que añade esta ronda:
+    - el `id` en E3;
+    - E9 (cierre con la fecha de hoy);
+    - F6 de baja;
+    - F11 a F13 (ciclo sobre un mismo par);
+    - G4b.
+  - Su lista «Mutantes medidos a mano» sigue con los cuatro de la ronda 1. Faltan M3 a M8, M11 y M12, que ahora mueren.
+  - **Escenario:**
+    1. Un ticket posterior toca `fn_perfiles_centros_solo_cierre` o el `where` de `retirar_alta_centro`.
+    2. Consulta el README para saber qué mutantes repetir.
+    3. Ve solo el cotejo de `centro_id` y la fila cerrada, y no repite el de la fecha ni el del ciclo.
+    4. Un cambio que reabra A-H1 o A-H2 se cierra con la cobertura «documentada» en verde.
+  - Es el patrón «README sin las secciones nuevas».
+  - **Arreglo:** ampliar la línea 51 con E3 (`id`), E9, F6 de baja, F11 a F13, G4b y los ocho mutantes.
+
+## Foco nuevo: `directorio_perfiles` en `carga.ts` y `centros.activo` en `invitar.ts`
+
+**`app/(app)/ajustes/centros/carga.ts:63`**
+- **Qué expone la vista:** `directorio_perfiles` es `security_invoker = false` con `security_barrier`. Da `id, nombre_completo, rol, estado, centro_id` a cualquiera con `rol_actual() is not null`.
+  - El administrador no ve con ella nada que no vea ya cualquier compañero.
+  - `motivo_estado` no está en la vista (`20260822160000:1390`).
+  - Es la puerta correcta: `perfiles` solo tiene `perfiles_lectura_propia`, y la recursión impide añadirle otra política (`20260829180000:64`).
+- **Filtros:** `estado = 'activo'` y `rol in (profesional_sanitario, administrador)` coinciden con P7 y con la lista cerrada de las RPC.
+  - `centro_id` se pide y no se usa, pero es una columna del directorio abierto.
+- **Errores:** los de `directorio_perfiles`, `perfiles_centros` y `centros` dan `ok: false`. Solo `organizacion` cae a `Europe/Madrid`, y la zona solo formatea `desde`.
+- **Centros cerrados:** la página no ofrece los inactivos, y lo que manda sigue en la RPC (23514).
+
+**`lib/cuentas/invitar.ts:62-81`**
+- **¿Se lee por la sesión?** Sí: es `sesion.supabase`, no el cliente de administración.
+  - `centros_lectura` deja leer todos los centros, abiertos y cerrados, a cualquier `rol_actual()` no nulo (medido en `pg_policies`).
+  - Por eso un centro cerrado se ve como `activo = false`, no como ausente.
+- **¿Qué pasa si falla?** No se crea la cuenta y se devuelve `motivo: 'centro'` con el texto del centro cerrado (A2-H1).
+- **Residuo sin candado:** entre esta lectura y `inviteUserByEmail` queda una ventana. Medí en el catálogo que ni `fn_crear_perfil_de_usuario()` ni `preparar_invitacion()` miran `activo`.
+  - Un cierre en esos milisegundos dejaría el principal en un centro cerrado.
+  - Las adicionales no corren ese riesgo: las vuelve a comprobar `dar_alta_centro`.
+  - Cerrar la ventana exige tocar el disparador de GoTrue, y P1 lo excluye. No lo elevo (B lo anota igual).
+- **Orden:** la lectura va después de `preparar_invitacion()`, que ya exige administrador. Un no administrador no llega a ella, y `exigirAdministrador()` está antes.
 
 ## Comprobado sin hallazgo
 
-- **Orden de las guardas.** El rol va antes del bloqueo y de la búsqueda: un no administrador no bloquea filas de `perfiles` ni distingue «no existe» de «no puedes».
-  - Después vienen la existencia (23503), la lista cerrada (22023), el estado (23514), el centro (23503/23514), la idempotencia y el insert.
-  - `retirar` no mira el estado del destino, como dice el diseño.
-- **Columnas de `perfiles`.** Las RPC no escriben ninguna. El espejo lo hace el disparador ya existente, y G1 es la alarma ADR-065.
-- **Disparador.** Es `security invoker`, con `search_path = ''`, `before update for each row`, y su función no la ejecuta nadie.
-  - Sin `grant delete`, el DELETE de `authenticated` da 42501 (E5).
-  - El cierre por la RPC deja su UPDATE auditado con actor ADM (E8).
-- **Otros escritores de la tabla.** Ninguna migración ni nada de `app/` o `lib/` actualiza `perfiles_centros`, así que el disparador no rompe ninguna ruta existente.
-  - `scripts/rls/12` y `19` cierran filas vigentes y pasan.
-  - `scripts/t002-enmienda-multicentro.sql` queda fuera de CI.
-- **El alta no amplía la lectura de notas.** Todas las referencias a `centros_actuales()` están acotadas a `rol_actual() = 'tecnico_administrativo'`, salvo `episodio_para_nota` (`20261007…:808`), que solo valida el centro del episodio que uno abre para sí.
-  - El texto nuevo de `architecture.md` («Un alta de centro no amplía la matriz» y el punto de `centros_actuales()`) coincide con eso.
-- **Siembra.** La fila de ADM en Madrid es `principal = true` con id fijo y `on conflict do nothing`.
-  - ADM no tiene pacientes, así que el principal no mueve la retención de nadie.
-  - Su `desde` (01-09-2026) pasa los checks.
-- **`tipos-bd.ts`.** Las dos firmas coinciden con la migración (`string` y `undefined`).
-- **`altas.ts`.** Traduce por SQLSTATE y solo deja pasar el texto de la base en el 23514, que es un texto propio. El 42501, el 22023 y el P0002 llevan su propio literal.
-
----
+- **28.E9** se ejecuta como ADM sobre una fila insertada como postgres (`desde = hoy - 5`), dentro de un savepoint.
+  - El caso «mañana» también moriría por el check de tabla (23514 ≠ 42501): la prueba exige el 42501 con el texto del disparador, así que discrimina.
+- **28.F13** cuenta dos filas del par con `hasta = current_date`: la de F10 y la nueva. Las dos se cierran en la misma transacción.
+- **28.G4b** es la técnica que propuse en la ronda 1. Mata quitar el `for update`.
+  - Como lee el texto, no mataría moverlo a otra `select` de la función ni añadirle `nowait` o `skip locked`.
+  - Lo dejo como límite conocido, sin escenario de fallo que lo justifique como hallazgo.
+- **Sin cambios de firma, permisos ni políticas.** El diff de la migración solo toca el cuerpo y el comentario de `fn_perfiles_centros_solo_cierre`.
+- **`acciones.ts`:** `nombresDeCentros` lee `centros` por la sesión, y un error cae al uuid del centro, que no es dato de paciente. El resto de la acción es de B (B2-H1, B2-H2).

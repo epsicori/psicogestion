@@ -1,123 +1,65 @@
 {
   "ticket": "T-041",
-  "ronda": 1,
-  "head": "9e0033c",
-  "rama": "worktree-agent-ada3a424c2ef63d80",
-  "diff": "afbbfcc..9e0033c",
+  "ronda": 2,
+  "head": "1d6f244",
+  "rama": "worktree-agent-ae6f460142344cc25",
+  "diff": "9e0033c..1d6f244",
   "fecha": "2026-10-05",
+  "rondas_anteriores": [{ "ronda": 1, "altas": 0, "medias": 2, "bajas": 11 }],
   "altas": 0,
-  "medias": 2,
-  "bajas": 11,
-  "informes": [
-    "revision-a.md",
-    "revision-a.json",
-    "revision-b.md",
-    "revision-b.json"
-  ],
+  "medias": 0,
+  "bajas": 6,
+  "nota_recuento": "A2-H1 coincide con B2-H4 y cuenta una vez",
+  "informes": ["revision-a.md", "revision-a.json", "revision-b.md", "revision-b.json"],
   "hallazgos": [
     {
-      "id": "A-H1",
-      "severidad": "MEDIA",
-      "archivo": "scripts/rls/28-altas-de-centro.sql",
-      "linea": 400,
-      "descripcion": "El banco nunca recorre dar → retirar → volver a dar → retirar sobre un mismo par: sobreviven los tres mutantes que quitan hasta is null (idempotencia :86, where de retirar :155 que el diseño §5 nombra, cálculo del principal :97).",
-      "escenario": "M5: ADM retira a Ana de Canarias y se la vuelve a dar; al retirarla otra vez el update alcanza también la fila cerrada, el disparador lanza 42501 y el alta queda sin poder retirarse (altas.ts lo pinta como permiso). M4: volver a dar devuelve el id cerrado sin insertar; la UI dice «alta dada» y 7c da 23514. M8: tras F10, la siguiente alta no es principal y el perfil queda sin principal. Una prueba del ciclo completo mata los tres."
-    },
-    {
-      "id": "A-H2",
+      "id": "B2-H1",
       "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
-      "linea": 185,
-      "descripcion": "El disparador «solo cierre» deja fechar el cierre en el pasado (cualquier hasta entre desde y hoy); medido: update hasta = desde sobre una vigente de 2026-09-01 pasa, y authenticated tiene UPDATE en las 7 columnas con la política del administrador.",
-      "escenario": "Ana coprofesional en notas firmadas el 20-09 con alta vigente en Madrid → el 05-10 un administrador hace PATCH perfiles_centros?id=eq.X {hasta:'2026-09-01'} → la pertenencia queda congelada diciendo que no tenía alta al firmar. La auditoría guarda el instante real (por eso BAJA); arreglo: exigir new.hasta = current_date o anotar que es legítimo."
+      "archivo": "app/(app)/ajustes/acciones.ts",
+      "linea": 61,
+      "descripcion": "La rama registroConAltasPendientes (mitad visible de B-H3) y el avisoPendiente:true (productor de B-H7) no tienen prueba: los dos mutantes sobreviven 159/159.",
+      "escenario": "Invitación con [Madrid principal, Canarias]; registrar_invitacion falla → con la rama anulada el mensaje vuelve a ser «La cuenta se creó, pero no se pudo dejar constancia» sin Canarias, y ninguna prueba se pone roja. Hacen falta dos pruebas de la acción: ok:false con altasSinDar (mensaje con el nombre) y ok:true con altasSinDar (avisoPendiente:true)."
     },
     {
-      "id": "A-H3",
+      "id": "B2-H2",
       "severidad": "BAJA",
-      "archivo": "scripts/rls/28-altas-de-centro.sql",
-      "linea": 381,
-      "descripcion": "El diseño §5 pide «suspendido o de baja → 23514» y F6 solo prueba suspendido; el mutante v_estado = 'suspendido' (M3) deja el banco verde.",
-      "escenario": "Con el mutante, ADM llama a rpc/dar_alta_centro sobre un perfil de baja → se inserta un alta vigente, principal si era la primera, y el espejo escribe perfiles.centro_id de un perfil de baja."
+      "archivo": "app/(app)/ajustes/acciones.ts",
+      "linea": 63,
+      "descripcion": "La rama de registro con altas pendientes no lleva avisoPendiente: B-H7 se arregló solo en la variante ok:true.",
+      "escenario": "registrar_invitacion falla con [Madrid, Canarias] → «… Tampoco se dio el alta en Canarias: dásela desde Ajustes › Altas de centro.» sale con text-sm, igual que «Invitación enviada a …» → se lee como un éxito y el alta no se da."
     },
     {
-      "id": "A-H4",
+      "id": "B2-H3",
       "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
-      "linea": 54,
-      "descripcion": "D7 (for update sobre perfiles) no tiene ninguna prueba: quitarlo de dar (M6) o de retirar (M11, :138) deja el banco verde; G4 ya usa el catálogo y aquí no.",
-      "escenario": "Una refactorización quita el for update con el banco en verde → dos administradores dan a la vez la primera alta a un perfil sin principal → ambas calculan principal = true → la segunda choca con perfiles_centros_un_principal_vigente y sale el 23505 que D7 quería dejar solo como red."
-    },
-    {
-      "id": "A-H5",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
-      "linea": 185,
-      "descripcion": "El cotejo new.id is distinct from old.id del disparador no tiene negativa: E2/E3 cubren centro_id, desde, perfil_id y creado_en, no id; el mutante sin esa línea (M7) deja el banco verde.",
-      "escenario": "Con el mutante, ADM hace PATCH perfiles_centros?id=eq.X {id:'<uuid nuevo>'} (el UPDATE de authenticated cubre id) → la fila vigente cambia de identidad y el INSERT auditado con registro_id = X ya no apunta a ninguna fila: el rastro del alta (ADR-051) pierde su enlace."
-    },
-    {
-      "id": "B-H1",
-      "severidad": "MEDIA",
       "archivo": "app/(app)/ajustes/centros/gestion-altas.tsx",
-      "linea": 237,
-      "descripcion": "Confirmar y Cancelar con disabled={enviando}: el foco cae a BODY (medido en Chromium) y en la salida con error nadie lo recoloca; jsdom no lo ve.",
-      "escenario": "Retirar un alta que otro administrador ya retiró → P0002 → el role=alert se lee pero el foco está en body fuera del diálogo modal; Intro no hace nada y solo un Tab lo devuelve a la X."
+      "linea": 101,
+      "descripcion": "El catch traduce un rechazo de transporte a «No se pudo guardar el cambio de centro.» cuando no se sabe si la RPC se confirmó, y no revalida la lista.",
+      "escenario": "Retirar Pau · Sur → la base cierra el alta y la respuesta se pierde → «No se pudo guardar», con Sur aún en la lista → reintento → P0002 «puede que otra persona la haya retirado ya»: le echa a otra persona la culpa de su propio cambio."
     },
     {
-      "id": "B-H2",
-      "severidad": "BAJA",
-      "archivo": "lib/cuentas/invitar.test.ts",
-      "linea": 121,
-      "descripcion": "La prueba (c) usa un solo centro adicional: el mutante que corta el bucle al primer fallo sobrevive (medido).",
-      "escenario": "Invitación con [Madrid principal, Canarias, Bilbao]; falla Canarias → el mutante no intenta Bilbao ni lo reporta, y el mensaje solo nombra Canarias."
-    },
-    {
-      "id": "B-H3",
+      "id": "B2-H4",
       "severidad": "BAJA",
       "archivo": "lib/cuentas/invitar.ts",
-      "linea": 89,
-      "descripcion": "Si registrar_invitacion falla, se devuelve antes del paso 4: las altas adicionales no se dan y el mensaje no las nombra.",
-      "escenario": "Invitación con [Madrid principal, Canarias]; registrar falla por un error transitorio → perfil solo con Madrid y mensaje «La cuenta se creó, pero no se pudo dejar constancia», sin mención a Canarias."
+      "linea": 73,
+      "coincide_con": "A2-H1",
+      "descripcion": "Un error al leer centros sale con el mismo mensaje que un centro cerrado; las pruebas B-H4 solo simulan error: null.",
+      "escenario": "La lectura de centros falla de forma transitoria → «Un centro elegido ya no está abierto. Recarga la pantalla…» → al recargar todos siguen abiertos y el administrador busca un cierre que no existe."
     },
     {
-      "id": "B-H4",
-      "severidad": "BAJA",
-      "archivo": "lib/cuentas/invitar.ts",
-      "linea": 44,
-      "descripcion": "preparar_invitacion no mira centros.activo: un centro cerrado tras cargar el formulario entra como principal por los metadatos, y como adicional recibe un consejo sin salida.",
-      "escenario": "ADM1 cierra Canarias con el formulario de ADM2 abierto → como principal: alta principal en un centro cerrado, donde quedarán los pacientes futuros; como adicional: «dásela desde Ajustes › Altas de centro», que no ofrece centros cerrados."
-    },
-    {
-      "id": "B-H5",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/ajustes/centros/page.tsx",
-      "linea": 52,
-      "descripcion": "Los errores de lectura se pintan como ausencia, y la ausencia de altas decide el aviso de principal de la confirmación.",
-      "escenario": "Falla la lectura de perfiles_centros → todos «Sin altas» y tienePrincipal=false → al dar a Pau (principal en Norte) un alta en Este, el diálogo dice «Será su centro principal…», y la base la inserta como no principal."
-    },
-    {
-      "id": "B-H6",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/ajustes/centros/page.tsx",
-      "linea": 70,
-      "descripcion": "La derivación de tienePrincipal no tiene prueba; el mutante suyas.length > 0 sobrevive.",
-      "escenario": "Estado D5: a Pau se le retira el principal Norte y le queda Sur → se le da Este → la base hace principal a Este y la confirmación mutada no lo avisa."
-    },
-    {
-      "id": "B-H7",
+      "id": "B2-H5",
       "severidad": "BAJA",
       "archivo": "app/(app)/ajustes/invitar/formulario-invitar.tsx",
-      "linea": 200,
-      "descripcion": "El aviso exitoConAltasPendientes sale en un role=status creado ya relleno y con el estilo del éxito.",
-      "escenario": "Invitación con un alta adicional fallida → NVDA no anuncia la región insertada, o la lee como un éxito → el administrador no da el alta pendiente."
+      "linea": 98,
+      "descripcion": "El arreglo de B-H8 no llegó al formulario de invitar, que el ticket reescribe: await invitar(datos) sigue en la transición sin try/catch.",
+      "escenario": "Invitación con [Madrid, Canarias]; el correo sale, falla Canarias y la respuesta se pierde → límite de error de la ruta → el administrador no sabe ni que la invitación salió ni que falta Canarias; si reintenta, lee «No se pudo enviar la invitación por correo»."
     },
     {
-      "id": "B-H8",
+      "id": "A2-H2",
       "severidad": "BAJA",
-      "archivo": "app/(app)/ajustes/centros/gestion-altas.tsx",
-      "linea": 93,
-      "descripcion": "La transición del diálogo no tiene try/catch: un rechazo de transporte va al límite de error.",
-      "escenario": "Corte de red al pulsar Confirmar → la promesa se rechaza en la transición → pantalla de error de la ruta en lugar del mensaje dentro del diálogo."
+      "archivo": "scripts/rls/README.md",
+      "linea": 51,
+      "descripcion": "La línea del banco 28 no recoge E3 (id), E9, F6 de baja, F11-F13 ni G4b, y su lista de mutantes medidos sigue con los cuatro de la ronda 1.",
+      "escenario": "Un ticket posterior toca fn_perfiles_centros_solo_cierre o el where de retirar_alta_centro y consulta el README para saber qué mutantes repetir → solo ve centro_id y fila cerrada → no repite fecha ni ciclo, y un cambio que reabra A-H1/A-H2 se cierra con la cobertura «documentada» en verde."
     }
   ]
 }

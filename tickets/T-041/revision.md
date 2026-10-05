@@ -1,32 +1,56 @@
-**Sin hallazgos ALTA.** Gate de la ronda 1: 0 ALTA · 2 MEDIA · 11 BAJA (A: 0/1/4; B: el resto).
+**Sin hallazgos ALTA.** Gate de la ronda 2: 0 ALTA · 0 MEDIA · 6 BAJA. A2-H1 es el mismo hallazgo que B2-H4 y cuenta una vez.
 
-# T-041 · Revisión combinada — ronda 1
+# T-041 · Revisión combinada — ronda 2
 
+> Ronda 1: 0 ALTA · 2 MEDIA · 11 BAJA ([revision.ronda1.md](revision.ronda1.md)).
 
 | Revisor | ALTA | MEDIA | BAJA | Informe |
 |---|---|---|---|---|
-| A (base de datos y RLS) | 0 | 1 | 4 | [revision-a.md](revision-a.md) |
-| B (aplicación e interfaz) | 0 | 1 | 7 | [revision-b.md](revision-b.md) |
+| A (base de datos, RLS y seguridad) | 0 | 0 | 2 (una = B2-H4) | [revision-a.md](revision-a.md) |
+| B (aplicación e interfaz) | 0 | 0 | 5 | [revision-b.md](revision-b.md) |
+
+## Cierre de la ronda 1
+
+**Parte A.** A-H1..A-H5 quedan cerrados. Los ocho mutantes que sobrevivían mueren ahora contra el banco entero:
+
+| Mutante | Dónde muere |
+|---|---|
+| M3 | 28.F6 de baja |
+| M4 | 28.F11 |
+| M5 | 28.F13 |
+| M8 | 28.F12 |
+| M6 y M11 | 28.G4b |
+| M7 | 28.E3 (id) |
+| M12 (cierre sin la fecha de hoy) | 28.E9 |
+
+- El arreglo de A-H2 (`new.hasta = current_date` en el disparador) no rompe a ningún escritor: todos los que cierran filas usan `current_date`.
+- `carga.ts` lee `directorio_perfiles`. Esa vista no expone a ningún compañero más de lo que ya ve cualquier perfil activo.
+
+**Parte B.** El criterio 8 y B-H1..B-H8 quedan cerrados. Cada arreglo mata su mutante, y B-H1 está medido en Chromium. Hay dos excepciones:
+
+- la rama visible de B-H3 y el productor de `avisoPendiente` de B-H7 siguen sin prueba (B2-H1);
+- B-H8 no llegó a `formulario-invitar.tsx` (B2-H5).
+
+Las dos decisiones que tomó el implementador ya tienen dueño en el diseño:
+
+- no dar las altas si falla `registrar_invitacion`: P4, paso 3 «sin cambios»;
+- leer `centros` antes de `inviteUserByEmail`: D9.
+  - La lectura va por la sesión, no con la clave de servicio.
+  - Si falla, la cuenta no se crea.
+  - Queda una ventana de milisegundos sin candado hasta el disparador de GoTrue. Se acepta.
 
 ## Hallazgos
 
-- **B-H1 · MEDIA** — `app/(app)/ajustes/centros/gestion-altas.tsx:237`: Confirmar y Cancelar con disabled={enviando}: el foco cae a BODY (medido en Chromium) y en la salida con error nadie lo recoloca; jsdom no lo ve. *Escenario*: Retirar un alta que otro administrador ya retiró → P0002 → el role=alert se lee pero el foco está en body fuera del diálogo modal; Intro no hace nada y solo un Tab lo devuelve a la X.
-- **B-H2 · BAJA** — `lib/cuentas/invitar.test.ts:121`: La prueba (c) usa un solo centro adicional: el mutante que corta el bucle al primer fallo sobrevive (medido). *Escenario*: Invitación con [Madrid principal, Canarias, Bilbao]; falla Canarias → el mutante no intenta Bilbao ni lo reporta, y el mensaje solo nombra Canarias.
-- **B-H3 · BAJA** — `lib/cuentas/invitar.ts:89`: Si registrar_invitacion falla, se devuelve antes del paso 4: las altas adicionales no se dan y el mensaje no las nombra. *Escenario*: Invitación con [Madrid principal, Canarias]; registrar falla por un error transitorio → perfil solo con Madrid y mensaje «La cuenta se creó, pero no se pudo dejar constancia», sin mención a Canarias.
-- **B-H4 · BAJA** — `lib/cuentas/invitar.ts:44`: preparar_invitacion no mira centros.activo: un centro cerrado tras cargar el formulario entra como principal por los metadatos, y como adicional recibe un consejo sin salida. *Escenario*: ADM1 cierra Canarias con el formulario de ADM2 abierto → como principal: alta principal en un centro cerrado, donde quedarán los pacientes futuros; como adicional: «dásela desde Ajustes › Altas de centro», que no ofrece centros cerrados.
-- **B-H5 · BAJA** — `app/(app)/ajustes/centros/page.tsx:52`: Los errores de lectura se pintan como ausencia, y la ausencia de altas decide el aviso de principal de la confirmación. *Escenario*: Falla la lectura de perfiles_centros → todos «Sin altas» y tienePrincipal=false → al dar a Pau (principal en Norte) un alta en Este, el diálogo dice «Será su centro principal…», y la base la inserta como no principal.
-- **B-H6 · BAJA** — `app/(app)/ajustes/centros/page.tsx:70`: La derivación de tienePrincipal no tiene prueba; el mutante suyas.length > 0 sobrevive. *Escenario*: Estado D5: a Pau se le retira el principal Norte y le queda Sur → se le da Este → la base hace principal a Este y la confirmación mutada no lo avisa.
-- **B-H7 · BAJA** — `app/(app)/ajustes/invitar/formulario-invitar.tsx:200`: El aviso exitoConAltasPendientes sale en un role=status creado ya relleno y con el estilo del éxito. *Escenario*: Invitación con un alta adicional fallida → NVDA no anuncia la región insertada, o la lee como un éxito → el administrador no da el alta pendiente.
-- **B-H8 · BAJA** — `app/(app)/ajustes/centros/gestion-altas.tsx:93`: La transición del diálogo no tiene try/catch: un rechazo de transporte va al límite de error. *Escenario*: Corte de red al pulsar Confirmar → la promesa se rechaza en la transición → pantalla de error de la ruta en lugar del mensaje dentro del diálogo.
-
-<!-- A:inicio -->
-### Revisor A (base de datos, RLS y seguridad)
-
-- **A-H1 · MEDIA** — `scripts/rls/28-altas-de-centro.sql:400`: El banco nunca recorre dar → retirar → volver a dar → retirar sobre un mismo par: sobreviven los tres mutantes que quitan hasta is null (idempotencia :86, where de retirar :155 que el diseño §5 nombra, cálculo del principal :97). *Escenario*: M5: ADM retira a Ana de Canarias y se la vuelve a dar; al retirarla otra vez el update alcanza también la fila cerrada, el disparador lanza 42501 y el alta queda sin poder retirarse (altas.ts lo pinta como permiso). M4: volver a dar devuelve el id cerrado sin insertar; la UI dice «alta dada» y 7c da 23514. M8: tras F10, la siguiente alta no es principal y el perfil queda sin principal. Una prueba del ciclo completo mata los tres.
-- **A-H2 · BAJA** — `supabase/migrations/20261010120000_altas_de_centro.sql:185`: El disparador «solo cierre» deja fechar el cierre en el pasado (cualquier hasta entre desde y hoy); medido: update hasta = desde sobre una vigente de 2026-09-01 pasa, y authenticated tiene UPDATE en las 7 columnas con la política del administrador. *Escenario*: Ana coprofesional en notas firmadas el 20-09 con alta vigente en Madrid → el 05-10 un administrador hace PATCH perfiles_centros?id=eq.X {hasta:'2026-09-01'} → la pertenencia queda congelada diciendo que no tenía alta al firmar. La auditoría guarda el instante real (por eso BAJA); arreglo: exigir new.hasta = current_date o anotar que es legítimo.
-- **A-H3 · BAJA** — `scripts/rls/28-altas-de-centro.sql:381`: El diseño §5 pide «suspendido o de baja → 23514» y F6 solo prueba suspendido; el mutante v_estado = 'suspendido' (M3) deja el banco verde. *Escenario*: Con el mutante, ADM llama a rpc/dar_alta_centro sobre un perfil de baja → se inserta un alta vigente, principal si era la primera, y el espejo escribe perfiles.centro_id de un perfil de baja.
-- **A-H4 · BAJA** — `supabase/migrations/20261010120000_altas_de_centro.sql:54`: D7 (for update sobre perfiles) no tiene ninguna prueba: quitarlo de dar (M6) o de retirar (M11, :138) deja el banco verde; G4 ya usa el catálogo y aquí no. *Escenario*: Una refactorización quita el for update con el banco en verde → dos administradores dan a la vez la primera alta a un perfil sin principal → ambas calculan principal = true → la segunda choca con perfiles_centros_un_principal_vigente y sale el 23505 que D7 quería dejar solo como red.
-- **A-H5 · BAJA** — `supabase/migrations/20261010120000_altas_de_centro.sql:185`: El cotejo new.id is distinct from old.id del disparador no tiene negativa: E2/E3 cubren centro_id, desde, perfil_id y creado_en, no id; el mutante sin esa línea (M7) deja el banco verde. *Escenario*: Con el mutante, ADM hace PATCH perfiles_centros?id=eq.X {id:'<uuid nuevo>'} (el UPDATE de authenticated cubre id) → la fila vigente cambia de identidad y el INSERT auditado con registro_id = X ya no apunta a ninguna fila: el rastro del alta (ADR-051) pierde su enlace.
-
-Mutantes medidos sobre el banco entero: 4 muertos (M1/M1b en 28.C6, M2 en 28.G2, M10 en 28.E1) y 7 supervivientes, cubiertos por A-H1, A-H3, A-H4 y A-H5. Detalle en [revision-a.md](revision-a.md).
-<!-- A:fin -->
+- **B2-H1 · BAJA** — `app/(app)/ajustes/acciones.ts:61`: la rama `registroConAltasPendientes` y `avisoPendiente: true` no tienen prueba. Los dos mutantes sobreviven, 159/159.
+  - *Escenario*: `registrar_invitacion` falla con [Madrid, Canarias] → con la rama anulada, el mensaje vuelve a omitir Canarias y no hay ninguna prueba roja.
+- **B2-H2 · BAJA** — `app/(app)/ajustes/acciones.ts:63`: la rama de registro con altas pendientes no lleva `avisoPendiente`, así que B-H7 quedó arreglado a medias.
+  - *Escenario*: «… Tampoco se dio el alta en Canarias…» sale con el estilo del éxito → se lee como un éxito y el alta no se da.
+- **B2-H3 · BAJA** — `app/(app)/ajustes/centros/gestion-altas.tsx:101`: el `catch` dice «No se pudo guardar» cuando no se sabe si se guardó, y no revalida la lista.
+  - *Escenario*: la retirada se confirma pero la respuesta se pierde → «No se pudo guardar», con Sur aún en la lista → el reintento da P0002 «puede que otra persona la haya retirado ya».
+- **B2-H4 = A2-H1 · BAJA** — `lib/cuentas/invitar.ts:73`: un error al leer `centros` sale como «Un centro elegido ya no está abierto». La rama del error no tiene prueba.
+  - *Escenario*: un fallo transitorio de lectura → el administrador recarga, ve todos los centros abiertos y busca un cierre que no existe.
+  - El fallo es seguro: la cuenta no se crea.
+- **B2-H5 · BAJA** — `app/(app)/ajustes/invitar/formulario-invitar.tsx:98`: la transición de invitar sigue sin `try/catch`.
+  - *Escenario*: el correo sale, falla Canarias y la respuesta se pierde → límite de error de la ruta → no se sabe que la invitación salió ni que falta Canarias, y el reintento dice «No se pudo enviar la invitación».
+- **A2-H2 · BAJA** — `scripts/rls/README.md:51`: la línea del banco 28 no recoge E3 (id), E9, F6 de baja, F11-F13 ni G4b. Su lista de mutantes medidos sigue con los cuatro de la ronda 1.
+  - *Escenario*: un ticket posterior toca el disparador o el `where` de `retirar_alta_centro` → mira en el README qué mutantes repetir → no repite ni el de la fecha ni el del ciclo.
