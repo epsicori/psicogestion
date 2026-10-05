@@ -712,6 +712,63 @@ describe('FormularioAlta · la espera de la serie (H15)', () => {
   });
 });
 
+// H31 (ronda 4): los errores de validacion se van cuando lo que los causaba se corrige, y solo entonces.
+describe('FormularioAlta · limpiar errores al corregir (H31)', () => {
+  const FIRMA = 'a'.repeat(64);
+  const SESIONES = [
+    { fecha: '2026-10-06', fechaLarga: 'Martes, 6 de octubre de 2026', hora: '17:00', estado: 'normal' as const, alternativa: null, horaResultante: null },
+    { fecha: '2026-10-13', fechaLarga: 'Martes, 13 de octubre de 2026', hora: '17:00', estado: 'normal' as const, alternativa: null, horaResultante: null },
+  ];
+
+  it('elegir paciente borra «Elige un paciente.»', async () => {
+    m.buscarPacientes.mockResolvedValue({ ok: true, pacientes: [PACIENTE] });
+    pinta({ inicial: { paciente: null, centroId: CENTRO, profesionalId: PROFESIONAL, clave: null } });
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(await screen.findByText('Elige un paciente.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Buscar paciente por nombre'), { target: { value: 'an' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Ana Pérez' }));
+
+    await waitFor(() => expect(screen.queryByText('Elige un paciente.')).toBeNull());
+  });
+
+  it('la previsualizacion de la serie borra «Falta la previsualización de la serie.»', async () => {
+    m.previsualizarAltaSerie.mockResolvedValue({ ok: true, firma: FIRMA, sesiones: SESIONES });
+    pinta();
+    await elegirTipoYHueco();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+    await screen.findByText('Así quedaría la serie');
+    // Un cambio que invalida la serie y deja una sesion fuera de rango: Guardar valida y enseña los dos errores.
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '1' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    });
+    expect(await screen.findByText('Falta la previsualización de la serie.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '2' } });
+
+    await waitFor(() => expect(screen.queryByText('Falta la previsualización de la serie.')).toBeNull());
+  });
+
+  it('un numero de sesiones aun fuera de rango no borra su error; uno valido, si', async () => {
+    pinta();
+    await elegirTipoYHueco();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '1' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    });
+    expect(await screen.findByText('Una serie tiene entre 2 y 52 sesiones.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '0' } });
+    expect(screen.queryByText('Una serie tiene entre 2 y 52 sesiones.')).not.toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '3' } });
+    await waitFor(() => expect(screen.queryByText('Una serie tiene entre 2 y 52 sesiones.')).toBeNull());
+  });
+});
+
 // H27 (ronda 4): Guardar no se deshabilita con el foco dentro; si no, tras un rechazo el foco queda en body.
 describe('FormularioAlta · el foco no se pierde al guardar (H27)', () => {
   const SALIDAS: Array<[string, () => void]> = [
