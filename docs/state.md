@@ -3,13 +3,13 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 05-10-2026 · **T-028 corte B integrado** (merge b5eeb9a); **T-040 integrado** (merge d8e6728).
+**Actualizado**: 05-10-2026 · **T-028 hecho** (corte C, merge 5e1ac12: cierra el prototipo clínico); **T-040 integrado** (merge d8e6728).
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 A/**B**, T-016–T-020, T-029–T-040, T-042.
-- **En curso**: **T-028 corte C** (botón en ficha `panel-resumen.tsx`, entrada desde la ficha; cierra prototipo clínico).
-- **T-021**: ADR-077 listo. **T-041**: diseño cerrado, espera turno `supabase/`.
+- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, **T-028 (A/B/C)**, T-016–T-020, T-029–T-040, T-042.
+- **En curso**: **T-041** (altas de centro) en verificación y revisión doble; rama `worktree-agent-ada3a424c2ef63d80`. Su migración `20261010120000` ya está aplicada en la base local: un `db reset` desde `main` la pierde.
+- **T-021**: ADR-077 listo; espera a T-041 en la cola `supabase/`.
 
 ## Bloqueos
 
@@ -18,15 +18,16 @@
 
 ## Siguiente paso
 
-1. T-028 corte C (panel-resumen.tsx, entrada desde ficha, cierra prototipo clínico).
-2. Cola `supabase/`: T-041 → ticket aviso hueco (arquitecto, T-028:169) → T-021. Ticket corto: `/recuperar`.
-3. Limpiar worktrees T-038, T-042, agent-a9325d705ce4db36b, agent-a2b0012224d53ce71, agent-a32189ff51a6d9558, rama a1549876942c02f5f (quitar junction `node_modules` antes).
+1. T-041: verificación + revisores A/B → merge → documentalista.
+2. Cola `supabase/`: ticket aviso hueco (arquitecto, T-028:169) → T-021. Ticket corto: `/recuperar`.
+3. Limpiar worktrees T-038, T-042, agent-a9325d705ce4db36b, agent-a2b0012224d53ce71, agent-a32189ff51a6d9558, agent-aa3cf8ef16a243549, agent-aae08223ceefe21b6, rama a1549876942c02f5f (quitar junction `node_modules` antes).
 
 ## Hallazgos anotados
 
 - **T-028 R5-H32 (BAJA)**: `role="status"` en sugerencias nace relleno cuando cambia el tipo. Arreglo: región montada siempre.
 - **T-028 R5-H33 (BAJA)**: Error lectura `tipos_terapia`/`directorio_perfiles` en `contenido-alta.tsx:52-53` cae a `[]` y se pinta falso «No hay…». Arreglo: propagar error.
 - **T-028 R6-H35 (BAJA)**: la prueba de H34 (`vista-alta.test.ts:64`) deja vivos tres mutantes de `finDeOcupado` (máximo en vez de mínimo, último tramo de la entrada, sin la cota `< fin`). Arreglo: un segundo libre tras el de 09:40 y un día con ocupado al final de la mañana y libre por la tarde. **Nota R6**: `agenda_bloques_profesional` sigue emitiendo el ocupado con la duración pedida; el recorte es solo de pantalla y otro consumidor vería el solape.
+- **Paciente fusionado o traspasado (T-028 R7, sin medir)**: ni `agenda_crear_cita`/`agenda_crear_serie` ni los disparadores de `citas` impiden agendar a un paciente con `fusionado_en` o `traspasado_en`; el buscador del alta ya dejaba llegar. Requiere ticket `supabase/`.
 - **`/recuperar` sin enlace (T-042, prueba manual)**: ninguna pantalla enlaza a `/recuperar`, tampoco «Verificación en dos pasos» de `/primera-vez`, donde se queda quien perdió el móvil; solo se llega tecleando la URL. `docs/interfaz.md` no la menciona. Propuesta: enlace «¿Has perdido el acceso a tu app? Usa un código de recuperación».
 - **T-042 R2-H1 (BAJA)**: el predicado del `update` de `bloquear_historia()` (migración `20261009120000:442`) no tiene prueba ni mutante; sin él cada «Bloquear» escribe una fila `UPDATE` en `auditoria` y `test:rls` sigue verde. Arreglo: aserción en CA-R2.2 de que bloquear con `0/0/false` no cambia el recuento.
 - **T-038 A3-H1=B3-H2 (BAJA)**: `lib/cuentas/totp.ts:57` marca `reentrar` ante cualquier 42501; `generar_codigos_recuperacion()` lo lanza por cuatro causas (Q3(B) incluida) y la vista afirma «hace más de cinco minutos». La salida sí resuelve.

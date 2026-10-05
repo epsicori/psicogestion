@@ -5,8 +5,8 @@ modelo: sonnet
 fase: 1
 prioridad: alta
 depende_de: [T-010, T-011, T-013, T-014, T-028a]
-estado: en curso
-corte_b_integrado: 2026-10-05
+estado: hecho
+completado: 2026-10-05
 territorio:
   - lib/agenda/sugerencias.ts               # corte A
   - lib/agenda/sugerencias.test.ts          # corte A
