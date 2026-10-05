@@ -196,6 +196,7 @@ export const es = {
     elegirCentro: 'Elige un centro',
     tituloDar: 'Dar alta de centro',
     tituloRetirar: 'Retirar alta de centro',
+    noGuardado: 'No se pudo guardar el cambio de centro.',
     confirmacion: {
       dar: '¿Dar de alta a {nombre} en {centro}? Podrá figurar como coprofesional en las notas de los episodios de ese centro y abrir episodios en él. No le da acceso a ningún paciente ni a ninguna nota.',
       darPrincipal:

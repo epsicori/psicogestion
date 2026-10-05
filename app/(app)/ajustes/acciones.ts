@@ -78,7 +78,10 @@ export async function invitar(datos: unknown): Promise<EstadoFormulario> {
  * cortesía: la que manda está en `dar_alta_centro()` / `retirar_alta_centro()`, que lanzan
  * 42501 a quien no es administrador.
  */
-export async function darAltaDeCentro(datos: unknown): Promise<EstadoFormulario> {
+/** `ok` distingue el éxito del rechazo: el diálogo de `/ajustes/centros` solo se cierra con él. */
+export type EstadoAlta = EstadoFormulario & { ok?: true };
+
+export async function darAltaDeCentro(datos: unknown): Promise<EstadoAlta> {
   const sesion = await exigirAdministrador();
   if (!sesion) return { ...ESTADO_INICIAL, mensaje: t('ajustes.permisos.soloAdministrador') };
 
@@ -91,10 +94,10 @@ export async function darAltaDeCentro(datos: unknown): Promise<EstadoFormulario>
   if (!alta.ok) return { ...ESTADO_INICIAL, mensaje: alta.mensaje };
 
   revalidatePath('/ajustes/centros');
-  return { ...ESTADO_INICIAL, mensaje: t('altasCentro.resultados.dada') };
+  return { ...ESTADO_INICIAL, ok: true, mensaje: t('altasCentro.resultados.dada') };
 }
 
-export async function retirarAltaDeCentro(datos: unknown): Promise<EstadoFormulario> {
+export async function retirarAltaDeCentro(datos: unknown): Promise<EstadoAlta> {
   const sesion = await exigirAdministrador();
   if (!sesion) return { ...ESTADO_INICIAL, mensaje: t('ajustes.permisos.soloAdministrador') };
 
@@ -107,7 +110,7 @@ export async function retirarAltaDeCentro(datos: unknown): Promise<EstadoFormula
   if (!retirada.ok) return { ...ESTADO_INICIAL, mensaje: retirada.mensaje };
 
   revalidatePath('/ajustes/centros');
-  return { ...ESTADO_INICIAL, mensaje: t('altasCentro.resultados.retirada') };
+  return { ...ESTADO_INICIAL, ok: true, mensaje: t('altasCentro.resultados.retirada') };
 }
 
 const esquemaReponerTotp = z.object({ perfilId: z.uuid() });
