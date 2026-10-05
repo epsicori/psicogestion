@@ -173,6 +173,8 @@ export const es = {
       exito: 'Invitación enviada a {correo}',
       exitoConAltasPendientes:
         'Invitación enviada a {correo}. No se pudo dar el alta en {centros}: dásela desde Ajustes › Altas de centro.',
+      registroConAltasPendientes:
+        '{mensaje} Tampoco se dio el alta en {centros}: dásela desde Ajustes › Altas de centro.',
       error: 'No se pudo enviar la invitación: {motivo}',
     },
   },
@@ -197,6 +199,7 @@ export const es = {
     tituloDar: 'Dar alta de centro',
     tituloRetirar: 'Retirar alta de centro',
     noGuardado: 'No se pudo guardar el cambio de centro.',
+    errorLectura: 'No se han podido cargar las altas de centro. Recarga la página para intentarlo de nuevo.',
     confirmacion: {
       dar: '¿Dar de alta a {nombre} en {centro}? Podrá figurar como coprofesional en las notas de los episodios de ese centro y abrir episodios en él. No le da acceso a ningún paciente ni a ninguna nota.',
       darPrincipal:
