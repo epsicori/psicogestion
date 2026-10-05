@@ -574,14 +574,14 @@ describe('FormularioAlta · el asignado y el centro (H22, H24)', () => {
     );
   });
 
-  it('H22: si el profesional se eligió a mano, cambiar de centro no lo sustituye por el asignado (solo si ya no trabaja allí, por el primero)', async () => {
+  it('H22/H28: si el profesional se eligió a mano, cambiar de centro no lo sustituye por el asignado; si ya no trabaja allí, entra el asignado y no el primero', async () => {
     pinta({ rol: 'tecnico_administrativo', centros, profesionales, inicial: sur });
     await elegirBea();
     fireEvent.change(screen.getByLabelText('Profesional'), { target: { value: PROFESIONAL } });
 
     fireEvent.change(screen.getByLabelText('Centro'), { target: { value: NORTE } });
 
-    expect(profesionalElegido()).toBe(ANA_NORTE);
+    expect(profesionalElegido()).toBe(LUIS_NORTE);
   });
 
   it('H22: sin paciente elegido, cambiar de centro sigue entrando el primero del centro nuevo', () => {

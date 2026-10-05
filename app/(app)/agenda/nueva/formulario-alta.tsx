@@ -372,10 +372,11 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
               const delCentro = profesionales.filter((p) => p.centroId === nuevo);
               if (rol !== 'profesional_sanitario') {
                 // El asignado del paciente, si trabaja en el centro nuevo y nadie eligió otro a mano (H22); si no, se
-                // conserva el actual si también trabaja allí, y si no, el primero.
+                // conserva el actual si también trabaja allí, y si no, el asignado (aunque se hubiera elegido a mano otro, que ya no vale
+                // aquí) o, sin asignado, el primero (H28).
                 const asignado = delCentro.find((p) => p.id === paciente?.profesionalId);
                 if (asignado && !profesionalManual) setValue('profesionalId', asignado.id);
-                else if (!delCentro.some((p) => p.id === profesionalId) && delCentro[0]) setValue('profesionalId', delCentro[0].id);
+                else if (!delCentro.some((p) => p.id === profesionalId) && (asignado ?? delCentro[0])) setValue('profesionalId', (asignado ?? delCentro[0]).id);
               }
               invalidarSerie();
             }}
