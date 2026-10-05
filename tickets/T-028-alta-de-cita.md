@@ -16,6 +16,8 @@ territorio:
   - lib/contraste/tokens.ts
   - components/ui/dialogo.tsx
   - components/ui/dialogo.test.tsx
+  - components/ui/foco.ts                   # ronda 5, H26 (propietario, 05-10-2026)
+  - components/ui/cierre-exterior-hidratado.test.tsx
   - app/(app)/layout.tsx
   - app/(app)/@modal/**
   - app/(app)/agenda/nueva/**
