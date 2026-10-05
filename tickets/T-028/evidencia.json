@@ -1,44 +1,132 @@
 {
   "ticket": "T-028",
-  "resumen": "Corte B, ronda 3 (rama worktree-agent-a1549876942c02f5f, HEAD 75be90b). Clon limpio: lint 0 errores (2 warnings ajenos), npm test 170 ficheros / 2153 pruebas verdes, build Turbopack OK. Base reseteada y sembrada; app en next start con SEGUNDO_FACTOR_AUTOMATICO_LOCAL. H1, H9, H10, H11 (a 1024 px), H12, H14, H15, H16, H17, H19, salto con ?inicio=, H2, H3, H5, H6, H8, man-3 a man-7: PASAN. FALLAN man-11 (el foco cae a body al elegir paciente o pulsar Cambiar) y man-12 (Sala y Numero de sesiones miden 40 px a 360 px). Servidor parado y clon borrado.",
+  "resumen": "Corte B, ronda 4 (rama worktree-agent-a1549876942c02f5f, HEAD f7d59c4). Clon limpio npm ci: lint 0 errores, npm test 172 ficheros / 2180 pruebas verdes, build Turbopack OK, territorio OK. Navegador (Playwright, next start con SEGUNDO_FACTOR_AUTOMATICO_LOCAL, sin db reset): man-11 (foco tras elegir paciente y Cambiar) y man-12 (campos de 44 px) CORREGIDOS; man-3, man-2 (en ruta y Agenda), man-5, man-6, man-7, man-9, man-10 PASAN. FALLA man-11c: tras un Guardar con conflicto de hueco document.activeElement cae a BODY. NO_VERIFICABLE: man-1 (la ficha no trae el boton, corte C), man-4 (base contaminada, requiere reset), man-8 (anomalia no provocable), man-13, auto-2 (sin spec a11y de la ruta). Servidor parado. Datos de prueba escritos por la UI: 1 serie de 4 de Hugo y 2 citas de Mateo.",
   "criterios": [
-    {"id": "auto-1", "texto": "lint, test y build en clon limpio", "veredicto": "PASA", "comando": "clon de la rama; npm ci; npm run lint; npm test; npm run build", "evidencia": "lint: 2 problems (0 errors, 2 warnings); Test Files 170 passed, Tests 2153 passed; build lista /agenda/nueva y /(.)agenda/nueva"},
-    {"id": "auto-2", "texto": "Verificador a11y de T-009 sobre la ruta nueva", "veredicto": "NO_VERIFICABLE", "motivo": "No se ejecuto la bateria Playwright de accesibilidad (limite de turnos). Hace falta npm run test:a11y con la ruta anadida."},
-    {"id": "H1", "texto": "El administrador sale en el selector de profesional", "veredicto": "PASA", "comando": "Playwright admin@ en /agenda/nueva, centros Las Palmas y Madrid", "evidencia": "Las Palmas: ['Profesional','Álvaro Administrador']; Madrid: ['Profesional','Álvaro Administrador','Ana Márquez','Bruno Ferrer']"},
-    {"id": "H9", "texto": "Sin ?paciente=, elegir paciente con el buscador pone su asignado, salvo eleccion manual previa", "veredicto": "PASA", "comando": "Playwright tecnico@ y admin@: buscar Diego, Lucia; Bruno a mano y luego paciente", "evidencia": "Diego -> Bruno Ferrer; Lucia -> Ana Márquez; con Bruno elegido a mano antes, elegir Lucia o Carmen mantiene Bruno Ferrer (ambos roles)"},
-    {"id": "H10", "texto": "Una parada de Tab por control en rejilla y lista; flechas entre dias y huecos", "veredicto": "PASA", "comando": "Playwright 1280 y 360: Tab desde Semana anterior; flechas", "evidencia": "Tab: Semana siguiente -> dia activo -> select Periodicidad (0 de 51 huecos con tabindex>=0). ArrowDown entra en huecos; Home/End/ArrowUp/Escape funcionan; ArrowRight/Left cambian de dia en la rejilla (en la lista movil lo hacen en la tira de dias; sobre un hueco no hacen nada). Tab sale a Periodicidad; Enter elige"},
-    {"id": "H11", "texto": "Dialogo max-w-5xl: hora legible con huecos solapados y Elegida visible", "veredicto": "PASA", "comando": "Playwright 1280 (dialogo 1024 px): cita breve a las 9:00 y tipo individual; medicion y captura", "evidencia": "Solapados 66x80: '09:40' (42 px) y 'Elegida' visibles sin recorte; ocupado '09:00 – 09:50' en 3 lineas, legible. Hueco sugerido+habitual 131x80: Elegida/Sugerida/Habitual dentro. Nota: con viewport 800 (dialogo 768) el carril de 47 px deja 'Elegida' al limite"},
-    {"id": "H12", "texto": "La lista movil salta al dia del hueco elegido al cambiar de semana", "veredicto": "PASA", "comando": "Playwright 360: pulsar tarjeta del 13 de octubre estando en la semana del 28 sep", "evidencia": "Dia activo 'martes, 13 de octubre de 2026', huecos 2026-10-13T09:00..12:00, Hueco elegido martes 13 12:00"},
-    {"id": "H14", "texto": "La region viva existe antes del anuncio", "veredicto": "PASA", "comando": "Playwright pagina y dialogo: leer [data-anuncio-global] antes de Guardar; MutationObserver", "evidencia": "Antes: existe, role=status, texto vacio; despues un solo cambio a 'Cita guardada.'"},
-    {"id": "H15", "texto": "Guardar no queda desactivado cuando la serie no se puede pedir o ha fallado", "veredicto": "PASA", "comando": "Playwright: Semanal con 1 sesion; abort de las Server Actions", "evidencia": "Con 1 sesion Guardar habilitado y sale 'Una serie tiene entre 2 y 52 sesiones.'. Con fallo de transporte: alerta 'No se ha podido calcular la serie. Pulsa Guardar para volver a intentarlo.' y Guardar reintenta y vuelve 'Así quedaría la serie'"},
-    {"id": "H16", "texto": "Vacio: 'este dia' en la lista movil y mensaje en la rejilla de escritorio", "veredicto": "PASA", "comando": "Playwright 1280 y 360", "evidencia": "1280 semana vacia: 'No hay huecos libres en esta semana.'; 360 dia sin huecos: 'No hay huecos libres este día.'"},
-    {"id": "H17", "texto": "/agenda?fecha= lleva el centro de la cita", "veredicto": "PASA", "comando": "Playwright admin@ con centro inicial Las Palmas, guardar en Madrid", "evidencia": "Redireccion a /agenda?fecha=2026-10-14&centro=c0080001-0000-4000-8000-00000000000a (Madrid)"},
-    {"id": "H19", "texto": "Cambiar el tipo con otra semana en vuelo vuelve a comprobar el hueco elegido", "veredicto": "PASA", "comando": "Playwright con Server Actions retrasadas 2,5 s: elegido lun 5 19:00, Semana siguiente y enseguida tipo de pareja", "evidencia": "Queda 'Elige un hueco libre', aviso 'Con esta duración el hueco elegido ya no cabe.', semana vuelve a 5-11 oct; no aparece 'acaba de ocuparse'"},
-    {"id": "inicio-otra-semana", "texto": "?inicio= en otra semana abre esa semana con el hueco elegido", "veredicto": "PASA", "comando": "Playwright 1280 y 360: ?paciente=<Lucia>&inicio=2026-10-21T09:00", "evidencia": "Semana '19 oct – 25 oct 2026', 'Hueco elegido: miércoles, 21 de octubre de 2026, 09:00, libre'; tras elegir tipo la semana no salta"},
-    {"id": "H2", "texto": "Con ?paciente= entra el profesional asignado", "veredicto": "PASA", "comando": "Playwright ?paciente=Lucia y Diego", "evidencia": "Ana Márquez y Bruno Ferrer (1280 y 360)"},
-    {"id": "H3", "texto": "Cambiar de profesional invalida la previsualizacion; Guardar no crea sesiones no vistas", "veredicto": "PASA", "comando": "Playwright con acciones retrasadas 4 s", "evidencia": "600 ms tras cambiar profesional: previa visible false, Guardar disabled true; al llegar la nueva, previa visible. Serie guardada en BD con el profesional vigente (Bruno, 4 sesiones jueves 11:00)"},
-    {"id": "H5", "texto": "Seleccion de hueco en vista semanal (escritorio) y lista del dia (360)", "veredicto": "PASA", "comando": "Playwright 1280 y 360", "evidencia": "Clic/Enter en hueco -> 'Hueco elegido: ...'; overflow horizontal 0 a 360"},
-    {"id": "H6", "texto": "Guardar como pagina lleva a /agenda?fecha= y anuncia 'Cita guardada'", "veredicto": "PASA", "comando": "Playwright pagina completa", "evidencia": "url /agenda?fecha=2026-10-15&centro=...; anuncio 'Cita guardada.'"},
-    {"id": "H8", "texto": "Cambiar tipo con hueco que ya no cabe: mensaje y seleccion limpia", "veredicto": "PASA", "comando": "Playwright (misma prueba que H19)", "evidencia": "'Con esta duración el hueco elegido ya no cabe.' y seleccion limpia; Guardar pide elegir hueco"},
-    {"id": "man-3", "texto": "Sin PIN funciona entero, incluida la serie", "veredicto": "PASA", "comando": "Playwright tecnico@ sin tocar el candado; consulta a citas en BD", "evidencia": "Series semanal y quincenal creadas: 4 filas serie=true Bruno 8/15/22/29 oct 11:00"},
-    {"id": "man-4", "texto": "Seis citas martes 12: primera sugerencia martes 12, motivo 'como las seis ultimas', sin cifra", "veredicto": "PASA", "comando": "Playwright ?paciente=Lucia", "evidencia": "'Martes, 6 de octubre de 2026 12:00 Como las seis últimas'; 2a 'martes a las 12:00, su día habitual'; sin cifras ni estrellas"},
-    {"id": "man-5", "texto": "Paciente sin citas: 'primeros huecos libres'", "veredicto": "PASA", "comando": "Playwright Hugo Vidal", "evidencia": "'Primeros huecos libres' / 'Aún no hay citas suficientes para saber su hora habitual.'; tarjetas 'Primer hueco libre'"},
-    {"id": "man-6", "texto": "Tecnico elige tipo pero no lo ve despues", "veredicto": "PASA", "comando": "Playwright tecnico@: agenda semanal, panel de cita, ficha", "evidencia": "El selector lista el catalogo activo; ni agenda, ni panel, ni ficha mencionan ningun tipo (regex sobre nombres de tipo: false)"},
-    {"id": "man-7", "texto": "Ningun control ni texto de modalidad", "veredicto": "PASA", "comando": "Playwright 1280 y 360", "evidencia": "regex modalidad/presencial/online en pantalla: false; 0 controles con name/id/aria modalidad"},
-    {"id": "man-11", "texto": "Recorrido con teclado, foco visible siempre y de vuelta al boton de origen", "veredicto": "FALLA", "reproduccion": "1) tecnico@ en /agenda/nueva (o dialogo desde /agenda). 2) Enfocar el buscador, escribir 'Lucía', Tab al resultado, Enter. 3) document.activeElement pasa a BODY y sigue asi 3 s despues. Igual al pulsar 'Cambiar' con Enter. El resto del recorrido (abrir, hueco, periodicidad, Guardar, Escape) pasa: anillo de foco, trampa de foco (40 Tab, 0 fuera) y retorno al enlace 'Nueva cita'."},
-    {"id": "man-12", "texto": "A 360 px ningun objetivo tactil por debajo de 44 px", "veredicto": "FALLA", "reproduccion": "1) 360x740, tecnico@, /agenda/nueva (y el dialogo). 2) Elegir paciente, tipo, un hueco y Periodicidad Semanal. 3) Medir: input 'Número de sesiones' 286x40 e input 'Sala' 286x40 (278x40 en el dialogo). El resto del formulario >= 44 px; overflow horizontal 0. Los controles de la cabecera comun quedan fuera (ajenos)."},
-    {"id": "man-1", "texto": "Desde la ficha, Nueva cita abre el dialogo con el paciente fijado", "veredicto": "NO_VERIFICABLE", "motivo": "Enlace de la ficha es del corte C."},
-    {"id": "man-2", "texto": "Con desbloqueo de historia vigente no hay dato clinico", "veredicto": "NO_VERIFICABLE", "motivo": "No ejercido en esta ronda; requiere ficha/candado (corte C)."},
-    {"id": "man-8", "texto": "Semanal x8 cruzando marzo", "veredicto": "NO_VERIFICABLE", "motivo": "No ejercido en esta ronda (limite de turnos); PASA en la ronda 2."},
-    {"id": "man-9", "texto": "Serie que pisa un festivo", "veredicto": "NO_VERIFICABLE", "motivo": "No ejercido en esta ronda; PASA en la ronda 2."},
-    {"id": "man-10", "texto": "Dos pestanas, mismo hueco", "veredicto": "NO_VERIFICABLE", "motivo": "No ejercido en esta ronda; PASA en la ronda 2."},
-    {"id": "man-13", "texto": "Comparacion con /prototipo", "veredicto": "NO_VERIFICABLE", "motivo": "Juicio visual humano."},
-    {"id": "H4", "texto": "Aviso de hueco raro", "veredicto": "NO_VERIFICABLE", "motivo": "Trasladado a otro ticket por decision del propietario."}
+    {
+      "id": "auto-1",
+      "texto": "lint, test y build en clon limpio (npm ci)",
+      "veredicto": "PASA",
+      "comando": "git clone worktree -> npm ci; npm run lint; npm test; npm run build",
+      "evidencia": "lint: 0 errores (2 warnings ajenos en lib/cuentas/accesos.test.ts); npm test: 172 ficheros, 2180 pruebas verdes; build Turbopack OK (lista de rutas completa, sin errores). Territorio: node territorio.mjs T-028 -> 63 ficheros, todos dentro del territorio."
+    },
+    {
+      "id": "auto-2",
+      "texto": "Verificador a11y de T-009 sobre /agenda/nueva",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "La rama no anade ninguna especificacion en accesibilidad/ (grep de 'agenda/nueva' en accesibilidad/ y playwright.config.ts: 0 coincidencias; git diff main...HEAD no toca accesibilidad/). No hay verificador que ejecutar sobre la ruta nueva; hace falta el spec."
+    },
+    {
+      "id": "man-11a",
+      "texto": "Foco al elegir paciente con el buscador y al pulsar Cambiar (FALLO de la ronda 3)",
+      "veredicto": "PASA",
+      "comando": "Playwright, ana, /agenda -> Nueva cita con teclado; escribir 'Hugo'; Tab; Enter; luego Enter en Cambiar; repetido con raton y a 360 px",
+      "evidencia": "activeElement: abrir dialogo => BUTTON Cerrar; Tab => INPUT search; escribir Hugo => INPUT search; Tab => BUTTON 'Hugo Vidal'; Enter (elegir paciente) => BUTTON 'Cambiar'; Tab => SELECT Centro; Shift+Tab => BUTTON Cambiar; Enter en Cambiar => INPUT search; click en resultado => BUTTON Cambiar; click en Cambiar => INPUT search. Identico a 1280 y a 360 px. Corregido. Observacion menor: tras Cambiar el buscador conserva el texto anterior ('Hugo')."
+    },
+    {
+      "id": "man-11b",
+      "texto": "Recorrido de teclado completo: abrir, elegir hueco, periodicidad, confirmar, cerrar; foco de vuelta al origen",
+      "veredicto": "PASA",
+      "comando": "Playwright teclado, ana, serie semanal de 4 sesiones para Hugo (Centro Madrid, tipo breve)",
+      "evidencia": "activeElement: abrir => BUTTON Cerrar; Tab recorre buscador, centro, tipo, semana anterior/siguiente, dia, periodicidad, sala, nota, Cancelar, Guardar, Cerrar y vuelve al buscador (foco atrapado, 3 vueltas, siempre dentro de [role=dialog]); Guardar vacio (validacion) => se queda en BUTTON Guardar con errores 'Elige un tipo de terapia.' y 'Elige un hueco libre del calendario.'; select tipo => SELECT; Tab => tarjeta sugerida; Enter => 'Hueco elegido: Martes, 6 de octubre de 2026, 12:20'; periodicidad => SELECT; sesiones => INPUT number; Tab => checkbox 'Incluir todas'; Tab => checkbox sesion 1; Space marca/desmarca sin perder foco; Enter en Guardar => A 'Nueva cita' (boton de origen), url /agenda, anuncio 'Serie guardada. Quedan fechas por resolver en la bandeja de la agenda.' Escape y Cancelar tambien devuelven el foco a A 'Nueva cita' (dialogo oculto, vis=false). Flechas en la rejilla: Tab => 'lun 12, 13 huecos libres'; ArrowRight => 'mar 13'; ArrowDown => 'martes, 13 de octubre de 2026, 09:00, libre'; Enter => '..., libre, elegida' (a 1280 y a 360 px)."
+    },
+    {
+      "id": "man-11c",
+      "texto": "Foco visible siempre: tras un Guardar que devuelve conflicto de hueco el foco no se pierde",
+      "veredicto": "FALLA",
+      "reproduccion": "Dos contextos: A (ana) en /agenda -> Nueva cita con teclado, paciente Hugo, Centro Madrid, tipo 'Sesion breve de seguimiento', Tab+Enter en la primera sugerencia (Martes 6 oct 11:00). B (tecnico) reserva el mismo hueco (Profesional Ana, Mateo) y guarda. En A: focus en Guardar y Enter. Mirar document.activeElement.",
+      "evidencia": "activeElement antes de Enter: BUTTON Guardar. Tras el mensaje 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.': activeElement = BODY (el foco se pierde; el boton Guardar sigue habilitado, disabled=false). El siguiente Tab cae en BUTTON 'Cerrar', el primero del dialogo, no en el siguiente control del formulario. Reproducido 2 veces (una con click de raton, una con teclado). El resto del formulario si queda intacto y se recalculan las sugerencias. Es una perdida de foco en el recorrido de teclado (contrato: foco visible siempre)."
+    },
+    {
+      "id": "man-12",
+      "texto": "A 360 px ningun objetivo tactil por debajo de 44 px (FALLO de la ronda 3)",
+      "veredicto": "PASA",
+      "comando": "Playwright 360x740, ana, dialogo desde /agenda, medir getBoundingClientRect de button/a/input/select/textarea/label dentro de [role=dialog] en tres estados (buscando, con tipo, serie con previsualizacion)",
+      "evidencia": "Alturas medidas en px: Cerrar 44; buscador 44; resultado 'Hugo Vidal' 44; Cambiar 44; Centro (select) 44; Tipo de terapia (select) 44; Periodicidad (select) 44; Numero de sesiones (input number) 44; Sala (input) 44; Nota operativa (textarea) 80; Cancelar 44; Guardar 44; Semana anterior 44; Semana siguiente 44; dias 44 (66.5 de ancho); huecos de la lista 44; tarjetas de sugerencia 102; label 'Incluir todas las sesiones' 44; labels 'Incluir'/'Aceptar alternativa' 44 (260 de ancho). Sala y Numero de sesiones ya miden 44 (eran 40). Unicos elementos <44: los input checkbox nativos (20x20) de la previsualizacion, cuya etiqueta contenedora mide 260x44 (area tactil de 44). Sin desbordamiento horizontal (scrollWidth-clientWidth=0). Fuera del dialogo, en la ruta completa, hay controles de la carcasa de otro ticket (Cerrar menu 32x32, Cerrar sesion 32x32, Abrir menu 36x36, centro activo 40, enlaces del menu 40, En sesion 34x44): no son de este ticket."
+    },
+    {
+      "id": "man-3",
+      "texto": "Abrir /agenda/nueva sin PIN funciona entero, incluida la serie",
+      "veredicto": "PASA",
+      "comando": "Playwright, ana sin introducir PIN en la sesion; serie semanal de 4 sesiones guardada via Server Action",
+      "evidencia": "Sesion nueva sin PIN: formulario completo, 'Serie guardada. Quedan fechas por resolver en la bandeja de la agenda.' y la agenda muestra las citas. En ningun momento se pidio PIN."
+    },
+    {
+      "id": "man-2",
+      "texto": "Con desbloqueo de historia vigente, la pantalla no muestra ningun dato clinico",
+      "veredicto": "PASA",
+      "comando": "Playwright, ana: abrir editor de la nota de Carmen en /pacientes/<id>/historia/notas?nota=..., PIN de desarrollo 123456 -> nota abierta (56 caracteres: 'Sesion 4. Pendiente de repasar...'); luego /agenda/nueva?paciente=<Carmen> y dialogo desde /agenda",
+      "evidencia": "Con el desbloqueo vigente: sin pedir PIN; coincidencias de diagn|episodio|motivo de consulta|historia clinica|modalidad relacional|ansiedad|depresi|trastorno = []; el texto de la nota no aparece (false); tras elegir centro y tipo, motivos 'Primer hueco libre' sin dato clinico. El motivo_consulta del episodio sembrado esta vacio. Solo cubre la ruta y el dialogo desde Agenda: la entrada desde la ficha es del corte C."
+    },
+    {
+      "id": "man-1",
+      "texto": "Desde la ficha del paciente, Resumen, 'Nueva cita' abre el dialogo con paciente fijado",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "La rama no toca app/(app)/pacientes/[id]/panel-resumen.tsx (corte C): la ficha de Lucia (pestana Resumen) no tiene ningun boton 'Nueva cita' (getByText('Nueva cita').count()=0 en /pacientes/<id>). Comprobado que el dialogo desde Agenda se abre, atrapa el foco, Escape y Cancelar devuelven el foco, y que /agenda/nueva?paciente= recargada es una pagina completa con el paciente fijado. Falta el punto de entrada de la ficha."
+    },
+    {
+      "id": "man-4",
+      "texto": "Paciente con seis citas los martes a las 12: primera sugerencia martes 12, motivo 'como las seis ultimas', sin cifra",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "La base ya no esta en su estado sembrado (no se puede hacer db reset ni seed, y la insercion directa de datos fue denegada). Lucia (6 martes a las 12 realizados) tiene ahora 18 citas extra de rondas anteriores (canceladas y programadas) y la pantalla le da 'Primeros huecos libres: Aun no hay citas suficientes para saber su hora habitual' con 'Primer hueco libre'. No puedo atribuirlo al codigo o a la contaminacion de datos sin reset. Verificable con db reset + seed: paciente Lucia, centro Madrid, tipo individual, primera tarjeta martes 12:00. Si el algoritmo debiera contar solo las seis ultimas realizadas, este resultado seria un defecto: el implementador debe aclararlo (las pruebas unitarias de sugerencias pasan). Ausencia de cifras de puntuacion: comprobada (regex de cifra/porcentaje/estrellas = false)."
+    },
+    {
+      "id": "man-5",
+      "texto": "Paciente sin citas previas: 'primeros huecos libres', sin hora habitual",
+      "veredicto": "PASA",
+      "comando": "Playwright, tecnico y ana, Mateo/Hugo (sin citas)",
+      "evidencia": "Texto en pantalla: 'Primeros huecos libres' + 'Aun no hay citas suficientes para saber su hora habitual.' y tres tarjetas 'Primer hueco libre'; ninguna tarjeta habla de hora habitual."
+    },
+    {
+      "id": "man-6",
+      "texto": "Tecnico administrativo: el tipo esta en el formulario con el catalogo activo; tras guardar ni la agenda, ni la ficha, ni la previsualizacion lo ensenan; ningun motivo lo nombra",
+      "veredicto": "PASA",
+      "comando": "Playwright tecnico@psicogestion.test: /agenda -> Nueva cita, Mateo, Profesional Ana, tipo breve, guardar; luego /agenda?fecha=2026-10-06 y ficha del paciente",
+      "evidencia": "Select 'Tipo de terapia' presente con 'Elige el tipo, Sesion breve de seguimiento, Sesion de pareja, Sesion individual' (la DB tiene 4 tipos, 'Sesion de grupo' activo=false, no aparece). 'Cita guardada.'. Agenda: '09:00 Mateo O. Ana Marquez Programada' sin tipo; ficha de Mateo (Proxima cita 09:00-09:30 Programada) sin tipo ni modalidad. Motivos: 'Primer hueco libre'."
+    },
+    {
+      "id": "man-7",
+      "texto": "Ningun control ni texto de modalidad en /agenda/nueva",
+      "veredicto": "PASA",
+      "comando": "Playwright, ana y tecnico, /agenda/nueva",
+      "evidencia": "Regex modalidad|presencial|telem|videollamada|online sobre el texto = false; elementos con name/id/aria-label 'odalidad' = 0."
+    },
+    {
+      "id": "man-8",
+      "texto": "Semanal x8 cruzando el ultimo domingo de marzo: las ocho con la misma hora local y la afectada marcada",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Parcial: con Hugo, centro Madrid, tipo breve, desde martes 16 de marzo de 2027 09:00, semanal 8: la previsualizacion ensena las ocho (16, 23, 30 marzo; 6, 13, 20, 27 abril; 4 mayo) todas a 09:00 (misma hora local). Ninguna aparece marcada como anomalia_horaria porque a las 09:00 no hay hora inexistente; marcar una requeriria una franja a las 02:00-03:00 que la disponibilidad sembrada no ofrece, y no se puede sembrar. Falta ejercer el marcado con una hora afectada."
+    },
+    {
+      "id": "man-9",
+      "texto": "Serie que pisa un festivo: sesion marcada con alternativa propuesta, nunca encima",
+      "veredicto": "PASA",
+      "comando": "Playwright, serie semanal desde martes 6 oct 2026 (festivo sembrado 20 oct)",
+      "evidencia": "Previsualizacion: 'Martes, 20 de octubre de 2026 | Festivo | Alternativa: miercoles, 21 de octubre de 2026, 12:20 | Aceptar alternativa'. Las demas sesiones con 'Incluir'. Guardado: 'Quedan fechas por resolver en la bandeja de la agenda.'"
+    },
+    {
+      "id": "man-10",
+      "texto": "Dos pestanas, mismo hueco: 'Ese hueco acaba de ocuparse' con sugerencias nuevas y el resto del formulario conservado",
+      "veredicto": "PASA",
+      "comando": "Playwright, A=ana y B=tecnico (profesional Ana) en el mismo hueco martes 6 oct 09:00; B guarda ('Cita guardada.'); A pulsa Guardar",
+      "evidencia": "A: 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.'; Sala conserva 'Sala conflicto-A'; paciente Hugo Vidal y tipo 'Sesion breve de seguimiento' intactos; sugerencias nuevas 11:00, 11:40, 12:20; 'Hueco elegido: Elige un hueco libre del calendario.' (la eleccion invalida se limpia). Ver man-11c por el foco."
+    },
+    {
+      "id": "man-13",
+      "texto": "/agenda/nueva al lado de /prototipo: mismo vocabulario visual",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Comparacion visual humana. Guion: abrir /prototipo (modulo Agenda) y /agenda/nueva en dos ventanas a 1280 px y comprobar tokens, bordes, tipografia, que 'Elegida' va en bg-secondary y que no hay controles sin accion."
+    },
+    {
+      "id": "H20-H25",
+      "texto": "Hallazgos H20-H25 de la ronda 3",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "No lei revision.md ni revision.json (el rol del verificador lo prohibe) y no puedo mapear esos ids a comportamientos. Lo ejercido por contrato arriba (foco, 44 px, conflicto, serie, tecnico, modalidad, PIN) cubre las areas habituales; el caller debe cotejar los ids contra man-11a/b/c y man-12."
+    }
   ],
   "regresiones": [
-    "Foco: al elegir paciente con el buscador (y al pulsar Cambiar) el foco cae a body (ver man-11).",
-    "BAJA: tras un Guardar fallido por validacion, 'Una serie tiene entre 2 y 52 sesiones.' y 'Falta la previsualización de la serie.' siguen visibles aunque el campo ya vale 4 y la previa existe.",
-    "BAJA: justo tras elegir el tipo aparece unos instantes 'Sin huecos libres en las próximas cuatro semanas.' en sugerencias antes de que lleguen las nuevas.",
-    "Observacion: la primera semana que abre el alta es la de hoy (domingo), vacia, aunque las sugerencias estan en la siguiente."
+    "Perdida de foco tras Guardar con conflicto de hueco (BODY), ver man-11c.",
+    "Observacion: el centro por defecto del formulario es 'Centro Las Palmas' aunque el paciente (Lucia, Hugo) sea de Centro Madrid; con Las Palmas el profesional no tiene franjas y la pantalla dice 'Sin huecos libres' hasta cambiar de centro.",
+    "Observacion: tras Cambiar, el buscador de paciente conserva el texto anterior.",
+    "npm run test:rls no se ejecuto (la base lleva migraciones de otra rama y no se puede resetear)."
   ]
 }
