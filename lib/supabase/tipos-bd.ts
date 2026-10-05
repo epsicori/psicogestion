@@ -282,6 +282,62 @@ export type Database = {
           },
         ]
       }
+      bonos_caducidades: {
+        Row: {
+          bono_id: string
+          caducidad: string | null
+          id: string
+          numero: number
+          registrada_en: string
+          registrada_por: string
+        }
+        Insert: {
+          bono_id: string
+          caducidad?: string | null
+          id?: string
+          numero: number
+          registrada_en?: string
+          registrada_por: string
+        }
+        Update: {
+          bono_id?: string
+          caducidad?: string | null
+          id?: string
+          numero?: number
+          registrada_en?: string
+          registrada_por?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonos_caducidades_bono_id_fkey"
+            columns: ["bono_id"]
+            isOneToOne: false
+            referencedRelation: "bonos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_caducidades_bono_id_fkey"
+            columns: ["bono_id"]
+            isOneToOne: false
+            referencedRelation: "bonos_consumo"
+            referencedColumns: ["bono_id"]
+          },
+          {
+            foreignKeyName: "bonos_caducidades_registrada_por_fkey"
+            columns: ["registrada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_caducidades_registrada_por_fkey"
+            columns: ["registrada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       borradores_factura: {
         Row: {
           creado_en: string
@@ -2788,33 +2844,33 @@ export type Database = {
           creada_por: string
           id: string
           importe: number
+          orden: number
           paciente_id: string
           regimen_iva: Database["public"]["Enums"]["regimen_iva"]
           tipo_terapia_id: string
           vigente_desde: string
-          vigente_hasta: string | null
         }
         Insert: {
           creada_en?: string
           creada_por: string
           id?: string
           importe: number
+          orden: number
           paciente_id: string
           regimen_iva: Database["public"]["Enums"]["regimen_iva"]
           tipo_terapia_id: string
           vigente_desde: string
-          vigente_hasta?: string | null
         }
         Update: {
           creada_en?: string
           creada_por?: string
           id?: string
           importe?: number
+          orden?: number
           paciente_id?: string
           regimen_iva?: Database["public"]["Enums"]["regimen_iva"]
           tipo_terapia_id?: string
           vigente_desde?: string
-          vigente_hasta?: string | null
         }
         Relationships: [
           {
@@ -3088,21 +3144,10 @@ export type Database = {
       bonos_consumo: {
         Row: {
           bono_id: string | null
+          caducidad: string | null
           paciente_id: string | null
           sesiones_consumidas: number | null
           sesiones_totales: number | null
-        }
-        Insert: {
-          bono_id?: string | null
-          paciente_id?: string | null
-          sesiones_consumidas?: never
-          sesiones_totales?: number | null
-        }
-        Update: {
-          bono_id?: string | null
-          paciente_id?: string | null
-          sesiones_consumidas?: never
-          sesiones_totales?: number | null
         }
         Relationships: [
           {
@@ -3262,6 +3307,34 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tarifas_paciente_vigencias: {
+        Row: {
+          importe: number | null
+          orden: number | null
+          paciente_id: string | null
+          regimen_iva: Database["public"]["Enums"]["regimen_iva"] | null
+          tarifa_id: string | null
+          tipo_terapia_id: string | null
+          vigente_desde: string | null
+          vigente_hasta: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tarifas_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_paciente_tipo_terapia_id_fkey"
+            columns: ["tipo_terapia_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_terapia"
             referencedColumns: ["id"]
           },
         ]

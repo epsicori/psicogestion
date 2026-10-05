@@ -10,12 +10,17 @@
 --   1. comment on type regimen_iva
 --   2. enum forma_pago
 --   3. privilegios por defecto
---   4. tablas: tarifas_paciente, borradores_factura, borradores_factura_versiones, cobros, bonos
---   5. citas.bono_id y fn_bono_de_la_cita() (D8)
---   6. funciones: fn_sellar_version_borrador(), verificar_cadena_borrador(), fn_cerrar_tarifa()
---   7. vistas: borradores_factura_estado (invoker) y bonos_consumo (definer con barrera)
---   8. disparadores: tres capas en las versiones y en cobros, sellado, auditoría en las cinco
---   9. tablas_solo_adicion: dos filas
+--   4. tablas: tarifas_paciente, borradores_factura, borradores_factura_versiones, cobros, bonos,
+--      bonos_caducidades
+--   5. citas.bono_id y fn_bono_de_la_cita() (D8; ronda 2: congelado en la cita realizada o pasada)
+--   6. funciones: fn_sellar_version_borrador(), verificar_cadena_borrador(), fn_alta_tarifa(),
+--      fn_numerar_caducidad_bono(), fn_validar_cabecera_borrador()
+--   7. vistas: borradores_factura_estado (invoker), bonos_consumo (definer con barrera) y
+--      tarifas_paciente_vigencias (invoker)
+--   8. disparadores: tres capas en las versiones, cobros, tarifas_paciente y bonos_caducidades;
+--      capas 2 y 3 en bonos; sellado, cabecera, alta de tarifa, numeración de caducidades y
+--      auditoría en las seis
+--   9. tablas_solo_adicion: cuatro filas
 --  10. RLS y políticas
 --  11. grants
 
@@ -58,25 +63,22 @@ create table public.tarifas_paciente (
   importe          numeric(12, 2) not null,
   regimen_iva      public.regimen_iva not null,
   vigente_desde    date not null,
-  vigente_hasta    date,
+  orden            integer not null,
   creada_por       uuid not null references public.perfiles (id),
   creada_en        timestamptz not null default now(),
   constraint tarifas_paciente_importe_ck check (importe > 0),
-  constraint tarifas_paciente_vigencia_ck check (vigente_hasta is null or vigente_hasta > vigente_desde),
-  constraint tarifas_paciente_sin_solape
-    exclude using gist (
-      paciente_id extensions.gist_uuid_ops with =,
-      tipo_terapia_id extensions.gist_uuid_ops with =,
-      daterange(vigente_desde, vigente_hasta, '[)') with &&
-    )
+  constraint tarifas_paciente_orden_uq unique (paciente_id, tipo_terapia_id, orden)
 );
 
 alter table public.tarifas_paciente enable row level security;
 
 comment on table public.tarifas_paciente is
-  'Precio pactado con un paciente para un tipo de terapia, con vigencia [desde, hasta). Dos '
-  'tarifas vigentes del mismo paciente y tipo no se solapan (exclusión). Cambiar el precio es '
-  'cerrar la vigente (vigente_hasta, una sola vez: fn_cerrar_tarifa) y dar de alta otra (T-021).';
+  'Precio pactado con un paciente para un tipo de terapia, desde vigente_desde. Solo adición: '
+  'cambiar el precio es dar de alta otra tarifa, que cierra la anterior en su vigente_desde. La '
+  'vigencia completa (vigente_hasta) la deriva la vista tarifas_paciente_vigencias. orden lo pone '
+  'la base y desempata dos altas del mismo día; sin FK entrante, por la capa 1 (T-021, ronda 2).';
+comment on column public.tarifas_paciente.orden is
+  'Posición de alta dentro de (paciente, tipo): 1, 2, 3… La calcula fn_alta_tarifa(); no se manda.';
 comment on column public.tarifas_paciente.importe is
   'Precio por sesión CON IVA, en euros: el precio que se teclea es el final (lib/dinero/iva.ts).';
 comment on column public.tarifas_paciente.regimen_iva is
@@ -134,7 +136,9 @@ create table public.borradores_factura_versiones (
     destinatario_nif_clave_version is null or destinatario_nif_clave_version = 1),
   constraint borradores_factura_versiones_lineas_ck check (
     jsonb_typeof(lineas) = 'array' and jsonb_array_length(lineas) >= 1),
-  constraint borradores_factura_versiones_importes_ck check (base + cuota_iva = total)
+  constraint borradores_factura_versiones_importes_ck check (base + cuota_iva = total),
+  constraint borradores_factura_versiones_signo_ck check (
+    sign(base) in (0, sign(total)) and sign(cuota_iva) in (0, sign(total)))
 );
 
 alter table public.borradores_factura_versiones enable row level security;
@@ -200,11 +204,33 @@ create table public.bonos (
 alter table public.bonos enable row level security;
 
 comment on table public.bonos is
-  'Bono de N sesiones de un paciente. Las sesiones consumidas NO se almacenan: las cuenta '
-  'bonos_consumo a partir de las citas realizadas con ese bono (T-021, §5). Solo la caducidad '
-  'es modificable.';
+  'Bono de N sesiones de un paciente. Solo adición: ninguna columna se modifica. Las sesiones '
+  'consumidas se derivan de las citas realizadas con este bono, y la caducidad vigente es la '
+  'última fila de bonos_caducidades (o esta columna si no hay ninguna). Las dos las da '
+  'bonos_consumo (T-021, ronda 2).';
 comment on column public.bonos.importe is
   'Precio del bono CON IVA, en euros.';
+comment on column public.bonos.caducidad is
+  'Caducidad inicial, la del alta. Un cambio posterior es una fila en bonos_caducidades; esta '
+  'columna no se toca.';
+
+-- 4.6 · bonos_caducidades (solo adición) ---------------------------------
+create table public.bonos_caducidades (
+  id              uuid primary key default gen_random_uuid(),
+  bono_id         uuid not null references public.bonos (id),
+  numero          integer not null,
+  caducidad       date,
+  registrada_por  uuid not null references public.perfiles (id),
+  registrada_en   timestamptz not null default now(),
+  constraint bonos_caducidades_numero_uq unique (bono_id, numero)
+);
+
+alter table public.bonos_caducidades enable row level security;
+
+comment on table public.bonos_caducidades is
+  'Cada cambio de caducidad de un bono, de solo adición. Vale la de mayor numero, y null '
+  'significa sin caducidad. Prorrogar o acortar un bono es una fila nueva, nunca un UPDATE. Sin '
+  'FK entrante, por la capa 1 (T-021, ronda 2).';
 
 
 -- =========================================================================
@@ -213,8 +239,9 @@ comment on column public.bonos.importe is
 alter table public.citas add column bono_id uuid references public.bonos (id);
 
 comment on column public.citas.bono_id is
-  'Bono del que descuenta esta cita cuando se realiza (T-021, D8). Debe ser del mismo paciente '
-  '(fn_bono_de_la_cita). Cambiarlo en una cita pasada es corregir un cobro, y queda en auditoria.';
+  'Bono del que descuenta esta cita cuando se realiza (T-021, D8). Debe ser del mismo paciente, y '
+  'queda congelado en cuanto la cita está realizada o ha terminado: cambiarlo reescribiría el '
+  'consumo de un bono pagado (ronda 2).';
 
 -- T-039: una columna nueva de citas nace cerrada a authenticated; esta se escribe a mano.
 grant update (bono_id) on public.citas to authenticated;
@@ -228,6 +255,13 @@ as $$
 declare
   v_paciente_bono uuid;
 begin
+  -- Ronda 2 (A-H6): se mira old, nunca new, para que no se abra paso cambiando estado u hora.
+  if tg_op = 'UPDATE'
+     and old.bono_id is distinct from new.bono_id
+     and (old.estado = 'realizada'::public.estado_cita or old.fin <= now()) then
+    raise exception 'La cita realizada o pasada ya no se cambia de bono: el consumo de un bono pagado no se reescribe (T-021)'
+      using errcode = '42501';
+  end if;
   if new.bono_id is not null then
     select b.paciente_id into v_paciente_bono from public.bonos b where b.id = new.bono_id;
     -- Un bono que no existe lo rechaza la clave ajena (23503).
@@ -242,8 +276,9 @@ $$;
 
 comment on function public.fn_bono_de_la_cita() is
   'Disparador before insert or update of bono_id, paciente_id sobre citas: el bono de una cita '
-  'es del mismo paciente que la cita, o 23514 (T-021, D8). security definer para ver el bono '
-  'aunque la RLS de bonos no lo enseñe a quien edita la cita.';
+  'es del mismo paciente que la cita, o 23514 (T-021, D8); y 42501 si la cita (old) está '
+  'realizada o ya terminó y el bono cambia (ronda 2). security definer para ver el bono aunque la '
+  'RLS de bonos no lo enseñe a quien edita la cita.';
 
 revoke execute on function public.fn_bono_de_la_cita() from public;
 
@@ -290,6 +325,7 @@ declare
   v_cita_id         uuid;
   v_cita_paciente   uuid;
   v_suma            numeric := 0;
+  v_suma_general    numeric := 0;
   v_todo_exento     boolean := true;
 begin
   -- 0 · Permisos antes que cotejo (ADR-071.5, .claude/rules/supabase.md). Misma condición que
@@ -300,10 +336,11 @@ begin
   if current_setting('role', true) in ('authenticated', 'anon') then
     if not coalesce(
          (select public.rol_actual()) = 'administrador'::public.rol_usuario
-         or exists (select 1 from public.borradores_factura b
-                     where b.id = new.borrador_id
-                       and b.profesional_id = (select auth.uid())
-                       and public.es_profesional_asignado(b.paciente_id)),
+         or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+             and exists (select 1 from public.borradores_factura b
+                          where b.id = new.borrador_id
+                            and b.profesional_id = (select auth.uid())
+                            and public.es_profesional_asignado(b.paciente_id))),
          false) then
       raise exception 'No puedes añadir una versión a este borrador: la añade el administrador o su profesional, asignado al paciente (T-021)'
         using errcode = '42501';
@@ -398,6 +435,16 @@ begin
     raise exception 'El centro_id del sobre no coincide con la columna (null si la columna es nula) (T-021)'
       using errcode = '23514';
   end if;
+  -- 6.2.bis (ronda 2, B-H8) · El centro de la versión es null, el del paciente o una pertenencia
+  -- del profesional, sin filtrar por hasta: un borrador puede cubrir sesiones de una pertenencia
+  -- ya cerrada. Lo que se impide es un centro que no tenga que ver con ninguno de los dos.
+  if new.centro_id is not null
+     and new.centro_id is distinct from (select p.centro_id from public.pacientes p where p.id = v_paciente_id)
+     and not exists (select 1 from public.perfiles_centros pc
+                      where pc.perfil_id = v_profesional_id and pc.centro_id = new.centro_id) then
+    raise exception 'El centro_id de la versión no es del paciente ni del profesional del borrador (T-021)'
+      using errcode = '23514';
+  end if;
   if (v_contenido -> 'destinatario_nombre') is distinct from to_jsonb(new.destinatario_nombre) then
     raise exception 'El destinatario_nombre del sobre no coincide con la columna (T-021)'
       using errcode = '23514';
@@ -463,7 +510,7 @@ begin
     end if;
 
     if json_typeof(v_linea -> 'concepto') is distinct from 'string'
-       or length(trim(v_linea ->> 'concepto')) = 0 then
+       or (v_linea ->> 'concepto') !~ '[^[:space:]]' then
       raise exception 'El concepto de una línea debe ser un texto no vacío (T-021)'
         using errcode = '23514';
     end if;
@@ -503,6 +550,15 @@ begin
       raise exception 'El tipo_iva_centesimas de una línea debe ser un entero mayor o igual que 0 (T-021, D4)'
         using errcode = '23514';
     end if;
+    -- Ronda 2 (A-H7.1, B-H5) · el tipo casa con el régimen de la línea.
+    if (v_linea ->> 'regimen_iva') = 'exento_sanitario' and v_tipo_iva <> 0 then
+      raise exception 'El tipo de IVA no casa con el régimen: una línea exento_sanitario lleva tipo_iva_centesimas 0 (T-021, D4)'
+        using errcode = '23514';
+    end if;
+    if (v_linea ->> 'regimen_iva') = 'general' and v_tipo_iva <= 0 then
+      raise exception 'El tipo de IVA no casa con el régimen: una línea general lleva tipo_iva_centesimas mayor que 0 (T-021, D4)'
+        using errcode = '23514';
+    end if;
 
     if json_typeof(v_linea -> 'cita_id') = 'null' then
       v_cita_id := null;
@@ -526,6 +582,9 @@ begin
     if (v_linea ->> 'regimen_iva') <> 'exento_sanitario' then
       v_todo_exento := false;
     end if;
+    if (v_linea ->> 'regimen_iva') = 'general' then
+      v_suma_general := v_suma_general + v_cantidad * v_precio;
+    end if;
   end loop;
 
   -- 6.4 · Los importes cuadran con las líneas (precios CON IVA).
@@ -535,6 +594,10 @@ begin
   end if;
   if v_todo_exento and new.cuota_iva <> 0 then
     raise exception 'Si todas las líneas son exento_sanitario, la cuota de IVA es 0 (art. 20.Uno.3.º LIVA) (T-021)'
+      using errcode = '23514';
+  end if;
+  if v_suma_general <> 0 and new.cuota_iva = 0 then
+    raise exception 'La cuota no cuadra: con líneas en régimen general la cuota de IVA no puede ser 0 (T-021, D4)'
       using errcode = '23514';
   end if;
 
@@ -704,26 +767,134 @@ comment on function public.verificar_cadena_borrador(uuid) is
 
 revoke all on function public.verificar_cadena_borrador(uuid) from public, anon, authenticated;
 
--- 6.3 · fn_cerrar_tarifa() -------------------------------------------------
-create function public.fn_cerrar_tarifa()
+-- 6.3 · fn_alta_tarifa(): orden y guarda de fecha (ronda 2) ---------------
+-- Invoker a propósito: bajo la RLS del llamante, quien no lee las tarifas del paciente ve v_max
+-- nulo, no hay guarda de fecha y lo rechaza la RLS (sin oráculo, ADR-071.5). Vale mientras
+-- tarifas_paciente_lectura tenga la condición de tarifas_paciente_alta sin creada_por (I-T1).
+create function public.fn_alta_tarifa()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
+declare
+  v_max    integer;
+  v_centro uuid;
+  v_hoy    date;
 begin
-  if old.vigente_hasta is not null then
-    raise exception 'Esta tarifa ya cerrada no se vuelve a cerrar ni se reabre: se da de alta una tarifa nueva (T-021)'
-      using errcode = '42501';
+  perform pg_advisory_xact_lock(hashtextextended(
+    'tarifa:' || new.paciente_id::text || ':' || new.tipo_terapia_id::text, 0));
+
+  select max(t.orden) into v_max
+    from public.tarifas_paciente t
+   where t.paciente_id = new.paciente_id
+     and t.tipo_terapia_id = new.tipo_terapia_id;
+
+  new.orden := coalesce(v_max, 0) + 1;
+
+  -- La primera tarifa del par no cierra nada; postgres y service_role (fijación, importador)
+  -- quedan exentos.
+  if v_max is not null and current_setting('role', true) in ('authenticated', 'anon') then
+    select p.centro_id into v_centro from public.pacientes p where p.id = new.paciente_id;
+    v_hoy := (now() at time zone public.zona_horaria_centro(v_centro))::date;
+    if new.vigente_desde < v_hoy then
+      raise exception 'Una tarifa que sustituye a otra no puede empezar antes de hoy (fecha del centro): la anterior ya se aplicó (T-021)'
+        using errcode = '23514';
+    end if;
   end if;
+
   return new;
 end;
 $$;
 
-comment on function public.fn_cerrar_tarifa() is
-  'Disparador before update sobre tarifas_paciente: vigente_hasta (la única columna con update) '
-  'se fija una sola vez; una tarifa ya cerrada da 42501 (T-021).';
+comment on function public.fn_alta_tarifa() is
+  'Disparador before insert sobre tarifas_paciente (T-021, ronda 2): orden = máximo del par + 1 '
+  'bajo cerrojo consultivo, y una tarifa que sustituye a otra no empieza antes de hoy en la zona '
+  'del centro (23514) para authenticated y anon. Invoker: invariante I-T1.';
 
-revoke execute on function public.fn_cerrar_tarifa() from public;
+revoke execute on function public.fn_alta_tarifa() from public;
+
+-- 6.4 · fn_numerar_caducidad_bono() (ronda 2) ------------------------------
+create function public.fn_numerar_caducidad_bono()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_max integer;
+begin
+  perform pg_advisory_xact_lock(hashtextextended('caducidad_bono:' || new.bono_id::text, 0));
+
+  select max(c.numero) into v_max
+    from public.bonos_caducidades c
+   where c.bono_id = new.bono_id;
+
+  new.numero := coalesce(v_max, 0) + 1;
+  return new;
+end;
+$$;
+
+comment on function public.fn_numerar_caducidad_bono() is
+  'Disparador before insert sobre bonos_caducidades (T-021, ronda 2): numero = máximo del bono + 1 '
+  'bajo cerrojo consultivo. Invoker, como fn_alta_tarifa(): invariante I-B1.';
+
+revoke execute on function public.fn_numerar_caducidad_bono() from public;
+
+-- 6.5 · fn_validar_cabecera_borrador() (ronda 2) ---------------------------
+-- Definer: lee pacientes y perfiles de otros profesionales, y vale también para postgres.
+create function public.fn_validar_cabecera_borrador()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_prof        uuid;
+  v_prof_fusion uuid;
+  v_rol         public.rol_usuario;
+begin
+  -- Paso 0 · permisos, la política borradores_factura_alta replicada; primero, por ADR-071.5.
+  if current_setting('role', true) in ('authenticated', 'anon') then
+    if not coalesce(
+         new.creado_por = (select auth.uid())
+         and ((select public.rol_actual()) = 'administrador'::public.rol_usuario
+              or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+                  and new.profesional_id = (select auth.uid())
+                  and public.es_profesional_asignado(new.paciente_id))), false) then
+      raise exception 'No puedes abrir este borrador: lo abre el administrador o el profesional asignado al paciente, y a su propio nombre (T-021)'
+        using errcode = '42501';
+    end if;
+  end if;
+
+  -- Paso 1 · el profesional atiende al paciente, o a aquel en que se fusionó.
+  select p.profesional_id, s.profesional_id into v_prof, v_prof_fusion
+    from public.pacientes p
+    left join public.pacientes s on s.id = p.fusionado_en
+   where p.id = new.paciente_id;
+  if not found
+     or (new.profesional_id is distinct from v_prof and new.profesional_id is distinct from v_prof_fusion) then
+    raise exception 'El profesional del borrador no atiende a ese paciente (T-021)'
+      using errcode = '23514';
+  end if;
+
+  -- Paso 2 · el profesional del borrador tiene un rol que factura.
+  select f.rol into v_rol from public.perfiles f where f.id = new.profesional_id;
+  if v_rol is null
+     or v_rol not in ('profesional_sanitario'::public.rol_usuario, 'administrador'::public.rol_usuario) then
+    raise exception 'El profesional del borrador debe tener rol profesional_sanitario o administrador (T-021)'
+      using errcode = '23514';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.fn_validar_cabecera_borrador() is
+  'Disparador before insert sobre borradores_factura (T-021, ronda 2). Paso 0 (authenticated y '
+  'anon): la política borradores_factura_alta, 42501. Paso 1: el profesional atiende al paciente '
+  'o a aquel en que se fusionó (23514). Paso 2: su rol es profesional_sanitario o administrador '
+  '(23514). Definer: lee pacientes y perfiles que la RLS no enseña.';
+
+revoke execute on function public.fn_validar_cabecera_borrador() from public;
 
 
 -- =========================================================================
@@ -755,6 +926,8 @@ comment on view public.borradores_factura_estado is
 
 -- 7.2 · bonos_consumo: definer con barrera, porque el técnico no lee citas. El `where` repite
 -- EXACTAMENTE la política bonos_lectura: es la puerta lateral de este ticket (A.4.2).
+-- La caducidad vigente es la última fila de bonos_caducidades aunque sea null (por eso no un
+-- coalesce), o la inicial si no hay ninguna (ronda 2).
 create view public.bonos_consumo
   with (security_invoker = false, security_barrier = true)
 as
@@ -764,10 +937,19 @@ select b.id               as bono_id,
        (select count(*)::integer
           from public.citas c
          where c.bono_id = b.id
-           and c.estado = 'realizada'::public.estado_cita) as sesiones_consumidas
+           and c.estado = 'realizada'::public.estado_cita) as sesiones_consumidas,
+       (case when u.numero is not null then u.caducidad else b.caducidad end) as caducidad
   from public.bonos b
+  left join lateral (
+    select c.numero, c.caducidad
+      from public.bonos_caducidades c
+     where c.bono_id = b.id
+     order by c.numero desc
+     limit 1
+  ) u on true
  where (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(b.paciente_id)
+    or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+        and public.es_profesional_asignado(b.paciente_id))
     or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
         and b.paciente_id in (
           select p.id from public.pacientes p
@@ -776,9 +958,30 @@ select b.id               as bono_id,
 
 comment on view public.bonos_consumo is
   'Sesiones consumidas de cada bono = citas realizadas con ese bono; se deriva, no se almacena '
-  '(T-021, §5). Definer con security_barrier porque el técnico no lee citas; el where repite la '
-  'política bonos_lectura. No expone citas ni líneas: solo bono_id, paciente_id, '
-  'sesiones_totales y sesiones_consumidas.';
+  '(T-021, §5), y la caducidad vigente (la última fila de bonos_caducidades, o la inicial). '
+  'Definer con security_barrier porque el técnico no lee citas; el where repite la política '
+  'bonos_lectura. No expone citas ni líneas: solo bono_id, paciente_id, sesiones_totales, '
+  'sesiones_consumidas y caducidad.';
+
+-- 7.3 · tarifas_paciente_vigencias: la vigente_hasta derivada (ronda 2).
+create view public.tarifas_paciente_vigencias
+  with (security_invoker = true)
+as
+select t.id as tarifa_id,
+       t.paciente_id,
+       t.tipo_terapia_id,
+       t.importe,
+       t.regimen_iva,
+       t.vigente_desde,
+       lead(t.vigente_desde) over (partition by t.paciente_id, t.tipo_terapia_id
+                                   order by t.vigente_desde, t.orden) as vigente_hasta,
+       t.orden
+  from public.tarifas_paciente t;
+
+comment on view public.tarifas_paciente_vigencias is
+  'Vigencia de cada tarifa: vigente_hasta es el vigente_desde de la siguiente del mismo paciente '
+  'y tipo (null si es la última). security_invoker: ve lo que deja la RLS de tarifas_paciente, '
+  'que es por paciente entero, así que lead() nunca salta una fila oculta.';
 
 
 -- =========================================================================
@@ -807,12 +1010,45 @@ create trigger impedir_truncado_cobros
   before truncate on public.cobros
   for each statement execute function public.fn_impedir_modificacion();
 
--- 8.3 · Cierre de tarifa.
-create trigger cerrar_tarifa
-  before update on public.tarifas_paciente
-  for each row execute function public.fn_cerrar_tarifa();
+create trigger impedir_modificacion_tarifas_paciente
+  before update or delete on public.tarifas_paciente
+  for each row execute function public.fn_impedir_modificacion();
 
--- 8.4 · Auditoría en las cinco tablas (D2). En las versiones se recorta el NIF cifrado, su
+create trigger impedir_truncado_tarifas_paciente
+  before truncate on public.tarifas_paciente
+  for each statement execute function public.fn_impedir_modificacion();
+
+create trigger impedir_modificacion_bonos_caducidades
+  before update or delete on public.bonos_caducidades
+  for each row execute function public.fn_impedir_modificacion();
+
+create trigger impedir_truncado_bonos_caducidades
+  before truncate on public.bonos_caducidades
+  for each statement execute function public.fn_impedir_modificacion();
+
+-- bonos: capas 2 y 3, sin capa 1 ni catálogo, porque es destino de claves ajenas (ronda 2).
+create trigger impedir_modificacion_bonos
+  before update or delete on public.bonos
+  for each row execute function public.fn_impedir_modificacion();
+
+create trigger impedir_truncado_bonos
+  before truncate on public.bonos
+  for each statement execute function public.fn_impedir_modificacion();
+
+-- 8.3 · Alta de tarifa, numeración de caducidades y validación de cabecera (ronda 2).
+create trigger alta_tarifa
+  before insert on public.tarifas_paciente
+  for each row execute function public.fn_alta_tarifa();
+
+create trigger numerar_caducidad_bono
+  before insert on public.bonos_caducidades
+  for each row execute function public.fn_numerar_caducidad_bono();
+
+create trigger validar_cabecera_borrador
+  before insert on public.borradores_factura
+  for each row execute function public.fn_validar_cabecera_borrador();
+
+-- 8.4 · Auditoría en las seis tablas (D2). En las versiones se recorta el NIF cifrado, su
 -- nonce, su etiqueta y el sobre (que los lleva dentro); la versión de clave se queda.
 create trigger auditar_tarifas_paciente
   after insert or update or delete on public.tarifas_paciente
@@ -835,6 +1071,10 @@ create trigger auditar_bonos
   after insert or update or delete on public.bonos
   for each row execute function public.fn_auditar('id');
 
+create trigger auditar_bonos_caducidades
+  after insert or update or delete on public.bonos_caducidades
+  for each row execute function public.fn_auditar('id');
+
 
 -- =========================================================================
 -- 9 · Catálogo de solo adición: lo recorren cobertura_solo_adicion() y 10-solo-adicion
@@ -843,19 +1083,26 @@ insert into public.tablas_solo_adicion (tabla, motivo) values
   ('borradores_factura_versiones',
    'Cada versión del borrador de factura se conserva y encadena por huella (art. 29.2.j LGT, ADR-053 h).'),
   ('cobros',
-   'Lo cobrado no se reescribe: un error se corrige con otro cobro de signo contrario (ADR-053 g).');
+   'Lo cobrado no se reescribe: un error se corrige con otro cobro de signo contrario (ADR-053 g).'),
+  ('tarifas_paciente',
+   'Lo que se pactó cobrar no se reescribe: cambiar el precio es una tarifa nueva que cierra la anterior al empezar (T-021, ronda 2).'),
+  ('bonos_caducidades',
+   'La caducidad de un bono pagado no se reescribe: cada cambio es una fila y la vigente es la última (T-021, ronda 2).');
 
 
 -- =========================================================================
--- 10 · RLS y políticas. El rol se compara en positivo: rol_actual() nulo no entra en ninguna rama.
+-- 10 · RLS y políticas. El rol se compara en positivo: rol_actual() nulo no entra en ninguna
+-- rama, y la rama del profesional exige el rol profesional_sanitario (ronda 2, A-H4).
 -- =========================================================================
 
--- 10.1 · tarifas_paciente: administrador o profesional asignado. El técnico, nada.
+-- 10.1 · tarifas_paciente: administrador o profesional asignado. El técnico, nada. La lectura y
+-- el alta comparten condición (I-T1, lo exige fn_alta_tarifa invoker).
 create policy tarifas_paciente_lectura on public.tarifas_paciente
   for select to authenticated
   using (
     (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
+    or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+        and public.es_profesional_asignado(paciente_id))
   );
 
 create policy tarifas_paciente_alta on public.tarifas_paciente
@@ -863,21 +1110,12 @@ create policy tarifas_paciente_alta on public.tarifas_paciente
   with check (
     creada_por = (select auth.uid())
     and ((select public.rol_actual()) = 'administrador'::public.rol_usuario
-         or public.es_profesional_asignado(paciente_id))
+         or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+             and public.es_profesional_asignado(paciente_id)))
   );
 
-create policy tarifas_paciente_cierre on public.tarifas_paciente
-  for update to authenticated
-  using (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-  )
-  with check (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-  );
-
--- 10.2 · borradores_factura: administrador, o el profesional del borrador.
+-- 10.2 · borradores_factura: administrador, o el profesional del borrador. El alta es el paso 0
+-- de fn_validar_cabecera_borrador(), que se queda como primera red.
 create policy borradores_factura_lectura on public.borradores_factura
   for select to authenticated
   using (
@@ -889,10 +1127,11 @@ create policy borradores_factura_lectura on public.borradores_factura
 create policy borradores_factura_alta on public.borradores_factura
   for insert to authenticated
   with check (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
-        and profesional_id = (select auth.uid())
-        and public.es_profesional_asignado(paciente_id))
+    creado_por = (select auth.uid())
+    and ((select public.rol_actual()) = 'administrador'::public.rol_usuario
+         or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+             and profesional_id = (select auth.uid())
+             and public.es_profesional_asignado(paciente_id)))
   );
 
 -- 10.3 · borradores_factura_versiones: se leen si la cabecera es legible (el exists corre bajo
@@ -907,10 +1146,11 @@ create policy borradores_factura_versiones_alta on public.borradores_factura_ver
   for insert to authenticated
   with check (
     (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or exists (select 1 from public.borradores_factura b
-                where b.id = borrador_id
-                  and b.profesional_id = (select auth.uid())
-                  and public.es_profesional_asignado(b.paciente_id))
+    or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+        and exists (select 1 from public.borradores_factura b
+                     where b.id = borrador_id
+                       and b.profesional_id = (select auth.uid())
+                       and public.es_profesional_asignado(b.paciente_id)))
   );
 
 -- 10.4 · cobros: administrador, profesional asignado o técnico de su centro.
@@ -918,7 +1158,8 @@ create policy cobros_lectura on public.cobros
   for select to authenticated
   using (
     (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
+    or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+        and public.es_profesional_asignado(paciente_id))
     or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
         and paciente_id in (
           select p.id from public.pacientes p
@@ -931,7 +1172,8 @@ create policy cobros_alta on public.cobros
   with check (
     registrado_por = (select auth.uid())
     and ((select public.rol_actual()) = 'administrador'::public.rol_usuario
-         or public.es_profesional_asignado(paciente_id)
+         or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+             and public.es_profesional_asignado(paciente_id))
          or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
              and paciente_id in (
                select p.id from public.pacientes p
@@ -939,12 +1181,13 @@ create policy cobros_alta on public.cobros
              )))
   );
 
--- 10.5 · bonos: las tres ramas de cobros.
+-- 10.5 · bonos: las tres ramas de cobros. Sin update: la caducidad cambia en bonos_caducidades.
 create policy bonos_lectura on public.bonos
   for select to authenticated
   using (
     (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
+    or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+        and public.es_profesional_asignado(paciente_id))
     or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
         and paciente_id in (
           select p.id from public.pacientes p
@@ -957,7 +1200,8 @@ create policy bonos_alta on public.bonos
   with check (
     creado_por = (select auth.uid())
     and ((select public.rol_actual()) = 'administrador'::public.rol_usuario
-         or public.es_profesional_asignado(paciente_id)
+         or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+             and public.es_profesional_asignado(paciente_id))
          or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
              and paciente_id in (
                select p.id from public.pacientes p
@@ -965,49 +1209,57 @@ create policy bonos_alta on public.bonos
              )))
   );
 
-create policy bonos_modificacion on public.bonos
-  for update to authenticated
+-- 10.6 · bonos_caducidades: quien ve el bono (el exists corre bajo la RLS de bonos).
+create policy bonos_caducidades_lectura on public.bonos_caducidades
+  for select to authenticated
   using (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-    or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
-        and paciente_id in (
-          select p.id from public.pacientes p
-           where p.centro_id in (select public.centros_actuales())
-        ))
-  )
+    exists (select 1 from public.bonos b where b.id = bono_id)
+  );
+
+create policy bonos_caducidades_alta on public.bonos_caducidades
+  for insert to authenticated
   with check (
-    (select public.rol_actual()) = 'administrador'::public.rol_usuario
-    or public.es_profesional_asignado(paciente_id)
-    or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
-        and paciente_id in (
-          select p.id from public.pacientes p
-           where p.centro_id in (select public.centros_actuales())
-        ))
+    registrada_por = (select auth.uid())
+    and exists (select 1 from public.bonos b where b.id = bono_id)
   );
 
 
 -- =========================================================================
--- 11 · Grants, después de quitarlo todo
+-- 11 · Grants, después de quitarlo todo. Insert por columnas: lo que pone la base (marcas de
+-- tiempo, orden, numero) no se manda (ronda 2, B-H7).
 -- =========================================================================
 revoke all on table public.tarifas_paciente             from public, anon, authenticated, service_role;
 revoke all on table public.borradores_factura           from public, anon, authenticated, service_role;
 revoke all on table public.borradores_factura_versiones from public, anon, authenticated, service_role;
 revoke all on table public.cobros                       from public, anon, authenticated, service_role;
 revoke all on table public.bonos                        from public, anon, authenticated, service_role;
+revoke all on table public.bonos_caducidades            from public, anon, authenticated, service_role;
 revoke all on table public.borradores_factura_estado    from public, anon, authenticated, service_role;
 revoke all on table public.bonos_consumo                from public, anon, authenticated, service_role;
+revoke all on table public.tarifas_paciente_vigencias   from public, anon, authenticated, service_role;
 
 -- Capa 1 de solo adición: ni update, ni delete, ni truncate para nadie, postgres incluido.
 revoke update, delete, truncate on table public.borradores_factura_versiones from postgres;
 revoke update, delete, truncate on table public.cobros                       from postgres;
+revoke update, delete, truncate on table public.tarifas_paciente             from postgres;
+revoke update, delete, truncate on table public.bonos_caducidades            from postgres;
 
-grant select, insert on table public.tarifas_paciente to authenticated;
-grant update (vigente_hasta) on public.tarifas_paciente to authenticated;
-grant select, insert on table public.borradores_factura to authenticated;
+grant select on table public.tarifas_paciente to authenticated;
+grant insert (id, paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por)
+  on public.tarifas_paciente to authenticated;
+grant select on table public.borradores_factura to authenticated;
+grant insert (id, paciente_id, profesional_id, creado_por)
+  on public.borradores_factura to authenticated;
 grant select, insert on table public.borradores_factura_versiones to authenticated;
-grant select, insert on table public.cobros to authenticated;
-grant select, insert on table public.bonos to authenticated;
-grant update (caducidad) on public.bonos to authenticated;
+grant select on table public.cobros to authenticated;
+grant insert (id, paciente_id, importe, fecha, forma_pago, referencia, registrado_por)
+  on public.cobros to authenticated;
+grant select on table public.bonos to authenticated;
+grant insert (id, paciente_id, sesiones_totales, importe, caducidad, creado_por)
+  on public.bonos to authenticated;
+grant select on table public.bonos_caducidades to authenticated;
+grant insert (id, bono_id, caducidad, registrada_por)
+  on public.bonos_caducidades to authenticated;
 grant select on table public.borradores_factura_estado to authenticated;
 grant select on table public.bonos_consumo to authenticated;
+grant select on table public.tarifas_paciente_vigencias to authenticated;
