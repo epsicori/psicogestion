@@ -2131,3 +2131,10 @@ Para el revisor y para la autoevaluación del implementador.
   ronda 2 son de categoría (tipo según régimen, cuota según régimen, signo), no aritméticas.
 - **Validar que el profesional de la cabecera esté activo.** Un profesional de baja ya no lee
   nada (ADR-032), así que su cabecera no expone datos.
+
+
+## Ronda 3 — decisiones del propietario (05-10-2026), diseño pendiente
+
+- **B-H1 (MEDIA)**: el bono de una cita realizada o pasada con `bono_id` nulo se puede poner **una sola vez**; después queda fijo (también para `postgres`). Quitarlo o cambiarlo sigue prohibido.
+- **A-H2 (BAJA)**: el profesional lee borradores y versiones **solo mientras tiene asignado al paciente**; tras reasignar, los ven el nuevo y el administrador.
+- **Ronda 3 corta antes del merge**: entran también la cota de la cuota de IVA respecto a las líneas generales (A-H1/B-H2: cuota mayor que la suma, base 0 con cuota llena, tipo 9999 %) y los blancos de anchura cero en el concepto (B-H3).
