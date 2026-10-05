@@ -367,6 +367,71 @@ quince en Cataluña— y una organización con dos centros tiene dos mínimos. L
 fija el valor por defecto y el centro lo hereda mientras no lo pise; un centro sin política
 propia resuelve a la de la organización, **nunca a nulo**, y eso tiene prueba propia.
 
+## Exportaciones
+
+El derecho de acceso (Ley 41/2002, art. 16) obliga a entregar copias de la historia. Las
+exportaciones de Psicogestión se generan bajo demanda, **se cifran en el navegador** con la
+contraseña del usuario (Argon2id + AES-256-GCM) y **se entregan como HTML autodescifrable**
+sin quedar en el servidor ni en almacenamiento alguno. La contraseña no se guarda jamás y no
+hay recuperación — es la forma de cumplir con la decisión fundacional 4.
+
+**Quién puede exportar**:
+- **Autor de nota o profesional asignado**: copia profesional (todas las versiones con
+  `anotaciones_reservadas`). Siempre que quiera, nunca desde lectura conjunta.
+- **Administrador**: tres motivos cerrados, cada uno con una proyección distinta:
+  - *Petición del paciente* (derecho de acceso): proyección del paciente, sin
+    `anotaciones_reservadas` (art. 18.3) ni notas conjuntas completas (ADR-030).
+  - *Requerimiento judicial o inspección*: copia profesional completa.
+  - *Traspaso del caso*: copia profesional completa.
+
+Toda exportación del administrador deja una fila en `accesos_historia` con el motivo, entra
+en la auditoría destacada y notifica al profesional titular (y al autor si son distintos).
+El técnico administrativo no exporta.
+
+**Tablas** (ambas solo adición, auditadas):
+- `exportaciones`: quién, cuándo, nota, versiones solicitadas, proyección, motivo, formato,
+  algoritmo de cifrado, parámetros KDF. **Ninguna columna** para contraseña, clave, fichero
+  ni contenido.
+- `exportaciones_ficheros`: huella SHA-256 del fichero HTML entregado, para auditoría de
+  reproducibilidad. Uno por exportación, registrado después de cifrar en el navegador.
+
+**Funciones** (definer, RLS):
+1. `exportar_nota(p_paciente_id uuid, p_nota_id uuid, p_motivo motivo_exportacion default null,
+   p_referencia text default null, p_ip inet default null, p_agente text default null) → jsonb`:
+   - Paso 0: sesión presente. Paso 1: rol válido (administrador o profesional). Paso 2: nota
+     existe y accesible. Paso 3: parámetros coherentes (motivo y referencia van juntos).
+   - Paso 4a (profesional): exige autor o asignado, no conjunta. Paso 4b (admin): solo para
+     administrador. Paso 5: historia desbloqueada. Paso 6: nota con versiones firmadas.
+   - Paso 7: inserta acceso con justificación. Paso 8: inserta exportación. Paso 9: avisos al
+     titular y autor si procede. Paso 10: devuelve JSON con ficha, versiones (segun la
+     proyección) y parámetros de cifrado.
+2. `registrar_fichero_exportado(p_exportacion_id uuid, p_huella_hex text) → void`: llamada
+   desde el navegador tras cifrar. Valida que la exportación es del usuario y no ha caducado
+   (15 minutos), y registra la huella en `exportaciones_ficheros`.
+3. `notas_para_copia(p_paciente_id uuid) → (nota_id, fecha_sesion, autor_nombre, versiones)`:
+   solo para administrador desbloqueado y no asignado. Devuelve notas con versión firmada que
+   el admin no puede leer por RLS — necesarias para «Pedir copia por motivo».
+4. `etiqueta_motivo_exportacion(motivo_exportacion) → text`: devuelve la etiqueta en castellano
+   para el motivo, usada en `accesos_historia.justificacion` y en el aviso.
+
+**El fichero** (ADR-076): HTML versionado con formato `psicogestion.copia-nota` versión 1.
+Contiene cabecera en claro (formato, algoritmo, parámetros KDF, sal, nonce), carga cifrada
+en base64, textos del interfaz (genéricos) y visor JavaScript en línea (Argon2id derivativo
+de contraseña en el navegador, AES-256-GCM nativo de `crypto.subtle`, lectura con
+`textContent` nunca `innerHTML`). Sin CSP externa (todo en línea), sin red. Marca de agua de
+auditoría sobre el contenido (código de nota/exportación/fecha/profesional). Una captura o
+impresión lleva siempre el código. Abre sin instalar nada, con teclado y lector de pantalla.
+
+**Flujo de tres pasos**: (1) Usuario pide copia (acción server con Zod); base genera JSON,
+servidor devuelve proyección para la contraseña. (2) Navegador: normaliza contraseña a NFC,
+genera sal y nonce, deriva clave con Argon2id propio en un Worker, cifra con AES-256-GCM,
+compone el HTML, calcula SHA-256 del fichero. (3) Navegador registra huella en la base y
+descarga el fichero como `blob:`.
+
+**Bajo demanda**: cada copia se genera una sola vez. Caducidad de 15 minutos para registrar
+el fichero sin que lo use otro usuario. Sin reintento silencioso, sin ficheros pasivos,
+sin almacenamiento.
+
 ## Copias de seguridad
 
 Estaba en el maestro y no en este destilado, que es tanto como no estar. **Tres niveles

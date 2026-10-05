@@ -3,31 +3,24 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 04-10-2026 (cierre del día) · T-040 B ronda 2 revisada y sellada; T-028 B ronda 4 implementada.
+**Actualizado**: 05-10-2026 · **T-040 integrado** (A+B, merge d8e6728); T-028 B ronda 5 implementada.
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 A/a, T-016–T-020, T-029–T-039, **T-040 A**, **T-042**.
-  T-042 ronda 2: `npm test` 1953, `test:rls` 1645 OK, lint 0, build OK (detalle en `docs/bitacora/T-042.md`).
-
-## En curso
-
-- **T-040 B** (rama `worktree-agent-a9325d705ce4db36b`, HEAD 55c6399): ronda 2 **revisada y sellada** (0 ALTA; 1 MEDIA R2A-H1: el 416 con `offset`+`count=exact` no tiene forma en el oráculo; 3 BAJA R2B-H1..H3). **Verificación a medias**: el `evidencia.json` sellado es la 1.ª pasada (BLOQUEADA, faltaba la migración); ya PASAN lint, build, `npm test`, `lint:migraciones`, territorio y B-H3/B-H4. Falta: oráculo S6/S6b, K13b/MB4, B-H1/H2/H6 en navegador, Playwright y la regresión de la ronda 1. La 2.ª pasada se cortó al parar (su `oraculo-postgrest.json` a medias se revirtió). Sin hacer: `architecture.md` (Exportaciones).
-- **T-028 B** (rama `worktree-agent-a1549876942c02f5f`): ronda 4 implementada (H20–H25, man-11, man-12; `npm test` 2180, lint 0, build webpack OK; sin base). Falta verificador + revisor, que sellará la ronda 4. Después, corte C.
-- **T-021**: listo para implementar (ADR-077). **T-041**: diseño cerrado; espera turno en `supabase/`.
+- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 A/a, T-016–T-020, T-029–T-040, **T-042**.
+- **T-028 B**: rama `worktree-agent-a2b0012224d53ce71` (ronda 5 implementada, H26–H31; territorio ampliado con `components/ui/foco.ts` por decisión propietario 05-10). Evidencia ronda 5 sellada (todo PASA salvo NO_VERIFICABLE auto-2, man-1, man-4, man-8, man-13, H29). Revisión ronda 5 sellada (7c0e2f6: 0 ALTA, 0 MEDIA, 2 BAJA H32/H33). Falta: prueba manual propietario → merge → corte C.
+- **T-021**: ADR-077 listo. **T-041**: diseño cerrado, espera turno `supabase/`.
 
 ## Bloqueos
 
-- **BD local**: lleva aplicada la migración de T-040 B (`20261009180000`, `migration up` sin reset, autorizado por el propietario el 04-10). Un `db reset` desde `main` la quita: antes de verificar T-040, mirar `max(version)`.
-- `.env.local` de `main` lleva `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` (propietario, 04-10).
+- `.env.local` `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` (propietario, 04-10).
 - winnat: `net stop winnat`.
 
 ## Siguiente paso
 
-1. T-040 B ronda 2: 2.ª pasada del verificador lanzada el 05-10 (solo lo NO_VERIFICABLE). R2A-H1 se anota, sin ronda S7 (propietario, 05-10). Después: prueba manual del propietario → merge → documentalista.
-2. En otra ventana de sellado: verificador + revisor de T-028 B ronda 4 → prueba manual → merge → corte C (cierra el prototipo clínico).
-3. Cola `supabase/`: T-041 → **ticket del aviso de hueco raro** (contrato T-028:169; lo redacta el arquitecto) → T-021. Ticket corto: enlace a `/recuperar`.
-4. Limpiar worktrees de T-038, T-042 y `agent-acac6bd68d6c681b5` (quitar antes la junction de `node_modules`).
+1. T-028 B ronda 5: prueba manual propietario → merge → corte C (cierra prototipo clínico).
+2. Cola `supabase/`: T-041 → ticket aviso hueco (arquitecto, T-028:169) → T-021. Ticket corto: `/recuperar`.
+3. Limpiar worktrees T-038, T-042, agent-a9325d705ce4db36b, a1549876942c02f5f (quitar junction `node_modules` antes).
 
 ## Hallazgos anotados
 
@@ -48,13 +41,13 @@
 - **T-039 R3-B-H2 (BAJA)**: H25 dice «de una cita», pero el técnico lee `episodio_id` también en la auditoría de `series_cita`.
 - **T-039 R3-B-H3 (BAJA)**: `scripts/rls/README.md:49` dice «(V, S)»; faltan C, W, N, T.
 - **T-039 R3-A-H1 (BAJA)**: `fn_exigir_vinculo_agenda` solo `before insert`; un profesional pasa su cita suelta a un paciente ajeno (ADR-055). Arreglo: también `before update of paciente_id`.
-- **H25**: el técnico lee en su auditoría `tipo_terapia_id` y, desde T-039, `episodio_id`. Deduce parejas. **Bloquea producción**.
-- **T-028 R4 (implementador)**: `components/ui/foco.ts` (`useCierreExterior`) no mira `defaultPrevented`; H20 se parcheó en `dialogo.tsx`. `diseno.md` dice `?semana=`, el real es `fecha`.
-- **Sellos de T-028 y T-033**: el hook los reselló hoy sin que parara su revisor (T-033 integrado hace semanas); quedan sin commitear y los decide el usuario.
-- **T-034 SQL-H2**: reabrir esquiva D6, reloj; y reabrir es hoy la única salida de la nota de una cita cuyo episodio se cerró (banco 23.Z). Recomendación: no cerrar con citas no canceladas posteriores al cierre.
-- **T-040 R3-H1** (BAJA): opacidad/color de marca sin prueba.
+- **H25**: técnico deduce parejas por `episodio_id` en auditoría. **Bloquea producción**.
+- **T-028 R5-H33 (BAJA)**: `contenido-alta.tsx:52-53` se traga el error de `tipos_terapia` y de `directorio_perfiles`: falso «No hay tipos de terapia activos» / «No hay profesionales activos» (patrón H29). **H32 (BAJA)**: `tarjetas-sugerencia.tsx:36-37`, de tarjetas a vacío el `role="status"` nace con el texto y no se anuncia; arreglo: región montada siempre. Comentario `rejilla-semana.tsx:232` desactualizado. Verificador: tras Cambiar, buscador conserva texto; centro por defecto sin franjas.
 - **T-040 R2A-H1 (MEDIA, anotada por el propietario 05-10)**: `scripts/t040-oraculo.mjs` no prueba `offset`+`Prefer: count=exact`; ese 416 («only 1/0 rows») lleva un bit del cuerpo y `conContenido` no lo cuenta. Con PostgREST v16.1 (local) confirma y deja rastro; al subir PostgREST, añadir la forma S7 con su gemela.
-- **T-040 A-H3 (BAJA, anotado por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga). Y en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN (B-H2 solo cubrió solo_copia).
+- **T-040 A-H3 (BAJA, por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga); en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN. **R3-H1 (BAJA)**: opacidad/color de marca sin prueba.
+- **Sello de T-033**: el hook reselló su `revision.sha` sin que parara su revisor (integrado hace semanas); sin commitear, lo decide el usuario.
+- **T-034 SQL-H2**: reabrir esquiva D6, reloj. Única salida nota de cita con episodio cerrado (23.Z). No cerrar con citas posteriores.
+- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket.
 - **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
 - **T-035 B-H1 → T-041**: suspendido.
 - **T-041 R3/R6**: funciones cuentas.
@@ -66,15 +59,10 @@
 - **T-014**: bandeja sin límite, ?centro, estado, 44px, 360px, ?semana, CRLF.
 - **T-012**: fallos recarga, cargarPaciente→404, PostgREST directo, coprofesional.
 - **T-028a**: marcada_realizada/por vacío; C18TEC; banco 21 año+3; deadlock DB14.
-- **T-033**: next start, URL inline, Suspense. **T-011c**: ordinal último, sin candado. **T-036**: drop if exists + inserts UUID.
-- **16-series**: `test:rls` falla en `16-series.sql` también en main.
-- **Foco candado**: body, aria-describedby, useDevolucionDeFoco.
-- **Alertar sin firmar**: cualquier versión con cita_id.
-- **Fuera CI**: SQL crean sin episodio. **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`.
-- **Armazón**: login→/pacientes. T-031/T-032. **`@axe-core/playwright` no instalado**: «axe sin violaciones» de los diseños no se puede ejecutar.
-- **`perfiles` sin `apellidos`**: solo nombre_completo. **Armazón <44px** también Cerrar/Abrir menú y Cerrar sesión (T-028 B).
-- **`docs/decisions/INDEX.md`**: faltan ADR-060..075.
-- **interfaz.md:67**: «Lista y alta, sin ficha».
-- **Scratchpad**: mutar.mjs paralelo.
-- **Worktrees**: sucios (T-014-correcciones, T-021).
-- Anteriores al 13-09: `docs/bitacora/estado-hasta-2026-09-13.md`.
+- **T-033**: next start, URL inline, Suspense. **T-011c**: ordinal. **T-036**: UUID.
+- **Foco**: body, aria-describedby, useDevolucionDeFoco. **Alertar sin firmar**: cita_id.
+- **Fuera CI**: SQL crean sin episodio. **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`. **Scratchpad**: mutar.mjs paralelo.
+- **Armazón**: login→/pacientes (T-031/T-032). **`@axe-core/playwright`**: no instalado.
+- **`perfiles` sin `apellidos`** (solo nombre_completo). **<44px**: menú, sesión (T-028 B).
+- **ADR INDEX**: faltan 060..075. **interfaz.md:67**: lista y alta. **Worktrees**: T-014, T-021.
+- Anteriores 13-09: `docs/bitacora/estado-hasta-2026-09-13.md`.
