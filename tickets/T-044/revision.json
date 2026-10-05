@@ -1,0 +1,26 @@
+{
+  "ticket": "T-044",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "app/primera-vez/segundo-factor.test.tsx",
+      "fichero": "app/primera-vez/segundo-factor.test.tsx",
+      "linea": 345,
+      "descripcion": "La negativa (b) solo mira la rama sin factor después del QR; los estados «Cargando» y fallo de enroll() quedan sin probar, y el mutante {!enrolamiento && (} sobrevive (16/16, medido).",
+      "escenario": "Guarda reescrita como !enrolamiento → con Auth caído, quien activa su primer factor ve «No se pudo preparar…» junto al enlace a /recuperar sin tener códigos; las pruebas siguen verdes. Arreglo: caso con enroll que devuelve error, que espere noSePudoEnrolar y niegue el enlace."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "accesibilidad/recuperar.spec.ts",
+      "fichero": "accesibilidad/recuperar.spec.ts",
+      "linea": 164,
+      "descripcion": "El caso C espera el encabezado y no la URL /primera-vez que pide el criterio 4; la razón (justificada: navegación suave, precedente codigos-recuperacion.spec.ts:120) solo vive en un comentario del spec, no en la bitácora.",
+      "escenario": "El verificador coteja el criterio 4 al pie de la letra → lo marca como no cumplido, o lo alinea con toHaveURL(/primera-vez/) y el caso C pasa a fallar de forma intermitente cuando la barra se queda en /pacientes. Arreglo: una línea en docs/bitacora/T-044.md."
+    }
+  ]
+}
