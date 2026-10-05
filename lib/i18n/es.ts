@@ -141,6 +141,8 @@ export const es = {
       totpRepuesto: 'TOTP repuesto correctamente',
       bajaCompletada: 'Usuario dado de baja',
       error: 'Error al realizar la acción',
+      errorLecturaUsuarios:
+        'No se ha podido cargar la lista de usuarios. Recarga la página para intentarlo de nuevo.',
     },
   },
 

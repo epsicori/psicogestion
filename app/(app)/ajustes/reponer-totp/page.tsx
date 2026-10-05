@@ -7,6 +7,7 @@ import { estadoDeCuenta } from '@/lib/cuentas/candado';
 import { t } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
+import { cargarPerfilesActivos } from '../perfiles-activos';
 import { FormularioReponerTotp } from './formulario-reponer-totp';
 
 /**
@@ -24,21 +25,17 @@ async function CargaDelFormulario() {
     redirect('/ajustes');
   }
 
-  const { data, error } = await sesion.supabase
-    .from('perfiles')
-    .select('id, nombre_completo, estado')
-    .eq('estado', 'activo')
-    .order('nombre_completo');
+  const carga = await cargarPerfilesActivos(sesion.supabase, sesion.usuario.id);
 
-  if (error) {
-    console.error('PaginaReponerTotp: fallo al leer perfiles', error);
+  if (!carga.ok) {
+    return (
+      <p role="alert" className="text-destructive text-sm">
+        {t('ajustes.resultados.errorLecturaUsuarios')}
+      </p>
+    );
   }
 
-  const perfiles = (data ?? [])
-    .filter((perfil) => perfil.id !== sesion.usuario.id)
-    .map((perfil) => ({ valor: perfil.id, etiqueta: perfil.nombre_completo }));
-
-  return <FormularioReponerTotp perfiles={perfiles} />;
+  return <FormularioReponerTotp perfiles={carga.perfiles} />;
 }
 
 export default function PaginaReponerTotp() {
