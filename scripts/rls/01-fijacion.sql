@@ -26,6 +26,10 @@
 
 \set REPMENOR '\'a0030002-0000-4000-8000-000000000001\''
 
+-- T-021: un borrador de factura de P1 (con su versión 1) y un cobro de P1.
+\set BORR1 '\'a0210001-0000-4000-8000-000000000001\''
+\set COB1  '\'a0210002-0000-4000-8000-000000000001\''
+
 \echo '=== 01-fijación ==='
 
 -- `on conflict (fila_unica) do nothing` desde T-008: `organizacion` es una tabla de FILA
@@ -210,5 +214,25 @@ call pg_temp.dar_segundo_factor(:PRO2, interval '2 seconds');
 
 call pg_temp.como_con_2fa(:PRO1); select public.fijar_pin_historia('111111'); call pg_temp.reset_sesion();
 call pg_temp.como_con_2fa(:PRO2); select public.fijar_pin_historia('222222'); call pg_temp.reset_sesion();
+
+-- T-021 · Una fila en cada tabla económica de solo adición, ANTES del módulo 10: sobre una
+-- tabla vacía el disparador de fila no salta y `10-solo-adicion` fallaría con «debía lanzar
+-- y no lanzó» (A.1-D11, PA.3). Un borrador de PRO1 sobre P1 (su paciente asignado, centro
+-- A), con una versión sellada por fn_sellar_version_borrador() —insertada como `postgres`,
+-- con el sobre de pg_temp.sobre_borrador()— y un cobro de P1 sin factura.
+insert into public.borradores_factura (id, paciente_id, profesional_id, creado_por) values
+  (:BORR1, :P1, :PRO1, :PRO1);
+select pg_temp.assert_no_lanza(format($f$
+  insert into public.borradores_factura_versiones
+    (borrador_id, centro_id, destinatario_nombre, lineas, base, cuota_iva, total, creada_por, creada_en,
+     algoritmo_version, contenido_canonico) values
+    (%L, %L, 'Ana Uno', %L, 60.00, 0.00, 60.00, %L, timestamptz '2026-10-01 10:00:00+00', 1, %L)$f$,
+  :BORR1, :CA, jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, 6000)), :PRO1,
+  pg_temp.sobre_borrador(:BORR1, :PRO1, timestamptz '2026-10-01 10:00:00+00',
+                         jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, 6000)),
+                         60.00, 0.00, 60.00, 'Ana Uno', :CA)),
+  'T-021 · la versión 1 del borrador de la fijación se sella (sobre de quince claves)');
+insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por) values
+  (:COB1, :P1, 60.00, date '2026-10-01', 'efectivo', :ADM);
 
 \echo '01-fijación: completa.'

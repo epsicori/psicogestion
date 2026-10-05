@@ -263,4 +263,78 @@ begin
                  from public.canjear_codigo_recuperacion() c;
 end $$;
 
-\echo '00-ayudantes: assert, assert_lanza, assert_no_lanza, contar, como() y sobre_prueba() definidos.'
+-- T-021 · El sobre canónico de una versión de borrador de factura, construido a mano como
+-- sobre_prueba() hace con el de la nota: las QUINCE claves exactas que exige
+-- fn_sellar_version_borrador(), en orden alfabético. paciente_id y profesional_id se leen de
+-- la cabecera borradores_factura (por eso es `stable`, y por eso se llama como `postgres`:
+-- bajo `authenticated` la RLS decidiría qué cabecera ve). numero_version, si no se pasa, es
+-- el siguiente que calculará el disparador (máximo + 1 de ese borrador). Los importes llegan
+-- en euros, con dos decimales, y van al sobre en céntimos enteros (A.1-D4). El NIF, si se
+-- pasa, son los tres bytea y la versión de clave 1, en base64 sin saltos de línea.
+create or replace function pg_temp.sobre_borrador(
+  p_borrador_id          uuid,
+  p_creada_por           uuid,
+  p_creada_en            timestamptz,
+  p_lineas               jsonb,
+  p_base                 numeric,
+  p_cuota_iva            numeric,
+  p_total                numeric,
+  p_destinatario_nombre  text default 'Destinatario de prueba',
+  p_centro_id            uuid default null,
+  p_descartado           boolean default false,
+  p_nif_cifrado          bytea default null,
+  p_nif_nonce            bytea default null,
+  p_nif_etiqueta         bytea default null,
+  p_numero_version       integer default null
+) returns text
+language sql
+stable
+as $$
+  select
+    '{' ||
+    '"base_centimos":' || ((p_base * 100)::bigint)::text || ',' ||
+    '"borrador_id":"' || lower(p_borrador_id::text) || '",' ||
+    '"centro_id":' || coalesce(to_json(p_centro_id::text)::text, 'null') || ',' ||
+    '"creada_en":' || to_json(to_char(p_creada_en at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))::text || ',' ||
+    '"creada_por":"' || lower(p_creada_por::text) || '",' ||
+    '"cuota_iva_centimos":' || ((p_cuota_iva * 100)::bigint)::text || ',' ||
+    '"descartado":' || p_descartado::text || ',' ||
+    '"destinatario_nif":' || case when p_nif_cifrado is null then 'null' else
+      '{"cifrado":' || to_json(translate(encode(p_nif_cifrado, 'base64'), E'\n', ''))::text ||
+      ',"clave_version":1' ||
+      ',"etiqueta":' || to_json(translate(encode(p_nif_etiqueta, 'base64'), E'\n', ''))::text ||
+      ',"nonce":' || to_json(translate(encode(p_nif_nonce, 'base64'), E'\n', ''))::text || '}' end || ',' ||
+    '"destinatario_nombre":' || to_json(p_destinatario_nombre)::text || ',' ||
+    '"esquema_version":1,' ||
+    '"lineas":' || p_lineas::text || ',' ||
+    '"numero_version":' || coalesce(p_numero_version,
+        (select coalesce(max(v.numero_version), 0) + 1 from public.borradores_factura_versiones v
+          where v.borrador_id = p_borrador_id))::text || ',' ||
+    '"paciente_id":' || coalesce(to_json((select b.paciente_id::text from public.borradores_factura b where b.id = p_borrador_id))::text, 'null') || ',' ||
+    '"profesional_id":' || coalesce(to_json((select b.profesional_id::text from public.borradores_factura b where b.id = p_borrador_id))::text, 'null') || ',' ||
+    '"total_centimos":' || ((p_total * 100)::bigint)::text ||
+    '}';
+$$;
+
+-- T-021 · Una línea de borrador con las seis claves exactas. Por defecto, exenta y sin cita.
+create or replace function pg_temp.linea_borrador(
+  p_concepto      text,
+  p_cantidad      integer,
+  p_precio        integer,
+  p_regimen       text default 'exento_sanitario',
+  p_tipo_iva      integer default 0,
+  p_cita_id       uuid default null
+) returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'concepto', p_concepto,
+    'cantidad', p_cantidad,
+    'precio_unitario_centimos', p_precio,
+    'regimen_iva', p_regimen,
+    'tipo_iva_centesimas', p_tipo_iva,
+    'cita_id', p_cita_id::text);
+$$;
+
+\echo '00-ayudantes: assert, assert_lanza, assert_no_lanza, contar, como(), sobre_prueba() y sobre_borrador() definidos.'
