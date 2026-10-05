@@ -87,12 +87,20 @@ export function GestionAltas({ personas, centros }: Props) {
   }
 
   function confirmar() {
-    if (!confirmacion) return;
+    if (!confirmacion || enviando) return;
     const { tipo, perfilId: perfil, centroId: centro } = confirmacion;
     setErrorDialogo('');
     iniciarTransicion(async () => {
       const accion = tipo === 'dar' ? darAltaDeCentro : retirarAltaDeCentro;
-      const resultado = await accion({ perfilId: perfil, centroId: centro });
+      let resultado: Awaited<ReturnType<typeof accion>> | undefined;
+      try {
+        resultado = await accion({ perfilId: perfil, centroId: centro });
+      } catch (error) {
+        // Una Server Action que lanza (red caída, 500) no debe dejar el diálogo mudo.
+        console.error('GestionAltas: la acción lanzó', error);
+        setErrorDialogo(t('altasCentro.noGuardado'));
+        return;
+      }
       if (!resultado?.ok) {
         setErrorDialogo(resultado?.mensaje ?? t('altasCentro.noGuardado'));
         return;
@@ -234,10 +242,23 @@ export function GestionAltas({ personas, centros }: Props) {
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              <Button onClick={confirmar} disabled={enviando}>
+              {/* aria-disabled y no disabled: un botón con foco que pasa a disabled lo suelta
+                  a BODY y el diálogo pierde el foco (patrón T-028 H27). La guarda está en los
+                  manejadores. */}
+              <Button
+                onClick={confirmar}
+                aria-disabled={enviando || undefined}
+                className="aria-disabled:opacity-50"
+              >
                 {enviando ? t('comunes.cargando') : t('ajustes.confirmacion.confirmar')}
               </Button>
-              <Button ref={cancelar} variante="contorno" onClick={cerrar} disabled={enviando}>
+              <Button
+                ref={cancelar}
+                variante="contorno"
+                onClick={cerrar}
+                aria-disabled={enviando || undefined}
+                className="aria-disabled:opacity-50"
+              >
                 {t('ajustes.confirmacion.cancelar')}
               </Button>
             </div>

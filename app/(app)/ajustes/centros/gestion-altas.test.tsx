@@ -129,6 +129,50 @@ describe('GestionAltas', () => {
     expect(await within(dialogo).findByText('Ese alta ya no está vigente.')).toBeInTheDocument();
   });
 
+  it('B-H8: si la acción lanza, el diálogo sigue abierto con el mensaje dentro y se puede reintentar', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    retirarAltaDeCentro.mockRejectedValueOnce(new Error('red caída'));
+    retirarAltaDeCentro.mockResolvedValueOnce({ ok: true, mensaje: 'Alta de centro retirada.' });
+    const usuario = userEvent.setup();
+    render(<GestionAltas personas={PERSONAS} centros={CENTROS} />);
+
+    await usuario.click(screen.getByRole('button', { name: 'Retirar el alta de Pau Profesional en Centro Sur' }));
+    await usuario.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+    const dialogo = await screen.findByRole('dialog', { name: 'Retirar alta de centro' });
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent('No se pudo guardar el cambio de centro.');
+    // GEMELA: el botón quedó libre y el reintento funciona.
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(retirarAltaDeCentro).toHaveBeenCalledTimes(2);
+  });
+
+  it('B-H1: mientras envía, Confirmar y Cancelar son aria-disabled (no disabled) y no actúan', async () => {
+    let terminar: (r: unknown) => void = () => {};
+    retirarAltaDeCentro.mockReturnValue(new Promise((resolver) => (terminar = resolver)));
+    const usuario = userEvent.setup();
+    render(<GestionAltas personas={PERSONAS} centros={CENTROS} />);
+
+    await usuario.click(screen.getByRole('button', { name: 'Retirar el alta de Pau Profesional en Centro Sur' }));
+    const dialogo = screen.getByRole('dialog');
+    await usuario.click(within(dialogo).getByRole('button', { name: 'Confirmar' }));
+
+    const confirmar = await within(dialogo).findByRole('button', { name: 'Cargando...' });
+    const cancelar = within(dialogo).getByRole('button', { name: 'Cancelar' });
+    for (const boton of [confirmar, cancelar]) {
+      expect(boton).toHaveAttribute('aria-disabled', 'true');
+      expect(boton).not.toBeDisabled();
+    }
+    // Ni un segundo clic en Confirmar ni Cancelar hacen nada mientras tanto.
+    await usuario.click(confirmar);
+    await usuario.click(cancelar);
+    expect(retirarAltaDeCentro).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    terminar({ ok: true, mensaje: 'Alta de centro retirada.' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it('el desplegable de centro excluye los que la persona ya tiene vigentes', async () => {
     const usuario = userEvent.setup();
     render(<GestionAltas personas={PERSONAS} centros={CENTROS} />);
