@@ -8,6 +8,9 @@ export const ROLES_USUARIO = [
   'tecnico_administrativo',
 ] as const;
 
+/** Tope de centros en una invitación (T-041): una cota razonable, no una política. */
+export const MAX_CENTROS_DE_ALTA = 50;
+
 export const esquemaInvitacion = z
   .object({
     correo: z.email('Introduce un correo válido.'),
@@ -17,16 +20,41 @@ export const esquemaInvitacion = z
       .min(1, 'Introduce el nombre completo.')
       .max(200, 'El nombre es demasiado largo.'),
     rol: z.enum(ROLES_USUARIO, 'Selecciona un rol válido.'),
-    // Nulo salvo para el técnico administrativo, que lo exige tanto aquí como en la
-    // base (ADR-033, perfiles_tecnico_exige_centro y preparar_invitacion()).
-    centroId: z.uuid('Selecciona un centro válido.').nullable(),
+    // T-041: los centros donde atiende. El técnico administrativo exige exactamente uno
+    // (ADR-033, perfiles_tecnico_exige_centro y preparar_invitacion()); el profesional y el
+    // administrador, cero o más.
+    centrosIds: z
+      .array(z.uuid('Selecciona un centro válido.'))
+      .max(MAX_CENTROS_DE_ALTA, 'Demasiados centros.'),
+    // El centro principal decide dónde quedan sus pacientes futuros; lo elige una persona,
+    // nunca se toma en silencio el primero de la lista (diseño T-041 §5).
+    centroPrincipalId: z.uuid('Selecciona un centro válido.').nullable(),
   })
-  .refine((datos) => datos.rol !== 'tecnico_administrativo' || datos.centroId !== null, {
-    message: 'El técnico administrativo exige un centro.',
-    path: ['centroId'],
-  });
+  .refine(
+    (datos) => datos.rol !== 'tecnico_administrativo' || datos.centrosIds.length === 1,
+    { message: 'El técnico administrativo exige un centro.', path: ['centrosIds'] },
+  )
+  .refine((datos) => new Set(datos.centrosIds).size === datos.centrosIds.length, {
+    message: 'Hay centros repetidos.',
+    path: ['centrosIds'],
+  })
+  .refine(
+    (datos) =>
+      datos.centrosIds.length === 0
+        ? datos.centroPrincipalId === null
+        : datos.centroPrincipalId !== null && datos.centrosIds.includes(datos.centroPrincipalId),
+    { message: 'Elige cuál es su centro principal', path: ['centroPrincipalId'] },
+  );
 
 export type DatosInvitacion = z.infer<typeof esquemaInvitacion>;
+
+/** Dar o retirar un alta de centro (T-041). La RPC decide todo lo demás. */
+export const esquemaAltaCentro = z.object({
+  perfilId: z.uuid('Perfil no válido.'),
+  centroId: z.uuid('Centro no válido.'),
+});
+
+export type EntradaAltaCentro = z.infer<typeof esquemaAltaCentro>;
 
 export const esquemaPin = z.object({
   pin: z.string('Introduce el PIN.').regex(/^\d{6}$/, 'El PIN debe ser exactamente seis dígitos.'),
