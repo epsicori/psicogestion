@@ -111,7 +111,22 @@ export function construirCalendarioAlta(entrada: {
     s.motivo.tipo === 'diaHabitual' ? [{ diaSemana: s.motivo.diaSemana, hora: s.motivo.hora }] : [],
   );
 
+  // H34: la base emite un `ocupado` como [cursor, cursor + duración pedida) y salta el cursor al final de la
+  // cita real; si ésta es más corta, el tramo siguiente empieza dentro del ocupado pintado. Un ocupado acaba,
+  // como mucho, donde empieza el siguiente tramo del mismo día (la base no se toca, y no se revela nada más).
+  const finDeOcupado = (b: BloqueAlta): string => {
+    const inicio = Date.parse(b.inicio);
+    const siguiente = entrada.bloques
+      .filter((o) => o.fecha === b.fecha && Date.parse(o.inicio) > inicio)
+      .reduce<number | null>((min, o) => {
+        const i = Date.parse(o.inicio);
+        return min === null || i < min ? i : min;
+      }, null);
+    return siguiente !== null && siguiente < Date.parse(b.fin) ? new Date(siguiente).toISOString() : b.fin;
+  };
+
   const huecos: HuecoVista[] = entrada.bloques.flatMap((b) => {
+    const fin = b.estado === 'ocupado' ? finDeOcupado(b) : b.fin;
     const diaIndice = indice.get(b.fecha);
     if (diaIndice === undefined) return [];
     const numeroSugerida = sugeridas.get(`${b.fecha}T${b.horaLocal}`);
@@ -134,12 +149,12 @@ export function construirCalendarioAlta(entrada: {
         horaLocal: b.horaLocal,
         diaIndice,
         minutoPared: h * 60 + m,
-        duracionMinutos: Math.round((Date.parse(b.fin) - Date.parse(b.inicio)) / 60_000),
+        duracionMinutos: Math.round((Date.parse(fin) - Date.parse(b.inicio)) / 60_000),
         estado: b.estado,
         sugerida: b.estado === 'libre' ? sugerida : null,
         habitual,
         etiqueta: partes.join(', '),
-        rango: formatearRango(new Date(b.inicio), new Date(b.fin), zona),
+        rango: formatearRango(new Date(b.inicio), new Date(fin), zona),
       },
     ];
   });

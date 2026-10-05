@@ -61,6 +61,25 @@ describe('construirCalendarioAlta', () => {
     expect(ocupado.etiqueta).toBe('martes, 6 de octubre de 2026, 18:00, Ocupado');
   });
 
+  it('un ocupado no se pinta por encima del tramo siguiente (H34): cita de 30 min, tipo de 50', () => {
+    // Ocupado 9:00-9:50 pedido, pero la cita real acaba 9:30 + 10 min de descanso: el siguiente libre empieza 9:40.
+    const c = construirCalendarioAlta({
+      ...base,
+      bloques: [
+        bloque('2026-10-06', '09:00', 'ocupado'),
+        bloque('2026-10-06', '09:40', 'libre'),
+        bloque('2026-10-07', '09:00', 'ocupado'),
+      ],
+    });
+
+    const [ocupado, libre, ultimo] = c.huecos;
+    expect(ocupado).toMatchObject({ estado: 'ocupado', duracionMinutos: 40, rango: '09:00 – 09:40' });
+    expect(ocupado.etiqueta).toBe('martes, 6 de octubre de 2026, 09:00, Ocupado');
+    expect(libre).toMatchObject({ estado: 'libre', duracionMinutos: 50, rango: '09:40 – 10:30' });
+    // Sin tramo siguiente el mismo día, conserva su fin; otro día no cuenta.
+    expect(ultimo).toMatchObject({ duracionMinutos: 50, rango: '09:00 – 09:50' });
+  });
+
   it('un bloque fuera de la semana visible no se pinta', () => {
     const c = construirCalendarioAlta({ ...base, bloques: [bloque('2026-10-12', '10:00', 'libre')] });
 
