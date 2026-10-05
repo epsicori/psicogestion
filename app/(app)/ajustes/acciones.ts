@@ -1,18 +1,20 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { ESTADO_INICIAL, type EstadoFormulario } from '@/lib/formularios';
+import { darAltaCentro, retirarAltaCentro } from '@/lib/cuentas/altas';
 import { darDeBajaPerfil } from '@/lib/cuentas/baja';
 import { estadoDeCuenta } from '@/lib/cuentas/candado';
-import { esquemaBaja, esquemaInvitacion } from '@/lib/cuentas/esquemas';
+import { esquemaAltaCentro, esquemaBaja, esquemaInvitacion } from '@/lib/cuentas/esquemas';
 import { invitarPerfil } from '@/lib/cuentas/invitar';
 import { reponerTotp } from '@/lib/cuentas/totp';
 import { t, tCon } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
 /**
- * Las tres acciones de ajustes del administrador (T-006·b1).
+ * Las acciones de ajustes del administrador (T-006·b1; altas de centro, T-041).
  *
  * Las tres comprueban la autorización POR DENTRO —`exigirSesion()` y el rol— y no
  * la heredan de la pantalla: una Server Action es un punto de entrada público y
@@ -37,7 +39,7 @@ export async function invitar(datos: unknown): Promise<EstadoFormulario> {
   const resultado = esquemaInvitacion.safeParse(datos);
   if (!resultado.success) {
     // `flattenError` reparte los errores POR CAMPO, incluido el del `.refine` de
-    // `esquemaInvitacion`, que cuelga de `centroId`. Escogerlos a mano de una
+    // `esquemaInvitacion`, que cuelgan de `centrosIds` y `centroPrincipalId`. Escogerlos a mano de una
     // lista de campos —como hacía la primera propuesta de este formulario— deja
     // fuera precisamente ese: el técnico administrativo sin centro se quedaba sin
     // su mensaje.
@@ -49,7 +51,63 @@ export async function invitar(datos: unknown): Promise<EstadoFormulario> {
     return { ...ESTADO_INICIAL, mensaje: invitacion.mensaje };
   }
 
+  // T-041: la invitación ya salió aunque alguna alta adicional fallara; se dice cuáles,
+  // por su nombre, para que el administrador la dé desde Ajustes › Altas de centro.
+  if (invitacion.altasSinDar.length > 0) {
+    const { data: centros } = await sesion.supabase
+      .from('centros')
+      .select('id, nombre')
+      .in('id', invitacion.altasSinDar);
+    const nombres = invitacion.altasSinDar.map(
+      (id) => centros?.find((centro) => centro.id === id)?.nombre ?? id,
+    );
+    return {
+      ...ESTADO_INICIAL,
+      mensaje: tCon('invitar.resultados.exitoConAltasPendientes', {
+        correo: resultado.data.correo,
+        centros: nombres.join(', '),
+      }),
+    };
+  }
+
   return { ...ESTADO_INICIAL, mensaje: tCon('invitar.resultados.exito', { correo: resultado.data.correo }) };
+}
+
+/**
+ * Dar y retirar altas de centro de quien atiende (T-041). La comprobación de rol aquí es
+ * cortesía: la que manda está en `dar_alta_centro()` / `retirar_alta_centro()`, que lanzan
+ * 42501 a quien no es administrador.
+ */
+export async function darAltaDeCentro(datos: unknown): Promise<EstadoFormulario> {
+  const sesion = await exigirAdministrador();
+  if (!sesion) return { ...ESTADO_INICIAL, mensaje: t('ajustes.permisos.soloAdministrador') };
+
+  const resultado = esquemaAltaCentro.safeParse(datos);
+  if (!resultado.success) {
+    return { ...ESTADO_INICIAL, errores: z.flattenError(resultado.error).fieldErrors };
+  }
+
+  const alta = await darAltaCentro(sesion, resultado.data);
+  if (!alta.ok) return { ...ESTADO_INICIAL, mensaje: alta.mensaje };
+
+  revalidatePath('/ajustes/centros');
+  return { ...ESTADO_INICIAL, mensaje: t('altasCentro.resultados.dada') };
+}
+
+export async function retirarAltaDeCentro(datos: unknown): Promise<EstadoFormulario> {
+  const sesion = await exigirAdministrador();
+  if (!sesion) return { ...ESTADO_INICIAL, mensaje: t('ajustes.permisos.soloAdministrador') };
+
+  const resultado = esquemaAltaCentro.safeParse(datos);
+  if (!resultado.success) {
+    return { ...ESTADO_INICIAL, errores: z.flattenError(resultado.error).fieldErrors };
+  }
+
+  const retirada = await retirarAltaCentro(sesion, resultado.data);
+  if (!retirada.ok) return { ...ESTADO_INICIAL, mensaje: retirada.mensaje };
+
+  revalidatePath('/ajustes/centros');
+  return { ...ESTADO_INICIAL, mensaje: t('altasCentro.resultados.retirada') };
 }
 
 const esquemaReponerTotp = z.object({ perfilId: z.uuid() });

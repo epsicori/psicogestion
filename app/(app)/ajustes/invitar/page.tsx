@@ -26,6 +26,8 @@ async function CargaDelFormulario() {
   const { data, error } = await sesion.supabase
     .from('centros')
     .select('id, nombre')
+    // T-041: solo centros abiertos; `dar_alta_centro()` rechaza uno cerrado con 23514.
+    .eq('activo', true)
     .order('nombre');
 
   if (error) {
