@@ -1,4 +1,5 @@
 import { CalendarClock, CalendarOff } from 'lucide-react';
+import Link from 'next/link';
 
 import { Pildora } from '@/components/ui/piezas';
 import { formatearFechaLarga, formatearRango } from '@/lib/fechas';
@@ -120,6 +121,7 @@ export async function PanelResumen({ pacienteId }: { pacienteId: string }) {
     return (
       <div className="flex flex-col gap-4">
         {documental && <Documentacion estado={documental} />}
+        <NuevaCita pacienteId={pacienteId} />
         <Bloque titulo={t('ficha.actividad')}>
           <Vacio
             icono={<CalendarClock className="size-5" aria-hidden="true" />}
@@ -134,6 +136,7 @@ export async function PanelResumen({ pacienteId }: { pacienteId: string }) {
   return (
     <div className="flex flex-col gap-4">
       {documental && <Documentacion estado={documental} />}
+      <NuevaCita pacienteId={pacienteId} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Bloque titulo={t('ficha.ultimaSesion')}>
@@ -160,6 +163,24 @@ export async function PanelResumen({ pacienteId }: { pacienteId: string }) {
           <Dato etiqueta={t('ficha.citasCanceladas')}>{resumen.canceladas}</Dato>
         </dl>
       </Bloque>
+    </div>
+  );
+}
+
+/**
+ * T-028 C. Lleva al alta con el paciente fijado por su uuid (nunca su nombre en la URL). Lo
+ * ven todos los roles, igual que el botón de la agenda: el alta es para los tres (el técnico
+ * agenda sin ver tipo ni nota). Solo se pinta donde la agenda es visible (`citas !== null`).
+ */
+function NuevaCita({ pacienteId }: { pacienteId: string }) {
+  return (
+    <div className="flex justify-end">
+      <Link
+        href={`/agenda/nueva?paciente=${pacienteId}`}
+        className="bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring/50 inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold shadow-sm transition outline-none focus-visible:ring-2"
+      >
+        {t('agenda.alta.abrir')}
+      </Link>
     </div>
   );
 }
