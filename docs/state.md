@@ -20,7 +20,7 @@
 
 1. T-044, T-045 en verificación y merge.
 2. Ya se puede `npx supabase db reset` desde main (20261010120000 está en main).
-3. T-021 en implementación (riesgo alto, Opus).
+3. T-021 implementado en su worktree (migración 20261011120000, banco 26: 164 aserciones; mutantes en `tickets/T-021/mutantes.json`): pasa a verificación y dos revisores.
 4. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
 
 ## Hallazgos anotados
@@ -53,7 +53,7 @@
 - **T-040 A-H3 (BAJA, por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga); en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN. **R3-H1 (BAJA)**: opacidad/color de marca sin prueba.
 - **Sello de T-033**: el hook reselló su `revision.sha` sin que parara su revisor (integrado hace semanas); sin commitear, lo decide el usuario.
 - **T-034 SQL-H2**: reabrir esquiva D6, reloj. Única salida nota de cita con episodio cerrado (23.Z). No cerrar con citas posteriores.
-- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket.
+- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket. **05-10 (T-021)**: en el worktree de T-021 ambas pasan, con la base recién reseteada y también tras `npm run seed`; no reproducido, sin medir la causa.
 - **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
 - **T-035 B-H1 → T-041**: cierre: la nota con coprofesional y alta posterior sigue vigente porque 7c no se reevalúa al firmar.
 - **T-041 R3/R6**: funciones cuentas.

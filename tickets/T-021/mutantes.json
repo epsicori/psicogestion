@@ -1,0 +1,56 @@
+{
+  "ticket": "T-021",
+  "fecha": "2026-10-05",
+  "metodo": "Cada mutante se aplica sobre la base reseteada (create or replace / drop trigger con psql como postgres), se corre npm run test:rls y se restaura la definición original. psql corre con ON_ERROR_STOP=1: la primera aserción rota es la que mata al mutante.",
+  "mutantes": [
+    {
+      "id": "M1",
+      "guarda": "fn_sellar_version_borrador() paso 6.2: cotejo total_centimos del sobre con la columna total",
+      "mutacion": "if false and (v_contenido -> 'total_centimos') is distinct from ...",
+      "resultado": "muerto",
+      "aserción": "26.J16 · total de la columna distinto de total_centimos — lanzó 23514 desde OTRA comprobación (La suma de cantidad por precio_unitario_centimos...)"
+    },
+    {
+      "id": "M2",
+      "guarda": "fn_sellar_version_borrador() paso 6.1: claves contadas con json_object_keys sobre json",
+      "mutacion": "jsonb_object_keys(v_sobre::jsonb) en lugar de json_object_keys(v_sobre)",
+      "resultado": "muerto",
+      "aserción": "26.J4 · una clave repetida (json_object_keys, no jsonb_object_keys) — debía lanzar 23514 y no lanzó nada"
+    },
+    {
+      "id": "M3",
+      "guarda": "fn_sellar_version_borrador() paso 0: permisos antes que cotejo (ADR-071.5)",
+      "mutacion": "if false and current_setting('role', true) in ('authenticated', 'anon') then",
+      "resultado": "muerto",
+      "aserción": "26.I8 · PRO1 sobre el borrador de PRO2, sobre coherente: 42501 — lanzó 42501 desde la política RLS, no desde el paso 0"
+    },
+    {
+      "id": "M4",
+      "guarda": "bonos_consumo: el where de la vista definer repite la política bonos_lectura",
+      "mutacion": "vista sin where",
+      "resultado": "muerto",
+      "aserción": "26.E4 · TEC1 no ve BONO2 en bonos_consumo: el where de la vista repite la política"
+    },
+    {
+      "id": "M5",
+      "guarda": "disparador bono_de_la_cita (D8): el bono es del mismo paciente que la cita",
+      "mutacion": "drop trigger bono_de_la_cita on public.citas",
+      "resultado": "muerto",
+      "aserción": "26.K1 · una cita de P1 con el bono de P2: 23514 — debía lanzar 23514 y no lanzó nada"
+    },
+    {
+      "id": "M6a",
+      "guarda": "verificar_cadena_borrador(): rama sobre_no_coincide_con_fila, clave total_centimos",
+      "mutacion": "se quita la línea del total_centimos",
+      "resultado": "sobrevive (equivalente)",
+      "aserción": "ninguna: el check base + cuota_iva = total obliga a cambiar base o cuota con el total, y esas dos claves siguen cotejadas. Ninguna fila alcanzable distingue el mutante."
+    },
+    {
+      "id": "M6b",
+      "guarda": "verificar_cadena_borrador(): rama sobre_no_coincide_con_fila, clave destinatario_nombre",
+      "mutacion": "se quita la línea del destinatario_nombre",
+      "resultado": "muerto",
+      "aserción": "26.B9 · alterar el sobre de la v2: huella_no_coincide y sobre_no_coincide_con_fila, solo en la v2"
+    }
+  ]
+}
