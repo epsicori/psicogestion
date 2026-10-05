@@ -24,7 +24,7 @@
 
 ## Siguiente paso
 
-1. Relanzar el verificador de T-040 B ronda 2 solo con lo NO_VERIFICABLE (sin `git checkout` en el worktree). Decidir R2A-H1 (forma S7 o anotar). Prueba manual del propietario → merge → documentalista.
+1. T-040 B ronda 2: 2.ª pasada del verificador lanzada el 05-10 (solo lo NO_VERIFICABLE). R2A-H1 se anota, sin ronda S7 (propietario, 05-10). Después: prueba manual del propietario → merge → documentalista.
 2. En otra ventana de sellado: verificador + revisor de T-028 B ronda 4 → prueba manual → merge → corte C (cierra el prototipo clínico).
 3. Cola `supabase/`: T-041 → **ticket del aviso de hueco raro** (contrato T-028:169; lo redacta el arquitecto) → T-021. Ticket corto: enlace a `/recuperar`.
 4. Limpiar worktrees de T-038, T-042 y `agent-acac6bd68d6c681b5` (quitar antes la junction de `node_modules`).
@@ -53,6 +53,7 @@
 - **Sellos de T-028 y T-033**: el hook los reselló hoy sin que parara su revisor (T-033 integrado hace semanas); quedan sin commitear y los decide el usuario.
 - **T-034 SQL-H2**: reabrir esquiva D6, reloj; y reabrir es hoy la única salida de la nota de una cita cuyo episodio se cerró (banco 23.Z). Recomendación: no cerrar con citas no canceladas posteriores al cierre.
 - **T-040 R3-H1** (BAJA): opacidad/color de marca sin prueba.
+- **T-040 R2A-H1 (MEDIA, anotada por el propietario 05-10)**: `scripts/t040-oraculo.mjs` no prueba `offset`+`Prefer: count=exact`; ese 416 («only 1/0 rows») lleva un bit del cuerpo y `conContenido` no lo cuenta. Con PostgREST v16.1 (local) confirma y deja rastro; al subir PostgREST, añadir la forma S7 con su gemela.
 - **T-040 A-H3 (BAJA, anotado por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga). Y en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN (B-H2 solo cubrió solo_copia).
 - **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
 - **T-035 B-H1 → T-041**: suspendido.

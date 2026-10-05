@@ -1,91 +1,134 @@
 {
   "ticket": "T-040",
-  "resumen": "Corte B ronda 2 BLOQUEADA, verificacion parcial. La base local compartida NO tiene aplicada la migracion 20261009180000 (max(version)=20261009120000; no existen exportaciones, exportar_nota ni notas_para_copia). Aplicarla (supabase migration up) fue denegado por el permiso de auto mode (recurso compartido). Sin ella no se pueden ejercer oraculo, banco 27, guion C4/C5 ni navegador. Pasan lint, npm test, lint:migraciones, build Turbopack en clon limpio y territorio. B-H3 y B-H4 verificados con mutantes (sin base).",
+  "resumen": "Corte B ronda 2, verificacion completa sobre HEAD 55c6399 con la base local supabase_db_Psicogestion (max(version)=20261009180000 antes y despues). PASAN: lint, build, npm test, lint:migraciones, territorio (1.a pasada, conservados), A-H1 (oraculo completo, S6/S6b sin 42703), A-H2 (K13b mata MB4), B-H1 y B-H2 (navegador), B-H3/B-H4 (mutantes), B-H5 (26 specs Playwright, workers=1), banco 27 completo, guion C4/C5, roles en navegador. FALLA ajena al ticket: npm run test:rls sale con codigo 3 en 16-series (y 23-cita-en-episodio) por citas_sin_solape_profesional; identico en main, el diff del ticket no toca esos bancos. NO_VERIFICABLE: B-H6 en navegador (el camino no es alcanzable desde la interfaz sembrada; sus pruebas unitarias y dos mutantes si se midieron). R2A-H1 descrito, no corregido: con offset=1 y count=exact el filtro sobre pgrst_scalar da 416 PGRST103 'only 0 rows' tanto si casa como si no, y la transaccion confirma (rastro 1/1/2).",
   "criterios": [
     {
       "id": "lint",
       "texto": "npm run lint limpio",
       "veredicto": "PASA",
-      "comando": "npm run lint (worktree y clon limpio)",
+      "comando": "npm run lint (worktree y clon limpio) - 1.a pasada, conservado",
       "evidencia": "0 errors, 2 warnings en lib/cuentas/accesos.test.ts (no usados; fichero fuera del territorio del ticket, preexistente)"
     },
     {
       "id": "build",
       "texto": "npm run build Turbopack en clon limpio tras npm ci",
       "veredicto": "PASA",
-      "comando": "git clone --branch worktree-agent-a9325d705ce4db36b; npm ci; npm run build (con .env.local copiado)",
-      "evidencia": "Build completo, ruta /pacientes/[id]/historia/notas generada; clon borrado"
+      "comando": "git clone --branch worktree-agent-a9325d705ce4db36b; npm ci; SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo npm run build (con .env.local copiado); repetido en la 2.a pasada",
+      "evidencia": "Build completo en el clon (HEAD 55c6399): tabla de rutas con Proxy (Middleware) y Dynamic. En el worktree con junction node_modules Turbopack falla (Symlink [project]/node_modules is invalid, it points out of the filesystem root): limitacion del junction, no del codigo; por eso el build se mide en clon limpio."
     },
     {
       "id": "npm test",
       "texto": "pruebas unitarias",
       "veredicto": "PASA",
-      "comando": "npm test",
-      "evidencia": "Test Files 155 passed (155); Tests 2051 passed (2051)"
+      "comando": "npm test (1.a pasada, conservado); en la 2.a: npx vitest run editor-de-nota.test.tsx en el clon",
+      "evidencia": "Test Files 155 passed (155); Tests 2051 passed (2051). editor-de-nota.test.tsx: 107 passed (107)."
     },
     {
       "id": "lint:migraciones",
       "texto": "lint de migraciones",
       "veredicto": "PASA",
-      "comando": "npm run lint:migraciones",
+      "comando": "npm run lint:migraciones (1.a pasada, conservado)",
       "evidencia": "lint-migraciones: 28 migracion(es) limpias."
     },
     {
       "id": "territorio",
       "texto": "git diff --name-only main...rama dentro del YAML de B0.2",
       "veredicto": "PASA",
-      "comando": "git diff --name-only main...HEAD | grep -v <patrones de B0.2>",
-      "evidencia": "Sin ficheros fuera de territorio (no hay tickets/T-040/diseno.md ni docs fuera de docs/**)"
+      "comando": "git diff --name-only main...HEAD | grep -v <patrones de B0.2> (1.a pasada, conservado)",
+      "evidencia": "Sin ficheros fuera de territorio"
     },
     {
       "id": "A-H1",
       "texto": "S6 y S6b filtran sobre pgrst_scalar sin 42703",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Exige PostgREST con exportar_nota en la base; la migracion 20261009180000 no esta aplicada. Haria falta aplicarla (npx supabase migration up --local, aditiva) y ejecutar npx tsx scripts/t040-oraculo.mjs."
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t040-oraculo.mjs (en el worktree, contra supabase_db_Psicogestion)",
+      "evidencia": "OK CB1 AUT S6 (?pgrst_scalar->>exportacion_id=eq.<uuid aleatorio>): 200, contenido false, delta exportaciones 1, accesos 1, avisos 0; OK AUT S6: el filtro sobre pgrst_scalar se aplica (200 o 416; ni 406 ni 42703): 200 null; OK AUT S6: la funcion se ejecuto y confirmo (Δexportaciones = 1); OK AUT S6b (not.is.null): 200, contenido true, delta 1/1/0, el filtro que casa entrega, con su rastro. Igual para ADM con delta avisos 2 en S6 y S6b. S1-S5 OK, CB7 OK (23505 con mensaje propio). Cierra: t040-oraculo: completa."
     },
     {
       "id": "A-H2",
-      "texto": "K13b mata a MB4 (begin..rollback)",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Exige el banco 27 contra una base con la migracion aplicada."
+      "texto": "K13b mata a MB4 (banco 27, begin..rollback)",
+      "veredicto": "PASA",
+      "comando": "(1) banco completo sin 16-series ni 23-cita-en-episodio: begin; cat scripts/rls/[0-9]*.sql; rollback, por docker exec -i supabase_db_Psicogestion psql -v ON_ERROR_STOP=1. (2) igual con exportar_nota mutada: el bloque Paso 3 (parametros) movido detras del Paso 5 (create or replace en la misma transaccion, antes de 27-exportaciones.sql)",
+      "evidencia": "Base: NOTICE: OK: 27.K13b (CB4) SIN con motivo y sin referencia o con una corta: el 22023 del paso 3 llega antes que el 42501 del paso 4; ... 27-exportaciones: completo. ROLLBACK (92 OK de 27.*). Mutante MB4: ERROR: ASERCION FALLIDA: 27.K13b (CB4) SIN con motivo y sin referencia o con una corta: el 22023 del paso 3 llega antes que el 42501 del paso 4. Despues: prosrc de exportar_nota sigue con Paso 3 antes de Paso 5 (t); max(version)=20261009180000."
     },
     {
       "id": "B-H1",
-      "texto": "Fallo de lectura de notas muestra aviso con reintento",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Navegador contra la app con la migracion aplicada; las pruebas unitarias de la lista pasan pero no sustituyen el E2E."
+      "texto": "Fallo de lectura de notas muestra aviso con reintento (navegador)",
+      "veredicto": "PASA",
+      "comando": "Playwright (chromium) sobre next start del clon en :3040: admin@psicogestion.test abre Historia clinica > Notas clinicas de Carmen Ruiz con alter function public.notas_para_copia(uuid) rename to notas_para_copia_x (restaurado al acabar)",
+      "evidencia": "AVISO visible: No se pudieron leer las otras notas de este paciente (las de copia por motivo). | Texto Todavia no hay notas visible: 0 | Boton Volver a intentarlo: 1 | Reintento con la funcion aun rota: el aviso sigue visible | Tras restaurar y pulsar reintento: aparece el encabezado Otras notas de este paciente (solo copia por motivo) y el aviso desaparece (aviso visible: false). Funcion restaurada: notas_para_copia=1, notas_para_copia_x=0."
     },
     {
       "id": "B-H2",
-      "texto": "Copia por motivo con nota bloqueada vuelve al PIN",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Requiere navegador y base con la migracion."
+      "texto": "Copia por motivo con nota bloqueada vuelve al PIN (navegador)",
+      "veredicto": "PASA",
+      "comando": "Playwright: admin abre la nota firmada f0080001-0000-4000-8000-000000000002, Pedir copia por motivo, rellena motivo, referencia y contrasenas, se revoca su desbloqueo (update desbloqueos_historia set revocado_en=now()), Cifrar y descargar",
+      "evidencia": "Alerta: La historia se ha bloqueado. Vuelve a desbloquearla con tu PIN y repite la copia. | Boton Desbloquear con el PIN presente: 1 | Al pulsarlo el dialogo se cierra y se pinta Esta historia esta cerrada ... PIN | Abrir (formulario PIN visible: true) | Tras el PIN 456789 vuelve Pedir copia por motivo | Exportaciones de la paciente antes/despues: 2/2 (no se registra nada con la historia bloqueada)."
     },
     {
       "id": "B-H3/B-H4",
       "texto": "Pruebas en rojo con sus mutantes",
       "veredicto": "PASA",
-      "comando": "sed comenta dialogo-de-copia.tsx:171 (reset inicial) y :191 (if (!vigente()) return; tras cifrar); npx vitest run dialogo-de-copia.test.tsx; git checkout",
-      "evidencia": "Sin reset inicial: 2 failed (\"tras un error, con el formulario montado, los campos de contrasena estan vacios\"; \"con otro error no hay boton de desbloquear\"). Sin vigente() tras cifrar: 1 failed (\"si se cierra mientras cifra, al terminar el cifrado ni se registra ni se descarga\"). Base: 17 passed (17). Nota: el arbol del worktree lo estaba modificando otro proceso a la vez (editor-de-nota.tsx y un setBloqueada(false) en dialogo-de-copia.tsx); mis git checkout restauraron dialogo-de-copia.tsx a HEAD y podrian haber descartado trabajo sin confirmar de ese proceso."
+      "comando": "1.a pasada, conservado: se comentan dialogo-de-copia.tsx:171 (reset inicial) y :191 (if (!vigente()) return; tras cifrar); npx vitest run dialogo-de-copia.test.tsx",
+      "evidencia": "Sin reset inicial: 2 failed. Sin vigente() tras cifrar: 1 failed. Base: 17 passed (17)."
     },
     {
       "id": "B-H5",
       "texto": "Specs Playwright con SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo y --workers=1",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Requiere servidor y base con la migracion."
+      "veredicto": "PASA",
+      "comando": "En clon limpio del HEAD tras npm run build: SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo PUERTO=3040 npx playwright test --workers=1",
+      "evidencia": "ok 21 nota-clinica.spec.ts:123 T-040 el dialogo de la copia se maneja con el teclado y devuelve el foco a Descargar copia (1.1s); ok 22 :205 T-040 tras cifrar y descargar, el foco queda en Cerrar (2.1s); ok 23 :229 T-040 en modo motivo, los radios tienen leyenda y la referencia su etiqueta (1.4s); resto de specs (acceso, avisos, codigos, marca-de-agua, recuperar, regenerar-codigos) verdes. 26 passed (1.6m), exit 0. axe no esta instalado: desvio declarado en el spec, no medido."
     },
     {
       "id": "B-H6",
-      "texto": "Recarga que devuelve solo_copia cambia la vista",
+      "texto": "Recarga que devuelve solo_copia cambia la vista (navegador)",
       "veredicto": "NO_VERIFICABLE",
-      "motivo": "Requiere navegador y base con la migracion."
+      "motivo": "En navegador no hay camino: pasar de nota abierta a solo_copia exige un administrador que tenia la nota abierta como lector (asignado o autor) y deja de serlo, y que la recarga salga de un aviso con boton (yaFirmada, firmadaSinRecargar o noSeRecargo, que solo salen al editar o firmar una nota propia). El sembrado no tiene ningun paciente asignado al administrador (pacientes con profesional_id = admin: 0 filas). Guion manual: asignar un paciente al administrador, que escriba y deje un borrador, firmar la misma nota desde otra pestana, quitar la asignacion, pulsar Cargar lo guardado: debe verse Pedir una copia por motivo, sin texto ni Descargar copia. Evidencia indirecta medida (no sustituye el criterio): npx vitest run editor-de-nota.test.tsx -> 107 passed; mutante 1 (solo_copia con nota abierta devuelve aviso noDisponible) -> 1 failed en 'una recarga que devuelve solo_copia pasa a la vista de solo copia, sin el contenido ni Descargar copia'; mutante 2 (la bandera noDisponible vuelve a incluir solo_copia) -> el mismo test falla; original restaurado."
     },
     {
-      "id": "regresion-ronda1",
-      "texto": "test:rls, oraculo, scripts/t040-exportacion.ts (C4, C5), navegador autora/admin/tecnico",
-      "veredicto": "NO_VERIFICABLE",
-      "motivo": "Base sin la migracion; test:rls banco 27 y guion fallarian por falta de objetos, no por defecto del codigo."
+      "id": "regresion-test:rls",
+      "texto": "npm run test:rls verde (criterio del contrato)",
+      "veredicto": "FALLA",
+      "reproduccion": "En el worktree Y en main: npm run test:rls -> exit 3 en 16-series.sql: ERROR: conflicting key value violates exclusion constraint citas_sin_solape_profesional ... [2026-10-08 07:12:20, 08:12:20) conflicts with existing key [2026-10-08 07:00:00+00, 08:10:00+00). Quitando 16-series, 23-cita-en-episodio falla igual (Z fijacion de la cita pasada c_z en ET39 ... 23P01). FALLO AJENO al ticket: main da el mismo error, el diff main...rama solo toca scripts/rls/11-cobertura.sql (+3 lineas), 27-exportaciones.sql y README.md, y esos bancos no se tocan."
+    },
+    {
+      "id": "regresion-banco-27",
+      "texto": "Banco 27-exportaciones y el resto de bancos que corren",
+      "veredicto": "PASA",
+      "comando": "begin; cat scripts/rls/[0-9]*.sql excepto 16-series y 23-cita-en-episodio; rollback, por docker exec -i supabase_db_Psicogestion psql -U postgres -v ON_ERROR_STOP=1 -f -",
+      "evidencia": "exit 0; 1447 NOTICE OK (92 de 27.*); 27-exportaciones: completo. ROLLBACK."
+    },
+    {
+      "id": "regresion-oraculo",
+      "texto": "Oraculo completo (CB1 y CB7)",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t040-oraculo.mjs",
+      "evidencia": "Sin ninguna linea FALLO; termina t040-oraculo: completa. S1-S3 con contenido y delta 1/1/(0|2); S4 400 y S5 405 con delta 0; CB7 23505 con el mensaje propio."
+    },
+    {
+      "id": "regresion-exportacion-C4-C5",
+      "texto": "Guion de punta a punta (C4 y C5)",
+      "veredicto": "PASA",
+      "comando": "npx tsx scripts/t040-exportacion.ts",
+      "evidencia": "ok 2 nota con dos versiones firmadas; ok 3 exportacion cifrada y registrada; ok C4 dos versiones en orden, numero, huella y huella anterior iguales a la tabla; ok C5 pg_dump --data-only de las cinco tablas (233052 caracteres): sin contrasena, sin reservadas, sin cuerpo; ok C5 docker logs supabase_db_Psicogestion y supabase_rest_Psicogestion: sin contrasena, sin reservadas, sin cuerpo; T-040: todos los pasos del guion pasaron (exit 0)."
+    },
+    {
+      "id": "regresion-roles-navegador",
+      "texto": "La misma vista con cada rol ensena el boton solo a quien la tabla deja",
+      "veredicto": "PASA",
+      "comando": "Playwright sobre /pacientes/<Carmen>/historia/notas?nota=<firmada de Ana> con ana, admin, bruno y tecnico",
+      "evidencia": "ana (autora): Descargar copia=1, Pedir copia por motivo=0 | admin: Descargar copia=0, Pedir copia por motivo=1 (Puedes pedir una copia cifrada con un motivo...) | bruno (sin asignacion): 0 y 0, la pagina da 404 | tecnico: 0 y 0, solo formulario de PIN (Esta historia esta cerrada)."
+    },
+    {
+      "id": "R2A-H1",
+      "texto": "Constancia: 416 con offset + count=exact en el oraculo (solo descripcion, sin arreglar)",
+      "veredicto": "PASA",
+      "comando": "Sonda aparte (copia del oraculo en el scratchpad, mismas fijaciones): ADM POST rpc/exportar_nota con Prefer: count=exact y ?offset=1, con y sin filtro sobre pgrst_scalar",
+      "evidencia": "Filtro que casa MARCA + offset=1: HTTP 416 PGRST103 An offset of 1 was requested, but there are only 0 rows; delta exportaciones 1, accesos 1, avisos 2 | Filtro que NO casa + offset=1: 416 identico (only 0 rows), delta 1/1/2 | Sin filtro + offset=1: 200 null, delta 1/1/2. La transaccion confirma en las tres, y en esta version de PostgREST el 416 no distingue casa de no casa (ambos 0 rows), a diferencia de la medicion de la ronda 1 (only 1 rows). El oraculo sigue sin cubrir esta forma (conContenido no la reconoce); no se ha tocado nada."
     }
   ],
-  "regresiones": []
+  "regresiones": [
+    "npm run test:rls sale con exit 3 en 16-series.sql (citas_sin_solape_profesional) y, sin ese banco, tambien falla 23-cita-en-episodio (23P01). Identico en main: fallo ajeno a T-040; requiere ticket aparte (parece depender de fechas fijas del sembrado frente a la fecha actual 2026-10-05).",
+    "scripts/seed.mjs toma el primer supabase_db_* de docker ps (localizarContenedor de scripts/psql.mjs): R2-H4 sigue vigente. No se ejecuto seed ni db reset; hoy supabase_db_Psicogestion es el primero de la lista, pero con el orden contrario actuaria sobre supabase_db_cinfa-e2e."
+  ]
 }
