@@ -1,68 +1,80 @@
 {
   "ticket": "T-041",
-  "resumen": "Base, RPC y banco 28 correctos; lint, 2336 tests, build y test:rls verdes. HALLAZGO BLOQUEANTE de la pantalla /ajustes/centros: el administrador solo se ve a si mismo (perfiles solo tiene la politica perfiles_lectura_propia), asi que desde la aplicacion no puede dar ni retirar altas a OTRO perfil (Tarea 2 del contrato y pasos 2-3 del guion manual). Los criterios literales pasan; el guion completo no. Escrito en la base compartida durante la prueba en navegador: una fila nueva en perfiles_centros (Alvaro Administrador, Centro Las Palmas, desde=hasta=2026-10-05, principal=false), ya cerrada por la ruta de la aplicacion; el alta de Madrid de Alvaro queda intacta.",
+  "resumen": "Ronda 2, rama worktree-agent-ae6f460142344cc25. Base con la migracion 20261010120000 corregida (fn_perfiles_centros_solo_cierre exige current_date), max(version)=20261010120000, 5 usuarios. lint 0 errores (2 warnings preexistentes en accesos.test.ts), npm test 185 ficheros / 2355 pruebas verdes, test:rls exit 0 (1873 OK, 28-altas-de-centro completo con 44 OK), next build --webpack limpio. Criterio 8 (que fallaba en ronda 1) PASA en Chromium: el administrador ve a Alvaro, Ana y Bruno (no a la baja ni a la tecnica), da un alta, retira el alta de Madrid a Bruno, y el foco queda dentro del dialogo tras un fallo forzado. Unico no verificable: el aviso de altas pendientes pintado como aviso en navegador (ver motivo). Territorio dentro del 6 del diseno. Al terminar deje la base reseteada (npx supabase db reset desde el worktree + npm run seed): 5 usuarios, max(version)=20261010120000, ninguna alta cerrada. Specs temporales borrados.",
   "criterios": [
     {
       "id": 1,
-      "texto": "Automatico: administrador con alta en el centro del episodio entra como coprofesional (y gemela sin alta, 23514), con el alta dada por la ruta de la aplicacion",
+      "texto": "Automatico: administrador con alta en el centro del episodio entra como coprofesional (gemela sin alta: 23514), con el alta dada por la ruta de la aplicacion",
       "veredicto": "PASA",
-      "comando": "npm run test:rls (banco scripts/rls/28-altas-de-centro.sql)",
-      "evidencia": "OK: 28.A1 dar_alta_centro(ADM, C41A) como ADM deja una fila vigente desde hoy; 28.A2 Nota de PRO1 en E41A (C41A) con ADM de coprofesional: pasa; 28.A3 la misma nota en E41B (C41B, sin alta de ADM): 23514 «no tiene alta en el centro del episodio». exit=0."
+      "comando": "npm run test:rls (scripts/rls/28-altas-de-centro.sql)",
+      "evidencia": "OK: 28.A1 dar_alta_centro(ADM, C41A) como ADM deja una fila vigente desde hoy | OK: 28.A2 Nota de PRO1 en E41A (C41A) con ADM de coprofesional: pasa, ADM tiene alta en C41A | OK (lanzo 23514 y el mensaje dice «no tiene alta en el centro del episodio»): 28.A3 La misma nota en E41B (C41B, sin alta de ADM). Alta dada por la RPC dar_alta_centro, no insertada como postgres."
     },
     {
       "id": 2,
-      "texto": "Automatico: profesional invitado desde la aplicacion con un centro es coprofesional en ese centro y no en otro",
+      "texto": "Automatico: profesional invitado desde la aplicacion con un centro puede ser coprofesional en ese centro y no en otro",
       "veredicto": "PASA",
-      "comando": "npm run test:rls; npm test (lib/cuentas/invitar.test.ts, esquemas.test.ts, formulario-invitar.test.tsx)",
-      "evidencia": "OK: 28.B1 La invitacion con C41A deja UNA pertenencia, principal y vigente; 28.B2 Nota de PRO1 en E41A con la invitada de coprofesional: pasa; 28.B3 la misma con E41B (C41B): 23514. Vitest: 183 ficheros, 2336 tests pasan."
+      "comando": "npm run test:rls (28.B*) y, en navegador, invitacion real con dos centros",
+      "evidencia": "OK: 28.B1 La invitacion con C41A deja UNA pertenencia, principal y vigente, en C41A | OK: 28.B2 Nota de PRO1 en E41A con la invitada de coprofesional: pasa | OK (23514): 28.B3 La misma con E41B (C41B). Navegador: invitar a 'Prueba Verificador' con Madrid y Las Palmas (principal Las Palmas) -> 'Invitacion enviada a verif1@psicogestion.test'; perfiles_centros: Las Palmas principal=t, Madrid principal=f, ambas desde 2026-10-05, hasta null."
     },
     {
       "id": 3,
-      "texto": "Automatico: solo el administrador da o retira altas; profesional y tecnico reciben error de la base",
+      "texto": "Automatico: solo el administrador da o retira altas; profesional o tecnico reciben error desde la base",
       "veredicto": "PASA",
-      "comando": "npm run test:rls; consulta directa a pg_policy / information_schema.role_table_grants / pg_trigger",
-      "evidencia": "OK: 28.C1-C4 PRO1 y TEC1 no dan ni retiran altas: 42501; 28.C5 la tabla no cambio; 28.C6 perfil suspendido con JWT vivo: 42501; 28.C7 gemela: ADM si escribe. Politicas de perfiles_centros: alta y cierre exigen rol_actual()='administrador'. UPDATE directo por postgres que cambia centro_id/desde de una pertenencia vigente: 'ERROR: De una pertenencia vigente solo cambian el cierre y la marca de principal.' (trigger perfiles_centros_solo_cierre). authenticated no tiene DELETE (grants: INSERT, SELECT, UPDATE); banco 28.E1-E8 y G7 verdes. Matiz: el DELETE como superusuario postgres SI prospera (el disparador es BEFORE UPDATE solamente; la proteccion contra DELETE son los grants, que el contrato no exige mas alla de esto); la fila borrada se hizo en un savepoint revertido, nada quedo escrito."
+      "comando": "npm run test:rls (28.C*, 28.E*, 28.G*)",
+      "evidencia": "OK (42501): 28.C1 PRO1 no da altas | 28.C2 PRO1 no retira | 28.C3 TEC1 no da | 28.C4 TEC1 no retira | 28.C5 tras los cuatro rechazos la tabla no cambio | 28.C6 perfil suspendido con JWT vivo: 42501 | 28.C7 (gemela) ADM da y retira el alta de PRO2 | 28.E5 ADM no borra: 42501 | 28.E1 no reabre una cerrada | 28.E9 no cierra con fecha pasada ni futura (current_date) | 28.G7 authenticated sin delete ni truncate."
     },
     {
       "id": 4,
       "texto": "Automatico: dar un alta no concede al administrador lectura de notas ajenas (decision fundacional 5)",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK: 28.D2 ADM, con alta en C41A y coprofesional de una nota firmada alli, ve las MISMAS versiones ajenas que antes del alta; 28.D3 ADM ve 0 versiones de P41 (paciente de PRO1), la de coterapia incluida; gemelas 28.D4 (ve las de su propia paciente) y 28.D5 (PRO1 ve 1 version de P41)."
+      "comando": "npm run test:rls (28.D*)",
+      "evidencia": "OK: 28.D2 ADM, con alta en C41A y coprofesional de una nota firmada alli, ve las MISMAS versiones ajenas que antes del alta | OK: 28.D3 ADM ve 0 versiones de P41 (paciente de PRO1), la de coterapia incluida | OK: 28.D4 (gemela) ADM desbloqueado ve la version de su propia paciente | OK: 28.D5 (gemela) PRO1 ve 1 version de P41."
     },
     {
       "id": 5,
       "texto": "Manual: con la siembra, Ana abre una nota en un episodio de Madrid y el selector de coprofesional ofrece al administrador",
       "veredicto": "PASA",
-      "comando": "Playwright (chromium) contra next start --port 3100 sobre el build del worktree: login ana@psicogestion.test, /pacientes/d0080001-...-03/historia/notas?nota=f0080001-...-01 (episodio de Centro Madrid), PIN 123456, abrir el listbox Coprofesional",
-      "evidencia": "OPCIONES: [\"Centro Las Palmas\",\"Centro Madrid\",\"Sin coprofesional\",\"Bruno Ferrer\",\"Álvaro Administrador\"] (las dos primeras son el selector de centro activo; el desplegable de coprofesional ofrece Bruno y Álvaro Administrador)."
+      "comando": "Playwright (spec temporal, ya borrado) contra next start del build del worktree: login Ana, /pacientes/d0080001-0000-4000-8000-000000000003/historia/notas?nota=f0080001-0000-4000-8000-000000000001, Abrir el editor, PIN, abrir el combobox Coprofesional",
+      "evidencia": "OPCIONES coprofesional: [\"Sin coprofesional\",\"Álvaro Administrador\"] ; 1 passed."
     },
     {
       "id": 6,
-      "texto": "Manual: /ajustes con cada rol enseña la gestión de altas solo al administrador",
+      "texto": "Manual: /ajustes con cada rol ensena la gestion de altas solo al administrador",
       "veredicto": "PASA",
-      "comando": "Playwright: login admin, ana (profesional) y tecnico; enlaces a /ajustes* en /ajustes y GET directo de /ajustes/centros",
-      "evidencia": "admin: enlaces [/ajustes/invitar, /ajustes/reponer-totp, /ajustes/dar-de-baja, /ajustes/centros :: Altas de centro]; /ajustes/centros muestra «Altas de centro». ana: enlaces [] y /ajustes/centros e /ajustes/invitar redirigen a /ajustes. tecnico: enlaces [] y /ajustes/centros redirige a /ajustes. Ver hallazgo del criterio 8 sobre lo que la pantalla del administrador muestra."
+      "comando": "Playwright (spec temporal) con admin, ana (profesional) y tecnico: /ajustes y /ajustes/centros",
+      "evidencia": "admin /ajustes: enlace 'Altas de centro' = 1, 'Administracion / Invitar usuarios / Reponer TOTP / Dar de baja / Altas de centro'; /ajustes/centros -> 200 con 'Altas de centro'. ana: enlace = 0; /ajustes/centros redirige a /ajustes. tecnico: enlace = 0; /ajustes/centros redirige a /ajustes."
     },
     {
       "id": 7,
       "texto": "Automatico: npm run lint && npm run build limpios; test:rls verde",
       "veredicto": "PASA",
-      "comando": "npm run lint; npm test; npx next build --webpack; npm run test:rls (en el worktree)",
-      "evidencia": "lint: 0 errores, 2 warnings preexistentes en lib/cuentas/accesos.test.ts (fichero fuera del diff). npm test: Test Files 183 passed, Tests 2336 passed. next build --webpack: compila, /ajustes/centros en la tabla de rutas. test:rls: exit 0, 1863 'OK', ningun ERROR de aserto (las coincidencias con 'fallo' son PIN_FALLIDO de otros bancos). Territorio: los 22 ficheros del diff estan dentro del §6 del diseno (banco 28 en lugar de 25, que §6 autoriza como 'numero libre siguiente'); tocar docs/state.md y docs/bitacora/T-041.md no aparece en el diff."
+      "comando": "npm run lint; npm test; npm run test:rls; npx next build --webpack",
+      "evidencia": "lint: 0 errores, 2 warnings (no-unused-vars en lib/cuentas/accesos.test.ts, fichero que el ticket no toca). npm test: Test Files 185 passed, Tests 2355 passed. test:rls: exit=0, 1873 lineas 'NOTICE:  OK', '28-altas-de-centro: completo.', ROLLBACK. next build --webpack: compila y lista /ajustes/centros entre las rutas, sin errores."
     },
     {
       "id": 8,
-      "texto": "Tarea 2 del contrato / guion manual pasos 2-3: en Ajustes el administrador da y retira altas de centro a un perfil existente (retirarle el alta de Madrid a un profesional)",
-      "veredicto": "FALLA",
-      "reproduccion": "1) Con la siembra, login admin@psicogestion.test / psico1234. 2) Ir a /ajustes/centros: la lista solo muestra «Álvaro Administrador · Administrador / Centro Madrid · principal»; Ana, Bruno y cualquier otro perfil no aparecen. 3) Abrir el desplegable «Persona»: opciones = [\"Álvaro Administrador\"]. Causa: app/(app)/ajustes/centros/page.tsx lee `perfiles` con el cliente del usuario y la unica politica de lectura de `perfiles` es perfiles_lectura_propia (id = auth.uid()), asi que el administrador solo se ve a si mismo. Consecuencia: desde la aplicacion se pueden dar y retirar altas solo a uno mismo (probado: dar alta a Álvaro en Las Palmas y retirarla funcionan, con dialogo de confirmacion, y la fila queda cerrada con hasta=2026-10-05, no borrada). No se puede retirar el alta de Madrid a un profesional (paso 3 del guion). El mismo defecto preexistente deja vacia la lista de /ajustes/dar-de-baja (opciones: [])."
+      "texto": "Guion pasos 2-3 en /ajustes/centros: el administrador ve a todas las personas activas, da un alta y retira el alta de Madrid a un profesional (ronda 1 FALLABA: solo se veia a si mismo)",
+      "veredicto": "PASA",
+      "comando": "Playwright (spec temporal, ya borrado) sobre next start del build del worktree, administrador admin@psicogestion.test",
+      "evidencia": "LISTA: Álvaro Administrador (Madrid principal, desde 01/09/2026), Ana Márquez (Las Palmas, Madrid), Bruno Ferrer (Madrid principal) ; Bárbara Baja (baja) y Teresa Técnica (técnica) no aparecen. Dar alta: Bruno Ferrer + Centro Las Palmas -> diálogo -> Confirmar -> 'Alta de centro dada.'; (Bruno ya tenía Las Palmas de una ejecución previa del guion) Álvaro + Las Palmas también -> 'Alta de centro dada.'. Retirar: 'Retirar el alta de Bruno Ferrer en Centro Madrid' -> Confirmar -> 'Alta de centro retirada.'; BD: fila de Bruno en Madrid con hasta=2026-10-05, no borrada, Bruno conserva Las Palmas (no principal, D5). Invitación con dos centros OK (criterio 2)."
+    },
+    {
+      "id": "8-foco",
+      "texto": "Foco del dialogo en Chromium al pulsar Confirmar y Cancelar, incluido un fallo forzado (retirar un alta ya retirada desde otra pestana): el foco queda dentro del dialogo y no en BODY",
+      "veredicto": "PASA",
+      "comando": "Playwright (spec temporal) con document.activeElement tras cada accion",
+      "evidencia": "Al abrir (dar y retirar): BUTTON 'Cancelar', enDialogo=true. Confirmar con éxito: foco en P role=status 'Alta de centro dada.' (dialogo cerrado, no BODY). Cancelar: foco en BUTTON 'Retirar' (el que abrió). Fallo forzado (alta retirada antes en otra pestaña, luego Confirmar en la primera): role=alert dentro del dialogo 'No tenía alta vigente en ese centro: puede que otra persona la haya retirado ya.'; foco tras el fallo {tag:BUTTON, texto:'Confirmar', enDialogo:true}; Cancelar despues -> foco BUTTON 'Retirar'. En ningun momento BODY."
+    },
+    {
+      "id": "aviso-altas-pendientes",
+      "texto": "Si se puede: el aviso de altas pendientes tras una invitacion se pinta como aviso",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "En navegador no se alcanza la rama: cerrar el centro Las Palmas tras cargar el formulario y enviar produce, por la comprobacion previa de la accion, el error 'Un centro elegido ya no está abierto. Recarga la pantalla y revisa los centros.' (sin data-aviso, color de texto normal), no el aviso de altas pendientes. Esa rama exige que la invitacion tenga exito y el alta falle despues (carrera entre la comprobacion y la RPC). Haria falta un fallo inyectado en dar_alta_centro o un test de componente; las pruebas unitarias de formulario-invitar (dentro de npm test, verdes) cubren el data-aviso, pero no el pintado real en navegador (clases border-destructive/text-destructive no medidas)."
     }
   ],
   "regresiones": [
-    "BLOQUEANTE para la Tarea 2: /ajustes/centros solo lista al propio administrador (perfiles_lectura_propia); no hay forma, desde la aplicacion, de dar o retirar altas a otro perfil. Los tests jsdom y el banco no lo detectan porque alimentan la pantalla con datos o llaman a las RPC directamente.",
-    "Preexistente, ajeno al ticket: /ajustes/dar-de-baja tiene la misma lista vacia por la misma politica.",
-    "Observacion: el trigger de solo-cierre cubre UPDATE; un DELETE de postgres (superusuario) sobre perfiles_centros no lo impide ningun disparador (authenticated no tiene grant DELETE).",
-    "Entorno: durante la prueba en navegador hubo timeouts 57014 en darAltaCentro mientras otra sesion ajena corria bancos largos sobre la misma base compartida (agenda_crear_serie / asserts de historia); repetido con la base libre funciono. No se atribuye al ticket.",
-    "Escrito en la base compartida: perfiles_centros (Álvaro Administrador, Centro Las Palmas, 2026-10-05..2026-10-05, no principal), mas sus filas de auditoria; ya cerrada. El resto del banco 28 se ejecuta en transaccion con ROLLBACK."
+    "Ninguna regresion en npm test (2355/2355), test:rls (exit 0) ni lint (0 errores; 2 warnings preexistentes ajenos al ticket en lib/cuentas/accesos.test.ts).",
+    "Territorio comprobado a mano contra el 6 del diseno: los 24 ficheros del diff (sin tickets/) caen dentro de app/(app)/ajustes/**, lib/cuentas/**, lib/i18n/es.ts, lib/supabase/tipos-bd.ts, supabase/migrations/20261010120000_altas_de_centro.sql, supabase/seed-completo.sql, scripts/rls/28-altas-de-centro.sql (numero libre siguiente), scripts/rls/README.md, docs/architecture.md y docs/interfaz.md. No se toca supabase/seed.sql, 11-cobertura.sql ni accesibilidad/**. No hay docs/state.md ni docs/bitacora/T-041.md en el diff (previstos en el 6; cierre de memoria pendiente, no es salida de territorio).",
+    "Nota de estado: el guion de navegador modifico la base local (altas de Bruno y Alvaro, invitacion 'Prueba Verificador') y fue deshecho con npx supabase db reset desde el worktree + npm run seed; no se toco supabase_db_cinfa-e2e ni ningun .sha."
   ]
 }
