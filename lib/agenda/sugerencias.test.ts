@@ -624,3 +624,78 @@ describe('sugerirHuecos · ronda 1 del corte A (E12-E15, H1, H2, H6)', () => {
     expect(libres).toEqual(copia);
   });
 });
+
+describe('sugerirHuecos · H8 y H9 (normalización y moda sobre todas las pasadas)', () => {
+  it('H8 · ocho pasadas en orden descendente: se ordena antes de recortar a las seis más recientes', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        ...pasadas([...SEIS_MARTES].reverse()),
+        pasada('2026-08-20', '10:00'),
+        pasada('2026-08-13', '10:00'),
+      ],
+      libres: [bloque('2026-10-06')],
+      hoy: HOY,
+    });
+    expect(r.sugerencias[0]).toEqual({
+      fecha: '2026-10-06',
+      horaLocal: '12:00',
+      motivo: { tipo: 'comoLasUltimas', n: 6 },
+    });
+  });
+
+  it('H8 · el comparador de las pasadas mira la hora: el corte cae en mitad de un día doble', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-09-08', '13:00'),
+        pasada('2026-09-08', '12:00'),
+        pasada('2026-09-15', '13:00'),
+        pasada('2026-09-22', '13:00'),
+        pasada('2026-09-22', '12:00'),
+        pasada('2026-09-29', '12:00'),
+        pasada('2026-09-29', '13:00'),
+      ],
+      libres: [bloque('2026-10-06', '12:00'), bloque('2026-10-06', '13:00')],
+      hoy: HOY,
+    });
+    // Se descarta la de las 12:00 del 08-09: la hora habitual es 13:00 (4 frente a 2).
+    expect(r.sugerencias[0].fecha).toBe('2026-10-06');
+    expect(r.sugerencias[0].horaLocal).toBe('13:00');
+  });
+
+  it('H9 · el día habitual sale de todas las pasadas, no de un representante por fecha', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-09-07', '12:00'),
+        pasada('2026-09-10', '12:00'),
+        pasada('2026-09-10', '13:00'),
+        pasada('2026-09-14', '12:00'),
+        pasada('2026-09-17', '12:00'),
+        pasada('2026-09-17', '13:00'),
+      ],
+      libres: [bloque('2026-10-08', '12:00'), bloque('2026-10-12', '12:00')],
+      hoy: HOY,
+    });
+    // Jueves 4 frente a lunes 2: la tarjeta de día habitual es la del jueves.
+    expect(r.modo).toBe('habitual');
+    expect(r.sugerencias).toContainEqual({
+      fecha: '2026-10-08',
+      horaLocal: '12:00',
+      motivo: { tipo: 'diaHabitual', diaSemana: 4, hora: '12:00' },
+    });
+  });
+
+  it('H9 · la hora habitual sale de todas las pasadas, no de un representante por fecha', () => {
+    const r = sugerirHuecos({
+      pasadas: [
+        pasada('2026-09-15', '12:00'),
+        pasada('2026-09-15', '13:00'),
+        pasada('2026-09-22', '12:00'),
+        pasada('2026-09-22', '13:00'),
+        pasada('2026-09-29', '13:00'),
+      ],
+      libres: [bloque('2026-10-06', '12:00'), bloque('2026-10-06', '13:00')],
+      hoy: HOY,
+    });
+    expect(r.sugerencias[0].horaLocal).toBe('13:00');
+  });
+});

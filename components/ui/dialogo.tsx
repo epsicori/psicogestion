@@ -15,10 +15,12 @@ type Props = {
    * diálogo de mover una cita de serie empieza en «Mantener».
    */
   focoInicial?: RefObject<HTMLElement | null>;
+  /** `amplio` es para un formulario entero (T-028): más ancho y, si no cabe, se desplaza por dentro. */
+  ancho?: 'normal' | 'amplio';
   children: ReactNode;
 };
 
-export function Dialogo({ abierto, alCerrar, titulo, focoInicial, children }: Props) {
+export function Dialogo({ abierto, alCerrar, titulo, focoInicial, ancho = 'normal', children }: Props) {
   const panel = useRef<HTMLDivElement>(null);
   const idTitulo = useId();
 
@@ -50,9 +52,14 @@ export function Dialogo({ abierto, alCerrar, titulo, focoInicial, children }: Pr
         aria-modal="true"
         aria-labelledby={idTitulo}
         tabIndex={-1}
+        // Un Escape que algo de dentro ya atendió (un hueco que devuelve el foco a su día) no cierra el diálogo (T-028 B, H20).
+        onKeyDown={(evento) => {
+          if (evento.key === 'Escape' && evento.defaultPrevented) evento.nativeEvent.stopPropagation();
+        }}
         className={cn(
-          'relative w-full max-w-lg rounded-xl border border-border bg-card p-6',
+          'relative w-full rounded-xl border border-border bg-card p-6',
           'text-card-foreground shadow-lg outline-none',
+          ancho === 'amplio' ? 'max-h-[calc(100dvh-2rem)] max-w-5xl overflow-y-auto' : 'max-w-lg',
         )}
       >
         <h2 id={idTitulo} className="pr-12 font-serif text-lg">

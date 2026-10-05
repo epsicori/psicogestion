@@ -1,0 +1,299 @@
+import type { ReactElement } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const CENTRO = '33333333-3333-4333-8333-333333333333';
+const USUARIO = '22222222-2222-4222-8222-222222222222';
+const OTRO_PROFESIONAL = '66666666-6666-4666-8666-666666666666';
+const CENTRO_B = '44444444-4444-4444-8444-444444444444';
+const ADMIN = '88888888-8888-4888-8888-888888888888';
+const ASIGNADO = '77777777-7777-4777-8777-777777777777';
+const PACIENTE = '11111111-1111-4111-8111-111111111111';
+
+const m = vi.hoisted(() => ({
+  cargarContexto: vi.fn(),
+  cargarVistaAlta: vi.fn(),
+  relojDelCentro: vi.fn(),
+  tablas: {} as Record<string, { data: unknown; error: unknown }>,
+  consultas: [] as { tabla: string; filtros: [string, unknown][] }[],
+}));
+
+vi.mock('../datos', () => ({ cargarContexto: m.cargarContexto }));
+vi.mock('./estado-alta', () => ({
+  DURACION_INICIAL: 50,
+  cargarVistaAlta: m.cargarVistaAlta,
+  relojDelCentro: m.relojDelCentro,
+}));
+vi.mock('./formulario-navegable', () => ({ FormularioNavegable: () => null }));
+
+import { ContenidoAlta } from './contenido-alta';
+
+function constructor(tabla: string) {
+  const consulta = { tabla, filtros: [] as [string, unknown][] };
+  m.consultas.push(consulta);
+  const cadena: Record<string, unknown> = {};
+  const devolver = () => cadena;
+  cadena.select = devolver;
+  cadena.order = devolver;
+  cadena.in = (columna: string, valor: unknown) => (consulta.filtros.push([columna, valor]), cadena);
+  cadena.or = (texto: string) => (consulta.filtros.push(['or', texto]), cadena);
+  cadena.is = (columna: string, valor: unknown) => (consulta.filtros.push([columna + ' is', valor]), cadena);
+  cadena.eq = (columna: string, valor: unknown) => (consulta.filtros.push([columna, valor]), cadena);
+  cadena.maybeSingle = () => Promise.resolve(m.tablas[tabla]);
+  cadena.then = (alResolver: (v: unknown) => unknown) => Promise.resolve(m.tablas[tabla]).then(alResolver);
+  return cadena;
+}
+
+function contexto(rol: string) {
+  return {
+    ok: true,
+    sesion: { usuario: { id: USUARIO }, supabase: { from: constructor } },
+    rol,
+    centros: [{ id: CENTRO, nombre: 'Centro Sur' }],
+    centro: CENTRO,
+    zona: 'Europe/Madrid',
+    hoy: '2026-10-04',
+    ahora: new Date('2026-10-04T10:00:00Z'),
+  };
+}
+
+const VISTA = { calendario: {}, modo: 'enFrio', tarjetas: [], errorSugerencias: false };
+
+/** El elemento que devuelve el componente asíncrono, ya resuelto. */
+async function resolver(sp: Record<string, string> = {}): Promise<ReactElement<Record<string, unknown>>> {
+  return (await ContenidoAlta({ searchParams: Promise.resolve(sp), modo: 'dialogo' })) as ReactElement<Record<string, unknown>>;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  m.consultas.length = 0;
+  m.tablas = {
+    tipos_terapia: { data: [{ id: 't1', nombre: 'Individual', duracion_minutos: 50 }], error: null },
+    directorio_perfiles: { data: [{ id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO }], error: null },
+    perfiles_centros: { data: [{ perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO }], error: null },
+    pacientes: { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez' }, error: null },
+  };
+  m.cargarContexto.mockResolvedValue(contexto('administrador'));
+  m.relojDelCentro.mockResolvedValue({ ok: true, zona: 'Europe/Madrid', hoy: '2026-10-04' });
+  m.cargarVistaAlta.mockResolvedValue({ ok: true, vista: VISTA });
+});
+
+describe('ContenidoAlta', () => {
+  it('pasa al formulario el catálogo de tipos con su duración, sin más', async () => {
+    const elemento = await resolver();
+
+    expect(elemento.props.tipos).toEqual([{ id: 't1', nombre: 'Individual', duracionMinutos: 50 }]);
+    expect(elemento.props.vista).toBe(VISTA);
+    const tipos = m.consultas.find((c) => c.tabla === 'tipos_terapia');
+    expect(tipos?.filtros).toContainEqual(['activo', true]);
+  });
+
+  it('se ofrecen los activos del directorio, profesionales sanitarios y administradores (H1)', async () => {
+    const elemento = await resolver();
+
+    expect(elemento.props.profesionales).toEqual([{ id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO }]);
+    const directorio = m.consultas.find((c) => c.tabla === 'directorio_perfiles');
+    expect(directorio?.filtros).toContainEqual(['rol', ['profesional_sanitario', 'administrador']]);
+    expect(directorio?.filtros).toContainEqual(['estado', 'activo']);
+  });
+
+  // H1 (ronda 3, FALLA del verificador): en la siembra el administrador tiene centro_id null.
+  it('el administrador activo sale siempre, también con centro_id null; un profesional sin centro no', async () => {
+    m.cargarContexto.mockResolvedValue({
+      ...contexto('administrador'),
+      centros: [
+        { id: CENTRO, nombre: 'Centro Sur' },
+        { id: CENTRO_B, nombre: 'Centro Norte' },
+      ],
+    });
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO, rol: 'profesional_sanitario' },
+        { id: ADMIN, nombre_completo: 'Zoe Admin', centro_id: null, rol: 'administrador' },
+        { id: 'sin-centro', nombre_completo: 'Sin Centro', centro_id: null, rol: 'profesional_sanitario' },
+      ],
+      error: null,
+    };
+    m.tablas.perfiles_centros = { data: [{ perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO }], error: null };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.profesionales).toEqual([
+      { id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO },
+      { id: ADMIN, nombre: 'Zoe Admin', centroId: CENTRO },
+      { id: ADMIN, nombre: 'Zoe Admin', centroId: CENTRO_B },
+    ]);
+    // La consulta del directorio no acota por centro: lo decide la pertenencia (H23).
+    const directorio = m.consultas.find((c) => c.tabla === 'directorio_perfiles');
+    expect(directorio?.filtros.some(([columna]) => columna === 'or' || columna === 'centro_id')).toBe(false);
+  });
+
+  // H23 (ronda 3): la pertenencia a un centro es perfiles_centros (ADR-051); perfiles.centro_id es solo el principal.
+  it('un profesional que pasa consulta en dos centros se ofrece en los dos, y solo con pertenencia vigente (H23)', async () => {
+    m.cargarContexto.mockResolvedValue({
+      ...contexto('administrador'),
+      centros: [
+        { id: CENTRO, nombre: 'Madrid' },
+        { id: CENTRO_B, nombre: 'Las Palmas' },
+      ],
+    });
+    m.tablas.directorio_perfiles = {
+      data: [{ id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO, rol: 'profesional_sanitario' }],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO },
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO_B },
+      ],
+      error: null,
+    };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.profesionales).toEqual([
+      { id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO },
+      { id: OTRO_PROFESIONAL, nombre: 'Ana Ruiz', centroId: CENTRO_B },
+    ]);
+    const pertenencias = m.consultas.find((c) => c.tabla === 'perfiles_centros');
+    expect(pertenencias?.filtros).toContainEqual(['hasta is', null]);
+  });
+
+  it('una pertenencia a un centro que quien mira no tiene no ofrece al profesional en ninguno de los suyos (H23)', async () => {
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO_B, rol: 'profesional_sanitario' },
+        { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO, rol: 'profesional_sanitario' },
+      ],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO_B },
+        { perfil_id: ASIGNADO, centro_id: CENTRO },
+      ],
+      error: null,
+    };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.profesionales).toEqual([{ id: ASIGNADO, nombre: 'Luis Soto', centroId: CENTRO }]);
+  });
+
+  // H2 (revisión del corte B): el profesional por defecto es el asignado al paciente, no el primero.
+  it('por defecto entra el profesional asignado al paciente, aunque no sea el primero del directorio', async () => {
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO },
+        { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO },
+      ],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO },
+        { perfil_id: ASIGNADO, centro_id: CENTRO },
+      ],
+      error: null,
+    };
+    m.tablas.pacientes = { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez', profesional_id: ASIGNADO }, error: null };
+
+    const elemento = await resolver({ paciente: PACIENTE });
+
+    expect(elemento.props.inicial).toMatchObject({ profesionalId: ASIGNADO });
+    expect(m.cargarVistaAlta.mock.calls[0][2]).toMatchObject({ profesionalId: ASIGNADO });
+  });
+
+  it('sin paciente, o con uno cuyo profesional no está en el centro, entra el primero en orden estable', async () => {
+    m.tablas.directorio_perfiles = {
+      data: [
+        { id: ASIGNADO, nombre_completo: 'Luis Soto', centro_id: CENTRO },
+        { id: OTRO_PROFESIONAL, nombre_completo: 'Ana Ruiz', centro_id: CENTRO },
+      ],
+      error: null,
+    };
+    m.tablas.perfiles_centros = {
+      data: [
+        { perfil_id: ASIGNADO, centro_id: CENTRO },
+        { perfil_id: OTRO_PROFESIONAL, centro_id: CENTRO },
+      ],
+      error: null,
+    };
+
+    const sinPaciente = await resolver();
+    expect(sinPaciente.props.inicial).toMatchObject({ profesionalId: OTRO_PROFESIONAL });
+    expect((sinPaciente.props.profesionales as { nombre: string }[]).map((p) => p.nombre)).toEqual(['Ana Ruiz', 'Luis Soto']);
+
+    m.tablas.pacientes = { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez', profesional_id: 'ajeno' }, error: null };
+    const ajeno = await resolver({ paciente: PACIENTE });
+    expect(ajeno.props.inicial).toMatchObject({ profesionalId: OTRO_PROFESIONAL });
+  });
+
+  it('el profesional agenda a su nombre: no consulta el directorio y el profesional es él', async () => {
+    m.cargarContexto.mockResolvedValue(contexto('profesional_sanitario'));
+
+    const elemento = await resolver();
+
+    expect(elemento.props.inicial).toMatchObject({ profesionalId: USUARIO });
+    expect(m.consultas.some((c) => c.tabla === 'directorio_perfiles')).toBe(false);
+  });
+
+  it('un paciente de la URL se vuelve a leer con la sesión de quien mira y entra elegido', async () => {
+    const elemento = await resolver({ paciente: PACIENTE, inicio: '2026-10-06T17:00' });
+
+    expect(elemento.props.inicial).toMatchObject({ paciente: { id: PACIENTE, nombre: 'Ana Pérez' }, clave: '2026-10-06T17:00' });
+    expect(m.cargarVistaAlta.mock.calls[0][2]).toMatchObject({ pacienteId: PACIENTE, fechaFoco: '2026-10-06', duracionMinutos: 50 });
+  });
+
+  // H22 (ronda 3): el formulario necesita el asignado del paciente de la URL para proponerlo al cambiar de centro.
+  it('el paciente de la URL llega con su profesional asignado', async () => {
+    m.tablas.pacientes = { data: { id: PACIENTE, nombre: 'Ana', apellidos: 'Pérez', profesional_id: ASIGNADO }, error: null };
+
+    const elemento = await resolver({ paciente: PACIENTE });
+
+    expect((elemento.props.inicial as { paciente: unknown }).paciente).toEqual({ id: PACIENTE, nombre: 'Ana Pérez', profesionalId: ASIGNADO });
+  });
+
+  it('un paciente que la RLS no deja ver no entra', async () => {
+    m.tablas.pacientes = { data: null, error: null };
+
+    const elemento = await resolver({ paciente: PACIENTE });
+
+    expect(elemento.props.inicial).toMatchObject({ paciente: null });
+    expect(m.cargarVistaAlta.mock.calls[0][2]).toMatchObject({ pacienteId: null });
+  });
+
+  it('si el reloj del centro falla, lo dice en una alerta y no tumba el render', async () => {
+    m.relojDelCentro.mockResolvedValue({ ok: false, motivo: 'no_autorizado', mensaje: 'Sin acceso al centro.' });
+
+    const elemento = await resolver();
+
+    expect(elemento.props.mensaje).toBe('Sin acceso al centro.');
+    expect(m.cargarVistaAlta).not.toHaveBeenCalled();
+  });
+
+  // H29 (ronda 4): un fallo al leer las pertenencias no puede pasar por «ningun profesional sanitario en ningun centro».
+  it('si falla la lectura de las pertenencias a centros, lo dice como error y no ofrece un selector cambiado', async () => {
+    m.tablas.perfiles_centros = { data: null, error: { message: 'fallo transitorio' } };
+
+    const elemento = await resolver();
+
+    expect(elemento.props.mensaje).toBe('No se ha podido preparar el formulario.');
+    expect(m.cargarVistaAlta).not.toHaveBeenCalled();
+  });
+
+  it('sin centro asignado lo dice', async () => {
+    m.cargarContexto.mockResolvedValue({ ...contexto('administrador'), centros: [], centro: null });
+
+    const elemento = await resolver();
+
+    expect(elemento.props.mensaje).toBe('No tienes ningún centro asignado.');
+  });
+
+  it('si fallan las sugerencias, el formulario sigue con su aviso (la vista lo lleva)', async () => {
+    m.cargarVistaAlta.mockResolvedValue({ ok: true, vista: { ...VISTA, errorSugerencias: true } });
+
+    const elemento = await resolver();
+
+    expect((elemento.props.vista as typeof VISTA).errorSugerencias).toBe(true);
+  });
+});

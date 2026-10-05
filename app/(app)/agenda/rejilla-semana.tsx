@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils';
 
 import { PX_MIN, destinoDeArrastre, horaDeMinuto } from './arrastre';
 import { ContenidoCita } from './contenido-cita';
+import { HuecoSeleccion } from './nueva/hueco-seleccion';
+import { carrilesDeHuecos, type SeleccionHuecos } from './nueva/seleccion-huecos';
+import { alTeclearHueco, enfocarPrimerHueco } from './nueva/teclado-huecos';
 import type { CitaVista, DiaVista, VistaCalendario } from './vista';
 
 /** Lo que hay que mover el puntero antes de que un clic se convierta en arrastre. */
@@ -40,13 +43,19 @@ type Props = {
   titulo: string;
   dias: DiaVista[];
   eje: VistaCalendario['eje'];
-  citas: CitaVista[];
+  /** Sin ellas (modo selección) la rejilla no pinta citas. */
+  citas?: CitaVista[];
   /** El día por el que se entra con Tab: el de hoy, o el primero de la semana. */
   diaInicial: number;
-  alAbrirDia: (dia: DiaVista, ancla: HTMLElement) => void;
-  alAbrirCita: (cita: CitaVista, ancla: HTMLElement) => void;
+  alAbrirDia?: (dia: DiaVista, ancla: HTMLElement) => void;
+  alAbrirCita?: (cita: CitaVista, ancla: HTMLElement) => void;
   /** Se soltó una cita en otro sitio: día y hora locales que pide el diálogo. */
-  alSoltar: (cita: CitaVista, fecha: string, hora: string) => void;
+  alSoltar?: (cita: CitaVista, fecha: string, hora: string) => void;
+  /**
+   * Modo selección (alta de cita): en lugar de citas, los huecos del alta con la misma geometría
+   * (`minutoPared`, `duracionMinutos`, `PX_MIN`). Sin arrastre ni panel de día.
+   */
+  seleccion?: SeleccionHuecos;
 };
 
 type Gesto = {
@@ -65,13 +74,18 @@ function cuentaDeCitas(n: number): string {
   return n === 1 ? t('agenda.rejilla.citas.una') : tCon('agenda.rejilla.citas.varias', { n });
 }
 
+function cuentaDeLibres(n: number): string {
+  if (n === 0) return t('agenda.alta.seleccion.sinLibres');
+  return n === 1 ? t('agenda.alta.seleccion.unLibre') : tCon('agenda.alta.seleccion.variosLibres', { n });
+}
+
 /**
  * La semana como rejilla (T-014 §1.6.3): una fila de siete celdas, y en cada una el número del
  * día (que es lo que recibe el foco, con tabulación móvil) y sus citas colocadas a su hora. El
  * arrastre es un atajo con el ratón; el botón «Reprogramar» del panel de la cita es el camino
  * sin arrastre. Ningún `Date` aquí: horas y días llegan ya escritos.
  */
-export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia, alAbrirCita, alSoltar }: Props) {
+export function RejillaSemana({ titulo, dias, eje, citas = [], diaInicial, alAbrirDia, alAbrirCita, alSoltar, seleccion }: Props) {
   const { activo, setActivo, alTeclear, refDe } = useFocoRodante(dias.length, diaInicial, 7);
   const botonesDia = useRef<(HTMLButtonElement | null)[]>([]);
   const fila = useRef<HTMLDivElement | null>(null);
@@ -125,7 +139,7 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
         if (fecha !== g.cita.fechaLocal || hora !== g.cita.horaLocal) {
           // Un pointerdown no enfoca el botón en todos los navegadores (revisión TS H10).
           g.boton.focus();
-          alSoltar(g.cita, fecha, hora);
+          alSoltar?.(g.cita, fecha, hora);
         }
       }
       terminar();
@@ -179,6 +193,7 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
   }
 
   const alto = (eje.hastaMinuto - eje.desdeMinuto) * PX_MIN;
+  const carriles = seleccion ? carrilesDeHuecos(seleccion.huecos) : null;
 
   return (
     <div className="flex">
@@ -201,6 +216,7 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
         <div role="row" ref={fila} className="grid grid-cols-7">
           {dias.map((dia, i) => {
             const delDia = citas.filter((c) => c.diaIndice === i);
+            const huecosDelDia = seleccion?.huecos.filter((h) => h.diaIndice === i) ?? [];
             return (
               <div key={dia.fecha} role="gridcell" className="border-border min-w-0 border-l first:border-l-0">
                 <button
@@ -212,9 +228,20 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
                   }}
                   tabIndex={i === activo ? 0 : -1}
                   aria-current={dia.esHoy ? 'date' : undefined}
-                  onKeyDown={alTeclear}
+                  onKeyDown={(evento) => {
+                    // En selección, Flecha abajo entra en los huecos del día (la única parada de Tab es el día).
+                    if (seleccion && evento.key === 'ArrowDown') {
+                      if (enfocarPrimerHueco(evento.currentTarget.closest('[role="gridcell"]'))) evento.preventDefault();
+                      return;
+                    }
+                    alTeclear(evento);
+                  }}
                   onFocus={() => setActivo(i)}
-                  onClick={(evento) => alAbrirDia(dia, evento.currentTarget)}
+                  onClick={(evento) => {
+                    if (!seleccion) return alAbrirDia?.(dia, evento.currentTarget);
+                    // En selección el día no abre panel: lleva al primer hueco libre que tiene.
+                    enfocarPrimerHueco(evento.currentTarget.closest('[role="gridcell"]'));
+                  }}
                   className={cn(
                     'hover:bg-muted focus-visible:ring-ring/50 flex h-11 w-full items-center justify-center gap-1 text-sm outline-none focus-visible:ring-2',
                     dia.esHoy ? 'text-primary font-semibold' : 'text-foreground',
@@ -223,14 +250,16 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
                   <span>
                     {dia.etiquetaCorta} {dia.numero}
                   </span>
-                  <span className="sr-only">, {cuentaDeCitas(delDia.length)}</span>
+                  <span className="sr-only">
+                    , {seleccion ? cuentaDeLibres(huecosDelDia.filter((h) => h.estado === 'libre').length) : cuentaDeCitas(delDia.length)}
+                  </span>
                 </button>
 
                 <div
                   data-cuerpo
                   ref={i === 0 ? primerCuerpo : undefined}
                   onClick={(evento) => {
-                    if (evento.target === evento.currentTarget) {
+                    if (evento.target === evento.currentTarget && alAbrirDia) {
                       alAbrirDia(dia, botonesDia.current[i] ?? evento.currentTarget);
                     }
                   }}
@@ -250,7 +279,7 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
                           huboArrastre.current = false;
                           return;
                         }
-                        alAbrirCita(cita, evento.currentTarget);
+                        alAbrirCita?.(cita, evento.currentTarget);
                       }}
                       // Con ratón el alto dice la duración; al tacto, 44 px sin tapar a la de debajo (H8, N3).
                       className="bg-card border-border hover:bg-muted focus-visible:ring-ring/50 pointer-coarse:min-h-(--alto-tactil) absolute overflow-hidden rounded-md border p-1 text-left outline-none select-none focus-visible:ring-2"
@@ -265,6 +294,34 @@ export function RejillaSemana({ titulo, dias, eje, citas, diaInicial, alAbrirDia
                       <ContenidoCita cita={cita} late />
                     </button>
                   ))}
+
+                  {huecosDelDia.map((hueco) => {
+                    const lugar = carriles?.get(hueco.clave) ?? { carril: 0, carriles: 1 };
+                    return (
+                      <HuecoSeleccion
+                        key={hueco.clave}
+                        hueco={hueco}
+                        elegido={hueco.clave === seleccion?.elegido}
+                        alElegir={seleccion?.alElegir ?? (() => {})}
+                        alTeclear={(evento) =>
+                          alTeclearHueco(evento, {
+                            contenedor: evento.currentTarget.closest('[data-cuerpo]'),
+                            dia: botonesDia.current[i] ?? null,
+                            alLado: (delta) => botonesDia.current[i + delta] ?? null,
+                          })
+                        }
+                        compacto={lugar.carriles > 1}
+                        parada={i === activo}
+                        className="absolute min-h-0 p-1"
+                        style={{
+                          top: (hueco.minutoPared - eje.desdeMinuto) * PX_MIN,
+                          height: hueco.duracionMinutos * PX_MIN,
+                          left: `${(lugar.carril / lugar.carriles) * 100}%`,
+                          width: `${100 / lugar.carriles}%`,
+                        }}
+                      />
+                    );
+                  })}
 
                   {fantasma?.columna === i && (
                     <div

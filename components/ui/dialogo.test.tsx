@@ -160,4 +160,26 @@ describe('Dialogo con focoInicial', () => {
     await abrir(usuario);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cerrar' }));
   });
+
+  it('por defecto es estrecho; con ancho amplio crece y, si no cabe en la pantalla, se desplaza por dentro', () => {
+    const { rerender } = render(
+      <Dialogo abierto alCerrar={() => {}} titulo="Ficha">
+        <p>Contenido</p>
+      </Dialogo>,
+    );
+    const normal = screen.getByRole('dialog').className;
+    expect(normal).toContain('max-w-lg');
+    expect(normal).not.toContain('overflow-y-auto');
+
+    rerender(
+      <Dialogo abierto alCerrar={() => {}} titulo="Ficha" ancho="amplio">
+        <p>Contenido</p>
+      </Dialogo>,
+    );
+    const amplio = screen.getByRole('dialog').className;
+    expect(amplio).toContain('max-w-5xl');
+    expect(amplio).not.toContain('max-w-lg');
+    expect(amplio).toContain('overflow-y-auto');
+    expect(amplio).toContain('max-h-[calc(100dvh-2rem)]');
+  });
 });

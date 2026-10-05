@@ -103,7 +103,9 @@ export function useCierreExterior(
     if (!activo) return;
 
     const alTeclear = (evento: globalThis.KeyboardEvent) => {
-      if (evento.key === 'Escape') alCerrar();
+      // Un Escape que algo de dentro ya atendió no cierra: con Next el delegado de React y este oyente
+      // cuelgan de `document` y `stopPropagation` no los separa (T-028 B, H26).
+      if (evento.key === 'Escape' && !evento.defaultPrevented) alCerrar();
     };
 
     // `mousedown` y no `click`: cerrar al apretar es lo que espera quien usa el ratón, y
