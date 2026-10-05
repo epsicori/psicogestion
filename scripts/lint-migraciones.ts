@@ -29,6 +29,8 @@ export const TABLAS_SOLO_ADICION: readonly string[] = [
   'accesos_historia',
   'accesos_historia_vistas',
   'facturas',
+  'exportaciones',
+  'exportaciones_ficheros',
 ];
 
 // Reglas degradadas a aviso porque el código existente ya las incumple y su

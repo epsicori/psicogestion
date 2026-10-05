@@ -1095,6 +1095,101 @@ export type Database = {
           },
         ]
       }
+      exportaciones: {
+        Row: {
+          acceso_id: number
+          algoritmo: string
+          creada_en: string
+          formato_version: number
+          id: string
+          motivo: Database["public"]["Enums"]["motivo_exportacion"] | null
+          nota_id: string
+          paciente_id: string
+          parametros_kdf: Json
+          perfil_id: string
+          proyeccion: Database["public"]["Enums"]["proyeccion_exportacion"]
+          referencia: string | null
+          versiones: number[]
+        }
+        Insert: {
+          acceso_id: number
+          algoritmo: string
+          creada_en?: string
+          formato_version: number
+          id?: string
+          motivo?: Database["public"]["Enums"]["motivo_exportacion"] | null
+          nota_id: string
+          paciente_id: string
+          parametros_kdf: Json
+          perfil_id: string
+          proyeccion: Database["public"]["Enums"]["proyeccion_exportacion"]
+          referencia?: string | null
+          versiones: number[]
+        }
+        Update: {
+          acceso_id?: number
+          algoritmo?: string
+          creada_en?: string
+          formato_version?: number
+          id?: string
+          motivo?: Database["public"]["Enums"]["motivo_exportacion"] | null
+          nota_id?: string
+          paciente_id?: string
+          parametros_kdf?: Json
+          perfil_id?: string
+          proyeccion?: Database["public"]["Enums"]["proyeccion_exportacion"]
+          referencia?: string | null
+          versiones?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exportaciones_nota_id_fkey"
+            columns: ["nota_id"]
+            isOneToOne: false
+            referencedRelation: "notas_clinicas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exportaciones_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exportaciones_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exportaciones_perfil_id_fkey"
+            columns: ["perfil_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exportaciones_ficheros: {
+        Row: {
+          exportacion_id: string
+          huella_fichero: string
+          registrado_en: string
+        }
+        Insert: {
+          exportacion_id: string
+          huella_fichero: string
+          registrado_en?: string
+        }
+        Update: {
+          exportacion_id?: string
+          huella_fichero?: string
+          registrado_en?: string
+        }
+        Relationships: []
+      }
       informes: {
         Row: {
           autor_id: string
@@ -3105,7 +3200,22 @@ export type Database = {
           tiene_pin: boolean
         }[]
       }
+      etiqueta_motivo_exportacion: {
+        Args: { m: Database["public"]["Enums"]["motivo_exportacion"] }
+        Returns: string
+      }
       evaluar_registro_postgres: { Args: { p_ajustes: Json }; Returns: boolean }
+      exportar_nota: {
+        Args: {
+          p_agente?: string
+          p_ip?: unknown
+          p_motivo?: Database["public"]["Enums"]["motivo_exportacion"]
+          p_nota_id: string
+          p_paciente_id: string
+          p_referencia?: string
+        }
+        Returns: Json
+      }
       fecha_en_regla_nueva: {
         Args: {
           p_dia_semana: number
@@ -3141,6 +3251,15 @@ export type Database = {
       nota_tiene_version_conjunta: {
         Args: { p_nota_id: string }
         Returns: boolean
+      }
+      notas_para_copia: {
+        Args: { p_paciente_id: string }
+        Returns: {
+          autor_nombre: string
+          fecha_sesion: string
+          nota_id: string
+          versiones: number
+        }[]
       }
       ocurrencias_serie: {
         Args: {
@@ -3221,6 +3340,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      registrar_fichero_exportado: {
+        Args: { p_exportacion_id: string; p_huella_hex: string }
+        Returns: undefined
+      }
       registrar_invitacion: {
         Args: { p_perfil_id: string }
         Returns: undefined
@@ -3294,6 +3417,10 @@ export type Database = {
         | "anomalia_horaria"
         | "festivo"
         | "ausencia"
+      motivo_exportacion:
+        | "peticion_paciente"
+        | "requerimiento_judicial_o_inspeccion"
+        | "traspaso_caso"
       motivo_propuesta_cita:
         | "festivo"
         | "ausencia"
@@ -3308,6 +3435,7 @@ export type Database = {
         | "evaluaciones"
         | "informes"
         | "documentos"
+      proyeccion_exportacion: "profesional" | "paciente"
       regimen_iva: "exento_sanitario" | "general"
       rol_usuario:
         | "administrador"
@@ -3498,6 +3626,11 @@ export const Constants = {
         "festivo",
         "ausencia",
       ],
+      motivo_exportacion: [
+        "peticion_paciente",
+        "requerimiento_judicial_o_inspeccion",
+        "traspaso_caso",
+      ],
       motivo_propuesta_cita: [
         "festivo",
         "ausencia",
@@ -3514,6 +3647,7 @@ export const Constants = {
         "informes",
         "documentos",
       ],
+      proyeccion_exportacion: ["profesional", "paciente"],
       regimen_iva: ["exento_sanitario", "general"],
       rol_usuario: [
         "administrador",

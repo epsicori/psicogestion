@@ -991,6 +991,62 @@ export const es = {
       avisoImpresion:
         'Lo que se imprima o se guarde desde esta pantalla queda sin cifrar, y es responsabilidad de quien lo haga.',
     },
+    // Corte B · la pantalla: botón, diálogo, errores y la lista de la ficha.
+    boton: {
+      descargar: 'Descargar copia',
+      pedirPorMotivo: 'Pedir copia por motivo',
+      cifrarYDescargar: 'Cifrar y descargar',
+      cerrar: 'Cerrar',
+      cancelar: 'Cancelar',
+      desbloquear: 'Desbloquear con el PIN',
+    },
+    dialogo: {
+      tituloProfesional: 'Descargar una copia cifrada',
+      tituloMotivo: 'Pedir una copia por motivo',
+      explicacion:
+        'La copia se cifra en este navegador con la contraseña que elijas. Ni la contraseña ni la copia sin cifrar salen de aquí.',
+      motivo: 'Motivo',
+      referencia: 'Referencia',
+      referenciaAyuda: 'Número de solicitud, expediente o similar. No escribas datos de salud.',
+      contrasena: 'Contraseña',
+      contrasenaAyuda: 'Entre 12 y 256 caracteres. Compártela con quien vaya a abrir la copia por otro canal.',
+      repeticion: 'Repite la contraseña',
+      entendido: 'Entiendo que sin esta contraseña nadie podrá abrir la copia, tampoco la consulta',
+    },
+    validacion: {
+      faltaMotivo: 'Elige el motivo.',
+      referencia: 'La referencia tiene que medir entre 3 y 200 caracteres.',
+      contrasena: 'La contraseña tiene que medir entre 12 y 256 caracteres.',
+      noCoinciden: 'Las dos contraseñas no coinciden.',
+      entendido: 'Marca la casilla para confirmar que lo entiendes.',
+    },
+    estado: {
+      pidiendo: 'Preparando la copia…',
+      cifrando: 'Cifrando la copia… puede tardar unos segundos.',
+      registrando: 'Registrando la copia…',
+      descargada: 'Copia descargada.',
+    },
+    error: {
+      bloqueada: 'La historia se ha bloqueado. Vuelve a desbloquearla con tu PIN y repite la copia.',
+      sin_permiso: 'No tienes permiso para sacar una copia de esta nota.',
+      falta_motivo: 'Para sacar una copia de esta nota hace falta un motivo.',
+      sin_versiones: 'La nota todavía no tiene ninguna versión firmada.',
+      caducada: 'Ha pasado demasiado tiempo desde que se preparó la copia. Vuelve a empezar.',
+      error: 'No se ha podido hacer la copia. Vuelve a intentarlo.',
+      noRegistrada: 'La copia no se ha podido registrar, así que no se ha descargado. Vuelve a intentarlo.',
+    },
+    motivo: {
+      explicacion:
+        'No puedes leer esta nota. Puedes pedir una copia cifrada con un motivo: la copia y el motivo quedan registrados y se avisa a los profesionales del paciente.',
+      versiones: {
+        una: '{n} versión firmada',
+        varias: '{n} versiones firmadas',
+      },
+    },
+    lista: {
+      otras: 'Otras notas de este paciente (solo copia por motivo)',
+      noSePudoLeer: 'No se pudieron leer las otras notas de este paciente (las de copia por motivo).',
+    },
   },
 
   // Avisos del armazón (T-015). Los plurales, con la convención del catálogo: `una` / `varias`.
@@ -1031,6 +1087,7 @@ export const es = {
       totp_repuesto: 'Segundo factor repuesto',
       codigos_regenerados: 'Códigos de recuperación nuevos',
       regeneracion_codigos_bloqueada: 'Regeneración de códigos bloqueada',
+      exportacion_por_administracion: 'Copia de una nota por la administración',
       otro: 'Aviso',
     },
   },
