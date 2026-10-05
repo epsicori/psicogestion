@@ -904,3 +904,82 @@ No se guarda nada falso, porque Guardar queda bloqueado. Pero la pantalla dice a
 | 12 | H31: sin `clearErrors('pacienteId')` | **Rojo** (1) |
 | 13 | H31: sin `clearErrors('firma')` | **Rojo** (1) |
 | 14 | H31: `clearErrors('sesionesTotales')` incondicional | **Rojo** (1) |
+
+---
+
+# T-028 · Revisión del corte B, ronda 6 (arreglo de H34)
+
+**Sin hallazgos ALTA. 0 ALTA, 0 MEDIA, 1 BAJA (H35).** H34 queda cerrado.
+
+- Diff: `git diff c956428..8f93b71` en `worktree-agent-a32189ff51a6d9558`. Es un commit con dos ficheros: `app/(app)/agenda/nueva/vista-alta.ts` (+17/−2) y su prueba (+19).
+- Alcance: los dos ficheros están en `app/(app)/agenda/nueva/**`, que es territorio del ticket. No toca `supabase/`, como decidió el propietario. No hay desvío.
+- No he leído `evidencia.json` ni el informe del verificador.
+
+## Cierre de la ronda 5 y de H34
+
+- **H34 · cerrado.** `finDeOcupado` (`vista-alta.ts:117-126`) recorta el fin de un `ocupado` al inicio del tramo siguiente del mismo día, solo si ese inicio cae antes del fin emitido.
+  - Las dos salidas, `duracionMinutos` (`:152`) y `rango` (`:157`), usan el fin recortado.
+  - La etiqueta accesible no cambia: no lleva duración.
+  - Los dos mutantes que revierten una sola salida dan **rojo**.
+- **H32 y H33 (BAJA, ronda 5): sin tocar.** Este diff no los aborda y siguen abiertos tal como se describieron.
+
+## Comprobaciones pedidas
+
+| Caso | Resultado |
+|---|---|
+| Varios ocupados seguidos | Correcto. La base salta al `max(upper(rango_bloqueante))` de todas las citas que tocan `[cursor, cursor+dur+desc)`. Cada ocupado se recorta contra el inicio mínimo posterior. Sonda: 09:00 ocupado, 09:40 ocupado, 10:20 libre → 09:00–09:40 y 09:40–10:20. |
+| Mañana y tarde | Correcto. Un ocupado a las 13:00 con la tarde empezando a las 16:00 conserva 13:00–13:50: la cota `siguiente < fin` lo impide. Si las franjas acaban y empiezan a la misma hora (14:00 y 14:00), la cota estricta tampoco recorta. **Pero ninguna prueba lo fija: H35.** |
+| Orden de entrada | La SQL ordena por día, luego por franja (`order by hora_inicio`) y luego por cursor. Con dos franjas solapadas el orden global no está garantizado. El arreglo no depende del orden: filtra y toma el mínimo. Sonda con la entrada barajada → los mismos rangos. |
+| Cambio de hora | El recorte compara instantes (`Date.parse`), no hora de pared. `minutoPared` sigue saliendo de `horaLocal`, igual que antes. La diferencia entre la duración real y la de pared en el día de 23 o 25 horas viene de antes y este diff no la cambia. |
+| Recorte a 0 minutos | No se alcanza. El filtro es estricto (`> inicio`), y `v_limite = upper(rango)` es siempre mayor que el cursor. Las horas son `HH:MM` y el descanso son minutos enteros, así que el mínimo es 1 minuto. Sonda: cita que acaba con su descanso a las 09:05 → ocupado 09:00–09:05, 5 minutos. En la rejilla se pinta con `min-h-0 overflow-hidden` (`rejilla-semana.tsx:315`) y el texto no desborda sobre el libre. |
+| Consumidores | `carrilesDeHuecos` (`seleccion-huecos.ts:46-48`) deja de abrir dos carriles para el par ocupado/libre que se pisaba. `RejillaSemana` (`:317-318`) toma el alto de `duracionMinutos`. `HuecoSeleccion` muestra el `rango`. El eje (`vista-alta.ts:166`) solo puede encoger. Las sugerencias y la previsualización leen los bloques crudos (`leerBloques`), no `HuecoVista`: no les afecta. |
+| D11 | El fin recortado es el inicio de un tramo que ya se pinta. No revela nada que no estuviera en pantalla, ni de qué cita se trata. |
+| Libres | No se recortan, y no hace falta: tras un libre la base avanza `dur + desc`, así que el tramo siguiente empieza en `fin + desc` o después. Que libres y ocupados de dos franjas solapadas se pisen ya pasaba antes y queda fuera de este diff. |
+
+## BAJA
+
+### H35 · `app/(app)/agenda/nueva/vista-alta.test.ts:64-81` — la prueba de H34 tiene un solo tramo detrás del ocupado: ni el mínimo ni la cota `< fin` quedan fijados
+
+**Qué pasa.**
+- El día 06 del fixture tiene el ocupado de las 09:00 y un único tramo detrás, a las 09:40.
+- El ocupado del día 07 es el último bloque de la entrada.
+- Con eso sobreviven tres mutantes de `finDeOcupado`, medidos en un clon con las 11 pruebas del fichero en verde:
+  - `i < min` → `i > min`, que toma el **último** tramo posterior del día;
+  - `return i`, que toma el último de la entrada;
+  - `siguiente !== null && siguiente < Date.parse(b.fin)` → `siguiente !== null`, que quita la cota.
+- El comentario «otro día no cuenta» tampoco se ejercita, porque no hay ningún bloque posterior de otro día. Ese mutante, sin `o.fecha === b.fecha`, es equivalente mientras ninguna franja cruce medianoche, así que no lo cuento como fallo.
+
+**Escenario.**
+1. Mutante «el último»: un día real con el ocupado a las 09:00 (cita de 30 min más 10 de descanso), un libre a las 09:40 y otro a las 10:40.
+   - El ocupado vuelve a pintarse 09:00–09:50, encima del libre de las 09:40.
+   - Es H34 tal cual, con todas las pruebas en verde.
+2. Mutante «sin cota»: una mañana que acaba con un ocupado a las 13:00 y una tarde que empieza a las 16:00.
+   - El ocupado se pinta «13:00 – 16:00 · Ocupado» y se come el descanso de mediodía.
+3. Con una sonda de cuatro casos (varios tramos detrás, mañana y tarde, entrada barajada, ocupado de 5 minutos), el código bueno da verde en todo. Los mutantes 1 y 2 dan rojo.
+
+**Lo que cerraría.** En la misma prueba:
+- un segundo libre detrás del de las 09:40 el día 06, por ejemplo a las 10:40;
+- un día con el ocupado al final de la mañana y un libre por la tarde, que conserve el fin emitido.
+
+## Descartados
+
+- **Hueco en blanco cuando la cita que bloquea es más larga que la duración pedida.** Ejemplo: ocupado 09:00–09:50 y siguiente tramo a las 10:40, con 09:50–10:40 sin pintar. Es el caso simétrico de H34. Viene de antes, no se puede reservar ahí (no hay botón) y alargar el ocupado no pertenece a este arreglo.
+- **El ocupado final de una franja conserva `cursor + dur`** aunque la cita acabe antes, cuando el tramo siguiente no cabe en la franja. No pisa nada y en ese resto no cabe una sesión.
+- **Coste O(n²) de `finDeOcupado`**, calculado incluso para bloques de fuera de la semana antes del `return []`. Con una semana de tramos no se nota.
+
+## Mutantes (10 contra `vista-alta.test.ts`, en un clon de 8f93b71)
+
+| # | Mutante | Resultado |
+|---|---|---|
+| 0 | Sin arreglo (`fin = b.fin`) | **Rojo** (1) |
+| 1 | Sin la cota `< fin` | Verde (**H35**) |
+| 2 | Sin el filtro de fecha | Verde (equivalente si ninguna franja cruza medianoche) |
+| 3 | `>` → `>=` | **Rojo** (1) |
+| 4 | Recorta también los libres | Verde (equivalente: la base no emite un libre pisado) |
+| 5 | Máximo en vez de mínimo | Verde (**H35**) |
+| 6 | El primero de la entrada | Verde (equivalente: la base ordena dentro de cada franja) |
+| 7 | El último de la entrada | Verde (**H35**) |
+| 8 | `rango` sin recortar | **Rojo** (1) |
+| 9 | `duracionMinutos` sin recortar | **Rojo** (1) |
+
+Contra la sonda de cuatro casos, los mutantes 1, 5 y 7 dan rojo. El 4 también, pero solo porque la sonda tiene dos libres que se pisan, cosa que la base no produce.

@@ -1,66 +1,118 @@
 {
   "ticket": "T-028",
   "corte": "B",
-  "ronda": 5,
-  "diff": "git diff f7d59c4..c956428 en worktree-agent-a2b0012224d53ce71: 6 commits de codigo + c956428 (territorio); 9 ficheros",
+  "ronda": 6,
+  "diff": "git diff c956428..8f93b71 en worktree-agent-a32189ff51a6d9558: 1 commit, app/(app)/agenda/nueva/vista-alta.ts y vista-alta.test.ts",
   "altas": 0,
   "medias": 0,
-  "bajas": 2,
-  "cerrados_de_la_ronda_4": [
-    "H26",
-    "H27",
-    "H28",
-    "H29",
-    "H31"
+  "bajas": 1,
+  "cerrados_de_la_ronda_5": [
+    "H34"
   ],
-  "parciales_de_la_ronda_4": {
-    "H30": "vacio->vacio cerrado; tarjetas viejas->vacio sigue naciendo rellena (H32)"
-  },
-  "comprobaciones_pedidas": {
-    "foco_ts_compartido": "Unico preventDefault sobre Escape fuera de pruebas: teclado-huecos.ts:48. Sondas con hydrateRoot(document): Dialogo cierra con Escape en campo (1), Emergente, Menu y Desplegable cierran; suites de los cinco consumidores verdes; mutante 'hook ignora todo Escape' rojo (10).",
-    "doble_envio_aria_disabled": "Clic e Intro (envio implicito) pasan por onSubmit y la guarda corta antes de handleSubmit; prueba de submit durante guardando discrimina (mutante sin guardando: rojo). Ventana previa al render con guardando=true identica a la de disabled. Sin via nueva."
-  },
+  "abiertos_sin_tocar": [
+    "H32",
+    "H33"
+  ],
   "evidencia_leida": "No",
+  "desvio_de_alcance": "No: los dos ficheros en app/(app)/agenda/nueva/**; supabase/ intacto",
+  "comprobaciones_pedidas": {
+    "varios_ocupados": "OK: minimo posterior del dia; sonda 09:00 oc, 09:40 oc, 10:20 libre -> 09:00-09:40, 09:40-10:20",
+    "manana_tarde": "OK en codigo (cota siguiente < fin, estricta); sin prueba que la fije (H35)",
+    "orden_de_entrada": "Independiente del orden (filter + minimo); sonda barajada da los mismos rangos",
+    "cambio_de_hora": "Recorte por instantes; minutoPared sin cambios respecto a antes",
+    "cero_minutos": "Inalcanzable: filtro estricto, upper(rango) > cursor, horas HH:MM y descanso en minutos; minimo 1 min; rejilla min-h-0 overflow-hidden",
+    "consumidores": "carrilesDeHuecos, RejillaSemana (alto), HuecoSeleccion (rango), eje: solo encogen; sugerencias y previsualizacion leen bloques crudos",
+    "D11": "El fin recortado es el inicio de un tramo ya pintado; nada nuevo de la cita"
+  },
   "mutantes_medidos": {
-    "0 foco.ts sin !defaultPrevented": "ROJO (2)",
-    "1 hook ignora todo Escape": "ROJO (10)",
-    "2 sin onKeyDown del Dialogo": "VERDE (redundante)",
-    "3 Guardar vuelve a disabled": "ROJO (4)",
-    "4 disabled y aria-disabled": "ROJO (1)",
-    "5 guarda sin guardando": "ROJO (1)",
-    "6 guarda sin catalogoVacio": "VERDE (no guarda: Zod)",
-    "7 guarda sin esperandoSerie": "VERDE (no guarda: enviar:273)",
-    "8 sin guarda": "ROJO (1)",
-    "9 H28 vuelve a delCentro[0]": "ROJO (1)",
-    "10 H29 sin return": "ROJO (1)",
-    "11 H30 rol condicional": "ROJO (1)",
-    "12 H31 sin clearErrors paciente": "ROJO (1)",
-    "13 H31 sin clearErrors firma": "ROJO (1)",
-    "14 H31 clearErrors sesiones siempre": "ROJO (1)"
+    "0 sin arreglo": "ROJO (1)",
+    "1 sin cota < fin": "VERDE (H35)",
+    "2 sin filtro de fecha": "VERDE (equivalente sin franjas que crucen medianoche)",
+    "3 > a >=": "ROJO (1)",
+    "4 recorta libres": "VERDE (equivalente: la base no emite libre pisado)",
+    "5 max en vez de min": "VERDE (H35)",
+    "6 primero de la entrada": "VERDE (equivalente con orden por franja)",
+    "7 ultimo de la entrada": "VERDE (H35)",
+    "8 rango sin recortar": "ROJO (1)",
+    "9 duracion sin recortar": "ROJO (1)"
   },
   "sondas": {
-    "A-E hydrateRoot(document)": "Dialogo real + alTeclearHueco: alCerrar 0, foco al dia; input del Dialogo: 1; Desplegable en Dialogo: cierran los dos (previo); Emergente y Menu cierran",
-    "H32": "tarjetas -> cargando con tarjetas -> vacio: 0, 0, 1 region de estado (nace rellena)"
+    "cuatro_casos": "varios tramos detras, manana/tarde, entrada barajada, ocupado de 5 min: codigo bueno verde; mutantes 1, 5 y 7 rojo"
   },
   "hallazgos": [
     {
-      "id": "H32",
+      "id": "H35",
       "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/tarjetas-sugerencia.tsx",
-      "linea": 36,
-      "descripcion": "De tarjetas viejas a resultado vacio, la <ul> se sustituye por un <p role=status> que nace ya con «Sin huecos…»: no se anuncia (H30 cerrado solo de vacio a vacio; el arreglo que propuse en la ronda 4 tenia ese hueco).",
-      "escenario": "Lector de pantalla con tres sugerencias; cambia a un tipo de 90 min sin cabida en cuatro semanas; durante el recalculo no hay region viva y al llegar el vacio la region se crea rellena: no oye ni que termino ni que no hay sugerencias."
-    },
-    {
-      "id": "H33",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
-      "linea": 52,
-      "descripcion": "El arreglo de H29 deja tiposLeidos.error y profesionalesLeidos?.error solo en console.error: caen a ?? [] y se pintan como «No hay tipos de terapia activos. Los da de alta el administrador.» y «No hay profesionales activos en este centro.».",
-      "escenario": "Fallo transitorio de PostgREST al leer tipos_terapia: el tecnico lee que no hay tipos y que los da de alta el administrador, se lo dice y el administrador ve el catalogo lleno; lo mismo con directorio_perfiles y un centro con profesionales."
+      "archivo": "app/(app)/agenda/nueva/vista-alta.test.ts",
+      "linea": 64,
+      "descripcion": "La prueba de H34 tiene un solo tramo detras del ocupado en su dia y ningun ocupado al final de una manana con tarde: sobreviven los mutantes 'maximo en vez de minimo', 'ultimo de la entrada' y 'sin la cota siguiente < fin' (11 verdes, medido).",
+      "escenario": "Con el mutante 'maximo': ocupado 09:00 (cita 30+10), libres 09:40 y 10:40 -> el ocupado vuelve a pintarse 09:00-09:50 encima del libre de las 09:40 (H34 reabierto) con todo verde. Con 'sin cota': ocupado 13:00 y tarde a las 16:00 -> 'Ocupado 13:00 - 16:00' cubre el mediodia."
     }
   ],
   "rondas_anteriores": [
+    {
+      "ticket": "T-028",
+      "corte": "B",
+      "ronda": 5,
+      "diff": "git diff f7d59c4..c956428 en worktree-agent-a2b0012224d53ce71: 6 commits de codigo + c956428 (territorio); 9 ficheros",
+      "altas": 0,
+      "medias": 0,
+      "bajas": 2,
+      "cerrados_de_la_ronda_4": [
+        "H26",
+        "H27",
+        "H28",
+        "H29",
+        "H31"
+      ],
+      "parciales_de_la_ronda_4": {
+        "H30": "vacio->vacio cerrado; tarjetas viejas->vacio sigue naciendo rellena (H32)"
+      },
+      "comprobaciones_pedidas": {
+        "foco_ts_compartido": "Unico preventDefault sobre Escape fuera de pruebas: teclado-huecos.ts:48. Sondas con hydrateRoot(document): Dialogo cierra con Escape en campo (1), Emergente, Menu y Desplegable cierran; suites de los cinco consumidores verdes; mutante 'hook ignora todo Escape' rojo (10).",
+        "doble_envio_aria_disabled": "Clic e Intro (envio implicito) pasan por onSubmit y la guarda corta antes de handleSubmit; prueba de submit durante guardando discrimina (mutante sin guardando: rojo). Ventana previa al render con guardando=true identica a la de disabled. Sin via nueva."
+      },
+      "evidencia_leida": "No",
+      "mutantes_medidos": {
+        "0 foco.ts sin !defaultPrevented": "ROJO (2)",
+        "1 hook ignora todo Escape": "ROJO (10)",
+        "2 sin onKeyDown del Dialogo": "VERDE (redundante)",
+        "3 Guardar vuelve a disabled": "ROJO (4)",
+        "4 disabled y aria-disabled": "ROJO (1)",
+        "5 guarda sin guardando": "ROJO (1)",
+        "6 guarda sin catalogoVacio": "VERDE (no guarda: Zod)",
+        "7 guarda sin esperandoSerie": "VERDE (no guarda: enviar:273)",
+        "8 sin guarda": "ROJO (1)",
+        "9 H28 vuelve a delCentro[0]": "ROJO (1)",
+        "10 H29 sin return": "ROJO (1)",
+        "11 H30 rol condicional": "ROJO (1)",
+        "12 H31 sin clearErrors paciente": "ROJO (1)",
+        "13 H31 sin clearErrors firma": "ROJO (1)",
+        "14 H31 clearErrors sesiones siempre": "ROJO (1)"
+      },
+      "sondas": {
+        "A-E hydrateRoot(document)": "Dialogo real + alTeclearHueco: alCerrar 0, foco al dia; input del Dialogo: 1; Desplegable en Dialogo: cierran los dos (previo); Emergente y Menu cierran",
+        "H32": "tarjetas -> cargando con tarjetas -> vacio: 0, 0, 1 region de estado (nace rellena)"
+      },
+      "hallazgos": [
+        {
+          "id": "H32",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/tarjetas-sugerencia.tsx",
+          "linea": 36,
+          "descripcion": "De tarjetas viejas a resultado vacio, la <ul> se sustituye por un <p role=status> que nace ya con «Sin huecos…»: no se anuncia (H30 cerrado solo de vacio a vacio; el arreglo que propuse en la ronda 4 tenia ese hueco).",
+          "escenario": "Lector de pantalla con tres sugerencias; cambia a un tipo de 90 min sin cabida en cuatro semanas; durante el recalculo no hay region viva y al llegar el vacio la region se crea rellena: no oye ni que termino ni que no hay sugerencias."
+        },
+        {
+          "id": "H33",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
+          "linea": 52,
+          "descripcion": "El arreglo de H29 deja tiposLeidos.error y profesionalesLeidos?.error solo en console.error: caen a ?? [] y se pintan como «No hay tipos de terapia activos. Los da de alta el administrador.» y «No hay profesionales activos en este centro.».",
+          "escenario": "Fallo transitorio de PostgREST al leer tipos_terapia: el tecnico lee que no hay tipos y que los da de alta el administrador, se lo dice y el administrador ve el catalogo lleno; lo mismo con directorio_perfiles y un centro con profesionales."
+        }
+      ]
+    },
     {
       "corte": "B",
       "ronda": 4,
