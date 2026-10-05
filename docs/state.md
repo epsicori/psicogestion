@@ -19,7 +19,7 @@
 ## Siguiente paso
 
 1. T-041: verificación + revisores A/B → merge → documentalista.
-2. Cola `supabase/`: ticket aviso hueco (arquitecto, T-028:169) → T-021. Ticket corto: `/recuperar`.
+2. Cola `supabase/`: ticket aviso hueco (arquitecto, T-028:169) → T-021.
 3. Limpiar worktrees T-038, T-042, agent-a9325d705ce4db36b, agent-a2b0012224d53ce71, agent-a32189ff51a6d9558, agent-aa3cf8ef16a243549, agent-aae08223ceefe21b6, rama a1549876942c02f5f (quitar junction `node_modules` antes).
 
 ## Hallazgos anotados
@@ -29,7 +29,6 @@
 - **T-028 R6-H35 (BAJA)**: la prueba de H34 (`vista-alta.test.ts:64`) deja vivos tres mutantes de `finDeOcupado` (máximo en vez de mínimo, último tramo de la entrada, sin la cota `< fin`). Arreglo: un segundo libre tras el de 09:40 y un día con ocupado al final de la mañana y libre por la tarde. **Nota R6**: `agenda_bloques_profesional` sigue emitiendo el ocupado con la duración pedida; el recorte es solo de pantalla y otro consumidor vería el solape.
 - **Paciente fusionado o traspasado (T-028 R7, sin medir)**: ni `agenda_crear_cita`/`agenda_crear_serie` ni los disparadores de `citas` impiden agendar a un paciente con `fusionado_en` o `traspasado_en`; el buscador del alta ya dejaba llegar. Requiere ticket `supabase/`.
 - **`/ajustes/dar-de-baja` lista vacía (T-041 verificación, preexistente)**: la página lee `perfiles`, cuya única política es `perfiles_lectura_propia`; el administrador no ve a nadie a quien dar de baja. Arreglo: leer `directorio_perfiles`, como hace `/ajustes/centros` desde la ronda 2 de T-041.
-- **`/recuperar` sin enlace (T-042, prueba manual)**: ninguna pantalla enlaza a `/recuperar`, tampoco «Verificación en dos pasos» de `/primera-vez`, donde se queda quien perdió el móvil; solo se llega tecleando la URL. `docs/interfaz.md` no la menciona. Propuesta: enlace «¿Has perdido el acceso a tu app? Usa un código de recuperación».
 - **T-042 R2-H1 (BAJA)**: el predicado del `update` de `bloquear_historia()` (migración `20261009120000:442`) no tiene prueba ni mutante; sin él cada «Bloquear» escribe una fila `UPDATE` en `auditoria` y `test:rls` sigue verde. Arreglo: aserción en CA-R2.2 de que bloquear con `0/0/false` no cambia el recuento.
 - **T-038 A3-H1=B3-H2 (BAJA)**: `lib/cuentas/totp.ts:57` marca `reentrar` ante cualquier 42501; `generar_codigos_recuperacion()` lo lanza por cuatro causas (Q3(B) incluida) y la vista afirma «hace más de cinco minutos». La salida sí resuelve.
 - **T-038 R4-H1 (BAJA)**: `app/(app)/cuenta/formulario-regenerar.test.tsx:160-161` niega dos frases concretas, no cualquier condición sobre el aviso; «… salvo que en tus avisos ya salga…» pasa. Arreglo: negar la etiqueta del aviso.

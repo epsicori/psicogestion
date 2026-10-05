@@ -151,3 +151,26 @@ test('canje con un código malo (T-042, caso B)', async ({ browser }) => {
 
   await contexto.close();
 });
+
+test('se llega a /recuperar por el enlace (T-044)', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { correo } = await prepararUsuario();
+  const contexto = await browser.newContext();
+  const pagina = await contexto.newPage();
+  await pagina.goto('/login');
+  await pagina.getByLabel('Correo').fill(correo);
+  await pagina.getByLabel('Contraseña').fill(CONTRASENA);
+  await pagina.getByRole('button', { name: 'Entrar' }).click();
+  await expect(pagina).toHaveURL(/\/primera-vez/);
+
+  await pagina
+    .getByRole('link', { name: '¿Has perdido el acceso a tu aplicación? Usa un código de recuperación' })
+    .click();
+  await expect(pagina).toHaveURL(/\/recuperar/);
+  await expect(pagina.getByLabel('Código de recuperación')).toBeVisible();
+
+  await pagina.getByRole('link', { name: 'Volver a la verificación en dos pasos' }).click();
+  await expect(pagina).toHaveURL(/\/primera-vez/);
+
+  await contexto.close();
+});
