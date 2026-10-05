@@ -47,9 +47,12 @@ describe('PanelResumen · botón «Nueva cita»', () => {
     );
   });
 
-  it('si la agenda no es visible (null), no se pinta', async () => {
+  it('si la agenda no es visible (null), también se pinta (H37)', async () => {
     datos.cargarCitasDelPaciente.mockResolvedValue(null);
     await pintar();
-    expect(screen.queryByRole('link', { name: 'Nueva cita' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Nueva cita' })).toHaveAttribute(
+      'href',
+      `/agenda/nueva?paciente=${ID}`,
+    );
   });
 });

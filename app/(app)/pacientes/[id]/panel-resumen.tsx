@@ -104,6 +104,7 @@ export async function PanelResumen({ pacienteId }: { pacienteId: string }) {
     return (
       <div className="flex flex-col gap-4">
         {documental && <Documentacion estado={documental} />}
+        <NuevaCita pacienteId={pacienteId} />
         <Bloque titulo={t('ficha.actividad')}>
           <Vacio
             icono={<CalendarOff className="size-5" aria-hidden="true" />}
@@ -170,7 +171,8 @@ export async function PanelResumen({ pacienteId }: { pacienteId: string }) {
 /**
  * T-028 C. Lleva al alta con el paciente fijado por su uuid (nunca su nombre en la URL). Lo
  * ven todos los roles, igual que el botón de la agenda: el alta es para los tres (el técnico
- * agenda sin ver tipo ni nota). Solo se pinta donde la agenda es visible (`citas !== null`).
+ * agenda sin ver tipo ni nota). Se pinta también cuando la agenda no es visible
+ * (`citas === null`): solo lleva el uuid y `/agenda/nueva` ya filtra por permisos y RLS (H37).
  */
 function NuevaCita({ pacienteId }: { pacienteId: string }) {
   return (
