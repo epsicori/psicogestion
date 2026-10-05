@@ -42,8 +42,8 @@
       "id": "M6a",
       "guarda": "verificar_cadena_borrador(): rama sobre_no_coincide_con_fila, clave total_centimos",
       "mutacion": "se quita la línea del total_centimos",
-      "resultado": "sobrevive (equivalente)",
-      "aserción": "ninguna: el check base + cuota_iva = total obliga a cambiar base o cuota con el total, y esas dos claves siguen cotejadas. Ninguna fila alcanzable distingue el mutante."
+      "resultado": "muerto",
+      "aserción": "26.B9b · total del sobre alterado y huella recalculada: solo sobre_no_coincide_con_fila (ronda 2, B-H4: la fila se altera con los cerrojos levantados, así que el mutante deja de ser equivalente)"
     },
     {
       "id": "M6b",
@@ -51,6 +51,175 @@
       "mutacion": "se quita la línea del destinatario_nombre",
       "resultado": "muerto",
       "aserción": "26.B9 · alterar el sobre de la v2: huella_no_coincide y sobre_no_coincide_con_fila, solo en la v2"
+    },
+    {
+      "id": "M7",
+      "guarda": "fn_bono_de_la_cita(): congelación, rama «pasada»",
+      "mutacion": "se quita `or old.fin <= now()`",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): 26.K14 · CITAPAS (programada, pasada): rama «pasada»"
+    },
+    {
+      "id": "M8",
+      "guarda": "fn_bono_de_la_cita(): congelación, rama «realizada»",
+      "mutacion": "se quita `old.estado = 'realizada' or`",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): 26.K15 · CITA1 (realizada, futura): rama «realizada»"
+    },
+    {
+      "id": "M9",
+      "guarda": "fn_alta_tarifa(): guarda de fecha",
+      "mutacion": "if false and new.vigente_desde < v_hoy then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.K3 · una tarifa que sustituye a TAR1 desde hace 120 días"
+    },
+    {
+      "id": "M10",
+      "guarda": "fn_alta_tarifa(): guarda de fecha estricta",
+      "mutacion": "`<` → `<=`",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.K5c · la misma desde hoy (fecha de CB) entra: la guarda es «antes de hoy», no «hoy» (lanzó 23514 · Una tarifa que sustituye a otra no puede empezar antes de hoy (fecha del centro): la anterior ya se aplicó (T-021))"
+    },
+    {
+      "id": "M11",
+      "guarda": "fn_alta_tarifa(): exención de la primera fila del par",
+      "mutacion": "sin `v_max is not null and`",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.K10 · PRO1 da de alta una tarifa de su paciente (primera del par: la fecha pasada entra) (lanzó 23514 · Una tarifa que sustituye a otra no puede empezar antes de hoy (fecha del centro): la anterior ya se aplicó (T-021))"
+    },
+    {
+      "id": "M12",
+      "guarda": "fn_validar_cabecera_borrador(): paso 1 (el profesional atiende al paciente)",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.N3 · ADM abre un borrador de P1 para PRO2"
+    },
+    {
+      "id": "M13",
+      "guarda": "fn_validar_cabecera_borrador(): paso 2 (rol del profesional)",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.N4 · ADM abre un borrador de PTEC para el técnico TEC1"
+    },
+    {
+      "id": "M14",
+      "guarda": "fn_validar_cabecera_borrador(): paso 0 (permisos)",
+      "mutacion": "if false then (en lugar del filtro de rol)",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (lanzó 23514 en vez de 42501): 26.G9 · PRO1 no abre un borrador de P2 (no es su paciente) — El profesional del borrador no atiende a ese paciente (T-021)"
+    },
+    {
+      "id": "M15",
+      "guarda": "fn_sellar_version_borrador() paso 6.2.bis",
+      "mutacion": "if false and new.centro_id is not null",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J41 · BORR3 (P1 en CA, PRO1 sin CE26) con centro CE26"
+    },
+    {
+      "id": "M16",
+      "guarda": "fn_sellar_version_borrador() paso 6.2.bis, rama del paciente",
+      "mutacion": "se quita el cotejo con el centro del paciente",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.J41p · BORR4 (PCE26 en CE26) con centro CE26: rama del paciente (lanzó 23514 · El centro_id de la versión no es del paciente ni del profesional del borrador (T-021))"
+    },
+    {
+      "id": "M17",
+      "guarda": "fn_sellar_version_borrador() paso 6.2.bis, rama del profesional",
+      "mutacion": "se quita el not exists de perfiles_centros",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.J41q · BORR3 con centro CE26 cuando PRO1 ya pertenece a CE26: rama del profesional (lanzó 23514 · El centro_id de la versión no es del paciente ni del profesional del borrador (T-021))"
+    },
+    {
+      "id": "M18",
+      "guarda": "política tarifas_paciente_lectura: rol en positivo",
+      "mutacion": "rama del profesional sin el rol",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.M1 · TEC1 no lee la tarifa de PTEC, ni en la tabla ni en la vista"
+    },
+    {
+      "id": "M19",
+      "guarda": "políticas cobros_lectura y bonos_lectura: rol en positivo",
+      "mutacion": "rama del profesional sin el rol en las dos",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.M2 · TEC1 no lee el cobro, el bono ni el consumo de PTEC"
+    },
+    {
+      "id": "M20",
+      "guarda": "fn_sellar_version_borrador() paso 0: rol en positivo",
+      "mutacion": "`true` en lugar del rol profesional_sanitario",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (lanzó 42501 con el código correcto pero desde OTRA comprobación; el mensaje no contiene «No puedes añadir una versión a este borrador»): 26.M7 · TEC1 no añade versión a BORRTEC, con sobre coherente (gemela: I7) — mensaje real: new row violates row-level security policy for table \"borradores_factura_versiones\""
+    },
+    {
+      "id": "M21",
+      "guarda": "borradores_factura_versiones_signo_ck",
+      "mutacion": "se quita la restricción",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J42 · base negativa y cuota mayor que el total"
+    },
+    {
+      "id": "M22",
+      "guarda": "fn_sellar_version_borrador() paso 6.3: concepto en blanco",
+      "mutacion": "vuelta a length(trim(…)) = 0",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J28b · concepto de tabulador y salto de línea (gemela: B1)"
+    },
+    {
+      "id": "M23",
+      "guarda": "fn_sellar_version_borrador(): exento ⇒ tipo 0",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J27b · línea exenta con tipo 21 % (gemela: B1)"
+    },
+    {
+      "id": "M24",
+      "guarda": "fn_sellar_version_borrador(): general ⇒ tipo > 0",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (lanzó 23514 con el código correcto pero desde OTRA comprobación; el mensaje no contiene «una línea general lleva tipo_iva_centesimas mayor que 0»): 26.J27c · línea general con tipo 0 (gemela: B2) — mensaje real: La cuota no cuadra: con líneas en régimen general la cuota de IVA no puede ser 0 (T-021, D4)"
+    },
+    {
+      "id": "M25",
+      "guarda": "fn_sellar_version_borrador(): general ⇒ cuota ≠ 0",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J31b · línea general al 21 % con cuota 0 (gemela: B2)"
+    },
+    {
+      "id": "M26",
+      "guarda": "bonos_consumo.caducidad: gana la última fila aunque sea null",
+      "mutacion": "coalesce(u.caducidad, b.caducidad)",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.E16c · gana la última fila aunque sea nula, y la base numera 1 y 2"
+    },
+    {
+      "id": "M27",
+      "guarda": "bonos: capa 2 (impedir_modificacion_bonos)",
+      "mutacion": "drop trigger",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): 26.A17 · postgres: update sobre bonos lo para la capa 2 (conserva el UPDATE)"
+    },
+    {
+      "id": "M28",
+      "guarda": "bonos: capa 3 (impedir_truncado_bonos)",
+      "mutacion": "drop trigger",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.L8b · bonos lleva las capas 2 (before update or delete, por fila) y 3 (before truncate, por sentencia)"
+    },
+    {
+      "id": "M29",
+      "guarda": "candados consultivos de fn_alta_tarifa() y fn_numerar_caducidad_bono()",
+      "mutacion": "se quitan los dos perform pg_advisory_xact_lock",
+      "resultado": "sobrevive (B-H9, aceptado)",
+      "aserción": "ninguna: quitar el cerrojo consultivo solo se ve con dos conexiones concurrentes y el banco es de una sola sesión. Hallazgo B-H9 en docs/state.md (patrón test:huellas)."
+    },
+    {
+      "id": "M30",
+      "guarda": "política borradores_factura_versiones_alta: rol en positivo",
+      "mutacion": "rama del profesional sin el rol",
+      "resultado": "sobrevive (equivalente)",
+      "aserción": "ninguna: fn_sellar_version_borrador() (definer, paso 0) ya exige el rol profesional_sanitario en positivo para la rama del profesional; la condición de rol en la política es redundante con ella."
     }
-  ]
+  ],
+  "metodo_ronda2": "Ronda 2 (05-10-2026): mismo método. M11 y M29 dieron en la primera pasada un deadlock ajeno (alter table ... disable trigger frente a la recarga del esquema de PostgREST) y se repitieron aislados; figuran los resultados de la repetición."
 }

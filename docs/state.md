@@ -20,7 +20,7 @@
 
 1. T-021: verificación + revisores A/B → merge → documentalista. Luego T-043.
 2. Ya se puede `npx supabase db reset` desde main (20261010120000 está en main).
-3. T-021 implementado en su worktree (migración 20261011120000, banco 26: 164 aserciones; mutantes en `tickets/T-021/mutantes.json`): pasa a verificación y dos revisores.
+3. T-021 ronda 2 (solo añadir, decisión del propietario 05-10) implementada en su worktree, migración 20261011120000 editada en sitio: pasa a verificación y dos revisores.
 4. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
 
 ## Hallazgos anotados
@@ -58,6 +58,8 @@
 - **T-041 R3/R6**: funciones cuentas.
 - **T-041 R2 (6 BAJA)**: B2-H1/H2 en acciones.ts (ramas registroConAltasPendientes/avisoPendiente sin prueba); B2-H3 en gestion-altas (catch no revalida); B2-H4=A2-H1 en invitar.ts (error lectura confunde con cierre); B2-H5 en formulario-invitar (transición sin try/catch); A2-H2 en README banco 28 (mutantes nuevos no documentados). Más: t002 líneas 148/190/217 sin `hasta is null`; ResultadoCuentas no puede `ok:true`; tsc app/layout.tsx(45,50); territorio.mjs no ve sufijos; DELETE en perfiles_centros sin disparador; ventana ms entre centros.activo e inviteUserByEmail; directorio_perfiles sin prueba RLS.
 - **T-025/T-026 (ADR-078)**: borradores en `docs/legal/` (consulta vinculante DGT con la lista del ADR-077 p.7; preguntas a Holded). Los envía el propietario tras revisión de asesor, antes de comercializar. Contratos sin tocar: los ajusta el arquitecto (vocabulario, 14.6, clave mínima).
+- **T-021 B-H9 (aceptado)**: falta prueba de concurrencia de dos conexiones para el sellado del borrador y la numeración de tarifas (`orden`) y caducidades (`numero`); el mutante sin candado sobrevive. Patrón: `test:huellas`.
+- **T-021 (familia de A-H6)**: las transiciones de estado de una cita realizada no tienen guarda (pasarla a cancelada baja el consumo del bono). Se decide con la agenda.
 - **T-021 A.9/P3.8**: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
 - **T-015 R3-H1** (BAJA): `fotoDeLayout` época pierde ante foto fresca vieja; franja revive.
 - **T-015 (anotados del diseño)**: realizada antes de fin no abre alerta; firmar no revalida layout.
