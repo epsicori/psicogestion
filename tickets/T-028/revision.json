@@ -1,103 +1,211 @@
 {
   "ticket": "T-028",
   "corte": "B",
-  "ronda": 3,
-  "diff": "6f83cc6..75be90b (worktree-agent-a1549876942c02f5f), sin lo del merge fcf1ab2 (tickets/** y docs/state.md de main); en la práctica fcf1ab2..75be90b",
+  "ronda": 4,
+  "diff": "git diff 75be90b..f7d59c4 en worktree-agent-a1549876942c02f5f, sin el merge 0a5dbe0 (tickets/** y docs/state.md de main): 9 commits, 18 ficheros de código",
   "altas": 0,
-  "medias": 4,
-  "bajas": 2,
-  "cerrados_de_la_ronda_2": [
-    "H1 (FALLA)",
-    "H9",
-    "H11",
-    "H12",
-    "H13",
-    "H14",
-    "H15",
-    "H16",
-    "H17",
-    "H19"
+  "medias": 2,
+  "bajas": 4,
+  "cerrados_de_la_ronda_3": [
+    "H21",
+    "H22",
+    "H23",
+    "H24",
+    "H25",
+    "man-11",
+    "man-12"
   ],
-  "parciales_de_la_ronda_2": {
-    "H9": "cerrado por el buscador; la puerta del cambio de centro es H22 y la guarda de centro sin prueba es H24",
-    "H10": "una parada de Tab, pero Escape cierra el diálogo (H20) y el patrón no es «Tab dentro del día» del contrato:116 (H21)",
-    "H11": "cerrado en lo pedido; residuo entre md y ~946 px con tipos de 30 min (H25)",
-    "H18": "en docs/state.md:27 de main; el ticket lo redacta el arquitecto"
+  "no_cerrados_de_la_ronda_3": {
+    "H20": "H26: verde en raíz div, abierto con hydrateRoot(document)"
   },
-  "interpretacion_1": "aceptable frente a contrato:116, pero no está en el código: la lista tiene una sola parada (sonda y lista-dia-seleccion.test.tsx:80); ver H21",
+  "man_11c": {
+    "causa": "app/(app)/agenda/nueva/formulario-alta.tsx:510 disabled={guardando…} tira el foco a body; ninguna salida sin éxito de enviar lo devuelve",
+    "origen": "d6cae21 (ronda 1)",
+    "clasificacion": "MEDIA (H27)"
+  },
+  "evidencia_leida": "Solo man-11c, por encargo; la extracción imprimió el fichero entero y ningún otro dictamen se apoya en ella",
   "mutantes_medidos": {
-    "contenido-alta .or -> .in(centro_id)": "rojo",
-    "contenido-alta flatMap sin administrador": "rojo",
-    "contenido-alta flatMap con cualquier rol sin centro": "rojo",
-    "elegirPaciente sin setValue(profesionalId)": "rojo",
-    "elegirPaciente sin !profesionalManual": "rojo",
-    "elegirPaciente sin p.centroId === centroId": "verde (H24)",
-    "hueco-seleccion sin tabIndex -1": "rojo",
-    "rejilla sin Flecha abajo en el día": "rojo",
-    "lista sin Flecha abajo en el día": "rojo",
-    "teclado-huecos sin Escape": "rojo",
-    "teclado-huecos sin alLado(1)": "rojo",
-    "lista sin el efecto entrarEnHuecos": "rojo",
-    "dialogo max-w-5xl -> max-w-3xl": "rojo",
-    "rejilla compacto={false}": "rojo",
-    "volverAlElegido contra vista.calendario.desde": "rojo"
+    "dialogo sin onKeyDown (H20)": "rojo (2), pero en raíz div",
+    "rejilla parada={i === activo} -> parada (H21)": "rojo (2)",
+    "hueco tabIndex -1 fijo (H21)": "rojo (3)",
+    "centro onChange sin la rama del asignado (H22)": "rojo (2)",
+    "centro onChange asignado sin !profesionalManual (H22)": "rojo (1)",
+    "elegirPaciente sin p.centroId === centroId (H24)": "rojo (2)",
+    "contenido-alta sin .is(hasta, null) (H23)": "rojo",
+    "contenido-alta sin filtro de centros visibles (H23)": "rojo",
+    "contenido-alta solo el primer centro (H23)": "rojo",
+    "contenido-alta paciente de URL sin profesionalId (H22)": "rojo",
+    "buscador sin efecto de foco (man-11)": "rojo (2)",
+    "buscador sin guarda moverFoco (man-11)": "rojo (1)",
+    "tipo sin clearErrors": "rojo",
+    "hueco sin clearErrors": "rojo",
+    "sesiones sin clearErrors": "rojo",
+    "sesiones clearErrors incondicional": "verde (H31)",
+    "paciente sin clearErrors": "verde (H31)",
+    "firma sin clearErrors": "verde (H31)",
+    "cargando={false}": "rojo",
+    "tarjetas sin role status": "rojo",
+    "estado-alta sin el salto": "rojo",
+    "estado-alta salto sin acotar a la semana": "rojo",
+    "estado-alta salto sin b.fecha >= hoy": "verde, equivalente (la RPC solo emite libres con v_cursor > now())",
+    "hueco Elegida block (H25)": "rojo",
+    "hueco Elegida inline-block w-full (H25)": "verde (la prueba mira la clase, no la visibilidad)"
   },
   "sondas": {
-    "Escape en hueco dentro de Dialogo": "foco al día y alCerrar llamado 1 vez (H20)",
-    "ListaDia en selección, paradas de Tab": "1 parada (el día); huecos tabIndex -1 (H21)",
-    "cambio de centro tras elegir paciente con asignado en el centro nuevo": "entra el primero del centro nuevo, no el asignado (H22)"
+    "Escape en hueco dentro de Dialogo con hydrateRoot(document)": "foco al día y alCerrar llamado 1 vez (H26)",
+    "H25 en Chromium con el CSS compilado, hueco de 30 min, 768-1024 px": "«Elegida» visible: borde inferior 459 frente a 462 del interior",
+    "botón enfocado que pasa a disabled (Chromium y jsdom)": "Chromium: activeElement BODY y no vuelve; con aria-disabled se queda (H27). jsdom: se queda en el BUTTON"
   },
   "hallazgos": [
     {
-      "id": "H20",
+      "id": "H26",
       "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/nueva/teclado-huecos.ts",
-      "linea": 47,
-      "descripcion": "Escape en un hueco mueve el foco al día pero no detiene la propagación; useCierreExterior (components/ui/foco.ts:106) cierra el diálogo del alta (router.back()) sin mirar defaultPrevented.",
-      "escenario": "Diálogo «Nueva cita» desde la agenda, formulario rellenado, foco en un hueco del martes → Escape → el foco va al día y el diálogo se cierra; se pierde el alta a medio rellenar. Sonda: alCerrar llamado 1 vez. Las pruebas de «Escape vuelve al día» montan la rejilla/lista sin Dialogo."
+      "archivo": "components/ui/dialogo.tsx",
+      "linea": 57,
+      "descripcion": "El arreglo de H20 (nativeEvent.stopPropagation en el onKeyDown del Dialogo) no detiene el Escape en la raíz real de Next: hydrateRoot(document) pone el delegado de React en el mismo nodo que el keydown de useCierreExterior (foco.ts:116), que cierra sin mirar defaultPrevented (foco.ts:106).",
+      "escenario": "Sonda con renderToString + hydrateRoot(document, <html><body><Dialogo alCerrar=fn><RejillaSemana seleccion/>): foco en el hueco de las 10:00 → Escape → foco al día 2026-10-06 y alCerrar llamado 1 vez. En el navegador: alta a medio rellenar, Escape en un hueco → router.back() y se pierde lo rellenado. escape-en-dialogo.test.tsx está verde porque render() de RTL monta en un div."
     },
     {
-      "id": "H21",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
-      "linea": 44,
-      "descripcion": "H10 se cierra con todos los huecos en tabIndex -1 y entrada por Flecha abajo, no con «Tab dentro del día» (contrato:116, diseño §1.F:282) como hacen las citas de la agenda; en la lista ningún hueco es alcanzable con Tab y nada anuncia la Flecha abajo.",
-      "escenario": "Teclado con zoom al 400 % (lista <md): Tab hasta «mar 6», Tab → foco a «Periodicidad» sin pasar por ningún hueco; Intro solo elige el día. Solo se elige hueco si se adivina Flecha abajo. La «interpretación 1» (tira + lista como dos paradas) sería conforme, pero el código y la prueba lista-dia-seleccion.test.tsx:80 fijan una sola parada."
-    },
-    {
-      "id": "H22",
+      "id": "H27",
       "severidad": "MEDIA",
       "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 354,
-      "descripcion": "Al cambiar de centro, si el profesional actual no está en el nuevo, entra delCentro[0] sin mirar el asignado del paciente (tampoco con ?paciente=, que llega sin profesionalId).",
-      "escenario": "Técnico en Sur elige a Bea Gil (asignada a Luis Soto, de Norte): sigue Dra. Ruiz (correcto). Cambia el centro a Norte → profesional = Ana Abad (primera de Norte), no Luis. Sugerencias y cita a nombre de Ana si no mira el desplegable. Medido con sonda."
+      "linea": 510,
+      "descripcion": "Causa de man-11c: Guardar lleva disabled={guardando…}; al pulsarlo pasa a disabled con el foco dentro, Chrome lo manda a body y ninguna salida sin éxito de enviar (hueco_ocupado, previsualizacion_caducada, fallo, catch) lo devuelve. Viene de la ronda 1 (d6cae21).",
+      "escenario": "Teclado: Tab a Guardar → Intro → la acción devuelve hueco_ocupado → aviso y sugerencias nuevas, pero activeElement = BODY y el siguiente Tab empieza fuera del diálogo modal (medido en Chromium: disabled=true → BODY; aria-disabled conserva el foco). En jsdom disabled no suelta el foco, así que ninguna prueba lo ve."
     },
     {
-      "id": "H23",
-      "severidad": "MEDIA",
+      "id": "H28",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 372,
+      "descripcion": "Con profesionalManual, cambiar a un centro donde el elegido a mano no trabaja entra delCentro[0] y no el asignado del paciente, que sí trabaja allí (la prueba :577 lo fija así).",
+      "escenario": "Técnico en Sur elige a Bea Gil (asignado Luis Soto, de Norte), elige a mano a Dra. Ruiz (solo Sur) y cambia a Norte → profesional = Ana Abad (primera de Norte), no Luis; sugerencias y cita a nombre de Ana si no mira el desplegable."
+    },
+    {
+      "id": "H29",
+      "severidad": "BAJA",
       "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
-      "linea": 44,
-      "descripcion": "El filtro centro_id.in.(…) usa perfiles.centro_id, que es solo el espejo del centro principal (ADR-051, perfiles_centros); un profesional con pertenencia vigente no principal no se ofrece en ese centro, aunque la base no pone condición de centro.",
-      "escenario": "Siembra: Ana pasa consulta en Madrid (principal) y Las Palmas (seed-completo.sql:210-229). Administrador abre «Nueva cita» y cambia a Centro Las Palmas → Ana no está en el selector; no se le puede dar cita allí desde administrador/técnico, y para sus pacientes el valor por defecto cae al primero de Las Palmas."
+      "linea": 54,
+      "descripcion": "Un error al leer perfiles_centros solo va a console.error y cae a ?? []; con el mapa vacío, la línea 77 ofrece a cada administrador en todos los centros y a ningún profesional sanitario.",
+      "escenario": "Fallo transitorio de esa lectura → el técnico abre Nueva cita → en cada centro solo salen administradores, que son delCentro[0] y el valor por defecto → la cita se guarda a nombre del administrador; sin administradores, mensaje falso «no hay profesionales en este centro»."
     },
     {
-      "id": "H24",
+      "id": "H30",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/tarjetas-sugerencia.tsx",
+      "linea": 36,
+      "descripcion": "role=\"status\" se pone y se quita junto con el texto: la región nace ya llena («Buscando huecos libres…») y, cuando llega el vacío, pierde el rol en el mismo render.",
+      "escenario": "Lector de pantalla: cambia el tipo de terapia → aparece «Buscando…» con el rol ya puesto (no se anuncia de forma fiable) → llega «No hay huecos libres…» sin rol → no se oye nada y el usuario no sabe si el recálculo terminó."
+    },
+    {
+      "id": "H31",
       "severidad": "BAJA",
       "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 246,
-      "descripcion": "La guarda p.centroId === centroId de elegirPaciente no tiene prueba que la distinga: la prueba «el asignado no trabaja en el centro» no incluye al asignado en profesionales.",
-      "escenario": "Mutante sin la condición de centro: 25/25 verdes. Un refactor la quita → asignado de Norte entra como profesionalId estando en Sur; el <select> no tiene esa opción y enseña otra, pero la cita se guarda con Luis en Sur."
-    },
-    {
-      "id": "H25",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
-      "linea": 59,
-      "descripcion": "Entre md y ~946 px de ventana, el rango «10:00 – 10:30» se parte en dos líneas y en un hueco de 30 min (48 px) la línea «Elegida» queda bajo overflow-hidden (calculado, no medido).",
-      "escenario": "iPad vertical (768-820 px), tipo de 30 min: el hueco elegido solo se distingue por el fondo en la rejilla; lo atenúa la línea «Hueco: …» del formulario."
+      "linea": 251,
+      "descripcion": "Tres clearErrors nuevos de fc128a9 no tienen prueba que los distinga: el del paciente (:251), el de la firma (:187) y la guarda de rango de sesiones (:244).",
+      "escenario": "Mutantes sin clearErrors(pacienteId), sin clearErrors(firma) y con clearErrors(sesionesTotales) incondicional: 35/35 verdes. Un refactor quita el del paciente → Guardar sin paciente → «Elige un paciente» → elige uno → el error sigue pintado; nada se pone en rojo."
     }
   ],
   "rondas_anteriores": [
+    {
+      "corte": "B",
+      "ronda": 3,
+      "diff": "6f83cc6..75be90b (worktree-agent-a1549876942c02f5f), sin lo del merge fcf1ab2 (tickets/** y docs/state.md de main); en la práctica fcf1ab2..75be90b",
+      "altas": 0,
+      "medias": 4,
+      "bajas": 2,
+      "cerrados_de_la_ronda_2": [
+        "H1 (FALLA)",
+        "H9",
+        "H11",
+        "H12",
+        "H13",
+        "H14",
+        "H15",
+        "H16",
+        "H17",
+        "H19"
+      ],
+      "parciales_de_la_ronda_2": {
+        "H9": "cerrado por el buscador; la puerta del cambio de centro es H22 y la guarda de centro sin prueba es H24",
+        "H10": "una parada de Tab, pero Escape cierra el diálogo (H20) y el patrón no es «Tab dentro del día» del contrato:116 (H21)",
+        "H11": "cerrado en lo pedido; residuo entre md y ~946 px con tipos de 30 min (H25)",
+        "H18": "en docs/state.md:27 de main; el ticket lo redacta el arquitecto"
+      },
+      "interpretacion_1": "aceptable frente a contrato:116, pero no está en el código: la lista tiene una sola parada (sonda y lista-dia-seleccion.test.tsx:80); ver H21",
+      "mutantes_medidos": {
+        "contenido-alta .or -> .in(centro_id)": "rojo",
+        "contenido-alta flatMap sin administrador": "rojo",
+        "contenido-alta flatMap con cualquier rol sin centro": "rojo",
+        "elegirPaciente sin setValue(profesionalId)": "rojo",
+        "elegirPaciente sin !profesionalManual": "rojo",
+        "elegirPaciente sin p.centroId === centroId": "verde (H24)",
+        "hueco-seleccion sin tabIndex -1": "rojo",
+        "rejilla sin Flecha abajo en el día": "rojo",
+        "lista sin Flecha abajo en el día": "rojo",
+        "teclado-huecos sin Escape": "rojo",
+        "teclado-huecos sin alLado(1)": "rojo",
+        "lista sin el efecto entrarEnHuecos": "rojo",
+        "dialogo max-w-5xl -> max-w-3xl": "rojo",
+        "rejilla compacto={false}": "rojo",
+        "volverAlElegido contra vista.calendario.desde": "rojo"
+      },
+      "sondas": {
+        "Escape en hueco dentro de Dialogo": "foco al día y alCerrar llamado 1 vez (H20)",
+        "ListaDia en selección, paradas de Tab": "1 parada (el día); huecos tabIndex -1 (H21)",
+        "cambio de centro tras elegir paciente con asignado en el centro nuevo": "entra el primero del centro nuevo, no el asignado (H22)"
+      },
+      "hallazgos": [
+        {
+          "id": "H20",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/teclado-huecos.ts",
+          "linea": 47,
+          "descripcion": "Escape en un hueco mueve el foco al día pero no detiene la propagación; useCierreExterior (components/ui/foco.ts:106) cierra el diálogo del alta (router.back()) sin mirar defaultPrevented.",
+          "escenario": "Diálogo «Nueva cita» desde la agenda, formulario rellenado, foco en un hueco del martes → Escape → el foco va al día y el diálogo se cierra; se pierde el alta a medio rellenar. Sonda: alCerrar llamado 1 vez. Las pruebas de «Escape vuelve al día» montan la rejilla/lista sin Dialogo."
+        },
+        {
+          "id": "H21",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
+          "linea": 44,
+          "descripcion": "H10 se cierra con todos los huecos en tabIndex -1 y entrada por Flecha abajo, no con «Tab dentro del día» (contrato:116, diseño §1.F:282) como hacen las citas de la agenda; en la lista ningún hueco es alcanzable con Tab y nada anuncia la Flecha abajo.",
+          "escenario": "Teclado con zoom al 400 % (lista <md): Tab hasta «mar 6», Tab → foco a «Periodicidad» sin pasar por ningún hueco; Intro solo elige el día. Solo se elige hueco si se adivina Flecha abajo. La «interpretación 1» (tira + lista como dos paradas) sería conforme, pero el código y la prueba lista-dia-seleccion.test.tsx:80 fijan una sola parada."
+        },
+        {
+          "id": "H22",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 354,
+          "descripcion": "Al cambiar de centro, si el profesional actual no está en el nuevo, entra delCentro[0] sin mirar el asignado del paciente (tampoco con ?paciente=, que llega sin profesionalId).",
+          "escenario": "Técnico en Sur elige a Bea Gil (asignada a Luis Soto, de Norte): sigue Dra. Ruiz (correcto). Cambia el centro a Norte → profesional = Ana Abad (primera de Norte), no Luis. Sugerencias y cita a nombre de Ana si no mira el desplegable. Medido con sonda."
+        },
+        {
+          "id": "H23",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
+          "linea": 44,
+          "descripcion": "El filtro centro_id.in.(…) usa perfiles.centro_id, que es solo el espejo del centro principal (ADR-051, perfiles_centros); un profesional con pertenencia vigente no principal no se ofrece en ese centro, aunque la base no pone condición de centro.",
+          "escenario": "Siembra: Ana pasa consulta en Madrid (principal) y Las Palmas (seed-completo.sql:210-229). Administrador abre «Nueva cita» y cambia a Centro Las Palmas → Ana no está en el selector; no se le puede dar cita allí desde administrador/técnico, y para sus pacientes el valor por defecto cae al primero de Las Palmas."
+        },
+        {
+          "id": "H24",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 246,
+          "descripcion": "La guarda p.centroId === centroId de elegirPaciente no tiene prueba que la distinga: la prueba «el asignado no trabaja en el centro» no incluye al asignado en profesionales.",
+          "escenario": "Mutante sin la condición de centro: 25/25 verdes. Un refactor la quita → asignado de Norte entra como profesionalId estando en Sur; el <select> no tiene esa opción y enseña otra, pero la cita se guarda con Luis en Sur."
+        },
+        {
+          "id": "H25",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/hueco-seleccion.tsx",
+          "linea": 59,
+          "descripcion": "Entre md y ~946 px de ventana, el rango «10:00 – 10:30» se parte en dos líneas y en un hueco de 30 min (48 px) la línea «Elegida» queda bajo overflow-hidden (calculado, no medido).",
+          "escenario": "iPad vertical (768-820 px), tipo de 30 min: el hueco elegido solo se distingue por el fondo en la rejilla; lo atenúa la línea «Hueco: …» del formulario."
+        }
+      ]
+    },
     {
       "ticket": "T-028",
       "corte": "B",

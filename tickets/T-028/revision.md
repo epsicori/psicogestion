@@ -636,3 +636,167 @@ Por eso el tramo libre anterior a una cita queda tragado por el bloque ocupado, 
 - **El administrador con `centro_id` no nulo de otro centro solo se ofrece en ese centro.** En la siembra el administrador no tiene centro, y no encuentro una ruta que se lo ponga. No tengo un escenario.
 - **El `title` del hueco compacto se suma al `aria-label` como descripción.** El lector repite el rango. Es verbosidad, no un fallo.
 - **Al cambiar a otro paciente, el profesional se queda en el asignado del anterior.** Para el paciente nuevo, sin asignado en el centro, no hay un valor por defecto «correcto» que contraponer.
+
+---
+
+# T-028 · Revisión del corte B, ronda 4 (arreglos de H20-H25, man-11 y man-12)
+
+**Sin hallazgos ALTA.** 2 MEDIA (H26-H27) y 4 BAJA (H28-H31).
+- Cerrados: H21, H22 (en lo que pedía), H23, H24 y H25. man-11 (foco tras elegir paciente) y man-12 (campos de 40 px) también.
+- **H20 no queda cerrado** con el árbol que monta Next (H26).
+- El FALLA nuevo man-11c tiene la causa en `formulario-alta.tsx:510` y viene de la ronda 1 (H27).
+
+**Alcance de la revisión**
+- **Diff revisado:** `git diff 75be90b..f7d59c4` en `worktree-agent-a1549876942c02f5f`, sin lo que entra por el merge `0a5dbe0` (solo `tickets/**` y `docs/state.md` de `main`). Son 9 commits y 18 ficheros de código, todos en `app/(app)/agenda/**`, `components/ui/dialogo.tsx` y `lib/i18n/es.ts`.
+- **Lo que he leído de la evidencia:** el encargo pedía la causa de man-11c. Al extraer esa entrada se me imprimió `evidencia.json` entero. Solo la he usado para man-11c; ningún otro dictamen de esta ronda se apoya en ella.
+- **Método**
+  - 25 mutantes y 3 sondas, medidos en un clon de f7d59c4 en el scratchpad, nunca en el worktree. Cada fichero se restauró con `git checkout` en el clon.
+  - Con el clon limpio, `npx vitest run "app/(app)/agenda" components/ui/dialogo.test.tsx` da 48 ficheros y 467 pruebas en verde.
+  - Sin `db reset` ni seed.
+- **Territorio:** `territorio.mjs T-028` en el worktree: 63 ficheros, todos dentro. `components/ui/dialogo.tsx` está en el territorio, pero es una primitiva compartida: el cambio de H20 llega a todos los diálogos. La prueba que ya existía, «Escape en un campo cualquiera sigue cerrándolo», sigue en verde.
+- **Alcance**
+  - `fc128a9` (limpia los errores al corregir), `2dfdf92` («Buscando huecos libres…») y `f7d59c4` (salto a la semana de la primera sugerencia) no vienen de un hallazgo de revisión.
+  - Los dos primeros encajan en el contrato:172 («Vacío, error y cargando») y en el comportamiento normal de un formulario.
+  - El salto es una decisión pequeña que no está en `diseno.md`. Toca solo la carga inicial: con `fechaFoco` no nulo no hay recursión. No es un desvío con escenario de fallo, pero el diseño no la recoge.
+
+## Cierre de la ronda 3
+
+| Hallazgo | Estado | Cómo lo he comprobado |
+|---|---|---|
+| H20 | **No cerrado** (H26) | El mutante sin el `onKeyDown` del `Dialogo` pone en **rojo** 2 pruebas de `escape-en-dialogo.test.tsx`. Pero esa prueba monta con `render()` de RTL, cuya raíz es un `div`. **Sonda** con `hydrateRoot(document, …)`, que es la raíz de Next (`app-index.js:33`): el foco va al día **y `alCerrar` se llama 1 vez**. |
+| H21 | Cerrado (interpretación 1) | En la rejilla, los huecos del día activo llevan `tabIndex` 0 y el resto -1. En el DOM van detrás del botón del día, así que Tab recorre el día y sus huecos y pasa al siguiente. En la lista, todos los huecos del día visible son paradas: `lista-dia` no pasa `parada` y vale el `true` por defecto. Mutante `parada={i === activo}`→`parada`: **rojo** (2). Mutante `tabIndex={-1}` fijo: **rojo** (3). Residuo sin escenario: el comentario de `rejilla-semana.tsx:232` («la única parada de Tab es el día») ya no es verdad. |
+| H22 | Cerrado en lo pedido | El escenario de la ronda 3 (técnico en Sur, elige a Bea y cambia a Norte) da Luis Soto. `?paciente=` ya trae `profesionalId`. Mutante sin la rama del asignado: **rojo** (2). Mutante sin `!profesionalManual`: **rojo** (1). Mutante sin `profesionalId` en el paciente de la URL: **rojo**. Queda un residuo con la elección a mano (H28). |
+| H23 | Cerrado | Lee `perfiles_centros` vigentes (`hasta is null`). La política de lectura es `rol_actual() is not null`, así que el técnico también la ve. El índice es único por par vigente: no hay duplicados. Mutantes: sin `.is('hasta', null)`, sin el filtro de centros visibles y solo el primer centro: **los tres en rojo**. El error de esa lectura se traga (H29). |
+| H24 | Cerrado | La prueba nueva pone al asignado de Norte en `profesionales` estando en Sur. Mutante sin `p.centroId === centroId`: **rojo** (2). En la ronda 3 estaba verde. |
+| H25 | Cerrado, **medido** | Chromium con el CSS compilado y Geist, en un hueco de 30 min (48 px), de 768 a 1024 px. El rango se parte («10:00 –» arriba, «10:30» en la segunda línea) y «Elegida» (41 px), ahora en línea con `ms-2`, cabe en la segunda línea: su borde inferior queda en 459 px y el interior del hueco acaba en 462. Es visible en todos los anchos. Mutante `block`: **rojo**. Mutante `inline-block w-full`: **verde**. La prueba mira la ausencia de la clase `block`, no la visibilidad; vale la medición, no la prueba. |
+| man-11 | Cerrado | Mutante sin el efecto que enfoca «Cambiar» o el campo: **rojo** (2). Mutante sin la guarda `moverFoco`: **rojo** (1), así que no roba el foco al montar. |
+| man-12 | Cerrado | `h-11` en sala y sesiones. Lo he leído en el diff, sin medirlo. |
+
+**Mutantes de lo nuevo (sin hallazgo previo)**
+- `clearErrors` en el tipo, el hueco y las sesiones: **rojo**.
+- `cargando={false}`: **rojo**.
+- `role="status"` quitado: **rojo**.
+- Salto quitado: **rojo**.
+- Salto sin acotarlo a la semana: **rojo**.
+- Salto sin `b.fecha >= hoy`: **verde**. Es equivalente, porque `agenda_bloques_profesional` solo emite libres con `v_cursor > now()` (migración `20261005120000`, en torno a la línea 976): nunca llegan libres pasados.
+- Los `clearErrors` del paciente y de la firma, y el de sesiones fuera de rango: **verdes** (H31).
+
+## man-11c · causa
+
+**`app/(app)/agenda/nueva/formulario-alta.tsx:510`:** `<Button type="submit" disabled={guardando || catalogoVacio || esperandoSerie}>`.
+
+**Mecanismo**
+- Al pulsar Guardar, `enviar` hace `setGuardando(true)`. El botón, que tiene el foco, pasa a `disabled`, y Chrome mueve el foco a `body`.
+- Cuando `enviar` vuelve sin éxito, el `finally` hace `setGuardando(false)` y nadie devuelve el foco. Afecta a `hueco_ocupado`, `previsualizacion_caducada`, `fallo` y `catch`.
+- El camino de validación de Zod no pasa por `guardando`. Por eso man-11b pasa y man-11c no.
+
+**Medido en Chromium:** botón enfocado → `disabled = true` → `activeElement` = `BODY`. Con `disabled = false`, sigue en `BODY`. Con `aria-disabled="true"` en su lugar, el foco se queda en el botón.
+
+**Clasificación: MEDIA (H27).**
+- Viene de la ronda 1 (`d6cae21`). No es una regresión de esta ronda.
+- Incumple el contrato:201 («Foco visible siempre») y el 166-172: tras el conflicto, el usuario de teclado tiene que volver a tabular desde el principio del documento, fuera del diálogo.
+- El proyecto ya tiene el patrón hermano: `aria-disabled` más `preventDefault` en `resolver-alerta.tsx:26-27`, `dialogo-reprogramar.tsx:312` y `fila-propuesta.tsx:115`.
+- Lo dejé pasar en las rondas 1 a 3.
+
+## MEDIA
+
+### H26 · `components/ui/dialogo.tsx:57` (con `components/ui/foco.ts:106,116`) — el arreglo de H20 no detiene el Escape en la raíz real de Next
+
+**Qué pasa.**
+- `nativeEvent.stopPropagation()` detiene el evento nativo para los nodos que están **por encima** del que lo escucha.
+- En Next 16 la app se hidrata con `hydrateRoot(document, …)` (`node_modules/next/dist/client/app-index.js:33`, `const appElement = document`). Así, el delegado de React y el `document.addEventListener('keydown', …)` de `useCierreExterior` están en el **mismo nodo**.
+- `stopPropagation` no impide los demás oyentes de ese mismo nodo.
+- `useCierreExterior` llama a `alCerrar()` sin mirar `defaultPrevented`.
+
+**Medido con una sonda.**
+- Montaje: `renderToString` y luego `hydrateRoot(document, <html><body><Dialogo abierto alCerrar={fn}><RejillaSemana seleccion …/>…)`.
+- Pasos: foco en el hueco de las 10:00 y Escape.
+- Resultado: el foco va a `data-dia="2026-10-06"` y `alCerrar` se llama **1 vez**.
+
+**Escenario.** Es el mismo de la ronda 3, en el navegador real.
+1. El técnico abre «Nueva cita» desde la agenda.
+2. Rellena paciente y tipo y baja con flechas por los huecos del martes.
+3. Pulsa Escape para volver al día.
+4. El diálogo se cierra (`router.back()`) y se pierde lo rellenado.
+
+**Por qué la prueba está verde.**
+- `escape-en-dialogo.test.tsx` monta con `render()` de RTL, que crea un `div` dentro de `body`: allí `stopPropagation` sí impide que el evento suba hasta `document`.
+- La prueba discrimina el mutante, pero en una raíz que no es la de Next.
+
+**Arreglo que funciona en las dos raíces:** que `useCierreExterior` (`foco.ts:106`) ignore el Escape con `evento.defaultPrevented`. El delegado de React se registra al hidratar, antes que el efecto, así que cuando llega el oyente del diálogo el `preventDefault` del hueco ya está puesto. La prueba debería montar con `hydrateRoot(document)` o con un `container` que sea el propio `document`, como hace Next.
+
+### H27 · `app/(app)/agenda/nueva/formulario-alta.tsx:510` — Guardar se deshabilita con el foco dentro y, tras un rechazo del servidor, el foco se queda en `body` (man-11c)
+
+**Qué pasa.** Lo explica la sección «man-11c · causa».
+
+**Escenario.**
+1. Teclado. Hueco elegido, Tab hasta «Guardar» e Intro.
+2. Otro usuario acaba de ocupar el hueco y la acción devuelve `hueco_ocupado`.
+3. El aviso de conflicto aparece y las sugerencias se recalculan, pero `document.activeElement` es `body`.
+4. El siguiente Tab empieza fuera del diálogo modal.
+
+Pasa igual con `previsualizacion_caducada` (serie), con el fallo genérico y con el `catch` de transporte.
+
+**Lo que cerraría.** Que el foco no se pierda: `aria-disabled` con guarda en `onClick`/`onSubmit`, como en los hermanos citados. Otra opción es enfocar el aviso o el primer campo afectado en cada salida sin éxito de `enviar`. Hace falta una prueba que mire `document.activeElement` después de `hueco_ocupado`. En jsdom, `disabled` no suelta el foco (medido: `activeElement` sigue en el BUTTON), así que la prueba tiene que comprobar que el botón no lleva el atributo `disabled` o que se enfoca un destino explícito.
+
+## BAJA
+
+### H28 · `app/(app)/agenda/nueva/formulario-alta.tsx:372-373` — con el profesional elegido a mano, cambiar a un centro donde no trabaja entra el primero del centro y no el asignado, que sí trabaja allí
+
+**Qué pasa.** Con `profesionalManual`, la rama del asignado se salta entera. Si el elegido a mano no está en el centro nuevo, entra `delCentro[0]`. La prueba `formulario-alta.test.tsx:577` lo fija así a propósito («solo si ya no trabaja allí, por el primero»).
+
+**Escenario.**
+1. Técnico en Sur. Elige a Bea Gil, cuyo asignado es Luis Soto, de Norte.
+2. Elige a mano a «Dra. Ruiz», que solo está en Sur.
+3. Cambia a Norte.
+4. El profesional pasa a ser Ana Abad, la primera de Norte, en vez de Luis, el asignado de Bea, que trabaja en Norte.
+
+La elección a mano ya no es válida en el centro nuevo. Entre el primero arbitrario y el asignado, el código elige el arbitrario. Si no mira el desplegable, las sugerencias y la cita salen a nombre de Ana.
+
+### H29 · `app/(app)/agenda/nueva/contenido-alta.tsx:54,65,77` — si falla la lectura de `perfiles_centros`, el selector cambia de significado en silencio
+
+**Qué pasa.** El error solo va a `console.error` y la lectura cae a `?? []`. Con el mapa de pertenencias vacío, la línea 77 ofrece a cada administrador en **todos** los centros y a ningún profesional sanitario.
+
+**Escenario.**
+1. Hay un fallo transitorio de PostgREST, o de la política, en esa lectura.
+2. El técnico abre «Nueva cita»: en cada centro solo aparecen los administradores, que pasan a ser `delCentro[0]` y por tanto el valor por defecto.
+3. Si elige paciente y hueco sin mirar, la cita se guarda a nombre del administrador.
+4. Si no hay administradores, ve «no hay profesionales en este centro», que es falso.
+
+Es «error tragado como ausencia»: hace falta distinguir el error y pintarlo como error de la pieza.
+
+### H30 · `app/(app)/agenda/nueva/tarjetas-sugerencia.tsx:36` — «Buscando huecos libres…» no se anuncia y el resultado vacío tampoco
+
+**Qué pasa.** El `role="status"` aparece y desaparece junto con el texto.
+- Una región viva que nace ya con contenido no se anuncia de forma fiable.
+- Cuando llega el resultado, el `<p>` pierde el rol y el texto cambia a la vez, así que «Sin huecos…» se pinta fuera de una región viva.
+
+**Escenario.**
+1. Con un lector de pantalla, el usuario cambia de tipo de terapia.
+2. Las tarjetas se vacían, aparece «Buscando huecos libres…» con el rol ya puesto y no se oye.
+3. Llega «No hay huecos libres…» sin rol y tampoco se oye.
+
+El usuario no sabe si el recálculo terminó.
+
+**Arreglo:** el `role="status"` en el `<p>` siempre que no haya tarjetas, y que solo cambie el texto. La prueba (`tarjetas-sugerencia.test.tsx:74-77`) comprueba que el rol existe mientras carga; no comprueba que el anuncio llegue.
+
+### H31 · `app/(app)/agenda/nueva/formulario-alta.tsx:187,244,251` — tres de los `clearErrors` nuevos de `fc128a9` no tienen ninguna prueba que los distinga
+
+**Medido.** Las 35 pruebas de `formulario-alta.test.tsx` siguen en verde con cada uno de estos mutantes:
+- Sin `clearErrors('pacienteId')`.
+- Sin `clearErrors('firma')` en el efecto de la serie.
+- Con `clearErrors('sesionesTotales')` incondicional, es decir, sin la guarda de rango.
+
+**Escenario.**
+1. Un refactor quita `clearErrors('pacienteId')`.
+2. El usuario pulsa Guardar sin paciente y sale «Elige un paciente».
+3. Elige uno: el error sigue pintado junto al buscador ya relleno.
+
+Con la guarda de sesiones quitada, escribir «1» borra el error de mínimo 2 sin que el valor sea válido. Nada se pone en rojo en ninguno de los casos. Es la contrapartida de H24 para lo nuevo.
+
+## Descartados
+
+- **El salto a la semana de la primera sugerencia hace dos lecturas de bloques en la carga inicial.** Es un coste, no un fallo, y solo ocurre en la carga sin `?inicio=`.
+- **`cambiarSesiones` limpia el error con 2,5**, porque 2,5 está dentro de `[2, 52]`. Guardar vuelve a validar y enseña el error de entero: no hay un estado erróneo que se guarde.
+- **Con `cargando` y tarjetas viejas, se siguen viendo las tarjetas anteriores.** Elegir una lleva a la previsualización y a la frescura del servidor; no tengo un escenario que guarde algo falso.
+- **El comentario de `rejilla-semana.tsx:232`** dice que la única parada es el día. Es un comentario desactualizado, sin escenario de fallo.
