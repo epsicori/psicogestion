@@ -125,6 +125,7 @@ export const es = {
       invitaciones: 'Invitar usuarios',
       reponerTotp: 'Reponer TOTP',
       darDeBaja: 'Dar de baja',
+      altasCentro: 'Altas de centro',
     },
     permisos: {
       soloAdministrador: 'Solo disponible para administradores',
@@ -156,16 +157,63 @@ export const es = {
       rol: 'Rol',
       centro: 'Centro',
       centroAyuda: 'Obligatorio para técnicos administrativos',
+      // T-041 · varios centros y su principal
+      centros: 'Centros donde atiende',
+      centrosAyuda:
+        'Puede figurar como coprofesional en las notas de los episodios de estos centros. No le da acceso a ningún paciente.',
+      centroPrincipal: 'Centro principal',
+      centroPrincipalAyuda: 'Los pacientes que dé de alta quedan en este centro.',
       enviar: 'Enviar invitación',
       cancelar: 'Cancelar',
     },
     errores: {
       centroRequerido: 'Debe seleccionar un centro para técnicos administrativos',
+      centroPrincipalRequerido: 'Elige cuál es su centro principal',
       invalidEmail: 'Correo electrónico no válido',
     },
     resultados: {
       exito: 'Invitación enviada a {correo}',
+      exitoConAltasPendientes:
+        'Invitación enviada a {correo}. No se pudo dar el alta en {centros}: dásela desde Ajustes › Altas de centro.',
+      registroConAltasPendientes:
+        '{mensaje} Tampoco se dio el alta en {centros}: dásela desde Ajustes › Altas de centro.',
       error: 'No se pudo enviar la invitación: {motivo}',
+    },
+  },
+
+  // --- T-041 · altas de centro de quien atiende ----------------------------
+  altasCentro: {
+    titulo: 'Altas de centro',
+    descripcion:
+      'En qué centros atiende cada profesional. Un alta permite figurar como coprofesional en las notas de ese centro; no da acceso a pacientes ni a notas.',
+    persona: 'Persona',
+    centro: 'Centro',
+    principal: 'principal',
+    desde: 'desde {fecha}',
+    darAlta: 'Dar alta',
+    retirar: 'Retirar',
+    retirarEtiqueta: 'Retirar el alta de {nombre} en {centro}',
+    sinAltas: 'Sin altas de centro vigentes',
+    sinPersonas: 'No hay profesionales ni administradores activos.',
+    sinCentrosLibres: 'Ya tiene alta en todos los centros abiertos.',
+    elegirPersona: 'Elige una persona',
+    elegirCentro: 'Elige un centro',
+    tituloDar: 'Dar alta de centro',
+    tituloRetirar: 'Retirar alta de centro',
+    noGuardado: 'No se pudo guardar el cambio de centro.',
+    errorLectura: 'No se han podido cargar las altas de centro. Recarga la página para intentarlo de nuevo.',
+    confirmacion: {
+      dar: '¿Dar de alta a {nombre} en {centro}? Podrá figurar como coprofesional en las notas de los episodios de ese centro y abrir episodios en él. No le da acceso a ningún paciente ni a ninguna nota.',
+      darPrincipal:
+        'Será su centro principal: los pacientes que dé de alta a partir de hoy quedarán en {centro}, y el personal de recepción de {centro} verá sus datos básicos y sus citas.',
+      retirar:
+        '¿Retirar el alta de {nombre} en {centro}? Dejará de poder figurar como coprofesional en notas nuevas de ese centro. Las notas firmadas no cambian, y el alta queda registrada con su fecha de cierre.',
+      retirarPrincipal:
+        'Es su centro principal. Los pacientes que dé de alta a partir de hoy no quedarán en ningún centro mientras no tenga otro principal.',
+    },
+    resultados: {
+      dada: 'Alta de centro dada.',
+      retirada: 'Alta de centro retirada.',
     },
   },
 

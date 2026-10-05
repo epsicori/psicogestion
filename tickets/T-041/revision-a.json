@@ -1,71 +1,49 @@
 {
   "ticket": "T-041",
-  "ronda": 1,
-  "revisor": "A (base de datos, RLS y seguridad)",
-  "head": "9e0033c",
-  "rama": "worktree-agent-ada3a424c2ef63d80",
-  "diff": "afbbfcc..9e0033c",
+  "revisor": "A",
+  "ronda": 2,
+  "head": "1d6f244",
+  "rama": "worktree-agent-ae6f460142344cc25",
+  "diff": "9e0033c..1d6f244 (propio de A: e48ded8; foco añadido: carga.ts de 192a4ce e invitar.ts de 57889db; d9865df es merge de main)",
   "fecha": "2026-10-05",
   "altas": 0,
-  "medias": 1,
-  "bajas": 4,
-  "mutantes": {
-    "muertos": [
-      "M1 dar <> (28.C6)",
-      "M1b retirar <> (28.C6)",
-      "M2 lista abierta (28.G2)",
-      "M10 disparador sin old.hasta (28.E1)"
-    ],
-    "supervivientes": [
-      "M3 estado = suspendido",
-      "M4 idempotencia sin hasta is null",
-      "M5 retirar sin hasta is null",
-      "M8 principal sin hasta is null",
-      "M6 dar sin for update",
-      "M11 retirar sin for update",
-      "M7 disparador sin id"
-    ]
+  "medias": 0,
+  "bajas": 2,
+  "cierre_ronda_1": {
+    "A-H1": "cerrado: 28.F11/F12/F13 recorren dar→retirar→dar→retirar sobre INV2·C41A; M4 muere en F11, M5 en F13 (42501 del disparador), M8 en F12",
+    "A-H2": "cerrado: el disparador exige new.hasta = current_date (migración:195); 28.E9 ayer/mañana → 42501 y hoy pasa; M12 muere en E9",
+    "A-H3": "cerrado: 28.F6 de baja; M3 muere",
+    "A-H4": "cerrado: 28.G4b lee for update en las dos RPC; M6 y M11 mueren",
+    "A-H5": "cerrado: 28.E3 con set id = gen_random_uuid(); M7 muere"
   },
+  "mutantes": [
+    { "mutante": "M3 dar: <> 'activo' → = 'suspendido'", "resultado": "muere en 28.F6 (de baja)" },
+    { "mutante": "M4 dar: idempotencia sin hasta is null", "resultado": "muere en 28.F11 (primera ejecución anulada por deadlock con otro banco; repetida)" },
+    { "mutante": "M5 retirar: where sin hasta is null", "resultado": "muere en 28.F13" },
+    { "mutante": "M8 dar: principal sin hasta is null", "resultado": "muere en 28.F12" },
+    { "mutante": "M6 dar sin for update", "resultado": "muere en 28.G4b" },
+    { "mutante": "M11 retirar sin for update", "resultado": "muere en 28.G4b (primera ejecución cortada por reinicio del contenedor; repetida)" },
+    { "mutante": "M7 disparador sin new.id is distinct from old.id", "resultado": "muere en 28.E3 (id)" },
+    { "mutante": "M12 disparador sin la comprobación de fecha", "resultado": "muere en 28.E9" }
+  ],
+  "linea_base": "banco entero verde («28-altas-de-centro: completo.»), antes y después del reinicio del contenedor",
   "hallazgos": [
     {
-      "id": "H1",
-      "severidad": "MEDIA",
-      "archivo": "scripts/rls/28-altas-de-centro.sql",
-      "linea": 400,
-      "descripcion": "El banco nunca recorre dar → retirar → volver a dar → retirar sobre un mismo par: sobreviven los tres mutantes que quitan hasta is null (idempotencia :86, where de retirar :155 que el diseño §5 nombra, cálculo del principal :97).",
-      "escenario": "M5: ADM retira a Ana de Canarias y se la vuelve a dar; al retirarla otra vez el update alcanza también la fila cerrada, el disparador lanza 42501 y el alta queda sin poder retirarse (altas.ts lo pinta como permiso). M4: volver a dar devuelve el id cerrado sin insertar; la UI dice «alta dada» y 7c da 23514. M8: tras F10, la siguiente alta no es principal y el perfil queda sin principal. Una prueba del ciclo completo mata los tres."
+      "id": "A2-H1",
+      "severidad": "BAJA",
+      "archivo": "lib/cuentas/invitar.ts",
+      "linea": 73,
+      "coincide_con": "B2-H4",
+      "descripcion": "Un error al leer centros (por la sesión) devuelve el mismo motivo y texto que un centro cerrado; la rama del error no tiene prueba (el mock siempre da error: null).",
+      "escenario": "Invitación con [Madrid principal, Canarias]; GET /centros falla de forma transitoria → «Un centro elegido ya no está abierto. Recarga la pantalla…» → al recargar los dos siguen abiertos y el administrador busca un cierre que no existe. La cuenta no se crea (fallo seguro)."
     },
     {
-      "id": "H2",
+      "id": "A2-H2",
       "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
-      "linea": 185,
-      "descripcion": "El disparador «solo cierre» deja fechar el cierre en el pasado (cualquier hasta entre desde y hoy); medido: update hasta = desde sobre una vigente de 2026-09-01 pasa, y authenticated tiene UPDATE en las 7 columnas con la política del administrador.",
-      "escenario": "Ana coprofesional en notas firmadas el 20-09 con alta vigente en Madrid → el 05-10 un administrador hace PATCH perfiles_centros?id=eq.X {hasta:'2026-09-01'} → la pertenencia queda congelada diciendo que no tenía alta al firmar. La auditoría guarda el instante real (por eso BAJA); arreglo: exigir new.hasta = current_date o anotar que es legítimo."
-    },
-    {
-      "id": "H3",
-      "severidad": "BAJA",
-      "archivo": "scripts/rls/28-altas-de-centro.sql",
-      "linea": 381,
-      "descripcion": "El diseño §5 pide «suspendido o de baja → 23514» y F6 solo prueba suspendido; el mutante v_estado = 'suspendido' (M3) deja el banco verde.",
-      "escenario": "Con el mutante, ADM llama a rpc/dar_alta_centro sobre un perfil de baja → se inserta un alta vigente, principal si era la primera, y el espejo escribe perfiles.centro_id de un perfil de baja."
-    },
-    {
-      "id": "H4",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
-      "linea": 54,
-      "descripcion": "D7 (for update sobre perfiles) no tiene ninguna prueba: quitarlo de dar (M6) o de retirar (M11, :138) deja el banco verde; G4 ya usa el catálogo y aquí no.",
-      "escenario": "Una refactorización quita el for update con el banco en verde → dos administradores dan a la vez la primera alta a un perfil sin principal → ambas calculan principal = true → la segunda choca con perfiles_centros_un_principal_vigente y sale el 23505 que D7 quería dejar solo como red."
-    },
-    {
-      "id": "H5",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261010120000_altas_de_centro.sql",
-      "linea": 185,
-      "descripcion": "El cotejo new.id is distinct from old.id del disparador no tiene negativa: E2/E3 cubren centro_id, desde, perfil_id y creado_en, no id; el mutante sin esa línea (M7) deja el banco verde.",
-      "escenario": "Con el mutante, ADM hace PATCH perfiles_centros?id=eq.X {id:'<uuid nuevo>'} (el UPDATE de authenticated cubre id) → la fila vigente cambia de identidad y el INSERT auditado con registro_id = X ya no apunta a ninguna fila: el rastro del alta (ADR-051) pierde su enlace."
+      "archivo": "scripts/rls/README.md",
+      "linea": 51,
+      "descripcion": "La línea del banco 28 no recoge E3 (id), E9, F6 de baja, F11-F13 ni G4b, y su lista de mutantes medidos sigue con los cuatro de la ronda 1.",
+      "escenario": "Un ticket posterior toca fn_perfiles_centros_solo_cierre o el where de retirar_alta_centro y consulta el README para saber qué mutantes repetir → solo ve centro_id y fila cerrada → no repite fecha ni ciclo, y un cambio que reabra A-H1/A-H2 se cierra con la cobertura «documentada» en verde."
     }
   ]
 }

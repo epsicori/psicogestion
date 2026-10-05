@@ -1,89 +1,91 @@
 {
   "ticket": "T-041",
   "revisor": "B",
-  "ronda": 1,
-  "head": "9e0033c",
-  "rama": "worktree-agent-ada3a424c2ef63d80",
-  "diff": "afbbfcc..9e0033c",
+  "ronda": 2,
+  "head": "1d6f244",
+  "rama": "worktree-agent-ae6f460142344cc25",
+  "diff": "9e0033c..1d6f244 (propio de la ronda: d9865df..1d6f244; d9865df es merge de main)",
   "fecha": "2026-10-05",
   "altas": 0,
-  "medias": 1,
-  "bajas": 7,
-  "dudas_del_implementador": {
-    "EstadoAlta = EstadoFormulario & { ok?: true }": "lectura del implementador (P6 dice EstadoFormulario); superconjunto compatible y necesario para distinguir éxito de rechazo; aceptable",
-    "altas vigentes en centros cerrados se listan": "lectura del implementador (P7 lee solo centros activos y calla); coherente con la base: retirar no mira centros.activo y tienePrincipal = v_principal; correcto",
-    "altasCentro.noGuardado": "lectura del implementador (no está en P8); reserva de la rama safeParse fallido; duplica MENSAJE_GENERICO; inocuo",
-    "de una casilla a dos el principal se vacía": "dueño: diseño P7 y D10; mutante (quitar la rama centrosIds.length <= 1) muere"
+  "medias": 0,
+  "bajas": 5,
+  "cierre_ronda_1": {
+    "criterio 8": "cerrado: carga.ts lee directorio_perfiles; mutante .from('perfiles') muere (2 rojas); en la base con el JWT del administrador, perfiles=1 fila, directorio_perfiles=3",
+    "B-H1": "cerrado: aria-disabled y guardas en confirmar/cerrar; 4 mutantes mueren; Chromium: foco en Confirmar durante el envío y tras el error (con disabled cae a BODY)",
+    "B-H2": "cerrado: (c2) y (c3); el return temprano muere",
+    "B-H3": "cerrado en invitar.ts (mutante muere); la rama visible de acciones.ts sin prueba (B2-H1)",
+    "B-H4": "cerrado: lectura de centros antes de inviteUserByEmail; quitar c.activo o el bloque muere",
+    "B-H5": "cerrado: cargarAltas devuelve ok:false y la página pinta role=alert; las tres lecturas mueren",
+    "B-H6": "cerrado: construirPersonas probada; suyas.length > 0 muere",
+    "B-H7": "cerrado en el formulario (2 mutantes mueren); el productor avisoPendiente sin prueba (B2-H1) y la rama de registro sin aviso (B2-H2)",
+    "B-H8": "cerrado en gestion-altas (quitar try/catch muere); falta en formulario-invitar (B2-H5)"
+  },
+  "decisiones_del_implementador": {
+    "registrar_invitacion falla: no intenta altas y las nombra": "dueño: diseño P4 (paso 3 «sin cambios», «ninguno se salta») y la segunda salida propuesta en B-H3 de la ronda 1; sin choque con la constitución (perfiles_centros fuera de la regla 6). Correcto en invitar.ts; lo que falta está en acciones.ts (B2-H1, B2-H2)",
+    "B-H4 leyendo centros por la sesión antes de inviteUserByEmail": "dueño: diseño D9 (validar todos los centros antes del correo); P1 «tres objetos y nada más» descarta redefinir preparar_invitacion; usa sesion.supabase, no la clave de servicio. Residuo aceptable: ventana sin candado entre la lectura y el disparador de GoTrue, de milisegundos, no cerrable sin tocar fn_crear_perfil_de_usuario (D8)"
   },
   "mutantes": [
-    { "fichero": "lib/cuentas/invitar.ts:109", "mutante": "return tras el primer fallo de dar_alta_centro", "resultado": "sobrevive (6/6)" },
-    { "fichero": "app/(app)/ajustes/invitar/formulario-invitar.tsx:86", "mutante": "quitar la rama de uno a dos", "resultado": "muere (1 roja)" },
-    { "fichero": "app/(app)/ajustes/centros/gestion-altas.tsx:69", "mutante": "quitar estado.current?.focus()", "resultado": "muere (2 rojas)" }
+    { "fichero": "app/(app)/ajustes/centros/carga.ts", "mutante": ".from('perfiles') en vez de directorio_perfiles", "resultado": "muere (2)" },
+    { "fichero": "lib/cuentas/invitar.ts", "mutante": "return tras altasSinDar.push", "resultado": "muere (2)" },
+    { "fichero": "lib/cuentas/invitar.ts", "mutante": "quitar && c.activo", "resultado": "muere (2)" },
+    { "fichero": "lib/cuentas/invitar.ts", "mutante": "quitar el bloque de lectura de centros", "resultado": "muere (3)" },
+    { "fichero": "lib/cuentas/invitar.ts", "mutante": "quitar altasSinDar de la rama de registro", "resultado": "muere (2)" },
+    { "fichero": "app/(app)/ajustes/centros/gestion-altas.tsx", "mutante": "quitar aria-disabled", "resultado": "muere (1)" },
+    { "fichero": "app/(app)/ajustes/centros/gestion-altas.tsx", "mutante": "aria-disabled -> disabled={enviando}", "resultado": "muere (1)" },
+    { "fichero": "app/(app)/ajustes/centros/gestion-altas.tsx", "mutante": "quitar || enviando en confirmar", "resultado": "muere (1)" },
+    { "fichero": "app/(app)/ajustes/centros/gestion-altas.tsx", "mutante": "quitar if (enviando) return en cerrar", "resultado": "muere (1)" },
+    { "fichero": "app/(app)/ajustes/centros/gestion-altas.tsx", "mutante": "quitar el try/catch", "resultado": "muere (1)" },
+    { "fichero": "app/(app)/ajustes/centros/carga.ts", "mutante": "tienePrincipal: suyas.length > 0", "resultado": "muere (1)" },
+    { "fichero": "app/(app)/ajustes/centros/carga.ts", "mutante": "quitar if (fallo) return { ok: false }", "resultado": "muere (3)" },
+    { "fichero": "app/(app)/ajustes/invitar/formulario-invitar.tsx", "mutante": "quitar role=status del contenedor", "resultado": "muere (2)" },
+    { "fichero": "app/(app)/ajustes/invitar/formulario-invitar.tsx", "mutante": "quitar setAviso(...)", "resultado": "muere (1)" },
+    { "fichero": "app/(app)/ajustes/acciones.ts:81", "mutante": "quitar avisoPendiente: true", "resultado": "sobrevive (159/159)" },
+    { "fichero": "app/(app)/ajustes/acciones.ts:62", "mutante": "if (false) en la rama registroConAltasPendientes", "resultado": "sobrevive (159/159)" }
   ],
+  "foco_chromium": {
+    "aria-disabled (HEAD)": "inicio:confirmar | enviando:confirmar | tras error:confirmar | Intro reactiva Confirmar:true",
+    "disabled (ronda 1)": "inicio:confirmar | enviando:BODY | tras error:BODY | Intro reactiva Confirmar:false"
+  },
   "hallazgos": [
     {
-      "id": "B-H1",
-      "severidad": "MEDIA",
+      "id": "B2-H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/acciones.ts",
+      "linea": 61,
+      "descripcion": "La rama registroConAltasPendientes (mitad visible de B-H3) y el avisoPendiente:true (productor de B-H7) no tienen prueba: los dos mutantes sobreviven 159/159.",
+      "escenario": "Invitación con [Madrid principal, Canarias]; registrar_invitacion falla → con la rama anulada el mensaje vuelve a ser «La cuenta se creó, pero no se pudo dejar constancia» sin Canarias, y ninguna prueba se pone roja. Hacen falta dos pruebas de la acción: ok:false con altasSinDar (mensaje con el nombre) y ok:true con altasSinDar (avisoPendiente:true)."
+    },
+    {
+      "id": "B2-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/ajustes/acciones.ts",
+      "linea": 63,
+      "descripcion": "La rama de registro con altas pendientes no lleva avisoPendiente: B-H7 se arregló solo en la variante ok:true.",
+      "escenario": "registrar_invitacion falla con [Madrid, Canarias] → «… Tampoco se dio el alta en Canarias: dásela desde Ajustes › Altas de centro.» sale con text-sm, igual que «Invitación enviada a …» → se lee como un éxito y el alta no se da."
+    },
+    {
+      "id": "B2-H3",
+      "severidad": "BAJA",
       "archivo": "app/(app)/ajustes/centros/gestion-altas.tsx",
-      "linea": 237,
-      "descripcion": "Confirmar y Cancelar con disabled={enviando}: el foco cae a BODY (medido en Chromium) y en la salida con error nadie lo recoloca; jsdom no lo ve.",
-      "escenario": "Retirar un alta que otro administrador ya retiró → P0002 → el role=alert se lee pero el foco está en body fuera del diálogo modal; Intro no hace nada y solo un Tab lo devuelve a la X."
+      "linea": 101,
+      "descripcion": "El catch traduce un rechazo de transporte a «No se pudo guardar el cambio de centro.» cuando no se sabe si la RPC se confirmó, y no revalida la lista.",
+      "escenario": "Retirar Pau · Sur → la base cierra el alta y la respuesta se pierde → «No se pudo guardar», con Sur aún en la lista → reintento → P0002 «puede que otra persona la haya retirado ya»: le echa a otra persona la culpa de su propio cambio."
     },
     {
-      "id": "B-H2",
-      "severidad": "BAJA",
-      "archivo": "lib/cuentas/invitar.test.ts",
-      "linea": 121,
-      "descripcion": "La prueba (c) usa un solo centro adicional: el mutante que corta el bucle al primer fallo sobrevive (medido).",
-      "escenario": "Invitación con [Madrid principal, Canarias, Bilbao]; falla Canarias → el mutante no intenta Bilbao ni lo reporta, y el mensaje solo nombra Canarias."
-    },
-    {
-      "id": "B-H3",
+      "id": "B2-H4",
       "severidad": "BAJA",
       "archivo": "lib/cuentas/invitar.ts",
-      "linea": 89,
-      "descripcion": "Si registrar_invitacion falla, se devuelve antes del paso 4: las altas adicionales no se dan y el mensaje no las nombra.",
-      "escenario": "Invitación con [Madrid principal, Canarias]; registrar falla por un error transitorio → perfil solo con Madrid y mensaje «La cuenta se creó, pero no se pudo dejar constancia», sin mención a Canarias."
+      "linea": 73,
+      "descripcion": "Un error al leer centros sale con el mismo mensaje que un centro cerrado; las pruebas B-H4 solo simulan error: null.",
+      "escenario": "La lectura de centros falla de forma transitoria → «Un centro elegido ya no está abierto. Recarga la pantalla…» → al recargar todos siguen abiertos y el administrador busca un cierre que no existe."
     },
     {
-      "id": "B-H4",
-      "severidad": "BAJA",
-      "archivo": "lib/cuentas/invitar.ts",
-      "linea": 44,
-      "descripcion": "preparar_invitacion no mira centros.activo: un centro cerrado tras cargar el formulario entra como principal por los metadatos, y como adicional recibe un consejo sin salida.",
-      "escenario": "ADM1 cierra Canarias con el formulario de ADM2 abierto → como principal: alta principal en un centro cerrado, donde quedarán los pacientes futuros; como adicional: «dásela desde Ajustes › Altas de centro», que no ofrece centros cerrados."
-    },
-    {
-      "id": "B-H5",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/ajustes/centros/page.tsx",
-      "linea": 52,
-      "descripcion": "Los errores de lectura se pintan como ausencia, y la ausencia de altas decide el aviso de principal de la confirmación.",
-      "escenario": "Falla la lectura de perfiles_centros → todos «Sin altas» y tienePrincipal=false → al dar a Pau (principal en Norte) un alta en Este, el diálogo dice «Será su centro principal…», y la base la inserta como no principal."
-    },
-    {
-      "id": "B-H6",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/ajustes/centros/page.tsx",
-      "linea": 70,
-      "descripcion": "La derivación de tienePrincipal no tiene prueba; el mutante suyas.length > 0 sobrevive.",
-      "escenario": "Estado D5: a Pau se le retira el principal Norte y le queda Sur → se le da Este → la base hace principal a Este y la confirmación mutada no lo avisa."
-    },
-    {
-      "id": "B-H7",
+      "id": "B2-H5",
       "severidad": "BAJA",
       "archivo": "app/(app)/ajustes/invitar/formulario-invitar.tsx",
-      "linea": 200,
-      "descripcion": "El aviso exitoConAltasPendientes sale en un role=status creado ya relleno y con el estilo del éxito.",
-      "escenario": "Invitación con un alta adicional fallida → NVDA no anuncia la región insertada, o la lee como un éxito → el administrador no da el alta pendiente."
-    },
-    {
-      "id": "B-H8",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/ajustes/centros/gestion-altas.tsx",
-      "linea": 93,
-      "descripcion": "La transición del diálogo no tiene try/catch: un rechazo de transporte va al límite de error.",
-      "escenario": "Corte de red al pulsar Confirmar → la promesa se rechaza en la transición → pantalla de error de la ruta en lugar del mensaje dentro del diálogo."
+      "linea": 98,
+      "descripcion": "El arreglo de B-H8 no llegó al formulario de invitar, que el ticket reescribe: await invitar(datos) sigue en la transición sin try/catch (en la ronda 1 lo di por «fuera del diff» y no lo estaba).",
+      "escenario": "Invitación con [Madrid, Canarias]; el correo sale, falla Canarias y la respuesta se pierde → límite de error de la ruta → el administrador no sabe ni que la invitación salió ni que falta Canarias; si reintenta, lee «No se pudo enviar la invitación por correo»."
     }
   ]
 }

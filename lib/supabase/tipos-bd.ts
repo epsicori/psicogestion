@@ -3145,6 +3145,10 @@ export type Database = {
         Returns: undefined
       }
       comprobar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
+      dar_alta_centro: {
+        Args: { p_centro_id: string; p_perfil_id: string }
+        Returns: string
+      }
       dar_de_baja_perfil: {
         Args: { p_motivo?: string; p_perfil_id: string }
         Returns: {
@@ -3368,6 +3372,10 @@ export type Database = {
           anios_minimo_legal: number
           origen: string
         }[]
+      }
+      retirar_alta_centro: {
+        Args: { p_centro_id: string; p_perfil_id: string }
+        Returns: undefined
       }
       rol_actual: {
         Args: never
