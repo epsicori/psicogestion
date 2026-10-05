@@ -190,13 +190,19 @@ begin
     raise exception 'De una pertenencia vigente solo cambian el cierre y la marca de principal.'
       using errcode = '42501';
   end if;
+  -- El cierre lleva la fecha de hoy, la misma que usa retirar_alta_centro(): fechar un
+  -- cierre en el pasado reescribiría quién tenía alta cuando se firmó una nota.
+  if new.hasta is not null and new.hasta <> current_date then
+    raise exception 'Una pertenencia se cierra con la fecha de hoy.'
+      using errcode = '42501';
+  end if;
   return new;
 end;
 $$;
 
 comment on function public.fn_perfiles_centros_solo_cierre() is
   'T-041 · Una pertenencia cerrada no se reabre ni se reescribe; de una vigente solo cambian '
-  'hasta (las comprobaciones de la tabla validan el valor) y principal (ADR-051).';
+  'hasta (siempre con la fecha de hoy) y principal (ADR-051).';
 
 revoke execute on function public.fn_perfiles_centros_solo_cierre() from public, anon, authenticated;
 

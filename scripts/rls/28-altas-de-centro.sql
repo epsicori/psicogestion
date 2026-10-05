@@ -313,6 +313,31 @@ select pg_temp.assert_lanza_codigo_msg(
   format('update public.perfiles_centros set creado_en = creado_en - interval ''1 day'' where id = %L', :'a_alta_adm'),
   '42501', 'solo cambian el cierre y la marca de principal',
   '28.E3 ADM no cambia el creado_en de una pertenencia vigente: 42501');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.perfiles_centros set id = gen_random_uuid() where id = %L', :'a_alta_adm'),
+  '42501', 'solo cambian el cierre y la marca de principal',
+  '28.E3 ADM no cambia el id de una pertenencia vigente: 42501 (el rastro de auditoría apunta a él)');
+-- Cierre fechado en el pasado: un alta vigente desde hace cinco días (escenario como postgres,
+-- en un savepoint) no se cierra con una fecha anterior a hoy ni posterior.
+call pg_temp.reset_sesion();
+savepoint s28_e9;
+insert into public.perfiles_centros (id, perfil_id, centro_id, principal, desde)
+values ('c0410001-0000-4000-8000-0000000000a1', :PRO2, :C41A, false, current_date - 5);
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(
+  $q$update public.perfiles_centros set hasta = current_date - 1 where id = 'c0410001-0000-4000-8000-0000000000a1'$q$,
+  '42501', 'se cierra con la fecha de hoy',
+  '28.E9 ADM no cierra una pertenencia con una fecha pasada: 42501');
+select pg_temp.assert_lanza_codigo_msg(
+  $q$update public.perfiles_centros set hasta = current_date + 1 where id = 'c0410001-0000-4000-8000-0000000000a1'$q$,
+  '42501', 'se cierra con la fecha de hoy',
+  '28.E9 Ni con una fecha futura: 42501');
+select pg_temp.assert_no_lanza(
+  $q$update public.perfiles_centros set hasta = current_date where id = 'c0410001-0000-4000-8000-0000000000a1'$q$,
+  '28.E9 (gemela) Cerrarla con hasta = hoy pasa');
+call pg_temp.reset_sesion();
+rollback to savepoint s28_e9;
+call pg_temp.como(:ADM);
 -- Gemela: la marca de principal de una vigente sí cambia.
 savepoint s28_e4;
 select pg_temp.assert_no_lanza(
@@ -381,6 +406,15 @@ select pg_temp.assert_lanza_codigo_msg(
   '28.F6 Destino suspendido: 23514');
 call pg_temp.reset_sesion();
 rollback to savepoint s28_f6;
+-- Destino de baja: también 23514 (con `= 'suspendido'` se colaría).
+savepoint s28_f6c;
+update public.perfiles set estado = 'baja', estado_desde = now() where id = :PRO2;
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(
+  format('select public.dar_alta_centro(%L, %L)', :PRO2, :C41B), '23514', 'El perfil no está activo',
+  '28.F6 Destino de baja: 23514');
+call pg_temp.reset_sesion();
+rollback to savepoint s28_f6c;
 savepoint s28_f6b;
 call pg_temp.como(:ADM);
 select pg_temp.assert_no_lanza(
@@ -432,6 +466,33 @@ select pg_temp.assert(
   (select centro_id from public.perfiles where id = :INV2) is null
   and (select hasta is null and not principal from public.perfiles_centros where id = :'f_inv2_b'),
   '28.F10 Retirar el principal deja perfiles.centro_id nulo; la otra alta sigue vigente y NO pasa a principal (D5)');
+-- Ciclo sobre el MISMO par: INV2 sin principal y con C41B vigente. Se le vuelve a dar C41A,
+-- cuya fila anterior está cerrada: la idempotencia no puede devolver la cerrada, el cálculo
+-- del principal no puede contarla, y el segundo retirar no puede tocarla.
+call pg_temp.como(:ADM);
+select public.dar_alta_centro(:INV2, :C41A) as f_inv2_a2 \gset
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  :'f_inv2_a2' <> :'f_inv2_a'
+  and (select count(*) from public.perfiles_centros where perfil_id = :INV2 and centro_id = :C41A) = 2
+  and (select count(*) from public.perfiles_centros
+        where perfil_id = :INV2 and centro_id = :C41A and hasta is null and id = :'f_inv2_a2') = 1,
+  '28.F11 Volver a dar un alta ya retirada inserta una fila nueva (id distinto): el par tiene dos, una cerrada y una vigente');
+select pg_temp.assert(
+  (select principal from public.perfiles_centros where id = :'f_inv2_a2')
+  and (select centro_id from public.perfiles where id = :INV2) = :C41A,
+  '28.F12 Sin principal vigente (una cerrada no cuenta), la alta nueva es principal y el espejo la refleja');
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(
+  format('select public.retirar_alta_centro(%L, %L)', :INV2, :C41A),
+  '28.F13 Retirar de nuevo el mismo par pasa: el update no toca la fila cerrada');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select count(*) from public.perfiles_centros
+    where perfil_id = :INV2 and centro_id = :C41A and hasta = current_date) = 2
+  and (select centro_id from public.perfiles where id = :INV2) is null,
+  '28.F13 Las dos filas del par quedan cerradas y el perfil sin principal');
+
 -- La primera alta de ADM (sección A) fue también su principal si no tenía otro: lo mismo
 -- que F8, sobre el administrador. No se fija: depende de lo que dejen los módulos previos.
 
@@ -458,6 +519,10 @@ select pg_temp.assert(
   and pg_get_functiondef('public.retirar_alta_centro(uuid,uuid)'::regprocedure)
     ~ 'is\s+distinct\s+from\s+''administrador''::public\.rol_usuario',
   '28.G4 Las dos RPC comprueban al llamante con is distinct from (seguro con rol_actual() nulo)');
+select pg_temp.assert(
+  pg_get_functiondef('public.dar_alta_centro(uuid,uuid)'::regprocedure) ~* 'for\s+update'
+  and pg_get_functiondef('public.retirar_alta_centro(uuid,uuid)'::regprocedure) ~* 'for\s+update',
+  '28.G4b Las dos RPC bloquean la fila de perfiles con for update (dos altas simultáneas se serializan, D7)');
 -- Firmas y permisos: no hay parámetro de principal; authenticated ejecuta, anon no.
 select pg_temp.assert(
   pg_get_function_identity_arguments('public.dar_alta_centro(uuid,uuid)'::regprocedure)
