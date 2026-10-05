@@ -1,0 +1,30 @@
+{
+  "ticket": "T-028",
+  "resumen": "Corte C (rama worktree-agent-aa3cf8ef16a243549, commit 681cb0d sobre main afbbfcc; 2 ficheros: panel-resumen.tsx y panel-resumen.test.tsx). La evidencia del corte B (ronda 6) queda en tickets/T-028/evidencia.corteB.json. Lint 0 errores (2 warnings preexistentes), npm test 181 ficheros / 2294 pruebas verdes, next build --webpack OK. Navegador (Chromium/Playwright, next start :3061 desde el worktree): man-1 PASA con ana, bruno y admin. El tecnico_administrativo NO se pudo ejercer: a mitad de la verificacion otro proceso reseteo la base compartida (ahora solo admin, ana, bruno; max(version)=20261010120000, 2 pacientes), el usuario tecnico@psicogestion.test dejo de existir y no pude resembrar (npm run seed denegado por el permiso). Servidor :3061 parado; script temporal borrado del worktree. Sin escrituras por la UI.",
+  "criterios": [
+    {
+      "id": "man-1",
+      "texto": "Desde la ficha abre /agenda/nueva con paciente fijado (texto, no control); recargar la deja en pie; ningun nombre en la URL",
+      "veredicto": "PASA",
+      "comando": "Playwright (chromium, 1280x900) contra next start :3061 del worktree: login ana/bruno/admin@psicogestion.test, /pacientes -> ficha -> clic 'Nueva cita' -> reload",
+      "evidencia": "ana: ficha /pacientes/d0080001-...0001 tiene 1 enlace 'Nueva cita' href=/agenda/nueva?paciente=d0080001-0000-4000-8000-000000000001; clic -> misma URL, dialog (modal interceptado) abierto; tras reload: URL identica, dialog 0 (pagina completa) con 'Paciente elegido Lucia Marquez Cambiar', combobox 'paciente' 0, input 'paciente' 0 (texto, no control); Centro Las Palmas/Madrid y Tipo de terapia visibles. bruno (ficha ...0002 Diego Ferrer): mismo href con su uuid, tras reload 'Paciente elegido Diego Ferrer Cambiar', sin selector de centro (solo uno), sin profesional (solo si mismo). admin: href con uuid, tras reload 'Paciente elegido Lucia Marquez Cambiar' + selector Profesional (Alvaro Administrador / Ana Marquez) + Centro. Ninguna URL contiene nombre o apellido (comprobado por regex tras decodeURIComponent: false en los tres; solo UUID). El boton aparece tambien en el estado vacio (bruno, 'Todavia no hay citas de este paciente') y con actividad (ana, admin). Lo que ve cada rol: profesional_sanitario (ana: ficha de 6 pacientes, bruno: 1) y administrador (8 pacientes) ven el boton y /agenda/nueva lo deja agendar (formulario completo, el administrador ademas elige profesional); el boton no promete nada que la pagina niegue en esos roles. Nota: la prueba unitaria panel-resumen.test.tsx del corte cubre el href con uuid."
+    },
+    {
+      "id": "man-1-tecnico",
+      "texto": "man-1 para el rol tecnico_administrativo: el boton de la ficha no promete lo que /agenda/nueva no le deja hacer",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "El usuario tecnico@psicogestion.test existia al inicio (listado de auth.users con 5 cuentas) pero otro proceso reseteo la base compartida durante la verificacion (quedan admin, ana, bruno; max(version)=20261010120000) y npm run seed me fue denegado, asi que no pude iniciar sesion como tecnico (login: 'Credenciales no validas'). Guion para una persona: resembrar (npm run seed tras db reset desde main), entrar como tecnico@psicogestion.test / psico1234, ir a /pacientes, abrir una ficha visible, comprobar si aparece 'Nueva cita' (el codigo la pinta solo con citas!==null, para los tres roles), pulsarla y confirmar que /agenda/nueva?paciente=<uuid> muestra el paciente fijado y deja agendar (el diseno dice que el tecnico agenda sin ver tipo ni nota); recargar y repetir."
+    },
+    {
+      "id": "auto-1",
+      "texto": "lint, npm test y build limpios en el worktree del corte C; territorio",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npm test; npx next build --webpack (en .claude/worktrees/agent-aa3cf8ef16a243549); node ~/.claude/pipeline/territorio.mjs T-028",
+      "evidencia": "lint: 0 errores, 2 warnings preexistentes (lib/cuentas/accesos.test.ts). npm test: Test Files 181 passed (181), Tests 2294 passed (2294). next build --webpack: compila, tabla de rutas sin error. territorio.mjs: 'T-028: 1 fichero(s) FUERA del territorio [...]: app/(app)/pacientes/[id]/panel-resumen.test.tsx' (panel-resumen.tsx esta en el territorio; solo su prueba sale fuera, tal como se anticipaba; no se arregla, se anota)."
+    }
+  ],
+  "regresiones": [
+    "Ninguna en el codigo del corte C. Incidencia de entorno ajena al ticket: la base compartida fue reseteada a mitad de verificacion (usuario tecnico y siembra completa perdidos, max(version)=20261010120000, de otra rama), lo que impidio ejercer el rol tecnico.",
+    "territorio.mjs: panel-resumen.test.tsx fuera de territorio (anotar en docs/state.md o ampliar territorio: del ticket)."
+  ]
+}
