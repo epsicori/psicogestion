@@ -1,0 +1,162 @@
+{
+  "ticket": "T-028",
+  "resumen": "Corte B, ronda 5 (rama worktree-agent-a2b0012224d53ce71, HEAD c956428). Clon limpio npm ci: lint 0 errores, npm test 173 ficheros / 2192 pruebas verdes, build Turbopack OK, territorio OK. Navegador sin db reset (puerto 3100, no 3040): man-11c PASA (el foco queda en Guardar), H26 PASA (Escape sigue cerrando emergente, panel anclado y desplegable), H28 y H30 PASAN, H31 con los tres mutantes muertos, H29 NO_VERIFICABLE; regresiones man-11a/b y man-12 y resto de man-* como en la ronda 4. Servidor parado. Datos escritos por la UI: nuevas series/citas de Hugo, Mateo y Lucia.",
+  "criterios": [
+    {
+      "id": "auto-1",
+      "texto": "npm run lint, npm test y npm run build limpios en clon limpio tras npm ci (HEAD c956428); territorio OK",
+      "veredicto": "PASA",
+      "comando": "npm ci; npm run lint; npm test; npm run build (clon); node ~/.claude/pipeline/territorio.mjs T-028",
+      "evidencia": "lint: 0 errores, 2 warnings preexistentes (lib/cuentas/accesos.test.ts); npm test: Test Files 173 passed (173), Tests 2192 passed (2192); build Turbopack OK con /agenda y /agenda/nueva en la tabla de rutas; territorio: 'T-028: 66 fichero(s) tocado(s), todos dentro de ...components/ui/foco.ts, components/ui/cierre-exterior-hidratado.test.tsx...'. Mutantes en el clon: foco.ts sin '!evento.defaultPrevented' -> cierre-exterior-hidratado.test.tsx falla 1; sin clearErrors(pacienteId) / sin clearErrors(firma) / clearErrors(sesionesTotales) incondicional -> cada uno falla 1 prueba de formulario-alta.test.tsx (H31 matado)."
+    },
+    {
+      "id": "auto-2",
+      "texto": "Verificador de accesibilidad de T-009 en verde sobre /agenda/nueva",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "No existe ningun spec en accesibilidad/ que cubra /agenda/nueva (grep sin resultados) ni lista de rutas donde anadirla; haria falta el spec o la lista."
+    },
+    {
+      "id": "man-11c",
+      "texto": "Foco visible siempre: tras Guardar con conflicto de hueco (hueco_ocupado) el foco no se pierde",
+      "veredicto": "PASA",
+      "comando": "node t10.mjs (ruta, dos sesiones: tecnico guarda el hueco, ana guarda despues) y node t12.mjs (dialogo, solo teclado, Enter en Guardar) scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "ruta: 'A conflicto: Ese hueco acaba de ocuparse. Elige otro de los que quedan.'; 'A foco: BUTTON | Guardar | type=submit'; sugerencias nuevas 13:00, 17:40, 18:20; sala 'Sala conflicto-A', paciente y tipo conservados. Dialogo con teclado: 'Enter Guardar -> conflicto => BUTTON | Guardar | type=submit'; estado Guardar {disabled:false, ariaDisabled:'false'}; 'Tab tras conflicto => BUTTON | Cerrar' (el foco sigue dentro del dialogo). En la ronda 4 era BODY."
+    },
+    {
+      "id": "man-11-H26",
+      "texto": "Escape sobre un hueco devuelve el foco al dia sin cerrar el dialogo; Escape en un campo cierra; foco.ts compartido sigue cerrando desplegable, emergente y panel anclado",
+      "veredicto": "PASA",
+      "comando": "node h26.mjs; h26c.mjs; esc.mjs; esc3.mjs; esc5.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Dialogo (desde /agenda): Escape sobre hueco 'lunes, 5 de octubre de 2026, 11:40, libre' -> dialogo presente=1, url /agenda/nueva, foco 'BUTTON | lun 5, 9 huecos libres'. Escape en campo Sala (y en el buscador) -> url /agenda y foco 'A | Nueva cita' (el [role=dialog] queda en DOM con offsetHeight 0, comportamiento de Next, no visible; igual con la X). Ruta: Escape sobre hueco -> foco al dia; Escape en Sala no cierra nada (no hay dialogo). Emergente (campana): tras Escape foco 'Notificaciones', aria-expanded false. Panel anclado de cita: tras Escape cerrado y foco en el boton de la cita; panel de dia: cerrado y foco 'mar 6, 7 citas'. Desplegable (admin, /ajustes/invitar): aria-expanded true/listbox 1 -> Escape -> false/0, foco en el combobox. Menu (components/ui/menu.tsx): no esta montado en ninguna pantalla de la app (sin importadores), solo cubierto por pruebas unitarias."
+    },
+    {
+      "id": "man-11a",
+      "texto": "Foco al elegir paciente con el buscador y al pulsar Cambiar (regresion)",
+      "veredicto": "PASA",
+      "comando": "node t4.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "'Enter: elegir paciente => BUTTON | Cambiar'; 'Enter en Cambiar => INPUT type=search'; 'click en resultado => BUTTON | Cambiar'; 'click en Cambiar => INPUT type=search'."
+    },
+    {
+      "id": "man-11b",
+      "texto": "Recorrido completo con teclado: abrir, elegir hueco, periodicidad, confirmar, cerrar; foco de vuelta al origen (regresion)",
+      "veredicto": "PASA",
+      "comando": "node t11.mjs; node t13.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Tarjeta 3 con Enter -> 'Hueco elegido: Martes, 6 de octubre de 2026, 19:00'; periodicidad y n sesiones por teclado; casillas Incluir con Space; 'foco Guardar => BUTTON | Guardar'; 'Enter Guardar => A | Nueva cita', url /agenda, anuncio 'Serie guardada. Quedan fechas por resolver en la bandeja de la agenda.'. Escape y Cancelar: 'foco A | Nueva cita'. Guardar con errores de validacion: el foco se queda en Guardar."
+    },
+    {
+      "id": "man-12",
+      "texto": "A 360 px ningun objetivo tactil por debajo de 44 px (regresion)",
+      "veredicto": "PASA",
+      "comando": "node t8.mjs (viewport 360x740, ana, tres estados del dialogo) scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Buscando 19 controles, con tipo 29, serie con preview 40: todos >=44 de alto; scrollX 0. Unicas lineas '!!': los 5 input checkbox de la previsualizacion (20x20) cuyo label contenedor mide 260-278x44 (el objetivo pulsable es la etiqueta de 44 px), igual que en la ronda 4."
+    },
+    {
+      "id": "H28",
+      "texto": "Cambiar de centro con el profesional elegido a mano: entra el asignado del paciente si trabaja alli",
+      "veredicto": "PASA",
+      "comando": "node h28c.mjs (admin, paciente Hugo, asignada Ana Marquez) scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Madrid: Alvaro, Ana, Bruno; Las Palmas: Alvaro, Ana. Manual=Bruno (solo Madrid) -> cambiar a Las Palmas -> 'Ana Márquez' (asignada); manual=Alvaro (trabaja en ambos) se conserva; manual=Ana se conserva."
+    },
+    {
+      "id": "H29",
+      "texto": "Error al leer perfiles_centros se trata como error (no mapa vacio)",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Exige hacer fallar la lectura de perfiles_centros y la base esta compartida con la prueba manual del propietario; solo cubierto por pruebas unitarias en verde (npm test 2192/2192)."
+    },
+    {
+      "id": "H30",
+      "texto": "Region de estado fija en sugerencias vacias/cargando",
+      "veredicto": "PASA",
+      "comando": "node h30.mjs (MutationObserver sobre p[role=status], Ana, Las Palmas sin franjas) scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "{'txt':'Buscando huecos libres…','mismo':true,'role':'status'} -> {'txt':'Sin huecos libres en las próximas cuatro semanas.','mismo':true,'role':'status'}: mismo nodo, rol conservado."
+    },
+    {
+      "id": "H31",
+      "texto": "Pruebas que matan los clearErrors de paciente, firma y rango",
+      "veredicto": "PASA",
+      "comando": "vitest en el clon con tres mutantes (sed sobre formulario-alta.tsx, restaurado)",
+      "evidencia": "Sin clearErrors(pacienteId): 1 failed 'elegir paciente borra «Elige un paciente.»'; sin clearErrors(firma): 1 failed 'la previsualizacion de la serie borra «Falta la previsualización de la serie.»'; clearErrors(sesionesTotales) incondicional: 1 failed 'un numero de sesiones aun fuera de rango no borra su error'."
+    },
+    {
+      "id": "man-3",
+      "texto": "Abrir /agenda/nueva sin PIN funciona entero, incluida la serie",
+      "veredicto": "PASA",
+      "comando": "node t11.mjs; t7.mjs; t15.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "'PIN pedido? false | formulario presente: true'; serie guardada ('Serie guardada...') sin introducir PIN."
+    },
+    {
+      "id": "man-2",
+      "texto": "Con desbloqueo de historia vigente la pantalla no muestra ningun dato clinico",
+      "veredicto": "PASA",
+      "comando": "node t15.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Nota clinica abierta con desbloqueo (56 caracteres); ruta y dialogo: 'coincidencias clinicas: []', 'cuerpo de nota presente: false'; motivos solo 'Primer hueco libre'."
+    },
+    {
+      "id": "man-5",
+      "texto": "Paciente sin citas previas: 'primeros huecos libres', sin hora habitual en las tarjetas",
+      "veredicto": "PASA",
+      "comando": "node cf.mjs (Hugo) scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Cabecera 'Primeros huecos libres' + 'Aún no hay citas suficientes para saber su hora habitual.'; tarjetas 'Primer hueco libre'; sin cifra de puntuacion ni estrellas."
+    },
+    {
+      "id": "man-6",
+      "texto": "Tecnico administrativo: tipo en el formulario con el catalogo activo; tras guardar ni agenda ni ficha lo ensenan; ningun motivo lo nombra",
+      "veredicto": "PASA",
+      "comando": "node t9.mjs; t10.mjs; t16.mjs (tecnico) scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Select 'Tipo de terapia' con 'Elige el tipo','Sesión breve de seguimiento','Sesión de pareja','Sesión individual'; tarjetas solo 'Primer hueco libre'; 'agenda tecnico muestra tipo? false'; panel de cita: 'tipo visible? false'."
+    },
+    {
+      "id": "man-7",
+      "texto": "Ningun control ni texto de modalidad en /agenda/nueva",
+      "veredicto": "PASA",
+      "comando": "node t17.mjs; t9.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "'modalidad/presencial/telematica en texto: false | en DOM name/id: 0'."
+    },
+    {
+      "id": "man-9",
+      "texto": "Serie que pisa un festivo: sesion marcada con alternativa, nunca encima",
+      "veredicto": "PASA",
+      "comando": "node t11.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Preview: 'Martes, 20 de octubre de 2026 | Festivo | Alternativa: miércoles, 21 de octubre de 2026, 19:00 | Aceptar alternativa'."
+    },
+    {
+      "id": "man-10",
+      "texto": "Dos pestanas, mismo hueco: 'Ese hueco acaba de ocuparse' con sugerencias nuevas y resto del formulario conservado",
+      "veredicto": "PASA",
+      "comando": "node t10.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "evidencia": "Ver man-11c: aviso, sugerencias 13:00/17:40/18:20, sala/paciente/tipo conservados."
+    },
+    {
+      "id": "man-1",
+      "texto": "Desde la ficha, pestana Resumen, 'Nueva cita' abre el dialogo con paciente fijado; recargar mantiene la pantalla",
+      "veredicto": "NO_VERIFICABLE",
+      "comando": "node cf2.mjs",
+      "motivo": "La ficha (Resumen) no trae el enlace 'Nueva cita' (0 enlaces): es el corte C (panel-resumen.tsx). /agenda/nueva?paciente=... si es enlazable y carga."
+    },
+    {
+      "id": "man-4",
+      "texto": "Paciente con seis citas los martes a las 12: primera sugerencia martes 12, motivo 'como las seis ultimas'",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Necesita base sembrada limpia (db reset + seed) con ese paciente; la base lleva una migracion de otra rama y esta en uso por el propietario."
+    },
+    {
+      "id": "man-8",
+      "texto": "Semanal x8 cruzando el ultimo domingo de marzo: ocho con la misma hora local y la afectada marcada",
+      "veredicto": "NO_VERIFICABLE",
+      "comando": "node t7.mjs scratchpad (clon5, next start :3100, Playwright, sin db reset)",
+      "motivo": "Parcial: semanal x8 desde martes 16-mar-2027 muestra las ocho a 09:00 (cruza el 28-mar) pero ninguna cae en la hora inexistente, asi que no hay sesion afectada que marcar (anomalia_horaria no provocable con las franjas sembradas)."
+    },
+    {
+      "id": "man-13",
+      "texto": "/agenda/nueva al lado de /prototipo: mismo vocabulario visual",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Comparacion visual humana; no realizada."
+    }
+  ],
+  "regresiones": [
+    "Ninguna nueva.",
+    "Observacion (ya vista en ronda 4): tras Cambiar, el buscador de paciente conserva el texto anterior ('Hugo').",
+    "Observacion: el [role=dialog] del alta queda en el DOM oculto (offsetHeight 0) tras cerrar desde /agenda; no es visible.",
+    "npm run test:rls no se ejecuto (la base lleva migraciones de otra rama y no se puede resetear)."
+  ]
+}
