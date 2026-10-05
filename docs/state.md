@@ -3,12 +3,12 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 05-10-2026 · **T-040 integrado** (A+B, merge d8e6728); T-028 B ronda 5 implementada.
+**Actualizado**: 05-10-2026 · **T-028 corte B integrado** (merge b5eeb9a); **T-040 integrado** (merge d8e6728).
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 A/a, T-016–T-020, T-029–T-040, **T-042**.
-- **T-028 B**: rama `worktree-agent-a2b0012224d53ce71` (ronda 5 implementada, H26–H31; territorio ampliado con `components/ui/foco.ts` por decisión propietario 05-10). Evidencia ronda 5 sellada (todo PASA salvo NO_VERIFICABLE auto-2, man-1, man-4, man-8, man-13, H29). Revisión ronda 5 sellada (7c0e2f6: 0 ALTA, 0 MEDIA, 2 BAJA H32/H33). Falta: prueba manual propietario → merge → corte C.
+- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 A/**B**, T-016–T-020, T-029–T-040, T-042.
+- **En curso**: **T-028 corte C** (botón en ficha `panel-resumen.tsx`, entrada desde la ficha; cierra prototipo clínico).
 - **T-021**: ADR-077 listo. **T-041**: diseño cerrado, espera turno `supabase/`.
 
 ## Bloqueos
@@ -18,12 +18,15 @@
 
 ## Siguiente paso
 
-1. T-028 B ronda 5: prueba manual propietario → merge → corte C (cierra prototipo clínico).
+1. T-028 corte C (panel-resumen.tsx, entrada desde ficha, cierra prototipo clínico).
 2. Cola `supabase/`: T-041 → ticket aviso hueco (arquitecto, T-028:169) → T-021. Ticket corto: `/recuperar`.
-3. Limpiar worktrees T-038, T-042, agent-a9325d705ce4db36b, a1549876942c02f5f (quitar junction `node_modules` antes).
+3. Limpiar worktrees T-038, T-042, agent-a9325d705ce4db36b, agent-a2b0012224d53ce71, agent-a32189ff51a6d9558, rama a1549876942c02f5f (quitar junction `node_modules` antes).
 
 ## Hallazgos anotados
 
+- **T-028 R5-H32 (BAJA)**: `role="status"` en sugerencias nace relleno cuando cambia el tipo. Arreglo: región montada siempre.
+- **T-028 R5-H33 (BAJA)**: Error lectura `tipos_terapia`/`directorio_perfiles` en `contenido-alta.tsx:52-53` cae a `[]` y se pinta falso «No hay…». Arreglo: propagar error.
+- **T-028 R6-H35 (BAJA)**: la prueba de H34 (`vista-alta.test.ts:64`) deja vivos tres mutantes de `finDeOcupado` (máximo en vez de mínimo, último tramo de la entrada, sin la cota `< fin`). Arreglo: un segundo libre tras el de 09:40 y un día con ocupado al final de la mañana y libre por la tarde. **Nota R6**: `agenda_bloques_profesional` sigue emitiendo el ocupado con la duración pedida; el recorte es solo de pantalla y otro consumidor vería el solape.
 - **`/recuperar` sin enlace (T-042, prueba manual)**: ninguna pantalla enlaza a `/recuperar`, tampoco «Verificación en dos pasos» de `/primera-vez`, donde se queda quien perdió el móvil; solo se llega tecleando la URL. `docs/interfaz.md` no la menciona. Propuesta: enlace «¿Has perdido el acceso a tu app? Usa un código de recuperación».
 - **T-042 R2-H1 (BAJA)**: el predicado del `update` de `bloquear_historia()` (migración `20261009120000:442`) no tiene prueba ni mutante; sin él cada «Bloquear» escribe una fila `UPDATE` en `auditoria` y `test:rls` sigue verde. Arreglo: aserción en CA-R2.2 de que bloquear con `0/0/false` no cambia el recuento.
 - **T-038 A3-H1=B3-H2 (BAJA)**: `lib/cuentas/totp.ts:57` marca `reentrar` ante cualquier 42501; `generar_codigos_recuperacion()` lo lanza por cuatro causas (Q3(B) incluida) y la vista afirma «hace más de cinco minutos». La salida sí resuelve.
@@ -42,7 +45,7 @@
 - **T-039 R3-B-H3 (BAJA)**: `scripts/rls/README.md:49` dice «(V, S)»; faltan C, W, N, T.
 - **T-039 R3-A-H1 (BAJA)**: `fn_exigir_vinculo_agenda` solo `before insert`; un profesional pasa su cita suelta a un paciente ajeno (ADR-055). Arreglo: también `before update of paciente_id`.
 - **H25**: técnico deduce parejas por `episodio_id` en auditoría. **Bloquea producción**.
-- **T-028 R5-H33 (BAJA)**: `contenido-alta.tsx:52-53` se traga el error de `tipos_terapia` y de `directorio_perfiles`: falso «No hay tipos de terapia activos» / «No hay profesionales activos» (patrón H29). **H32 (BAJA)**: `tarjetas-sugerencia.tsx:36-37`, de tarjetas a vacío el `role="status"` nace con el texto y no se anuncia; arreglo: región montada siempre. Comentario `rejilla-semana.tsx:232` desactualizado. Verificador: tras Cambiar, buscador conserva texto; centro por defecto sin franjas.
+- **Verificador T-028**: tras Cambiar, buscador conserva texto; centro por defecto sin franjas. Comentario `rejilla-semana.tsx:232` desactualizado.
 - **T-040 R2A-H1 (MEDIA, anotada por el propietario 05-10)**: `scripts/t040-oraculo.mjs` no prueba `offset`+`Prefer: count=exact`; ese 416 («only 1/0 rows») lleva un bit del cuerpo y `conContenido` no lo cuenta. Con PostgREST v16.1 (local) confirma y deja rastro; al subir PostgREST, añadir la forma S7 con su gemela.
 - **T-040 A-H3 (BAJA, por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga); en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN. **R3-H1 (BAJA)**: opacidad/color de marca sin prueba.
 - **Sello de T-033**: el hook reselló su `revision.sha` sin que parara su revisor (integrado hace semanas); sin commitear, lo decide el usuario.

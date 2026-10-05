@@ -5,6 +5,8 @@ modelo: sonnet
 fase: 1
 prioridad: alta
 depende_de: [T-010, T-011, T-013, T-014, T-028a]
+estado: en curso
+corte_b_integrado: 2026-10-05
 territorio:
   - lib/agenda/sugerencias.ts               # corte A
   - lib/agenda/sugerencias.test.ts          # corte A
@@ -29,7 +31,6 @@ territorio:
   - accesibilidad/**                        # solo para añadir /agenda/nueva a la lista de rutas
   - docs/interfaz.md                        # solo el choque 4 y §14 (diseño E7)
   - app/(app)/pacientes/[id]/panel-resumen.tsx   # corte C, tras integrar T-012
-estado: pendiente
 ---
 
 # Enmienda por ADR-074 y ADR-075 (propietario, 02-10-2026)
