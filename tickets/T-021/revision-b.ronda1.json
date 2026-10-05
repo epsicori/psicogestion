@@ -1,0 +1,88 @@
+{
+  "ticket": "T-021",
+  "altas": 1,
+  "medias": 3,
+  "bajas": 6,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "ALTA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 1011,
+      "descripcion": "Tres datos económicos se reescriben en sitio con UPDATE (bonos.caducidad sin límite, tarifas_paciente.vigente_hasta, citas.bono_id de una cita realizada): contra la regla 6; el origen es el diseño y decide el propietario (enmendar la regla con ADR o solo adición).",
+      "escenario": "PRO1: update citas set bono_id = null sobre una cita realizada → bonos_consumo baja de 1 a 0 (medido); ADM: update bonos set caducidad a ayer → bono caducado hacia atrás; el valor anterior solo queda en auditoria."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 714,
+      "descripcion": "fn_cerrar_tarifa no compara vigente_hasta con current_date y tarifas_paciente.creada_en lo elige el llamante: el cierre se fecha hacia atrás y la tarifa nueva se retrofecha.",
+      "escenario": "Tarifa de 60 € desde 2026-01-01; el 05-10 PRO1 cierra en 2026-02-01 e inserta una de 90 € desde 2026-02-01 con creada_en 2026-02-01 (medido) → la tabla dice que en marzo regía 90 €; K4 del banco cierra en una fecha pasada como positiva."
+    },
+    {
+      "id": "H3",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 889,
+      "descripcion": "La política borradores_factura_alta no exige creado_por = auth.uid(); la cabecera del borrador se abre a nombre de otro y con creado_en arbitrario.",
+      "escenario": "Como PRO1, insert into borradores_factura (P1, PRO1, creado_por = ADM, creado_en = 2020-01-01) pasa (medido); la sección G no tiene ninguna negativa de autoría."
+    },
+    {
+      "id": "H4",
+      "severidad": "MEDIA",
+      "archivo": "tickets/T-021/mutantes.json",
+      "linea": 42,
+      "descripcion": "M6a se declara equivalente y no lo es: el check base + cuota = total restringe la fila, no el sobre; sin la línea total_centimos del verificador, el banco sigue verde.",
+      "escenario": "Sobre de la v2 con total_centimos 6000→7000 y huella recalculada: el verificador da solo sobre_no_coincide_con_fila, con base, cuota y líneas coincidentes y el total no (medido); sin L689 da cero filas."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 501,
+      "descripcion": "tipo_iva_centesimas no está atado a regimen_iva ni a la cuota (no se exige exento ⇔ 0, ni general ⇒ > 0 con cuota > 0).",
+      "escenario": "Línea exento_sanitario con 2100 se sella; línea general al 21 % con cuota 0 y total 100 se sella (medido); quedan para siempre en una cadena de solo adición."
+    },
+    {
+      "id": "H6",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 137,
+      "descripcion": "Base y cuota no tienen coherencia de signo; solo se exige base + cuota = total.",
+      "escenario": "base -50, cuota 150, total 100 con una sola línea general de 100 € se sella (medido)."
+    },
+    {
+      "id": "H7",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 174,
+      "descripcion": "Los sellos de tiempo del sistema (cobros.registrado_en, borradores_factura.creado_en, bonos.creado_en, tarifas_paciente.creada_en) los elige el llamante.",
+      "escenario": "Como TEC1, un cobro con registrado_en = 2025-01-01 entra y lo devuelve así (medido)."
+    },
+    {
+      "id": "H8",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 397,
+      "descripcion": "El centro_id de una versión del borrador no se valida contra los centros del paciente ni del profesional.",
+      "escenario": "Una versión del borrador de P1/PRO1 (centro A) se sella con centro_id = CB (medido); una lectura por centro la atribuiría a B."
+    },
+    {
+      "id": "H9",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/26-economico.sql",
+      "linea": 0,
+      "descripcion": "El punto Concurrencia de A.5 no tiene ninguna prueba: el banco es una sola transacción.",
+      "escenario": "Si se quitan el for no key update (L337) y el cerrojo consultivo (L340), el banco sigue verde; dos guardados simultáneos dan 23505 en el segundo en lugar de serializarse."
+    },
+    {
+      "id": "H10",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 466,
+      "descripcion": "trim() solo quita espacios: un concepto de tabuladores o saltos de línea pasa como no vacío.",
+      "escenario": "Una línea con concepto = Et se sella (medido); J28 solo prueba dos espacios."
+    }
+  ]
+}
