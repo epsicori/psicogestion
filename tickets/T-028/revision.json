@@ -1,51 +1,83 @@
 {
   "ticket": "T-028",
   "corte": "C",
-  "ronda": 7,
-  "diff": "git diff main...worktree-agent-aa3cf8ef16a243549 (681cb0d): app/(app)/pacientes/[id]/panel-resumen.tsx y panel-resumen.test.tsx",
+  "ronda": 8,
+  "diff": "git diff worktree-agent-aa3cf8ef16a243549..worktree-agent-aae08223ceefe21b6 -- app (3883608); total del corte: git diff main...worktree-agent-aae08223ceefe21b6 (panel-resumen.tsx y panel-resumen.test.tsx)",
   "altas": 0,
-  "medias": 1,
-  "bajas": 1,
+  "medias": 0,
+  "bajas": 0,
   "evidencia_leida": "No",
+  "cerrados_de_la_ronda_7": [
+    "H36",
+    "H37"
+  ],
   "abiertos_sin_tocar": [
     "H32",
     "H33",
     "H35"
   ],
-  "desvio_de_alcance": "No en contenido; la prueba nueva queda fuera del territorio declarado (H36)",
+  "desvio_de_alcance": "No",
   "comprobaciones_pedidas": {
-    "quien_ve_el_boton": "OK: los tres roles; contenido-alta.tsx:26 solo corta con rol nulo; profesional lee y agenda por el mismo es_profesional_asignado; tecnico por centros_actuales; sin tipo ni nota en el enlace",
-    "ocultar_con_null": "Lectura del implementador, sin dueno en contrato ni diseno; defendible con rol nulo, pero null tambien es fallo de lectura (H37)",
-    "prueba": "Discrimina: 6/6 mutantes en rojo",
-    "territorio": "panel-resumen.test.tsx FUERA (H36); zz-man1.mjs sin seguimiento en el worktree"
+    "H36": "Cerrado: tickets/T-028-alta-de-cita.md:35 incluye panel-resumen.test.tsx (cad615b); territorio.mjs en el worktree: 2 ficheros, todos dentro; zz-man1.mjs ya no existe",
+    "H37": "Cerrado segun decision del propietario: la rama citas===null (panel-resumen.tsx:103-117) pinta NuevaCita en la misma posicion que las otras ramas; comentario :171-176 actualizado",
+    "prueba_null_discrimina": "Si: quitar NuevaCita solo de la rama null -> 1 roja (la prueba de H37), 2 verdes; sin mutar 3/3 verdes; comprueba href exacto con uuid",
+    "quien_ve_que": "Sin cambios: null = sin rol o error de lectura; sin rol /agenda/nueva corta en contenido-alta.tsx:26 con AvisoDeError antes de leer; el enlace solo lleva el uuid del paciente de la ficha ya visible",
+    "lint": "eslint de los dos ficheros limpio"
   },
   "mutantes_medidos": {
-    "1 href sin paciente": "ROJO (2)",
-    "2 paciente=x": "ROJO (2)",
-    "3 siempre visible (rama null)": "ROJO (1)",
-    "4 nunca visible": "ROJO (2)",
-    "5 sin boton en rama sin citas": "ROJO (1)",
-    "6 sin boton en rama con citas": "ROJO (1)"
+    "0 sin mutar": "VERDE (3/3)",
+    "1 sin boton en la rama null": "ROJO (1)"
   },
-  "hallazgos": [
-    {
-      "id": "H36",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/pacientes/[id]/panel-resumen.test.tsx",
-      "linea": 1,
-      "descripcion": "La prueba nueva del boton no esta en el territorio: del ticket (solo panel-resumen.tsx para el corte C) y territorio.mjs T-028 la da FUERA.",
-      "escenario": "Se lanza territorio.mjs antes del merge -> FUERA; las salidas son revertir (se pierde la unica prueba automatica del boton, 6/6 mutantes muertos) o ampliar territorio: con aprobacion del propietario, como en la ronda 5 con foco.ts."
-    },
-    {
-      "id": "H37",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/pacientes/[id]/panel-resumen.tsx",
-      "linea": 173,
-      "descripcion": "El comentario dice que el boton se oculta donde la agenda no es visible, pero cargarCitasDelPaciente tambien devuelve null cuando falla la lectura, y el alta no depende de esa lectura.",
-      "escenario": "Fallo pasajero de PostgREST al leer citas del paciente -> la ficha dice «No puedes ver la agenda de este paciente» y ya no ofrece «Nueva cita»; recepcion concluye que no puede citarlo aunque /agenda -> Nueva cita -> buscar funciona."
-    }
-  ],
+  "hallazgos": [],
   "rondas_anteriores": [
+    {
+      "ticket": "T-028",
+      "corte": "C",
+      "ronda": 7,
+      "diff": "git diff main...worktree-agent-aa3cf8ef16a243549 (681cb0d): app/(app)/pacientes/[id]/panel-resumen.tsx y panel-resumen.test.tsx",
+      "altas": 0,
+      "medias": 1,
+      "bajas": 1,
+      "evidencia_leida": "No",
+      "abiertos_sin_tocar": [
+        "H32",
+        "H33",
+        "H35"
+      ],
+      "desvio_de_alcance": "No en contenido; la prueba nueva queda fuera del territorio declarado (H36)",
+      "comprobaciones_pedidas": {
+        "quien_ve_el_boton": "OK: los tres roles; contenido-alta.tsx:26 solo corta con rol nulo; profesional lee y agenda por el mismo es_profesional_asignado; tecnico por centros_actuales; sin tipo ni nota en el enlace",
+        "ocultar_con_null": "Lectura del implementador, sin dueno en contrato ni diseno; defendible con rol nulo, pero null tambien es fallo de lectura (H37)",
+        "prueba": "Discrimina: 6/6 mutantes en rojo",
+        "territorio": "panel-resumen.test.tsx FUERA (H36); zz-man1.mjs sin seguimiento en el worktree"
+      },
+      "mutantes_medidos": {
+        "1 href sin paciente": "ROJO (2)",
+        "2 paciente=x": "ROJO (2)",
+        "3 siempre visible (rama null)": "ROJO (1)",
+        "4 nunca visible": "ROJO (2)",
+        "5 sin boton en rama sin citas": "ROJO (1)",
+        "6 sin boton en rama con citas": "ROJO (1)"
+      },
+      "hallazgos": [
+        {
+          "id": "H36",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/pacientes/[id]/panel-resumen.test.tsx",
+          "linea": 1,
+          "descripcion": "La prueba nueva del boton no esta en el territorio: del ticket (solo panel-resumen.tsx para el corte C) y territorio.mjs T-028 la da FUERA.",
+          "escenario": "Se lanza territorio.mjs antes del merge -> FUERA; las salidas son revertir (se pierde la unica prueba automatica del boton, 6/6 mutantes muertos) o ampliar territorio: con aprobacion del propietario, como en la ronda 5 con foco.ts."
+        },
+        {
+          "id": "H37",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/pacientes/[id]/panel-resumen.tsx",
+          "linea": 173,
+          "descripcion": "El comentario dice que el boton se oculta donde la agenda no es visible, pero cargarCitasDelPaciente tambien devuelve null cuando falla la lectura, y el alta no depende de esa lectura.",
+          "escenario": "Fallo pasajero de PostgREST al leer citas del paciente -> la ficha dice «No puedes ver la agenda de este paciente» y ya no ofrece «Nueva cita»; recepcion concluye que no puede citarlo aunque /agenda -> Nueva cita -> buscar funciona."
+        }
+      ]
+    },
     {
       "ticket": "T-028",
       "corte": "B",
