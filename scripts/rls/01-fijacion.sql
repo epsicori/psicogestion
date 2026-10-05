@@ -29,6 +29,11 @@
 -- T-021: un borrador de factura de P1 (con su versión 1) y un cobro de P1.
 \set BORR1 '\'a0210001-0000-4000-8000-000000000001\''
 \set COB1  '\'a0210002-0000-4000-8000-000000000001\''
+-- T-021 ronda 2: una tarifa y una caducidad de bono (tablas de solo adición) y su bono.
+\set TIPO21 '\'a0210003-0000-4000-8000-000000000001\''
+\set TAR21  '\'a0210004-0000-4000-8000-000000000001\''
+\set BONO21 '\'a0210005-0000-4000-8000-000000000001\''
+\set CAD21  '\'a0210006-0000-4000-8000-000000000001\''
 
 \echo '=== 01-fijación ==='
 
@@ -234,5 +239,15 @@ select pg_temp.assert_no_lanza(format($f$
   'T-021 · la versión 1 del borrador de la fijación se sella (sobre de quince claves)');
 insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por) values
   (:COB1, :P1, 60.00, date '2026-10-01', 'efectivo', :ADM);
+
+-- T-021 ronda 2 · una fila en tarifas_paciente y otra en bonos_caducidades, que entran en
+-- tablas_solo_adicion: sin ellas 10-solo-adicion falla con "debía lanzar y no lanzó".
+insert into public.tipos_terapia (id, nombre) values (:TIPO21, 'Terapia de la fijación T-021');
+insert into public.tarifas_paciente (id, paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por)
+  values (:TAR21, :P1, :TIPO21, 60.00, 'exento_sanitario', date '2026-01-01', :ADM);
+insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad, creado_por)
+  values (:BONO21, :P1, 5, 275.00, null, :ADM);
+insert into public.bonos_caducidades (id, bono_id, caducidad, registrada_por)
+  values (:CAD21, :BONO21, date '2031-12-31', :ADM);
 
 \echo '01-fijación: completa.'
