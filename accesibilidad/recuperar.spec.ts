@@ -161,7 +161,11 @@ test('se llega a /recuperar por el enlace (T-044)', async ({ browser }) => {
   await pagina.getByLabel('Correo').fill(correo);
   await pagina.getByLabel('Contraseña').fill(CONTRASENA);
   await pagina.getByRole('button', { name: 'Entrar' }).click();
-  await expect(pagina).toHaveURL(/\/primera-vez/);
+  // La redirección de la guardia a /primera-vez es una navegación suave y la URL puede quedarse
+  // en /pacientes (como en codigos-recuperacion.spec.ts): lo que cuenta es la pantalla que se pinta.
+  await expect(pagina.getByRole('heading', { name: 'Verificación en dos pasos' })).toBeVisible({
+    timeout: 30_000,
+  });
 
   await pagina
     .getByRole('link', { name: '¿Has perdido el acceso a tu aplicación? Usa un código de recuperación' })
