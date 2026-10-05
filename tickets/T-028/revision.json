@@ -1,112 +1,174 @@
 {
   "ticket": "T-028",
   "corte": "B",
-  "ronda": 4,
-  "diff": "git diff 75be90b..f7d59c4 en worktree-agent-a1549876942c02f5f, sin el merge 0a5dbe0 (tickets/** y docs/state.md de main): 9 commits, 18 ficheros de código",
+  "ronda": 5,
+  "diff": "git diff f7d59c4..c956428 en worktree-agent-a2b0012224d53ce71: 6 commits de codigo + c956428 (territorio); 9 ficheros",
   "altas": 0,
-  "medias": 2,
-  "bajas": 4,
-  "cerrados_de_la_ronda_3": [
-    "H21",
-    "H22",
-    "H23",
-    "H24",
-    "H25",
-    "man-11",
-    "man-12"
+  "medias": 0,
+  "bajas": 2,
+  "cerrados_de_la_ronda_4": [
+    "H26",
+    "H27",
+    "H28",
+    "H29",
+    "H31"
   ],
-  "no_cerrados_de_la_ronda_3": {
-    "H20": "H26: verde en raíz div, abierto con hydrateRoot(document)"
+  "parciales_de_la_ronda_4": {
+    "H30": "vacio->vacio cerrado; tarjetas viejas->vacio sigue naciendo rellena (H32)"
   },
-  "man_11c": {
-    "causa": "app/(app)/agenda/nueva/formulario-alta.tsx:510 disabled={guardando…} tira el foco a body; ninguna salida sin éxito de enviar lo devuelve",
-    "origen": "d6cae21 (ronda 1)",
-    "clasificacion": "MEDIA (H27)"
+  "comprobaciones_pedidas": {
+    "foco_ts_compartido": "Unico preventDefault sobre Escape fuera de pruebas: teclado-huecos.ts:48. Sondas con hydrateRoot(document): Dialogo cierra con Escape en campo (1), Emergente, Menu y Desplegable cierran; suites de los cinco consumidores verdes; mutante 'hook ignora todo Escape' rojo (10).",
+    "doble_envio_aria_disabled": "Clic e Intro (envio implicito) pasan por onSubmit y la guarda corta antes de handleSubmit; prueba de submit durante guardando discrimina (mutante sin guardando: rojo). Ventana previa al render con guardando=true identica a la de disabled. Sin via nueva."
   },
-  "evidencia_leida": "Solo man-11c, por encargo; la extracción imprimió el fichero entero y ningún otro dictamen se apoya en ella",
+  "evidencia_leida": "No",
   "mutantes_medidos": {
-    "dialogo sin onKeyDown (H20)": "rojo (2), pero en raíz div",
-    "rejilla parada={i === activo} -> parada (H21)": "rojo (2)",
-    "hueco tabIndex -1 fijo (H21)": "rojo (3)",
-    "centro onChange sin la rama del asignado (H22)": "rojo (2)",
-    "centro onChange asignado sin !profesionalManual (H22)": "rojo (1)",
-    "elegirPaciente sin p.centroId === centroId (H24)": "rojo (2)",
-    "contenido-alta sin .is(hasta, null) (H23)": "rojo",
-    "contenido-alta sin filtro de centros visibles (H23)": "rojo",
-    "contenido-alta solo el primer centro (H23)": "rojo",
-    "contenido-alta paciente de URL sin profesionalId (H22)": "rojo",
-    "buscador sin efecto de foco (man-11)": "rojo (2)",
-    "buscador sin guarda moverFoco (man-11)": "rojo (1)",
-    "tipo sin clearErrors": "rojo",
-    "hueco sin clearErrors": "rojo",
-    "sesiones sin clearErrors": "rojo",
-    "sesiones clearErrors incondicional": "verde (H31)",
-    "paciente sin clearErrors": "verde (H31)",
-    "firma sin clearErrors": "verde (H31)",
-    "cargando={false}": "rojo",
-    "tarjetas sin role status": "rojo",
-    "estado-alta sin el salto": "rojo",
-    "estado-alta salto sin acotar a la semana": "rojo",
-    "estado-alta salto sin b.fecha >= hoy": "verde, equivalente (la RPC solo emite libres con v_cursor > now())",
-    "hueco Elegida block (H25)": "rojo",
-    "hueco Elegida inline-block w-full (H25)": "verde (la prueba mira la clase, no la visibilidad)"
+    "0 foco.ts sin !defaultPrevented": "ROJO (2)",
+    "1 hook ignora todo Escape": "ROJO (10)",
+    "2 sin onKeyDown del Dialogo": "VERDE (redundante)",
+    "3 Guardar vuelve a disabled": "ROJO (4)",
+    "4 disabled y aria-disabled": "ROJO (1)",
+    "5 guarda sin guardando": "ROJO (1)",
+    "6 guarda sin catalogoVacio": "VERDE (no guarda: Zod)",
+    "7 guarda sin esperandoSerie": "VERDE (no guarda: enviar:273)",
+    "8 sin guarda": "ROJO (1)",
+    "9 H28 vuelve a delCentro[0]": "ROJO (1)",
+    "10 H29 sin return": "ROJO (1)",
+    "11 H30 rol condicional": "ROJO (1)",
+    "12 H31 sin clearErrors paciente": "ROJO (1)",
+    "13 H31 sin clearErrors firma": "ROJO (1)",
+    "14 H31 clearErrors sesiones siempre": "ROJO (1)"
   },
   "sondas": {
-    "Escape en hueco dentro de Dialogo con hydrateRoot(document)": "foco al día y alCerrar llamado 1 vez (H26)",
-    "H25 en Chromium con el CSS compilado, hueco de 30 min, 768-1024 px": "«Elegida» visible: borde inferior 459 frente a 462 del interior",
-    "botón enfocado que pasa a disabled (Chromium y jsdom)": "Chromium: activeElement BODY y no vuelve; con aria-disabled se queda (H27). jsdom: se queda en el BUTTON"
+    "A-E hydrateRoot(document)": "Dialogo real + alTeclearHueco: alCerrar 0, foco al dia; input del Dialogo: 1; Desplegable en Dialogo: cierran los dos (previo); Emergente y Menu cierran",
+    "H32": "tarjetas -> cargando con tarjetas -> vacio: 0, 0, 1 region de estado (nace rellena)"
   },
   "hallazgos": [
     {
-      "id": "H26",
-      "severidad": "MEDIA",
-      "archivo": "components/ui/dialogo.tsx",
-      "linea": 57,
-      "descripcion": "El arreglo de H20 (nativeEvent.stopPropagation en el onKeyDown del Dialogo) no detiene el Escape en la raíz real de Next: hydrateRoot(document) pone el delegado de React en el mismo nodo que el keydown de useCierreExterior (foco.ts:116), que cierra sin mirar defaultPrevented (foco.ts:106).",
-      "escenario": "Sonda con renderToString + hydrateRoot(document, <html><body><Dialogo alCerrar=fn><RejillaSemana seleccion/>): foco en el hueco de las 10:00 → Escape → foco al día 2026-10-06 y alCerrar llamado 1 vez. En el navegador: alta a medio rellenar, Escape en un hueco → router.back() y se pierde lo rellenado. escape-en-dialogo.test.tsx está verde porque render() de RTL monta en un div."
-    },
-    {
-      "id": "H27",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 510,
-      "descripcion": "Causa de man-11c: Guardar lleva disabled={guardando…}; al pulsarlo pasa a disabled con el foco dentro, Chrome lo manda a body y ninguna salida sin éxito de enviar (hueco_ocupado, previsualizacion_caducada, fallo, catch) lo devuelve. Viene de la ronda 1 (d6cae21).",
-      "escenario": "Teclado: Tab a Guardar → Intro → la acción devuelve hueco_ocupado → aviso y sugerencias nuevas, pero activeElement = BODY y el siguiente Tab empieza fuera del diálogo modal (medido en Chromium: disabled=true → BODY; aria-disabled conserva el foco). En jsdom disabled no suelta el foco, así que ninguna prueba lo ve."
-    },
-    {
-      "id": "H28",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 372,
-      "descripcion": "Con profesionalManual, cambiar a un centro donde el elegido a mano no trabaja entra delCentro[0] y no el asignado del paciente, que sí trabaja allí (la prueba :577 lo fija así).",
-      "escenario": "Técnico en Sur elige a Bea Gil (asignado Luis Soto, de Norte), elige a mano a Dra. Ruiz (solo Sur) y cambia a Norte → profesional = Ana Abad (primera de Norte), no Luis; sugerencias y cita a nombre de Ana si no mira el desplegable."
-    },
-    {
-      "id": "H29",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
-      "linea": 54,
-      "descripcion": "Un error al leer perfiles_centros solo va a console.error y cae a ?? []; con el mapa vacío, la línea 77 ofrece a cada administrador en todos los centros y a ningún profesional sanitario.",
-      "escenario": "Fallo transitorio de esa lectura → el técnico abre Nueva cita → en cada centro solo salen administradores, que son delCentro[0] y el valor por defecto → la cita se guarda a nombre del administrador; sin administradores, mensaje falso «no hay profesionales en este centro»."
-    },
-    {
-      "id": "H30",
+      "id": "H32",
       "severidad": "BAJA",
       "archivo": "app/(app)/agenda/nueva/tarjetas-sugerencia.tsx",
       "linea": 36,
-      "descripcion": "role=\"status\" se pone y se quita junto con el texto: la región nace ya llena («Buscando huecos libres…») y, cuando llega el vacío, pierde el rol en el mismo render.",
-      "escenario": "Lector de pantalla: cambia el tipo de terapia → aparece «Buscando…» con el rol ya puesto (no se anuncia de forma fiable) → llega «No hay huecos libres…» sin rol → no se oye nada y el usuario no sabe si el recálculo terminó."
+      "descripcion": "De tarjetas viejas a resultado vacio, la <ul> se sustituye por un <p role=status> que nace ya con «Sin huecos…»: no se anuncia (H30 cerrado solo de vacio a vacio; el arreglo que propuse en la ronda 4 tenia ese hueco).",
+      "escenario": "Lector de pantalla con tres sugerencias; cambia a un tipo de 90 min sin cabida en cuatro semanas; durante el recalculo no hay region viva y al llegar el vacio la region se crea rellena: no oye ni que termino ni que no hay sugerencias."
     },
     {
-      "id": "H31",
+      "id": "H33",
       "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 251,
-      "descripcion": "Tres clearErrors nuevos de fc128a9 no tienen prueba que los distinga: el del paciente (:251), el de la firma (:187) y la guarda de rango de sesiones (:244).",
-      "escenario": "Mutantes sin clearErrors(pacienteId), sin clearErrors(firma) y con clearErrors(sesionesTotales) incondicional: 35/35 verdes. Un refactor quita el del paciente → Guardar sin paciente → «Elige un paciente» → elige uno → el error sigue pintado; nada se pone en rojo."
+      "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
+      "linea": 52,
+      "descripcion": "El arreglo de H29 deja tiposLeidos.error y profesionalesLeidos?.error solo en console.error: caen a ?? [] y se pintan como «No hay tipos de terapia activos. Los da de alta el administrador.» y «No hay profesionales activos en este centro.».",
+      "escenario": "Fallo transitorio de PostgREST al leer tipos_terapia: el tecnico lee que no hay tipos y que los da de alta el administrador, se lo dice y el administrador ve el catalogo lleno; lo mismo con directorio_perfiles y un centro con profesionales."
     }
   ],
   "rondas_anteriores": [
+    {
+      "corte": "B",
+      "ronda": 4,
+      "diff": "git diff 75be90b..f7d59c4 en worktree-agent-a1549876942c02f5f, sin el merge 0a5dbe0 (tickets/** y docs/state.md de main): 9 commits, 18 ficheros de código",
+      "altas": 0,
+      "medias": 2,
+      "bajas": 4,
+      "cerrados_de_la_ronda_3": [
+        "H21",
+        "H22",
+        "H23",
+        "H24",
+        "H25",
+        "man-11",
+        "man-12"
+      ],
+      "no_cerrados_de_la_ronda_3": {
+        "H20": "H26: verde en raíz div, abierto con hydrateRoot(document)"
+      },
+      "man_11c": {
+        "causa": "app/(app)/agenda/nueva/formulario-alta.tsx:510 disabled={guardando…} tira el foco a body; ninguna salida sin éxito de enviar lo devuelve",
+        "origen": "d6cae21 (ronda 1)",
+        "clasificacion": "MEDIA (H27)"
+      },
+      "evidencia_leida": "Solo man-11c, por encargo; la extracción imprimió el fichero entero y ningún otro dictamen se apoya en ella",
+      "mutantes_medidos": {
+        "dialogo sin onKeyDown (H20)": "rojo (2), pero en raíz div",
+        "rejilla parada={i === activo} -> parada (H21)": "rojo (2)",
+        "hueco tabIndex -1 fijo (H21)": "rojo (3)",
+        "centro onChange sin la rama del asignado (H22)": "rojo (2)",
+        "centro onChange asignado sin !profesionalManual (H22)": "rojo (1)",
+        "elegirPaciente sin p.centroId === centroId (H24)": "rojo (2)",
+        "contenido-alta sin .is(hasta, null) (H23)": "rojo",
+        "contenido-alta sin filtro de centros visibles (H23)": "rojo",
+        "contenido-alta solo el primer centro (H23)": "rojo",
+        "contenido-alta paciente de URL sin profesionalId (H22)": "rojo",
+        "buscador sin efecto de foco (man-11)": "rojo (2)",
+        "buscador sin guarda moverFoco (man-11)": "rojo (1)",
+        "tipo sin clearErrors": "rojo",
+        "hueco sin clearErrors": "rojo",
+        "sesiones sin clearErrors": "rojo",
+        "sesiones clearErrors incondicional": "verde (H31)",
+        "paciente sin clearErrors": "verde (H31)",
+        "firma sin clearErrors": "verde (H31)",
+        "cargando={false}": "rojo",
+        "tarjetas sin role status": "rojo",
+        "estado-alta sin el salto": "rojo",
+        "estado-alta salto sin acotar a la semana": "rojo",
+        "estado-alta salto sin b.fecha >= hoy": "verde, equivalente (la RPC solo emite libres con v_cursor > now())",
+        "hueco Elegida block (H25)": "rojo",
+        "hueco Elegida inline-block w-full (H25)": "verde (la prueba mira la clase, no la visibilidad)"
+      },
+      "sondas": {
+        "Escape en hueco dentro de Dialogo con hydrateRoot(document)": "foco al día y alCerrar llamado 1 vez (H26)",
+        "H25 en Chromium con el CSS compilado, hueco de 30 min, 768-1024 px": "«Elegida» visible: borde inferior 459 frente a 462 del interior",
+        "botón enfocado que pasa a disabled (Chromium y jsdom)": "Chromium: activeElement BODY y no vuelve; con aria-disabled se queda (H27). jsdom: se queda en el BUTTON"
+      },
+      "hallazgos": [
+        {
+          "id": "H26",
+          "severidad": "MEDIA",
+          "archivo": "components/ui/dialogo.tsx",
+          "linea": 57,
+          "descripcion": "El arreglo de H20 (nativeEvent.stopPropagation en el onKeyDown del Dialogo) no detiene el Escape en la raíz real de Next: hydrateRoot(document) pone el delegado de React en el mismo nodo que el keydown de useCierreExterior (foco.ts:116), que cierra sin mirar defaultPrevented (foco.ts:106).",
+          "escenario": "Sonda con renderToString + hydrateRoot(document, <html><body><Dialogo alCerrar=fn><RejillaSemana seleccion/>): foco en el hueco de las 10:00 → Escape → foco al día 2026-10-06 y alCerrar llamado 1 vez. En el navegador: alta a medio rellenar, Escape en un hueco → router.back() y se pierde lo rellenado. escape-en-dialogo.test.tsx está verde porque render() de RTL monta en un div."
+        },
+        {
+          "id": "H27",
+          "severidad": "MEDIA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 510,
+          "descripcion": "Causa de man-11c: Guardar lleva disabled={guardando…}; al pulsarlo pasa a disabled con el foco dentro, Chrome lo manda a body y ninguna salida sin éxito de enviar (hueco_ocupado, previsualizacion_caducada, fallo, catch) lo devuelve. Viene de la ronda 1 (d6cae21).",
+          "escenario": "Teclado: Tab a Guardar → Intro → la acción devuelve hueco_ocupado → aviso y sugerencias nuevas, pero activeElement = BODY y el siguiente Tab empieza fuera del diálogo modal (medido en Chromium: disabled=true → BODY; aria-disabled conserva el foco). En jsdom disabled no suelta el foco, así que ninguna prueba lo ve."
+        },
+        {
+          "id": "H28",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 372,
+          "descripcion": "Con profesionalManual, cambiar a un centro donde el elegido a mano no trabaja entra delCentro[0] y no el asignado del paciente, que sí trabaja allí (la prueba :577 lo fija así).",
+          "escenario": "Técnico en Sur elige a Bea Gil (asignado Luis Soto, de Norte), elige a mano a Dra. Ruiz (solo Sur) y cambia a Norte → profesional = Ana Abad (primera de Norte), no Luis; sugerencias y cita a nombre de Ana si no mira el desplegable."
+        },
+        {
+          "id": "H29",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/contenido-alta.tsx",
+          "linea": 54,
+          "descripcion": "Un error al leer perfiles_centros solo va a console.error y cae a ?? []; con el mapa vacío, la línea 77 ofrece a cada administrador en todos los centros y a ningún profesional sanitario.",
+          "escenario": "Fallo transitorio de esa lectura → el técnico abre Nueva cita → en cada centro solo salen administradores, que son delCentro[0] y el valor por defecto → la cita se guarda a nombre del administrador; sin administradores, mensaje falso «no hay profesionales en este centro»."
+        },
+        {
+          "id": "H30",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/tarjetas-sugerencia.tsx",
+          "linea": 36,
+          "descripcion": "role=\"status\" se pone y se quita junto con el texto: la región nace ya llena («Buscando huecos libres…») y, cuando llega el vacío, pierde el rol en el mismo render.",
+          "escenario": "Lector de pantalla: cambia el tipo de terapia → aparece «Buscando…» con el rol ya puesto (no se anuncia de forma fiable) → llega «No hay huecos libres…» sin rol → no se oye nada y el usuario no sabe si el recálculo terminó."
+        },
+        {
+          "id": "H31",
+          "severidad": "BAJA",
+          "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+          "linea": 251,
+          "descripcion": "Tres clearErrors nuevos de fc128a9 no tienen prueba que los distinga: el del paciente (:251), el de la firma (:187) y la guarda de rango de sesiones (:244).",
+          "escenario": "Mutantes sin clearErrors(pacienteId), sin clearErrors(firma) y con clearErrors(sesionesTotales) incondicional: 35/35 verdes. Un refactor quita el del paciente → Guardar sin paciente → «Elige un paciente» → elige uno → el error sigue pintado; nada se pone en rojo."
+        }
+      ]
+    },
     {
       "corte": "B",
       "ronda": 3,

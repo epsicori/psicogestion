@@ -800,3 +800,107 @@ Con la guarda de sesiones quitada, escribir «1» borra el error de mínimo 2 si
 - **`cambiarSesiones` limpia el error con 2,5**, porque 2,5 está dentro de `[2, 52]`. Guardar vuelve a validar y enseña el error de entero: no hay un estado erróneo que se guarde.
 - **Con `cargando` y tarjetas viejas, se siguen viendo las tarjetas anteriores.** Elegir una lleva a la previsualización y a la frescura del servidor; no tengo un escenario que guarde algo falso.
 - **El comentario de `rejilla-semana.tsx:232`** dice que la única parada es el día. Es un comentario desactualizado, sin escenario de fallo.
+
+# T-028 · Revisión del corte B, ronda 5 (arreglos de H26-H31)
+
+**Sin hallazgos ALTA.** 0 MEDIA y 2 BAJA (H32-H33).
+- Cerrados, con mutante medido: H26, H27, H28, H29 y H31.
+- **H30 queda cerrado solo en parte** (H32): el arreglo que propuse en la ronda 4 tenía un hueco, y el implementador lo siguió al pie de la letra.
+
+**Alcance de la revisión**
+- **Diff revisado:** `git diff f7d59c4..c956428` en `worktree-agent-a2b0012224d53ce71`. Son 6 commits de código más `c956428`, que solo amplía el territorio. Toca 9 ficheros: `app/(app)/agenda/nueva/**`, `components/ui/foco.ts`, la prueba nueva `components/ui/cierre-exterior-hidratado.test.tsx` y el ticket.
+- **Evidencia:** no he leído `evidencia.json` ni el informe del verificador.
+- **Método**
+  - Todo medido en un clon de c956428 en el scratchpad, nunca en el worktree. Cada fichero se restauró con `git checkout` en el clon. Sin `db reset` ni seed.
+  - Con el clon limpio, `npx vitest run components/ui "app/(app)/agenda"` da 62 ficheros y 568 pruebas en verde.
+  - 15 mutantes y 2 sondas.
+- **Territorio:** `territorio.mjs T-028` da 66 ficheros, todos dentro. `foco.ts` y su prueba entran por `c956428`, que recoge la decisión del propietario del 05-10.
+- **Alcance:** no hay commits que no vengan de un hallazgo de la ronda 4.
+
+## Cierre de la ronda 4
+
+| Hallazgo | Estado | Cómo lo he comprobado |
+|---|---|---|
+| H26 | **Cerrado** | **Sonda A**, con las piezas reales y en la raíz de Next: `renderToString` y luego `hydrateRoot(document, <html><body><Dialogo …>`, con un hueco que llama a `alTeclearHueco`. Foco en el hueco y Escape: `alCerrar` se llama **0** veces y el foco va al día. Mutante `foco.ts` sin `!evento.defaultPrevented`: **rojo** en la prueba nueva y en la sonda A. En la ronda 4, la misma sonda daba 1 llamada. Ver la salvedad en «Descartados». |
+| H26 · hook compartido | **Sin rotura** | He buscado todos los `preventDefault` sobre Escape fuera de las pruebas, en `components/`, `app/` y `lib/`. Solo hay uno: `teclado-huecos.ts:48`, vía `enfocar`, y solo cuando el día existe. `desplegable`, `menu`, `pestanas`, `lista-dia`, `rejilla-mes` y `rejilla-semana` solo cancelan flechas, Intro, Espacio o Tab. `alTeclearCita` (`rejilla-semana.tsx:188`) atiende Escape sin `preventDefault`, así que el panel anclado de la agenda se sigue cerrando. `useFocoAtrapado` solo cancela Tab. Con la raíz en `document`: Escape en un campo del `Dialogo` lo cierra (**sonda B**: 1 llamada); `Emergente` y `Menu` se cierran (**sondas D y E**) y `Desplegable` también (sonda C). Las pruebas de los cinco consumidores siguen en verde. Mutante «el hook ignora todo Escape»: **rojo** (10), incluidas las de `desplegable` y `menu`. |
+| H27 | **Cerrado** | Guardar lleva `aria-disabled` y la guarda está en `onSubmit`. Mutante «vuelve a `disabled`»: **rojo** (4). Mutante «`disabled` y `aria-disabled` a la vez»: **rojo** (1). Mutante sin `guardando` en la guarda: **rojo** (1). Mutante sin la guarda entera: **rojo** (1). Que el foco se quede en el botón con `aria-disabled` lo medí en Chromium en la ronda 4. |
+| H27 · doble envío | **Sin vía nueva** | Con `aria-disabled`, un `type="submit"` sigue enviando, tanto con un clic como con Intro en un campo (envío implícito). Las dos vías pasan por el mismo `onSubmit`, y la guarda corta antes de `handleSubmit`. La prueba nueva hace `submit` mientras guarda y la acción no se repite. La ventana entre el primer envío y el render con `guardando = true` (`setGuardando` corre tras la validación asíncrona de RHF) ya existía con `disabled`: el atributo también se ponía en ese render. Mutantes sin `catalogoVacio` y sin `esperandoSerie` en la guarda: **verdes**, pero no guardan nada. Con el catálogo vacío, Zod rechaza el tipo. Durante la espera, `enviar` vuelve en la línea 273 (`if (esperandoSerie) return`). Lo único que cambiaría es que se pintan errores de validación al pulsar el botón atenuado. No hay escenario de doble envío. |
+| H28 | **Cerrado** | Si el profesional se eligió a mano y no vale en el centro nuevo, entra el asignado si trabaja allí; si no, el primero. Mutante «vuelve a `delCentro[0]`»: **rojo** (1). El orden de las ramas no cambia los otros dos casos: sin elección a mano entra el asignado, y sin asignado entra el primero. Las pruebas de H22 y H24 siguen en verde. |
+| H29 | **Cerrado en lo pedido** | Si falla `perfiles_centros`, se devuelve `AvisoDeError` (`contenido-alta.tsx:56`). Mutante sin ese `return`: **rojo** (1). Las dos lecturas hermanas siguen tragándose el error (H33). |
+| H30 | **Parcial** (H32) | De vacío a vacío, el `<p role="status">` es el mismo nodo y solo cambia el texto. Mutante «rol condicional»: **rojo** (1). De tarjetas viejas a vacío, la región nace ya rellena (sonda, H32). |
+| H31 | **Cerrado** | Los tres mutantes que en la ronda 4 quedaban **verdes** dan ahora **rojo**: sin `clearErrors('pacienteId')` (1), sin `clearErrors('firma')` (1) y con `clearErrors('sesionesTotales')` incondicional (1). |
+
+## BAJA
+
+### H32 · `app/(app)/agenda/nueva/tarjetas-sugerencia.tsx:36-37` — al pasar de tarjetas viejas a «sin huecos», la región de estado nace ya rellena y no se anuncia
+
+**Qué pasa.**
+- Mientras recalcula, el formulario conserva la vista anterior (`formulario-alta.tsx:130,149`).
+- Si hay tarjetas, `cargando` sigue pintando la `<ul>` y no hay ninguna región viva.
+- Cuando llega un resultado vacío, la `<ul>` se sustituye por un `<p role="status">` que se monta con «Sin huecos…» ya escrito.
+- Es el mismo defecto de H30, en el camino más corriente. El arreglo que propuse en la ronda 4 («el `role` en el `<p>` siempre que no haya tarjetas») no lo cubría.
+
+**Medido** con una sonda (RTL, `rerender`) que reproduce la secuencia del formulario:
+
+| Paso | Regiones de estado |
+|---|---|
+| Con una tarjeta | 0 |
+| Con la misma tarjeta y `cargando` | 0 |
+| Con el resultado vacío | 1, creada en ese render con el texto ya puesto |
+
+**Escenario.**
+1. Un usuario con lector de pantalla ve tres sugerencias para una sesión de 50 min.
+2. Cambia a un tipo de 90 min con el que no cabe nada en cuatro semanas.
+3. Durante el recálculo no se anuncia nada.
+4. Llega «Sin huecos libres en las próximas cuatro semanas.», que nace ya rellena y no se oye.
+5. No sabe si el recálculo terminó ni que se ha quedado sin sugerencias.
+
+**Lo que cerraría.**
+- Una región `role="status"` montada siempre en la `<section>`, también cuando hay tarjetas (puede ser `sr-only`). Solo cambia su texto: «Buscando…», «Sin huecos…» o vacío.
+- Una prueba que parta de tarjetas, pase por `cargando`, acabe sin tarjetas y compruebe que la región es el mismo nodo antes y después.
+
+### H33 · `app/(app)/agenda/nueva/contenido-alta.tsx:52-53` — el arreglo de H29 deja las dos lecturas hermanas del mismo bloque tragando el error como ausencia
+
+**Qué pasa.**
+- Si falla `tipos_terapia`, solo se escribe un `console.error`. `tiposLeidos.data ?? []` (línea 59) deja `tipos` vacío, y el formulario pinta `agenda.alta.campos.tipoVacio`: «No hay tipos de terapia activos. Los da de alta el administrador.».
+- Si falla `directorio_perfiles`, `profesionales` queda vacío y la línea 91 devuelve `sinProfesionales`: «No hay profesionales activos en este centro.».
+- Es exactamente el síntoma del escenario 4 de H29, que llega por la otra lectura.
+
+**Escenario.**
+1. Un fallo transitorio de PostgREST al leer `tipos_terapia`.
+2. El técnico abre «Nueva cita» y lee que no hay tipos y que los da de alta el administrador.
+3. Se lo dice al administrador, que ve el catálogo lleno.
+4. Con `directorio_perfiles` pasa lo mismo: un centro que tiene profesionales sale «sin profesionales activos».
+
+No se guarda nada falso, porque Guardar queda bloqueado. Pero la pantalla dice algo falso y manda al usuario a otra persona.
+
+**Lo que cerraría:** el mismo `return <AvisoDeError mensaje={t('agenda.alta.error.cargar')} />` para `tiposLeidos.error` y `profesionalesLeidos?.error`, con una prueba para cada uno. Lo dejé pasar en las rondas 1 a 4.
+
+## Descartados
+
+- **La prueba nueva de H26 no monta el `Dialogo` real ni la rejilla.** Reproduce su forma: un `div role="dialog"` y un botón que hace `preventDefault`. Aun así discrimina: el mutante de `foco.ts` la pone en rojo, y la sonda A, con las piezas reales, dice lo mismo. Hay riesgo de que se desvíe del componente real, pero no hay fallo.
+- **El `onKeyDown` del `Dialogo` (`dialogo.tsx:56`) queda redundante.** El mutante que lo quita da **verde** en todo, también en la sonda A hidratada: el hook basta en las dos raíces. No hay escenario de fallo.
+- **Las cuatro `it.each` de H27 («tras %s, Guardar sigue enfocado») siguen verdes con el mutante «vuelve a `disabled`».** En jsdom, `disabled` no suelta el foco, y al acabar, `finally` ya ha quitado el atributo. La que discrimina es la quinta, que mira `disabled === false` mientras guarda. El título promete más de lo que mide, pero la propiedad está cubierta.
+- **Escape dentro de un `Desplegable` abierto en un `Dialogo` cierra los dos** (sonda C). Ya pasaba antes de este diff, y en el formulario de alta no hay desplegables, emergentes ni menús.
+- **Tras guardar con éxito, `finally` reactiva Guardar mientras el diálogo navega.** Ya pasaba igual con `disabled` y este diff no lo cambia. Un segundo envío choca en el servidor con la cita recién creada.
+- **El hover de `bg-primary/90` sigue activo con `aria-disabled`.** Es cosmético.
+
+## Mutantes (15 medidos)
+
+| # | Mutante | Resultado |
+|---|---|---|
+| 0 | `foco.ts` sin `!evento.defaultPrevented` | **Rojo** (2: la prueba nueva y la sonda A) |
+| 1 | El hook ignora todo Escape | **Rojo** (10) |
+| 2 | Sin el `onKeyDown` del `Dialogo` | Verde (redundante; descartado) |
+| 3 | Guardar vuelve a `disabled` | **Rojo** (4) |
+| 4 | `disabled` y `aria-disabled` a la vez | **Rojo** (1) |
+| 5 | Guarda sin `guardando` | **Rojo** (1) |
+| 6 | Guarda sin `catalogoVacio` | Verde (no guarda: Zod rechaza el tipo) |
+| 7 | Guarda sin `esperandoSerie` | Verde (no guarda: `enviar` vuelve en la línea 273) |
+| 8 | Sin la guarda entera | **Rojo** (1) |
+| 9 | H28: vuelve a `delCentro[0]` | **Rojo** (1) |
+| 10 | H29: sin el `return` de error | **Rojo** (1) |
+| 11 | H30: rol condicional | **Rojo** (1) |
+| 12 | H31: sin `clearErrors('pacienteId')` | **Rojo** (1) |
+| 13 | H31: sin `clearErrors('firma')` | **Rojo** (1) |
+| 14 | H31: `clearErrors('sesionesTotales')` incondicional | **Rojo** (1) |
