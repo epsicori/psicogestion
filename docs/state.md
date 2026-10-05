@@ -3,13 +3,13 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 05-10-2026 · **T-028 hecho** (corte C, merge 5e1ac12: cierra el prototipo clínico); **T-040 integrado** (merge d8e6728).
+**Actualizado**: 05-10-2026 · **T-041 hecho** (merge 80b6a06: altas de centro); **T-044, T-045** en verificación.
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, **T-028 (A/B/C)**, T-016–T-020, T-029–T-040, T-042.
-- **En curso**: **T-041** (altas de centro) en verificación y revisión doble; rama `worktree-agent-ada3a424c2ef63d80`. Su migración `20261010120000` ya está aplicada en la base local: un `db reset` desde `main` la pierde.
-- **T-021**: ADR-077 listo; espera a T-041 en la cola `supabase/`.
+- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 (A/B/C), T-016–T-020, T-029–T-042.
+- **En verificación**: T-044, T-045 (riesgo bajo).
+- **Siguiente en `supabase/`**: T-021 (migración 20261011120000, riesgo alto, diseño hecho con respuestas del propietario), luego T-043 (migración 20261012120000, idem, va tras T-021).
 
 ## Bloqueos
 
@@ -18,9 +18,10 @@
 
 ## Siguiente paso
 
-1. T-041: verificación + revisores A/B → merge → documentalista.
-2. Cola `supabase/`: ticket aviso hueco (arquitecto, T-028:169) → T-021. Ticket corto: `/recuperar`.
-3. Limpiar worktrees T-038, T-042, agent-a9325d705ce4db36b, agent-a2b0012224d53ce71, agent-a32189ff51a6d9558, agent-aa3cf8ef16a243549, agent-aae08223ceefe21b6, rama a1549876942c02f5f (quitar junction `node_modules` antes).
+1. T-044, T-045 en verificación y merge.
+2. Ya se puede `npx supabase db reset` desde main (20261010120000 está en main).
+3. T-021 en implementación (riesgo alto, Opus).
+4. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
 
 ## Hallazgos anotados
 
@@ -54,8 +55,9 @@
 - **T-034 SQL-H2**: reabrir esquiva D6, reloj. Única salida nota de cita con episodio cerrado (23.Z). No cerrar con citas posteriores.
 - **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket.
 - **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
-- **T-035 B-H1 → T-041**: suspendido.
+- **T-035 B-H1 → T-041**: cierre: la nota con coprofesional y alta posterior sigue vigente porque 7c no se reevalúa al firmar.
 - **T-041 R3/R6**: funciones cuentas.
+- **T-041 R2 (6 BAJA)**: B2-H1/H2 en acciones.ts (ramas registroConAltasPendientes/avisoPendiente sin prueba); B2-H3 en gestion-altas (catch no revalida); B2-H4=A2-H1 en invitar.ts (error lectura confunde con cierre); B2-H5 en formulario-invitar (transición sin try/catch); A2-H2 en README banco 28 (mutantes nuevos no documentados). Más: t002 líneas 148/190/217 sin `hasta is null`; ResultadoCuentas no puede `ok:true`; tsc app/layout.tsx(45,50); territorio.mjs no ve sufijos; DELETE en perfiles_centros sin disparador; ventana ms entre centros.activo e inviteUserByEmail; directorio_perfiles sin prueba RLS.
 - **T-025/T-026 (ADR-078)**: borradores en `docs/legal/` (consulta vinculante DGT con la lista del ADR-077 p.7; preguntas a Holded). Los envía el propietario tras revisión de asesor, antes de comercializar. Contratos sin tocar: los ajusta el arquitecto (vocabulario, 14.6, clave mínima).
 - **T-021 A.9/P3.8**: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
 - **T-015 R3-H1** (BAJA): `fotoDeLayout` época pierde ante foto fresca vieja; franja revive.
