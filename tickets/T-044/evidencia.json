@@ -1,0 +1,15 @@
+{
+  "ticket": "T-044",
+  "resumen": "8/8 PASA. Nota: en una primera pasada el enlace se pintaba con !enrolamiento (aparecia en enrolar antes del QR y si el enroll fallaba); el codigo actual usa factorVerificadoId y se reverifico todo contra build nuevo. Base: max(version)=20261011120000 al inicio y al final; usuarios 3 -> 22 (usuarios t042-* creados por el spec, ninguno desaparecio).",
+  "criterios": [
+    {"id": 1, "texto": "segundo-factor.test.tsx: enlace con factor verificado (href /recuperar) y ausente al enrolar", "veredicto": "PASA", "comando": "npx vitest run app/primera-vez/segundo-factor.test.tsx app/recuperar/formulario-recuperar.test.tsx", "evidencia": "Test Files 2 passed (2); Tests 20 passed (20); incluye 'con un factor verificado, enlaza a /recuperar' y 'al enrolar un factor nuevo no sale el enlace'"},
+    {"id": 2, "texto": "formulario-recuperar.test.tsx: enlace Volver con href /primera-vez", "veredicto": "PASA", "comando": "idem", "evidencia": "'ofrece volver a la verificacion en dos pasos (T-044)' verde; casos previos verdes"},
+    {"id": 3, "texto": "npm test verde incl. sin-literales", "veredicto": "PASA", "comando": "npm test", "evidencia": "Test Files 186 passed (186); Tests 2363 passed (2363)"},
+    {"id": 4, "texto": "build + playwright recuperar --workers=1 con caso C", "veredicto": "PASA", "comando": "npx next build --webpack; npx next start -p 3011; PUERTO=3011 npx playwright test recuperar --workers=1", "evidencia": "build OK; caso A (3.3s), caso B (2.9s), 'se llega a /recuperar por el enlace (T-044)' (12.1s): 3 passed"},
+    {"id": 5, "texto": "npm run lint sin errores nuevos", "veredicto": "PASA", "comando": "npm run lint", "evidencia": "0 errors, 2 warnings preexistentes (lib/cuentas/accesos.test.ts)"},
+    {"id": 6, "texto": "Manual: a 360 px ambos enlaces enteros y >=44 px de alto", "veredicto": "PASA", "comando": "Playwright chromium viewport 360x740 con spec temporal (ya borrado), getBoundingClientRect", "evidencia": "/primera-vez enlace: x=45 w=270 h=44 scrollWidth=clientWidth=270, docWidth=360; /recuperar volver: x=64.6 w=230.9 h=44 sw=cw, docWidth=360. Identico para tecnico_administrativo, profesional_sanitario y administrador"},
+    {"id": 7, "texto": "Manual: igual para los tres roles y nunca al enrolar", "veredicto": "PASA", "comando": "spec temporal con usuarios de los tres roles + usuario sin factor (factor borrado), build final", "evidencia": "Tres roles: enlace visible, lleva a /recuperar y vuelve a /primera-vez. Enrolar tras QR: enlaces=0. Enrolar con POST /auth/v1/factors abortado (mensaje 'No se pudo preparar la verificacion...'): enlaces=0"},
+    {"id": 8, "texto": "Manual: docs/interfaz.md tiene la seccion nueva con los puntos pedidos", "veredicto": "PASA", "comando": "git diff main -- docs/interfaz.md", "evidencia": "Seccion '### Recuperar el acceso (/recuperar, T-044)': aal1 con factor verificado, enlace de /primera-vez, el canje borra el factor y obliga a enrolar, invalido y agotado mismo mensaje, enlace de vuelta"}
+  ],
+  "regresiones": []
+}

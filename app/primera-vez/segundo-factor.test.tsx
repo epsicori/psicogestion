@@ -329,3 +329,28 @@ describe('SegundoFactor (T-037)', () => {
     });
   });
 });
+
+describe('SegundoFactor · enlace a /recuperar (T-044)', () => {
+  const NOMBRE = '¿Has perdido el acceso a tu aplicación? Usa un código de recuperación';
+
+  beforeEach(() => {
+    enroll.mockReset();
+  });
+
+  it('con un factor verificado, enlaza a /recuperar', () => {
+    render(<SegundoFactor factorVerificadoId="factor-1" />);
+
+    expect(screen.getByRole('link', { name: NOMBRE })).toHaveAttribute('href', '/recuperar');
+  });
+
+  it('al enrolar un factor nuevo no sale el enlace', async () => {
+    enroll.mockResolvedValue({
+      data: { id: 'factor-nuevo', totp: { qr_code: 'data:image/svg+xml;utf-8,<svg/>', secret: 'S' } },
+      error: null,
+    });
+    render(<SegundoFactor factorVerificadoId={null} />);
+    await screen.findByAltText('Código QR para configurar la verificación en dos pasos');
+
+    expect(screen.queryByRole('link', { name: NOMBRE })).toBeNull();
+  });
+});

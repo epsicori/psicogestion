@@ -1,6 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
@@ -71,6 +72,13 @@ export function FormularioRecuperar() {
           {mensaje}
         </p>
       )}
+
+      <Link
+        href="/primera-vez"
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-flex min-h-11 items-center self-center text-center text-sm underline underline-offset-4 outline-none focus-visible:ring-2 rounded"
+      >
+        {t('recuperar.volver')}
+      </Link>
     </form>
   );
 }

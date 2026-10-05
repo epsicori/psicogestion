@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
@@ -285,6 +286,15 @@ export function SegundoFactor({ factorVerificadoId }: Props) {
         <p role="status" className="text-destructive text-sm">
           {mensaje}
         </p>
+      )}
+
+      {factorVerificadoId && (
+        <Link
+          href="/recuperar"
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-flex min-h-11 items-center self-center text-center text-sm underline underline-offset-4 outline-none focus-visible:ring-2 rounded"
+        >
+          {t('primeraVez.totp.perdisteLaAplicacion')}
+        </Link>
       )}
 
       {/* `retoId` no se pinta; se conserva para que el reto usado sea el último

@@ -3,12 +3,12 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 05-10-2026 · **T-041 hecho** (merge 80b6a06: altas de centro); **T-044, T-045** en verificación.
+**Actualizado**: 05-10-2026 · **T-041 hecho** (merge 80b6a06: altas de centro); **T-045 hecho** (dar de baja y reponer TOTP leen `directorio_perfiles`); **T-044 hecho** (enlace a `/recuperar` y vuelta).
 
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 (A/B/C), T-016–T-020, T-029–T-042.
-- **En verificación**: T-044, T-045 (riesgo bajo).
+- **En verificación**: T-021 (esquema económico, riesgo alto; rama `worktree-agent-a19ecdb63f2c1e386`, migración 20261011120000 ya aplicada en la base local).
 - **Siguiente en `supabase/`**: T-021 (migración 20261011120000, riesgo alto, diseño hecho con respuestas del propietario), luego T-043 (migración 20261012120000, idem, va tras T-021).
 
 ## Bloqueos
@@ -18,7 +18,7 @@
 
 ## Siguiente paso
 
-1. T-044, T-045 en verificación y merge.
+1. T-021: verificación + revisores A/B → merge → documentalista. Luego T-043.
 2. Ya se puede `npx supabase db reset` desde main (20261010120000 está en main).
 3. T-021 implementado en su worktree (migración 20261011120000, banco 26: 164 aserciones; mutantes en `tickets/T-021/mutantes.json`): pasa a verificación y dos revisores.
 4. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
@@ -29,8 +29,7 @@
 - **T-028 R5-H33 (BAJA)**: Error lectura `tipos_terapia`/`directorio_perfiles` en `contenido-alta.tsx:52-53` cae a `[]` y se pinta falso «No hay…». Arreglo: propagar error.
 - **T-028 R6-H35 (BAJA)**: la prueba de H34 (`vista-alta.test.ts:64`) deja vivos tres mutantes de `finDeOcupado` (máximo en vez de mínimo, último tramo de la entrada, sin la cota `< fin`). Arreglo: un segundo libre tras el de 09:40 y un día con ocupado al final de la mañana y libre por la tarde. **Nota R6**: `agenda_bloques_profesional` sigue emitiendo el ocupado con la duración pedida; el recorte es solo de pantalla y otro consumidor vería el solape.
 - **Paciente fusionado o traspasado (T-028 R7, sin medir)**: ni `agenda_crear_cita`/`agenda_crear_serie` ni los disparadores de `citas` impiden agendar a un paciente con `fusionado_en` o `traspasado_en`; el buscador del alta ya dejaba llegar. Requiere ticket `supabase/`.
-- **`/ajustes/dar-de-baja` lista vacía (T-041 verificación, preexistente)**: la página lee `perfiles`, cuya única política es `perfiles_lectura_propia`; el administrador no ve a nadie a quien dar de baja. Arreglo: leer `directorio_perfiles`, como hace `/ajustes/centros` desde la ronda 2 de T-041.
-- **`/recuperar` sin enlace (T-042, prueba manual)**: ninguna pantalla enlaza a `/recuperar`, tampoco «Verificación en dos pasos» de `/primera-vez`, donde se queda quien perdió el móvil; solo se llega tecleando la URL. `docs/interfaz.md` no la menciona. Propuesta: enlace «¿Has perdido el acceso a tu app? Usa un código de recuperación».
+- **`directorio_perfiles` sin prueba de RLS (T-045)**: ningún módulo de `scripts/rls/` nombra la vista, y desde T-041 y T-045 la usan tres pantallas de administrador (centros, dar de baja, reponer TOTP). Falta un módulo de quién ve qué. T-045 (dar de baja y reponer TOTP leen la vista) pendiente de verificación y merge.
 - **T-042 R2-H1 (BAJA)**: el predicado del `update` de `bloquear_historia()` (migración `20261009120000:442`) no tiene prueba ni mutante; sin él cada «Bloquear» escribe una fila `UPDATE` en `auditoria` y `test:rls` sigue verde. Arreglo: aserción en CA-R2.2 de que bloquear con `0/0/false` no cambia el recuento.
 - **T-038 A3-H1=B3-H2 (BAJA)**: `lib/cuentas/totp.ts:57` marca `reentrar` ante cualquier 42501; `generar_codigos_recuperacion()` lo lanza por cuatro causas (Q3(B) incluida) y la vista afirma «hace más de cinco minutos». La salida sí resuelve.
 - **T-038 R4-H1 (BAJA)**: `app/(app)/cuenta/formulario-regenerar.test.tsx:160-161` niega dos frases concretas, no cualquier condición sobre el aviso; «… salvo que en tus avisos ya salga…» pasa. Arreglo: negar la etiqueta del aviso.

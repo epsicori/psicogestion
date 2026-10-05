@@ -6,7 +6,8 @@ riesgo: bajo            # un enlace, dos textos y un párrafo de interfaz.md: ni
 fase: 1
 prioridad: media
 depende_de: []          # T-042 ya está en main; no comparte ficheros con T-041 (ver Notas)
-estado: pendiente
+estado: hecho
+completado: 2026-10-05
 delegable: no           # segundo-factor.tsx lleva foco y ramas por factor; es poco y lo hace la fábrica
 territorio:
   - app/primera-vez/segundo-factor.tsx
