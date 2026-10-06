@@ -147,8 +147,8 @@ $$;
 
 select pg_temp.assert(
   pg_get_function_result('public.agenda_bloques_profesional(uuid,uuid,date,date,smallint)'::regprocedure)
-    = 'TABLE(fecha date, hora_local time without time zone, inicio timestamp with time zone, fin timestamp with time zone, estado text)',
-  'A · agenda_bloques_profesional devuelve exactamente (fecha, hora_local, inicio, fin, estado)'
+    = 'TABLE(fecha date, hora_local time without time zone, inicio timestamp with time zone, fin timestamp with time zone, estado text, hueco_raro_minutos integer)',
+  'A · agenda_bloques_profesional devuelve exactamente (fecha, hora_local, inicio, fin, estado, hueco_raro_minutos)'
 );
 
 select pg_temp.assert(

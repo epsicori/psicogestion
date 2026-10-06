@@ -3364,6 +3364,7 @@ export type Database = {
           fecha: string
           fin: string
           hora_local: string
+          hueco_raro_minutos: number
           inicio: string
         }[]
       }
