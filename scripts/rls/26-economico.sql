@@ -60,6 +60,10 @@
 \set PTEC    '\'a0260001-0000-4000-8000-000000000201\''
 \set PCE26   '\'a0260001-0000-4000-8000-000000000202\''
 \set CE26    '\'a0260001-0000-4000-8000-000000000301\''
+-- Ronda 3.
+\set CITAPAS2 '\'a0260001-0000-4000-8000-0000000000f6\''
+\set BORRREA  '\'a0260001-0000-4000-8000-0000000000b5\''
+\set PREA     '\'a0260001-0000-4000-8000-000000000203\''
 
 -- La fijación de `01` (BORR1, COB1; ronda 2: TIPO21, TAR21, BONO21, CAD21) la vuelve a nombrar
 -- este módulo.
@@ -121,6 +125,28 @@ as $$
     case when p_cifrado is null then 'null' else '1' end,
     p_lineas, p_base, p_cuota, p_total, p_descartado, p_creada_por, p_creada_en, p_sobre,
     coalesce(', ' || p_extra_val, ''));
+$$;
+
+-- =========================================================================================
+-- Ayudante local (ronda 3): el INSERT de una versión con el sobre coherente ya calculado, para
+-- las pruebas de las cotas. Fecha now() (la transacción del banco), centro nulo salvo que se pase.
+-- =========================================================================================
+create or replace function pg_temp.sv(
+  p_borrador uuid,
+  p_lineas   jsonb,
+  p_base     numeric,
+  p_cuota    numeric,
+  p_total    numeric,
+  p_por      uuid,
+  p_nombre   text default 'Ana Uno',
+  p_centro   uuid default null
+) returns text
+language sql
+stable
+as $$
+  select pg_temp.sql_version(p_borrador,
+    pg_temp.sobre_borrador(p_borrador, p_por, now(), p_lineas, p_base, p_cuota, p_total, p_nombre, p_centro),
+    p_lineas, p_base, p_cuota, p_total, p_por, now(), p_nombre, p_centro);
 $$;
 
 -- =========================================================================================
@@ -195,6 +221,23 @@ alter table public.borradores_factura enable trigger validar_cabecera_borrador;
 insert into public.citas (id, paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria, bono_id) values
   (:CITAPAS, :P1, :PRO1, :CA, ((current_date - 37) + time '07:05') at time zone 'Europe/Madrid',
                               ((current_date - 37) + time '07:55') at time zone 'Europe/Madrid', 'Europe/Madrid', :BONO3);
+-- Ronda 3 · CITAPAS2: cita PASADA, programada y SIN bono de P1 (K19a-K23). Va 39 días atrás, a las
+-- 07:05, otro día que CITAPAS para no solapar con ella.
+insert into public.citas (id, paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria) values
+  (:CITAPAS2, :P1, :PRO1, :CA, ((current_date - 39) + time '07:05') at time zone 'Europe/Madrid',
+                               ((current_date - 39) + time '07:55') at time zone 'Europe/Madrid', 'Europe/Madrid');
+-- Ronda 3 · PREA (paciente de PRO1) y BORRREA con una versión: la lectura sigue a la asignación (bloque O).
+insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values
+  (:PREA, 'Rea', 'T021 Reasignación', :PRO1, :CA);
+insert into public.borradores_factura (id, paciente_id, profesional_id, creado_por) values
+  (:BORRREA, :PREA, :PRO1, :PRO1);
+select pg_temp.assert_no_lanza(
+  pg_temp.sql_version(:BORRREA,
+    pg_temp.sobre_borrador(:BORRREA, :PRO1, timestamptz '2026-10-01 10:00:00+00',
+      jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, 6000)), 60.00, 0.00, 60.00, 'Rea', :CA),
+    jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, 6000)), 60.00, 0.00, 60.00,
+    :PRO1, timestamptz '2026-10-01 10:00:00+00', 'Rea', :CA),
+  '26.fij · la v1 de BORRREA se sella');
 select (now() at time zone public.zona_horaria_centro(:CA))::date as hoy_ca,
        (now() at time zone public.zona_horaria_centro(:CB))::date as hoy_cb \gset
 select pg_temp.assert(
@@ -1008,6 +1051,40 @@ select pg_temp.assert_lanza_codigo_msg(
     pg_temp.sobre_borrador(:BORR1, :PRO1, :T0, jsonb_build_array(pg_temp.linea_borrador(E'\t\n', 1, 6000)), 60.00, 0.00, 60.00, 'Ana Uno', :CA),
     jsonb_build_array(pg_temp.linea_borrador(E'\t\n', 1, 6000)), 60.00, 0.00, 60.00, :PRO1, :T0, 'Ana Uno', :CA),
   '23514', 'El concepto de una línea', '26.J28b · concepto de tabulador y salto de línea (gemela: B1)');
+-- Ronda 3 (B-H3) · conceptos que solo llevan caracteres que no se ven. Cada invisible va como
+-- escape E'\uXXXX', nunca crudo. Los controles miden los octetos del concepto del sobre.
+select pg_temp.assert(
+  octet_length(pg_temp.sobre_borrador(:BORR1, :PRO1, :T0, jsonb_build_array(pg_temp.linea_borrador(E'\u200B', 1, 6000)), 60.00, 0.00, 60.00, 'Ana Uno', :CA)::json
+     -> 'lineas' -> 0 ->> 'concepto') = 3,
+  '26.J28c.0 · control: el concepto del sobre es un solo U+200B (3 octetos)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador(E'\u200B', 1, 6000)), 60.00, 0.00, 60.00, :PRO1, 'Ana Uno', :CA),
+  '23514', 'Un concepto invisible', '26.J28c · concepto de un espacio de anchura cero (gemela: J28f)');
+select pg_temp.assert(
+  octet_length(pg_temp.sobre_borrador(:BORR1, :PRO1, :T0, jsonb_build_array(pg_temp.linea_borrador(E'\uFEFF\u2060', 1, 6000)), 60.00, 0.00, 60.00, 'Ana Uno', :CA)::json
+     -> 'lineas' -> 0 ->> 'concepto') = 6,
+  '26.J28d.0 · control: el concepto del sobre es U+FEFF y U+2060 (6 octetos)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador(E'\uFEFF\u2060', 1, 6000)), 60.00, 0.00, 60.00, :PRO1, 'Ana Uno', :CA),
+  '23514', 'Un concepto invisible', '26.J28d · concepto de marca de orden de bytes y unión de palabras');
+select pg_temp.assert(
+  octet_length(pg_temp.sobre_borrador(:BORR1, :PRO1, :T0, jsonb_build_array(pg_temp.linea_borrador(E'\u3164\u3000', 1, 6000)), 60.00, 0.00, 60.00, 'Ana Uno', :CA)::json
+     -> 'lineas' -> 0 ->> 'concepto') = 6,
+  '26.J28e.0 · control: el concepto del sobre es U+3164 y U+3000 (6 octetos)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador(E'\u3164\u3000', 1, 6000)), 60.00, 0.00, 60.00, :PRO1, 'Ana Uno', :CA),
+  '23514', 'Un concepto invisible', '26.J28e · concepto de espacio ideográfico y espacio duro');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador(E'Sesión\u200B de psicoterapia', 1, 6000)), 60.00, 0.00, 60.00, :PRO1),
+  '26.J28f · lo visible manda: un invisible entre letras no estorba (BORR3)');
+-- J28g · el disparador de las cotas corre DESPUÉS del paso 0: TEC1 recibe 42501, no 23514.
+call pg_temp.reset_sesion();
+select pg_temp.sv(:BORRTEC, jsonb_build_array(pg_temp.linea_borrador(E'\u200B', 1, 5000)), 50.00, 0.00, 50.00, :TEC1, 'Teo T021', null) as sql_j28g \gset
+call pg_temp.como(:TEC1);
+select pg_temp.assert_lanza_codigo_msg(
+  :'sql_j28g',
+  '42501', 'No puedes añadir una versión a este borrador', '26.J28g · TEC1 con concepto invisible: los permisos van antes que la cota (gemela: M7)');
+call pg_temp.reset_sesion();
 -- J41 (B-H8) · el centro_id de la versión es null, el del paciente o uno del profesional.
 select pg_temp.assert_lanza_codigo_msg(
   pg_temp.sql_version(:BORR3,
@@ -1025,17 +1102,81 @@ select pg_temp.assert_no_lanza(
     pg_temp.sobre_borrador(:BORR3, :PRO1, :T0, :'l_ok'::jsonb, 60.00, 0.00, 60.00, 'Ana Uno', :CE26),
     :'l_ok'::jsonb, 60.00, 0.00, 60.00, :PRO1, :T0, 'Ana Uno', :CE26),
   '26.J41q · BORR3 con centro CE26 cuando PRO1 ya pertenece a CE26: rama del profesional');
--- J42 (B-H6) · base, cuota y total con signos coherentes.
+-- J42 (B-H6, ronda 3) · base, cuota y total con signos coherentes. Con la banda de la cuota, la
+-- única forma de llegar a signo_ck es un documento mixto: un exento negativo y un general positivo
+-- con total 0. La banda pasa (0,46 céntimos de diferencia) y para el signo (base negativa, total 0).
 select pg_temp.assert_lanza_codigo_msg(
-  pg_temp.sql_version(:BORR1,
-    pg_temp.sobre_borrador(:BORR1, :PRO1, :T0, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)), -50.00, 150.00, 100.00, 'Ana Uno', :CA),
-    jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)), -50.00, 150.00, 100.00, :PRO1, :T0, 'Ana Uno', :CA),
-  '23514', 'borradores_factura_versiones_signo_ck', '26.J42 · base negativa y cuota mayor que el total');
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Devolución de una sesión', 1, -10000),
+                                       pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)),
+    -17.36, 17.36, 0.00, :PRO1, 'Ana Uno', :CA),
+  '23514', 'borradores_factura_versiones_signo_ck', '26.J42 · documento mixto: base negativa, cuota positiva y total 0');
 select pg_temp.assert_no_lanza(
   pg_temp.sql_version(:BORR3,
     pg_temp.sobre_borrador(:BORR3, :PRO1, :T0, jsonb_build_array(pg_temp.linea_borrador('Devolución de una sesión', 1, -6000)), -60.00, 0.00, -60.00, 'Ana Uno', null),
     jsonb_build_array(pg_temp.linea_borrador('Devolución de una sesión', 1, -6000)), -60.00, 0.00, -60.00, :PRO1, :T0, 'Ana Uno', null),
   '26.J42g · gemela: un total negativo (rectificar) con signos coherentes se sella');
+
+-- Ronda 3 (A-H1, B-H2) · techo del tipo y banda de la cuota. Q es la cuota exacta de las líneas
+-- generales (céntimos, sin redondear) y U sus unidades: la cuota sellada queda a U céntimos de Q.
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 10000),
+                                       pg_temp.linea_borrador('Informe pericial', 1, 100, 'general', 2100)),
+    51.00, 50.00, 101.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J43 · cuota de 50,00 sobre una parte general de 1,00 (Q = 0,17; gemela: J43g)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 10000),
+                                       pg_temp.linea_borrador('Informe pericial', 1, 100, 'general', 2100)),
+    100.83, 0.17, 101.00, :PRO1),
+  '26.J43g · la cuota de 0,17 sobre esa parte general se sella (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)),
+    0.00, 100.00, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J44 · base 0 con la cuota llena (gemelas: B2 y J47g)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 6000),
+                                       pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Abono del informe', 1, -10000, 'general', 2100)),
+    50.00, 10.00, 60.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J45 · partes generales que se anulan (Q = 0) con una cuota de 10,00 (gemela: J45g)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 6000),
+                                       pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Abono del informe', 1, -10000, 'general', 2100)),
+    60.00, 0.00, 60.00, :PRO1),
+  '26.J45g · las mismas líneas con cuota 0 se sellan (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 999900)),
+    82.64, 17.36, 100.00, :PRO1),
+  '23514', 'como mucho 10000 centésimas', '26.J46 · tipo de IVA de 9999 % (gemela: J46g)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 10000)),
+    50.00, 50.00, 100.00, :PRO1),
+  '26.J46g · el tipo de 10000 centésimas entra: el límite exacto (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)),
+    82.63, 17.37, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J47 · cuota 1,46 céntimos por encima de Q (U = 1; gemela: J47g)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)),
+    82.64, 17.36, 100.00, :PRO1),
+  '26.J47g · cuota 0,46 céntimos por encima de Q se sella (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)),
+    82.66, 17.34, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J47b · cuota 1,54 céntimos por debajo de Q: la mitad inferior de la banda (gemela: J47c)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100)),
+    82.65, 17.35, 100.00, :PRO1),
+  '26.J47c · cuota 0,54 céntimos por debajo de Q se sella (BORR3)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 2, 6050, 'general', 2100)),
+    100.00, 21.00, 121.00, :PRO1),
+  '26.J47d · dos unidades de 60,50 al 21 %: la cantidad cuenta en Q (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 20000),
+                                       pg_temp.linea_borrador('Abono del informe', 1, -10000, 'general', 2100)),
+    82.64, 17.36, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J48 · cuota positiva sobre una parte general negativa: signo contrario (signo_ck no la para)');
 
 -- =========================================================================================
 -- K · Bono de otro paciente, tarifas por vigencia derivada, congelación del bono de la cita
@@ -1147,6 +1288,37 @@ select pg_temp.assert_lanza_codigo_msg(
   format('update public.citas set bono_id = %L where id = %L', :BONO1, :CITAPAS),
   '42501', 'realizada o pasada ya no se cambia de bono', '26.K17 · también postgres: CITAPAS no cambia de bono');
 
+-- Ronda 3 (B-H1) · el primer bono de una cita terminada entra una vez; después queda fijo.
+-- CITAPAS2 es pasada, programada y sin bono (fijación).
+call pg_temp.como(:ADM);
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.citas set bono_id = %L where id = %L', :BONO2, :CITAPAS2),
+  '23514', 'el bono es de otro paciente', '26.K19a · CITAPAS2 (pasada, sin bono) con el bono de P2: la comprobación del paciente sigue valiendo');
+select pg_temp.assert(
+  pg_temp.contar_dml(format('update public.citas set estado = %L where id = %L returning 1', 'realizada', :CITAPAS2)) = 1,
+  '26.K19.0 · ADM marca CITAPAS2 como realizada (control: no es objeto de prueba)');
+select b.sesiones_consumidas as consumidas_bono3 from public.bonos_consumo b where b.bono_id = :BONO3 \gset
+select pg_temp.assert(
+  pg_temp.contar_dml(format('update public.citas set bono_id = %L where id = %L returning 1', :BONO3, :CITAPAS2)) = 1,
+  '26.K19 · CITAPAS2 (realizada y pasada, sin bono) recibe BONO3 una vez (gemela de K20, K21 y K22)');
+select pg_temp.assert(
+  (select b.sesiones_consumidas from public.bonos_consumo b where b.bono_id = :BONO3) = :'consumidas_bono3'::bigint + 1
+  and (select c.bono_id from public.citas c where c.id = :CITAPAS2) = :BONO3::uuid,
+  '26.K19b · el consumo de BONO3 sube uno y la cita queda con BONO3');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.citas set bono_id = %L where id = %L', :BONO1, :CITAPAS2),
+  '42501', 'realizada o pasada ya no se cambia de bono', '26.K20 · CITAPAS2: BONO3 a BONO1');
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.citas set bono_id = null where id = %L', :CITAPAS2),
+  '42501', 'realizada o pasada ya no se cambia de bono', '26.K21 · CITAPAS2: BONO3 a nulo');
+call pg_temp.reset_sesion();
+select pg_temp.assert_lanza_codigo_msg(
+  format('update public.citas set bono_id = %L where id = %L', :BONO1, :CITAPAS2),
+  '42501', 'realizada o pasada ya no se cambia de bono', '26.K22 · también postgres: CITAPAS2 no cambia de bono');
+select pg_temp.assert(
+  (select count(*) from public.citas c where c.bono_id = :BONO3 and c.estado = 'realizada'::public.estado_cita) = :'consumidas_bono3'::bigint + 1,
+  '26.K23 · el consumo de BONO3 sigue en +1: no se reescribió');
+
 -- =========================================================================================
 -- L · Catálogo: privilegios, execute del verificador, tablas_solo_adicion
 -- =========================================================================================
@@ -1239,6 +1411,23 @@ select pg_temp.assert(
   and (select not p.prosecdef and p.proconfig @> array['search_path=""'] from pg_proc p
     where p.oid = 'public.fn_numerar_caducidad_bono()'::regprocedure),
   '26.L10 · sellado, verificador y cabecera son definer; alta de tarifa y numeración de caducidades, invoker; todas con search_path vacío');
+-- Ronda 3 · el disparador de las cotas: before insert, por fila, activo, y ordena DESPUÉS del
+-- sellado (Postgres dispara los before de una tabla por orden de nombre). La lectura del borrador
+-- sigue a la asignación.
+select pg_temp.assert(
+  exists (select 1 from pg_trigger t
+           where t.tgrelid = 'public.borradores_factura_versiones'::regclass
+             and t.tgname = 'sellar_version_borrador_cotas'
+             and t.tgenabled = 'O' and t.tgfoid = 'public.fn_cotas_version_borrador()'::regprocedure
+             and (t.tgtype & 1) <> 0 and (t.tgtype & 2) <> 0 and (t.tgtype & 4) <> 0)
+  and 'sellar_version_borrador_cotas' collate "C" > 'sellar_version_borrador' collate "C"
+  and (select not p.prosecdef and p.proconfig @> array['search_path=""'] from pg_proc p
+        where p.oid = 'public.fn_cotas_version_borrador()'::regprocedure)
+  and (select pg_get_expr(p.polqual, p.polrelid) ~ 'es_profesional_asignado'
+              and pg_get_expr(p.polqual, p.polrelid) !~ 'auth\.uid'
+         from pg_policy p
+        where p.polrelid = 'public.borradores_factura'::regclass and p.polname = 'borradores_factura_lectura'),
+  '26.L10r3 · sellar_version_borrador_cotas: before insert por fila, activo, ordena después del sellado; función invoker; la lectura de la cabecera sigue la asignación');
 
 -- =========================================================================================
 -- M · Rol en positivo (A-H4): PTEC tiene como profesional_id al técnico TEC1, en CB (donde
@@ -1319,6 +1508,79 @@ select pg_temp.assert_no_lanza(
 select pg_temp.assert_lanza_codigo_msg(
   format('insert into public.borradores_factura (paciente_id, profesional_id, creado_por) values (%L, %L, %L)', :P1, :PRO1, :PRO1),
   '42501', 'No puedes abrir este borrador', '26.N7 · ADM abre un borrador con creado_por de PRO1');
+call pg_temp.reset_sesion();
+
+-- =========================================================================================
+-- O · Lectura por asignación (ronda 3, A-H2): el profesional lee el borrador, sus versiones y su
+-- estado mientras tiene asignado al paciente. Tras reasignar, los ve el nuevo y no el anterior;
+-- escribir no cambia (O6: solo el administrador continúa el borrador del anterior).
+-- =========================================================================================
+select pg_temp.assert(
+  (select p.profesional_id = :PRO1::uuid from public.pacientes p where p.id = :PREA)
+  and (select count(*) from public.borradores_factura_versiones v where v.borrador_id = :BORRREA) = 1,
+  '26.O0 · control: PREA es de PRO1 y BORRREA tiene una versión');
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRREA)) = 1
+  and pg_temp.contar(format('select 1 from public.borradores_factura_versiones where borrador_id = %L', :BORRREA)) = 1
+  and pg_temp.contar(format('select 1 from public.borradores_factura_estado where borrador_id = %L', :BORRREA)) = 1,
+  '26.O1 · PRO1 (asignado) lee la cabecera, la versión y el estado de BORRREA (gemela de O3)');
+call pg_temp.como(:PRO2);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRREA)) = 0
+  and pg_temp.contar(format('select 1 from public.borradores_factura_versiones where borrador_id = %L', :BORRREA)) = 0
+  and pg_temp.contar(format('select 1 from public.borradores_factura_estado where borrador_id = %L', :BORRREA)) = 0,
+  '26.O1b · PRO2 (no asignado) no lee nada de BORRREA (gemela de O4)');
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  pg_temp.contar_dml(format('update public.pacientes set profesional_id = %L where id = %L returning 1', :PRO2, :PREA)) = 1,
+  '26.O2 · ADM reasigna PREA a PRO2');
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRREA)) = 0
+  and pg_temp.contar(format('select 1 from public.borradores_factura_versiones where borrador_id = %L', :BORRREA)) = 0
+  and pg_temp.contar(format('select 1 from public.borradores_factura_estado where borrador_id = %L', :BORRREA)) = 0,
+  '26.O3 · tras reasignar, PRO1 ya no lee la cabecera, la versión ni el estado de BORRREA');
+call pg_temp.como(:PRO2);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRREA)) = 1
+  and pg_temp.contar(format('select 1 from public.borradores_factura_versiones where borrador_id = %L', :BORRREA)) = 1
+  and pg_temp.contar(format('select 1 from public.borradores_factura_estado where borrador_id = %L', :BORRREA)) = 1,
+  '26.O4 · tras reasignar, PRO2 lee la cabecera, la versión y el estado de BORRREA');
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRREA)) = 1
+  and pg_temp.contar(format('select 1 from public.borradores_factura_versiones where borrador_id = %L', :BORRREA)) = 1
+  and pg_temp.contar(format('select 1 from public.borradores_factura_estado where borrador_id = %L', :BORRREA)) = 1,
+  '26.O5 · ADM lee los tres, siempre');
+call pg_temp.reset_sesion();
+-- O6 · escribir no se abre: la versión nueva de PRO2 sobre el borrador de PRO1 da 42501; la misma
+-- versión como ADM se sella.
+select pg_temp.sv(:BORRREA, jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, 6000)), 60.00, 0.00, 60.00, :PRO2, 'Rea', :CA) as sql_o6 \gset
+select pg_temp.sv(:BORRREA, jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, 6000)), 60.00, 0.00, 60.00, :ADM, 'Rea', :CA) as sql_o6g \gset
+call pg_temp.como(:PRO2);
+select pg_temp.assert_lanza_codigo_msg(
+  :'sql_o6',
+  '42501', 'No puedes añadir una versión a este borrador', '26.O6 · PRO2 lee el borrador de PRO1 pero no le añade versiones (gemela: O6g)');
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(
+  :'sql_o6g',
+  '26.O6g · ADM sí añade la versión al mismo borrador');
+call pg_temp.como(:TEC1);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRTEC)) = 0,
+  '26.O7 · TEC1, titular de PTEC, no lee la cabecera de BORRTEC: el rol en positivo la corta (gemela: O7g)');
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRTEC)) = 1,
+  '26.O7g · ADM cuenta la cabecera de BORRTEC');
+select pg_temp.assert(
+  pg_temp.contar_dml(format('update public.pacientes set profesional_id = %L where id = %L returning 1', :PRO1, :PREA)) = 1,
+  '26.O8 · ADM revierte la reasignación de PREA');
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.borradores_factura where id = %L', :BORRREA)) = 1,
+  '26.O8b · PRO1 vuelve a leer BORRREA: la política sigue a la asignación en los dos sentidos');
 call pg_temp.reset_sesion();
 
 -- Limpieza para los bancos que vienen detrás (todo es una transacción): las citas futuras de
