@@ -1,0 +1,57 @@
+{
+  "ticket": "T-023",
+  "fecha": "2026-10-06",
+  "nota": "Cada mutante SQL es una copia de 20261013120000_cobros_y_pendiente.sql con un cambio, aplicada dentro de begin … rollback antes de 00-ayudantes + 01-fijacion + 30-cobros (nunca en la base). 'falla' es la primera aserción que cae. M7, M8 y M9 se midieron además con el bloque A (catálogo) quitado del banco, para saber si el comportamiento también los detecta.",
+  "sql_banco": {
+    "M1": {
+      "mutacion": "sin la condición de centro del técnico en el where de la vista",
+      "rojo": true,
+      "falla": "30.D2 · TEC1 ve 0 filas de P30B (otro centro)"
+    },
+    "M2": {
+      "mutacion": "sin `and public.es_profesional_asignado(p.id)`",
+      "rojo": true,
+      "falla": "30.D5 · PRO1 ve 0 filas de P30B (no asignado); D5 va antes que D4 en el fichero, y D4/D9 caerían igual"
+    },
+    "M3": {
+      "mutacion": "`c.inicio::date` en lugar de `(c.inicio at time zone c.zona_horaria)::date`",
+      "rojo": true,
+      "falla": "30.B0 · sale dev=6000 (tarifa base del día anterior en UTC) en lugar de 10000"
+    },
+    "M4": {
+      "mutacion": "sin `and c.bono_id is null`",
+      "rojo": true,
+      "falla": "30.C4 · sale dev=27000: la cita del bono cuenta además del bono"
+    },
+    "M5": {
+      "mutacion": "`c.estado in ('realizada', 'no_asistida')`",
+      "rojo": true,
+      "falla": "30.C5b · sale dev=36000: la no asistida devenga"
+    },
+    "M6": {
+      "mutacion": "sin `t.orden desc` en el order by de la tarifa",
+      "rojo": true,
+      "falla": "30.C5 · sale dev=29000: coge la tarifa de 80,00 en lugar de la de 90,00 del mismo día. No es equivalente"
+    },
+    "M7": {
+      "mutacion": "`security_barrier = false`",
+      "rojo": true,
+      "falla": "30.A1 · pendiente_paciente es una vista definer con security_barrier=true. Sin el bloque A el banco queda verde (64 OK): la barrera solo la vigila el catálogo"
+    },
+    "M8": {
+      "mutacion": "sin `cobros_devolucion_motivo_ck`",
+      "rojo": true,
+      "falla": "30.A6 (catálogo); sin el bloque A, 30.E7 · debía lanzar 23514 y no lanzó nada"
+    },
+    "M9": {
+      "mutacion": "sin el disparador `validar_cobro`",
+      "rojo": true,
+      "falla": "30.A8 (catálogo); sin el bloque A, 30.E9 · debía lanzar 23514 y no lanzó nada"
+    },
+    "M10": {
+      "mutacion": "`>=` en lugar de `>` en `when s.importe + b.importe > k.importe then 'pendiente'`",
+      "rojo": true,
+      "falla": "30.B3 · sale est=pendiente con pen=0 en lugar de cobrado"
+    }
+  }
+}

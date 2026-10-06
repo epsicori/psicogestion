@@ -87,6 +87,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "accesos_historia_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "accesos_historia_perfil_id_fkey"
             columns: ["perfil_id"]
             isOneToOne: false
@@ -180,6 +187,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alertas_documentacion_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "alertas_documentacion_profesional_id_fkey"
@@ -279,6 +293,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
         ]
       }
@@ -381,6 +402,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "borradores_factura_profesional_id_fkey"
@@ -513,6 +541,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "borradores_factura_versiones_profesional_id_fkey"
@@ -722,6 +757,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "citas_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "citas_profesional_id_fkey"
             columns: ["profesional_id"]
             isOneToOne: false
@@ -757,6 +799,7 @@ export type Database = {
           forma_pago: Database["public"]["Enums"]["forma_pago"]
           id: string
           importe: number
+          motivo: string | null
           paciente_id: string
           referencia: string | null
           registrado_en: string
@@ -767,6 +810,7 @@ export type Database = {
           forma_pago: Database["public"]["Enums"]["forma_pago"]
           id?: string
           importe: number
+          motivo?: string | null
           paciente_id: string
           referencia?: string | null
           registrado_en?: string
@@ -777,6 +821,7 @@ export type Database = {
           forma_pago?: Database["public"]["Enums"]["forma_pago"]
           id?: string
           importe?: number
+          motivo?: string | null
           paciente_id?: string
           referencia?: string | null
           registrado_en?: string
@@ -789,6 +834,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobros_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "cobros_registrado_por_fkey"
@@ -904,6 +956,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "consentimiento_firmantes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "consentimiento_firmantes_representante_id_fkey"
             columns: ["representante_id"]
             isOneToOne: false
@@ -983,6 +1042,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consentimientos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
         ]
       }
@@ -1093,6 +1159,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diagnosticos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
         ]
       }
@@ -1220,6 +1293,13 @@ export type Database = {
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "episodio_participantes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
         ]
       }
       episodios_asistenciales: {
@@ -1273,6 +1353,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "episodios_asistenciales_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "episodios_asistenciales_profesional_id_fkey"
@@ -1408,6 +1495,13 @@ export type Database = {
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "evaluaciones_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
         ]
       }
       eventos_salientes: {
@@ -1529,6 +1623,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "exportaciones_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "exportaciones_perfil_id_fkey"
             columns: ["perfil_id"]
             isOneToOne: false
@@ -1633,6 +1734,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "informes_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
         ]
       }
@@ -1791,6 +1899,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notas_clinicas_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
         ]
       }
@@ -2067,6 +2182,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pacientes_fusionado_en_fkey"
+            columns: ["fusionado_en"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "pacientes_fusionado_por_fkey"
             columns: ["fusionado_por"]
             isOneToOne: false
@@ -2167,6 +2289,13 @@ export type Database = {
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pacientes_identificacion_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: true
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
         ]
       }
       pacientes_salud_basica: {
@@ -2201,6 +2330,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_salud_basica_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "pacientes_salud_basica_registrado_por_fkey"
@@ -2585,6 +2721,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "propuestas_cita_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "propuestas_cita_profesional_id_fkey"
             columns: ["profesional_id"]
             isOneToOne: false
@@ -2701,6 +2844,13 @@ export type Database = {
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "representantes_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
         ]
       }
       series_cita: {
@@ -2801,6 +2951,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "series_cita_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "series_cita_profesional_id_fkey"
             columns: ["profesional_id"]
             isOneToOne: false
@@ -2893,6 +3050,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "tarifas_paciente_tipo_terapia_id_fkey"
@@ -3004,6 +3168,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "valoraciones_riesgo_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "valoraciones_riesgo_valorado_por_fkey"
             columns: ["valorado_por"]
             isOneToOne: false
@@ -3050,6 +3221,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accesos_historia_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "accesos_historia_perfil_id_fkey"
@@ -3126,6 +3304,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "alertas_documentacion_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "alertas_documentacion_profesional_id_fkey"
             columns: ["profesional_id"]
             isOneToOne: false
@@ -3156,6 +3341,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
         ]
       }
@@ -3241,6 +3433,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "citas_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+          {
             foreignKeyName: "citas_profesional_id_fkey"
             columns: ["profesional_id"]
             isOneToOne: false
@@ -3309,6 +3508,41 @@ export type Database = {
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "valoraciones_riesgo_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+        ]
+      }
+      pendiente_paciente: {
+        Row: {
+          citas_sin_tarifa: number | null
+          cobrado_centimos: number | null
+          devengado_centimos: number | null
+          estado: string | null
+          excedente_centimos: number | null
+          paciente_id: string | null
+          pendiente_centimos: number | null
+          profesional_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pacientes_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pacientes_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       tarifas_paciente_vigencias: {
@@ -3329,6 +3563,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "pacientes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
           },
           {
             foreignKeyName: "tarifas_paciente_tipo_terapia_id_fkey"
