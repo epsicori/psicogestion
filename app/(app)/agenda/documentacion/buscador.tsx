@@ -27,13 +27,25 @@ const ID_ERROR = 'busqueda-error';
  * que el resultado refleje la base; el foco lo decide el proveedor cuando la alerta deja de
  * estar pintada.
  */
-export function Buscador({
+export function Buscador(props: {
+  tipo: Filtros['tipo'];
+  nivel: Filtros['nivel'];
+  pagina: number;
+  children: ReactNode;
+}) {
+  // Cambiar de filtro o de página remonta el buscador: el término, los resultados y el último envío
+  // (que `relanzar` repetiría con el filtro viejo) se descartan, como dice la ayuda del campo.
+  return <BuscadorInterno key={`${props.tipo ?? ''}|${props.nivel ?? ''}|${props.pagina}`} {...props} />;
+}
+
+function BuscadorInterno({
   tipo,
   nivel,
   children,
 }: {
   tipo: Filtros['tipo'];
   nivel: Filtros['nivel'];
+  pagina: number;
   children: ReactNode;
 }) {
   const [estado, accion, buscando] = useActionState<EstadoBusqueda, FormData>(

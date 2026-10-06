@@ -311,6 +311,8 @@ export function coincideBusqueda(termino: string, nombre: string | null, apellid
   const palabras = normalizar(termino)
     .split(/\s+/)
     .filter((p) => p !== '');
+  // Un término hecho solo de diacríticos queda vacío: `every` sobre nada sería `true` y casaría con todos.
+  if (palabras.length === 0) return false;
   const normalizadoNombre = normalizar(nombre ?? '');
   const normalizadoApellidos = normalizar(apellidos ?? '');
   return palabras.every((p) => normalizadoNombre.includes(p) || normalizadoApellidos.includes(p));

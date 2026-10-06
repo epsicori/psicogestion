@@ -150,7 +150,7 @@ export async function ContenidoDocumentacion({
           {t('agenda.documentacion.pagina.quitarPaciente')}
         </Link>
       )}
-      {p.paciente ? lista : <Buscador tipo={p.tipo} nivel={p.nivel}>{lista}</Buscador>}
+      {p.paciente ? lista : <Buscador tipo={p.tipo} nivel={p.nivel} pagina={pag.pagina}>{lista}</Buscador>}
     </div>
   );
 }

@@ -221,18 +221,26 @@ describe('Documentacion (agrupada por paciente, T-048)', () => {
   });
 
   it('pinta como mucho 6 pacientes, pide solo sus nombres y enlaza al pie con los totales', async () => {
-    const alertas = Array.from({ length: 8 }, (_, i) => alerta({ id: id(100 + i), pacienteId: id(i + 1) }));
+    // El paciente 8 solo tiene un pendiente, pero es el más urgente (nivel 3): el orden no es el de los ids.
+    const alertas = Array.from({ length: 8 }, (_, i) =>
+      alerta({ id: id(100 + i), pacienteId: id(i + 1), nivel: i === 7 ? 3 : null }),
+    );
     // Cada paciente con un pendiente más, salvo el último: 15 pendientes de 8 pacientes.
     const extra = Array.from({ length: 7 }, (_, i) => alerta({ id: id(200 + i), pacienteId: id(i + 1), tipo: 'informe_pendiente' }));
-    await pintar('profesional_sanitario', [...alertas, ...extra], { total: 15 });
+    const nombresDe = nombres(
+      Object.fromEntries(Array.from({ length: 8 }, (_, i) => [id(i + 1), [`Nombre${i + 1}`, 'Apellido'] as [string, string]])),
+    );
+    await pintar('profesional_sanitario', [...alertas, ...extra], { total: 15, nombres: nombresDe });
 
+    // Exactamente los 6 que se pintan y en su orden: el 8 (nivel 3) y luego los cinco primeros.
+    const esperados = [8, 1, 2, 3, 4, 5];
     expect(m.leerNombresPacientes).toHaveBeenCalledTimes(1);
-    const pedidos = m.leerNombresPacientes.mock.calls[0][1] as string[];
-    expect(pedidos).toHaveLength(6);
+    expect(m.leerNombresPacientes.mock.calls[0][1]).toEqual(esperados.map((n) => id(n)));
+    const pintados = screen.getAllByRole('link', { name: /^Nombre\d Apellido$/ }).map((e) => e.textContent);
+    expect(pintados).toEqual(esperados.map((n) => `Nombre${n} Apellido`));
 
     const pie = screen.getByRole('link', { name: 'Ver todos: 15 pendientes de 8 pacientes' });
     expect(pie.getAttribute('href')).toBe('/agenda/documentacion');
-    expect(screen.getAllByRole('link', { name: 'Paciente' })).toHaveLength(6);
   });
 
   it('con exactamente 6 pacientes y sin recorte no hay pie', async () => {

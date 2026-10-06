@@ -307,6 +307,11 @@ describe('coincideBusqueda', () => {
   it('tolera espacios sobrantes', () => {
     expect(coincideBusqueda('  ana   lopez ', 'Ana', 'López')).toBe(true);
   });
+  it('un término que queda vacío al normalizar (solo diacríticos) no coincide con nada', () => {
+    for (const termino of ['´´', '^^', '¨¨', '``']) {
+      expect(coincideBusqueda(termino, 'Ana', 'López')).toBe(false);
+    }
+  });
   it('sin nombre ni apellidos, no coincide', () => {
     expect(coincideBusqueda('ana', null, null)).toBe(false);
   });

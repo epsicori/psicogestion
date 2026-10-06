@@ -4,14 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GrupoPresentado } from '../pendientes';
 
-const m = vi.hoisted(() => ({ buscarPendientes: vi.fn() }));
+const m = vi.hoisted(() => ({ buscarPendientes: vi.fn(), resolverAlerta: vi.fn() }));
 
 vi.mock('./acciones', () => ({ buscarPendientes: m.buscarPendientes }));
-vi.mock('../acciones-alertas', () => ({ resolverAlerta: vi.fn() }));
+vi.mock('../acciones-alertas', () => ({ resolverAlerta: m.resolverAlerta }));
 
 import { Buscador } from './buscador';
 
-function grupo(n: number, nombre = `Paciente ${n}`): GrupoPresentado {
+function grupo(n: number, nombre = `Paciente ${n}`, resoluble = false): GrupoPresentado {
   return {
     pacienteId: `p${n}`,
     nombre,
@@ -31,7 +31,7 @@ function grupo(n: number, nombre = `Paciente ${n}`): GrupoPresentado {
         pildora: null,
         destino: `/pacientes/p${n}`,
         nombreEnlace: `Informe pendiente de ${nombre}: ir a la ficha`,
-        resoluble: false,
+        resoluble,
       },
     ],
     verTodos: null,
@@ -52,7 +52,7 @@ function resultados(grupos: GrupoPresentado[], extra: Record<string, unknown> = 
 
 function pintar(props: { tipo?: 'nota_sin_firmar' | null; nivel?: 1 | 2 | 3 | null } = {}) {
   return render(
-    <Buscador tipo={props.tipo ?? null} nivel={props.nivel ?? null}>
+    <Buscador tipo={props.tipo ?? null} nivel={props.nivel ?? null} pagina={1}>
       <p>LISTA PAGINADA</p>
     </Buscador>,
   );
@@ -196,6 +196,66 @@ describe('Buscador', () => {
     fireEvent.click(boton);
     expect(m.buscarPendientes).toHaveBeenCalledTimes(1);
     await act(async () => resolver(resultados([grupo(1)])));
+  });
+
+  // D10c: resolver desde los resultados repite la búsqueda, mueve el foco, anuncia y actualiza el recuento.
+  it('resolver desde un resultado relanza la búsqueda, mueve el foco, anuncia y actualiza el recuento', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    m.buscarPendientes.mockResolvedValueOnce(
+      resultados([grupo(1, 'Paciente 1', true), grupo(2, 'Paciente 2', true)]),
+    );
+    pintar({ tipo: 'nota_sin_firmar', nivel: 1 });
+    await buscar('paciente');
+    await waitFor(() => screen.getByRole('link', { name: 'Paciente 1' }));
+    expect(document.querySelector('[data-estado-busqueda]')?.textContent).toBe('2 pacientes coinciden');
+    expect(m.buscarPendientes).toHaveBeenCalledTimes(1);
+
+    // La base ya no devuelve al paciente 1 cuando se repite la búsqueda.
+    m.buscarPendientes.mockResolvedValueOnce(resultados([grupo(2, 'Paciente 2', true)]));
+    const botones = screen.getAllByRole('button', { name: /Marcar como resuelta/ });
+    await userEvent.click(botones[0]);
+
+    await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(2));
+    const primero = m.buscarPendientes.mock.calls[0][1] as FormData;
+    const repetido = m.buscarPendientes.mock.calls[1][1] as FormData;
+    expect(repetido.get('termino')).toBe(primero.get('termino'));
+    expect(repetido.get('tipo')).toBe('nota_sin_firmar');
+    expect(repetido.get('nivel')).toBe('1');
+
+    // El recuento se actualiza, el paciente resuelto desaparece y el foco va al que ocupa su sitio.
+    await waitFor(() => expect(document.querySelector('[data-estado-bloque]')?.textContent).toContain('Marcada como resuelta.'));
+    expect(document.querySelector('[data-estado-busqueda]')?.textContent).toBe('1 paciente coincide');
+    expect(screen.queryByRole('link', { name: 'Paciente 1' })).toBeNull();
+    await waitFor(() => expect(document.activeElement?.id).toBe('busqueda-paciente-p2'));
+  });
+
+  // H1 (ronda 2): cambiar de filtro o de página descarta la búsqueda (D10 y la ayuda del campo).
+  it.each([
+    ['el tipo', { tipo: 'nota_sin_firmar' as const, nivel: null, pagina: 1 }],
+    ['el nivel', { tipo: null, nivel: 2 as const, pagina: 1 }],
+    ['la página', { tipo: null, nivel: null, pagina: 2 }],
+  ])('cambiar %s descarta la búsqueda: campo vacío, lista paginada y sin repetir el término viejo', async (_n, nuevos) => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    m.buscarPendientes.mockResolvedValue(resultados([grupo(1, 'Paciente 1', true)]));
+    const { rerender } = render(
+      <Buscador tipo={null} nivel={null} pagina={1}>
+        <p>LISTA PAGINADA</p>
+      </Buscador>,
+    );
+    await buscar('paciente');
+    await waitFor(() => screen.getByRole('link', { name: 'Paciente 1' }));
+
+    rerender(
+      <Buscador tipo={nuevos.tipo} nivel={nuevos.nivel} pagina={nuevos.pagina}>
+        <p>LISTA PAGINADA</p>
+      </Buscador>,
+    );
+    const campo = screen.getByLabelText('Buscar por nombre o apellidos') as HTMLInputElement;
+    expect(campo.value).toBe('');
+    expect(screen.getByText('LISTA PAGINADA')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Paciente 1' })).toBeNull();
+    expect(document.querySelector('[data-estado-busqueda]')?.textContent).toBe('');
+    expect(m.buscarPendientes).toHaveBeenCalledTimes(1);
   });
 
   it('el término no va a ningún sitio: ni URL, ni historial, ni almacenamiento, ni cookies', async () => {

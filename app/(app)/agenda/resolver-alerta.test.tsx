@@ -214,6 +214,28 @@ describe('ResolverAlerta: éxito y foco (T-015 R4, T-048 criterio 9)', () => {
     expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
   });
 
+  it('(b) era el último y la lista nueva es otra más larga (otra página): el foco va al último, no al de su índice', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const D: Paciente = { id: 'pD', alertas: ['d1'], anuncio: 'Dora, 1 pendiente' };
+    const E: Paciente = { id: 'pE', alertas: ['e1'], anuncio: 'Eva, 1 pendiente' };
+    const { rerender } = render(<Bloque pacientes={[ANA]} />);
+    await pulsar();
+    // Resolver el único paciente de la última página: la redirección lleva a la anterior, que
+    // trae más pacientes. `min(indice, len - 1)` daría el primero (índice 0); aquí era el último.
+    rerender(<Bloque pacientes={[B, C, D, E]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pE'));
+  });
+
+  it('gemela: no era el último y la lista nueva es más larga: el foco va al de su índice', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const D: Paciente = { id: 'pD', alertas: ['d1'], anuncio: 'Dora, 1 pendiente' };
+    const E: Paciente = { id: 'pE', alertas: ['e1'], anuncio: 'Eva, 1 pendiente' };
+    const { rerender } = render(<Bloque pacientes={[ANA, B]} />);
+    await pulsar();
+    rerender(<Bloque pacientes={[C, D, E]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pC'));
+  });
+
   it('(c) la lista queda vacía: el foco va al encabezado y el status sigue montado', async () => {
     m.resolverAlerta.mockResolvedValue({ ok: true });
     const { rerender } = render(<Bloque conFila />);
