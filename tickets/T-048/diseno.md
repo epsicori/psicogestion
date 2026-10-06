@@ -746,3 +746,602 @@ justo la urgencia de D1; todo lo demás tiene foco, ARIA, roles, lectura o el bu
 8. **Revisar con más cuidado (3):** que `documentacion.test.tsx:26-60` solo cambie el identificador.
 9. **Revisar con más cuidado (4):** que `tiposConsultados` devuelva `[]` y nunca el tipo pedido fuera de la lista blanca.
 10. **Fuera de territorio:** ningún fichero de T-047 se toca. El esqueleto que late en `/agenda` (`EsqueletoLista` con `animate-pulse`) queda como hallazgo para `docs/state.md` (§1.14).
+
+---
+
+## Ronda 3 (06-10-2026)
+
+Anexo de riesgo medio que cierra R2-H1 a R2-H4 de `tickets/T-048/revision.md`. Se ha leído la
+implementación vigente en la rama `worktree-agent-afd4c4801e9671c9e` (HEAD `3108602`) sin
+modificarla. Lo que este anexo dice **prevalece** sobre las secciones anteriores donde choque, y
+la «Fe de erratas» de abajo lo enumera.
+
+### R3.0 · Hechos verificados contra el código
+
+| Hecho | Dónde |
+|---|---|
+| Cada segmento se envuelve en `ErrorBoundary > LoadingBoundary > HTTPAccessFallbackBoundary > RedirectBoundary > InnerLayoutRouter`. La página tiene **su propio** `RedirectBoundary`, por debajo de cualquier `layout.tsx` del mismo nivel. | `node_modules/next/dist/client/components/layout-router.js:619-650` |
+| `RedirectErrorBoundary.getDerivedStateFromError` captura el error de redirección y **sustituye a los hijos** por `HandleRedirect`. Este hace `router.replace`/`push` dentro de `startTransition` y luego `reset()`. Los hijos se **desmontan** y vuelven a montarse desde cero, aunque la clave del segmento no cambie. La clave sin parámetros (`:549`) solo conserva el estado en una navegación normal, no a través de este límite. | `node_modules/next/dist/client/components/redirect-boundary.js:30-39, :57-90` |
+| La redirección de `?pagina` se lanza al pintar `ContenidoDocumentacion` (`if (p.pagina > pag.ultima) redirect(...)`), detrás del `<Suspense>` de la página. No la lanza la acción. `action-handler.js` solo convierte en `x-action-redirect` la que lanza la propia acción. La de `contenido.tsx` viaja como error en el flujo RSC y la captura el `RedirectBoundary` de la página. | worktree `app/(app)/agenda/documentacion/contenido.tsx:87-88`, `page.tsx:32-34`; `node_modules/next/dist/server/app-render/action-handler.js:889-900` |
+| Segundo desmontaje, independiente del primero: `Buscador` devuelve `<BuscadorInterno key={tipo|nivel|pagina}>`, y la lista (con su `ProveedorResolucion`) le llega como `children`. Pasar de `pagina=3` a `pagina=2` remonta la lista aunque no hubiera límite. | worktree `documentacion/buscador.tsx:38`, `contenido.tsx:153` |
+| `pendiente`, `anuncio` y `enfocar` son estado de `ProveedorResolucion`, y la región `[data-estado-bloque]` se pinta dentro de él. Ambos se pierden en los dos desmontajes. | worktree `app/(app)/agenda/resolver-alerta.tsx:69-71, :116-121` |
+| El `h2#documentacion-titulo` (`ID_TITULO`) está en `page.tsx`, dentro del segmento de página, y también se remonta. Como destino del foco sirve igual (se busca por `id` después del commit), pero no puede alojar estado. | worktree `documentacion/page.tsx:23-29`, `parametros.ts:14` |
+| Con `cacheComponents: true`, cada segmento va además dentro de un `<Activity>` por clave de estado. Al salir de la ruta, el segmento queda **oculto con su estado** (hasta 3 rutas), y los efectos se limpian al ocultarlo y se repiten al volver. La guía oficial recomienda reiniciar el estado transitorio en la limpieza de un `useLayoutEffect`. | `layout-router.js:684-688`; `next.config.ts:20`; `node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md:13-35` |
+| Un `layout.tsx` no se vuelve a pintar al navegar y no recibe `searchParams`. | `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/layout.md:154, :180` |
+| No hay `layout.tsx` en `app/(app)/agenda/` ni en `app/(app)/agenda/documentacion/`. | `ls` del worktree |
+| `useRouter()` (que usa `HandleRedirect`) lee `AppRouterContext` y lanza un invariante si es nulo. `AppRouterContext` se exporta desde `next/dist/shared/lib/app-router-context.shared-runtime`, que es el mismo fichero que requiere `navigation.js`. `redirect(url)` sin tipo queda en `'replace'` fuera de una acción. | `redirect-boundary.js:27, :31, :94`; `node_modules/next/dist/client/components/redirect.js:51-52` |
+| React 19.2.8 exporta `Activity`. La versión de `@testing-library/user-event` es 14.6.6 (ya en uso en `app/(app)/agenda/calendario.test.tsx`). La de `@playwright/test` es 1.56.1. | `node_modules/react/package.json`, `package.json:43` |
+| El spec, al desplegar, hace `boton.focus(); keyboard.press('Enter')`. No hay Tab hasta el botón ni Espacio. | worktree `accesibilidad/documentacion-pendiente.spec.ts:131-132` |
+| El spec solo mide alto y borde derecho del botón (`:124-126`) y de los enlaces de pendiente (`:137-141`). El enlace de nombre no se mide. | ídem |
+| `pendientes-fila.test.tsx` abre y cierra solo con `fireEvent.click`. | worktree `app/(app)/agenda/pendientes-fila.test.tsx:115-129` |
+| `ENLACE` lleva `inline-flex min-h-11` y **ningún ancho mínimo**. Lo comparten el nombre, los pendientes y «Ver todos». El botón `tamano="sm"` es `min-h-11 px-3`. | worktree `pendientes-fila.tsx:15, :76, :80-82`; `components/ui/button.tsx:19` |
+| El nombre pintado es `[nombre, apellidos].join(' ')`. `apellidos` es `not null` y `length(trim) > 0`. | worktree `contenido.tsx:104`, `documentacion.tsx:92`; `supabase/migrations/20260822094547_esquema_base_organizacion_paciente_historia.sql:411` |
+| Orden de pacientes: primero el nivel máximo, y el nivel nulo va detrás de cualquier nivel. Después, el pendiente más antiguo. Solo `nota_sin_firmar` abierta tiene nivel. | worktree `pendientes.ts:97-140`; `supabase/migrations/20261006120000_avisos_y_escalado.sql` (vista `alertas_documentacion_nivel`) |
+| `escalar_notas_pendientes()` selecciona alertas `abierta`, `nota_sin_firmar` y `nivel_nota_pendiente(referencia_en, centro) = 3`. Inserta una `nota_pendiente_escalada` por administrador, idempotente por `(perfil_id, tipo, origen_tabla, origen_id)`. Corre cada 15 min y nunca cierra la notificación. Los informes no los lee. | `20261006120000_avisos_y_escalado.sql` §G y §H; índice en `:21` |
+| **La siembra ya produce escalados**: las seis notas de Lucía, de Ana, abiertas por el disparador con `referencia_en = citas.fin` de martes pasados, y la de Iván, de hace 35 días. El fixture del spec añade **una** notificación más por administrador y por `db reset`, no una por pasada. | `supabase/seed-completo.sql:480-491, :540-563` |
+| `fn_proteger_notificacion` solo deja cambiar `leida_en`, de nulo a `now()`. | `20261006120000_avisos_y_escalado.sql:24-58` |
+| Hay un índice único de alerta abierta sobre `(origen_tabla, origen_id, tipo)`, y el `where not exists` del spec compara solo `origen_id`. Si una nota vieja del fixture sigue abierta con `origen_id …000`, el informe nuevo con ese mismo `origen_id` no entra. | `20260822094547_…:880-882`; spec `:58-60` |
+| `~/.claude/pipeline/territorio.mjs:26` exige que no haya nada tras `territorio:`. Con el comentario en la misma línea respondía «T-048: sin territorio declarado, nada que comprobar» (salida real, antes de corregir el contrato). | `node ~/.claude/pipeline/territorio.mjs T-048` |
+
+### R3.1 · Fe de erratas de este diseño
+
+- **§0, fila de `layout-router.js:549`.** La conclusión «una redirección de `?pagina=3` a
+  `?pagina=2` no desmonta `ProveedorResolucion`» es **falsa**. La clave sin parámetros es cierta,
+  pero el `RedirectBoundary` de la página remonta el subárbol, y además la `key` de `Buscador`
+  incluye `pagina` (R3.0).
+- **§1.5, último párrafo.** «Sin desmontar el proveedor» se sustituye por R3.2. `eraUltimo` se
+  mantiene, pero vive en una memoria por encima del límite.
+- **§4, riesgo 4.** Se sustituye por los riesgos 1 a 4 de R3.6. La mención a la «meta tag» vale
+  para la carga inicial del documento, no para la revalidación tras una acción, que es el caso
+  de este criterio.
+- **§1.5, reglas 1 a 6 y render.** La decisión pasa de la fase de render a un efecto, la región
+  de estado sale del proveedor, y hay una regla nueva (prefijo ajeno). Todo está en R3.2.
+
+### R3.2 · R2-H1: el foco y el anuncio sobreviven al remontaje
+
+**Idea.** El estado que tiene que cruzar la redirección (qué se acaba de resolver y qué se
+anuncia) y la región `role="status"` suben a una **memoria** montada en un `layout.tsx` propio de
+`/agenda/documentacion`. Ese layout queda por encima del `RedirectBoundary` de la página y fuera
+de la `key` de `Buscador`. El proveedor que se monte después del remontaje lee de la memoria y
+decide.
+
+#### a) `app/(app)/agenda/resolver-alerta.tsx` (modificar)
+
+Tipos y piezas nuevas, todas exportadas:
+
+```ts
+export type Pendiente = {
+  alertaId: string;
+  pacienteId: string;
+  prefijo: Prefijo;      // el bloque donde se resolvió
+  indice: number;        // su posición en lo pintado al acertar (>= 0)
+  eraUltimo: boolean;
+};
+
+/** Puro. null = la alerta sigue pintada: esperar. */
+export function decidirDestino(
+  p: Pendiente,
+  bloque: { prefijo: Prefijo; encabezadoId: string; pacientes: readonly PacienteEnFoco[] },
+): { id: string; texto: string } | null;
+
+export function MemoriaResolucion({ children }: { children: ReactNode }): ReactNode;
+export function useDescartarResolucion(): () => void;   // sin memoria → función vacía
+```
+
+**`decidirDestino`** aplica las reglas en este orden, y el orden es parte del contrato:
+
+1. Si algún `pacientes[i].alertas` contiene `p.alertaId`, devuelve `null`.
+2. Sea `base = t('agenda.documentacion.resuelta')`.
+3. Si el paciente `p.pacienteId` está en `pacientes`, devuelve
+   `{ id: idEnlacePaciente(bloque.prefijo, p.pacienteId), texto: base + ' ' + paciente.anuncio }`.
+   Se usa el prefijo **del bloque**, no el del pendiente.
+4. Si `pacientes` está vacío, devuelve `{ id: encabezadoId, texto: base }`.
+5. Si `p.prefijo !== bloque.prefijo`, devuelve `{ id: encabezadoId, texto: base }`. Es una
+   resolución hecha en la búsqueda y heredada por la lista tras la redirección: su `indice` no
+   significa nada en otra lista.
+6. Si no, el vecino: `p.eraUltimo ? pacientes[pacientes.length - 1] : pacientes[Math.min(p.indice, pacientes.length - 1)]`,
+   devuelto como `{ id: idEnlacePaciente(bloque.prefijo, vecino.id), texto: base }`.
+
+**`MemoriaResolucion`** (cliente) tiene:
+
+- Estado `pendiente: Pendiente | null` y `anuncio: { texto: string; n: number }`.
+- Un ref `ultimoCerrado: Pendiente | null`.
+- Un contexto privado (`ContextoMemoria`) con un valor estable (`useMemo` / `useCallback`):
+  `{ pendiente, anotar(p), cerrar(p, texto), descartar() }`.
+  - `anotar(p)` hace `setPendiente(p)` con un objeto nuevo en cada llamada.
+  - `cerrar(p, texto)` es **idempotente por identidad**: si `ultimoCerrado.current === p`, no
+    hace nada. Si no, lo anota, hace `setPendiente(null)` y `setAnuncio(a => ({ texto, n: a.n + 1 }))`.
+    En desarrollo, StrictMode repite el efecto que la llama, y sin esta guarda el anuncio
+    saltaría dos veces.
+  - `descartar()` hace `setPendiente(null)` y no anuncia nada.
+- `useLayoutEffect(() => () => descartar(), [])`. Cuando Activity oculta la ruta (se navega a
+  otra), el pendiente se tira. Al volver, nada roba el foco. Es el patrón de la guía
+  `preserving-ui-state.md`.
+- Este render, con la región **siempre montada**, una sola por memoria:
+  `{children}<p role="status" aria-live="polite" aria-atomic="true" data-estado-bloque className="sr-only"><span key={anuncio.n}>{anuncio.texto || null}</span></p>`.
+
+**`ProveedorResolucion`** mantiene la firma de hoy (`prefijo`, `encabezadoId`, `pacientes`,
+`alAcertar?`, `children`):
+
+- Lee `ContextoMemoria`. Si hay memoria, pinta `<BloqueResolucion {...props} />`. Si no la hay
+  (el panel de `/agenda`, las pruebas existentes), pinta
+  `<MemoriaResolucion><BloqueResolucion {...props} /></MemoriaResolucion>`. **No** se hace un
+  `return` temprano antes de hooks: son dos componentes.
+- `BloqueResolucion` (privado) conserva el ref `pacientesAhora`, actualizado en un efecto como hoy.
+- `alResolver(r)` calcula `indice` y `eraUltimo` sobre `pacientesAhora.current` igual que hoy,
+  llama a `memoria.anotar({ ...r, prefijo, indice: max(indice, 0), eraUltimo })` y después a
+  `alAcertar?.()`.
+- **Un efecto** con dependencias `[memoria.pendiente, pacientes, prefijo, encabezadoId, memoria.cerrar]`:
+  - si no hay pendiente, sale;
+  - calcula `d = decidirDestino(...)` y, si es `null`, sale;
+  - hace `document.getElementById(d.id)?.focus()` y **después** `memoria.cerrar(pendiente, d.texto)`.
+- Desaparecen el estado `enfocar` y el `setState` en fase de render.
+- Render: `<ContextoResolucion.Provider value={{ alResolver }}><div data-bloque-pendientes>{children}</div></ContextoResolucion.Provider>`.
+  Sin región dentro, sin `role` y sin `tabIndex`.
+- `ResolverAlerta` no cambia.
+
+**Invariante:** en la página, como mucho hay **un** `BloqueResolucion` montado bajo la memoria,
+porque la búsqueda y la lista son ramas excluyentes (`buscador.tsx:152-198`). Si alguien
+pintara dos a la vez, `cerrar` idempotente evita el doble anuncio, pero el foco lo decidiría el
+primero que vea su pendiente. Por eso se anota en R3.9.
+
+#### b) `app/(app)/agenda/documentacion/layout.tsx` (crear)
+
+- Componente de servidor, **no `async`**, sin lecturas.
+- `export default function LayoutDocumentacion({ children }: { children: ReactNode }) { return <MemoriaResolucion>{children}</MemoriaResolucion>; }`
+- Nada más: ni marco, ni título, ni `Suspense`. No cambia el árbol visual. La región va
+  `sr-only`, después del contenido.
+
+#### c) `app/(app)/agenda/documentacion/buscador.tsx` (modificar)
+
+- En `BuscadorInterno`, `const descartar = useDescartarResolucion();`.
+- `limpiar()` llama a `descartar()` **antes** de `campo.current?.focus()`.
+- `enviar(datos)` llama a `descartar()` después de validar.
+- `relanzar` **no** descarta: es la continuación de la resolución.
+- Por qué: si se pulsa «Limpiar búsqueda» con una resolución en vuelo, la lista que vuelve tiene
+  otro prefijo y la regla 5 le llevaría el foco al encabezado, robándoselo al campo que
+  `limpiar` acaba de enfocar.
+
+#### d) Sin cambios
+
+`contenido.tsx`, `page.tsx`, `documentacion.tsx` (el panel usa la memoria propia del
+proveedor), `acciones-alertas.ts`. La `key` de `Buscador` **se queda**: con la memoria arriba, ya
+no le cuesta el foco, y quitarla rompería D10 («cambiar de filtro o de página pierde la
+búsqueda»).
+
+#### e) Pruebas
+
+**Nueva: `app/(app)/agenda/documentacion/remontaje.test.tsx`.** Reproduce el remontaje real, no
+un `rerender`.
+
+Arnés, de fuera a dentro, en el orden real de Next (layout > límite del segmento > página):
+
+```
+<AppRouterContext.Provider value={routerFalso}>       // next/dist/shared/lib/app-router-context.shared-runtime
+  <MemoriaResolucion>                                  // lo que pinta documentacion/layout.tsx
+    <RedirectBoundary>                                 // next/dist/client/components/redirect-boundary (el real)
+      <PaginaFalsa />                                  // h2#ID_TITULO tabIndex=-1 + ContenidoFalso
+    </RedirectBoundary>
+  </MemoriaResolucion>
+</AppRouterContext.Provider>
+```
+
+- **Datos.** `PaginaFalsa` lee un estado del arnés, `{ pagina, revalidada }`, que vive en un
+  componente por encima de `AppRouterContext` y se expone a la prueba por un manejador del
+  módulo de prueba.
+  - Página 3: un solo paciente, `P21`, con una alerta.
+  - Página 2: veinte pacientes, `P1` a `P20`.
+- **`ContenidoFalso`.**
+  - Si `pagina === 3 && revalidada`, llama a `redirect('/agenda/documentacion?pagina=2')` de
+    `next/navigation` **durante el render**, como `contenido.tsx:87-88`.
+  - Si no, pinta `<Buscador tipo={null} nivel={null} pagina={pagina}>` con una lista dentro:
+    `<ProveedorResolucion prefijo="pagina" encabezadoId={ID_TITULO} pacientes=…>`, y por
+    paciente un `<a id={idEnlacePaciente('pagina', id)} href="#">` y un `<ResolverAlerta>` real.
+  - Así se reproducen **los dos** desmontajes: el límite y la `key`.
+- **`routerFalso`.** `{ replace, push, refresh, prefetch, back, forward }`. `replace` y `push` son
+  `vi.fn((href) => fijarDatos({ pagina: 2, revalidada: true }))`.
+- **Mocks.**
+  - `vi.mock('../acciones-alertas')` con `resolverAlerta` en `{ ok: true }`.
+  - `vi.mock('./acciones')` con `buscarPendientes`.
+  - **No** se mockea `next/navigation`: hacen falta los `redirect` y `unstable_rethrow` reales.
+  - `console.error` espiado y silenciado, porque React registra el error capturado.
+
+**Caso 1. «el último de la última página: tras la redirección real, foco al último de la
+página 2 y anuncio en el mismo nodo»:**
+
+1. Pintar, con `pagina: 3`.
+2. Pulsar «Marcar como resuelta» de `P21` con `userEvent` y esperar a que el botón deje de
+   estar `aria-disabled`.
+3. Guardar `h2Antes = getElementById(ID_TITULO)` y
+   `regionAntes = querySelector('[data-estado-bloque]')`.
+4. `act(() => revalidar())`, que fija `revalidada: true`.
+5. `await waitFor`:
+   - `document.activeElement.id === idEnlacePaciente('pagina', 'P20')`.
+6. Aserciones:
+   - `routerFalso.replace` (o `push`) se llamó una vez con `'/agenda/documentacion?pagina=2'`;
+   - **`getElementById(ID_TITULO) !== h2Antes`**: prueba que el remontaje ocurrió. Si alguien
+     cambia el arnés por un `rerender`, esta aserción cae;
+   - **`querySelector('[data-estado-bloque]') === regionAntes`**, y su texto contiene
+     «Marcada como resuelta.»;
+   - hay una sola `[data-estado-bloque]` en el documento.
+
+**Caso 2. «resuelta desde la búsqueda y redirigida: foco al encabezado, anuncio en el mismo
+nodo»:**
+
+- Igual que el caso 1, pero antes de resolver se busca.
+- Se escribe un término válido y se envía, y `buscarPendientes` devuelve un grupo `P21`. Se
+  reutilizan los grupos presentados de `buscador.test.tsx`.
+- Se despliega la fila con el teclado y se resuelve. Tras `revalidar()`:
+  - el foco está en `#documentacion-titulo`;
+  - la región es la misma y contiene «Marcada como resuelta.»;
+  - `P20` **no** tiene el foco.
+
+**Caso 3, gemelo de control. «sin redirección (la página sigue teniendo pacientes): el foco va
+al vecino de su índice».**
+
+- Página 3 con `P21` y `P22`. Se resuelve `P21`.
+- La revalidación deja `P22` sin redirigir (no hay `redirect`).
+- El foco va a `P22` y `replace` no se llama.
+- Demuestra que la regla de `eraUltimo` no tapa el caso normal.
+
+**Mutantes que la prueba debe matar**, y por qué falla cada uno:
+
+| Mutante | Falla en |
+|---|---|
+| El estado vuelve a `ProveedorResolucion` (la ronda 2 tal cual) | Caso 1, paso 5. Tras el remontaje no hay pendiente y el foco queda en `body`. |
+| La memoria se monta en `page.tsx`, en `Tarjeta` o dentro de `Buscador` | Caso 1, paso 5. Esas piezas se remontan con el límite. |
+| La región se queda dentro del proveedor | Caso 1, identidad de `regionAntes`. Es un nodo nuevo, y una región que nace con contenido no se anuncia. |
+| `eraUltimo` se sustituye por `min(indice)` | Caso 1. El foco iría a `P1`. |
+| Se quita la regla 5 (prefijo ajeno) | Caso 2. El foco iría a `P20`. |
+| Se decide al acertar y no cuando la alerta desaparece | Casos 1 y 3. El destino se calcularía con la lista vieja. |
+
+**Ampliar `app/(app)/agenda/resolver-alerta.test.tsx`:**
+
+- `it.each` sobre `decidirDestino`, cubriendo:
+  - alerta aún pintada → `null`;
+  - paciente presente con prefijo propio y con prefijo ajeno → su enlace con el prefijo del
+    bloque, y el texto con su anuncio;
+  - lista vacía → encabezado;
+  - prefijo ajeno y paciente ausente → encabezado;
+  - `eraUltimo` y `min(indice)`, cada uno con su gemelo.
+- «La memoria oculta por `Activity` tira el pendiente».
+  - Arnés: `<Activity mode={modo}><MemoriaResolucion><ProveedorResolucion …>` de `react`.
+  - Pasos: se resuelve (ok), se pasa a `hidden` **antes** de que cambie la lista, se cambia la
+    lista (la alerta ya no está) y se vuelve a `visible`.
+  - Se espera que el foco siga donde estaba y que la región no anuncie nada nuevo.
+  - Mutante: sin el `useLayoutEffect` de limpieza, el efecto del bloque se repite al volver y
+    roba el foco.
+- «`cerrar` es idempotente».
+  - Llamarlo dos veces con el mismo `Pendiente` incrementa `n` una sola vez: la `key` del
+    `span` cambia una vez.
+- Los casos de `:217` y `:229` («(b) era el último y la lista nueva es otra más larga (otra
+  página)» y su gemelo) se **renombran**: prueban la regla de `eraUltimo` con un `rerender`,
+  no la redirección. El título nuevo cita `documentacion/remontaje.test.tsx` como evidencia de
+  la redirección. Siguen pasando sin cambiar su cuerpo, porque el proveedor sin memoria crea
+  la suya.
+- Si alguna aserción busca `[data-estado-bloque]` **dentro** de `[data-bloque-pendientes]`,
+  pasa a buscarla en el contenedor de la prueba: la región es ahora hermana del bloque.
+
+**Ampliar `app/(app)/agenda/documentacion/buscador.test.tsx`.** Un caso «Limpiar búsqueda
+con una resolución en vuelo no roba el foco del campo»:
+
+- Arnés: `<MemoriaResolucion>` + `h2#ID_TITULO` + `<Buscador>`, con la lista hija envuelta en
+  un `ProveedorResolucion prefijo="pagina"`.
+- Pasos:
+  - se busca;
+  - se resuelve un resultado, y la segunda llamada a `buscarPendientes`, la de `relanzar`,
+    devuelve una promesa que no se resuelve;
+  - se pulsa «Limpiar búsqueda».
+- Esperado: tras vaciar efectos, `document.activeElement` es el campo.
+- Mutante: sin `descartar()` en `limpiar`, el foco va al `h2`.
+- Gemelo con `enviar` (una búsqueda nueva en vez de limpiar): el foco no va al `h2`.
+
+### R3.3 · R2-H2: «Tab al botón, Espacio despliega», literal
+
+**Playwright** (`accesibilidad/documentacion-pendiente.spec.ts`, prueba 1). Se sustituyen las
+líneas `:131-132` por este recorrido:
+
+1. `await enlacePaciente.focus();` El ancla es el enlace del nombre, que en el DOM va justo
+   antes del botón (`pendientes-fila.tsx:76-82`).
+2. `await page.keyboard.press('Tab');` y `await expect(boton).toBeFocused();`
+3. `await page.keyboard.press('Space');` y después:
+   - `await expect(boton).toHaveAttribute('aria-expanded', 'true');`
+   - `await expect(lista).toBeVisible();`
+   - `await expect(boton).toBeFocused();`
+4. Sigue el bucle de Tab que ya existe (`:148-156`) hasta «Marcar como resuelta», luego
+   `Enter`, y las aserciones del foco y el anuncio (`:158-163`).
+5. **Nadie** llama a `boton.focus()` ni a `boton.click()` en esta prueba.
+
+**jsdom** (`app/(app)/agenda/pendientes-fila.test.tsx`).
+
+- El caso de `:115-129` se renombra a «abre y cierra con el clic» y se queda como está.
+- Caso nuevo: «Tab desde el nombre llega al botón; Intro abre y Espacio cierra y vuelve a
+  abrir (`userEvent.keyboard`)».
+  1. `const user = userEvent.setup();` y pintar con `modo="desplegable"`.
+  2. Enfocar el enlace del nombre (`getByRole('link', { name: 'Ana López' })`) y hacer
+     `await user.tab()`. Se espera `document.activeElement === boton`.
+  3. `await user.keyboard('{Enter}')`:
+     - `aria-expanded="true"`;
+     - la lista sin `hidden`;
+     - el foco en el botón.
+  4. `await user.keyboard(' ')`:
+     - `aria-expanded="false"`;
+     - la lista con `hidden`.
+  5. `await user.keyboard(' ')` otra vez:
+     - `aria-expanded="true"`.
+- Caso nuevo: «dos filas abiertas a la vez». Se abren dos filas con el teclado y las dos
+  quedan `aria-expanded="true"`. Es el criterio 3: no es un acordeón.
+
+**Mutantes que matan**, y por qué:
+
+| Mutante | Falla en |
+|---|---|
+| `<div role="button" tabIndex={-1} onClick={…}>` | Paso 2 de jsdom y paso 2 de Playwright. Tab no se detiene en él. |
+| `<div role="button" tabIndex={0} onClick={…}>` | Pasos 3 a 5 de jsdom y paso 3 de Playwright. Ni `user-event` ni el navegador convierten Intro o Espacio en `click` sobre un `div`. |
+| `<div role="button" tabIndex={0} onKeyDown={Intro → toggle}>` | Paso 4 de jsdom y paso 3 de Playwright. Espacio no hace nada. |
+| `<button>` con `onKeyDown` que hace `preventDefault` de Espacio | Paso 4 de jsdom. |
+
+### R3.4 · R2-H3: 44 × 44 en el nombre y en el botón
+
+**Hechos.** `ENLACE` no tiene ancho mínimo (R3.0). Un nombre corto pinta una caja más estrecha
+que 44 px. La regla es «44 px de objetivo táctil en todo lo que se pulse»
+(`docs/interfaz.md:242, :275`; ADR-044, ADR-041), y el criterio 12 la pide para el enlace de
+nombre y para el botón.
+
+**Arreglo** (`app/(app)/agenda/pendientes-fila.tsx`).
+
+- Se añade `min-w-11` a `ENLACE`.
+- Crece la caja pulsable, no el relleno visual. El texto sigue alineado a la izquierda (sin
+  `justify-center`), así que la columna de nombres no se desalinea.
+- Al ser compartida, cubre también los enlaces de pendiente y «Ver todos», que el criterio 12
+  también nombra.
+- El botón `sm` no necesita cambio: `px-3`, la insignia y el chevron ya pasan de 44. Si la
+  medida dijera lo contrario, se añade `className="min-w-11"` en ese `<Button>` y en ningún otro.
+
+**Fixture** (spec, `PREPARAR`).
+
+- Se añade un paciente 22: `id a0480000-0000-4000-8000-000000000021`, `nombre 'Il'`,
+  `apellidos 'Z'`. Se pinta «Il Z», unos 25 px a `text-sm`.
+- Tiene un `informe_pendiente`, con `origen_id b0480000-0000-4000-8000-000000000121` y
+  `fecha_referencia current_date - 999`.
+- La marca de limpieza es el prefijo de `id`/`origen_id`, no el nombre, así que `LIMPIAR` ya lo
+  cubre.
+- **No** contiene «zzmarca»: la prueba 3 sigue esperando 21 coincidencias y «Hay 21 …», y no se
+  toca.
+- Cae justo detrás de `PRIMERO` en el orden (nivel nulo, segundo pendiente más antiguo), dentro
+  de los 6 del panel y de la página 1.
+- El comentario de cabecera del spec (`:13-17`) pasa a decir:
+  - 22 pacientes;
+  - solo informes;
+  - uno de nombre corto, que existe para medir 44 px.
+
+**Medidas** (spec).
+
+- Prueba 1:
+  - `mide44(enlacePaciente, 'el nombre del paciente')`;
+  - `mide44(panel.locator('#panel-paciente-a0480000-0000-4000-8000-000000000021'), 'un nombre corto')`;
+  - `mide44(boton, 'el desplegable')` en lugar de `:124-126`;
+  - y en el bucle de `:137-141`, `mide44(enlace, 'un enlace de pendiente')`.
+- Prueba 2, en la página:
+  - `mide44(page.locator('#pagina-paciente-a0480000-0000-4000-8000-000000000021'), 'un nombre corto en la página')`.
+- Mutante: quitar `min-w-11` hace que «Il Z» falle con «… es más estrecho que 44 px».
+
+### R3.5 · R2-H4: el fixture no alimenta al escalado
+
+**Decisión.** El fixture deja de tener **notas**: las 13 alertas de `PRIMERO` son
+`informe_pendiente` con `origen_tabla 'informes'`. Desaparece el `update … referencia_en` de
+`:71-74`. El cron solo lee `nota_sin_firmar` de nivel 3 (R3.0), así que ninguna fila del
+fixture puede generar una notificación, ni durante la pasada ni si `afterAll` no llega a
+correr. Es la única opción que no deja nada permanente. Una limpieza posterior siempre llega
+tarde a una carrera con el cron.
+
+**`PREPARAR`, en este orden, dentro del mismo `do $$`.**
+
+0. Se cierra una nota vieja del fixture si quedó abierta por una pasada interrumpida de la
+   ronda 2. Si no se cierra, bloquea el informe nuevo con su mismo `origen_id` (R3.0) y sigue
+   escalando:
+   `update public.alertas_documentacion set estado = 'resuelta', resuelta_en = now() where estado = 'abierta' and tipo = 'nota_sin_firmar' and origen_id::text like 'b0480000-0000-4000-8000-%';`
+   - Es la misma transición que `LIMPIAR`, no es `DELETE`, y la tabla no es de las protegidas.
+1. Se neutralizan las notificaciones que ya dejaron las pasadas de la ronda 2, que son como
+   mucho una por administrador:
+   `update public.notificaciones set leida_en = now() where leida_en is null and tipo = 'nota_pendiente_escalada' and origen_tabla = 'notas_clinicas' and origen_id = 'b0480000-0000-4000-8000-000000000000';`
+   - `fn_proteger_notificacion` lo permite, porque solo cambia `leida_en` y lo fija la base.
+   - No se borra nada.
+2. Pacientes 0 a 21 (R3.4) y alertas: todas `informe_pendiente`.
+   - `PRIMERO`: `fecha_referencia current_date - 1000`.
+   - Nombre corto: `current_date - 999`.
+   - Resto: `current_date - 5`.
+
+**Consecuencia en la prueba 1.** `PRIMERO` deja de ser el primero: delante van los pacientes de
+Ana con notas sin firmar (en la siembra, Lucía). Sigue entre los 6 del panel.
+
+- El comentario de `:118` cambia a «entre los seis primeros: sin nivel, es el pendiente más
+  antiguo».
+- `await expect(enlacePaciente, 'PRIMERO no está en el panel: Ana tiene más de cuatro pacientes con notas sin firmar abiertas').toBeVisible()`
+  deja el fallo legible si otra prueba siembra notas.
+- Tras resolver el primero, siguen saliendo «12 pendientes».
+
+**Lo que se pierde.** El spec ya no pinta un paciente de nivel 3. El criterio 12 no lo pide.
+El criterio 5 lo cubre en jsdom (`pendientes-fila.test.tsx`, «la píldora de urgencia…»), y el
+paso manual de escala de grises lo tiene con Lucía, de la siembra. El enlace de filtro «Muy
+atrasada» de la prueba 3 es estático y sigue funcionando. Pregunta P-R3-1.
+
+### R3.6 · Riesgos, por probabilidad
+
+1. **Media: dos copias del módulo de `AppRouterContext` en Vitest.** Si la prueba importa una
+   instancia y `navigation.js` requiere otra, `HandleRedirect` lanza «invariant expected app
+   router to be mounted». Hoy `next/link` y `react` ya comparten instancia en las pruebas
+   existentes, y los dos ficheros son CJS externalizados. Si ocurre, es un **BLOQUEO**. No se
+   sustituye el límite real por uno de juguete, y no se toca `vitest.config` (fuera de
+   territorio).
+2. **Media: la regla del compilador `react-hooks/set-state-in-effect` marca la llamada a
+   `memoria.cerrar` desde el efecto.** No debería, porque no es un `setState` local. Si la marca,
+   no se desactiva la regla: se informa y se para.
+3. **Baja-media (ya existía): orden de microtareas entre el resultado de la acción y el árbol
+   revalidado.** `alResolver` calcula `indice` con `pacientesAhora` y supone que el árbol nuevo
+   aún no se ha aplicado (`server-action-reducer` resuelve antes de aplicar). El caso 3 de
+   `remontaje.test.tsx` no lo prueba, porque el arnés serializa. Se deja anotado, y Playwright
+   (prueba 1) es la red.
+4. **Baja: pendiente heredado por una navegación manual en vuelo.** Si se pulsa «Página 1»
+   entre el acierto y la revalidación, la memoria (que no se oculta, porque es la misma ruta)
+   entrega el pendiente a la página 1, y el foco salta a su `min(indice)`. Hace falta un clic
+   en una ventana de unos 100 ms. Se acepta y se anota en la bitácora. Distinguirlo de la
+   redirección exigiría marcar la URL, y eso queda descartado en R3.7.
+5. **Baja: `PRIMERO` fuera de los 6 del panel**, si otra prueba siembra notas para Ana. El
+   `toBeVisible` con mensaje lo hace legible.
+6. **Baja: React escribe el error de redirección capturado en `console.error`** durante
+   `remontaje.test.tsx`. Se espía para que la salida quede limpia, y **no** se usa para
+   aserciones.
+
+### R3.7 · Decisiones y alternativas descartadas
+
+- **Memoria en `documentacion/layout.tsx`.** Es la única pieza propia por encima del
+  `RedirectBoundary` de la página y fuera de la `key` de `Buscador`.
+- **Descartado: marcar la URL** (`?resuelta=…`). El contrato fija el estado de la URL en
+  `pagina`/`tipo`/`nivel`/`paciente`. Además, el servidor no sabe que hubo una resolución, y
+  ensucia el historial que D10 protege.
+- **Descartado: `useId` estable.** El identificador sobrevive al remontaje, pero el estado no.
+- **Descartado: variable de módulo.** Se filtra entre pruebas y entre pestañas del mismo
+  proceso, y la región seguiría naciendo con contenido.
+- **Descartado: quitar la `key` de `Buscador` o el `redirect()`.** El primero no basta, porque
+  el límite remonta igual. El segundo lo exige el criterio 8.
+- **Descartado: `sessionStorage`.** D9 no admite almacenamiento del navegador.
+- **Decidir en un efecto y no en el render.** Fijar el estado de un ancestro durante el render
+  de un hijo es un error de React. Además, el efecto corre después del commit, cuando los `id`
+  de destino ya existen.
+- **Prefijo ajeno → encabezado (regla 5).** El `indice` de una lista de búsqueda no señala nada
+  en la lista paginada. Pregunta P-R3-2.
+- **Fixture sin notas mejor que limpiar notificaciones después.** Lo que no se genera no hay que
+  limpiarlo, y la carrera con el cron desaparece.
+- **`min-w-11` en `ENLACE` y no en cada uso.** Una sola regla cubre los tres enlaces que nombra el
+  criterio 12.
+
+### R3.8 · Cómo se cierra cada hallazgo y criterio afectado
+
+| Hallazgo o criterio | Evidencia |
+|---|---|
+| R2-H1 · criterio 9 (b) tras la redirección | `npm test -- "app/(app)/agenda/documentacion/remontaje.test.tsx"`: tres casos en verde. Pegar además la salida de cada mutante de la tabla de R3.2 e) en rojo, como mínimo «estado en el proveedor», «sin regla 5» y «`min(indice)`», revertidos después. |
+| R2-H1 · Activity y limpiar | `npm test -- "app/(app)/agenda/resolver-alerta.test.tsx" "app/(app)/agenda/documentacion/buscador.test.tsx"` en verde, con el mutante «sin `useLayoutEffect`» en rojo. |
+| R2-H2 · criterio 3 | `npm test -- "app/(app)/agenda/pendientes-fila.test.tsx"` en verde, y el mutante `div role=button tabIndex=0 onClick` en rojo en el caso nuevo. |
+| R2-H2 y R2-H3 · criterio 12 | `npx playwright test accesibilidad/documentacion-pendiente.spec.ts` en verde, tras `npx supabase db reset && npm run seed`. Además, `rg -n "boton\.(focus|click)\(" accesibilidad/documentacion-pendiente.spec.ts` no devuelve nada. Mutante: sin `min-w-11`, la prueba 1 en rojo con «un nombre corto es más estrecho que 44 px». |
+| R2-H4 | `rg -n "'nota_sin_firmar'|referencia_en" accesibilidad/documentacion-pendiente.spec.ts` solo devuelve el `update` de cierre del paso 0. Tras **dos** pasadas del spec, como postgres, `select count(*) from public.notificaciones where origen_id::text like 'b0480000-%' and leida_en is null` da `0`, y `select count(*) from public.alertas_documentacion where origen_id::text like 'b0480000-%' and estado = 'abierta'` también da `0`. |
+| Nada se rompe | `npm test`, `npm run lint` y `npm run build` limpios. `node ~/.claude/pipeline/territorio.mjs T-048` desde la rama lista sus ficheros, todos dentro, y no dice «sin territorio declarado». |
+
+### R3.9 · Qué revisar (ronda 3)
+
+1. **Que `remontaje.test.tsx` use el `RedirectBoundary` real** de
+   `next/dist/client/components/redirect-boundary` y un `redirect()` real lanzado en render.
+   Comprobar que la aserción `h2 !== h2Antes` está, porque es la que impide que el arnés degenere
+   en un `rerender`.
+2. **Que la región `[data-estado-bloque]` sea una sola en la página** y viva en la memoria. Que el
+   nodo sea el mismo antes y después, que su `span` cambie de `key` una vez por acierto (no dos
+   con StrictMode) y que nunca nazca con texto.
+3. **El orden de las reglas de `decidirDestino`.** «Paciente presente» va antes que «prefijo
+   ajeno», y «lista vacía» antes que «prefijo ajeno». Cambiar el orden da un destino distinto en
+   la búsqueda → lista. Revisar los `it.each` contra la lista de R3.2 a).
+4. **Que `cerrar` compare por identidad del `Pendiente`**, no por `alertaId`. Dos aciertos
+   seguidos sobre alertas distintas tienen que anunciar dos veces, y el mismo pendiente
+   repetido por StrictMode, una.
+5. **Puertas laterales del pendiente.**
+   - `limpiar` y `enviar` descartan; `relanzar` no.
+   - Ocultar la ruta (Activity) descarta.
+   - Una navegación por la paginación **no** descarta (riesgo 4, aceptado).
+   - Que nadie más llame a `descartar`.
+6. **Que el panel siga igual.** `documentacion.tsx` no cambia, y su proveedor crea su propia
+   memoria. La prueba 1 de Playwright sigue encontrando `[data-estado-bloque]` dentro de
+   `section[aria-labelledby="agenda-documentacion"]`.
+7. **`layout.tsx`.** No `async`, sin lecturas, sin `use cache`, y sin marcado visible más allá
+   de la región `sr-only`. `rg -n "use cache"` del contrato sigue vacío.
+8. **Spec.**
+   - Ninguna `nota_sin_firmar` se inserta.
+   - Ningún `DELETE` aparece.
+   - El `update` de `notificaciones` solo toca `leida_en is null` del `origen_id` exacto del
+     fixture viejo.
+   - El paciente corto no contiene «zzmarca».
+   - La prueba 3 conserva sus 21.
+9. **`min-w-11` sin `justify-center`.** La columna de nombres no se desalinea a 360 px. Hay que
+   mirarlo en la captura del spec o a mano.
+10. **Que los casos renombrados de `resolver-alerta.test.tsx:217, :229` no se vendan como
+    evidencia de la redirección.**
+
+### R3.10 · Territorio
+
+Ficheros nuevos:
+
+- `app/(app)/agenda/documentacion/layout.tsx`
+- `app/(app)/agenda/documentacion/remontaje.test.tsx`
+
+Los cubre el glob `app/(app)/agenda/documentacion/**` que ya está en el contrato. El resto
+(`resolver-alerta.tsx`/`.test.tsx`, `pendientes-fila.tsx`/`.test.tsx`, `buscador.tsx`/`.test.tsx`
+y el spec) ya estaba dentro. **No hace falta ampliar el territorio.**
+
+**Corrección hecha en el contrato** (`tickets/T-048-documentacion-pendiente-agrupada.md`,
+cabecera):
+
+- La línea `territorio:` llevaba un comentario en la misma línea y el script no la reconocía.
+  Salía en verde sin comprobar nada (R3.0).
+- El comentario pasa a la línea anterior y la clave queda sola: `territorio:`. La lista no cambia.
+- Con eso, el script ya lee los 19 globs.
+- **La rama de la ronda 3 tiene que partir de un `main` que incluya esta corrección y este
+  anexo**: la copia del contrato en la rama de la ronda 2 conserva la línea vieja.
+
+### R3.11 · Delegable
+
+Nada. Todo es foco, ARIA, el ciclo de vida de React o datos de la base. La única línea de
+pintura (`min-w-11`) no justifica un encargo.
+
+### R3.12 · Preguntas para el propietario
+
+- **P-R3-1.** ¿Se acepta que el spec de Playwright deje de pintar un paciente de nivel 3, para
+  que el fixture no pueda alimentar al escalado?
+  - El nivel 3 sigue probado en jsdom (criterio 5) y a mano con Lucía, de la siembra.
+  - **Recomendación: sí.** La alternativa (una nota de nivel 3 y una limpieza posterior)
+    siempre pierde la carrera con el cron de 15 min, y deja una notificación falsa en la
+    bandeja del administrador hasta el siguiente `db reset`.
+- **P-R3-2.** Si se resuelve algo desde la búsqueda y la revalidación redirige de página, la
+  búsqueda se pierde (la `key` de D10) y el foco va al título de la página con el anuncio
+  «Marcada como resuelta.».
+  - **Recomendación: sí.** Llevarlo al «último paciente» de una lista que el usuario no estaba
+    mirando le deja en un sitio que no eligió. El título es el punto de partida que el
+    criterio 9 (c) ya usa.
+- Ninguna de las dos bloquea. Si el propietario no contesta, se implementa la recomendación.
+
+### Lo que no entra en la ronda 3, y por qué
+
+- **Cerrar la notificación de escalado cuando la alerta se resuelve.** Es el comportamiento de
+  `escalar_notas_pendientes` (T-015), no de esta pantalla. Si se quiere, va a `docs/state.md`
+  como hallazgo, con su propio ticket y su migración.
+- **Que la siembra escale a Lucía e Iván.** Es intencionado: la siembra simula el estado real.
+- **Distinguir una navegación manual en vuelo de la redirección** (riesgo 4). Exigiría estado
+  en la URL o un protocolo con el servidor que el contrato no autoriza.
+- **Tocar `vitest.config` o simular el enrutador entero.** Si el `RedirectBoundary` real no
+  carga, se para (riesgo 1).
+
+### Resumen de la ronda 3 (para el gate)
+
+1. **Qué se construye:**
+   - una memoria de resolución (`MemoriaResolucion`) en un `layout.tsx` nuevo de
+     `/agenda/documentacion`, que guarda el pendiente y la única región `role="status"` por
+     encima del `RedirectBoundary` de la página y de la `key` de `Buscador`;
+   - el proveedor decide el foco en un efecto con una función pura (`decidirDestino`).
+2. **Decisión 1:** el estado sube al layout y no a la URL ni a un módulo. Es la única pieza que
+   el límite de redirección y la `key` no remontan, y el panel de `/agenda` se crea su propia
+   memoria sin cambiar.
+3. **Decisión 2:** reglas en orden: esperar, paciente presente, lista vacía, prefijo ajeno →
+   título, `eraUltimo` / `min(indice)`. `limpiar`, `enviar` y la ocultación por Activity
+   descartan el pendiente; `cerrar` es idempotente frente a StrictMode.
+4. **Decisión 3:** el fixture del spec pasa a ser solo de informes, así que el cron no tiene nada
+   que escalar. Antes cierra la nota vieja y marca como leídas las notificaciones que dejó la
+   ronda 2, sin `DELETE`.
+5. **R2-H2:** Tab desde el nombre al botón y Espacio despliega, en Playwright; Intro, Espacio y
+   Espacio con `userEvent` en jsdom. Matan los mutantes `div role=button`.
+6. **R2-H3:** `min-w-11` en `ENLACE`, y un paciente «Il Z» para medir 44 × 44 en el panel y en la
+   página.
+7. **Corrección del contrato:** la línea `territorio:` tenía un comentario y el script no
+   comprobaba nada. Ya lee los 19 globs, y la rama nueva debe partir de ese `main`.
+8. **Revisar con más cuidado (1):** que `remontaje.test.tsx` use el `RedirectBoundary` real y
+   compruebe que el `h2` cambió de nodo; si no, vuelve a ser un `rerender`.
+9. **Revisar con más cuidado (2):** la región única y el mismo nodo antes y después, y el orden
+   de las reglas de `decidirDestino`.
+10. **Revisar con más cuidado (3):** las puertas del pendiente (`limpiar`, `enviar`, Activity,
+    navegación manual aceptada), y que el spec no inserte ninguna nota ni borre nada.
