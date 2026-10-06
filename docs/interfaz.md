@@ -492,7 +492,8 @@ deja entre su fin y la cita siguiente del profesional (en cualquier centro) más
 descanso pero no cabe otra sesión (`d < g < D + 2d`). Es una sección que recibe el foco y se anuncia
 por eso (no es región viva ni diálogo, y Tab sale de ella), con los minutos, hasta tres
 alternativas de la semana pintada que no lo dejan y **«Agendar igualmente»**, que siempre existe y
-guarda lo elegido. Solo avisa de la primera sesión de una serie. El servidor no mira el hueco (D8):
+guarda lo elegido. Mientras se recalculan los huecos (cambio de tipo, de profesional o de semana), Guardar
+espera al cálculo vigente y no decide con los huecos de antes. Solo avisa de la primera sesión de una serie. El servidor no mira el hueco (D8):
 el aviso informa, no bloquea, y no toca las sugerencias ni sus tarjetas (ADR-049c).
 
 **La forma a 360 px** (WCAG 1.4.10, reflujo): la semana por debajo de `md` es una tira de
