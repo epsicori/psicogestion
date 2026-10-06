@@ -1,0 +1,68 @@
+{
+  "ticket": "T-043",
+  "resumen": "Rama worktree-agent-a84f11f89963e2cc9 HEAD c8759df. Todo PASA salvo CA2: el banco completo no llega a 29-hueco-raro por el hallazgo AJENO de fechas fijas en 15/18 (ya anotado en docs/state.md), pero ademas, corregido ese obstaculo en memoria (15 y 18 desplazadas a diciembre), 29-hueco-raro FALLA en B1 dentro del banco completo por un defecto PROPIO: sus anclas (primer lunes de febrero de año+4 = 2030-02-04) chocan con festivos y ausencias de PRO1 que siembra 21-alta-de-cita.sql (lunes_21+280 y +294 = 2030-02-11/12-17/25/26-03-03). Aislado (00+01+29, o todo menos 15/18/21) pasa completo. CA7 ejercido en Chromium contra next start (webpack) en :3107 como profesional (Ana) y tecnico (360 px); lo de lector de pantalla queda sin verificar. Las citas de prueba que inserte/cree en la base compartida (5) se borraron al acabar; max(version)=20261012120000 intacta; junction de node_modules retirada.",
+  "criterios": [
+    {
+      "id": "CA1",
+      "texto": "Migracion aplicada, lint:migraciones 0 hallazgos, forma de salida, una sola funcion, security definer, search_path vacio, grants",
+      "veredicto": "PASA",
+      "comando": "docker exec supabase_db_Psicogestion psql -U postgres -tAc \"select max(version) ...; select pg_get_function_result(...); select count(*) from pg_proc where proname='agenda_bloques_profesional'; select prosecdef, proconfig, proacl ...\"; npm run lint:migraciones",
+      "evidencia": "max(version)=20261012120000. pg_get_function_result = TABLE(fecha date, hora_local time without time zone, inicio timestamp with time zone, fin timestamp with time zone, estado text, hueco_raro_minutos integer); count=1; prosecdef=t, proconfig={search_path=\"\"}, proacl={postgres=X/postgres,authenticated=X/postgres}; has_function_privilege anon=f, authenticated=t. lint-migraciones: 33 migración(es) limpias. NOTA: no ejecute `db reset` (prohibido por el encargo); la aplicacion limpia de la migracion se deduce de que esta aplicada en la base y de que los mutantes la reaplican (drop+create) dentro de una transaccion sin error."
+    },
+    {
+      "id": "CA2",
+      "texto": "npm run test:rls sale con codigo 0 y 29-hueco-raro corre completo (B a J)",
+      "veredicto": "FALLA",
+      "comando": "npm run test:rls ; node todo.mjs (banco completo con 15 y 18 desplazadas de 2026-10-0x a 2026-12-0x solo en memoria) ; banco 00+01+29 ; banco completo sin 15,18,21",
+      "evidencia": "(1) npm run test:rls: exit=3, ERROR en 15-agenda: «lanzó 42501 en vez de 23P01 ... Una cita pasada no se puede reprogramar» (hallazgo AJENO, docs/state.md l.29; 29 no se ejecuta). (2) 00+01+29 aislado: exit 0, '29-hueco-raro: OK', 24 NOTICE OK (A, B0, B1 40, C null, D 11, E1 69, E2 null, F d=0, G tecnico/CB/PRO2/gemelas, H ausencia, I fin de franja, J cancelada). (3) Banco completo menos 15,18,21: exit 0 y '29-hueco-raro: OK'. (4) Banco completo con 15/18 con fechas futuras (solo para sortear lo ajeno): 21 pasa entera y 29 FALLA: «ERROR: ASERCIÓN FALLIDA: B1 · dos citas candidatas (10:30 y 11:40)...». Causa medida: tras 21, PRO1 tiene disponibilidad festivo 2030-02-11 ('R1-H2 festivo'), ausencia 2030-02-12..17, festivo 2030-02-25, ausencia 2030-02-26..03-03; l007 de 29 es 2030-02-11, y agenda_bloques_profesional(PRO1,CA,2030-02-11) devuelve 0 filas (dia29 = NULL). Sin 21 el mismo 29 pasa. El header de 29 afirma que 26 y 28 no chocan y que 21 usa año+3, pero 21 llega a 2030 con sus offsets +280/+294.",
+      "reproduccion": "Con 15-agenda.sql y 18-agenda-rango.sql arreglados (o saltandolos) correr 00..29 en una sola transaccion: 21-alta-de-cita.sql deja festivo/ausencia de PRO1 en 2030-02-11..17 y 2030-02-25..03-03; 29-hueco-raro.sql (ancla lunes_29 = 2030-02-04, secciones B en l007=2030-02-11, y las de l021=2030-02-25) cae en B1. Arreglo posible (no aplicado, no es mi cometido): mover el ancla de 29 a una fecha que 21 no toque (otro mes/año+5)."
+    },
+    {
+      "id": "CA3",
+      "texto": "Permisos intactos: TEC2->CA y PRO2->PRO1 42501 «No autorizado para ver esta agenda.»; gemelas TEC1->CA y ADM pasan",
+      "veredicto": "PASA",
+      "comando": "banco 00+01+29 (y banco completo sin 15,18,21)",
+      "evidencia": "OK (lanzó 42501 y el mensaje dice «No autorizado para ver esta agenda»): G · el técnico de CB pidiendo CA: 42501 | OK (...): G · un profesional ajeno (PRO2 pidiendo a PRO1): 42501 | OK: G · el técnico de CA ve el valor calculado con una cita de PRO1 en CB: 40 minutos | OK: G · GEMELA: el administrador ve el mismo array | OK: G · GEMELA: el propio profesional ve el mismo array. Ademas 21 (que incluye la puerta de permisos) pasa entera con 15/18 sorteadas."
+    },
+    {
+      "id": "CA4",
+      "texto": "Mutantes M1 a M9 hacen caer test:rls en la asercion nombrada",
+      "veredicto": "PASA",
+      "comando": "node mut.mjs Mn : migracion mutada con sed/replace aplicada dentro de begin...rollback antes de 00+01+29 (no toca la base; el rollback la deshace)",
+      "evidencia": "M1 (v_sig <= ...) cae en E2 'cita a las 11:00: quedan 70 minutos' (psql:<stdin>:996) | M2 (v_sig >= v_tras) cae en C (l.962) | M3 (v_tras sin descanso) cae en C (l.962) | M4 (sin c.inicio < v_f_fin) cae en I (l.1094) | M5 (min->max) cae en B1 (l.948) | M6 (sin not exists de ausencia) cae en H (l.1080) | M7 (sin filtro de estado) cae en J (l.1108) | M8 (v_sig - v_tras) cae en B1 (l.948) | M9 (calcular tambien en ocupados) cae en B1 (l.948). Todos exit=3. Coinciden con la tabla de cabecera de 29 (M1 E2, M2 C, M3 C, M4 I, M5 B1, M6 H, M7 J, M8 B1/D, M9 B1). No contraste con la tabla del diseno (no lo lei)."
+    },
+    {
+      "id": "CA5",
+      "texto": "npm test en verde; pruebas de alternativas, aviso y formulario",
+      "veredicto": "PASA",
+      "comando": "npm test ; npx vitest run \"app/(app)/agenda/nueva\" --reporter=verbose",
+      "evidencia": "Test Files 188 passed (188); Tests 2387 passed (2387). alternativas-hueco.test.ts: orden con varias candidatas, empate (anterior), excluye elegido/ocupados/raros, corta en maximo, sin el elegido no hay alternativas. aviso-hueco-raro.test.tsx: nombre por titulo y no region viva/dialogo, ref, alternativas, sin alternativas muestra texto y no lista, 'ocupado: aria-disabled, nunca disabled'. formulario-alta.test.tsx: Guardar sobre hueco raro no guarda y da foco al aviso; no raro guarda sin aviso; «Agendar igualmente» guarda exactamente lo elegido, una vez; alternativa quita el aviso, foco en «Hueco elegido» y no guarda; elegir otro hueco quita el aviso; si al agendar el hueco se ocupo el foco no va a body. (No cotejado uno a uno con los siete casos del diseno)."
+    },
+    {
+      "id": "CA6",
+      "texto": "Ningun camino de servidor rechaza por el hueco; Guardar y Agendar igualmente nunca disabled",
+      "veredicto": "PASA",
+      "comando": "grep -rn huecosRaros --include=*.ts --include=*.tsx app lib (sin tests) ; grep -n disabled aviso-hueco-raro.tsx formulario-alta.tsx ; grep huecosRaros|hueco acciones.ts",
+      "evidencia": "acciones.ts (guardarAlta) no contiene huecosRaros. lib/citas/alta.ts solo CONSTRUYE huecosRaros en leerBloques (l.43, 61-71: lee fila.hueco_raro_minutos de la base) y no lo usa para rechazar; lo consumen alternativas-hueco.ts, estado-alta.ts y formulario-alta.tsx (cliente). Las unicas apariciones de 'disabled' en aviso y formulario son aria-disabled (y comentarios H27). En Chromium: 'button[disabled]' = 0 con el aviso abierto."
+    },
+    {
+      "id": "CA7",
+      "texto": "Manual en Chromium: aviso con 40 minutos y foco; Tab; alternativa y foco en «Hueco elegido»; Agendar igualmente crea; sin rareza sin aviso; 360 px sin desbordar",
+      "veredicto": "PASA",
+      "comando": "next start -p 3107 (build webpack del worktree, base local sembrada) + playwright chromium (guiones e2e4/e2e6.cjs en el scratchpad): cita de Ana 10:30 el 2026-10-27 (y 28 para el tecnico), tipo Sesion individual 50 min, descanso 10, hueco 09:00",
+      "evidencia": "PROFESIONAL (Ana, 1280 px): Guardar sobre 09:00 -> aviso 'Esta cita deja un hueco corto / Entre esta cita y la siguiente quedarían 40 minutos: más que el descanso, pero no cabe otra sesión.' con alternativas 11:30, 12:30, 16:00; document.activeElement === la section del aviso (true); aria-labelledby = título, aria-describedby = texto. Tab: 11:30 -> 12:30 -> 16:00 -> «Agendar igualmente» -> Cancelar -> Guardar. Segundo Guardar: no guarda, URL sigue en /agenda/nueva y foco vuelve al aviso (true). Elegir alternativa: aviso desaparece (0), foco en <p> 'Hueco elegido: martes, 27 de octubre de 2026, 11:30, libre', calendario marca '…11:30, libre, elegida'. Volver a 09:00 + Guardar: aviso otra vez; «Agendar igualmente» -> redirige a /agenda?fecha=2026-10-27 y la cita existe en la base (08:00 UTC = 09:00 CET). Hueco sin rareza (17:00): Guardar sin aviso (0), redirige y crea la cita (16:00 UTC). TECNICO a 360 px (día elegido en la lista movil): mismo aviso con 40 minutos, foco en el aviso, Tab igual, 2º Guardar no guarda, alternativa -> foco en «Hueco elegido», Agendar igualmente crea la cita (28-oct 08:00 UTC). A 360 px: scrollWidth-clientWidth = 0, aviso.scrollWidth<=clientWidth, aviso dentro del viewport. 'button[disabled]' = 0. NO VERIFICADO: lo que lee un lector de pantalla (anuncio del título/texto al recibir el foco, el anuncio 'de siempre' al cerrar el diálogo): solo se comprobo la estructura ARIA y el foco. Tampoco se ejercio el flujo como administrador (el guion lo pide) ni a 360 px como profesional."
+    },
+    {
+      "id": "CA8",
+      "texto": "npm run lint sin errores, build limpio, territorio.mjs dentro del territorio",
+      "veredicto": "PASA",
+      "comando": "npm run lint ; npx next build --webpack ; node ~/.claude/pipeline/territorio.mjs T-043 ; git diff main --name-only",
+      "evidencia": "lint: 0 errors, 2 warnings (no-unused-vars en lib/cuentas/accesos.test.ts, ajeno al ticket). next build --webpack: exit=0 (rutas listadas, sin errores). territorio.mjs responde 'T-043: sin territorio declarado, nada que comprobar.' (no parsea el contrato: el bloque lleva comentarios); no sirve como prueba. Comprobacion a mano del diff contra el territorio: todo dentro salvo docs/bitacora/T-043.md y docs/state.md (no listados en el territorio del contrato, aunque son memoria obligatoria por la constitucion regla 4; tickets/T-048* aparecen en 'diff main' solo porque main avanzo). OBSERVACION para el integrador. Se uso --webpack, no `npm run build` (Turbopack falla con la junction, segun el encargo)."
+    }
+  ],
+  "regresiones": [
+    "AJENA (docs/state.md l.29): npm run test:rls cae en 15-agenda.sql por fechas fijas ya pasadas (2026-10-06, CITA1) con 42501 'Una cita pasada no se puede reprogramar'; 18-agenda-rango igual. Impide que el banco completo llegue a 29.",
+    "PROPIA (CA2): 29-hueco-raro.sql y 21-alta-de-cita.sql comparten PRO1 en febrero de 2030 (21: lunes_21 = 1er lunes de mayo año+3 con offsets +280/+294; 29: 1er lunes de febrero año+4). Resultado: 29 falla en B1 dentro del banco completo aunque pase aislado. Dependiente del año actual (2026).",
+    "Aislado, 21-alta-de-cita.sql necesita 04-baja.sql (PROBAJA en baja) y 18 (C18TEC) antes; con 00+01+04+21 cae en la aserción M por dependencia de 18, no por T-043 (la aserción A enmendada pasa)."
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "ticket": "T-043",
+  "revisor": "B",
+  "ronda": 1,
+  "altas": 0,
+  "medias": 1,
+  "bajas": 5,
+  "hallazgos": [
+    {
+      "id": "B-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 300,
+      "descripcion": "La intercepción decide con la vista de una clave de cálculo ya no vigente; si el recálculo en vuelo quita la rareza, el aviso se desmonta con el foco dentro y el foco cae a body.",
+      "escenario": "Tipo A (50 min) y hueco 17:00 raro; se cambia a tipo B con recalcularAlta en vuelo y se pulsa Guardar: sale el aviso con el foco; al llegar la vista (17:00 ya no raro) la sección se desmonta, document.activeElement = BODY y guardarAlta = 0 (sonda S5). Contradice «el foco nunca va a body» del diseño §5 y CA5."
+    },
+    {
+      "id": "B-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 300,
+      "descripcion": "Con un recálculo en vuelo, Guardar decide el aviso con la rareza de la duración anterior y puede guardar sin avisar (o avisar con minutos viejos).",
+      "escenario": "Tipo A con 17:00 sin rareza; se cambia a tipo B (con el que 17:00 sí es raro) con el recálculo en vuelo y se pulsa Guardar: guardarAlta se llama una vez con tipoTerapiaId = B y nunca sale el aviso (sonda S6)."
+    },
+    {
+      "id": "B-H3",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 312,
+      "descripcion": "Las dos guardas contra un segundo «Agendar igualmente» (agendarIgualmente y ocupado= en :576) se hacen equivalentes entre sí y la pareja sobrevive; el «una vez» de CA5 se prueba con un clic y la bitácora da por matado «ocupado ignorado».",
+      "escenario": "Quitando la guarda de agendarIgualmente y poniendo ocupado={false}, la suite sigue 69/69; la sonda S1 (Guardar, Agendar igualmente, esperar «Guardando…», Agendar igualmente otra vez) cuenta 2 llamadas a guardarAlta frente a 1 en HEAD."
+    },
+    {
+      "id": "B-H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 132,
+      "descripcion": "Sin prueba la condición «solo si el foco se perdió» del destino 'guardar' (:132) ni el reintento de la serie desde «Agendar igualmente» (:313-316): sus mutantes sobreviven 69/69.",
+      "escenario": "(a) Agendar igualmente devuelve un fallo genérico con el aviso montado: en HEAD el foco se queda en «Agendar igualmente»; con refGuardar.focus() incondicional salta a Guardar (sonda S2). (b) Con la previsualización de serie fallida y el aviso visible, sin la rama falloSerie «Agendar igualmente» lanza handleSubmit(guardar) en lugar de volver a pedir la serie."
+    },
+    {
+      "id": "B-H5",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 572,
+      "descripcion": "La exclusión de raros en las alternativas solo se prueba en la función pura; el paso de vista.huecosRaros desde el formulario no tiene prueba (la fixture solo hace raro al elegido) y la bitácora lo da por matado.",
+      "escenario": "Con alternativasSinHueco(vista.calendario.huecos, {}, …) la suite sigue 69/69; con 17:00 y 18:00 raros y 17:00 elegido, el aviso ofrece 18:00 (HEAD: solo 19:00), el usuario la elige, pulsa Guardar y le sale otro aviso (sonda S4)."
+    },
+    {
+      "id": "B-H6",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.test.tsx",
+      "linea": 852,
+      "descripcion": "El caso 1 de CA5 hace findByRole del aviso antes de expect(guardarAlta).not.toHaveBeenCalled(), al revés de lo que pide el diseño §5: sin la intercepción falla por el selector, no por la llamada.",
+      "escenario": "Mutante sin intercepción (M_H): el caso 1 cae con «Unable to find role=\"region\" and name \"Esta cita deja un hueco corto\"» y la aserción de la llamada nunca se ejecuta; el mutante muere, pero el diagnóstico no dice que se guardó."
+    }
+  ]
+}
