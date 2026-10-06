@@ -1,0 +1,56 @@
+{
+  "ticket": "T-048",
+  "altas": 0,
+  "medias": 3,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/documentacion/buscador.tsx",
+      "linea": 52,
+      "descripcion": "La búsqueda (vista, estado de useActionState y término) no se reinicia al cambiar tipo o nivel: el Buscador no se remonta, porque la clave del segmento ignora los search params (layout-router.js:549), y relanzar reenvía el FormData con los filtros viejos.",
+      "escenario": "Busco «ana» y pulso el filtro «Nota sin firmar». La URL pasa a ?tipo=nota_sin_firmar y el filtro sale marcado, pero siguen pintados los resultados calculados sin filtro (también el paciente que solo tiene un consentimiento) y el término sigue en el campo. Contradice el contrato, la ayuda del campo y el paso 5 del guion manual."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/documentacion/acciones.test.ts",
+      "linea": 10,
+      "descripcion": "D10b mockea entero @/lib/citas/agenda en lugar de usar los lectores reales sobre un doble de PostgREST, y la prueba de consola solo recorre el camino feliz. El caso (5) del diseño, consola limpia con un error forzado, no existe.",
+      "escenario": "El mutante de acciones.ts:53 'if (!r.ok) { console.error(\"buscarPendientes\", termino.data, r.mensaje); return { fase: \"fallo\" }; }' sigue en verde: :152 solo compara el valor y :165 no falla. Con un 42501 o un corte de red, el nombre buscado acabaría en el log del servidor, contra D10."
+    },
+    {
+      "id": "H3",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/documentacion/buscador.test.tsx",
+      "linea": 34,
+      "descripcion": "D10c sin prueba: todos los fixtures llevan resoluble:false y ninguna prueba comprueba que resolver desde un resultado vuelva a llamar a buscarPendientes con el mismo término.",
+      "escenario": "Con el mutante 'const relanzar = () => {}' (buscador.tsx:72), o alAcertar={undefined} (:163), la suite queda en verde. Al resolver el único pendiente de un resultado, la lista no cambia, el foco no se mueve, no se anuncia nada y el paciente sigue con su recuento viejo."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/pendientes.ts",
+      "linea": 316,
+      "descripcion": "Un término hecho solo de diacríticos pasa Zod, se normaliza a vacío y [].every() da true, así que coincide con todos.",
+      "escenario": "Busco «´´» (o «^^», «¨¨»): la acción devuelve los 20 pacientes más urgentes y anuncia «N pacientes coinciden». Medido con node: coincideBusqueda('´´','Ana','López') === true."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/resolver-alerta.tsx",
+      "linea": 90,
+      "descripcion": "eraUltimo no tiene ninguna prueba que lo distinga de min(indice, len-1): la prueba «era el último» usa una lista que se acorta en uno.",
+      "escenario": "Con el mutante eraUltimo:false (:108), la suite queda en verde. Resuelvo el único paciente de la página 3, la redirección lleva a la página 2 (20 pacientes) con el estado conservado, y el foco va al primero de la página en vez del último."
+    },
+    {
+      "id": "H6",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/documentacion.test.tsx",
+      "linea": 231,
+      "descripcion": "El panel solo afirma que pide 6 nombres, no que sean los 6 que pinta; el criterio 10 del diseño pedía «exactamente los 6 ids pintados».",
+      "escenario": "El mutante leerNombresPacientes(sesion, grupos.slice(-6)...) en documentacion.tsx:79 queda en verde. Con 8 pacientes, los 2 más urgentes salen como «Paciente» sin nombre y se piden los nombres de 2 que no se pintan."
+    }
+  ]
+}
