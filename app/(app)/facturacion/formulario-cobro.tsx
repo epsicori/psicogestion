@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMemo, useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { AreaTexto } from '@/components/ui/area-texto';
 import { Button } from '@/components/ui/button';
@@ -48,14 +48,15 @@ export function FormularioCobro({ pacientes, hoy, alRegistrar }: Props) {
     register,
     handleSubmit,
     setError,
-    watch,
+    control,
     formState: { errors },
   } = useForm<EntradaCobro, unknown, DatosCobro>({
     resolver: zodResolver(esquema),
     defaultValues: { pacienteId: '', importe: '', fecha: hoy, referencia: '', motivo: '' },
   });
 
-  const devolucion = esNegativo(watch('importe'));
+  // useWatch y no watch(): watch() no se puede memoizar y el compilador de React lo salta.
+  const devolucion = esNegativo(useWatch({ control, name: 'importe' }));
 
   function alSerValido(datos: DatosCobro) {
     setMensaje('');

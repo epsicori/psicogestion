@@ -21,7 +21,7 @@ vi.mock('./bloques', async (original) => ({
 // Los dos clientes, de pega: aquí solo importa si se montan y con qué.
 vi.mock('./selector-profesional', () => ({
   SelectorProfesional: ({ opciones }: { opciones: { id: string; nombre: string }[] }) => (
-    <button type="button" role="combobox" aria-label="Profesional">
+    <button type="button" role="combobox" aria-label="Profesional" aria-controls="lista" aria-expanded={false}>
       {opciones.map((o) => o.nombre).join(',')}
     </button>
   ),
