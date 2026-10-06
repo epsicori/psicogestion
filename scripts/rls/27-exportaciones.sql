@@ -99,16 +99,20 @@ insert into public.notas_clinicas (id, paciente_id, episodio_id, autor_id) value
 select pg_temp.assert_no_lanza(format($f$
   insert into public.notas_clinicas_versiones
     (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en, anotaciones_reservadas) values
+    -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
     (%L, '{"texto":"MARCA-CUERPO-1"}', %L, 'individual', %L, timestamptz '2029-03-01 10:00:00+00', 'MARCA-RESERVADA-1')$f$,
   :E_N1,
+  -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
   pg_temp.sobre_prueba(:E_N1, :E_AUT, timestamptz '2029-03-01 10:00:00+00', '{"texto":"MARCA-CUERPO-1"}'::jsonb,
                        p_anotaciones_reservadas => 'MARCA-RESERVADA-1'),
   :E_AUT), '27.0a N1 v1 (individual, con reservadas) se sella');
 select pg_temp.assert_no_lanza(format($f$
   insert into public.notas_clinicas_versiones
     (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en, anotaciones_reservadas, motivo_cambio) values
+    -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
     (%L, '{"texto":"MARCA-CUERPO-2"}', %L, 'conjunta', %L, timestamptz '2029-03-01 11:00:00+00', 'MARCA-RESERVADA-2', 'MARCA-MOTIVO-2')$f$,
   :E_N1,
+  -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
   pg_temp.sobre_prueba(:E_N1, :E_AUT, timestamptz '2029-03-01 11:00:00+00', '{"texto":"MARCA-CUERPO-2"}'::jsonb,
                        p_anotaciones_reservadas => 'MARCA-RESERVADA-2', p_motivo_cambio => 'MARCA-MOTIVO-2',
                        p_alcance => 'conjunta'),
@@ -116,15 +120,19 @@ select pg_temp.assert_no_lanza(format($f$
 select pg_temp.assert_no_lanza(format($f$
   insert into public.notas_clinicas_versiones
     (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
+    -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
     (%L, '{"texto":"N3-CUERPO"}', %L, 'individual', %L, timestamptz '2029-03-01 12:00:00+00')$f$,
   :E_N3,
+  -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
   pg_temp.sobre_prueba(:E_N3, :E_TIT, timestamptz '2029-03-01 12:00:00+00', '{"texto":"N3-CUERPO"}'::jsonb),
   :E_TIT), '27.0c N3 v1 se sella');
 select pg_temp.assert_no_lanza(format($f$
   insert into public.notas_clinicas_versiones
     (nota_id, cuerpo, contenido_canonico, alcance, autor_id, creada_en) values
+    -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
     (%L, '{"texto":"N4-CUERPO"}', %L, 'individual', %L, timestamptz '2029-03-01 13:00:00+00')$f$,
   :E_N4,
+  -- fecha-fija: creada_en como postgres, el margen de un minuto solo aplica a authenticated
   pg_temp.sobre_prueba(:E_N4, :E_AUT, timestamptz '2029-03-01 13:00:00+00', '{"texto":"N4-CUERPO"}'::jsonb),
   :E_AUT), '27.0d N4 v1 se sella');
 

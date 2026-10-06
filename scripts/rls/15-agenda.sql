@@ -19,6 +19,14 @@
 \set CITAX '\'a0100002-0000-4000-8000-00000000000f\''
 \set SERIE1 '\'a0100003-0000-4000-8000-000000000001\''
 
+-- T-049 · Ancla del bloque de agenda: el martes entre D+14 y D+20, siempre en hora local de Madrid.
+-- p_dia = 0, 1, 2: el martes, el miércoles y el jueves de ese martes. Nunca un desplazamiento escrito a mano.
+create function pg_temp.instante15(p_dia int, p_hora time) returns timestamptz
+language sql stable as
+$$ select ((current_date + 14 + ((9 - extract(isodow from current_date + 14)::int) % 7) + p_dia) + p_hora) at time zone 'Europe/Madrid' $$;
+select (pg_temp.instante15(0, '12:00') at time zone 'Europe/Madrid')::date as d15 \gset
+\echo 'Ancla 15: d15=':d15
+
 -- =========================================================================
 -- A · El enum: cinco valores, ninguno «en_curso» (ADR-045)
 -- =========================================================================
@@ -101,11 +109,11 @@ update public.perfiles set descanso_activo = true, descanso_minutos = 10 where i
 insert into public.citas
   (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria)
 values (:CITA1, :P1, :PRO1, :CA, :TT1,
-        timestamptz '2026-10-06 10:00:00+02', timestamptz '2026-10-06 10:50:00+02', 'Europe/Madrid');
+        pg_temp.instante15(0, '10:00'), pg_temp.instante15(0, '10:50'), 'Europe/Madrid');
 
 select pg_temp.assert(
-  (select rango_bloqueante = tstzrange(timestamptz '2026-10-06 10:00:00+02',
-                                       timestamptz '2026-10-06 11:00:00+02', '[)')
+  (select rango_bloqueante = tstzrange(pg_temp.instante15(0, '10:00'),
+                                       pg_temp.instante15(0, '11:00'), '[)')
      from public.citas where id = :CITA1),
   'El rango bloqueante es [inicio, fin + descanso): 10:00-10:50 bloquea hasta las 11:00'
 );
@@ -114,8 +122,8 @@ select pg_temp.assert(
 select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.citas
            (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria, rango_bloqueante)
-         values (%L, %L, %L, timestamptz '2026-10-07 10:00:00+02', timestamptz '2026-10-07 10:50:00+02',
-                 'Europe/Madrid', tstzrange(timestamptz '2026-10-07 10:00:00+02', timestamptz '2026-10-07 10:50:00+02'))$sql$,
+         values (%L, %L, %L, pg_temp.instante15(1, '10:00'), pg_temp.instante15(1, '10:50'),
+                 'Europe/Madrid', tstzrange(pg_temp.instante15(1, '10:00'), pg_temp.instante15(1, '10:50')))$sql$,
     :P1, :PRO1, :CA),
   '42501',
   'Mandar rango_bloqueante a mano lanza 42501: lo calcula el disparador'
@@ -125,7 +133,7 @@ select pg_temp.assert_lanza_codigo(
 select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.citas
            (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
-         values (%L, %L, %L, timestamptz '2026-10-06 10:30:00+02', timestamptz '2026-10-06 11:20:00+02', 'Europe/Madrid')$sql$,
+         values (%L, %L, %L, pg_temp.instante15(0, '10:30'), pg_temp.instante15(0, '11:20'), 'Europe/Madrid')$sql$,
     :P1, :PRO1, :CA),
   '23P01',
   'Dos citas solapadas del mismo profesional, ambas programadas, chocan con la restricción de exclusión'
@@ -135,7 +143,7 @@ select pg_temp.assert_lanza_codigo(
 select pg_temp.assert_lanza_codigo(
   format($sql$insert into public.citas
            (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
-         values (%L, %L, %L, timestamptz '2026-10-06 10:55:00+02', timestamptz '2026-10-06 11:45:00+02', 'Europe/Madrid')$sql$,
+         values (%L, %L, %L, pg_temp.instante15(0, '10:55'), pg_temp.instante15(0, '11:45'), 'Europe/Madrid')$sql$,
     :P1, :PRO1, :CA),
   '23P01',
   'Con 10 minutos de descanso, una cita a las 10:55 choca: el descanso es parte del rango, no un consejo'
@@ -149,7 +157,7 @@ begin
     insert into public.citas (paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria)
     values ('d0030001-0000-4000-8000-000000000001', 'b0030001-0000-4000-8000-000000000002',
             'c0030001-0000-4000-8000-00000000000a',
-            timestamptz '2026-10-06 10:55:00+02', timestamptz '2026-10-06 11:45:00+02', 'Europe/Madrid');
+            pg_temp.instante15(0, '10:55'), pg_temp.instante15(0, '11:45'), 'Europe/Madrid');
     raise exception 'FALLO: debía chocar y no chocó';
   exception when exclusion_violation then
     if sqlerrm not like '%citas_sin_solape_profesional%' then
@@ -164,7 +172,7 @@ $$;
 insert into public.citas
   (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria)
 values (:CITA2, :P1, :PRO1, :CA, :TT1,
-        timestamptz '2026-10-06 11:00:00+02', timestamptz '2026-10-06 11:50:00+02', 'Europe/Madrid');
+        pg_temp.instante15(0, '11:00'), pg_temp.instante15(0, '11:50'), 'Europe/Madrid');
 
 select pg_temp.assert(
   pg_temp.contar(format('select * from public.citas where id = %L', :CITA2)) = 1,
@@ -177,7 +185,7 @@ update public.citas set estado = 'cancelada' where id = :CITA2;
 insert into public.citas
   (id, paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria)
 values (:CITA3, :P2, :PRO1, :CA, :TT1,
-        timestamptz '2026-10-06 11:10:00+02', timestamptz '2026-10-06 12:00:00+02', 'Europe/Madrid');
+        pg_temp.instante15(0, '11:10'), pg_temp.instante15(0, '12:00'), 'Europe/Madrid');
 
 select pg_temp.assert(
   pg_temp.contar(format('select * from public.citas where id = %L', :CITA3)) = 1,
@@ -206,13 +214,13 @@ select pg_temp.assert(
 insert into public.citas
   (paciente_id, profesional_id, centro_id, tipo_terapia_id, inicio, fin, zona_horaria)
 values (:P1, :PRO1, :CA, :TT1,
-        timestamptz '2026-10-08 09:00:00+02', timestamptz '2026-10-08 09:50:00+02', 'Europe/Madrid');
+        pg_temp.instante15(2, '09:00'), pg_temp.instante15(2, '09:50'), 'Europe/Madrid');
 
 select pg_temp.assert(
-  (select rango_bloqueante = tstzrange(timestamptz '2026-10-08 09:00:00+02',
-                                       timestamptz '2026-10-08 10:10:00+02', '[)')
+  (select rango_bloqueante = tstzrange(pg_temp.instante15(2, '09:00'),
+                                       pg_temp.instante15(2, '10:10'), '[)')
      from public.citas
-    where inicio = timestamptz '2026-10-08 09:00:00+02'),
+    where inicio = pg_temp.instante15(2, '09:00')),
   'GEMELA POSITIVA: una cita NUEVA sí toma los 20 minutos — el disparador calcula, no está muerto'
 );
 
@@ -493,7 +501,7 @@ call pg_temp.reset_sesion();
 call pg_temp.como(:PRO1);
 select pg_temp.assert_lanza_codigo(
   format('select public.agenda_actualizar_cita(%L::uuid, p_inicio => timestamptz %L, p_fin => timestamptz %L)',
-         :CITA1, '2026-10-06 11:15:00+02', '2026-10-06 12:05:00+02'),
+         :CITA1, pg_temp.instante15(0, '11:15'), pg_temp.instante15(0, '12:05')),
   '23P01',
   'Mover una cita encima de otra por la funcion CHOCA igual: security definer no es una puerta trasera al solape'
 );

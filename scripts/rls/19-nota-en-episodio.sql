@@ -93,10 +93,14 @@ insert into public.episodio_participantes (episodio_id, paciente_id, papel, alta
   (:EJX, :PC,  'miembro', current_date - 30, null),
   (:EJX, :PJ4, 'miembro', current_date - 30, null);
 
+-- T-049 · Año propio del 19: Y+8, primer lunes de enero (README, punto 10).
+select (extract(year from now())::int + 8) as anio_19 \gset
+select (make_date(:anio_19, 1, 1) + ((8 - extract(isodow from make_date(:anio_19, 1, 1))::int) % 7))::text as lunes_19 \gset
+
 -- Cita de PD con PRO1 en CA, fuera de cualquier otro rango.
 insert into public.citas (id, paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria) values
   (:CITA, :PD, :PRO1, :CA,
-   timestamptz '2030-01-07 10:00:00+01', timestamptz '2030-01-07 10:50:00+01', 'Europe/Madrid');
+   (:'lunes_19'::date + time '10:00') at time zone 'Europe/Madrid', (:'lunes_19'::date + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid');
 
 -- ---------------------------------------------------------------------------
 -- 19.1 · Una nota sin episodio muere con 23502 (NOT NULL), incluso como postgres
@@ -578,7 +582,7 @@ insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) 
 -- CITA2: cita de PADM con PRO2 en CB. El administrador la LEE (citas_lectura), pero no es suya.
 insert into public.citas (id, paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria) values
   (:CITA2, :PADM, :PRO2, :CB,
-   timestamptz '2030-01-14 10:00:00+01', timestamptz '2030-01-14 10:50:00+01', 'Europe/Madrid');
+   ((:'lunes_19'::date + 7) + time '10:00') at time zone 'Europe/Madrid', ((:'lunes_19'::date + 7) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid');
 
 -- ---------------------------------------------------------------------------
 -- 19.48 · (revision-sql H1) El disparador lee el episodio (paso 3) y el participante

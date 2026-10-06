@@ -19,6 +19,9 @@ definidos en `00-ayudantes.sql`), y con `ON_ERROR_STOP=1` eso basta para que `ps
 tanto el proceso de Node— salga con código distinto de cero. Nadie tiene que leer la salida
 para saber si el banco pasó.
 
+Antes de localizar el contenedor, `test:rls` pasa `scripts/rls/fechas-fijas.mjs` (punto 10): si
+falla, el banco no llega a la base ni a `docker`.
+
 ## Los módulos
 
 | Fichero | Qué prueba |
@@ -75,7 +78,8 @@ guion suelto:
    un UUID aleatorio, para que un guion que falla se pueda repetir señalando la misma fila.
 5. **Nunca dependas del reloj de verdad.** Si la prueba necesita una ventana caducada
    (como el candado del PIN), se manipula la fecha directamente en la fila, como hace
-   `03-candado.sql`; nunca se espera con `pg_sleep`.
+   `03-candado.sql`; nunca se espera con `pg_sleep`. Tampoco escribas una fecha futura literal:
+   ancla relativa (punto 10) o, si no es agenda, `-- fecha-fija: motivo`.
 6. **Si al probar aparece una política que falta o está mal**, no se arregla aquí: se
    anota en `docs/state.md` y el arreglo va al ticket que la creó. Este banco prueba, no
    parchea.
@@ -104,3 +108,55 @@ guion suelto:
    cuerpo, mismo autor, mismo instante— choquen en el génesis aunque sean de pacientes
    distintos. Cuando dos fixtures comparten cuerpo y autor, varía `creada_en` entre ellas
    (basta un segundo de diferencia).
+10. **Fechas: ninguna que caduque, ninguna que choque.** El banco corre con `now()` real y cada
+   guarda del reloj (`fn_proteger_cita_pasada`: una cita cuyo fin ya pasó no se mueve) convierte
+   un literal futuro de hoy en un fallo de mañana. `scripts/rls/fechas-fijas.mjs` lo vigila
+   (`test:rls` lo ejecuta primero; también `node scripts/rls/fechas-fijas.mjs`, con `--hoy
+   AAAA-MM-DD` para probarlo): marca todo literal `AAAA-MM-DD` que sea hoy o futuro (fecha de
+   Europe/Madrid) y no lleve `fecha-fija:` seguido de un motivo en su línea o en la anterior.
+   Tres reglas, con sus comprobaciones:
+   1. **Banda corta.** Un ancla al día de agenda (`now() ± interval`, `current_date ± k`) solo
+      con |k| ≤ 30. Comprobación:
+      `grep -nE "current_date *\+ *[0-9]{2,}|now\(\) *\+ *interval '([3-9][0-9]|[0-9]{3,}) days" scripts/rls/*.sql`
+      debe devolver exactamente: la línea del ayudante `instante15` de `15-agenda.sql` (l.26,
+      `current_date + 14`); `16-series.sql` l.702 (comentario desfasado, nombra el
+      `current_date + 300` que el 17 ya no usa), l.1257 y l.1271-1275 (C7, D+40..D+68, y las citas
+      de su propia serie S7); y `18-agenda-rango.sql` l.377 (comentario).
+   2. **Año propio.** Cada ancla al año usa un desplazamiento distinto, declarado aquí.
+      Comprobación:
+      `grep -noE "extract\(year from (now\(\)|current_date)\)(::int)? *\+ *[0-9]+" scripts/rls/*.sql`
+      debe coincidir con la tabla, módulo por módulo (16:50 → +1, 17:26 → +7, 19:97 → +8,
+      21:37 → +3, 23:194 y 23:198 ×2 → +4, 26:191 → +6).
+
+      | Módulo | Profesional/centro | Franja |
+      |---|---|---|
+      | 15 | PRO1/CA (y PRO2/CB en `now()`) | martes entre D+14 y D+20, y los dos días siguientes |
+      | 16 | PRO1/CA, PRO2 | D−10..D+68 (puntual) · `domingo_marzo(Y+1) − 21` .. ~febrero Y+4 |
+      | 17 | PRO1/CA | primer lunes de junio de Y+7 |
+      | 18 | PRO18 propio | `now()` ± 1 día |
+      | 19 | PRO1/CA, PRO2/CB | primer lunes de enero de Y+8 y el siguiente |
+      | 20, 22 | PRO1/CA | pasado (D−45..D−1) |
+      | 21 | PRO1/CA, PRO2/CB | primer lunes de mayo de Y+3 .. +350 (abril de Y+4) |
+      | 23 | PRO1/CA | D−40..D+11 · primer lunes de mayo de Y+4 .. +42 |
+      | 26 | PRO1/CA, PRO2/CB | primer lunes de junio de Y+6 y los dos días siguientes |
+      | 29 (T-043) | PRO1/CA | primer lunes de febrero de Y+10 .. +84 |
+
+      (`Y` = `extract(year from now())`, `D` = `current_date`.) Un módulo nuevo elige un
+      desplazamiento libre, lo añade a la tabla y da sufijo de módulo a sus variables psql
+      (`anio_NN`, `lunes_NN`: son globales a todo el banco). Plantilla de un ancla anual, el
+      primer lunes de junio de Y+6:
+      ```sql
+      select (extract(year from now())::int + 6) as anio_NN \gset
+      select (make_date(:anio_NN, 6, 1) + ((8 - extract(isodow from make_date(:anio_NN, 6, 1))::int) % 7))::text as lunes_NN \gset
+      ```
+      Los instantes se escriben en hora local (`(:'lunes_NN'::date + time '10:00') at time zone
+      'Europe/Madrid'`), nunca con un desplazamiento `+02` escrito a mano.
+   3. **Literal futuro de agenda: prohibido.** `-- fecha-fija: motivo` es para lo que ninguna
+      guarda compara con el reloj (caducidades de bono, `creada_en` como `postgres`, una
+      tarifa que cae por permiso antes de mirar la fecha). **No vale para** `citas`,
+      `series_cita`, `propuestas_cita` ni `disponibilidad`, ni para una llamada a `agenda_*`:
+      esas se anclan (regla 2). El motivo no lleva `%`, `$`, `'` ni `:` seguido de letra,
+      porque la anotación puede caer dentro de un `format($f$ … $f$)`.
+   Solape conocido y fuera de regla: 16 (hasta ~febrero de Y+4) y 21 (mayo de Y+3 a abril de Y+4)
+   comparten calendario (`lunes_21 + 259`); coinciden en 2026-2028 y en verde, y dejan de coincidir
+   en 2029-2031.

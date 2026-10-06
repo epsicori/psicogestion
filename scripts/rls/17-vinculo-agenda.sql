@@ -22,7 +22,9 @@
 insert into public.tipos_terapia (id, nombre, duracion_minutos, regimen)
 values (:TT4, 'Terapia T-029', 50, 'exento_sanitario');
 
-select (current_date + 300) as f29 \gset
+-- T-049 · Año propio del 17: Y+7, primer lunes de junio (README, punto 10).
+select (extract(year from now())::int + 7) as anio_17 \gset
+select (make_date(:anio_17, 6, 1) + ((8 - extract(isodow from make_date(:anio_17, 6, 1))::int) % 7)) as f29 \gset
 
 -- =========================================================================
 -- A · INSERT directo: la política

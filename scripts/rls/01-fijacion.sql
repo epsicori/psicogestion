@@ -248,6 +248,7 @@ insert into public.tarifas_paciente (id, paciente_id, tipo_terapia_id, importe, 
 insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad, creado_por)
   values (:BONO21, :P1, 5, 275.00, null, :ADM);
 insert into public.bonos_caducidades (id, bono_id, caducidad, registrada_por)
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   values (:CAD21, :BONO21, date '2031-12-31', :ADM);
 
 \echo '01-fijación: completa.'
