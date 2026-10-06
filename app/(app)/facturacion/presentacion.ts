@@ -96,6 +96,21 @@ export function ordenar<T extends FilaDePendiente>(filas: readonly T[]): T[] {
   );
 }
 
+const PATRON_NUMERIC = /^(-)?(\d+)\.(\d{2})$/;
+
+/**
+ * `importe::text` de un `numeric(12,2)` ('12.50', '-20.00') a céntimos por aritmética entera. Es
+ * el inverso de `importeParaBd`. No se usa `aCentimos`: ese lee el formato español, donde el punto
+ * es separador de miles, y '20.00' serían 2000 €.
+ */
+export function importeDeBd(texto: string): Centimos {
+  const partes = PATRON_NUMERIC.exec(texto);
+  if (!partes) throw new Error(`Importe de la base mal formado: '${texto}'.`);
+  const [, signo, euros, centimos] = partes;
+  const valor = Number(euros) * 100 + Number(centimos);
+  return signo ? -valor : valor;
+}
+
 /** La suma de lo pendiente. Un cobro de más no resta: no se compensa entre pacientes. */
 export function totalPendiente(filas: readonly FilaDePendiente[]): Centimos {
   return filas.reduce((suma, fila) => suma + fila.pendiente, 0);

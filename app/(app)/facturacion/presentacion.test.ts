@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { t } from '@/lib/i18n';
 
-import { aFilaDePendiente, ordenar, pildoraDe, totalPendiente, type FilaVista } from './presentacion';
+import { aFilaDePendiente, importeDeBd, ordenar, pildoraDe, totalPendiente, type FilaVista } from './presentacion';
 
 function vista(devengado: number, cobrado: number, extra: Partial<FilaVista> = {}): FilaVista {
   const diferencia = devengado - cobrado;
@@ -87,6 +87,22 @@ describe('pildoraDe · tres tonos, sin rojo', () => {
       tono: 'warning',
       texto: t('cobros.pildora.cobradoDeMas'),
     });
+  });
+});
+
+describe('importeDeBd · el numeric que devuelve PostgREST como texto, a céntimos sin coma flotante', () => {
+  it.each([
+    ['12.50', 1250],
+    ['-20.00', -2000],
+    ['0.05', 5],
+    ['-0.05', -5],
+    ['9999999999.99', 999_999_999_999],
+  ])('%s → %i', (texto, centimos) => {
+    expect(importeDeBd(texto)).toBe(centimos);
+  });
+
+  it.each(['12,50', '1.234,56', '12.5', '', 'doce'])('lanza con «%s»', (texto) => {
+    expect(() => importeDeBd(texto)).toThrow();
   });
 });
 

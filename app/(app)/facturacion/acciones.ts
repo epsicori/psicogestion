@@ -67,7 +67,9 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
   const centimos = aCentimos(importe);
   const { error } = await supabase.from('cobros').insert({
     paciente_id: pacienteId,
-    importe: importeParaBd(centimos),
+    // El generador tipa `numeric` como `number`, pero PostgREST acepta el texto y así el importe
+    // no pasa nunca por coma flotante (diseño §1.5, D8). El cast es solo para el tipo.
+    importe: importeParaBd(centimos) as unknown as number,
     fecha,
     forma_pago: formaPago,
     referencia: referencia ?? null,
