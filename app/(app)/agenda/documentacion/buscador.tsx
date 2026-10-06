@@ -56,6 +56,7 @@ export function Buscador({
   const campo = useRef<HTMLInputElement>(null);
 
   const hayError = errorLocal || estado.fase === 'invalida';
+  const hayFallo = vista === 'busqueda' && estado.fase === 'fallo';
 
   function enviar(datos: FormData) {
     if (!esquemaTermino.safeParse(datos.get('termino')).success) {
@@ -141,7 +142,7 @@ export function Buscador({
           <Button variante="contorno" tamano="sm" className="self-start" onClick={limpiar}>
             {t('agenda.documentacion.buscador.limpiar')}
           </Button>
-          {estado.coincidencias > estado.grupos.length && (
+          {estado.grupos.length < estado.coincidencias && (
             <p className="text-muted-foreground text-xs">
               {tCon('agenda.documentacion.buscador.masDe20', { n: estado.coincidencias })}
             </p>
@@ -170,15 +171,19 @@ export function Buscador({
             </ul>
           </ProveedorResolucion>
         </div>
-      ) : vista === 'busqueda' && estado.fase === 'fallo' ? (
-        <div className="flex flex-col gap-3">
-          <AvisoDeError mensaje={t('agenda.documentacion.buscador.error')} />
-          <Button variante="contorno" tamano="sm" className="self-start" onClick={limpiar}>
-            {t('agenda.documentacion.buscador.limpiar')}
-          </Button>
-        </div>
       ) : (
-        children
+        <>
+          {hayFallo ? (
+            <div className="flex flex-col gap-3">
+              <AvisoDeError mensaje={t('agenda.documentacion.buscador.error')} />
+              <Button variante="contorno" tamano="sm" className="self-start" onClick={limpiar}>
+                {t('agenda.documentacion.buscador.limpiar')}
+              </Button>
+            </div>
+          ) : (
+            children
+          )}
+        </>
       )}
     </div>
   );
