@@ -47,10 +47,11 @@ describe('AvisoHuecoRaro', () => {
     expect(props.alElegir).toHaveBeenCalledWith('2026-10-07T10:00', 'miércoles, 7 de octubre de 2026, 10:00, libre');
   });
 
-  it('sin alternativas dice que no hay y no pinta la lista', () => {
+  it('sin alternativas dice que no hay, no pinta la lista y «Agendar igualmente» sigue ahí', () => {
     pinta({ alternativas: [] });
     expect(screen.getByText(/No hay otro hueco esta semana/)).toBeInTheDocument();
     expect(screen.queryByRole('list')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Agendar igualmente' })).toBeInTheDocument();
   });
 
   it('«Agendar igualmente» avisa a quien lo usa', () => {
