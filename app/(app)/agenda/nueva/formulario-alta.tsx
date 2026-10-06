@@ -113,12 +113,17 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
 
   // Los huecos: lo último que llegó y la clave de lo que se pidió, para ignorar lo que llega tarde.
   const claveCalculo = [paciente?.id ?? '', profesionalId, centroId, tipoId ?? '', foco ?? '', excluirHuecos.join(',')].join('|');
-  const [calculo, setCalculo] = useState<{ clave: string; vista: VistaAlta }>({
-    clave: [inicial.paciente?.id ?? '', inicial.profesionalId, inicial.centroId, '', vistaInicial.calendario.desde, ''].join('|'),
-    vista: vistaInicial,
+  const [calculo, setCalculo] = useState<{ clave: string; claveVista: string; vista: VistaAlta }>(() => {
+    const clave = [inicial.paciente?.id ?? '', inicial.profesionalId, inicial.centroId, '', vistaInicial.calendario.desde, ''].join('|');
+    return { clave, claveVista: clave, vista: vistaInicial };
   });
   const vista = calculo.vista;
-  const huecoRaroElegido = elegido ? (vista.huecosRaros[elegido.clave] ?? null) : null;
+  // `clave`: la última pedida que ya contestó (bien o mal). `claveVista`: la de los huecos pintados.
+  // Con un recálculo en vuelo, Guardar espera (`bloqueado`). Con una vista de otra clave (en vuelo o
+  // tras un fallo), nada decide la rareza y el aviso no se monta (T-043 R3, B2-H1/B2-H2).
+  const recalculando = calculo.clave !== claveCalculo;
+  const vistaVigente = !recalculando && calculo.claveVista === claveCalculo;
+  const huecoRaroElegido = elegido && vistaVigente ? (vista.huecosRaros[elegido.clave] ?? null) : null;
   // Derivado, no sincronizado: si un recálculo quita la rareza o el elegido, el aviso se va solo.
   const avisoVisible = avisoHueco !== null && avisoHueco === elegido?.clave && huecoRaroElegido !== null;
 
@@ -155,7 +160,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
           return;
         }
         setFallo('');
-        setCalculo({ clave: claveCalculo, vista: resultado.vista });
+        setCalculo({ clave: claveCalculo, claveVista: claveCalculo, vista: resultado.vista });
         const nuevo = resultado.vista.calendario;
         if (
           elegido &&
@@ -350,7 +355,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         setExcluirHuecos((previos) => (elegido && !previos.includes(elegido.clave) ? [...previos, elegido.clave].slice(-10) : previos));
         if (resultado.vista) {
           const nueva = resultado.vista;
-          setCalculo((anterior) => ({ clave: anterior.clave, vista: nueva }));
+          setCalculo((anterior) => ({ ...anterior, vista: nueva }));
         }
         setAviso(resultado.mensaje);
         return;
@@ -373,8 +378,6 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
 
   const sinHueco = errors.fecha !== undefined || errors.horaLocal !== undefined;
   const catalogoVacio = tipos.length === 0;
-  // Los huecos pintados son de otra clave que la pedida: nada decide con ellos (T-043 R2, B-H1).
-  const recalculando = calculo.clave !== claveCalculo;
   // Una sola guarda para los cuatro sitios que la repetían (H27, B-H3).
   const bloqueado = guardando || catalogoVacio || esperandoSerie || recalculando;
   const idTipo = `${prefijo}-tipo`;

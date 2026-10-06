@@ -11,7 +11,7 @@ type Props = {
   ref?: Ref<HTMLElement>;
   minutos: number;
   alternativas: readonly AlternativaAviso[];
-  /** Guardando, catálogo vacío o serie en vuelo: «Agendar igualmente» no hace nada (H27). */
+  /** Lo que bloquea Guardar en el formulario (`bloqueado`): «Agendar igualmente» no hace nada (H27). */
   ocupado: boolean;
   alElegir: (clave: string, etiqueta: string) => void;
   alAgendarIgualmente: () => void;
