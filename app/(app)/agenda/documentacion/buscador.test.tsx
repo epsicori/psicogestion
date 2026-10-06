@@ -9,7 +9,9 @@ const m = vi.hoisted(() => ({ buscarPendientes: vi.fn(), resolverAlerta: vi.fn()
 vi.mock('./acciones', () => ({ buscarPendientes: m.buscarPendientes }));
 vi.mock('../acciones-alertas', () => ({ resolverAlerta: m.resolverAlerta }));
 
+import { MemoriaResolucion, ProveedorResolucion } from '../resolver-alerta';
 import { Buscador } from './buscador';
+import { ID_TITULO } from './parametros';
 
 function grupo(n: number, nombre = `Paciente ${n}`, resoluble = false): GrupoPresentado {
   return {
@@ -273,5 +275,73 @@ describe('Buscador', () => {
     expect(replace).not.toHaveBeenCalled();
     expect(window.location.search).toBe('');
     for (const e of [setItem, cookie, push, replace]) e.mockRestore();
+  });
+});
+
+// R3 (ronda 3): la resolución en vuelo no roba el foco del campo que el usuario acaba de elegir.
+describe('Buscador: descartar la resolución en vuelo (R2-H1)', () => {
+  beforeEach(() => {
+    m.buscarPendientes.mockReset();
+    m.resolverAlerta.mockReset();
+  });
+
+  /** La página real: título enfocable, la memoria del layout y la lista paginada dentro del buscador. */
+  function pintarConMemoria() {
+    return render(
+      <MemoriaResolucion>
+        <h2 id={ID_TITULO} tabIndex={-1}>
+          Documentación pendiente
+        </h2>
+        <Buscador tipo={null} nivel={null} pagina={1}>
+          <ProveedorResolucion
+            prefijo="pagina"
+            encabezadoId={ID_TITULO}
+            pacientes={[{ id: 'pQ', alertas: ['aQ'], anuncio: 'Q' }]}
+          >
+            <p>LISTA PAGINADA</p>
+          </ProveedorResolucion>
+        </Buscador>
+      </MemoriaResolucion>,
+    );
+  }
+
+  it('«Limpiar búsqueda» con una resolución en vuelo no roba el foco del campo', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    m.buscarPendientes.mockResolvedValueOnce(resultados([grupo(1, 'Paciente 1', true)]));
+    // `relanzar` queda en vuelo: la lista que vuelve tras limpiar no contiene al paciente resuelto.
+    let soltar: (v: unknown) => void = () => {};
+    m.buscarPendientes.mockReturnValue(new Promise((r) => (soltar = r)));
+    pintarConMemoria();
+    const campo = await buscar('paciente');
+    await waitFor(() => screen.getByRole('button', { name: /Marcar como resuelta/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Marcar como resuelta/ }));
+    await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(2));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }));
+    await act(async () => {});
+    expect(screen.getByText('LISTA PAGINADA')).toBeTruthy();
+    expect(document.activeElement).toBe(campo);
+    // Una acción sin resolver retiene las transiciones de todo el árbol de React: se suelta.
+    await act(async () => soltar(resultados([])));
+  });
+
+  it('gemelo con «Buscar»: una búsqueda nueva con una resolución pendiente no manda el foco a un resultado ajeno', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    // 1) la búsqueda; 2) `relanzar`, que aún devuelve la alerta (la base no ha llegado); 3) la nueva
+    // búsqueda, sin el paciente 1: sin descartar, el pendiente se cerraría moviendo el foco al paciente 2.
+    m.buscarPendientes.mockResolvedValueOnce(resultados([grupo(1, 'Paciente 1', true), grupo(2, 'Paciente 2', true)]));
+    m.buscarPendientes.mockResolvedValueOnce(resultados([grupo(1, 'Paciente 1', true), grupo(2, 'Paciente 2', true)]));
+    m.buscarPendientes.mockResolvedValueOnce(resultados([grupo(2, 'Paciente 2', true)]));
+    pintarConMemoria();
+    await buscar('paciente');
+    await userEvent.click((await screen.findAllByRole('button', { name: /Marcar como resuelta/ }))[0]);
+    await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(2));
+
+    await buscar('paciente');
+    await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Paciente 1' })).toBeNull());
+    await act(async () => {});
+    expect(document.activeElement?.id).not.toBe('busqueda-paciente-p2');
+    expect(document.activeElement?.id).not.toBe(ID_TITULO);
   });
 });

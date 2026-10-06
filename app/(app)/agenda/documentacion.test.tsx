@@ -150,7 +150,7 @@ describe('Documentacion (nivel y resolver, T-015)', () => {
       expect(bloque.hasAttribute('tabindex')).toBe(false);
       expect(bloque.getAttribute('role')).toBeNull();
       expect(bloque.closest('section')?.getAttribute('aria-labelledby')).toBe('agenda-documentacion');
-      expect(bloque.querySelector('[data-estado-bloque][role="status"]')).not.toBeNull();
+      expect(bloque.closest('section')!.querySelector('[data-estado-bloque][role="status"]')).not.toBeNull();
       const titulo = screen.getByRole('heading', { name: 'Documentación pendiente' });
       expect(titulo.id).toBe('agenda-documentacion');
       expect(titulo.getAttribute('tabindex')).toBe('-1');

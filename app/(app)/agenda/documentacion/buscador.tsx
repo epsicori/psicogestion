@@ -9,7 +9,7 @@ import { t, tCon } from '@/lib/i18n';
 
 import type { Filtros } from '../pendientes';
 import { FilaPaciente } from '../pendientes-fila';
-import { ProveedorResolucion } from '../resolver-alerta';
+import { ProveedorResolucion, useDescartarResolucion } from '../resolver-alerta';
 import { buscarPendientes, type EstadoBusqueda } from './acciones';
 import { esquemaTermino, ID_TITULO } from './parametros';
 
@@ -61,6 +61,7 @@ function BuscadorInterno({
     },
     { fase: 'inicial' },
   );
+  const descartar = useDescartarResolucion();
   const [vista, setVista] = useState<'lista' | 'busqueda'>('lista');
   const [errorLocal, setErrorLocal] = useState(false);
   const [termino, setTermino] = useState('');
@@ -75,6 +76,8 @@ function BuscadorInterno({
       setErrorLocal(true);
       return;
     }
+    // Una búsqueda nueva es una decisión del usuario: la resolución en vuelo ya no manda el foco.
+    descartar();
     setErrorLocal(false);
     ultimoEnvio.current = datos;
     setVista('busqueda');
@@ -86,7 +89,11 @@ function BuscadorInterno({
     if (datos) startTransition(() => accion(datos));
   };
 
+  // `relanzar` no descarta: es la continuación de la resolución, no una decisión nueva.
   function limpiar() {
+    // Antes de enfocar el campo: la lista que vuelve tiene otro prefijo y la resolución en vuelo
+    // le llevaría el foco al título, robándoselo al campo.
+    descartar();
     setVista('lista');
     setTermino('');
     setErrorLocal(false);

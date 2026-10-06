@@ -207,17 +207,17 @@ describe('ContenidoDocumentacion: vacíos, errores y ?paciente', () => {
     expect(screen.getByRole('link', { name: 'Quitar los filtros' }).getAttribute('href')).toBe('/agenda/documentacion');
   });
 
-  it('el envoltorio de lista con el status siempre montado: en lista, vacío y error', async () => {
+  it('el envoltorio de lista con el status (hermano suyo) siempre montado: en lista, vacío y error', async () => {
     const a = await pintar({}, 'profesional_sanitario', [alerta()]);
-    expect(document.querySelector('[data-bloque-pendientes] [data-estado-bloque][role="status"]')).not.toBeNull();
+    expect(document.querySelector('[data-bloque-pendientes] ~ [data-estado-bloque][role="status"]')).not.toBeNull();
     a.unmount();
     const b = await pintar({}, 'profesional_sanitario', []);
-    expect(document.querySelector('[data-bloque-pendientes] [data-estado-bloque][role="status"]')).not.toBeNull();
+    expect(document.querySelector('[data-bloque-pendientes] ~ [data-estado-bloque][role="status"]')).not.toBeNull();
     b.unmount();
     m.leerPendientes.mockResolvedValue({ ok: false, mensaje: 'No se pudo' });
     render(await ContenidoDocumentacion({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole('alert').textContent).toContain('No se pudo');
-    expect(document.querySelector('[data-bloque-pendientes] [data-estado-bloque][role="status"]')).not.toBeNull();
+    expect(document.querySelector('[data-bloque-pendientes] ~ [data-estado-bloque][role="status"]')).not.toBeNull();
   });
 
   it('error al cargar el contexto: aviso, no excepción', async () => {
