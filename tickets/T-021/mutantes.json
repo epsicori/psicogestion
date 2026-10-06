@@ -219,7 +219,127 @@
       "mutacion": "rama del profesional sin el rol",
       "resultado": "sobrevive (equivalente)",
       "aserción": "ninguna: fn_sellar_version_borrador() (definer, paso 0) ya exige el rol profesional_sanitario en positivo para la rama del profesional; la condición de rol en la política es redundante con ella."
+    },
+    {
+      "id": "M31",
+      "guarda": "fn_bono_de_la_cita(): bono previo",
+      "mutacion": "se quita old.bono_id is not null",
+      "resultado": "muerto",
+      "aserción": "26.K19a (cambia el código a 42501) (ronda 3)"
+    },
+    {
+      "id": "M32",
+      "guarda": "fn_bono_de_la_cita(): bono previo",
+      "mutacion": "old.bono_id is not null pasa a new.bono_id is not null",
+      "resultado": "muerto",
+      "aserción": "26.K14 (ronda 3)"
+    },
+    {
+      "id": "M33",
+      "guarda": "fn_bono_de_la_cita(): congelación",
+      "mutacion": "solo para authenticated",
+      "resultado": "muerto",
+      "aserción": "26.K17 (ronda 3)"
+    },
+    {
+      "id": "M34",
+      "guarda": "borradores_factura_lectura",
+      "mutacion": "vuelve a la política de la ronda 2",
+      "resultado": "muerto",
+      "aserción": "26.O3 y 26.O4 (y L10r3) (ronda 3)"
+    },
+    {
+      "id": "M35",
+      "guarda": "borradores_factura_lectura",
+      "mutacion": "AND de profesional_id = auth.uid() y asignación",
+      "resultado": "muerto",
+      "aserción": "26.O4 (y L10r3) (ronda 3)"
+    },
+    {
+      "id": "M36",
+      "guarda": "borradores_factura_lectura",
+      "mutacion": "se quita el rol de la rama del profesional",
+      "resultado": "muerto",
+      "aserción": "26.O7 (ronda 3)"
+    },
+    {
+      "id": "M37",
+      "guarda": "fn_cotas_version_borrador(): concepto visible",
+      "mutacion": "if false",
+      "resultado": "muerto",
+      "aserción": "26.J28c, J28d, J28e (ronda 3)"
+    },
+    {
+      "id": "M38",
+      "guarda": "fn_cotas_version_borrador(): clase visible",
+      "mutacion": "se quita U+FEFF",
+      "resultado": "muerto",
+      "aserción": "26.J28d (ronda 3)"
+    },
+    {
+      "id": "M39",
+      "guarda": "sellar_version_borrador_cotas",
+      "mutacion": "se renombra a aa_cotas_version_borrador",
+      "resultado": "muerto",
+      "aserción": "26.J28g (23514 en vez de 42501) y L10r3 (ronda 3)"
+    },
+    {
+      "id": "M40",
+      "guarda": "fn_cotas_version_borrador(): techo del tipo",
+      "mutacion": "if false",
+      "resultado": "muerto",
+      "aserción": "26.J46 (ronda 3)"
+    },
+    {
+      "id": "M41",
+      "guarda": "fn_cotas_version_borrador(): techo del tipo",
+      "mutacion": "> 10000 pasa a >= 10000",
+      "resultado": "muerto",
+      "aserción": "26.J46g (ronda 3)"
+    },
+    {
+      "id": "M42",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "if false",
+      "resultado": "muerto",
+      "aserción": "26.J43, J44, J45, J47, J47b, J48 (ronda 3)"
+    },
+    {
+      "id": "M43",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "sin tolerancia (> 0)",
+      "resultado": "muerto",
+      "aserción": "26.J43g, J47g, J47c (ronda 3)"
+    },
+    {
+      "id": "M44",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "tolerancia 2 * unidades",
+      "resultado": "muerto",
+      "aserción": "26.J47, J47b (ronda 3)"
+    },
+    {
+      "id": "M45",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "solo techo con signo",
+      "resultado": "muerto",
+      "aserción": "26.J47b (ronda 3)"
+    },
+    {
+      "id": "M46",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "techo en valor absoluto",
+      "resultado": "muerto",
+      "aserción": "26.J47b, J48 (ronda 3)"
+    },
+    {
+      "id": "M47",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "Q sin la cantidad",
+      "resultado": "muerto",
+      "aserción": "26.J47d (ronda 3)"
     }
   ],
-  "metodo_ronda2": "Ronda 2 (05-10-2026): mismo método. M11 y M29 dieron en la primera pasada un deadlock ajeno (alter table ... disable trigger frente a la recarga del esquema de PostgREST) y se repitieron aislados; figuran los resultados de la repetición."
+  "metodo_ronda2": "Ronda 2 (05-10-2026): mismo método. M11 y M29 dieron en la primera pasada un deadlock ajeno (alter table ... disable trigger frente a la recarga del esquema de PostgREST) y se repitieron aislados; figuran los resultados de la repetición.",
+  "metodo_ronda3": "Ronda 3 (06-10-2026): cada mutante se aplica sobre la base viva con create or replace / alter policy / drop trigger como postgres, se corre el banco (00, 01 y 26, con las aserciones convertidas en avisos para ver todas las que caen) y se restaura desde la migración 20261011130000. Reconfirmados muertos M7 (K14, K17), M8 (K15, K18), M21 (J42 reescrita), M22 (J28b: lanza 23514 pero desde otra comprobación) y M25 (J31b, por el mismo motivo). Sin supervivientes nuevos."
 }

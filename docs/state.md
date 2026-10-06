@@ -8,7 +8,7 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 (A/B/C), T-016–T-020, T-029–T-042.
-- **T-021 en ronda 3** (rama `worktree-agent-a19ecdb63f2c1e386`, HEAD a982e0a, migración 20261011120000 aplicada en la base local). Ronda 2: evidencia 15/15 PASA (archivada `evidencia.ronda2.json`); A 0/0/2, B 0/1/2. **Decisiones del propietario (05-10) para la ronda 3**, en `tickets/T-021/diseno.md` §«Ronda 3»: bono a cita terminada se pone una vez (B-H1); borradores solo los lee el profesional asignado (A-H2); cota de la cuota de IVA y blancos de anchura cero (A-H1/B-H2/B-H3) entran ya.
+- **T-021 ronda 3 implementada** (rama `worktree-agent-a2cc04ba9ba7302c8`, migración 20261011130000 aplicada en la base local): B-H1 (bono a cita terminada, una vez), A-H2 (lee el profesional asignado) y cotas del sellado en `sellar_version_borrador_cotas`. Banco 26 en verde, M31-M47 y M7/M8/M21/M22/M25 muertos. Pendiente: verificación y dos revisores. Ronda 2 archivada en `evidencia.ronda2.json`.
 - **T-026 diseñado y respondido** (partir en T-026a/T-026b; editor del borrador en ticket nuevo; concepto según IVA; Ajustes solo admin). **T-023 diseñado y respondido** (T-023b tras T-026).
 - **Siguiente en `supabase/`**: T-021 (20261011120000) → T-043 (20261012120000) → T-023 (20261013120000) → T-026a (20261014120000).
 
@@ -53,7 +53,7 @@
 - **T-040 A-H3 (BAJA, por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga); en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN. **R3-H1 (BAJA)**: opacidad/color de marca sin prueba.
 - **Sello de T-033**: el hook reselló su `revision.sha` sin que parara su revisor (integrado hace semanas); sin commitear, lo decide el usuario.
 - **T-034 SQL-H2**: reabrir esquiva D6, reloj. Única salida nota de cita con episodio cerrado (23.Z). No cerrar con citas posteriores.
-- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket. **05-10 (T-021)**: en el worktree de T-021 ambas pasan, con la base recién reseteada y también tras `npm run seed`; no reproducido, sin medir la causa.
+- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket. **05-10 (T-021)**: en el worktree de T-021 ambas pasan, con la base recién reseteada y también tras `npm run seed`; no reproducido, sin medir la causa. **06-10 (T-021)**: con la base de este worktree, `test:rls` completo cae en 16 antes de llegar a 26; el banco se corrió entero salvo 16 y 23.
 - **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
 - **T-035 B-H1 → T-041**: cierre: la nota con coprofesional y alta posterior sigue vigente porque 7c no se reevalúa al firmar.
 - **T-041 R3/R6**: funciones cuentas.

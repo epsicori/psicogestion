@@ -83,7 +83,7 @@ as $$
 declare
   -- Un carácter que se ve: ni blanco Unicode, ni de control, ni de anchura cero, ni selector.
   -- Escapes \u del motor de expresiones regulares en una cadena normal: ningún carácter crudo.
-  v_visible constant text := '[^[:space:]\u0001- \u007F- ­͏؜ᅟᅠ ឴឵᠋-᠏ -‏ -  -⁯⠀　ㅤ︀-️﻿ﾠ\U000E0000-\U000E007F\U000E0100-\U000E01EF]';
+  v_visible constant text := '[^[:space:]\u0001-\u0020\u007F-\u00A0\u00AD\u034F\u061C\u115F\u1160\u1680\u17B4\u17B5\u180B-\u180F\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFA0\U000E0000-\U000E007F\U000E0100-\U000E01EF]';
   v_linea         jsonb;
   v_tipo          numeric;
   v_cantidad      numeric;
