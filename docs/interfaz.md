@@ -485,8 +485,15 @@ barra de 3 px a la izquierda **y** el texto «Habitual»; el color nunca va solo
 motivos de las sugerencias no nombran el tipo, D8). El profesional solo agenda a su nombre; el
 administrador y el técnico eligen profesional, y la nota operativa no se enseña al técnico.
 Al guardar desde la página se va a `/agenda?fecha=<día de la cita>` y el éxito se anuncia en
-una región de estado global (también al cerrar el diálogo). El aviso de «hueco raro» **no** es
-de este ticket: va aparte.
+una región de estado global (también al cerrar el diálogo).
+
+**El aviso de «hueco raro»** (T-043) sale **al pulsar Guardar**, no al elegir: el hueco elegido
+deja entre su fin y la cita siguiente del profesional (en cualquier centro) más minutos que el
+descanso pero no cabe otra sesión (`d < g < D + 2d`). Es una sección que recibe el foco y se anuncia
+por eso (no es región viva ni diálogo, y Tab sale de ella), con los minutos, hasta tres
+alternativas de la semana pintada que no lo dejan y **«Agendar igualmente»**, que siempre existe y
+guarda lo elegido. Solo avisa de la primera sesión de una serie. El servidor no mira el hueco (D8):
+el aviso informa, no bloquea, y no toca las sugerencias ni sus tarjetas (ADR-049c).
 
 **La forma a 360 px** (WCAG 1.4.10, reflujo): la semana por debajo de `md` es una tira de
 7 días y, debajo, la lista de las citas del día por hora, sin arrastre; la rejilla de 7
