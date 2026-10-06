@@ -7,7 +7,7 @@ prioridad: alta
 depende_de: [T-021, T-007]
 estado: pendiente
 riesgo: alto
-territorio:                   # de tickets/T-023/diseno.md §6
+territorio:
   - supabase/migrations/20261013120000_cobros_y_pendiente.sql
   - scripts/rls/30-cobros.sql
   - scripts/rls/26-economico.sql
