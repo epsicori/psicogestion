@@ -1,107 +1,62 @@
 {
   "ticket": "T-043",
-  "ronda": 1,
+  "ronda": 2,
   "altas": 0,
-  "medias": 4,
-  "bajas": 7,
+  "medias": 1,
+  "bajas": 5,
   "hallazgos": [
     {
       "id": "H1",
-      "severidad": "MEDIA",
+      "severidad": "BAJA",
       "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
-      "linea": 152,
-      "descripcion": "Quitar c.profesional_id = p_profesional_id de la búsqueda de S deja 29 en verde: ningún día del banco tiene una cita de otro profesional en la franja.",
-      "escenario": "Mutante N3, sonda X4: con solo una cita de PRO2 en CB 10:30-11:20, HEAD da 09:00/libre/- y el mutante 09:00/libre/40. TEC1 recibe la hora de las citas de otro profesional y un aviso falso con test:rls verde.",
+      "linea": 153,
+      "descripcion": "El filtro de estado de la búsqueda de S se prueba con un solo valor: todas las citas de 29 son 'programada', y in ('programada', 'confirmada', 'realizada') -> in ('programada') deja 29 en verde.",
+      "escenario": "Sonda Y1: cita de PRO1 a las 10:30 pasada a 'confirmada'. HEAD da 09:00:00/libre/40 y el mutante 09:00:00/libre/-, así que el aviso desaparece en cuanto el paciente confirma la cita siguiente, con test:rls verde.",
       "revisor": "A"
     },
     {
       "id": "H2",
-      "severidad": "MEDIA",
+      "severidad": "BAJA",
       "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "linea": 162,
+      "descripcion": "El not exists de la ausencia sigue sin fijar el festivo parcial ni la ausencia abierta (hasta null): quitar 'festivo' de d.tipo in (...) (l. 162) o 'd.hasta is null or' (l. 166) deja 29 en verde.",
+      "escenario": "Sonda Y2: festivo parcial de PRO1 de 10:00 a 10:20 y cita a las 10:30. HEAD da 09:00:00/libre/- y el mutante sin 'festivo' da 09:00:00/libre/40 (gemela Y4 sin festivo: 40). Sonda Y3: ausencia de 10:00 a 10:20 con hasta null. HEAD da - y el mutante sin 'hasta is null' da 40.",
+      "revisor": "A"
+    },
+    {
+      "id": "B2-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 123,
+      "descripcion": "El aviso sigue montado durante el recálculo; si la vista nueva quita la rareza con el foco dentro del aviso, se desmonta y el foco cae a body (la premisa del diseño para no poner el efecto genérico es falsa).",
+      "escenario": "Tipo A, 17:00 raro, Guardar → aviso. Cambio a tipo B con recalcularAlta en vuelo; el usuario vuelve al aviso y pulsa «Agendar igualmente» (aria-disabled, no hace nada, foco en el botón). Llega la vista sin rareza: la sección se desmonta y document.activeElement = BODY (sonda S7).",
+      "revisor": "B"
+    },
+    {
+      "id": "B2-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
       "linea": 154,
-      "descripcion": "La cota inferior de la búsqueda de S no está fijada: >= v_tras → > v_tras y >= v_tras → >= v_f_ini sobreviven, porque ningún día tiene una cita antes del tramo ni una adyacente seguida de otra.",
-      "escenario": "N2b, X2: con citas 09:00-09:50 y 11:30-12:20, HEAD da 10:00/libre/40 y el mutante null, así que el aviso desaparece en cualquier día con una cita anterior. N1, X1: con citas 10:00-10:20 y 10:30-11:20, HEAD da null y el mutante 40.",
-      "revisor": "A"
+      "descripcion": "Un recálculo fallido marca la clave como vigente con la vista anterior, y Guardar vuelve a decidir con la rareza de la duración vieja (B-H2 por la puerta del fallo); el comentario de :376 y interfaz.md:491 dicen que no.",
+      "escenario": "Tipo A, 17:00 no raro; cambio a B y recalcularAlta devuelve ok:false; Guardar → guardarAlta llamado con tipoTerapiaId B y sin aviso, aunque con B el hueco es raro (40 min) (sonda S8). A la inversa, aviso con los minutos de A.",
+      "revisor": "B"
     },
     {
-      "id": "H3",
-      "severidad": "MEDIA",
-      "archivo": "scripts/rls/29-hueco-raro.sql",
-      "linea": 282,
-      "descripcion": "El diseño §5 afirma que una cita en F_fin exacto no cuenta (I/M4), pero I pone la cita a las 14:10, y < v_f_fin → <= sobrevive.",
-      "escenario": "N4, X3: con citas 09:00-09:20 en CA y de PRO1 en CB a las 14:00, el tramo 12:30 da null en HEAD y 40 con el mutante: un aviso falso en el último hueco por una cita fuera de la franja.",
-      "revisor": "A"
-    },
-    {
-      "id": "H4",
+      "id": "B2-H3",
       "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
-      "linea": 159,
-      "descripcion": "El not exists de la ausencia tiene una sola fijación (H), y cuatro de sus predicados sobreviven: fecha (N5), centro (N6), perfil (N7) e inicio del rango en c+D (N10).",
-      "escenario": "N5, X5/X7: sin desde/hasta, la ausencia de 10:00-10:20 del día de H apaga los huecos raros de todos los días (40 → null). N7: la ausencia de PRO2 apaga el aviso de PRO1 y la delata. N10, X6: con una ausencia en el descanso (09:52-09:58), HEAD da null y el mutante 40.",
-      "revisor": "A"
-    },
-    {
-      "id": "H5",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
       "linea": 173,
-      "descripcion": "ceil, que el diseño elige para las citas con segundos, no tiene prueba: floor sobrevive, y citas no impide segundos.",
-      "escenario": "N8, X7: con una cita a las 10:30:30, HEAD da 41 y el mutante 40. Con d = 0, un hueco de 30 s da 0 con floor, y leerBloques lo descarta (minutos > 0), así que no hay aviso.",
-      "revisor": "A"
-    },
-    {
-      "id": "B-H1",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 300,
-      "descripcion": "La intercepción decide con la vista de una clave de cálculo ya no vigente; si el recálculo en vuelo quita la rareza, el aviso se desmonta con el foco dentro y el foco cae a body.",
-      "escenario": "Tipo A (50 min) y hueco 17:00 raro; se cambia a tipo B con recalcularAlta en vuelo y se pulsa Guardar: sale el aviso con el foco; al llegar la vista (17:00 ya no raro) la sección se desmonta, document.activeElement = BODY y guardarAlta = 0 (sonda S5). Contradice «el foco nunca va a body» del diseño §5 y CA5.",
+      "descripcion": "La salida de «recalculando» tras un fallo (setCalculo con la clave en :154 y :173) no tiene prueba, y desde esta ronda es lo único que impide que Guardar se quede bloqueado.",
+      "escenario": "Mutantes M_FA (sin setCalculo en la rama !ok) y M_FC (sin él en el catch): 75/75 en verde. Con ellos, un recálculo que falla deja recalculando = true para siempre; Guardar queda aria-disabled y onSubmit corta cada clic e Intro sin decir nada.",
       "revisor": "B"
     },
     {
-      "id": "B-H2",
+      "id": "B2-H4",
       "severidad": "BAJA",
       "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 300,
-      "descripcion": "Con un recálculo en vuelo, Guardar decide el aviso con la rareza de la duración anterior y puede guardar sin avisar (o avisar con minutos viejos).",
-      "escenario": "Tipo A con 17:00 sin rareza; se cambia a tipo B (con el que 17:00 sí es raro) con el recálculo en vuelo y se pulsa Guardar: guardarAlta se llama una vez con tipoTerapiaId = B y nunca sale el aviso (sonda S6).",
-      "revisor": "B"
-    },
-    {
-      "id": "B-H3",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 312,
-      "descripcion": "Las dos guardas contra un segundo «Agendar igualmente» (agendarIgualmente y ocupado= en :576) se hacen equivalentes entre sí y la pareja sobrevive; el «una vez» de CA5 se prueba con un clic y la bitácora da por matado «ocupado ignorado».",
-      "escenario": "Quitando la guarda de agendarIgualmente y poniendo ocupado={false}, la suite sigue 69/69; la sonda S1 (Guardar, Agendar igualmente, esperar «Guardando…», Agendar igualmente otra vez) cuenta 2 llamadas a guardarAlta frente a 1 en HEAD.",
-      "revisor": "B"
-    },
-    {
-      "id": "B-H4",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 132,
-      "descripcion": "Sin prueba la condición «solo si el foco se perdió» del destino 'guardar' (:132) ni el reintento de la serie desde «Agendar igualmente» (:313-316): sus mutantes sobreviven 69/69.",
-      "escenario": "(a) Agendar igualmente devuelve un fallo genérico con el aviso montado: en HEAD el foco se queda en «Agendar igualmente»; con refGuardar.focus() incondicional salta a Guardar (sonda S2). (b) Con la previsualización de serie fallida y el aviso visible, sin la rama falloSerie «Agendar igualmente» lanza handleSubmit(guardar) en lugar de volver a pedir la serie.",
-      "revisor": "B"
-    },
-    {
-      "id": "B-H5",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 572,
-      "descripcion": "La exclusión de raros en las alternativas solo se prueba en la función pura; el paso de vista.huecosRaros desde el formulario no tiene prueba (la fixture solo hace raro al elegido) y la bitácora lo da por matado.",
-      "escenario": "Con alternativasSinHueco(vista.calendario.huecos, {}, …) la suite sigue 69/69; con 17:00 y 18:00 raros y 17:00 elegido, el aviso ofrece 18:00 (HEAD: solo 19:00), el usuario la elige, pulsa Guardar y le sale otro aviso (sonda S4).",
-      "revisor": "B"
-    },
-    {
-      "id": "B-H6",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.test.tsx",
-      "linea": 852,
-      "descripcion": "El caso 1 de CA5 hace findByRole del aviso antes de expect(guardarAlta).not.toHaveBeenCalled(), al revés de lo que pide el diseño §5: sin la intercepción falla por el selector, no por la llamada.",
-      "escenario": "Mutante sin intercepción (M_H): el caso 1 cae con «Unable to find role=\"region\" and name \"Esta cita deja un hueco corto\"» y la aserción de la llamada nunca se ejecuta; el mutante muere, pero el diagnóstico no dice que se guardó.",
+      "linea": 580,
+      "descripcion": "La puerta lateral que nombra R2.5 («Agendar igualmente» con el aviso visible y un recálculo en vuelo) no tiene prueba: R1 y R2 solo cubren Guardar.",
+      "escenario": "Mutante M_R_aviso (guarda de agendarIgualmente y ocupado sin recalculando): 75/75. Con él, durante el recálculo de tipo B, «Agendar igualmente» guarda (guardarAlta = 1, tipoTerapiaId B) aceptando el aviso de 30 minutos de la duración de A (sonda S7 con el mutante).",
       "revisor": "B"
     }
   ]

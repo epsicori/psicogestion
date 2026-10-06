@@ -1,0 +1,50 @@
+{
+  "ticket": "T-043",
+  "revisor": "A",
+  "ronda": 1,
+  "altas": 0,
+  "medias": 3,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "linea": 152,
+      "descripcion": "Quitar c.profesional_id = p_profesional_id de la búsqueda de S deja 29 en verde: ningún día del banco tiene una cita de otro profesional en la franja.",
+      "escenario": "Mutante N3, sonda X4: con solo una cita de PRO2 en CB 10:30-11:20, HEAD da 09:00/libre/- y el mutante 09:00/libre/40. TEC1 recibe la hora de las citas de otro profesional y un aviso falso con test:rls verde."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "linea": 154,
+      "descripcion": "La cota inferior de la búsqueda de S no está fijada: >= v_tras → > v_tras y >= v_tras → >= v_f_ini sobreviven, porque ningún día tiene una cita antes del tramo ni una adyacente seguida de otra.",
+      "escenario": "N2b, X2: con citas 09:00-09:50 y 11:30-12:20, HEAD da 10:00/libre/40 y el mutante null, así que el aviso desaparece en cualquier día con una cita anterior. N1, X1: con citas 10:00-10:20 y 10:30-11:20, HEAD da null y el mutante 40."
+    },
+    {
+      "id": "H3",
+      "severidad": "MEDIA",
+      "archivo": "scripts/rls/29-hueco-raro.sql",
+      "linea": 282,
+      "descripcion": "El diseño §5 afirma que una cita en F_fin exacto no cuenta (I/M4), pero I pone la cita a las 14:10, y < v_f_fin → <= sobrevive.",
+      "escenario": "N4, X3: con citas 09:00-09:20 en CA y de PRO1 en CB a las 14:00, el tramo 12:30 da null en HEAD y 40 con el mutante: un aviso falso en el último hueco por una cita fuera de la franja."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "linea": 159,
+      "descripcion": "El not exists de la ausencia tiene una sola fijación (H), y cuatro de sus predicados sobreviven: fecha (N5), centro (N6), perfil (N7) e inicio del rango en c+D (N10).",
+      "escenario": "N5, X5/X7: sin desde/hasta, la ausencia de 10:00-10:20 del día de H apaga los huecos raros de todos los días (40 → null). N7: la ausencia de PRO2 apaga el aviso de PRO1 y la delata. N10, X6: con una ausencia en el descanso (09:52-09:58), HEAD da null y el mutante 40."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "linea": 173,
+      "descripcion": "ceil, que el diseño elige para las citas con segundos, no tiene prueba: floor sobrevive, y citas no impide segundos.",
+      "escenario": "N8, X7: con una cita a las 10:30:30, HEAD da 41 y el mutante 40. Con d = 0, un hueco de 30 s da 0 con floor, y leerBloques lo descarta (minutos > 0), así que no hay aviso."
+    }
+  ]
+}
