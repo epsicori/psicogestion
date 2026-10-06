@@ -63,7 +63,7 @@ export const MODULOS: Modulo[] = [
     etiqueta: t('modulos.facturacion'),
     href: '/facturacion',
     icono: WalletCards,
-    disponible: false,
+    disponible: true,
     roles: TODOS_LOS_ROLES,
   },
   {
