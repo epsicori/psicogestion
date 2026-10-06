@@ -8,6 +8,8 @@
 
 ## Preguntas abiertas
 
+**Respondida (06-10-2026)**: P1 = (a) dos funciones en un solo `Promise.all`. El diseño de abajo queda en pie tal cual.
+
 **P1 · «Una sola llamada a la base por render» frente a «la lista de profesionales sale de lo visible
 en el año» y CA3 («la salida no contiene ningún nombre»).** Las tres cosas no caben juntas:
 
