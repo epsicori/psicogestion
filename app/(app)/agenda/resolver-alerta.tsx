@@ -3,6 +3,7 @@
 import { unstable_rethrow } from 'next/navigation';
 import {
   createContext,
+  useCallback,
   useActionState,
   useContext,
   useEffect,
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { t, tCon } from '@/lib/i18n';
 
 import { resolverAlerta, type EstadoResolver } from './acciones-alertas';
+import { idEnlacePaciente, type Prefijo } from './pendientes-ids';
 
 /**
  * «Marcar como resuelta» de una alerta de documentación (T-015, decisión P1). Quien la pinta ya
@@ -32,31 +34,86 @@ import { resolverAlerta, type EstadoResolver } from './acciones-alertas';
  * fallo al marcar no interrumpe a nadie.
  */
 
-type Contexto = { alResolver: () => void };
+type Resolucion = { alertaId: string; pacienteId: string };
+type Contexto = { alResolver: (r: Resolucion) => void };
 const ContextoResolucion = createContext<Contexto | null>(null);
 
-/**
- * El contenedor del bloque de alertas: lo enfocable tras resolver y el aviso de que se resolvió.
- * Lo pinta `Marco` dentro de `MarcoBloque` y en todas las ramas (lista, vacío y error), para que
- * no pierda el estado cuando la última alerta pasa a «vacío».
- */
-export function ProveedorResolucion({ children }: { children: ReactNode }) {
-  const [resueltas, setResueltas] = useState(0);
-  const grupo = useRef<HTMLDivElement>(null);
+/** Lo que el proveedor necesita saber de lo pintado: quién está, en qué orden y con qué alertas. */
+export type PacienteEnFoco = { id: string; alertas: readonly string[]; anuncio: string };
 
-  // El foco, tras el commit en que ya consta el éxito: da igual si la fila ya se ha ido o no,
-  // el contenedor no se desmonta.
+type Pendiente = Resolucion & { indice: number; eraUltimo: boolean };
+
+/**
+ * El contenedor del bloque de alertas: decide dónde queda el foco tras resolver y anuncia que se
+ * resolvió. Lo pintan el panel y la página dentro de su marco y en todas las ramas (lista, vacío y
+ * error), para que no pierda el estado cuando la última alerta pasa a «vacío» (T-015, R4).
+ *
+ * El foco no se decide al acertar sino cuando la alerta resuelta **deja de estar en lo pintado**
+ * (`pacientes`): hasta entonces la revalidación no ha llegado y el destino sería el de antes (T-048).
+ * Si el paciente sigue, su enlace; si no, el que ocupa su sitio (o el anterior, si era el último);
+ * si no queda ninguno, el encabezado del bloque.
+ */
+export function ProveedorResolucion({
+  prefijo,
+  encabezadoId,
+  pacientes,
+  alAcertar,
+  children,
+}: {
+  prefijo: Prefijo;
+  encabezadoId: string;
+  pacientes: readonly PacienteEnFoco[];
+  alAcertar?: () => void;
+  children: ReactNode;
+}) {
+  const [pendiente, setPendiente] = useState<Pendiente | null>(null);
+  const [anuncio, setAnuncio] = useState({ texto: '', n: 0 });
+  // Lo pintado «ahora», para que `alResolver` calcule el sitio del paciente aunque la acción de
+  // `useActionState` lo llame con el cierre de un render anterior.
+  const pacientesAhora = useRef(pacientes);
   useEffect(() => {
-    if (resueltas > 0) grupo.current?.focus();
-  }, [resueltas]);
+    pacientesAhora.current = pacientes;
+  }, [pacientes]);
+
+  useEffect(() => {
+    if (!pendiente) return;
+    // La revalidación (o la nueva búsqueda) todavía no ha llegado.
+    if (pacientes.some((p) => p.alertas.includes(pendiente.alertaId))) return;
+
+    const paciente = pacientes.find((p) => p.id === pendiente.pacienteId);
+    let destino = encabezadoId;
+    let texto = t('agenda.documentacion.resuelta');
+    if (paciente) {
+      destino = idEnlacePaciente(prefijo, paciente.id);
+      texto = `${texto} ${paciente.anuncio}`;
+    } else if (pacientes.length > 0) {
+      const vecino = pendiente.eraUltimo
+        ? pacientes[pacientes.length - 1]
+        : pacientes[Math.min(pendiente.indice, pacientes.length - 1)];
+      destino = idEnlacePaciente(prefijo, vecino.id);
+    }
+    document.getElementById(destino)?.focus();
+    setAnuncio((previo) => ({ texto, n: previo.n + 1 }));
+    setPendiente(null);
+  }, [pendiente, pacientes, prefijo, encabezadoId]);
+
+  const alResolver = useCallback(
+    (r: Resolucion) => {
+      const lista = pacientesAhora.current;
+      const indice = lista.findIndex((p) => p.id === r.pacienteId);
+      setPendiente({ ...r, indice: Math.max(indice, 0), eraUltimo: indice === lista.length - 1 });
+      alAcertar?.();
+    },
+    [alAcertar],
+  );
 
   return (
-    <ContextoResolucion.Provider value={{ alResolver: () => setResueltas((n) => n + 1) }}>
-      <div ref={grupo} role="group" aria-labelledby="agenda-documentacion" tabIndex={-1} className="outline-none">
+    <ContextoResolucion.Provider value={{ alResolver }}>
+      <div data-bloque-pendientes>
         {children}
         {/* Siempre montado: un live region que nace con el contenido no se anuncia. */}
         <p role="status" aria-live="polite" aria-atomic="true" data-estado-bloque className="sr-only">
-          <span key={resueltas}>{resueltas > 0 ? t('agenda.documentacion.resuelta') : null}</span>
+          <span key={anuncio.n}>{anuncio.texto || null}</span>
         </p>
       </div>
     </ContextoResolucion.Provider>
@@ -65,7 +122,15 @@ export function ProveedorResolucion({ children }: { children: ReactNode }) {
 
 type Resultado = { resultado: EstadoResolver; intento: number };
 
-export function ResolverAlerta({ alertaId, etiquetaTipo }: { alertaId: string; etiquetaTipo: string }) {
+export function ResolverAlerta({
+  alertaId,
+  pacienteId,
+  etiquetaTipo,
+}: {
+  alertaId: string;
+  pacienteId: string;
+  etiquetaTipo: string;
+}) {
   const bloque = useContext(ContextoResolucion);
 
   const [estado, accion, pendiente] = useActionState<Resultado, FormData>(
@@ -78,7 +143,7 @@ export function ResolverAlerta({ alertaId, etiquetaTipo }: { alertaId: string; e
         console.error('ResolverAlerta: la acción ha fallado', error);
         resultado = { ok: false, error: 'fallo' };
       }
-      if (resultado?.ok) bloque?.alResolver();
+      if (resultado?.ok) bloque?.alResolver({ alertaId, pacienteId });
       return { resultado, intento: previo.intento + 1 };
     },
     { resultado: null, intento: 0 },

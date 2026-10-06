@@ -7,21 +7,53 @@ vi.mock('next/navigation', () => ({ unstable_rethrow: (e: unknown) => m.rethrow(
 
 vi.mock('./acciones-alertas', () => ({ resolverAlerta: m.resolverAlerta }));
 
+import { idEnlacePaciente } from './pendientes-ids';
 import { ProveedorResolucion, ResolverAlerta } from './resolver-alerta';
 
 const ALERTA = '11111111-1111-4111-8111-111111111111';
 const NOMBRE_BOTON = 'Marcar como resuelta: Consentimiento por firmar';
 
-function Bloque({ conFila }: { conFila: boolean }) {
+type Paciente = { id: string; alertas: string[]; anuncio?: string };
+
+const ANA: Paciente = { id: 'pA', alertas: [ALERTA], anuncio: 'Ana, 1 pendiente' };
+
+function etiquetaDe(alertaId: string): string {
+  return alertaId === ALERTA ? 'Consentimiento por firmar' : `Informe ${alertaId}`;
+}
+
+function Bloque({
+  conFila,
+  pacientes,
+  alAcertar,
+}: {
+  conFila?: boolean;
+  pacientes?: Paciente[];
+  alAcertar?: () => void;
+}) {
+  const lista = pacientes ?? (conFila ? [ANA] : []);
   return (
     <section aria-labelledby="agenda-documentacion">
-      <h2 id="agenda-documentacion">Documentación pendiente</h2>
-      <ProveedorResolucion>
-        {conFila && (
+      <h2 id="agenda-documentacion" tabIndex={-1}>
+        Documentación pendiente
+      </h2>
+      <ProveedorResolucion
+        prefijo="panel"
+        encabezadoId="agenda-documentacion"
+        pacientes={lista.map((p) => ({ id: p.id, alertas: p.alertas, anuncio: p.anuncio ?? `${p.id}, anuncio` }))}
+        alAcertar={alAcertar}
+      >
+        {lista.length > 0 && (
           <ul>
-            <li>
-              <ResolverAlerta alertaId={ALERTA} etiquetaTipo="Consentimiento por firmar" />
-            </li>
+            {lista.map((p) => (
+              <li key={p.id}>
+                <a id={idEnlacePaciente('panel', p.id)} href={`/pacientes/${p.id}`}>
+                  {p.id}
+                </a>
+                {p.alertas.map((a) => (
+                  <ResolverAlerta key={a} alertaId={a} pacienteId={p.id} etiquetaTipo={etiquetaDe(a)} />
+                ))}
+              </li>
+            ))}
           </ul>
         )}
       </ProveedorResolucion>
@@ -124,26 +156,97 @@ describe('ResolverAlerta: mientras se envía (T-015, R4)', () => {
   });
 });
 
-describe('ResolverAlerta: éxito (T-015, R4)', () => {
+describe('ResolverAlerta: éxito y foco (T-015 R4, T-048 criterio 9)', () => {
   beforeEach(() => m.resolverAlerta.mockReset());
 
-  it('la fila desaparece al repintar: el foco va al grupo del bloque y el status del bloque lo anuncia', async () => {
+  const OTRA = '22222222-2222-4222-8222-222222222222';
+  const B: Paciente = { id: 'pB', alertas: [OTRA], anuncio: 'Berta, 1 pendiente' };
+  const C: Paciente = { id: 'pC', alertas: ['c1'], anuncio: 'Carla, 1 pendiente' };
+  const A_CON_DOS: Paciente = { id: 'pA', alertas: [ALERTA, 'a2'], anuncio: 'Ana, 1 pendiente' };
+  const A_CON_UNA: Paciente = { id: 'pA', alertas: ['a2'], anuncio: 'Ana, 1 pendiente' };
+
+  it('(a) el paciente sigue: el foco va a su enlace y se anuncia lo resuelto y su estado', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[A_CON_DOS, B]} />);
+    const boton = screen.getAllByRole('button', { name: NOMBRE_BOTON })[0];
+    boton.focus();
+    await pulsar();
+
+    // Antes de que la revalidación llegue, nada se mueve: la alerta sigue en lo pintado.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: NOMBRE_BOTON }));
+    expect(estadoBloque().textContent).toBe('');
+
+    rerender(<Bloque pacientes={[A_CON_UNA, B]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pA'));
+    expect(estadoBloque().textContent).toBe('Marcada como resuelta. Ana, 1 pendiente');
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('(b) el paciente desaparece y no era el último: el foco va al que ocupa su sitio', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[ANA, B, C]} />);
+    // Se resuelve la del paciente de en medio.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Marcar como resuelta: Informe ' + OTRA }));
+    });
+    expect(document.activeElement).toBe(document.body);
+
+    rerender(<Bloque pacientes={[ANA, C]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pC'));
+    expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
+  });
+
+  it('(b) el primero desaparece: el foco va al nuevo primero', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[ANA, B, C]} />);
+    await pulsar();
+    rerender(<Bloque pacientes={[B, C]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+  });
+
+  it('(b) era el último: el foco va al anterior', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[ANA, B, C]} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Marcar como resuelta: Informe c1' }));
+    });
+    rerender(<Bloque pacientes={[ANA, B]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+  });
+
+  it('(c) la lista queda vacía: el foco va al encabezado y el status sigue montado', async () => {
     m.resolverAlerta.mockResolvedValue({ ok: true });
     const { rerender } = render(<Bloque conFila />);
+    expect(estadoBloque()).toBeTruthy();
     screen.getByRole('button', { name: NOMBRE_BOTON }).focus();
     await pulsar();
 
-    // El servidor revalida y la fila deja de existir.
     rerender(<Bloque conFila={false} />);
-
-    const grupo = screen.getByRole('group', { name: 'Documentación pendiente' });
-    expect(grupo.getAttribute('tabindex')).toBe('-1');
-    expect(document.activeElement).toBe(grupo);
+    expect(document.activeElement).toBe(document.getElementById('agenda-documentacion'));
     expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('gemela: si la fila no se va, el foco no se roba hasta que hay éxito', async () => {
+  it('el proveedor no es un grupo ni un tabstop: la lista no se anuncia como región', () => {
+    render(<Bloque conFila />);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(document.querySelector('[data-bloque-pendientes]')?.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('al acertar avisa a alAcertar; al fallar, no', async () => {
+    const alAcertar = vi.fn();
+    m.resolverAlerta.mockResolvedValueOnce({ ok: false, error: 'fallo' });
+    render(<Bloque conFila alAcertar={alAcertar} />);
+    await pulsar();
+    expect(alAcertar).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(document.getElementById('agenda-documentacion'));
+
+    m.resolverAlerta.mockResolvedValueOnce({ ok: true });
+    await pulsar();
+    expect(alAcertar).toHaveBeenCalledTimes(1);
+  });
+
+  it('gemela: si la acción falla, el foco no se roba y el status del bloque queda vacío', async () => {
     m.resolverAlerta.mockResolvedValue({ ok: false, error: 'fallo' });
     render(<Bloque conFila />);
     const boton = screen.getByRole('button', { name: NOMBRE_BOTON });
