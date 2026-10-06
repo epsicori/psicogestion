@@ -71,6 +71,8 @@ async function elegirTipoYHueco(tipo = TIPO_A) {
   fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: tipo } });
   // Sin CSS, la rejilla (md+) y la lista (móvil) están las dos en el DOM: vale la primera.
   fireEvent.click((await screen.findAllByRole('button', { name: /17:00, libre/ }))[0]);
+  // T-043 R2: Guardar espera al cálculo vigente; toda prueba parte de uno resuelto.
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar' }).getAttribute('aria-disabled')).not.toBe('true'));
 }
 
 beforeEach(() => {
@@ -253,26 +255,31 @@ describe('FormularioAlta · hueco elegido fuera de la semana visible (H8)', () =
     expect(m.recalcularAlta).toHaveBeenLastCalledWith(expect.objectContaining({ fechaFoco: '2026-10-05' }));
   });
 
-  it('si el guardado dice que el hueco se ocupó mientras se recalcula la duración, queda el mensaje del conflicto y no el de «no cabe»', async () => {
+  it('si el guardado dice que el hueco se ocupó mientras se guarda, cambia la duración y se recalcula, queda el mensaje del conflicto y no el de «no cabe»', async () => {
     let resolverRecalculo: (valor: unknown) => void = () => {};
+    let resolverGuardado: (valor: unknown) => void = () => {};
     m.recalcularAlta
       .mockResolvedValueOnce({ ok: true, vista: VISTA, duracionMinutos: 50 })
       .mockImplementationOnce(() => new Promise((resolver) => (resolverRecalculo = resolver)))
       .mockResolvedValue({ ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 });
-    m.guardarAlta.mockResolvedValue({
-      ok: false,
-      motivo: 'hueco_ocupado',
-      mensaje: 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.',
-      vista: SIN_EL_HUECO,
-    });
+    m.guardarAlta.mockImplementation(() => new Promise((resolver) => (resolverGuardado = resolver)));
     pinta();
     await elegirTipoYHueco(TIPO_A);
 
+    // Guardar ya no se puede pulsar con el recálculo en vuelo (T-043 R2): la carrera que queda es esta.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    });
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+      resolverGuardado({
+        ok: false,
+        motivo: 'hueco_ocupado',
+        mensaje: 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.',
+        vista: SIN_EL_HUECO,
+      });
     });
     await act(async () => {
       resolverRecalculo({ ok: true, vista: SIN_EL_HUECO, duracionMinutos: 90 });
@@ -849,9 +856,13 @@ describe('FormularioAlta · aviso de hueco raro', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
-    const aviso = await screen.findByRole('region', { name: AVISO });
-    expect(aviso).toHaveAccessibleDescription(/30 minutos/);
+    // R7: se espera a que el envío termine por cualquiera de los dos caminos y se mira primero que no guardó.
+    await waitFor(() =>
+      expect(m.guardarAlta.mock.calls.length > 0 || screen.queryByRole('region', { name: AVISO }) !== null).toBe(true),
+    );
     expect(m.guardarAlta).not.toHaveBeenCalled();
+    const aviso = screen.getByRole('region', { name: AVISO });
+    expect(aviso).toHaveAccessibleDescription(/30 minutos/);
     await waitFor(() => expect(document.activeElement).toBe(aviso));
   });
 
@@ -954,5 +965,174 @@ describe('FormularioAlta · aviso de hueco raro', () => {
     await waitFor(() => expect(screen.queryByRole('region', { name: AVISO })).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guardar' })));
   });
-});
 
+  const SIN_RARA = vistaCon([bloque('2026-10-06', '17:00', 'libre'), bloque('2026-10-06', '18:00', 'libre'), bloque('2026-10-06', '19:00', 'libre')]);
+  const RARA_40 = vistaCon(
+    [bloque('2026-10-06', '17:00', 'libre'), bloque('2026-10-06', '18:00', 'libre'), bloque('2026-10-06', '19:00', 'libre')],
+    { '2026-10-06T17:00': 40 },
+  );
+  const guardarActivo = () => expect(screen.getByRole('button', { name: /Guardar/ }).getAttribute('aria-disabled')).not.toBe('true');
+
+  // R1 · B-H1: con el recálculo en vuelo, Guardar no decide con la vista vieja.
+  it('con un recálculo en vuelo, Guardar no decide con la vista vieja y el foco no cae a body', async () => {
+    let resolver2: (v: unknown) => void = () => {};
+    m.recalcularAlta
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockImplementationOnce(() => new Promise((r) => (resolver2 = r)))
+      .mockResolvedValue({ ok: true, vista: SIN_RARA, duracionMinutos: 90 });
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    pinta({ vista: RARA });
+    await elegirTipoYHueco(TIPO_A);
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
+    });
+    const guardar = screen.getByRole('button', { name: 'Guardar' });
+    guardar.focus();
+
+    await act(async () => {
+      fireEvent.click(guardar);
+    });
+    await act(async () => {});
+
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull(); // (1) discrimina
+    expect(m.guardarAlta).not.toHaveBeenCalled(); // (2)
+    expect(guardar.getAttribute('aria-disabled')).toBe('true'); // (3)
+
+    await act(async () => {
+      resolver2({ ok: true, vista: SIN_RARA, duracionMinutos: 90 });
+    });
+    await waitFor(guardarActivo);
+    expect(document.activeElement).toBe(guardar); // (4)
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull(); // (5)
+
+    await act(async () => {
+      fireEvent.click(guardar);
+    });
+    await waitFor(() => expect(m.guardarAlta).toHaveBeenCalledTimes(1));
+    expect(m.guardarAlta).toHaveBeenCalledWith(expect.objectContaining({ tipoTerapiaId: TIPO_B, horaLocal: '17:00' }));
+  });
+
+  // R2 · B-H2: ni guarda sin aviso ni avisa con los minutos de la duración anterior.
+  it('con un recálculo en vuelo, Guardar no guarda sin aviso; con la vista nueva, avisa', async () => {
+    let resolver2: (v: unknown) => void = () => {};
+    m.recalcularAlta
+      .mockResolvedValueOnce({ ok: true, vista: VISTA, duracionMinutos: 50 })
+      .mockImplementationOnce(() => new Promise((r) => (resolver2 = r)))
+      .mockResolvedValue({ ok: true, vista: RARA_40, duracionMinutos: 90 });
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    pinta();
+    await elegirTipoYHueco(TIPO_A);
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    });
+    await act(async () => {
+      resolver2({ ok: true, vista: RARA_40, duracionMinutos: 90 });
+    });
+    await waitFor(guardarActivo);
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    const aviso = await screen.findByRole('region', { name: AVISO });
+    expect(aviso).toHaveAccessibleDescription(/40 minutos/);
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+  });
+
+  // R3 · B-H3: «Agendar igualmente» durante el guardado.
+  it('durante el guardado, «Agendar igualmente» no lleva disabled y un segundo clic no repite', async () => {
+    let resolver: (v: unknown) => void = () => {};
+    m.guardarAlta.mockImplementation(() => new Promise((r) => (resolver = r)));
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+    const agendar = screen.getByRole('button', { name: 'Agendar igualmente' }) as HTMLButtonElement;
+
+    await act(async () => {
+      fireEvent.click(agendar);
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Guardando/ })).toBeTruthy());
+    expect(agendar.disabled).toBe(false); // (1)
+    expect(agendar.getAttribute('aria-disabled')).toBe('true');
+
+    await act(async () => {
+      fireEvent.click(agendar);
+    });
+    expect(m.guardarAlta).toHaveBeenCalledTimes(1); // (2)
+
+    await act(async () => resolver({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' }));
+    expect(m.guardarAlta).toHaveBeenCalledTimes(1); // (3)
+  });
+
+  // R4 · B-H4a: si falla sin desmontar el aviso, el foco no se mueve.
+  it('si «Agendar igualmente» falla sin desmontar el aviso, el foco se queda en «Agendar igualmente»', async () => {
+    m.guardarAlta.mockResolvedValue({ ok: false, motivo: 'fallo', mensaje: 'No se pudo guardar.' });
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+    const agendar = screen.getByRole('button', { name: 'Agendar igualmente' });
+    agendar.focus();
+
+    await act(async () => {
+      fireEvent.click(agendar);
+    });
+    await screen.findByText('No se pudo guardar.');
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Guardando/ })).toBeNull());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.queryByRole('region', { name: AVISO })).not.toBeNull(); // (1)
+    expect(document.activeElement).toBe(agendar); // (2)
+  });
+
+  // R5 · B-H4b: con la serie fallida, «Agendar igualmente» reintenta la serie y no guarda.
+  it('con la serie fallida y el aviso visible, «Agendar igualmente» reintenta la serie y no guarda', async () => {
+    const FIRMA_A = 'a'.repeat(64);
+    const SESIONES = [
+      { fecha: '2026-10-06', fechaLarga: 'Martes, 6 de octubre de 2026', hora: '17:00', estado: 'normal', alternativa: null, horaResultante: null },
+    ];
+    m.previsualizarAltaSerie
+      .mockResolvedValueOnce({ ok: true, firma: FIRMA_A, sesiones: SESIONES })
+      .mockRejectedValueOnce(new Error('red'))
+      .mockResolvedValue({ ok: true, firma: FIRMA_A, sesiones: SESIONES });
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.change(screen.getByLabelText('Periodicidad'), { target: { value: 'semanal' } });
+    expect(await screen.findByText('Así quedaría la serie')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+    fireEvent.change(screen.getByLabelText('Número de sesiones'), { target: { value: '9' } });
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('No se ha podido calcular la serie'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Agendar igualmente' }));
+    });
+
+    await waitFor(() => expect(m.previsualizarAltaSerie).toHaveBeenCalledTimes(3));
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+  });
+
+  // R6 · B-H5: las alternativas excluyen los otros huecos raros.
+  it('las alternativas del aviso excluyen los otros huecos raros', async () => {
+    const RARA2 = vistaCon(
+      [bloque('2026-10-06', '17:00', 'libre'), bloque('2026-10-06', '18:00', 'libre'), bloque('2026-10-06', '19:00', 'libre')],
+      { '2026-10-06T17:00': 30, '2026-10-06T18:00': 20 },
+    );
+    m.recalcularAlta.mockResolvedValue({ ok: true, vista: RARA2, duracionMinutos: 50 });
+    pinta({ vista: RARA2 });
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+
+    const lista = screen.getByRole('list', { name: 'Huecos que no lo dejan' });
+    const items = Array.from(lista.querySelectorAll('li'));
+    expect(items).toHaveLength(1); // (1)
+    expect(items[0].textContent).toContain('19:00'); // (2)
+    expect(items.some((li) => (li.textContent ?? '').includes('18:00'))).toBe(false); // (3)
+  });
+});

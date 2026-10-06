@@ -309,7 +309,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   }
 
   function agendarIgualmente() {
-    if (guardando || catalogoVacio || esperandoSerie) return; // misma guarda que onSubmit (H27)
+    if (bloqueado) return; // misma guarda que onSubmit (H27)
     if (falloSerie !== null) {
       setSerieFallida(null);
       return;
@@ -373,6 +373,10 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
 
   const sinHueco = errors.fecha !== undefined || errors.horaLocal !== undefined;
   const catalogoVacio = tipos.length === 0;
+  // Los huecos pintados son de otra clave que la pedida: nada decide con ellos (T-043 R2, B-H1).
+  const recalculando = calculo.clave !== claveCalculo;
+  // Una sola guarda para los cuatro sitios que la repetían (H27, B-H3).
+  const bloqueado = guardando || catalogoVacio || esperandoSerie || recalculando;
   const idTipo = `${prefijo}-tipo`;
 
   return (
@@ -380,7 +384,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
       noValidate
       onSubmit={(evento) => {
         // `aria-disabled` no impide el envío (Intro en un campo, segundo clic): se corta aquí (H27).
-        if (guardando || catalogoVacio || esperandoSerie) {
+        if (bloqueado) {
           evento.preventDefault();
           return;
         }
@@ -470,7 +474,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         error={vista.errorSugerencias}
         elegida={elegido?.clave ?? null}
         alElegir={elegirTarjeta}
-        cargando={calculo.clave !== claveCalculo}
+        cargando={recalculando}
       />
 
       <SelectorHueco
@@ -573,7 +577,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
             const h = vista.calendario.huecos.find((x) => x.clave === clave);
             return h ? [{ clave, texto: `${vista.calendario.dias[h.diaIndice].etiquetaLarga}, ${h.horaLocal}`, etiqueta: h.etiqueta }] : [];
           })}
-          ocupado={guardando || catalogoVacio || esperandoSerie}
+          ocupado={bloqueado}
           alElegir={elegirAlternativa}
           alAgendarIgualmente={agendarIgualmente}
         />
@@ -584,7 +588,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
           {t('comunes.cancelar')}
         </Button>
         {/* `aria-disabled` y no `disabled`: un botón `disabled` con el foco dentro lo suelta a `body` (H27). */}
-        <Button ref={refGuardar} type="submit" aria-disabled={guardando || catalogoVacio || esperandoSerie} className="aria-disabled:cursor-default aria-disabled:opacity-50">
+        <Button ref={refGuardar} type="submit" aria-disabled={bloqueado} className="aria-disabled:cursor-default aria-disabled:opacity-50">
           {guardando ? t('agenda.alta.guardando') : t('agenda.alta.guardar')}
         </Button>
       </div>
