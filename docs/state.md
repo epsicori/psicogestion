@@ -3,11 +3,11 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 06-10-2026 · **T-021 hecho** (merge 67c1ddd: rondas 1–4, 0 ALTA/0 MEDIA/6 BAJA integrados).
+**Actualizado**: 06-10-2026 · **T-049 implementado** (rama `T-049-fechas-del-banco-rls`, pendiente de verificación y revisión); T-021 hecho (merge 67c1ddd).
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-042 (incluye T-021).
+- **Integrado en `main`**: T-000–T-042 (incluye T-021). T-049 en rama.
 - **Siguiente en `supabase/`**: T-043 (20261012120000) → T-023 (20261013120000) → T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -17,14 +17,17 @@
 
 ## Siguiente paso
 
-1. T-043 ya puede empezar.
+1. T-049 se fusiona antes que T-043 (el banco 00-28 vuelve a verde; hoy cae en `15-agenda.sql`). T-043 rebasa sobre T-049, añade su fila (29 → +10) a la tabla del README, punto 10, y pasa el lint de fechas fijas.
+   Al verificar T-049, `max(version)` debe ser el de `main` (20261011140000); con la migración de T-043 aplicada, `21-alta-de-cita.sql` cae por la firma de `agenda_bloques_profesional` (T-043 añade `hueco_raro_minutos`), no por T-049.
 2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove).
 
 ## Hallazgos anotados
 
 - **T-021 A4-H1 (BAJA)**: si la parte general mueve Q < 0,5 céntimos, ninguna cuota sella (6.4 rechaza cuota 0; banda admite solo 0). T-026 debe acotar esto en Zod.
 - **T-021 · seguimiento (ronda 4)**: B4-H1 (constante 1 de `least(1,…)` sin fijar: 0.6 y 1.3 sobreviven), B4-H2 (rama |Q_i| < 1 sin prueba positiva), B4-H3 (techo tipo IVA lejos del borde), A4-H2 (U+1D159 fuera clase invisibles), A4-H3 (tramo extra sin aserción de catálogo) — anotados, T-026 o futuro.
-- **Fechas fijas ya pasadas en banco RLS**: `15-agenda.sql:494` CITA1 a 2026-10-06, también en `18-agenda-rango`; `npm run test:rls` cae con 42501 «cita pasada». Requiere ticket.
+- **Solape de calendario 16/21 (T-049)**: 16 (hasta ~febrero de Y+4) y 21 (mayo de Y+3 a abril de Y+4) comparten calendario; coinciden un lunes (`lunes_21 + 259`) en 2026-2028, en verde, y dejan de coincidir en 2029-2031. Estable, pero su comportamiento cambia en 2029. Requiere ticket.
+- **Colisión interna del 16 (T-049)**: C7 (D+40..D+68 a la hora de `now()`) frente a la serie de 12:00 de `desde_8_martes`, solo si el banco corre un jueves hacia mediodía en enero-febrero. Requiere ticket.
+- **Comentario desfasado `16-series.sql:702` (T-049)**: nombra el `current_date + 300` del 17, que ahora ancla en Y+7. El 16 está fuera del territorio de T-049.
 - **`~/.claude/pipeline/territorio.mjs`**: no reconoce `territorio:` con comentario en la misma línea; muestra verde sin territorio. Usuario.
 - **R4.9 propuesta de regla para `.claude/rules/supabase.md`**: lista de caracteres como enteros hexadecimales y `chr()`, nunca escapes barra invertida; y otra de T-021 R3.9: dos disparadores de cotas se ordenan por nombre y cada mensaje de error lleva un fragmento sin prefijo común (decisión usuario/arquitecto; el documentalista las escribió en `.claude/rules/` y se revirtieron).
 - **T-028 R5-H32 (BAJA)**: `role="status"` en sugerencias nace relleno cuando cambia el tipo. Arreglo: región montada siempre.

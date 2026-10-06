@@ -179,6 +179,7 @@ insert into public.tarifas_paciente (id, paciente_id, tipo_terapia_id, importe, 
 
 -- Bonos: BONO1 de P1 (centro A), BONO2 de P2 (centro B).
 insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad, creado_por) values
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   (:BONO1, :P1, 3, 165.00, date '2031-12-31', :ADM),
   (:BONO2, :P2, 5, 300.00, null, :ADM);
 
@@ -186,17 +187,21 @@ insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad,
 insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por) values
   (:COB2, :P2, 70.00, date '2026-10-02', 'transferencia', :ADM);
 
+-- T-049 · Año propio del 26: Y+6, primer lunes de junio (README, punto 10).
+select (extract(year from now())::int + 6) as anio_26 \gset
+select (make_date(:anio_26, 6, 1) + ((8 - extract(isodow from make_date(:anio_26, 6, 1))::int) % 7))::text as lunes_26 \gset
+
 -- Tres citas FUTURAS de P1 con PRO1, en tres días distintos (no se solapan por
 -- `citas_sin_solape_profesional`), y una de P2 con PRO2 para el bono de otro paciente.
 insert into public.citas (id, paciente_id, profesional_id, centro_id, inicio, fin, zona_horaria) values
-  (:CITA1, :P1, :PRO1, :CA, ((current_date + 1500) + time '10:00') at time zone 'Europe/Madrid',
-                            ((current_date + 1500) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid'),
-  (:CITA2, :P1, :PRO1, :CA, ((current_date + 1501) + time '10:00') at time zone 'Europe/Madrid',
-                            ((current_date + 1501) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid'),
-  (:CITA3, :P1, :PRO1, :CA, ((current_date + 1502) + time '10:00') at time zone 'Europe/Madrid',
-                            ((current_date + 1502) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid'),
-  (:CITAP2, :P2, :PRO2, :CB, ((current_date + 1500) + time '10:00') at time zone 'Europe/Madrid',
-                             ((current_date + 1500) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid');
+  (:CITA1, :P1, :PRO1, :CA, ((:'lunes_26'::date + 0) + time '10:00') at time zone 'Europe/Madrid',
+                            ((:'lunes_26'::date + 0) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid'),
+  (:CITA2, :P1, :PRO1, :CA, ((:'lunes_26'::date + 1) + time '10:00') at time zone 'Europe/Madrid',
+                            ((:'lunes_26'::date + 1) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid'),
+  (:CITA3, :P1, :PRO1, :CA, ((:'lunes_26'::date + 2) + time '10:00') at time zone 'Europe/Madrid',
+                            ((:'lunes_26'::date + 2) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid'),
+  (:CITAP2, :P2, :PRO2, :CB, ((:'lunes_26'::date + 0) + time '10:00') at time zone 'Europe/Madrid',
+                             ((:'lunes_26'::date + 0) + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid');
 
 -- Ronda 2 · un centro sin nadie (CE26) y dos pacientes: PTEC, cuyo `profesional_id` es el
 -- técnico TEC1 en un centro (CB) donde no tiene pertenencia vigente (escenario A-H4), y PCE26,
@@ -208,6 +213,7 @@ insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) 
 insert into public.tarifas_paciente (id, paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por) values
   (:TARTEC, :PTEC, :TIPO26, 50.00, 'exento_sanitario', date '2026-01-01', :ADM);
 insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad, creado_por) values
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   (:BONO3, :P1, 2, 110.00, date '2030-01-31', :ADM),
   (:BONOTEC, :PTEC, 4, 200.00, null, :ADM);
 insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por) values
@@ -601,10 +607,13 @@ select pg_temp.assert_lanza_codigo(
 -- Ronda 2 · la caducidad de un bono pagado no se reescribe: cada cambio es una fila de
 -- bonos_caducidades y la vigente es la última.
 select pg_temp.assert_no_lanza(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, caducidad, registrada_por) values (%L, date '2032-06-30', %L)$f$, :BONO1, :TEC1),
   '26.E16 · TEC1 registra una caducidad nueva de BONO1 (una fila más)');
 select pg_temp.assert(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   (select b.caducidad from public.bonos_consumo b where b.bono_id = :BONO1) = date '2032-06-30',
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   '26.E16b · bonos_consumo.caducidad de BONO1 es la última registrada (2032-06-30)');
 select pg_temp.assert_no_lanza(
   format('insert into public.bonos_caducidades (bono_id, caducidad, registrada_por) values (%L, null, %L)', :BONO1, :TEC1),
@@ -614,21 +623,26 @@ select pg_temp.assert(
   and (select array_agg(c.numero order by c.numero) from public.bonos_caducidades c where c.bono_id = :BONO1) = '{1,2}'::int[],
   '26.E16c · gana la última fila aunque sea nula, y la base numera 1 y 2');
 select pg_temp.assert_lanza_codigo_msg(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$update public.bonos set caducidad = date '2033-01-01' where id = %L$f$, :BONO1),
   '42501', 'permission denied for table bonos', '26.E16d · TEC1 (que ve BONO1) no reescribe la caducidad inicial: sin privilegio');
 select pg_temp.assert_lanza_codigo(
   format('update public.bonos set sesiones_totales = 99 where id = %L', :BONO1),
   '42501', '26.E17 · TEC1 no cambia sesiones_totales (bonos no tiene update)');
 select pg_temp.assert_lanza_codigo_msg(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, caducidad, registrada_por) values (%L, date '2032-06-30', %L)$f$, :BONO2, :TEC1),
   '42501', 'row-level security', '26.E18 · TEC1 no registra caducidad de BONO2 (otro centro)');
 select pg_temp.assert_lanza_codigo_msg(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, caducidad, registrada_por) values (%L, date '2032-06-30', %L)$f$, :BONO1, :ADM),
   '42501', 'row-level security', '26.E18c · TEC1 no registra caducidad a nombre de otro (registrada_por)');
 select pg_temp.assert_lanza_codigo_msg(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, numero, caducidad, registrada_por) values (%L, 5, date '2032-06-30', %L)$f$, :BONO1, :TEC1),
   '42501', 'permission denied for table bonos_caducidades', '26.E18d · TEC1 no manda numero');
 select pg_temp.assert_lanza_codigo_msg(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, caducidad, registrada_por, registrada_en) values (%L, date '2032-06-30', %L, timestamptz '2025-01-01 00:00:00+00')$f$, :BONO1, :TEC1),
   '42501', 'permission denied for table bonos_caducidades', '26.E18e · TEC1 no manda registrada_en');
 select pg_temp.assert_lanza_codigo_msg(
@@ -636,9 +650,11 @@ select pg_temp.assert_lanza_codigo_msg(
   '42501', 'permission denied for table bonos', '26.E18g · TEC1 no manda creado_en (gemela: E13)');
 call pg_temp.como(:PRO1);
 select pg_temp.assert_no_lanza(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, caducidad, registrada_por) values (%L, date '2033-06-30', %L)$f$, :BONO1, :PRO1),
   '26.E18f · PRO1 registra caducidad de BONO1 (su paciente)');
 select pg_temp.assert_lanza_codigo_msg(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, caducidad, registrada_por) values (%L, date '2033-06-30', %L)$f$, :BONO2, :PRO1),
   '42501', 'row-level security', '26.E18f.n · PRO1 no registra caducidad de BONO2');
 call pg_temp.como(:ADM);
@@ -647,6 +663,7 @@ select pg_temp.assert(
   and not exists (select 1 from public.bonos_caducidades c where c.bono_id = :BONO2),
   '26.E18b · BONO2 sigue sin caducidad y sin filas en bonos_caducidades');
 select pg_temp.assert(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   (select b.caducidad from public.bonos_consumo b where b.bono_id = :BONO3) = date '2030-01-31',
   '26.E19 · sin filas en bonos_caducidades, la caducidad de BONO3 es la inicial');
 call pg_temp.reset_sesion();
@@ -1436,6 +1453,7 @@ select pg_temp.assert_lanza_codigo_msg(
 call pg_temp.como(:TEC1);
 select pg_temp.assert_lanza_codigo(
   format($f$insert into public.tarifas_paciente (paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por)
+            -- fecha-fija: TEC1 cae por permiso antes de mirar la fecha de la tarifa
             values (%L, %L, 80.00, 'general', date '2027-01-01', %L)$f$, :P1, :TIPO26, :TEC1),
   '42501', '26.K13 · TEC1 no da de alta tarifas');
 
@@ -1629,6 +1647,7 @@ select pg_temp.assert_lanza_codigo_msg(
   format('insert into public.bonos (paciente_id, sesiones_totales, importe, creado_por) values (%L, 4, 200.00, %L)', :PTEC, :TEC1),
   '42501', 'row-level security', '26.M5 · TEC1 no da de alta un bono de PTEC');
 select pg_temp.assert_lanza_codigo_msg(
+  -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   format($f$insert into public.bonos_caducidades (bono_id, caducidad, registrada_por) values (%L, date '2032-01-01', %L)$f$, :BONOTEC, :TEC1),
   '42501', 'row-level security', '26.M6 · TEC1 no registra caducidad de BONOTEC');
 call pg_temp.reset_sesion();

@@ -9,6 +9,7 @@
 // T-005: `localizarContenedor()` y `ejecutarSql()` se extrajeron a scripts/psql.mjs, sin
 // cambio de comportamiento, porque un segundo guion (verificar-huellas.mjs) los necesita.
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -23,6 +24,14 @@ function ficherosSql() {
     .filter((f) => f.endsWith(".sql"))
     .sort()
     .map((f) => path.join(dirRls, f));
+}
+
+// T-049 · Antes de tocar la base, el lint de fechas fijas: una fecha futura sin anotar corta aquí,
+// sin docker ni psql (scripts/rls/README.md, punto 10).
+const lint = spawnSync(process.execPath, [path.join(dirRls, "fechas-fijas.mjs")], { stdio: "inherit" });
+if (lint.status !== 0) {
+  console.error("test:rls: el lint de fechas fijas no pasa; el banco no se ejecuta.");
+  process.exit(lint.status ?? 1);
 }
 
 const contenedor = localizarContenedor();
