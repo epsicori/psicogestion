@@ -31,7 +31,7 @@ function bloque(fecha: string, horaLocal: string, estado: BloqueAlta['estado']):
   return { fecha, horaLocal, inicio: inicio.toISOString(), fin: new Date(inicio.getTime() + 50 * 60_000).toISOString(), estado };
 }
 
-function vistaCon(bloques: BloqueAlta[]): VistaAlta {
+function vistaCon(bloques: BloqueAlta[], huecosRaros: Record<string, number> = {}): VistaAlta {
   return {
     calendario: construirCalendarioAlta({
       fechaFoco: '2026-10-06',
@@ -43,6 +43,7 @@ function vistaCon(bloques: BloqueAlta[]): VistaAlta {
     modo: 'enFrio',
     tarjetas: [],
     errorSugerencias: false,
+    huecosRaros,
   };
 }
 
@@ -825,6 +826,133 @@ describe('FormularioAlta · el foco no se pierde al guardar (H27)', () => {
     expect(m.guardarAlta).toHaveBeenCalledTimes(1);
 
     await act(async () => resolver({ ok: false, motivo: 'fallo', mensaje: 'x' }));
+  });
+});
+
+// T-043 · el aviso de hueco raro al pulsar Guardar.
+describe('FormularioAlta · aviso de hueco raro', () => {
+  const RARA = vistaCon(
+    [bloque('2026-10-06', '17:00', 'libre'), bloque('2026-10-06', '18:00', 'libre'), bloque('2026-10-06', '19:00', 'libre')],
+    { '2026-10-06T17:00': 30 },
+  );
+  const AVISO = 'Esta cita deja un hueco corto';
+
+  function pintaRara() {
+    m.recalcularAlta.mockResolvedValue({ ok: true, vista: RARA, duracionMinutos: 50 });
+    return pinta({ vista: RARA });
+  }
+
+  it('al pulsar Guardar sobre un hueco raro no guarda: enseña el aviso con los minutos y le da el foco', async () => {
+    pintaRara();
+    await elegirTipoYHueco();
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    const aviso = await screen.findByRole('region', { name: AVISO });
+    expect(aviso).toHaveAccessibleDescription(/30 minutos/);
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement).toBe(aviso));
+  });
+
+  it('un hueco que no es raro se guarda sin aviso', async () => {
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    pintaRara();
+    fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_A } });
+    fireEvent.click((await screen.findAllByRole('button', { name: /18:00, libre/ }))[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => expect(m.guardarAlta).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull();
+  });
+
+  it('«Agendar igualmente» guarda exactamente lo elegido, una vez', async () => {
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    const { props } = pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agendar igualmente' }));
+
+    await waitFor(() => expect(m.guardarAlta).toHaveBeenCalledTimes(1));
+    expect(m.guardarAlta).toHaveBeenCalledWith(expect.objectContaining({ fecha: '2026-10-06', horaLocal: '17:00', tipoTerapiaId: TIPO_A }));
+    await waitFor(() => expect(props.alTerminar).toHaveBeenCalled());
+  });
+
+  it('pulsar Guardar con el aviso ya visible no guarda y devuelve el foco al aviso', async () => {
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    const aviso = await screen.findByRole('region', { name: AVISO });
+    screen.getByRole('button', { name: 'Guardar' }).focus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => expect(document.activeElement).toBe(aviso));
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+  });
+
+  it('elegir una alternativa cambia el hueco, quita el aviso, deja el foco en «Hueco elegido» y no guarda', async () => {
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+    const lista = screen.getByRole('list', { name: 'Huecos que no lo dejan' });
+    expect(lista.querySelectorAll('li').length).toBeGreaterThan(0);
+
+    fireEvent.click(lista.querySelector('button') as HTMLElement);
+
+    await waitFor(() => expect(screen.queryByRole('region', { name: AVISO })).toBeNull());
+    const resumen = screen.getByText(/Hueco elegido/).closest('p') as HTMLElement;
+    expect(resumen.textContent).toMatch(/18:00/);
+    await waitFor(() => expect(document.activeElement).toBe(resumen));
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+  });
+
+  it('elegir otro hueco a mano quita el aviso, y volver al raro no lo resucita sin pulsar Guardar', async () => {
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /19:00, libre/ })[0]);
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /17:00, libre/ })[0]);
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull();
+  });
+
+  it('un recálculo que quita la rareza del elegido retira el aviso', async () => {
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+
+    const sinRara = vistaCon([bloque('2026-10-06', '17:00', 'libre'), bloque('2026-10-06', '18:00', 'libre'), bloque('2026-10-06', '19:00', 'libre')]);
+    m.recalcularAlta.mockResolvedValue({ ok: true, vista: sinRara, duracionMinutos: 90 });
+    fireEvent.change(screen.getByLabelText('Tipo de terapia'), { target: { value: TIPO_B } });
+
+    await waitFor(() => expect(screen.queryByRole('region', { name: AVISO })).toBeNull());
+  });
+
+  it('si al agendar igualmente el hueco acaba de ocuparse, el foco no se pierde en body', async () => {
+    m.guardarAlta.mockResolvedValue({
+      ok: false,
+      motivo: 'hueco_ocupado',
+      mensaje: 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.',
+      vista: vistaCon([bloque('2026-10-06', '17:00', 'ocupado'), bloque('2026-10-06', '18:00', 'libre')]),
+    });
+    pintaRara();
+    await elegirTipoYHueco();
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+    screen.getByRole('button', { name: 'Agendar igualmente' }).focus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agendar igualmente' }));
+
+    await waitFor(() => expect(screen.queryByRole('region', { name: AVISO })).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Guardar' })));
   });
 });
 

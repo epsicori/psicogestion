@@ -56,7 +56,7 @@ function contexto(rol: string) {
   };
 }
 
-const VISTA = { calendario: {}, modo: 'enFrio', tarjetas: [], errorSugerencias: false };
+const VISTA = { calendario: {}, modo: 'enFrio', tarjetas: [], errorSugerencias: false, huecosRaros: {} };
 
 /** El elemento que devuelve el componente asíncrono, ya resuelto. */
 async function resolver(sp: Record<string, string> = {}): Promise<ReactElement<Record<string, unknown>>> {

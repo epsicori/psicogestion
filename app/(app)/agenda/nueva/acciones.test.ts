@@ -100,7 +100,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-04T10:00:00Z'));
   m.zonaDeCentro.mockResolvedValue({ ok: true, zona: 'Europe/Madrid' });
-  m.leerBloques.mockResolvedValue({ ok: true, bloques: BLOQUES });
+  m.leerBloques.mockResolvedValue({ ok: true, bloques: BLOQUES, huecosRaros: {} });
   m.leerUltimasCitasPaciente.mockResolvedValue({ ok: true, citas: [] });
   m.crearCitaSuelta.mockResolvedValue({ ok: true, citaId: 'c1' });
   m.crearSerieAlta.mockResolvedValue({ ok: true, serieId: 's1', citaIds: ['c1', 'c2'], propuestasPendientes: [] });
