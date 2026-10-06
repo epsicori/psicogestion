@@ -5,7 +5,8 @@ modelo: opus
 fase: 2
 prioridad: alta
 depende_de: [T-004, T-010]
-estado: pendiente
+estado: hecho
+completado: 2026-10-06
 riesgo: alto
 # territorio: adenda del diseño (A.6, 03-10-2026); no cambia con P3 (§Adenda P3 aplicada, PA.6)
 territorio:

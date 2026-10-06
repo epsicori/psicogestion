@@ -3,76 +3,37 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 05-10-2026 · **T-041 hecho** (merge 80b6a06: altas de centro); **T-045 hecho** (dar de baja y reponer TOTP leen `directorio_perfiles`); **T-044 hecho** (enlace a `/recuperar` y vuelta).
+**Actualizado**: 06-10-2026 · **T-021 hecho** (merge 67c1ddd: rondas 1–4, 0 ALTA/0 MEDIA/6 BAJA integrados).
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 (A/B/C), T-016–T-020, T-029–T-042.
-- **T-021 ronda 4 implementada** (rama `worktree-agent-a8507d244f215480d`, migración 20261011140000 aplicada en la base local con `migration up`): redefine `fn_cotas_version_borrador()`, la banda tolera `Σ least(1, |Q_i|)` por línea general y la clase de invisibles es una lista de 34 tramos (Unicode 17.0) con `chr()`. Banco 26 en verde (J28h, J28i, J49-J53), M48-M58 y repeticiones muertos. Pendiente: verificación y dos revisores.
-- **T-026 diseñado y respondido** (partir en T-026a/T-026b; editor del borrador en ticket nuevo; concepto según IVA; Ajustes solo admin). **T-023 diseñado y respondido** (T-023b tras T-026).
-- **Siguiente en `supabase/`**: T-021 (20261011120000, 20261011130000, 20261011140000) → T-043 (20261012120000) → T-023 (20261013120000) → T-026a (20261014120000).
+- **Integrado en `main`**: T-000–T-042 (incluye T-021).
+- **Siguiente en `supabase/`**: T-043 (20261012120000) → T-023 (20261013120000) → T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
 
-- `.env.local` `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` (propietario, 04-10).
+- `.env.local` `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` (propietario).
 - winnat: `net stop winnat`.
 
 ## Siguiente paso
 
-1. T-021: verificación + revisores A/B → merge → documentalista. Luego T-043.
-2. Ya se puede `npx supabase db reset` desde main (20261010120000 está en main).
-3. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
+1. T-043 ya puede empezar.
+2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove).
 
 ## Hallazgos anotados
 
+- **T-021 A4-H1 (BAJA)**: si la parte general mueve Q < 0,5 céntimos, ninguna cuota sella (6.4 rechaza cuota 0; banda admite solo 0). T-026 debe acotar esto en Zod.
+- **T-021 · seguimiento (ronda 4)**: B4-H1 (constante 1 de `least(1,…)` sin fijar: 0.6 y 1.3 sobreviven), B4-H2 (rama |Q_i| < 1 sin prueba positiva), B4-H3 (techo tipo IVA lejos del borde), A4-H2 (U+1D159 fuera clase invisibles), A4-H3 (tramo extra sin aserción de catálogo) — anotados, T-026 o futuro.
+- **Fechas fijas ya pasadas en banco RLS**: `15-agenda.sql:494` CITA1 a 2026-10-06, también en `18-agenda-rango`; `npm run test:rls` cae con 42501 «cita pasada». Requiere ticket.
+- **`~/.claude/pipeline/territorio.mjs`**: no reconoce `territorio:` con comentario en la misma línea; muestra verde sin territorio. Usuario.
+- **R4.9 propuesta de regla para `.claude/rules/supabase.md`**: lista de caracteres como enteros hexadecimales y `chr()`, nunca escapes barra invertida; y otra de T-021 R3.9: dos disparadores de cotas se ordenan por nombre y cada mensaje de error lleva un fragmento sin prefijo común (decisión usuario/arquitecto; el documentalista las escribió en `.claude/rules/` y se revirtieron).
 - **T-028 R5-H32 (BAJA)**: `role="status"` en sugerencias nace relleno cuando cambia el tipo. Arreglo: región montada siempre.
-- **T-028 R5-H33 (BAJA)**: Error lectura `tipos_terapia`/`directorio_perfiles` en `contenido-alta.tsx:52-53` cae a `[]` y se pinta falso «No hay…». Arreglo: propagar error.
-- **T-028 R6-H35 (BAJA)**: la prueba de H34 (`vista-alta.test.ts:64`) deja vivos tres mutantes de `finDeOcupado` (máximo en vez de mínimo, último tramo de la entrada, sin la cota `< fin`). Arreglo: un segundo libre tras el de 09:40 y un día con ocupado al final de la mañana y libre por la tarde. **Nota R6**: `agenda_bloques_profesional` sigue emitiendo el ocupado con la duración pedida; el recorte es solo de pantalla y otro consumidor vería el solape.
-- **Paciente fusionado o traspasado (T-028 R7, sin medir)**: ni `agenda_crear_cita`/`agenda_crear_serie` ni los disparadores de `citas` impiden agendar a un paciente con `fusionado_en` o `traspasado_en`; el buscador del alta ya dejaba llegar. Requiere ticket `supabase/`.
-- **`directorio_perfiles` sin prueba de RLS (T-045)**: ningún módulo de `scripts/rls/` nombra la vista, y desde T-041 y T-045 la usan tres pantallas de administrador (centros, dar de baja, reponer TOTP). Falta un módulo de quién ve qué. T-045 (dar de baja y reponer TOTP leen la vista) pendiente de verificación y merge.
-- **T-042 R2-H1 (BAJA)**: el predicado del `update` de `bloquear_historia()` (migración `20261009120000:442`) no tiene prueba ni mutante; sin él cada «Bloquear» escribe una fila `UPDATE` en `auditoria` y `test:rls` sigue verde. Arreglo: aserción en CA-R2.2 de que bloquear con `0/0/false` no cambia el recuento.
-- **T-038 A3-H1=B3-H2 (BAJA)**: `lib/cuentas/totp.ts:57` marca `reentrar` ante cualquier 42501; `generar_codigos_recuperacion()` lo lanza por cuatro causas (Q3(B) incluida) y la vista afirma «hace más de cinco minutos». La salida sí resuelve.
-- **T-038 R4-H1 (BAJA)**: `app/(app)/cuenta/formulario-regenerar.test.tsx:160-161` niega dos frases concretas, no cualquier condición sobre el aviso; «… salvo que en tus avisos ya salga…» pasa. Arreglo: negar la etiqueta del aviso.
-- **T-038 y T-042 lecciones**: reglas por ruta propuestas para `.claude/rules/supabase.md` (orden de guardas en RPC definer, fallo sin lanzar, `p_contrasena` fuera de raise/format, `crypt`+NULL en `coalesce`), una comprobación para `guard.json` y el ADR del patrón de dos pasos, en `docs/bitacora/T-038.md` y `T-042.md`; decide usuario/arquitecto.
-- **T-042 notas**: `canjearCodigo` sin Zod en servidor; `scripts/t002-rls.sql` y `t004-auditoria.sql` llaman a la firma de un paso, que ya no existe (ningún `npm run` los usa).
-- **T-038 nota de despliegue (Q1)**: los ajustes de registro de Postgres que exige `registro_postgres_seguro()` viven solo en `docs/bitacora/T-038.md`; no hay manual de despliegue.
-- **`app/page.tsx` en `next dev`**: el `redirect('/agenda')` hace saltar «Route "/": Could not validate `instant`» (Cache Components) en cada visita a `/`; sale en el indicador de errores de desarrollo. Funciona, pero ensucia el registro.
-- **`verificar` en `app/primera-vez/segundo-factor.tsx:117` (T-037)**: transición asíncrona sin `try/catch` y sin `error.tsx` en `app/`; un fallo sustituye la página entera (mismo patrón que T-038 B2-H1).
-- **Playwright con 6 workers**: `acceso.spec:138` y `avisos.spec:29` fallan porque entran a la vez con el mismo usuario sembrado («el TOTP sembrado no se aceptó»); en serie pasan.
-- **`test:a11y`**: sin `SEGUNDO_FACTOR_AUTOMATICO_LOCAL=activo` cinco specs ajenas caen en `/primera-vez` y fallan sin decir por qué. El script debería fijarla.
-- **R2-H4 (T-037)**: `scripts/seed.mjs:29` y `scripts/test-huellas.mjs:19` toman el primer `supabase_db_*`.
-- **Base compartida**: el verificador hace `db reset` mientras los revisores miden; los revisores trabajan en `begin … rollback` y esperan a `max(version)`.
-- **T-039 R3-B-H1 (MEDIA)**: architecture.md, residuo (3). Reprogramar fuera de la ventana del episodio y dar de baja a un participante no tienen dueño; T-034 SQL-H2 cubre solo el cierre posterior.
-- **T-039 R3-B-H2 (BAJA)**: H25 dice «de una cita», pero el técnico lee `episodio_id` también en la auditoría de `series_cita`.
-- **T-039 R3-B-H3 (BAJA)**: `scripts/rls/README.md:49` dice «(V, S)»; faltan C, W, N, T.
-- **T-039 R3-A-H1 (BAJA)**: `fn_exigir_vinculo_agenda` solo `before insert`; un profesional pasa su cita suelta a un paciente ajeno (ADR-055). Arreglo: también `before update of paciente_id`.
-- **H25**: técnico deduce parejas por `episodio_id` en auditoría. **Bloquea producción**.
-- **Verificador T-028**: tras Cambiar, buscador conserva texto; centro por defecto sin franjas. Comentario `rejilla-semana.tsx:232` desactualizado.
-- **T-040 R2A-H1 (MEDIA, anotada por el propietario 05-10)**: `scripts/t040-oraculo.mjs` no prueba `offset`+`Prefer: count=exact`; ese 416 («only 1/0 rows») lleva un bit del cuerpo y `conContenido` no lo cuenta. Con PostgREST v16.1 (local) confirma y deja rastro; al subir PostgREST, añadir la forma S7 con su gemela.
-- **T-040 A-H3 (BAJA, por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga); en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN. **R3-H1 (BAJA)**: opacidad/color de marca sin prueba.
-- **Sello de T-033**: el hook reselló su `revision.sha` sin que parara su revisor (integrado hace semanas); sin commitear, lo decide el usuario.
-- **T-034 SQL-H2**: reabrir esquiva D6, reloj. Única salida nota de cita con episodio cerrado (23.Z). No cerrar con citas posteriores.
-- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket. **05-10 (T-021)**: en el worktree de T-021 ambas pasan, con la base recién reseteada y también tras `npm run seed`; no reproducido, sin medir la causa. **06-10 (T-021)**: con la base de este worktree, `test:rls` completo cae en 16 antes de llegar a 26; el banco se corrió entero salvo 16 y 23. **06-10 (ronda 4)**: también cae `15-agenda.sql:494` (CITA1 movida a la fecha fija 2026-10-06, hoy ya pasada: 42501 «cita pasada» en vez de 23P01); con `ON_ERROR_ROLLBACK` solo caen 15 y 16 (más las de solo lectura, artefacto del modo).
-- **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
-- **T-035 B-H1 → T-041**: cierre: la nota con coprofesional y alta posterior sigue vigente porque 7c no se reevalúa al firmar.
-- **T-041 R3/R6**: funciones cuentas.
-- **T-041 R2 (6 BAJA)**: B2-H1/H2 en acciones.ts (ramas registroConAltasPendientes/avisoPendiente sin prueba); B2-H3 en gestion-altas (catch no revalida); B2-H4=A2-H1 en invitar.ts (error lectura confunde con cierre); B2-H5 en formulario-invitar (transición sin try/catch); A2-H2 en README banco 28 (mutantes nuevos no documentados). Más: t002 líneas 148/190/217 sin `hasta is null`; ResultadoCuentas no puede `ok:true`; tsc app/layout.tsx(45,50); territorio.mjs no ve sufijos; DELETE en perfiles_centros sin disparador; ventana ms entre centros.activo e inviteUserByEmail; directorio_perfiles sin prueba RLS.
-- **T-025/T-026 (ADR-078)**: borradores en `docs/legal/` (consulta vinculante DGT con la lista del ADR-077 p.7; preguntas a Holded). Los envía el propietario tras revisión de asesor, antes de comercializar. Contratos sin tocar: los ajusta el arquitecto (vocabulario, 14.6, clave mínima).
-- **T-021 B-H9 (aceptado)**: falta prueba de concurrencia de dos conexiones para el sellado del borrador y la numeración de tarifas (`orden`) y caducidades (`numero`); el mutante sin candado sobrevive. Patrón: `test:huellas`.
-- **T-021 (A-H6; A.9/P3.8)**: la cita realizada no tiene guarda de transición (cancelarla baja el consumo del bono; se decide con la agenda). Pendientes: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
-- **T-021 · documentos mixtos**: exento negativo y general positivo no se sellan por `signo_ck`; lo decide T-026.
-- **T-021 · banda de la cuota**: tolera un céntimo por línea general (`least(1, |Q_i|)`). T-026 desglosa por línea o por documento y tipo, nunca por unidad (J49u). Residuo: un céntimo por línea general visible; el Zod de T-026 debe acotar el número de líneas.
-- **T-021 · marcas combinantes de una escritura concreta** (fuera de los bloques genéricos): solas como concepto se sellan. Residuo aceptado.
-- **T-015 R3-H1** (BAJA): `fotoDeLayout` época pierde ante foto fresca vieja; franja revive.
-- **T-015 (anotados del diseño)**: realizada antes de fin no abre alerta; firmar no revalida layout.
-- **T-015 retardo R2.3**: acciones agenda revalidan solo `/agenda`; cabecera vieja hasta navegar.
-- **T-014**: bandeja sin límite, ?centro, estado, 44px, 360px, ?semana, CRLF.
-- **T-012**: fallos recarga, cargarPaciente→404, PostgREST directo, coprofesional.
-- **T-028a**: marcada_realizada/por vacío; C18TEC; banco 21 año+3; deadlock DB14.
-- **T-033**: next start, URL inline, Suspense. **T-011c**: ordinal. **T-036**: UUID.
-- **Foco**: body, aria-describedby, useDevolucionDeFoco. **Alertar sin firmar**: cita_id.
-- **Fuera CI**: SQL crean sin episodio. **CI**: sin `NEXT_PUBLIC_*`, `SEGUNDO_FACTOR_LOCAL`. **Scratchpad**: mutar.mjs paralelo.
-- **Armazón**: login→/pacientes (T-031/T-032). **`@axe-core/playwright`**: no instalado.
-- **`perfiles` sin `apellidos`** (solo nombre_completo). **<44px**: menú, sesión (T-028 B).
-- **ADR INDEX**: faltan 060..075. **interfaz.md:67**: lista y alta. **Worktrees**: T-014, T-021.
+- **Paciente fusionado o traspasado (T-028 R7)**: ni `agenda_crear_cita`/`agenda_crear_serie` ni disparadores impiden agendar fusionado/traspasado. Requiere ticket.
+- **`directorio_perfiles` sin prueba RLS**: ningún módulo `scripts/rls/` la nombra; tres pantallas admin (centros, dar de baja, TOTP) la usan desde T-041/T-045.
+- **T-042 R2-H1 (BAJA)**: predicado `update` `bloquear_historia()` sin prueba ni mutante; cada «Bloquear» escribe en `auditoria`.
+- **T-039 R3-B-H1 (MEDIA)**: reprogramar fuera ventana episodio y dar de baja participante sin dueño; T-034 cubre solo cierre.
+- **T-039 R3-A-H1 (BAJA)**: `fn_exigir_vinculo_agenda` solo `before insert`; profesional pasa cita suelta a paciente ajeno.
+- **H25 (bloquea producción)**: técnico deduce parejas por `episodio_id` en auditoría.
+- **T-040 R2A-H1 (MEDIA)**: `offset`+`count=exact` con 416 bit en cuerpo no contado. PostgREST v16+ requiere S7.
+- **Base compartida `test:rls`**: verificador hace `db reset`; revisores trabajan en `begin…rollback` esperando `max(version)`.
 - Anteriores 13-09: `docs/bitacora/estado-hasta-2026-09-13.md`.
