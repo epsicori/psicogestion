@@ -7,6 +7,20 @@ prioridad: alta
 depende_de: [T-021, T-007]
 estado: pendiente
 riesgo: alto
+territorio:                   # de tickets/T-023/diseno.md §6
+  - supabase/migrations/20261013120000_cobros_y_pendiente.sql
+  - scripts/rls/30-cobros.sql
+  - scripts/rls/26-economico.sql
+  - scripts/rls/README.md
+  - lib/supabase/tipos-bd.ts
+  - app/(app)/facturacion/**
+  - components/armazon/modulos.ts
+  - components/armazon/modulos.test.ts
+  - lib/i18n/es.ts
+  - accesibilidad/facturacion.spec.ts
+  - tickets/T-023/**
+  - docs/bitacora/T-023*.md
+  - docs/state.md
 ---
 
 > **Partido el 05-10-2026 (P4 de `tickets/T-023/diseno.md`).** Este ticket hace cobros, pendiente y
