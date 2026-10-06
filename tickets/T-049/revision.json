@@ -1,0 +1,4 @@
+{"ticket":"T-049","altas":0,"medias":0,"bajas":2,"hallazgos":[
+{"id":"H1","severidad":"BAJA","archivo":"scripts/rls/fechas-fijas.mjs","linea":69,"descripcion":"El lint solo reconoce AAAA-MM-DD con ceros; Postgres acepta tambien '2027-1-5', '20270105' y make_date(2027,1,5).","escenario":"Un modulo futuro inserta una cita con timestamptz '2027-1-5 10:00+01' -> el lint da 0 y test:rls arranca -> el 05-01-2027 el banco vuelve a caer con el 42501 de 'Una cita pasada'."},
+{"id":"H2","severidad":"BAJA","archivo":"scripts/rls/fechas-fijas.mjs","linea":77,"descripcion":"Un directorio como argumento pasa existsSync y readFileSync lanza EISDIR sin capturar: sale con codigo 1 y una traza, en vez del 2 de error de uso.","escenario":"node scripts/rls/fechas-fijas.mjs scripts/rls -> traza de Node y codigo 1, que es el codigo de 'literales sin anotar'; quien lea solo el codigo ve un fallo de anotacion que no existe."}
+]}
