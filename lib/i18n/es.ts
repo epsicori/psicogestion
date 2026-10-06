@@ -1052,6 +1052,7 @@ export const es = {
       huecoOcupado: 'Ese hueco acaba de ocuparse. Elige otro de los que quedan.',
       huecoNoCabe: 'Con esta duración el hueco elegido ya no cabe.',
       sinHueco: 'Elige un hueco libre del calendario.',
+      semanaDelElegido: 'El calendario vuelve a la semana del hueco elegido. Pulsa Guardar otra vez.',
       huecoRaro: {
         titulo: 'Esta cita deja un hueco corto',
         texto: 'Entre esta cita y la siguiente quedarían {minutos} minutos: más que el descanso, pero no cabe otra sesión.',

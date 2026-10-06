@@ -1264,4 +1264,154 @@ describe('FormularioAlta · aviso de hueco raro', () => {
     expect(document.activeElement).toBe(selector); // (4) la reaparición no roba el foco
     expect(m.guardarAlta).not.toHaveBeenCalled(); // (5)
   });
+
+  // T-043 R4 · la semana siguiente a la del elegido: sin el hueco elegido ni su rareza.
+  const SEMANA_SIGUIENTE: VistaAlta = {
+    ...RARA,
+    huecosRaros: {},
+    calendario: construirCalendarioAlta({
+      fechaFoco: '2026-10-13',
+      zona: 'Europe/Madrid',
+      hoy: '2026-10-04',
+      sugerencias: { modo: 'enFrio', sugerencias: [] },
+      bloques: [bloque('2026-10-13', '10:00', 'libre')],
+    }),
+  };
+  const SEMANA_DEL_ELEGIDO = 'El calendario vuelve a la semana del hueco elegido. Pulsa Guardar otra vez.';
+
+  /** `clearAllMocks` no vacía los «once»: los que deja sin consumir una prueba caída no pasan a la siguiente. */
+  function respuestasDeRecalculo() {
+    return m.recalcularAlta.mockReset().mockResolvedValue({ ok: true, vista: VISTA, duracionMinutos: 50 });
+  }
+
+  /** Elige A y su hueco raro, y navega a la semana siguiente (que no lo tiene ni sabe de su rareza). */
+  async function elegirYNavegar() {
+    pinta({ vista: RARA });
+    await elegirTipoYHueco(TIPO_A);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Semana siguiente' }));
+    });
+    await screen.findAllByRole('button', { name: /10:00, libre/ });
+    await waitFor(guardarActivo);
+  }
+
+  // R11 · B3-H1 (S2): tras navegar a otra semana, Guardar vuelve a la del elegido y no decide.
+  it('tras cambiar de semana, Guardar vuelve a la del elegido, lo dice y no guarda; el clic siguiente avisa', async () => {
+    let resolver3: (v: unknown) => void = () => {};
+    respuestasDeRecalculo()
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: true, vista: SEMANA_SIGUIENTE, duracionMinutos: 50 })
+      .mockImplementationOnce(() => new Promise((r) => (resolver3 = r)));
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    await elegirYNavegar();
+    const guardar = screen.getByRole('button', { name: 'Guardar' });
+    guardar.focus();
+
+    fireEvent.click(guardar);
+
+    // R7, con la vuelta a la semana del elegido (3.ª llamada) como camino alternativo.
+    await waitFor(() =>
+      expect(
+        m.guardarAlta.mock.calls.length > 0 || screen.queryByRole('region', { name: AVISO }) !== null || m.recalcularAlta.mock.calls.length >= 3,
+      ).toBe(true),
+    );
+    expect(m.guardarAlta).not.toHaveBeenCalled(); // (1) discrimina 0c2c87e, M_SEM y M_SEM_SIGUE
+    expect(avisos()).toContain(SEMANA_DEL_ELEGIDO); // (2) discrimina M_SEM_MSG
+    expect(m.recalcularAlta.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ fechaFoco: '2026-10-05' })); // (3)
+    expect(document.activeElement).toBe(guardar); // (4)
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull(); // (5)
+
+    await act(async () => {
+      resolver3({ ok: true, vista: RARA, duracionMinutos: 50 });
+    });
+    await waitFor(guardarActivo);
+    fireEvent.click(guardar);
+    const aviso = await screen.findByRole('region', { name: AVISO });
+    expect(aviso).toHaveAccessibleDescription(/30 minutos/); // (6)
+    expect(m.guardarAlta).not.toHaveBeenCalled(); // (7)
+  });
+
+  // R12 · B3-H1 con fallo: si la vuelta a la semana del elegido falla, el clic siguiente guarda sin aviso.
+  it('si la vuelta a la semana del elegido falla, Guardar se libera y el clic siguiente guarda lo elegido sin aviso', async () => {
+    respuestasDeRecalculo()
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: true, vista: SEMANA_SIGUIENTE, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: false, motivo: 'fallo', mensaje: FALLO_CALCULO });
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    await elegirYNavegar();
+    const guardar = screen.getByRole('button', { name: 'Guardar' });
+
+    fireEvent.click(guardar);
+    await screen.findByText(FALLO_CALCULO);
+    guardarActivo(); // (1)
+
+    fireEvent.click(guardar);
+    // R7: con la vista pintada aún la del 12-10, una guarda que mirase los huecos pintados no saldría nunca (M_SEM_CAL).
+    await waitFor(() =>
+      expect(m.guardarAlta.mock.calls.length > 0 || screen.queryByRole('region', { name: AVISO }) !== null).toBe(true),
+    ); // (2)
+    expect(m.guardarAlta).toHaveBeenCalledTimes(1); // (2)
+    expect(m.guardarAlta).toHaveBeenCalledWith(expect.objectContaining({ fecha: '2026-10-06', horaLocal: '17:00' })); // (2)
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull(); // (3) D-R3.3
+  });
+
+  // R13 · B3-H2 (S1), rama `!resultado.ok`: volver a la clave de la vista pintada con un fallo no la hace vigente.
+  it('volver con un fallo a la clave de la vista pintada no la hace vigente: Guardar guarda sin aviso', async () => {
+    respuestasDeRecalculo()
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: false, motivo: 'fallo', mensaje: 'FALLO B' })
+      .mockResolvedValueOnce({ ok: false, motivo: 'fallo', mensaje: 'FALLO A' });
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    pinta({ vista: RARA });
+    await elegirTipoYHueco(TIPO_A);
+    const selector = screen.getByLabelText('Tipo de terapia');
+    await act(async () => {
+      fireEvent.change(selector, { target: { value: TIPO_B } });
+    });
+    await screen.findByText('FALLO B');
+    await act(async () => {
+      fireEvent.change(selector, { target: { value: TIPO_A } });
+    });
+    await screen.findByText('FALLO A');
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull(); // (1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() =>
+      expect(m.guardarAlta.mock.calls.length > 0 || screen.queryByRole('region', { name: AVISO }) !== null).toBe(true),
+    );
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull(); // (2) discrimina 0c2c87e y M_FV_A
+    expect(m.guardarAlta).toHaveBeenCalledTimes(1); // (2)
+    expect(m.guardarAlta).toHaveBeenCalledWith(expect.objectContaining({ tipoTerapiaId: TIPO_A, horaLocal: '17:00' })); // (2)
+  });
+
+  // R14 · B3-H2 (S1b), rama `catch`: con el aviso abierto, volver con un fallo a su clave no lo resucita.
+  it('con el aviso abierto, volver con un rechazo a la clave de la vista pintada no resucita el aviso', async () => {
+    respuestasDeRecalculo()
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockRejectedValueOnce(new Error('red'))
+      .mockRejectedValueOnce(new Error('red'));
+    pinta({ vista: RARA });
+    await elegirTipoYHueco(TIPO_A);
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByRole('region', { name: AVISO });
+    const selector = screen.getByLabelText('Tipo de terapia');
+    selector.focus();
+
+    await act(async () => {
+      fireEvent.change(selector, { target: { value: TIPO_B } });
+    });
+    await screen.findByText(FALLO_CALCULO);
+    await act(async () => {
+      fireEvent.change(selector, { target: { value: TIPO_A } });
+    });
+    await waitFor(() => {
+      guardarActivo();
+      expect(m.recalcularAlta).toHaveBeenCalledTimes(3);
+    });
+
+    // Síncronas: el aviso y la alerta de fallo nunca a la vez.
+    expect(screen.queryByRole('region', { name: AVISO })).toBeNull(); // (1) discrimina 0c2c87e y M_FV_C
+    expect(document.activeElement).toBe(selector); // (2)
+    expect(m.guardarAlta).not.toHaveBeenCalled(); // (3)
+  });
 });

@@ -121,6 +121,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   // `clave`: la última pedida que ya contestó (bien o mal). `claveVista`: la de los huecos pintados.
   // Con un recálculo en vuelo, Guardar espera (`bloqueado`). Con una vista de otra clave (en vuelo o
   // tras un fallo), nada decide la rareza y el aviso no se monta (T-043 R3, B2-H1/B2-H2).
+  // Un fallo deja `claveVista` vacía: ninguna vista vale hasta el siguiente cálculo bueno (R4, B3-H2).
   const recalculando = calculo.clave !== claveCalculo;
   const vistaVigente = !recalculando && calculo.claveVista === claveCalculo;
   const huecoRaroElegido = elegido && vistaVigente ? (vista.huecosRaros[elegido.clave] ?? null) : null;
@@ -156,7 +157,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         if (!vigente) return;
         if (!resultado.ok) {
           setFallo(resultado.mensaje);
-          setCalculo((anterior) => ({ ...anterior, clave: claveCalculo }));
+          setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, claveVista: '' }));
           return;
         }
         setFallo('');
@@ -175,7 +176,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
       } catch {
         if (!vigente) return;
         setFallo(t('agenda.alta.error.calcular'));
-        setCalculo((anterior) => ({ ...anterior, clave: claveCalculo }));
+        setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, claveVista: '' }));
       }
     })();
     return () => {
@@ -302,6 +303,14 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   // El aviso intercepta el envío (el servidor nunca mira el hueco, D8); `guardar` es el cuerpo de siempre.
   async function enviar(datos: DatosAltaCita) {
     if (esperandoSerie) return;
+    // B3-H1 (T-043 R4): la rareza del elegido solo se conoce con su semana pedida. Si se navegó a otra, Guardar vuelve a
+    // ella y no decide. Se compara con `foco` y no con los huecos pintados: tras un fallo la vista pintada no cambia y
+    // Guardar no saldría nunca de aquí (D-R3.3).
+    if (elegido && lunesDe(elegido.clave.slice(0, 10)) !== foco) {
+      volverAlElegido();
+      setAviso(t('agenda.alta.semanaDelElegido'));
+      return;
+    }
     if (elegido && huecoRaroElegido !== null) {
       if (avisoHueco === elegido.clave) refAviso.current?.focus();
       else {
