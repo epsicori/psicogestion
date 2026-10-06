@@ -1,0 +1,26 @@
+{
+  "ticket": "T-043",
+  "revisor": "B",
+  "ronda": 3,
+  "altas": 0,
+  "medias": 1,
+  "bajas": 1,
+  "hallazgos": [
+    {
+      "id": "B3-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 126,
+      "descripcion": "El aviso solo mira vista.huecosRaros, que cubre la semana pintada y la ventana de 28 días; el elegido sobrevive a la navegación de semana, y si está fuera de la ventana y se mira otra semana, Guardar guarda un hueco raro sin aviso (estado-alta.ts:109-131).",
+      "escenario": "Hoy 04-10; se elige un hueco raro el 09-11 (día +36) en su semana; se pulsa «Semana anterior»: la lectura nueva es hoy..max(semanaHasta, hoy+27) y no trae el 09-11; el elegido sigue marcado; Guardar → guardarAlta llamado con ese hueco y sin aviso (sonda S2: vista sin la clave, guardarAlta=1 aviso=false). Pasa desde la ronda 1."
+    },
+    {
+      "id": "B3-H2",
+      "severidad": "BAJA",
+      "archivo": "docs/interfaz.md",
+      "linea": 496,
+      "descripcion": "La doc dice «si el cálculo falla, Guardar guarda sin aviso y nunca decide con los huecos de antes», pero la rama de fallo (formulario-alta.tsx:157-160, :175-179) solo avanza clave y conserva claveVista: volver a una clave ya pintada que falla deja vigente la vista vieja.",
+      "escenario": "Tipo A, 17:00 raro (30 min); cambio a B y falla; vuelta a A y vuelve a fallar → Guardar: guardarAlta=0 y aviso «30 minutos» junto a la alerta «FALLO A» (sonda S1); si el aviso estaba abierto antes, reaparece solo tras el segundo fallo (S1b)."
+    }
+  ]
+}

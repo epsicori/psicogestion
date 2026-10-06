@@ -1,0 +1,26 @@
+{
+  "ticket": "T-043",
+  "revisor": "A",
+  "ronda": 2,
+  "altas": 0,
+  "medias": 0,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "linea": 153,
+      "descripcion": "El filtro de estado de la búsqueda de S se prueba con un solo valor: todas las citas de 29 son 'programada', y in ('programada', 'confirmada', 'realizada') -> in ('programada') deja 29 en verde.",
+      "escenario": "Sonda Y1: cita de PRO1 a las 10:30 pasada a 'confirmada'. HEAD da 09:00:00/libre/40 y el mutante 09:00:00/libre/-, así que el aviso desaparece en cuanto el paciente confirma la cita siguiente, con test:rls verde."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
+      "linea": 162,
+      "descripcion": "El not exists de la ausencia sigue sin fijar el festivo parcial ni la ausencia abierta (hasta null): quitar 'festivo' de d.tipo in (...) (l. 162) o 'd.hasta is null or' (l. 166) deja 29 en verde.",
+      "escenario": "Sonda Y2: festivo parcial de PRO1 de 10:00 a 10:20 y cita a las 10:30. HEAD da 09:00:00/libre/- y el mutante sin 'festivo' da 09:00:00/libre/40 (gemela Y4 sin festivo: 40). Sonda Y3: ausencia de 10:00 a 10:20 con hasta null. HEAD da - y el mutante sin 'hasta is null' da 40."
+    }
+  ]
+}

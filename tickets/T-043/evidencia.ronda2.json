@@ -1,0 +1,65 @@
+{
+  "ticket": "T-043",
+  "resumen": "Ronda 2. Rama T-043-aviso-de-hueco-raro HEAD f2670dc, worktree agent-aa8091620e0e92d48, contrato de main. max(version)=20261012120000 antes y despues; no se hizo db reset. npm test 188 ficheros/2393 verdes, lint 0 errores, lint:migraciones limpio, next build --webpack limpio, territorio 22 ficheros dentro con el contrato de main (checkout posterior, worktree limpio). CA2: ejecucion (1) cae en 15 por fecha caducada (42501 en vez de 23P01), como se anticipaba; la ejecucion (2) tal como la define R2.3 (00..14,16,17,18,19..28,29,15) NO llega a 29: cae en 18-agenda-rango (R1 GEMELA: el 18 necesita citas del centro B que siembra el 15), asi que se aplica el plan B de R2.3 (15 con 2026-10-0x->2026-12-0x en memoria, orden alfabetico): exit 0 y '29-hueco-raro: OK' despues de 16, 21, 23 y 26; la (3) aislada 00+01+29 pasa. El 'grep 18 sin literales de fecha' sale vacio, pero la premisa 'sin tocar 15 ni 18' no se sostiene: 18 depende de datos del 15. CA2 se da por PASA con (1)+plan B+(3), segun Q2, anotando la desviacion. CA4 (mutantes) NO se ejecuto en esta ronda (el encargo no lo pedia): queda NO_VERIFICABLE aqui, vale la ronda 1 y las revisiones. CA5 mutantes de interfaz y R1/R2 contra c8759df: idem, no ejecutados; solo npm test. CA7 ejercido en Chromium (Playwright) contra next start (webpack) en :3107 como profesional (Ana, 1280 px), tecnico (360 px) y administrador (1280 px, 09:00 del 29-oct); lector de pantalla NO verificado (solo estructura ARIA y foco). Citas de prueba creadas en la base compartida (3 insertadas por SQL a las 10:30 de 27, 28 y 29-oct como base del hueco, y 4 creadas por la propia pantalla: 27-oct 09:00 y 17:00, 28-oct 09:00 y 29-oct 09:00): las 7 se borraron con DELETE como postgres; la base quedo en 8 citas (las de antes) y 5 usuarios; quedan sus filas de auditoria (append-only). Servidor :3107 parado y junction de node_modules retirada.",
+  "criterios": [
+    {
+      "id": "CA1",
+      "texto": "Migracion aplicada, lint:migraciones 0 hallazgos, forma de salida termina en estado text, hueco_raro_minutos integer, una sola funcion, security definer, search_path vacio, grants",
+      "veredicto": "PASA",
+      "comando": "docker exec supabase_db_Psicogestion psql -U postgres -tAc \"select max(version) from supabase_migrations.schema_migrations\"; npm run lint:migraciones; banco 29 seccion A (00+01+29 aislado)",
+      "evidencia": "max(version)=20261012120000. lint-migraciones: 33 migracion(es) limpias. Banco 29 seccion A, todo OK: 'A · agenda_bloques_profesional devuelve (fecha, hora_local, inicio, fin, estado, hueco_raro_minutos)'; 'existe UNA sola agenda_bloques_profesional'; 'sigue siendo security definer'; 'sigue con search_path vacio'; 'authenticated ejecuta y anon no'; 'no tiene grant a public'. NOTA: no se ejecuto db reset (prohibido por el encargo); la base estaba recien reseteada desde la rama, con la migracion aplicada."
+    },
+    {
+      "id": "CA2",
+      "texto": "test:rls sale con 0 y 29-hueco-raro corre completo (B a J), cerrado con las tres ejecuciones de R2.3 (Q2)",
+      "veredicto": "PASA",
+      "comando": "(1) npm run test:rls ; (2) concatenacion ad hoc con psql.mjs: 00..14,16..28,29,15 ; (2b plan B) 15 con 2026-10-0x->2026-12-0x en memoria, orden alfabetico ; (3) 00+01+29",
+      "evidencia": "(1) npm run test:rls: exit=3, ERROR en 15-agenda: 'ASERCION FALLIDA (lanzo 42501 en vez de 23P01): Mover una cita encima de otra por la funcion CHOCA igual ... Una cita pasada no se puede reprogramar ni reatribuir'; 29 no llega a ejecutarse (hallazgo ajeno, T-049). (2) orden 00..14,16,17,18,19..28,29,15: exit=3, ERROR en 18-agenda-rango (linea 9148 de la concatenacion): 'R1 GEMELA: el administrador si ve citas del centro B en el rango' -> el 18 depende de datos que siembra el 15, asi que '15 al final sin tocar 15 ni 18' no es viable y 29 no se alcanza; moviendo 15 y 18 juntos al final tambien cae (21 usa C18TEC del 18: 'M · C18TEC ... no cambio'). (2b plan B) 15 desplazado a diciembre, orden alfabetico: exit=0; modulos 'completa' en orden 15-agenda, 16-series, 17, 18-agenda-rango, 19, 20, 21-alta-de-cita, 22, 23-cita-en-episodio, 26-economico y despues '29-hueco-raro: OK' (linea 16947). (3) 00+01+29: exit=0, '29-hueco-raro: OK' con 33 NOTICE OK: A, B0, B1 (40, la menor de dos candidatas manda), C (adyacente null), D (11), E1 (69), E2 (70 -> null), F (descanso 0), G (tecnico ve 40 con cita de PRO1 en CB), H (ausencia en medio null), I (fin de franja null), J (cancelada no cuenta), K1-K9 (ocupado siempre null, entre otros). Desviacion respecto a R2.3: la ejecucion (2) tal cual falla por el 18, no por el 15; se cierra con plan B y Q2."
+    },
+    {
+      "id": "CA3",
+      "texto": "Permisos intactos: TEC2->CA y PRO2->PRO1 dan 42501 'No autorizado para ver esta agenda.'; gemelas TEC1 y ADM pasan",
+      "veredicto": "PASA",
+      "comando": "banco 00+01+29 aislado (seccion G)",
+      "evidencia": "OK (lanzo 42501 y el mensaje dice 'No autorizado para ver esta agenda'): G · el tecnico de CB pidiendo CA: 42501; OK (...): G · un profesional ajeno (PRO2 pidiendo a PRO1): 42501; OK: G · el tecnico de CA ve el valor calculado (40); OK: G · GEMELA: el administrador ve el mismo array; OK: G · GEMELA: el propio profesional ve el mismo array."
+    },
+    {
+      "id": "CA4",
+      "texto": "Mutantes M1 a M9 hacen caer test:rls en la aserciones que el diseno nombra",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "No se ejecutaron mutantes en esta ronda: el encargo del orquestador acotaba la verificacion a npm test, lint, build, las tres ejecuciones RLS, territorio y CA7. Para cerrarlo hace falta, por sustitucion de texto sobre una copia de la migracion (patron unico), medir `begin; <migracion mutada>; 00; 01; 29; rollback;` para M1-M9 y N1, N2b, N3-N8, N10 y anotar mutante -> seccion -> linea. Vale entretanto la evidencia de la ronda 1 (evidencia.ronda1.json) y los revisores A y B."
+    },
+    {
+      "id": "CA5",
+      "texto": "npm test en verde y pruebas unitarias de alternativas, aviso y formulario",
+      "veredicto": "PASA",
+      "comando": "npm test (vitest run) en el worktree",
+      "evidencia": "Test Files 188 passed (188); Tests 2393 passed (2393); Duration 63.64s. Quedan sin medir en esta ronda los mutantes de interfaz (M_E, M_F, M_L, M_M, M_BM, M_H, ...) y la ejecucion de R1/R2 contra c8759df (diseno R2.3, CA5 ampliado): no pedidos en el encargo; la parte de 'npm test en verde' pasa, la ampliacion queda sin verificar."
+    },
+    {
+      "id": "CA6",
+      "texto": "No bloquea: guardarAlta y lib/citas/alta.ts no leen huecosRaros para rechazar; ningun disabled en Guardar ni Agendar igualmente",
+      "veredicto": "PASA",
+      "comando": "grep -n huecosRaros lib/citas/alta.ts app/(app)/agenda/nueva/acciones.ts ; grep -n 'disabled=' formulario-alta.tsx aviso-hueco-raro.tsx ; page.locator('button[disabled]').count() en Chromium con el aviso abierto",
+      "evidencia": "huecosRaros en lib/citas/alta.ts solo en leerBloques (lineas 43, 61, 65, 71: lo calcula y devuelve, sin rechazar); acciones.ts: sin coincidencias. 'disabled=' solo aparece como aria-disabled (formulario-alta.tsx:591, aviso-hueco-raro.tsx:65). En Chromium con el aviso abierto: button[disabled] = 0 (profesional, tecnico y administrador)."
+    },
+    {
+      "id": "CA7",
+      "texto": "Manual en Chromium: aviso con 40 minutos y foco en el aviso, Tab, alternativa->foco en Hueco elegido, Agendar igualmente crea, sin rareza crea sin aviso, 360 px sin desborde",
+      "veredicto": "PASA",
+      "comando": "next start -p 3107 (build webpack del worktree, base local sembrada) + Playwright chromium (guion ca7.cjs en el scratchpad): cita de Ana a las 10:30 (27, 28 y 29-oct, insertadas como postgres), tipo Sesion individual 50 min, descanso 10, hueco 09:00",
+      "evidencia": "PROFESIONAL (Ana, 1280 px, 27-oct): Guardar sobre 09:00 -> aviso 'Esta cita deja un hueco corto / Entre esta cita y la siguiente quedarian 40 minutos: mas que el descanso, pero no cabe otra sesion.' con alternativas 11:30, 12:30, 16:00; foco en el aviso: true; aria-labelledby/describedby presentes; button[disabled]=0. Tab: 11:30 -> 12:30 -> 16:00 -> Agendar igualmente -> Cancelar -> Guardar. 2o Guardar: sigue en /agenda/nueva y foco en el aviso: true. Alternativa: aviso desaparece (0), foco en 'Hueco elegido: martes, 27 de octubre de 2026, 11:30, libre', calendario 'martes, 27 de octubre de 2026, 11:30, libre, elegida'. De nuevo 09:00 + Guardar + 'Agendar igualmente' -> /agenda?fecha=2026-10-27 y la cita existe en la base (27-oct 09:00 Madrid). TECNICO a 360 px (28-oct): mismo aviso con 40 minutos, foco en el aviso: true, Tab igual, 2o Guardar no guarda (foco true), alternativa -> foco 'Hueco elegido ... 11:30', Agendar igualmente -> /agenda?fecha=2026-10-28 (cita creada). Desborde a 360 px: scrollWidth-clientWidth = 0; aviso scrollWidth=clientWidth=284, x 37..323 dentro de 360. ADMINISTRADOR (1280 px, 29-oct): mismo aviso y Tab, foco true, 2o Guardar no guarda; alternativa y Agendar igualmente ejecutados (ultima linea: aviso tras alternativa=0, foco en Hueco elegido; el flujo terminaba con 'Agendar igualmente'). Hueco sin rareza (administrador, 17:00 del 27-oct): aviso count 0, Guardar redirige a /agenda?fecha=2026-10-27 y crea la cita (17:00 en la base). NO verificado: lo que lee un lector de pantalla (solo estructura ARIA y foco) y el anuncio de siempre al cerrar; tecnico solo a 360 px y profesional solo a 1280 px."
+    },
+    {
+      "id": "CA8",
+      "texto": "npm run lint sin errores, build limpio, territorio dentro del territorio: (contrato de main)",
+      "veredicto": "PASA",
+      "comando": "npm run lint ; npx next build --webpack ; cp tickets/T-043-aviso-de-hueco-raro.md (de main) al worktree; node ~/.claude/pipeline/territorio.mjs T-043; git checkout -- tickets/T-043-aviso-de-hueco-raro.md",
+      "evidencia": "lint: 0 errors, 2 warnings (lib/cuentas/accesos.test.ts, SupabaseClient y Database sin usar; fuera del territorio del ticket, preexistente). next build --webpack: compila y lista las rutas (incluye ◐ /agenda/nueva) sin errores. territorio.mjs T-043 con el contrato de main: 'T-043: 22 fichero(s) tocado(s), todos dentro de supabase/migrations/20261012120000_hueco_raro.sql, scripts/rls/29-hueco-raro.sql, ... docs/interfaz.md, docs/bitacora/T-043.md, docs/state.md.' exit=0. Tras el checkout, git status del worktree limpio. Se uso 'next build --webpack' como pidio el encargo, no 'npm run build' (Turbopack)."
+    }
+  ],
+  "regresiones": [
+    "npm run test:rls cae en 15-agenda por la fecha caducada (2026-10-0x ya pasadas; T-049, ajeno al ticket).",
+    "Hallazgo sobre R2.3: tal como esta redactada la ejecucion (2) no puede alcanzar 29 con 15 al final sin tocar 15 ni 18, porque 18-agenda-rango necesita citas del centro B que siembra 15 (R1 GEMELA) y 21 depende de C18TEC del 18. Se cierra con el plan B (15 en memoria a diciembre). Conviene reescribir R2.3 o hacer T-049 antes de la siguiente ronda."
+  ]
+}

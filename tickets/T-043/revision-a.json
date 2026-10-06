@@ -1,26 +1,18 @@
 {
   "ticket": "T-043",
   "revisor": "A",
-  "ronda": 2,
+  "ronda": 3,
   "altas": 0,
   "medias": 0,
-  "bajas": 2,
+  "bajas": 1,
   "hallazgos": [
     {
       "id": "H1",
       "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
-      "linea": 153,
-      "descripcion": "El filtro de estado de la búsqueda de S se prueba con un solo valor: todas las citas de 29 son 'programada', y in ('programada', 'confirmada', 'realizada') -> in ('programada') deja 29 en verde.",
-      "escenario": "Sonda Y1: cita de PRO1 a las 10:30 pasada a 'confirmada'. HEAD da 09:00:00/libre/40 y el mutante 09:00:00/libre/-, así que el aviso desaparece en cuanto el paciente confirma la cita siguiente, con test:rls verde."
-    },
-    {
-      "id": "H2",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
-      "linea": 162,
-      "descripcion": "El not exists de la ausencia sigue sin fijar el festivo parcial ni la ausencia abierta (hasta null): quitar 'festivo' de d.tipo in (...) (l. 162) o 'd.hasta is null or' (l. 166) deja 29 en verde.",
-      "escenario": "Sonda Y2: festivo parcial de PRO1 de 10:00 a 10:20 y cita a las 10:30. HEAD da 09:00:00/libre/- y el mutante sin 'festivo' da 09:00:00/libre/40 (gemela Y4 sin festivo: 40). Sonda Y3: ausencia de 10:00 a 10:20 con hasta null. HEAD da - y el mutante sin 'hasta is null' da 40."
+      "archivo": "scripts/rls/README.md",
+      "linea": 143,
+      "descripcion": "La ventana del 29 en la tabla de años del README sigue en 'primer lunes de febrero de Y+10 .. +84' (de la ronda 1), pero la franja llega ya a lunes_29 + 154 (29-hueco-raro.sql:62 y :68) y hay citas hasta l154. La rama actualizó la línea de comprobación (29:34) y dejó la celda, aunque la cabecera del 29 remite a esa tabla como fuente.",
+      "escenario": "Quien añade agenda de PRO1/CA en Y+10 consulta la tabla, como pide la cabecera del 29, y lee que la ventana del 29 acaba a finales de abril. Si pone una cita de lunes a las 10:30 entre mayo y julio, cae en un día de K1-K12 (l091..l154): el array completo de esa sección deja de cuadrar y el 29 sale en rojo sin que la función haya cambiado."
     }
   ]
 }

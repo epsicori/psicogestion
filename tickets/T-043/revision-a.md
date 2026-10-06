@@ -1,118 +1,102 @@
-**Revisor A, ronda 2 (SQL: migración y banco 29): 0 ALTA, 0 MEDIA, 2 BAJA.** No hay ALTA.
+**Revisor A, ronda 3 (SQL: migración, banco 29 y README del banco): 0 ALTA, 0 MEDIA, 1 BAJA.** No hay ALTA.
 
-# T-043 · Revisión A, ronda 2
+# T-043 · Revisión A, ronda 3
 
-Diff de la ronda: `git diff c8759df f2670dc`. Diff del conjunto: `git diff main...f2670dc`. Worktree
-`agent-aa8091620e0e92d48`, HEAD f2670dc. La migración `20261012120000_hueco_raro.sql` no cambia en la ronda
-(`git diff --quiet c8759df f2670dc -- supabase/migrations`). En SQL solo cambia `scripts/rls/29-hueco-raro.sql`.
-La revisión de la ronda 1 está archivada en `revision-a.ronda1.md` y `revision-a.ronda1.json`.
+Diff de la ronda: `git diff 3d512cb 0c2c87e` (3d512cb es la «bitácora ronda 2» rebasada sobre `main`; f2670dc ya
+no es antecesor de la rama). Diff del conjunto: `git diff main...T-043-aviso-de-hueco-raro`. Worktree
+`agent-a831b63e745ab7cf6`, HEAD 0c2c87e, árbol limpio. La migración `20261012120000_hueco_raro.sql` no cambia en
+la ronda (`git diff --stat 3d512cb 0c2c87e -- supabase` vacío). En mi territorio cambian
+`scripts/rls/29-hueco-raro.sql` (K10-K12, `\gset`, franja a +154, cabecera, anotaciones) y
+`scripts/rls/README.md` (fila 29 de la tabla de módulos y la línea de comprobación del año propio).
+Las revisiones anteriores están en `revision-a.ronda1.*` y `revision-a.ronda2.*`.
 
 ## Cómo se midió
 
-- Base `supabase_db_Psicogestion`, con `max(version) = 20261012120000`. El contenedor se fijó por nombre
-  porque también está levantado `supabase_db_cinfa-e2e`. Cada ejecución fue `begin; <migración de HEAD,
-  mutada o no>; 00; 01; 29; [sondas]; rollback;` por `docker exec -i … psql -v ON_ERROR_STOP=1 -f -`.
-  Cada mutante es una sustitución de texto sobre la copia, con una comprobación de que el patrón aparece
-  una sola vez. Al terminar, `max(version)` sigue igual y no queda ninguna cita `a2900004…`. No escribí
-  nada en el worktree.
-- **Convivencia con 00-28**: `begin; migración; 00 … 14, 15*, 16 … 28, 29; rollback;` en orden alfabético.
-  `15*` es el 15 con sus literales desplazados nueve semanas (`2026-10-06/07/08` → `2026-12-08/09/10`,
-  el mismo día de la semana). Resultado: **`29-hueco-raro: OK`** tras los 28 módulos anteriores, con 16,
-  21, 23 y 26 dentro, que son los que siembran agenda de PRO1.
-- El orden del diseño R2.3.2 (15 al final y sin tocar) **no llega al 29**. Cae en
-  `18-agenda-rango`, «R1 GEMELA: el administrador sí ve citas del centro B en el rango», porque 18 usa
-  citas que siembra 15. El diseño ya prevé este caso como plan B, y es lo que medí arriba. No es un
-  hallazgo del código, pero el verificador debe saber que el plan A no le servirá.
+- Base `supabase_db_Psicogestion`, `max(version) = 20261012120000`. El contenedor se fijó por nombre, porque
+  `supabase_db_cinfa-e2e` también está levantado. Todo en `begin … rollback`, con la migración de HEAD dentro de
+  la transacción. No escribí en el worktree ni confirmé filas.
+- **Mutantes** (`scratchpad/mut43r3.mjs`, el `mut43r2.mjs` de la ronda 2 apuntado al worktree nuevo y con la
+  sección capturada por `/ASERCIÓN FALLIDA: ([^ ]+) ·/`): `begin; migración mutada; 00; 01; 29; rollback;`. Cada
+  patrón se exige exactamente una vez.
+- **Banco entero** (`scratchpad/banco-r3.mjs`): `begin; migración; 00 … 28; sonda; 29; sonda; rollback;`, en
+  orden alfabético y sin tocar ningún módulo (T-049 ya está en la base de la rama, así que el 15 no necesita
+  desplazarse). La primera ejecución murió con `deadlock detected` en otro módulo mientras corría el
+  verificador; no cuenta. La segunda: **estado 0**, `29-hueco-raro: OK` con 16, 21, 23 y 26 dentro, y las cinco
+  líneas K10-K12 en OK.
+- `node scripts/rls/fechas-fijas.mjs` en el worktree: «29 fichero(s) … ninguno sin anotar», estado 0.
 
-## Diseño R2.5, punto por punto (parte SQL)
-
-| Punto | Resultado |
-|---|---|
-| Ancla | `anio_29 = año + 10` (l. 35). La franja llega a `lunes_29 + 140` (l. 66). El `\gset` define `l077`, `l084`, `l091`, `l098`, `l105`, `l106`, `l112`, `l119`, `l126` y `l133`. La cabecera (l. 6-12) ya no dice «21 usa año + 3», remite a R2.0 y la l. 6 termina en «P1, P2)». |
-| Alcance de 00-28 | Repetí los greps de R2.0 y añadí `interval 'N years/months'`, `make_date` y `date_trunc('year')`. Las únicas anclas de año son 16 (+1), 21 (+3), 23 (+4) y 29 (+10). El mayor desplazamiento es `current_date + 1502` (26). El literal más alto es `'2033-06-30'` (26, bonos). Las filas de `disponibilidad` de 16, 21 y 23 llevan `hasta`. La ejecución alfabética completa da OK en 29. |
-| Arrays completos | Las nueve K comparan con `pg_temp.dia29(...) = array[...]`, sin `like` ni `@>`. `pg_temp.assert` usa `is distinct from true`, así que un `null` (día sin filas) también falla. |
-| K1 | Se llama como **TEC1**. La única cita es de PRO2 con P2 en CB (l. 325). |
-| K4 | La cita de las 14:00 es de PRO1 **en CB** (l. 370). |
-| K5 | La ausencia está en `l106`, el martes. |
-| K8 | La ausencia es 09:52-09:58 y el 09:00 sale `libre`, así que no toca `[09:00, 09:50)`. |
-| K9 | La cita es `10:30:20`, y el array trae `11:30:20` y `12:30:20`. |
-| Ids | `cita29(12…23)`, consecutivos y sin repetir los de B-J (1-11). |
-| Anotación final | M1-M9 y N1-N10, con la sección de caída correcta. |
-
-## Mutantes, medidos (aislados, `00 + 01 + 29`)
+## Mutantes, medidos sobre HEAD
 
 | Mutante | Cae en | | Mutante | Cae en |
 |---|---|---|---|---|
-| M1 | E2 | | N1 | K3 |
-| M2 | C | | N2b | K2 |
-| M3 | C | | N3 | K1 |
-| M4 | I | | N4 | K4 |
-| M5 | B1 | | N5 | K5 |
-| M6 (`where false and d.perfil_id…`) | H | | N6 | K6 |
-| M7 | J | | N7 | K7 |
-| M8 | B1 | | N8 `floor` | K9 |
-| M9 | B1 | | N8 `round` | K9 |
-| quitar `hueco_raro_minutos := null` | B1 | | N8 `trunc` | K9 |
-| | | | N8 sin `ceil` (cast `::integer`) | K9 |
-| | | | N10 | K8 |
+| ORIG | `29-hueco-raro: OK`, estado 0 | | N4 | K4 |
+| M1 | E2 | | N5 | K5 |
+| M2 | C | | N6 | K6 |
+| M3 | C | | N7 | K7 |
+| M4 | I | | N8 `floor` / `round` / `trunc` / cast | K9 (los cuatro) |
+| M5 | B1 | | N9 (sin `hueco_raro_minutos := null`) | B1 |
+| M6 | H | | N10 | K8 |
+| M7 | J | | **N11** (`in ('programada')`) | **K10** |
+| M8 | B1 | | **N12** (`in ('ausencia')`) | **K11** |
+| M9 | B1 | | **N13** (`d.hasta >= v_dia`) | **K12** |
+| N1 | K3 | | X_centro_null | H |
+| N2b | K2 | | X_aus_fin_tras | H |
+| N3 | K1 | | | |
 
-M1-M9 siguen cayendo en la sección de la ronda 1, y cada N cae en la primera K que lo nombra, con el
-mensaje del `assert` de esa K.
+Cada mutante cae en la sección que le asigna el diseño (tabla R3.1.5). Ninguno cae en otra ni sobrevive.
 
-## Hallazgos de la ronda 1
+## Hallazgos de la ronda 2
 
 | Id | Estado | Cómo se cerró |
 |---|---|---|
-| H1 · sin distractor de otro profesional | **Cerrado** | K1 (como TEC1, con una cita de PRO2 en CB). N3 cae en K1. |
-| H2 · cota inferior de S | **Cerrado** | K2 mata N2b y K3 mata N1. |
-| H3 · cita en `F_fin` exacto | **Cerrado** | K4, con el último tramo desplazado a 12:30. N4 cae en K4, e I sigue matando M4. |
-| H4 · `not exists` de la ausencia (fecha, centro, perfil, inicio del rango) | **Cerrado** para los cuatro predicados nombrados | K5-K8. Ver H2 de esta ronda para los que no nombré. |
-| H5 · `ceil` | **Cerrado** | K9. También caen `round`, `trunc` y el cast sin `ceil`. |
+| H1 · filtro de estado probado con un solo valor | **Cerrado** | K10: cita de las 10:30 pasada a `confirmada` como `postgres`, con aserción de fijación sobre el estado leído (l. 473-477) y el array de G. N11 cae en K10. |
+| H2 · festivo parcial y ausencia abierta | **Cerrado** | K11 (`festivo`, `centro_id null`, l. 491-494) y K12 (`ausencia`, `hasta null`, l. 509-512), los dos con el array de H. N12 cae en K11 y N13 en K12. El borrado de K12 (l. 523-531) filtra por perfil, motivo y `hasta is null`, y exige exactamente 1. |
+
+## Diseño R3.5, «Banco», punto por punto
+
+| Punto | Resultado |
+|---|---|
+| K10 con fijación | Sí. Si el `update` no tocara la fila, el `select` daría `null` y `pg_temp.assert` (`is distinct from true`) fallaría. |
+| K11 `festivo` + `centro_id null`; K12 `hasta null`; esperado = array de H | Sí, los dos con `09:00:00/libre/-`. |
+| Borrado de K12 | Perfil, motivo y `hasta is null`; `count(*) = 1`. El banco corre en una sola transacción con `rollback` (`scripts/test-rls.mjs:48-55`), así que un fallo antes del borrado tampoco deja la fila. |
+| Sin literales ni `current_date` nuevos; ids | El 29 no tiene ningún literal `AAAA-MM-DD` ni `current_date`; el lint pasa. Los ids de cita son 1-26, sin repetir. |
+| Cabecera contra la tabla del README | La cabecera dice «ninguno pasa de año + 8 y el 29 es el único en año + 10». Lo medí: antes del 29, la cita más tardía del banco está en Y+8 (19) y la `disponibilidad` más tardía en Y+4. El grep del año propio da +1, +7, +8, +3, +4 ×3, +6 y +10 (29:34), lo mismo que la línea de comprobación. **La fila 29 de la tabla de ventanas no cuadra**: ver H1. |
+| Fila 29 de la tabla de módulos | Dice año + 10, A-J, K1-K12, M1-M9 y N1-N13 con su frase, y declara el superviviente. Cuadra con el fichero. |
 
 ## Hallazgos nuevos
 
-Los dos son de la misma familia que H4 de la ronda 1, y los dos estaban ya en c8759df. Son huecos de mi
-revisión de la ronda 1, que solo enumeró cuatro predicados, no de esta ronda. Los dos son BAJA por la misma
-razón que H4: HEAD es correcto, y la lista copiada es literalmente la de `v_limite` (l. 117) y la de
-`v_limite2` (l. 126-130), así que el riesgo es que una de las copias derive en un refactor futuro.
-
 ### BAJA
 
-**H1 · `supabase/migrations/20261012120000_hueco_raro.sql:153` (`c.estado in ('programada', 'confirmada',
-'realizada')`, probado con un solo valor).** Todas las citas de 29 nacen `programada`, y la única que
-cambia de estado pasa a `cancelada` (J). Por eso `in ('programada', 'confirmada', 'realizada')` →
-`in ('programada')` deja 29 en verde (medido: `29-hueco-raro: OK`).
-- *Escenario (sonda Y1)*: una cita de PRO1 a las 10:30 que el paciente ha **confirmado**
-  (`programada → confirmada`, la transición normal de `lib/agenda/estados-cita.ts:43`). HEAD da
-  `09:00:00/libre/40`. El mutante da `09:00:00/libre/-`, así que el aviso desaparece en cuanto la cita
-  siguiente se confirma, y `test:rls` sigue verde.
-- *Arreglo*: una K10 igual que G o K5, con la cita de las 10:30 pasada a `confirmada`, que espere 40.
-
-**H2 · `supabase/migrations/20261012120000_hueco_raro.sql:162` y `:166` (el `not exists` de la ausencia:
-festivo parcial y ausencia abierta).** H y K5-K8 solo siembran filas `tipo = 'ausencia'` con `hasta`. Por eso
-sobreviven `d.tipo in ('festivo', 'ausencia')` → `in ('ausencia')` y `(d.hasta is null or d.hasta >= v_dia)`
-→ `d.hasta >= v_dia`. Los dos dan `29-hueco-raro: OK`. El esquema admite las dos filas
-(`disponibilidad_forma_ck` solo exige `desde`), y el comentario de la l. 113 nombra los «festivos
-parciales».
-- *Escenario Y2*: un festivo parcial de PRO1 de 10:00 a 10:20 (`centro_id null`) y una cita a las 10:30.
-  HEAD da `09:00:00/libre/-`, porque el hueco lo corta el festivo, como en H. Sin `'festivo'`, da
-  `09:00:00/libre/40`: el aviso dice «40 minutos» por un hueco que no existe. La gemela sin festivo
-  (Y4) da 40 en HEAD.
-- *Escenario Y3*: una ausencia de PRO1 de 10:00 a 10:20 con `desde` = el día y `hasta null` (recurrente
-  sin fin), y una cita a las 10:30. HEAD da `-` y el mutante, 40.
-- *Arreglo*: dos K más, como H: una con `tipo = 'festivo'` y otra con `hasta = null`. Si van al final y la
-  abierta no cruza ningún lunes posterior del banco, no mueven nada.
+**H1 · `scripts/rls/README.md:143` (ventana del 29 en la tabla de años: `.. +84`).** La fila la escribió T-049
+con el 29 de la ronda 1. Esta rama llevó la franja a `lunes_29 + 154` (`29-hueco-raro.sql:62` y `:68`) y
+siembra citas hasta `l154`, pero solo actualizó la línea de comprobación (`29:34 → +10`, l. 130); la celda sigue
+en `+84`. El diseño R3.5 pide que «la cabecera y la fila del README cuadren con la tabla de años», y la cabecera
+del 29 (l. 6-11) remite a esa tabla como la fuente: «un banco nuevo que siembre agenda de PRO1 en año + 10 tiene
+que mirar esto».
+- *Escenario*: quien añade agenda de PRO1/CA en Y+10 (una K13 del propio 29, o un módulo que llegue a Y+10
+  desde otro ancla) mira la tabla, como pide la cabecera, y ve que la ventana del 29 acaba en `+84`, a finales de
+  abril. Si pone una cita de lunes a las 10:30 entre mayo y julio de Y+10, cae en uno de los días de K1-K12
+  (`l091` … `l154`). El array completo de esa sección deja de cuadrar y el 29 sale en rojo sin que la función
+  haya cambiado. Si la cita va en un módulo anterior al 29, el fallo aparece en el 29 y no en el módulo que la
+  sembró.
+- *Arreglo*: `primer lunes de febrero de Y+10 .. +154`.
 
 ## Lo que no es hallazgo
 
-- **Fixtures del banco en la base** (bitácora, l. 47): según la bitácora, la base del implementador tenía
-  los fixtures de 01 confirmados y por eso ejecutó «00 + `\set` de 01 + 29». Hoy la base no tiene usuarios
-  `%rls.test`, y 01 corre entero dentro del rollback. Mi tabla de mutantes está medida con 01 completo y
-  coincide con la de la bitácora en todos los N. Que el verificador no copie ese método.
-- **Encabezado de K2**: dice «sin `c.inicio >= v_f_ini`», cuando N2b *sustituye* la cota por
-  `>= v_f_ini`. La anotación final lo dice bien. Es cosmético y no tiene escenario de fallo.
-- **Cambio de hora en año + 10**: la cita y la franja están en hora local de `Europe/Madrid`. En 2036 el
-  cambio cae el 30 de marzo, entre `l049` y `l056`, y G y H dan sus arrays.
+- **Anotación de los mutantes** (`29-hueco-raro.sql:534`): dice «medidos a mano sobre la función en la base, uno
+  por uno», y la fila del README dice «en `begin … rollback` con la migración dentro». Las dos frases describen
+  la misma medición, aunque la primera también se puede leer como el `create or replace` sobre la base
+  compartida que D-R3.7 descarta. Es cosmético, porque remite a la evidencia.
+- **Superviviente `'realizada'`** (l. 558): declarado en el banco y en el README, como pide el diseño. Para que
+  fuera visible haría falta una cita realizada *posterior* al tramo; con el banco anclado en el futuro, eso
+  obliga a fijar un estado que la aplicación no produce.
+- **«Ninguna `disponibilidad` sembrada antes del 29 queda abierta»** (cabecera, l. 8): la sonda antes del 29 da
+  20 filas con `hasta` nulo, pero son las franjas de la siembra de la aplicación (`ana@` y `bruno@psicogestion.test`,
+  presentes en la base compartida). No son del banco ni de PRO1 (`b0030001-…-0002`). Las filas del banco de PRO1
+  llevan todas `hasta`, y tras el 29 el recuento sigue en 20: la de K12 se borró.
+- **Variables `lNNN` sin sufijo de módulo** (README, regla 10.2): ya existían en la ronda 2. El 21 usa `l007`,
+  pero corre antes del 29, así que la redefinición no le afecta.
+- **Cambio de hora**: para Y+10, `l140`-`l154` caen entre finales de junio y principios de julio, en horario de
+  verano y lejos de los dos cambios. Las citas se escriben en hora local.
 
-Sondas y guion en el scratchpad de esta sesión: `mut43r2.mjs` (mutantes M, N y X), `29Y.sql` (Y1-Y4) y
-`15-desplazado.sql`.
+Ejecutores en el scratchpad de esta sesión: `mut43r3.mjs` y `banco-r3.mjs`.
