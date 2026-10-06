@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Activity, StrictMode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({ resolverAlerta: vi.fn(), rethrow: vi.fn() }));
 
@@ -7,21 +8,59 @@ vi.mock('next/navigation', () => ({ unstable_rethrow: (e: unknown) => m.rethrow(
 
 vi.mock('./acciones-alertas', () => ({ resolverAlerta: m.resolverAlerta }));
 
-import { ProveedorResolucion, ResolverAlerta } from './resolver-alerta';
+import { idEnlacePaciente } from './pendientes-ids';
+import {
+  decidirDestino,
+  MemoriaResolucion,
+  ProveedorResolucion,
+  ResolverAlerta,
+  type Pendiente,
+} from './resolver-alerta';
 
 const ALERTA = '11111111-1111-4111-8111-111111111111';
 const NOMBRE_BOTON = 'Marcar como resuelta: Consentimiento por firmar';
 
-function Bloque({ conFila }: { conFila: boolean }) {
+type Paciente = { id: string; alertas: string[]; anuncio?: string };
+
+const ANA: Paciente = { id: 'pA', alertas: [ALERTA], anuncio: 'Ana, 1 pendiente' };
+
+function etiquetaDe(alertaId: string): string {
+  return alertaId === ALERTA ? 'Consentimiento por firmar' : `Informe ${alertaId}`;
+}
+
+function Bloque({
+  conFila,
+  pacientes,
+  alAcertar,
+}: {
+  conFila?: boolean;
+  pacientes?: Paciente[];
+  alAcertar?: () => void;
+}) {
+  const lista = pacientes ?? (conFila ? [ANA] : []);
   return (
     <section aria-labelledby="agenda-documentacion">
-      <h2 id="agenda-documentacion">Documentación pendiente</h2>
-      <ProveedorResolucion>
-        {conFila && (
+      <h2 id="agenda-documentacion" tabIndex={-1}>
+        Documentación pendiente
+      </h2>
+      <ProveedorResolucion
+        prefijo="panel"
+        encabezadoId="agenda-documentacion"
+        pacientes={lista.map((p) => ({ id: p.id, alertas: p.alertas, anuncio: p.anuncio ?? `${p.id}, anuncio` }))}
+        alAcertar={alAcertar}
+      >
+        {lista.length > 0 && (
           <ul>
-            <li>
-              <ResolverAlerta alertaId={ALERTA} etiquetaTipo="Consentimiento por firmar" />
-            </li>
+            {lista.map((p) => (
+              <li key={p.id}>
+                <a id={idEnlacePaciente('panel', p.id)} href={`/pacientes/${p.id}`}>
+                  {p.id}
+                </a>
+                {p.alertas.map((a) => (
+                  <ResolverAlerta key={a} alertaId={a} pacienteId={p.id} etiquetaTipo={etiquetaDe(a)} />
+                ))}
+              </li>
+            ))}
           </ul>
         )}
       </ProveedorResolucion>
@@ -43,13 +82,25 @@ async function pulsar() {
   });
 }
 
-function diferido<T>() {
+type Res = { ok: true } | { ok: false; error: string };
+const FALLO: Res = { ok: false, error: 'fallo' };
+
+// Toda promesa en vuelo se suelta al acabar cada prueba, falle o no: una acción que se queda
+// colgada deja a React con trabajo pendiente y contagia a la prueba siguiente (T-048, ronda 4).
+const sueltas: Array<() => void> = [];
+function diferido<T>(alSoltar: T) {
   let resolver!: (valor: T) => void;
   const promesa = new Promise<T>((r) => {
     resolver = r;
   });
+  sueltas.push(() => resolver(alSoltar));
   return { promesa, resolver };
 }
+afterEach(async () => {
+  await act(async () => {
+    for (const soltar of sueltas.splice(0)) soltar();
+  });
+});
 
 describe('ResolverAlerta: fallos (T-015, R3)', () => {
   beforeEach(() => {
@@ -95,7 +146,7 @@ describe('ResolverAlerta: mientras se envía (T-015, R4)', () => {
   beforeEach(() => m.resolverAlerta.mockReset());
 
   it('aria-disabled y no disabled: conserva el foco y un segundo clic no envía otra vez', async () => {
-    const d = diferido<{ ok: true }>();
+    const d = diferido<Res>(FALLO);
     m.resolverAlerta.mockReturnValue(d.promesa);
     render(<Bloque conFila />);
 
@@ -112,10 +163,6 @@ describe('ResolverAlerta: mientras se envía (T-015, R4)', () => {
       fireEvent.click(pendiente);
     });
     expect(m.resolverAlerta).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      d.resolver({ ok: true });
-    });
   });
 
   it('gemela: sin envío pendiente el botón no lleva aria-disabled', () => {
@@ -124,26 +171,119 @@ describe('ResolverAlerta: mientras se envía (T-015, R4)', () => {
   });
 });
 
-describe('ResolverAlerta: éxito (T-015, R4)', () => {
+describe('ResolverAlerta: éxito y foco (T-015 R4, T-048 criterio 9)', () => {
   beforeEach(() => m.resolverAlerta.mockReset());
 
-  it('la fila desaparece al repintar: el foco va al grupo del bloque y el status del bloque lo anuncia', async () => {
+  const OTRA = '22222222-2222-4222-8222-222222222222';
+  const B: Paciente = { id: 'pB', alertas: [OTRA], anuncio: 'Berta, 1 pendiente' };
+  const C: Paciente = { id: 'pC', alertas: ['c1'], anuncio: 'Carla, 1 pendiente' };
+  const A_CON_DOS: Paciente = { id: 'pA', alertas: [ALERTA, 'a2'], anuncio: 'Ana, 1 pendiente' };
+  const A_CON_UNA: Paciente = { id: 'pA', alertas: ['a2'], anuncio: 'Ana, 1 pendiente' };
+
+  it('(a) el paciente sigue: el foco va a su enlace y se anuncia lo resuelto y su estado', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[A_CON_DOS, B]} />);
+    const boton = screen.getAllByRole('button', { name: NOMBRE_BOTON })[0];
+    boton.focus();
+    await pulsar();
+
+    // Antes de que la revalidación llegue, nada se mueve: la alerta sigue en lo pintado.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: NOMBRE_BOTON }));
+    expect(estadoBloque().textContent).toBe('');
+
+    rerender(<Bloque pacientes={[A_CON_UNA, B]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pA'));
+    expect(estadoBloque().textContent).toBe('Marcada como resuelta. Ana, 1 pendiente');
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('(b) el paciente desaparece y no era el último: el foco va al que ocupa su sitio', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[ANA, B, C]} />);
+    // Se resuelve la del paciente de en medio.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Marcar como resuelta: Informe ' + OTRA }));
+    });
+    expect(document.activeElement).toBe(document.body);
+
+    rerender(<Bloque pacientes={[ANA, C]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pC'));
+    expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
+  });
+
+  it('(b) el primero desaparece: el foco va al nuevo primero', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[ANA, B, C]} />);
+    await pulsar();
+    rerender(<Bloque pacientes={[B, C]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+  });
+
+  it('(b) era el último: el foco va al anterior', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const { rerender } = render(<Bloque pacientes={[ANA, B, C]} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Marcar como resuelta: Informe c1' }));
+    });
+    rerender(<Bloque pacientes={[ANA, B]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+  });
+
+  it('regla eraUltimo con un rerender (la redirección real está en documentacion/remontaje.test.tsx): la lista nueva es más larga y el foco va al último, no al de su índice', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const D: Paciente = { id: 'pD', alertas: ['d1'], anuncio: 'Dora, 1 pendiente' };
+    const E: Paciente = { id: 'pE', alertas: ['e1'], anuncio: 'Eva, 1 pendiente' };
+    const { rerender } = render(<Bloque pacientes={[ANA]} />);
+    await pulsar();
+    // Resolver el único paciente de la última página: la redirección lleva a la anterior, que
+    // trae más pacientes. `min(indice, len - 1)` daría el primero (índice 0); aquí era el último.
+    rerender(<Bloque pacientes={[B, C, D, E]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pE'));
+  });
+
+  it('gemela de la regla eraUltimo (con un rerender, no con la redirección): la lista nueva es más larga y el foco va al de su índice', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const D: Paciente = { id: 'pD', alertas: ['d1'], anuncio: 'Dora, 1 pendiente' };
+    const E: Paciente = { id: 'pE', alertas: ['e1'], anuncio: 'Eva, 1 pendiente' };
+    const { rerender } = render(<Bloque pacientes={[ANA, B]} />);
+    await pulsar();
+    rerender(<Bloque pacientes={[C, D, E]} />);
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pC'));
+  });
+
+  it('(c) la lista queda vacía: el foco va al encabezado y el status sigue montado', async () => {
     m.resolverAlerta.mockResolvedValue({ ok: true });
     const { rerender } = render(<Bloque conFila />);
+    expect(estadoBloque()).toBeTruthy();
     screen.getByRole('button', { name: NOMBRE_BOTON }).focus();
     await pulsar();
 
-    // El servidor revalida y la fila deja de existir.
     rerender(<Bloque conFila={false} />);
-
-    const grupo = screen.getByRole('group', { name: 'Documentación pendiente' });
-    expect(grupo.getAttribute('tabindex')).toBe('-1');
-    expect(document.activeElement).toBe(grupo);
+    expect(document.activeElement).toBe(document.getElementById('agenda-documentacion'));
     expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('gemela: si la fila no se va, el foco no se roba hasta que hay éxito', async () => {
+  it('el proveedor no es un grupo ni un tabstop: la lista no se anuncia como región', () => {
+    render(<Bloque conFila />);
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(document.querySelector('[data-bloque-pendientes]')?.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('al acertar avisa a alAcertar; al fallar, no', async () => {
+    const alAcertar = vi.fn();
+    m.resolverAlerta.mockResolvedValueOnce({ ok: false, error: 'fallo' });
+    render(<Bloque conFila alAcertar={alAcertar} />);
+    await pulsar();
+    expect(alAcertar).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(document.getElementById('agenda-documentacion'));
+
+    m.resolverAlerta.mockResolvedValueOnce({ ok: true });
+    await pulsar();
+    expect(alAcertar).toHaveBeenCalledTimes(1);
+  });
+
+  it('gemela: si la acción falla, el foco no se roba y el status del bloque queda vacío', async () => {
     m.resolverAlerta.mockResolvedValue({ ok: false, error: 'fallo' });
     render(<Bloque conFila />);
     const boton = screen.getByRole('button', { name: NOMBRE_BOTON });
@@ -178,7 +318,7 @@ describe('ResolverAlerta: el segundo clic mientras envía (T-015, R4)', () => {
   beforeEach(() => m.resolverAlerta.mockReset());
 
   it('con el envío pendiente, el clic llega con defaultPrevented y no se envía otra vez', async () => {
-    const d = diferido<{ ok: true }>();
+    const d = diferido<Res>(FALLO);
     m.resolverAlerta.mockReturnValue(d.promesa);
     render(<Bloque conFila />);
     await pulsar();
@@ -190,9 +330,205 @@ describe('ResolverAlerta: el segundo clic mientras envía (T-015, R4)', () => {
     });
     expect(prevenido).toBe(true);
     expect(m.resolverAlerta).toHaveBeenCalledTimes(1);
+  });
+});
 
-    await act(async () => {
-      d.resolver({ ok: true });
-    });
+// R3.2 a): las reglas de `decidirDestino` y su orden (T-048, ronda 3).
+describe('decidirDestino: reglas en orden', () => {
+  const pend = (extra: Partial<Pendiente> = {}): Pendiente => ({
+    alertaId: 'x1',
+    pacienteId: 'pX',
+    prefijo: 'pagina',
+    indice: 0,
+    eraUltimo: false,
+    ...extra,
+  });
+  const pac = (id: string, alertas: string[] = [`${id}-a`]) => ({ id, alertas, anuncio: `${id}, anuncio` });
+  const bloque = (pacientes: ReturnType<typeof pac>[], prefijo: 'pagina' | 'busqueda' = 'pagina') => ({
+    prefijo,
+    encabezadoId: 'titulo',
+    pacientes,
+  });
+
+  it.each([
+    ['la alerta sigue pintada: esperar', pend(), bloque([pac('pX', ['x1'])]), null],
+    [
+      'el paciente sigue, con su prefijo: su enlace y su anuncio',
+      pend(),
+      bloque([pac('pX'), pac('pY')]),
+      { id: 'pagina-paciente-pX', texto: 'Marcada como resuelta. pX, anuncio' },
+    ],
+    [
+      'el paciente sigue, con prefijo ajeno: el enlace lleva el prefijo del bloque',
+      pend({ prefijo: 'busqueda' }),
+      bloque([pac('pX')]),
+      { id: 'pagina-paciente-pX', texto: 'Marcada como resuelta. pX, anuncio' },
+    ],
+    [
+      'lista vacía: el encabezado',
+      pend({ eraUltimo: true }),
+      bloque([]),
+      { id: 'titulo', texto: 'Marcada como resuelta.' },
+    ],
+    [
+      'lista vacía con prefijo ajeno: el encabezado (vacía va antes que ajeno)',
+      pend({ prefijo: 'busqueda' }),
+      bloque([]),
+      { id: 'titulo', texto: 'Marcada como resuelta.' },
+    ],
+    [
+      'prefijo ajeno y paciente ausente: el encabezado',
+      pend({ prefijo: 'busqueda', indice: 1, eraUltimo: true }),
+      bloque([pac('pA'), pac('pB')]),
+      { id: 'titulo', texto: 'Marcada como resuelta.' },
+    ],
+    [
+      'eraUltimo: el último de la lista nueva',
+      pend({ indice: 0, eraUltimo: true }),
+      bloque([pac('pA'), pac('pB'), pac('pC')]),
+      { id: 'pagina-paciente-pC', texto: 'Marcada como resuelta.' },
+    ],
+    [
+      'gemelo de eraUltimo: no lo era, su índice',
+      pend({ indice: 1, eraUltimo: false }),
+      bloque([pac('pA'), pac('pB'), pac('pC')]),
+      { id: 'pagina-paciente-pB', texto: 'Marcada como resuelta.' },
+    ],
+    [
+      'min(indice): el índice pasa de largo y se queda en el último',
+      pend({ indice: 9, eraUltimo: false }),
+      bloque([pac('pA'), pac('pB')]),
+      { id: 'pagina-paciente-pB', texto: 'Marcada como resuelta.' },
+    ],
+    [
+      'gemelo de min(indice): un índice dentro de la lista no se recorta',
+      pend({ indice: 0, eraUltimo: false }),
+      bloque([pac('pA'), pac('pB')]),
+      { id: 'pagina-paciente-pA', texto: 'Marcada como resuelta.' },
+    ],
+  ])('%s', (_titulo, pendiente, b, esperado) => {
+    expect(decidirDestino(pendiente, b)).toEqual(esperado);
+  });
+});
+
+describe('MemoriaResolucion: StrictMode y Activity', () => {
+  beforeEach(() => m.resolverAlerta.mockReset());
+
+  const B2 = { id: 'pB', alertas: ['b1'] };
+  const C2 = { id: 'pC', alertas: ['c1'] };
+
+  it('con StrictMode, un bloque que nace con el pendiente anotado (remontaje) enfoca y anuncia una sola vez, aunque StrictMode repita su efecto', async () => {
+    // Esta prueba NO prueba ninguna guarda de `cerrar`: el anuncio único lo garantiza el lote de
+    // React. Fija que el arnés remonta de verdad bajo StrictMode (2 focos) y que hay un anuncio por acierto.
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const Arnes = ({ clave, pacientes }: { clave: string; pacientes: Paciente[] }) => (
+      <StrictMode>
+        <MemoriaResolucion>
+          <Bloque key={clave} pacientes={pacientes} />
+        </MemoriaResolucion>
+      </StrictMode>
+    );
+    const { rerender } = render(<Arnes clave="antes" pacientes={[ANA, B2]} />);
+    await pulsar();
+    expect(estadoBloque().textContent).toBe('');
+
+    let insertados = 0;
+    const contar = (registros: MutationRecord[]) => {
+      for (const r of registros) {
+        r.addedNodes.forEach((n) => {
+          if (n.nodeName === 'SPAN') insertados += 1;
+        });
+      }
+    };
+    const observador = new MutationObserver(contar);
+    observador.observe(estadoBloque(), { childList: true });
+    const foco = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      rerender(<Arnes clave="despues" pacientes={[B2]} />);
+      await act(async () => {});
+      contar(observador.takeRecords());
+
+      const enB = foco.mock.contexts.filter((c) => (c as HTMLElement).id === 'panel-paciente-pB');
+      expect(enB.length).toBeGreaterThanOrEqual(2);
+      expect(insertados).toBe(1);
+      expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
+      expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+      expect(document.querySelectorAll('[data-estado-bloque]')).toHaveLength(1);
+    } finally {
+      foco.mockRestore();
+      observador.disconnect();
+    }
+  });
+
+  it('la memoria oculta por Activity tira el pendiente: al volver, nada roba el foco ni anuncia', async () => {
+    m.resolverAlerta.mockResolvedValue({ ok: true });
+    const Arnes = ({ modo, pacientes }: { modo: 'visible' | 'hidden'; pacientes: Paciente[] }) => (
+      <Activity mode={modo}>
+        <MemoriaResolucion>
+          <Bloque pacientes={pacientes} />
+        </MemoriaResolucion>
+      </Activity>
+    );
+    const { rerender } = render(<Arnes modo="visible" pacientes={[ANA, B2, C2]} />);
+    await pulsar();
+    // Se sale de la ruta antes de que la revalidación llegue; la lista cambia con la ruta oculta.
+    rerender(<Arnes modo="hidden" pacientes={[ANA, B2, C2]} />);
+    rerender(<Arnes modo="hidden" pacientes={[B2, C2]} />);
+    rerender(<Arnes modo="visible" pacientes={[B2, C2]} />);
+    expect(document.activeElement).not.toBe(document.getElementById('panel-paciente-pB'));
+    expect(document.activeElement).toBe(document.body);
+    expect(estadoBloque().textContent).toBe('');
+  });
+
+  type PropsArnes = { modo: 'visible' | 'hidden'; pacientes: Paciente[]; alAcertar: () => void };
+
+  it.each([
+    [
+      'la memoria del layout',
+      ({ modo, pacientes, alAcertar }: PropsArnes) => (
+        <Activity mode={modo}>
+          <MemoriaResolucion>
+            <Bloque pacientes={pacientes} alAcertar={alAcertar} />
+          </MemoriaResolucion>
+        </Activity>
+      ),
+    ],
+    [
+      'la memoria propia del proveedor, el panel',
+      ({ modo, pacientes, alAcertar }: PropsArnes) => (
+        <Activity mode={modo}>
+          <Bloque pacientes={pacientes} alAcertar={alAcertar} />
+        </Activity>
+      ),
+    ],
+  ])('Activity con la acción aún en vuelo (%s): el ok llega con la ruta oculta y al volver nada roba el foco ni anuncia', async (_nombre, Arnes) => {
+    const d = diferido<Res>(FALLO);
+    m.resolverAlerta.mockReturnValue(d.promesa);
+    const alAcertar = vi.fn();
+    const { rerender } = render(<Arnes modo="visible" pacientes={[ANA, B2, C2]} alAcertar={alAcertar} />);
+    await pulsar();
+    expect(screen.getByRole('button', { name: 'Guardando…' })).toBeTruthy();
+
+    rerender(<Arnes modo="hidden" pacientes={[ANA, B2, C2]} alAcertar={alAcertar} />);
+    await act(async () => d.resolver({ ok: true }));
+    expect(alAcertar).toHaveBeenCalledTimes(1);
+
+    rerender(<Arnes modo="hidden" pacientes={[B2, C2]} alAcertar={alAcertar} />);
+    rerender(<Arnes modo="visible" pacientes={[B2, C2]} alAcertar={alAcertar} />);
+    await act(async () => {});
+    expect(document.activeElement).toBe(document.body);
+    expect(estadoBloque().textContent).toBe('');
+  });
+
+  it('gemelo: con la acción diferida y sin salir de la ruta, el ok sí mueve el foco y anuncia', async () => {
+    const d = diferido<Res>(FALLO);
+    m.resolverAlerta.mockReturnValue(d.promesa);
+    const { rerender } = render(<Bloque pacientes={[ANA, B2, C2]} />);
+    await pulsar();
+    await act(async () => d.resolver({ ok: true }));
+    rerender(<Bloque pacientes={[B2, C2]} />);
+    await act(async () => {});
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+    expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
   });
 });

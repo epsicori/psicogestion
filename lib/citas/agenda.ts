@@ -56,11 +56,14 @@ export type FilaCitaMinima = {
 export type AlertaPendiente = {
   id: string;
   pacienteId: string;
-  pacienteNombre: string | null;
   tipo: Database['public']['Enums']['tipo_alerta_documentacion'];
   fechaReferencia: string | null;
+  creadaEn: string | null;
   /** Nivel de la nota pendiente, calculado en la base (`alertas_documentacion_nivel`, T-015). */
   nivel: 1 | 2 | 3 | null;
+  /** Identificadores del origen (D8 de T-048): nada clínico. */
+  origenTabla: string | null;
+  origenId: string | null;
 };
 
 function aNivel(valor: number | null): 1 | 2 | 3 | null {
@@ -203,68 +206,117 @@ export async function zonaDeCentro(
 }
 
 /**
- * Las alertas de documentación abiertas que la RLS deja ver, de la más
- * antigua a la más reciente. `alertas_documentacion` vive fuera del candado y
- * no contiene nada clínico; el nombre del paciente sale de `pacientes`, con
- * su propia RLS (si no lo deja ver, queda nulo).
+ * Hasta cuántas alertas lee la bandeja (T-048, D2). PostgREST ya recorta a `max_rows = 1000`
+ * (`supabase/config.toml`), pero en silencio: aquí el tope es explícito y, si el recuento exacto
+ * lo supera, `recortada` lo dice para que la pantalla lo declare.
+ */
+export const TOPE_PENDIENTES = 1000;
+
+/**
+ * Las alertas de documentación abiertas que la RLS deja ver, de la más urgente a la menos
+ * (nivel desc, referencia y creación asc, nulos al final). Nada clínico: ocho columnas, y las
+ * dos de origen son identificadores para el destino de cada pendiente. Lee siempre desde 0
+ * (T-040 R2A-H1: un `offset` más allá del final da 416); agrupar y paginar es de memoria.
  *
  * `soloPropias`: la política de lectura da al administrador todas las alertas de la
  * organización, y la bandeja no puede ser global (choque 2 de interfaz.md: el secreto
  * profesional es del profesional, no del cargo). Con él, solo las del profesional de la sesión.
  *
  * Se lee de la vista invoker `alertas_documentacion_nivel` (T-015): misma RLS que la tabla,
- * más el `nivel`, que se calcula allí y en ningún otro sitio.
+ * más el `nivel`, que se calcula allí y en ningún otro sitio. Nunca recibe un término de búsqueda.
  */
-export async function leerAlertasNotaPendiente(
+export async function leerPendientes(
   sesion: Sesion,
-  { soloPropias = false, tipos }: { soloPropias?: boolean; tipos?: readonly AlertaPendiente['tipo'][] } = {},
-): Promise<ResultadoCitas<{ alertas: AlertaPendiente[] }>> {
+  {
+    soloPropias = false,
+    tipos,
+    nivel,
+    pacienteId,
+  }: {
+    soloPropias?: boolean;
+    tipos?: readonly AlertaPendiente['tipo'][];
+    nivel?: 1 | 2 | 3;
+    pacienteId?: string;
+  } = {},
+): Promise<ResultadoCitas<{ alertas: AlertaPendiente[]; total: number; recortada: boolean }>> {
+  // Una intersección vacía de tipos no se le pasa a PostgREST: no hay nada que leer.
+  if (tipos && tipos.length === 0) return { ok: true, alertas: [], total: 0, recortada: false };
+
   let consulta = sesion.supabase
     .from('alertas_documentacion_nivel')
-    .select('id, paciente_id, tipo, fecha_referencia, creada_en, nivel')
+    .select('id, paciente_id, tipo, fecha_referencia, creada_en, nivel, origen_tabla, origen_id', { count: 'exact' })
     .eq('estado', 'abierta');
   if (soloPropias) consulta = consulta.eq('profesional_id', sesion.usuario.id);
   if (tipos) consulta = consulta.in('tipo', [...tipos]);
-  const { data, error } = await consulta
-    .order('fecha_referencia', { ascending: true })
-    .order('creada_en', { ascending: true });
+  if (nivel) consulta = consulta.eq('nivel', nivel);
+  if (pacienteId) consulta = consulta.eq('paciente_id', pacienteId);
+  const { data, error, count } = await consulta
+    .order('nivel', { ascending: false, nullsFirst: false })
+    .order('fecha_referencia', { ascending: true, nullsFirst: false })
+    .order('creada_en', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true })
+    .range(0, TOPE_PENDIENTES - 1);
 
   if (error) {
-    console.error('leerAlertasNotaPendiente: fallo al leer alertas_documentacion_nivel', error);
+    console.error('leerPendientes: fallo al leer alertas_documentacion_nivel', error);
     return fallo(error);
   }
 
   // Las columnas de una vista llegan nulables en los tipos generados; la tabla base no lo es.
-  const filas = (data ?? []).flatMap((fila) =>
+  const alertas = (data ?? []).flatMap((fila) =>
     fila.id && fila.paciente_id && fila.tipo
-      ? [{ ...fila, id: fila.id, paciente_id: fila.paciente_id, tipo: fila.tipo }]
+      ? [
+          {
+            id: fila.id,
+            pacienteId: fila.paciente_id,
+            tipo: fila.tipo,
+            fechaReferencia: fila.fecha_referencia,
+            creadaEn: fila.creada_en,
+            nivel: aNivel(fila.nivel),
+            origenTabla: fila.origen_tabla,
+            origenId: fila.origen_id,
+          },
+        ]
       : [],
   );
-  const ids = [...new Set(filas.map((fila) => fila.paciente_id))];
-  const nombres = new Map<string, string>();
+  const total = count ?? alertas.length;
+  const recortada = count === null ? alertas.length >= TOPE_PENDIENTES : count > alertas.length;
+  return { ok: true, alertas, total, recortada };
+}
 
-  if (ids.length > 0) {
-    const pacientes = await sesion.supabase.from('pacientes').select('id, nombre, apellidos').in('id', ids);
-    if (pacientes.error) {
-      console.error('leerAlertasNotaPendiente: fallo al leer pacientes', pacientes.error);
-      return fallo(pacientes.error);
+const TANDA_NOMBRES = 100;
+
+/**
+ * Nombre y apellidos de los pacientes pedidos, por `pacientes` y su RLS, en tandas de 100 ids
+ * como mucho. Quien lo llama pide solo los que pinta; el que la RLS no deja ver no aparece en el
+ * mapa y se pinta con la etiqueta genérica. Nunca recibe un término de búsqueda.
+ */
+export async function leerNombresPacientes(
+  sesion: Sesion,
+  ids: readonly string[],
+): Promise<
+  ResultadoCitas<{ nombres: ReadonlyMap<string, { nombre: string | null; apellidos: string | null }> }>
+> {
+  const unicos = [...new Set(ids)];
+  const nombres = new Map<string, { nombre: string | null; apellidos: string | null }>();
+  if (unicos.length === 0) return { ok: true, nombres };
+
+  const tandas: string[][] = [];
+  for (let i = 0; i < unicos.length; i += TANDA_NOMBRES) tandas.push(unicos.slice(i, i + TANDA_NOMBRES));
+
+  const respuestas = await Promise.all(
+    tandas.map((tanda) => sesion.supabase.from('pacientes').select('id, nombre, apellidos').in('id', tanda)),
+  );
+  for (const respuesta of respuestas) {
+    if (respuesta.error) {
+      console.error('leerNombresPacientes: fallo al leer pacientes', respuesta.error);
+      return fallo(respuesta.error);
     }
-    for (const paciente of pacientes.data ?? []) {
-      nombres.set(paciente.id, [paciente.nombre, paciente.apellidos].filter(Boolean).join(' '));
+    for (const paciente of respuesta.data ?? []) {
+      nombres.set(paciente.id, { nombre: paciente.nombre, apellidos: paciente.apellidos });
     }
   }
-
-  return {
-    ok: true,
-    alertas: filas.map((fila) => ({
-      id: fila.id,
-      pacienteId: fila.paciente_id,
-      pacienteNombre: nombres.get(fila.paciente_id) ?? null,
-      tipo: fila.tipo,
-      fechaReferencia: fila.fecha_referencia,
-      nivel: aNivel(fila.nivel),
-    })),
-  };
+  return { ok: true, nombres };
 }
 
 /** El estado que pinta el punto: «en curso» manda sobre el guardado (ADR-045), y nunca se guarda. */
