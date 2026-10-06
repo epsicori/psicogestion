@@ -6,7 +6,8 @@ riesgo: medio           # sin migración (D2): roles, foco y a11y; ninguna lectu
 fase: 1
 prioridad: media
 depende_de: [T-014, T-015]
-estado: pendiente       # decisiones del propietario cerradas el 06-10-2026 (D1–D13); listo para diseño
+estado: hecho
+completado: 2026-10-06
 delegable: no           # ver §Delegable
 # territorio provisional; lo cierra tickets/T-048/diseno.md §6 (anexo de la ronda 3: sin comentario en la línea de la clave, el script no la reconoce)
 territorio:
