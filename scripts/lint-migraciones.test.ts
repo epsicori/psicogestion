@@ -209,6 +209,11 @@ describe('constantes exportadas', () => {
       'facturas',
       'exportaciones',
       'exportaciones_ficheros',
+      'borradores_factura_versiones',
+      'cobros',
+      'tarifas_paciente',
+      'bonos',
+      'bonos_caducidades',
     ]);
   });
 });

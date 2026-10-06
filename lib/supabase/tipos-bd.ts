@@ -230,6 +230,306 @@ export type Database = {
         }
         Relationships: []
       }
+      bonos: {
+        Row: {
+          caducidad: string | null
+          creado_en: string
+          creado_por: string
+          id: string
+          importe: number
+          paciente_id: string
+          sesiones_totales: number
+        }
+        Insert: {
+          caducidad?: string | null
+          creado_en?: string
+          creado_por: string
+          id?: string
+          importe: number
+          paciente_id: string
+          sesiones_totales: number
+        }
+        Update: {
+          caducidad?: string | null
+          creado_en?: string
+          creado_por?: string
+          id?: string
+          importe?: number
+          paciente_id?: string
+          sesiones_totales?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonos_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bonos_caducidades: {
+        Row: {
+          bono_id: string
+          caducidad: string | null
+          id: string
+          numero: number
+          registrada_en: string
+          registrada_por: string
+        }
+        Insert: {
+          bono_id: string
+          caducidad?: string | null
+          id?: string
+          numero: number
+          registrada_en?: string
+          registrada_por: string
+        }
+        Update: {
+          bono_id?: string
+          caducidad?: string | null
+          id?: string
+          numero?: number
+          registrada_en?: string
+          registrada_por?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonos_caducidades_bono_id_fkey"
+            columns: ["bono_id"]
+            isOneToOne: false
+            referencedRelation: "bonos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_caducidades_bono_id_fkey"
+            columns: ["bono_id"]
+            isOneToOne: false
+            referencedRelation: "bonos_consumo"
+            referencedColumns: ["bono_id"]
+          },
+          {
+            foreignKeyName: "bonos_caducidades_registrada_por_fkey"
+            columns: ["registrada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonos_caducidades_registrada_por_fkey"
+            columns: ["registrada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      borradores_factura: {
+        Row: {
+          creado_en: string
+          creado_por: string
+          id: string
+          paciente_id: string
+          profesional_id: string
+        }
+        Insert: {
+          creado_en?: string
+          creado_por: string
+          id?: string
+          paciente_id: string
+          profesional_id: string
+        }
+        Update: {
+          creado_en?: string
+          creado_por?: string
+          id?: string
+          paciente_id?: string
+          profesional_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "borradores_factura_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_creado_por_fkey"
+            columns: ["creado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      borradores_factura_versiones: {
+        Row: {
+          algoritmo_version: number
+          base: number
+          borrador_id: string
+          centro_id: string | null
+          contenido_canonico: string
+          creada_en: string
+          creada_por: string
+          cuota_iva: number
+          descartado: boolean
+          destinatario_nif_cifrado: string | null
+          destinatario_nif_clave_version: number | null
+          destinatario_nif_etiqueta: string | null
+          destinatario_nif_nonce: string | null
+          destinatario_nombre: string
+          huella: string
+          huella_anterior: string
+          id: string
+          lineas: Json
+          numero_version: number
+          paciente_id: string
+          profesional_id: string
+          total: number
+        }
+        Insert: {
+          algoritmo_version: number
+          base: number
+          borrador_id: string
+          centro_id?: string | null
+          contenido_canonico: string
+          creada_en?: string
+          creada_por: string
+          cuota_iva: number
+          descartado?: boolean
+          destinatario_nif_cifrado?: string | null
+          destinatario_nif_clave_version?: number | null
+          destinatario_nif_etiqueta?: string | null
+          destinatario_nif_nonce?: string | null
+          destinatario_nombre: string
+          huella: string
+          huella_anterior: string
+          id?: string
+          lineas: Json
+          numero_version: number
+          paciente_id: string
+          profesional_id: string
+          total: number
+        }
+        Update: {
+          algoritmo_version?: number
+          base?: number
+          borrador_id?: string
+          centro_id?: string | null
+          contenido_canonico?: string
+          creada_en?: string
+          creada_por?: string
+          cuota_iva?: number
+          descartado?: boolean
+          destinatario_nif_cifrado?: string | null
+          destinatario_nif_clave_version?: number | null
+          destinatario_nif_etiqueta?: string | null
+          destinatario_nif_nonce?: string | null
+          destinatario_nombre?: string
+          huella?: string
+          huella_anterior?: string
+          id?: string
+          lineas?: Json
+          numero_version?: number
+          paciente_id?: string
+          profesional_id?: string
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "borradores_factura_versiones_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: false
+            referencedRelation: "borradores_factura"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: false
+            referencedRelation: "borradores_factura_estado"
+            referencedColumns: ["borrador_id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_centro_id_fkey"
+            columns: ["centro_id"]
+            isOneToOne: false
+            referencedRelation: "centros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_versiones_profesional_id_fkey"
+            columns: ["profesional_id"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       centros: {
         Row: {
           activo: boolean
@@ -280,6 +580,7 @@ export type Database = {
       }
       citas: {
         Row: {
+          bono_id: string | null
           centro_id: string | null
           creada_en: string
           creada_por: string | null
@@ -305,6 +606,7 @@ export type Database = {
           zona_horaria: string
         }
         Insert: {
+          bono_id?: string | null
           centro_id?: string | null
           creada_en?: string
           creada_por?: string | null
@@ -330,6 +632,7 @@ export type Database = {
           zona_horaria: string
         }
         Update: {
+          bono_id?: string | null
           centro_id?: string | null
           creada_en?: string
           creada_por?: string | null
@@ -355,6 +658,20 @@ export type Database = {
           zona_horaria?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "citas_bono_id_fkey"
+            columns: ["bono_id"]
+            isOneToOne: false
+            referencedRelation: "bonos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "citas_bono_id_fkey"
+            columns: ["bono_id"]
+            isOneToOne: false
+            referencedRelation: "bonos_consumo"
+            referencedColumns: ["bono_id"]
+          },
           {
             foreignKeyName: "citas_centro_id_fkey"
             columns: ["centro_id"]
@@ -430,6 +747,61 @@ export type Database = {
             columns: ["tipo_terapia_id"]
             isOneToOne: false
             referencedRelation: "tipos_terapia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cobros: {
+        Row: {
+          fecha: string
+          forma_pago: Database["public"]["Enums"]["forma_pago"]
+          id: string
+          importe: number
+          paciente_id: string
+          referencia: string | null
+          registrado_en: string
+          registrado_por: string
+        }
+        Insert: {
+          fecha: string
+          forma_pago: Database["public"]["Enums"]["forma_pago"]
+          id?: string
+          importe: number
+          paciente_id: string
+          referencia?: string | null
+          registrado_en?: string
+          registrado_por: string
+        }
+        Update: {
+          fecha?: string
+          forma_pago?: Database["public"]["Enums"]["forma_pago"]
+          id?: string
+          importe?: number
+          paciente_id?: string
+          referencia?: string | null
+          registrado_en?: string
+          registrado_por?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobros_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobros_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobros_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2466,6 +2838,71 @@ export type Database = {
         }
         Relationships: []
       }
+      tarifas_paciente: {
+        Row: {
+          creada_en: string
+          creada_por: string
+          id: string
+          importe: number
+          orden: number
+          paciente_id: string
+          regimen_iva: Database["public"]["Enums"]["regimen_iva"]
+          tipo_terapia_id: string
+          vigente_desde: string
+        }
+        Insert: {
+          creada_en?: string
+          creada_por: string
+          id?: string
+          importe: number
+          orden: number
+          paciente_id: string
+          regimen_iva: Database["public"]["Enums"]["regimen_iva"]
+          tipo_terapia_id: string
+          vigente_desde: string
+        }
+        Update: {
+          creada_en?: string
+          creada_por?: string
+          id?: string
+          importe?: number
+          orden?: number
+          paciente_id?: string
+          regimen_iva?: Database["public"]["Enums"]["regimen_iva"]
+          tipo_terapia_id?: string
+          vigente_desde?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tarifas_paciente_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_paciente_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_paciente_tipo_terapia_id_fkey"
+            columns: ["tipo_terapia_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_terapia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tipos_terapia: {
         Row: {
           activo: boolean
@@ -2704,6 +3141,32 @@ export type Database = {
           },
         ]
       }
+      bonos_consumo: {
+        Row: {
+          bono_id: string | null
+          caducidad: string | null
+          paciente_id: string | null
+          sesiones_consumidas: number | null
+          sesiones_totales: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonos_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      borradores_factura_estado: {
+        Row: {
+          borrador_id: string | null
+          estado: string | null
+          ultima_version: number | null
+        }
+        Relationships: []
+      }
       citas_agenda: {
         Row: {
           centro_id: string | null
@@ -2844,6 +3307,34 @@ export type Database = {
             columns: ["paciente_id"]
             isOneToOne: false
             referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tarifas_paciente_vigencias: {
+        Row: {
+          importe: number | null
+          orden: number | null
+          paciente_id: string | null
+          regimen_iva: Database["public"]["Enums"]["regimen_iva"] | null
+          tarifa_id: string | null
+          tipo_terapia_id: string | null
+          vigente_desde: string | null
+          vigente_hasta: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tarifas_paciente_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tarifas_paciente_tipo_terapia_id_fkey"
+            columns: ["tipo_terapia_id"]
+            isOneToOne: false
+            referencedRelation: "tipos_terapia"
             referencedColumns: ["id"]
           },
         ]
@@ -3392,6 +3883,16 @@ export type Database = {
           nivel3_horas: number
         }[]
       }
+      verificar_cadena_borrador: {
+        Args: { p_borrador_id?: string }
+        Returns: {
+          borrador_id: string
+          creada_en: string
+          motivo: string
+          numero_version: number
+          version_id: string
+        }[]
+      }
       verificar_cadena_huellas: {
         Args: { p_paciente_id?: string }
         Returns: {
@@ -3418,6 +3919,7 @@ export type Database = {
       estado_evento_saliente: "pendiente" | "entregado" | "fallido"
       estado_perfil: "activo" | "suspendido" | "baja"
       estado_propuesta_cita: "pendiente" | "confirmada" | "descartada"
+      forma_pago: "efectivo" | "transferencia" | "tarjeta" | "bizum" | "otro"
       modalidad_asistencia: "presencial" | "online"
       modalidad_relacional: "individual" | "pareja" | "familiar" | "grupo"
       motivo_desviacion_cita:
@@ -3626,6 +4128,7 @@ export const Constants = {
       estado_evento_saliente: ["pendiente", "entregado", "fallido"],
       estado_perfil: ["activo", "suspendido", "baja"],
       estado_propuesta_cita: ["pendiente", "confirmada", "descartada"],
+      forma_pago: ["efectivo", "transferencia", "tarjeta", "bizum", "otro"],
       modalidad_asistencia: ["presencial", "online"],
       modalidad_relacional: ["individual", "pareja", "familiar", "grupo"],
       motivo_desviacion_cita: [

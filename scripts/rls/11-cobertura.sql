@@ -19,6 +19,13 @@ declare
     'accesos_historia_vistas_alta', 'accesos_historia_vistas_lectura',
     'alertas_documentacion_alta', 'alertas_documentacion_lectura', 'alertas_documentacion_modificacion',
     'auditoria_lectura_propia',
+    -- T-021 · esquema económico (ADR-053: la app no expide facturas). Lo ejerce 26-economico.
+    'bonos_alta', 'bonos_lectura',
+    'bonos_caducidades_alta', 'bonos_caducidades_lectura',
+    'borradores_factura_alta', 'borradores_factura_lectura',
+    'borradores_factura_versiones_alta', 'borradores_factura_versiones_lectura',
+    'cobros_alta', 'cobros_lectura',
+    'tarifas_paciente_alta', 'tarifas_paciente_lectura',
     -- T-010 · dominio Agenda. El tecnico administrativo NO tiene politica de select
     -- sobre citas a proposito: lee por la vista citas_agenda (choque 4, invariante 3).
     'citas_alta', 'citas_lectura', 'citas_modificacion',

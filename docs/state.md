@@ -8,9 +8,9 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 (A/B/C), T-016–T-020, T-029–T-042.
-- **T-021 en ronda 3** (rama `worktree-agent-a19ecdb63f2c1e386`, HEAD a982e0a, migración 20261011120000 aplicada en la base local). Ronda 2: evidencia 15/15 PASA (archivada `evidencia.ronda2.json`); A 0/0/2, B 0/1/2. **Decisiones del propietario (05-10) para la ronda 3**, en `tickets/T-021/diseno.md` §«Ronda 3»: bono a cita terminada se pone una vez (B-H1); borradores solo los lee el profesional asignado (A-H2); cota de la cuota de IVA y blancos de anchura cero (A-H1/B-H2/B-H3) entran ya.
+- **T-021 ronda 4 implementada** (rama `worktree-agent-a8507d244f215480d`, migración 20261011140000 aplicada en la base local con `migration up`): redefine `fn_cotas_version_borrador()`, la banda tolera `Σ least(1, |Q_i|)` por línea general y la clase de invisibles es una lista de 34 tramos (Unicode 17.0) con `chr()`. Banco 26 en verde (J28h, J28i, J49-J53), M48-M58 y repeticiones muertos. Pendiente: verificación y dos revisores.
 - **T-026 diseñado y respondido** (partir en T-026a/T-026b; editor del borrador en ticket nuevo; concepto según IVA; Ajustes solo admin). **T-023 diseñado y respondido** (T-023b tras T-026).
-- **Siguiente en `supabase/`**: T-021 (20261011120000) → T-043 (20261012120000) → T-023 (20261013120000) → T-026a (20261014120000).
+- **Siguiente en `supabase/`**: T-021 (20261011120000, 20261011130000, 20261011140000) → T-043 (20261012120000) → T-023 (20261013120000) → T-026a (20261014120000).
 
 ## Bloqueos
 
@@ -21,8 +21,7 @@
 
 1. T-021: verificación + revisores A/B → merge → documentalista. Luego T-043.
 2. Ya se puede `npx supabase db reset` desde main (20261010120000 está en main).
-3. T-021 en implementación (riesgo alto, Opus).
-4. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
+3. Limpiar worktrees: T-038, T-042, agent-a9325d705ce4db36b, a2b0012224d53ce71, a32189ff51a6d9558, aa3cf8ef16a243549, aae08223ceefe21b6, ada3a424c2ef63d80 y ae6f460142344cc25 (T-041), rama a1549876942c02f5f (unlink junction node_modules antes de git worktree remove).
 
 ## Hallazgos anotados
 
@@ -53,13 +52,17 @@
 - **T-040 A-H3 (BAJA, por diseño)**: el administrador coterapeuta no tiene camino para la copia por motivo (`notas_para_copia` no lo lista; la vista conjunta no descarga); en la vista abierta, «Descargar copia» ante «bloqueada» no ofrece el PIN. **R3-H1 (BAJA)**: opacidad/color de marca sin prueba.
 - **Sello de T-033**: el hook reselló su `revision.sha` sin que parara su revisor (integrado hace semanas); sin commitear, lo decide el usuario.
 - **T-034 SQL-H2**: reabrir esquiva D6, reloj. Única salida nota de cita con episodio cerrado (23.Z). No cerrar con citas posteriores.
-- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket.
+- **16-series y 23-cita-en-episodio**: `npm run test:rls` falla en ambas (citas_sin_solape_profesional, 23P01). Idéntico en main; hipótesis: fechas fijas sembrado vs fecha actual. Requiere ticket. **05-10 (T-021)**: en el worktree de T-021 ambas pasan, con la base recién reseteada y también tras `npm run seed`; no reproducido, sin medir la causa. **06-10 (T-021)**: con la base de este worktree, `test:rls` completo cae en 16 antes de llegar a 26; el banco se corrió entero salvo 16 y 23. **06-10 (ronda 4)**: también cae `15-agenda.sql:494` (CITA1 movida a la fecha fija 2026-10-06, hoy ya pasada: 42501 «cita pasada» en vez de 23P01); con `ON_ERROR_ROLLBACK` solo caen 15 y 16 (más las de solo lectura, artefacto del modo).
 - **`playwright.config.ts`**: no pasa `SEGUNDO_FACTOR_AUTOMATICO_LOCAL` al servidor ni serializa specs que comparten cuenta; la batería falla en bloque fuera de un `.env.local` preparado.
 - **T-035 B-H1 → T-041**: cierre: la nota con coprofesional y alta posterior sigue vigente porque 7c no se reevalúa al firmar.
 - **T-041 R3/R6**: funciones cuentas.
 - **T-041 R2 (6 BAJA)**: B2-H1/H2 en acciones.ts (ramas registroConAltasPendientes/avisoPendiente sin prueba); B2-H3 en gestion-altas (catch no revalida); B2-H4=A2-H1 en invitar.ts (error lectura confunde con cierre); B2-H5 en formulario-invitar (transición sin try/catch); A2-H2 en README banco 28 (mutantes nuevos no documentados). Más: t002 líneas 148/190/217 sin `hasta is null`; ResultadoCuentas no puede `ok:true`; tsc app/layout.tsx(45,50); territorio.mjs no ve sufijos; DELETE en perfiles_centros sin disparador; ventana ms entre centros.activo e inviteUserByEmail; directorio_perfiles sin prueba RLS.
 - **T-025/T-026 (ADR-078)**: borradores en `docs/legal/` (consulta vinculante DGT con la lista del ADR-077 p.7; preguntas a Holded). Los envía el propietario tras revisión de asesor, antes de comercializar. Contratos sin tocar: los ajusta el arquitecto (vocabulario, 14.6, clave mínima).
-- **T-021 A.9/P3.8**: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
+- **T-021 B-H9 (aceptado)**: falta prueba de concurrencia de dos conexiones para el sellado del borrador y la numeración de tarifas (`orden`) y caducidades (`numero`); el mutante sin candado sobrevive. Patrón: `test:huellas`.
+- **T-021 (A-H6; A.9/P3.8)**: la cita realizada no tiene guarda de transición (cancelarla baja el consumo del bono; se decide con la agenda). Pendientes: T-026 espejo/inmutable; `facturas` linter; architecture desfasado; saldo/paciente; bono espejo; ADR-053 dos «cobrado»; outbox; interfaz previa.
+- **T-021 · documentos mixtos**: exento negativo y general positivo no se sellan por `signo_ck`; lo decide T-026.
+- **T-021 · banda de la cuota**: tolera un céntimo por línea general (`least(1, |Q_i|)`). T-026 desglosa por línea o por documento y tipo, nunca por unidad (J49u). Residuo: un céntimo por línea general visible; el Zod de T-026 debe acotar el número de líneas.
+- **T-021 · marcas combinantes de una escritura concreta** (fuera de los bloques genéricos): solas como concepto se sellan. Residuo aceptado.
 - **T-015 R3-H1** (BAJA): `fotoDeLayout` época pierde ante foto fresca vieja; franja revive.
 - **T-015 (anotados del diseño)**: realizada antes de fin no abre alerta; firmar no revalida layout.
 - **T-015 retardo R2.3**: acciones agenda revalidan solo `/agenda`; cabecera vieja hasta navegar.

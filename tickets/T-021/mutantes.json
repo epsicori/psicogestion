@@ -1,0 +1,684 @@
+{
+  "ticket": "T-021",
+  "fecha": "2026-10-05",
+  "metodo": "Cada mutante se aplica sobre la base reseteada (create or replace / drop trigger con psql como postgres), se corre npm run test:rls y se restaura la definición original. psql corre con ON_ERROR_STOP=1: la primera aserción rota es la que mata al mutante.",
+  "mutantes": [
+    {
+      "id": "M1",
+      "guarda": "fn_sellar_version_borrador() paso 6.2: cotejo total_centimos del sobre con la columna total",
+      "mutacion": "if false and (v_contenido -> 'total_centimos') is distinct from ...",
+      "resultado": "muerto",
+      "aserción": "26.J16 · total de la columna distinto de total_centimos — lanzó 23514 desde OTRA comprobación (La suma de cantidad por precio_unitario_centimos...)"
+    },
+    {
+      "id": "M2",
+      "guarda": "fn_sellar_version_borrador() paso 6.1: claves contadas con json_object_keys sobre json",
+      "mutacion": "jsonb_object_keys(v_sobre::jsonb) en lugar de json_object_keys(v_sobre)",
+      "resultado": "muerto",
+      "aserción": "26.J4 · una clave repetida (json_object_keys, no jsonb_object_keys) — debía lanzar 23514 y no lanzó nada"
+    },
+    {
+      "id": "M3",
+      "guarda": "fn_sellar_version_borrador() paso 0: permisos antes que cotejo (ADR-071.5)",
+      "mutacion": "if false and current_setting('role', true) in ('authenticated', 'anon') then",
+      "resultado": "muerto",
+      "aserción": "26.I8 · PRO1 sobre el borrador de PRO2, sobre coherente: 42501 — lanzó 42501 desde la política RLS, no desde el paso 0"
+    },
+    {
+      "id": "M4",
+      "guarda": "bonos_consumo: el where de la vista definer repite la política bonos_lectura",
+      "mutacion": "vista sin where",
+      "resultado": "muerto",
+      "aserción": "26.E4 · TEC1 no ve BONO2 en bonos_consumo: el where de la vista repite la política"
+    },
+    {
+      "id": "M5",
+      "guarda": "disparador bono_de_la_cita (D8): el bono es del mismo paciente que la cita",
+      "mutacion": "drop trigger bono_de_la_cita on public.citas",
+      "resultado": "muerto",
+      "aserción": "26.K1 · una cita de P1 con el bono de P2: 23514 — debía lanzar 23514 y no lanzó nada"
+    },
+    {
+      "id": "M6a",
+      "guarda": "verificar_cadena_borrador(): rama sobre_no_coincide_con_fila, clave total_centimos",
+      "mutacion": "se quita la línea del total_centimos",
+      "resultado": "muerto",
+      "aserción": "26.B9b · total del sobre alterado y huella recalculada: solo sobre_no_coincide_con_fila (ronda 2, B-H4: la fila se altera con los cerrojos levantados, así que el mutante deja de ser equivalente)"
+    },
+    {
+      "id": "M6b",
+      "guarda": "verificar_cadena_borrador(): rama sobre_no_coincide_con_fila, clave destinatario_nombre",
+      "mutacion": "se quita la línea del destinatario_nombre",
+      "resultado": "muerto",
+      "aserción": "26.B9 · alterar el sobre de la v2: huella_no_coincide y sobre_no_coincide_con_fila, solo en la v2"
+    },
+    {
+      "id": "M7",
+      "guarda": "fn_bono_de_la_cita(): congelación, rama «pasada»",
+      "mutacion": "se quita `or old.fin <= now()`",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): 26.K14 · CITAPAS (programada, pasada): rama «pasada»",
+      "ronda4": "muerto: 26.K14, 26.K17"
+    },
+    {
+      "id": "M8",
+      "guarda": "fn_bono_de_la_cita(): congelación, rama «realizada»",
+      "mutacion": "se quita `old.estado = 'realizada' or`",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): 26.K15 · CITA1 (realizada, futura): rama «realizada»",
+      "ronda4": "muerto: 26.K15, 26.K18"
+    },
+    {
+      "id": "M9",
+      "guarda": "fn_alta_tarifa(): guarda de fecha",
+      "mutacion": "if false and new.vigente_desde < v_hoy then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.K3 · una tarifa que sustituye a TAR1 desde hace 120 días"
+    },
+    {
+      "id": "M10",
+      "guarda": "fn_alta_tarifa(): guarda de fecha estricta",
+      "mutacion": "`<` → `<=`",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.K5c · la misma desde hoy (fecha de CB) entra: la guarda es «antes de hoy», no «hoy» (lanzó 23514 · Una tarifa que sustituye a otra no puede empezar antes de hoy (fecha del centro): la anterior ya se aplicó (T-021))"
+    },
+    {
+      "id": "M11",
+      "guarda": "fn_alta_tarifa(): exención de la primera fila del par",
+      "mutacion": "sin `v_max is not null and`",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.K10 · PRO1 da de alta una tarifa de su paciente (primera del par: la fecha pasada entra) (lanzó 23514 · Una tarifa que sustituye a otra no puede empezar antes de hoy (fecha del centro): la anterior ya se aplicó (T-021))"
+    },
+    {
+      "id": "M12",
+      "guarda": "fn_validar_cabecera_borrador(): paso 1 (el profesional atiende al paciente)",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.N3 · ADM abre un borrador de P1 para PRO2"
+    },
+    {
+      "id": "M13",
+      "guarda": "fn_validar_cabecera_borrador(): paso 2 (rol del profesional)",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.N4 · ADM abre un borrador de PTEC para el técnico TEC1"
+    },
+    {
+      "id": "M14",
+      "guarda": "fn_validar_cabecera_borrador(): paso 0 (permisos)",
+      "mutacion": "if false then (en lugar del filtro de rol)",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (lanzó 23514 en vez de 42501): 26.G9 · PRO1 no abre un borrador de P2 (no es su paciente) — El profesional del borrador no atiende a ese paciente (T-021)"
+    },
+    {
+      "id": "M15",
+      "guarda": "fn_sellar_version_borrador() paso 6.2.bis",
+      "mutacion": "if false and new.centro_id is not null",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J41 · BORR3 (P1 en CA, PRO1 sin CE26) con centro CE26"
+    },
+    {
+      "id": "M16",
+      "guarda": "fn_sellar_version_borrador() paso 6.2.bis, rama del paciente",
+      "mutacion": "se quita el cotejo con el centro del paciente",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.J41p · BORR4 (PCE26 en CE26) con centro CE26: rama del paciente (lanzó 23514 · El centro_id de la versión no es del paciente ni del profesional del borrador (T-021))"
+    },
+    {
+      "id": "M17",
+      "guarda": "fn_sellar_version_borrador() paso 6.2.bis, rama del profesional",
+      "mutacion": "se quita el not exists de perfiles_centros",
+      "resultado": "muerto",
+      "aserción": "FALLO: 26.J41q · BORR3 con centro CE26 cuando PRO1 ya pertenece a CE26: rama del profesional (lanzó 23514 · El centro_id de la versión no es del paciente ni del profesional del borrador (T-021))"
+    },
+    {
+      "id": "M18",
+      "guarda": "política tarifas_paciente_lectura: rol en positivo",
+      "mutacion": "rama del profesional sin el rol",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.M1 · TEC1 no lee la tarifa de PTEC, ni en la tabla ni en la vista"
+    },
+    {
+      "id": "M19",
+      "guarda": "políticas cobros_lectura y bonos_lectura: rol en positivo",
+      "mutacion": "rama del profesional sin el rol en las dos",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.M2 · TEC1 no lee el cobro, el bono ni el consumo de PTEC"
+    },
+    {
+      "id": "M20",
+      "guarda": "fn_sellar_version_borrador() paso 0: rol en positivo",
+      "mutacion": "`true` en lugar del rol profesional_sanitario",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (lanzó 42501 con el código correcto pero desde OTRA comprobación; el mensaje no contiene «No puedes añadir una versión a este borrador»): 26.M7 · TEC1 no añade versión a BORRTEC, con sobre coherente (gemela: I7) — mensaje real: new row violates row-level security policy for table \"borradores_factura_versiones\""
+    },
+    {
+      "id": "M21",
+      "guarda": "borradores_factura_versiones_signo_ck",
+      "mutacion": "se quita la restricción",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J42 · base negativa y cuota mayor que el total",
+      "ronda4": "muerto: 26.J42"
+    },
+    {
+      "id": "M22",
+      "guarda": "fn_sellar_version_borrador() paso 6.3: concepto en blanco",
+      "mutacion": "vuelta a length(trim(…)) = 0",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J28b · concepto de tabulador y salto de línea (gemela: B1)",
+      "ronda4": "muerto: 26.J28b"
+    },
+    {
+      "id": "M23",
+      "guarda": "fn_sellar_version_borrador(): exento ⇒ tipo 0",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J27b · línea exenta con tipo 21 % (gemela: B1)"
+    },
+    {
+      "id": "M24",
+      "guarda": "fn_sellar_version_borrador(): general ⇒ tipo > 0",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (lanzó 23514 con el código correcto pero desde OTRA comprobación; el mensaje no contiene «una línea general lleva tipo_iva_centesimas mayor que 0»): 26.J27c · línea general con tipo 0 (gemela: B2) — mensaje real: La cuota no cuadra: con líneas en régimen general la cuota de IVA no puede ser 0 (T-021, D4)"
+    },
+    {
+      "id": "M25",
+      "guarda": "fn_sellar_version_borrador(): general ⇒ cuota ≠ 0",
+      "mutacion": "if false then",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 23514 y no lanzó nada): 26.J31b · línea general al 21 % con cuota 0 (gemela: B2)",
+      "ronda4": "muerto: 26.J31b"
+    },
+    {
+      "id": "M26",
+      "guarda": "bonos_consumo.caducidad: gana la última fila aunque sea null",
+      "mutacion": "coalesce(u.caducidad, b.caducidad)",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.E16c · gana la última fila aunque sea nula, y la base numera 1 y 2"
+    },
+    {
+      "id": "M27",
+      "guarda": "bonos: capa 2 (impedir_modificacion_bonos)",
+      "mutacion": "drop trigger",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA (debía lanzar 42501 y no lanzó nada): 26.A17 · postgres: update sobre bonos lo para la capa 2 (conserva el UPDATE)"
+    },
+    {
+      "id": "M28",
+      "guarda": "bonos: capa 3 (impedir_truncado_bonos)",
+      "mutacion": "drop trigger",
+      "resultado": "muerto",
+      "aserción": "ASERCIÓN FALLIDA: 26.L8b · bonos lleva las capas 2 (before update or delete, por fila) y 3 (before truncate, por sentencia)"
+    },
+    {
+      "id": "M29",
+      "guarda": "candados consultivos de fn_alta_tarifa() y fn_numerar_caducidad_bono()",
+      "mutacion": "se quitan los dos perform pg_advisory_xact_lock",
+      "resultado": "sobrevive (B-H9, aceptado)",
+      "aserción": "ninguna: quitar el cerrojo consultivo solo se ve con dos conexiones concurrentes y el banco es de una sola sesión. Hallazgo B-H9 en docs/state.md (patrón test:huellas)."
+    },
+    {
+      "id": "M30",
+      "guarda": "política borradores_factura_versiones_alta: rol en positivo",
+      "mutacion": "rama del profesional sin el rol",
+      "resultado": "sobrevive (equivalente)",
+      "aserción": "ninguna: fn_sellar_version_borrador() (definer, paso 0) ya exige el rol profesional_sanitario en positivo para la rama del profesional; la condición de rol en la política es redundante con ella."
+    },
+    {
+      "id": "M31",
+      "guarda": "fn_bono_de_la_cita(): bono previo",
+      "mutacion": "se quita old.bono_id is not null",
+      "resultado": "muerto",
+      "aserción": "26.K19a (cambia el código a 42501) (ronda 3)"
+    },
+    {
+      "id": "M32",
+      "guarda": "fn_bono_de_la_cita(): bono previo",
+      "mutacion": "old.bono_id is not null pasa a new.bono_id is not null",
+      "resultado": "muerto",
+      "aserción": "26.K14 (ronda 3)"
+    },
+    {
+      "id": "M33",
+      "guarda": "fn_bono_de_la_cita(): congelación",
+      "mutacion": "solo para authenticated",
+      "resultado": "muerto",
+      "aserción": "26.K17 (ronda 3)"
+    },
+    {
+      "id": "M34",
+      "guarda": "borradores_factura_lectura",
+      "mutacion": "vuelve a la política de la ronda 2",
+      "resultado": "muerto",
+      "aserción": "26.O3 y 26.O4 (y L10r3) (ronda 3)"
+    },
+    {
+      "id": "M35",
+      "guarda": "borradores_factura_lectura",
+      "mutacion": "AND de profesional_id = auth.uid() y asignación",
+      "resultado": "muerto",
+      "aserción": "26.O4 (y L10r3) (ronda 3)"
+    },
+    {
+      "id": "M36",
+      "guarda": "borradores_factura_lectura",
+      "mutacion": "se quita el rol de la rama del profesional",
+      "resultado": "muerto",
+      "aserción": "26.O7 (ronda 3)"
+    },
+    {
+      "id": "M37",
+      "guarda": "fn_cotas_version_borrador(): concepto visible",
+      "mutacion": "if false",
+      "resultado": "muerto",
+      "aserción": "26.J28c, J28d, J28e (ronda 3)",
+      "ronda4": "muerto: 26.J28c, 26.J28d, 26.J28e, 26.J28h · tramo 1-20, 26.J28h · tramo 7F-A0, 26.J28h · tramo AD-AD y 31 más"
+    },
+    {
+      "id": "M38",
+      "guarda": "fn_cotas_version_borrador(): clase visible",
+      "mutacion": "se quita U+FEFF",
+      "resultado": "muerto",
+      "aserción": "26.J28d (ronda 3)",
+      "ronda4": "subsumido en M56·26 (par FEFF): muerto en 26.J28d y 26.J28h · tramo FEFF-FEFF"
+    },
+    {
+      "id": "M39",
+      "guarda": "sellar_version_borrador_cotas",
+      "mutacion": "se renombra a aa_cotas_version_borrador",
+      "resultado": "muerto",
+      "aserción": "26.J28g (23514 en vez de 42501) y L10r3 (ronda 3)",
+      "ronda4": "muerto: 26.J27, 26.J28, 26.J31b, 26.J28b, 26.J28g, 26.L10r3"
+    },
+    {
+      "id": "M40",
+      "guarda": "fn_cotas_version_borrador(): techo del tipo",
+      "mutacion": "if false",
+      "resultado": "muerto",
+      "aserción": "26.J46 (ronda 3)",
+      "ronda4": "muerto: 26.J46"
+    },
+    {
+      "id": "M41",
+      "guarda": "fn_cotas_version_borrador(): techo del tipo",
+      "mutacion": "> 10000 pasa a >= 10000",
+      "resultado": "muerto",
+      "aserción": "26.J46g (ronda 3)",
+      "ronda4": "muerto: 26.J46g"
+    },
+    {
+      "id": "M42",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "if false",
+      "resultado": "muerto",
+      "aserción": "26.J43, J44, J45, J47, J47b, J48 (ronda 3)",
+      "ronda4": "muerto: 26.J43, 26.J44, 26.J45, 26.J47, 26.J47b, 26.J48 y 10 más"
+    },
+    {
+      "id": "M43",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "sin tolerancia (> 0)",
+      "resultado": "muerto",
+      "aserción": "26.J43g, J47g, J47c (ronda 3)",
+      "ronda4": "muerto: 26.J42, 26.J43g, 26.J47g, 26.J47c, 26.J49g, 26.J49h, 26.J49ug, 26.J52g, 26.J53g"
+    },
+    {
+      "id": "M44",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "tolerancia 2 * unidades",
+      "resultado": "muerto",
+      "aserción": "26.J47, J47b (ronda 3)",
+      "ronda4": "muerto: 26.J47, 26.J47b, 26.J49, 26.J49u"
+    },
+    {
+      "id": "M45",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "solo techo con signo",
+      "resultado": "muerto",
+      "aserción": "26.J47b (ronda 3)",
+      "ronda4": "muerto: 26.J47b, 26.J49u"
+    },
+    {
+      "id": "M46",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "techo en valor absoluto",
+      "resultado": "muerto",
+      "aserción": "26.J47b, J48 (ronda 3)",
+      "ronda4": "muerto: 26.J47b, 26.J48, 26.J49u, 26.J50d"
+    },
+    {
+      "id": "M47",
+      "guarda": "fn_cotas_version_borrador(): banda de la cuota",
+      "mutacion": "Q sin la cantidad",
+      "resultado": "muerto",
+      "aserción": "26.J47d (ronda 3)",
+      "ronda4": "muerto: 26.J47d, 26.J49ug, 26.J53g"
+    },
+    {
+      "id": "M48",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "la tolerancia de la ronda 3: v_holgura + cantidad",
+      "resultado": "muerto",
+      "aserción": "26.J49, 26.J49u, 26.J50, 26.J50a, 26.J50b, 26.J50c, 26.J50d, 26.J50e, 26.J50g (ronda 4)"
+    },
+    {
+      "id": "M49",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "MB1 de B: > 1 fijo",
+      "resultado": "muerto",
+      "aserción": "26.J49g (ronda 4)"
+    },
+    {
+      "id": "M50",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "MB2 de B: T = número de líneas generales (v_holgura + 1)",
+      "resultado": "muerto",
+      "aserción": "26.J49 (ronda 4)"
+    },
+    {
+      "id": "M51",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "least(0.5, abs(v_q))",
+      "resultado": "muerto",
+      "aserción": "26.J47c (ronda 4)"
+    },
+    {
+      "id": "M52",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "sin tope: v_holgura + abs(v_q)",
+      "resultado": "muerto",
+      "aserción": "26.J45, 26.J47, 26.J47b, 26.J49, 26.J49u, 26.J50b (ronda 4)"
+    },
+    {
+      "id": "M53",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "sin abs: least(1, v_q)",
+      "resultado": "muerto",
+      "aserción": "26.J45g, 26.J52g (ronda 4)"
+    },
+    {
+      "id": "M54",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "tope sin la cantidad: least(1, abs(precio·tipo/(10000+tipo)))",
+      "resultado": "muerto",
+      "aserción": "26.J53g (ronda 4)"
+    },
+    {
+      "id": "M55",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "la banda abre con v_holgura > 0 en vez de v_hay_general",
+      "resultado": "muerto",
+      "aserción": "26.J50f (ronda 4)"
+    },
+    {
+      "id": "M56·01",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x0001, 0x0020]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 1-20 (ronda 4)"
+    },
+    {
+      "id": "M56·02",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x007F, 0x00A0]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 7F-A0 (ronda 4)"
+    },
+    {
+      "id": "M56·03",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x00AD, 0x00AD]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo AD-AD (ronda 4)"
+    },
+    {
+      "id": "M56·04",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x0300, 0x036F]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 300-36F (ronda 4)"
+    },
+    {
+      "id": "M56·05",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x0600, 0x0605]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 600-605 (ronda 4)"
+    },
+    {
+      "id": "M56·06",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x061C, 0x061C]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 61C-61C (ronda 4)"
+    },
+    {
+      "id": "M56·07",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x06DD, 0x06DD]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 6DD-6DD (ronda 4)"
+    },
+    {
+      "id": "M56·08",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x070F, 0x070F]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 70F-70F (ronda 4)"
+    },
+    {
+      "id": "M56·09",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x0890, 0x0891]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 890-891 (ronda 4)"
+    },
+    {
+      "id": "M56·10",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x08E2, 0x08E2]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 8E2-8E2 (ronda 4)"
+    },
+    {
+      "id": "M56·11",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x115F, 0x1160]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 115F-1160 (ronda 4)"
+    },
+    {
+      "id": "M56·12",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x1680, 0x1680]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 1680-1680 (ronda 4)"
+    },
+    {
+      "id": "M56·13",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x17B4, 0x17B5]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 17B4-17B5 (ronda 4)"
+    },
+    {
+      "id": "M56·14",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x180B, 0x180F]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 180B-180F (ronda 4)"
+    },
+    {
+      "id": "M56·15",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x1AB0, 0x1AFF]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 1AB0-1AFF (ronda 4)"
+    },
+    {
+      "id": "M56·16",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x1DC0, 0x1DFF]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 1DC0-1DFF (ronda 4)"
+    },
+    {
+      "id": "M56·17",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x2000, 0x200F]",
+      "resultado": "muerto",
+      "aserción": "26.J28c, 26.J28h · tramo 2000-200F, 26.J28h · tramo 205F-206F (ronda 4)"
+    },
+    {
+      "id": "M56·18",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x2028, 0x202F]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 2028-202F (ronda 4)"
+    },
+    {
+      "id": "M56·19",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x205F, 0x206F]",
+      "resultado": "muerto",
+      "aserción": "26.J28d, 26.J28h · tramo 1-20, 26.J28h · tramo 7F-A0, 26.J28h · tramo AD-AD, 26.J28h · tramo 300-36F, 26.J28h · tramo 600-605 y 29 más (ronda 4)"
+    },
+    {
+      "id": "M56·20",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x20D0, 0x20FF]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 20D0-20FF (ronda 4)"
+    },
+    {
+      "id": "M56·21",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x2800, 0x2800]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 2800-2800 (ronda 4)"
+    },
+    {
+      "id": "M56·22",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x3000, 0x3000]",
+      "resultado": "muerto",
+      "aserción": "26.J28e, 26.J28h · tramo 3000-3000 (ronda 4)"
+    },
+    {
+      "id": "M56·23",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x3164, 0x3164]",
+      "resultado": "muerto",
+      "aserción": "26.J28e, 26.J28h · tramo 3164-3164 (ronda 4)"
+    },
+    {
+      "id": "M56·24",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0xFE00, 0xFE0F]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo FE00-FE0F (ronda 4)"
+    },
+    {
+      "id": "M56·25",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0xFE20, 0xFE2F]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo FE20-FE2F (ronda 4)"
+    },
+    {
+      "id": "M56·26",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0xFEFF, 0xFEFF]",
+      "resultado": "muerto",
+      "aserción": "26.J28d, 26.J28h · tramo FEFF-FEFF (ronda 4)"
+    },
+    {
+      "id": "M56·27",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0xFFA0, 0xFFA0]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo FFA0-FFA0 (ronda 4)"
+    },
+    {
+      "id": "M56·28",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0xFFF0, 0xFFFB]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo FFF0-FFFB (ronda 4)"
+    },
+    {
+      "id": "M56·29",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x110BD, 0x110BD]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 110BD-110BD (ronda 4)"
+    },
+    {
+      "id": "M56·30",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x110CD, 0x110CD]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 110CD-110CD (ronda 4)"
+    },
+    {
+      "id": "M56·31",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x13430, 0x1343F]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 13430-1343F (ronda 4)"
+    },
+    {
+      "id": "M56·32",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x1BCA0, 0x1BCA3]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 1BCA0-1BCA3 (ronda 4)"
+    },
+    {
+      "id": "M56·33",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0x1D173, 0x1D17A]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo 1D173-1D17A (ronda 4)"
+    },
+    {
+      "id": "M56·34",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "se quita el par [0xE0000, 0xE0FFF]",
+      "resultado": "muerto",
+      "aserción": "26.J28h · tramo E0000-E0FFF (ronda 4)"
+    },
+    {
+      "id": "M57a",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "0001-0020 pasa a 0001-0021",
+      "resultado": "muerto",
+      "aserción": "26.J28i · U+21 (ronda 4)"
+    },
+    {
+      "id": "M57b",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "3000 pasa a 3000-3001",
+      "resultado": "muerto",
+      "aserción": "26.J28i · U+3001 (ronda 4)"
+    },
+    {
+      "id": "M57c",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): clase visible",
+      "mutacion": "FFF0-FFFB pasa a FFF0-FFFC",
+      "resultado": "muerto",
+      "aserción": "26.J28i · U+FFFC (ronda 4)"
+    },
+    {
+      "id": "M58",
+      "guarda": "fn_cotas_version_borrador() (ronda 4): banda",
+      "mutacion": "> por >=",
+      "resultado": "muerto",
+      "aserción": "26.J50fg (ronda 4)"
+    }
+  ],
+  "metodo_ronda2": "Ronda 2 (05-10-2026): mismo método. M11 y M29 dieron en la primera pasada un deadlock ajeno (alter table ... disable trigger frente a la recarga del esquema de PostgREST) y se repitieron aislados; figuran los resultados de la repetición.",
+  "metodo_ronda3": "Ronda 3 (06-10-2026): cada mutante se aplica sobre la base viva con create or replace / alter policy / drop trigger como postgres, se corre el banco (00, 01 y 26, con las aserciones convertidas en avisos para ver todas las que caen) y se restaura desde la migración 20261011130000. Reconfirmados muertos M7 (K14, K17), M8 (K15, K18), M21 (J42 reescrita), M22 (J28b: lanza 23514 pero desde otra comprobación) y M25 (J31b, por el mismo motivo). Sin supervivientes nuevos.",
+  "metodo_ronda4": "Ronda 4 (06-10-2026): cada mutante (create or replace / alter trigger / alter table como postgres) se aplica dentro de la misma transacción que corre el banco (00, 01 y 26, con las aserciones convertidas en avisos) y que termina en rollback, de modo que la base viva vuelve sola a la definición de la migración 20261011140000 sin restaurarla a mano; en la práctica, el mismo efecto que aplicar y restaurar desde esa migración. M48-M58 nuevos, M56 uno por par del array (01-34) y M57a-c ensanchando un tramo. Repetidos y muertos con la función nueva M37, M39, M40, M41, M42, M43, M44, M45, M46, M47, M7, M8, M21, M22 y M25 (campo ronda4). M38 subsumido en M56·26. Equivalentes declarados: contar en T las líneas exentas (6.3 obliga a tipo 0, Q_i = 0) y volver a añadir [:space:] a la clase (sus 29 puntos están en los tramos). Sin supervivientes."
+}
