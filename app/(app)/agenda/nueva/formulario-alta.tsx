@@ -158,6 +158,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         if (!resultado.ok) {
           setFallo(resultado.mensaje);
           setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, claveVista: '' }));
+          setAviso(''); // B4-H2 (R5): si era la vuelta a la semana del elegido, no ha vuelto.
           return;
         }
         setFallo('');
@@ -177,6 +178,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         if (!vigente) return;
         setFallo(t('agenda.alta.error.calcular'));
         setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, claveVista: '' }));
+        setAviso(''); // B4-H2 (R5)
       }
     })();
     return () => {
@@ -259,6 +261,16 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     if (!elegido) return;
     const lunes = lunesDe(elegido.clave.slice(0, 10));
     if (lunes !== foco) setFoco(lunes);
+  }
+
+  /**
+   * Navegación del usuario (semana anterior o siguiente). Vacía la región de estado: el texto de la vuelta (B3-H1)
+   * no se queda en otra semana, y el siguiente rebote pasa de '' al texto, así que se anuncia (B4-H1, T-043 R5).
+   * `volverAlElegido` no pasa por aquí: llama a `setFoco` directamente y no vacía lo que `enviar` pone.
+   */
+  function cambiarSemana(lunes: string) {
+    setAviso('');
+    setFoco(lunes);
   }
 
   function cambiarPeriodicidad(valor: (typeof PERIODICIDADES)[number]) {
@@ -493,7 +505,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         calendario={vista.calendario}
         elegido={elegido?.clave ?? null}
         alElegir={elegirHueco}
-        alCambiarSemana={setFoco}
+        alCambiarSemana={cambiarSemana}
       />
 
       <p ref={refResumen} tabIndex={-1} className="focus-visible:ring-ring/50 text-sm outline-none focus-visible:ring-2">

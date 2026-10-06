@@ -1414,4 +1414,67 @@ describe('FormularioAlta · aviso de hueco raro', () => {
     expect(document.activeElement).toBe(selector); // (2)
     expect(m.guardarAlta).not.toHaveBeenCalled(); // (3)
   });
+
+  // R15 · B4-H1 (sonda P1): cambiar de semana a mano vacía la región, y el segundo rebote vuelve a anunciarse.
+  it('tras un rebote, cambiar otra vez de semana vacía la región de estado y el segundo Guardar la vuelve a llenar', async () => {
+    let resolver5: (v: unknown) => void = () => {};
+    respuestasDeRecalculo()
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: true, vista: SEMANA_SIGUIENTE, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: true, vista: SEMANA_SIGUIENTE, duracionMinutos: 50 })
+      .mockImplementationOnce(() => new Promise((r) => (resolver5 = r)));
+    m.guardarAlta.mockResolvedValue({ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' });
+    await elegirYNavegar();
+    const guardar = screen.getByRole('button', { name: 'Guardar' });
+
+    // Primer rebote: vuelve a la semana del elegido y lo anuncia.
+    fireEvent.click(guardar);
+    await waitFor(() => {
+      expect(m.recalcularAlta).toHaveBeenCalledTimes(3);
+      guardarActivo();
+    });
+    expect(avisos()).toContain(SEMANA_DEL_ELEGIDO); // (1)
+
+    // El usuario vuelve a la semana siguiente para comparar.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Semana siguiente' }));
+    });
+    await screen.findAllByRole('button', { name: /10:00, libre/ });
+    await waitFor(guardarActivo);
+    expect(avisos()).not.toContain(SEMANA_DEL_ELEGIDO); // (2) la región pasa por vacío: discrimina 4b1d9eb y M_NAV
+
+    // Segundo rebote: la región vuelve a cambiar, y por eso se anuncia.
+    fireEvent.click(guardar);
+    await waitFor(() =>
+      expect(
+        m.guardarAlta.mock.calls.length > 0 || screen.queryByRole('region', { name: AVISO }) !== null || m.recalcularAlta.mock.calls.length >= 5,
+      ).toBe(true),
+    );
+    expect(m.guardarAlta).not.toHaveBeenCalled(); // (3)
+    expect(avisos()).toContain(SEMANA_DEL_ELEGIDO); // (4)
+    expect(m.recalcularAlta.mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ fechaFoco: '2026-10-05' })); // (5)
+
+    await act(async () => {
+      resolver5({ ok: true, vista: RARA, duracionMinutos: 50 });
+    });
+  });
+
+  // R16 · B4-H2 (sonda P3): si la vuelta a la semana del elegido falla, la región deja de decir que el calendario volvió.
+  it.each([
+    ['!resultado.ok', () => m.recalcularAlta.mockResolvedValueOnce({ ok: false, motivo: 'fallo', mensaje: FALLO_CALCULO })],
+    ['catch', () => m.recalcularAlta.mockRejectedValueOnce(new Error('red'))],
+  ])('si la vuelta a la semana del elegido falla (%s), la región de estado ya no dice que el calendario vuelve', async (_rama, falla) => {
+    respuestasDeRecalculo()
+      .mockResolvedValueOnce({ ok: true, vista: RARA, duracionMinutos: 50 })
+      .mockResolvedValueOnce({ ok: true, vista: SEMANA_SIGUIENTE, duracionMinutos: 50 });
+    falla();
+    await elegirYNavegar();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await screen.findByText(FALLO_CALCULO);
+    expect(m.recalcularAlta).toHaveBeenCalledTimes(3);
+    expect(avisos()).not.toContain(SEMANA_DEL_ELEGIDO); // discrimina 4b1d9eb y M_FA_A / M_FA_C
+    expect(m.guardarAlta).not.toHaveBeenCalled();
+  });
 });
