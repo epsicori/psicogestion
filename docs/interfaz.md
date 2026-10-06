@@ -106,6 +106,10 @@ primaria: **Nueva cita**.
    firmada, de más antigua a más reciente, **con el nivel de escalado visible**. Sale de
    `alertas_documentacion` y **nunca enseña contenido clínico** (choque 11). De aquí se
    salta a la ficha del paciente; la historia sigue teniendo una sola puerta.
+   **Agrupada por paciente (T-048)**: una fila por paciente, con insignia de pendientes y
+   resumen por tipo (el más antiguo), desplegable con máximo 10 pendientes y, bajo el panel,
+   «Ver todos» hacia `/agenda/documentacion` (página paginada de 20 pacientes, filtros de tipo
+   y nivel en la URL, buscador por nombre que **no** va a la URL). Todo se carga cerrado.
 
 **Cuadro inferior**, y aquí es donde el rol manda (choque 6): adherencia desglosada en tres
 métricas —asistencia, ausencia sin aviso y **abandono**, que es la clínicamente
