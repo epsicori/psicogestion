@@ -68,6 +68,7 @@ export function ProveedorResolucion({
 }) {
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
   const [anuncio, setAnuncio] = useState({ texto: '', n: 0 });
+  const [enfocar, setEnfocar] = useState<{ id: string | null; n: number }>({ id: null, n: 0 });
   // Lo pintado «ahora», para que `alResolver` calcule el sitio del paciente aunque la acción de
   // `useActionState` lo llame con el cierre de un render anterior.
   const pacientesAhora = useRef(pacientes);
@@ -75,11 +76,10 @@ export function ProveedorResolucion({
     pacientesAhora.current = pacientes;
   }, [pacientes]);
 
-  useEffect(() => {
-    if (!pendiente) return;
-    // La revalidación (o la nueva búsqueda) todavía no ha llegado.
-    if (pacientes.some((p) => p.alertas.includes(pendiente.alertaId))) return;
-
+  // La alerta resuelta ya no está en lo pintado (la revalidación o la nueva búsqueda ha llegado):
+  // se decide el destino y el aviso. Es estado propio ajustado durante el render, sin efecto; lo
+  // único que queda al efecto es tocar el DOM.
+  if (pendiente && !pacientes.some((p) => p.alertas.includes(pendiente.alertaId))) {
     const paciente = pacientes.find((p) => p.id === pendiente.pacienteId);
     let destino = encabezadoId;
     let texto = t('agenda.documentacion.resuelta');
@@ -92,10 +92,14 @@ export function ProveedorResolucion({
         : pacientes[Math.min(pendiente.indice, pacientes.length - 1)];
       destino = idEnlacePaciente(prefijo, vecino.id);
     }
-    document.getElementById(destino)?.focus();
-    setAnuncio((previo) => ({ texto, n: previo.n + 1 }));
     setPendiente(null);
-  }, [pendiente, pacientes, prefijo, encabezadoId]);
+    setAnuncio((previo) => ({ texto, n: previo.n + 1 }));
+    setEnfocar((previo) => ({ id: destino, n: previo.n + 1 }));
+  }
+
+  useEffect(() => {
+    if (enfocar.id) document.getElementById(enfocar.id)?.focus();
+  }, [enfocar]);
 
   const alResolver = useCallback(
     (r: Resolucion) => {
