@@ -140,7 +140,7 @@ guion suelto:
       | 21 | PRO1/CA, PRO2/CB | primer lunes de mayo de Y+3 .. +350 (abril de Y+4) |
       | 23 | PRO1/CA | D−40..D+11 · primer lunes de mayo de Y+4 .. +42 |
       | 26 | PRO1/CA, PRO2/CB | primer lunes de junio de Y+6 y los dos días siguientes |
-      | 29 (T-043) | PRO1/CA | primer lunes de febrero de Y+10 .. +84 |
+      | 29 (T-043) | PRO1/CA | primer lunes de febrero de Y+10 .. +154 |
 
       (`Y` = `extract(year from now())`, `D` = `current_date`.) Un módulo nuevo elige un
       desplazamiento libre, lo añade a la tabla y da sufijo de módulo a sus variables psql

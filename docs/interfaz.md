@@ -494,7 +494,9 @@ por eso (no es región viva ni diálogo, y Tab sale de ella), con los minutos, h
 alternativas de la semana pintada que no lo dejan y **«Agendar igualmente»**, que siempre existe y
 guarda lo elegido. Mientras se recalculan los huecos (cambio de tipo, de paciente, de profesional, de
 centro o de semana), el aviso se retira y Guardar espera al cálculo vigente. Si el cálculo falla, Guardar
-guarda sin aviso (la rareza no se conoce) y nunca decide con los huecos de antes. «Agendar igualmente»
+guarda sin aviso (la rareza no se conoce) y nunca decide con los huecos de antes. Si tras elegir se ha cambiado de
+semana, Guardar vuelve primero a la del hueco elegido y lo dice en la región de estado: se pulsa otra vez para
+guardar o para ver el aviso. «Agendar igualmente»
 solo existe con el aviso. Solo avisa de la primera sesión de una serie. El servidor no mira el hueco (D8):
 el aviso informa, no bloquea, y no toca las sugerencias ni sus tarjetas (ADR-049c).
 
