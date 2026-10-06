@@ -11,6 +11,7 @@ riesgo: alto
 territorio:
   - supabase/migrations/20261011120000_economico_esquema.sql
   - supabase/migrations/20261011130000_economico_ronda_3.sql
+  - supabase/migrations/20261011140000_economico_ronda_4.sql
   - scripts/rls/00-ayudantes.sql
   - scripts/rls/01-fijacion.sql
   - scripts/rls/11-cobertura.sql

@@ -2687,3 +2687,640 @@ La ronda 3 no deja supervivientes nuevos.
 - **P-R3.1: sí.** Tras reasignar al paciente, el nuevo profesional lee el borrador del anterior y no le añade versiones. Solo el administrador lo continúa. Por eso O6 y O6g quedan como están en R3.2, y R3.1.b no cambia.
 - **P-R3.2: techo en 10000 (100 %).** `tipo_iva_centesimas <= 10000`, como en R3.1.c (D4). J46 y J46g y los mutantes M40 y M41 quedan como están.
 - **P-R3.3: hecho.** `supabase/migrations/20261011130000_economico_ronda_3.sql` ya está en el `territorio:` del contrato. Los demás ficheros que escribe la ronda 3 ya estaban listados (R3.8).
+
+## Ronda 4 (06-10-2026)
+
+Entrada:
+- revisor A de la ronda 3, `tickets/T-021/revision.md` (repo principal);
+- revisor B de la ronda 3, `tickets/T-021/revision-b.ronda3.md` (worktree `agent-a2cc04ba9ba7302c8`, HEAD 58cd9a1).
+
+No hay ningún hallazgo ALTA. Los cuatro se arreglan antes de integrar:
+
+| Hallazgo | Severidad | Qué |
+|---|---|---|
+| A-H1 = B-H1 | MEDIA | la tolerancia U de la banda la infla quien sella |
+| B-H2 | BAJA | D3 sin positiva: los mutantes «> 1» y «U = número de líneas» sobreviven |
+| A-H2 / B-H3 | BAJA | faltan invisibles en la clase, seis tramos sin negativa y J28e mal rotulada |
+| A-H3 = B-H4 | BAJA | la memoria: `signo_ck` y las tres reglas de R3.9 |
+
+Una sola pieza de producción cambia: `fn_cotas_version_borrador()`.
+
+### R4.0 · Hechos verificados contra el código
+
+**Migración y función**
+- **La base local tiene aplicada la ronda 3.**
+  - `select max(version) from supabase_migrations.schema_migrations` da `20261011130000` en `supabase_db_Psicogestion`.
+  - La migración no está en `main`: `ls supabase/migrations` en el repo principal acaba en `20261010120000_altas_de_centro.sql`.
+- **El linter no protege la 20261011130000.** `analizarEdiciones` (`scripts/lint-migraciones.ts:376-400`) solo compara con `main`; con una migración que no está allí, `continue`. Reescribirla no daría error: la decisión de R4.3-D1 no se apoya en el linter.
+- **La función de las cotas** está en `20261011130000_economico_ronda_3.sql:78-117`:
+  - clase `v_visible` con `[:space:]` y escapes de barra invertida;
+  - tolerancia `v_unidades = Σ cantidad` de las líneas generales;
+  - la condición `v_unidades > 0 and abs(new.cuota_iva * 100 - v_cuota_exacta) > v_unidades` (`:111`).
+- **Los mensajes que el banco busca por fragmento**: `Un concepto invisible`, `como mucho 10000 centésimas` y `fuera de la banda`. No cambian.
+- **Lo que el paso 6.3 del sellado (`20261011120000_economico_esquema.sql:512-548`) ya ha validado cuando corren las cotas**:
+  - `json_typeof` de `concepto` (string), `cantidad` y `tipo_iva_centesimas` (number);
+  - la cantidad, entera y ≥ 1;
+  - el precio, entero de cualquier signo, 0 incluido;
+  - el tipo: 0 si es exento y > 0 si es general.
+
+  En las cotas no llega ningún nulo.
+
+**Locale y clase de invisibles**
+- **La base usa el proveedor ICU**: `datlocprovider = 'i'`, `en_US.UTF-8`, versión 17 (`supabase/config.toml:42`).
+- **Bajo ICU, `[[:space:]]` casa 29 puntos de código**: `9-d 1c-20 85 a0 1680 2000-200a 2028 2029 202f 205f 3000`. Los 29 están en los tramos de R4.1, así que quitar `[:space:]` de la clase no cambia nada en esta base.
+- **La clase construida con `chr()`** a partir de los 34 pares de R4.1 se comprobó contra la base local, con una consulta de solo lectura en el scratchpad:
+  - el complemento casa exactamente **4609** puntos de código (de 1 a 0x10FFFF, sin sustitutos), que es la suma de los tramos;
+  - los tramos no se solapan ni se tocan;
+  - los rangos entre corchetes del motor de expresiones de Postgres van por punto de código, no por colación.
+- **Los 67 vecinos de R4.2** (el punto anterior y el posterior de cada tramo):
+  - casan la clase de lo visible: 67 de 67;
+  - ninguno es blanco para el 6.3: `!~ '[^[:space:]]'` da 0 de 67.
+
+**El generador**
+- **Node 24.14.1 trae Unicode 17.0** (`process.versions.unicode`) y soporta `\p{Default_Ignorable_Code_Point}`, `\p{Cf}`, `\p{White_Space}` y `\p{Cc}`.
+- **Postgres 17 no tiene `\p{}`** en sus expresiones, ni acceso SQL a la categoría general; solo `unicode_assigned()`. La lista se genera fuera y se fija como datos.
+- **El generador de R4.2 da 29 tramos de referencia.** Con las marcas combinantes genéricas y U+2800, 34. Ejecutado.
+
+**Banco**
+- `pg_temp.sv` (`26-economico.sql:134-150`) devuelve el texto SQL del alta de versión con `now()`.
+- BORR1 es de PRO1 sobre P1 (`01-fijacion.sql:229`). PRO1 autenticado llega al paso 6 sobre BORR1 (J39 y J40, `26:1018-1024`).
+- BORR3 es de PRO1 sobre P1 (`26:212`) y es donde se sellan las positivas de la ronda 3.
+- J28e (`26:1074-1076`) lleva U+3164 y U+3000, pero su rótulo dice «espacio ideográfico y espacio duro»: U+3164 es el relleno hangul, no un espacio duro.
+- **Las positivas de la banda con líneas generales** son J43g, J45g, J46g, J47g, J47c y J47d (`26:1126-1174`): todas de una sola línea general, salvo J45g.
+- **La cabecera del banco 26** (`26:5-30`) llega hasta la sección N; le falta la O, que añadió la ronda 3.
+
+**Aritmética** (`lib/dinero/iva.ts`)
+- `desglosarDesdeTotal` redondea la base una vez por llamada, con el redondeo comercial, y deja la cuota por diferencia.
+- Error por llamada: `|cuota·100 − Q_llamada| ≤ 0,5`, y además `≤ |Q_llamada|`, porque la cuota redondeada nunca cruza el 0 hacia el otro lado.
+
+**Memoria**
+- `docs/state.md` del worktree tiene 77 líneas, con 80 de límite.
+- Su línea 13 reserva `20261012120000` para T-043. `20261011140000` está libre.
+
+### R4.1 · La migración nueva: `supabase/migrations/20261011140000_economico_ronda_4.sql`
+
+Tres sentencias, y nada más:
+
+1. **`create or replace function public.fn_cotas_version_borrador()`** con el cuerpo completo de abajo:
+   - `returns trigger`, `language plpgsql`, `set search_path = ''`;
+   - sin `security definer`.
+2. **`revoke execute on function public.fn_cotas_version_borrador() from public;`**
+   - `create or replace` conserva los privilegios, pero se repite para que el fichero se lea solo.
+3. **`comment on function public.fn_cotas_version_borrador() is …`**: el texto nuevo, más abajo.
+
+**No se tocan:**
+- el disparador `sellar_version_borrador_cotas` (el mismo nombre, el mismo orden);
+- `fn_sellar_version_borrador()`: su comentario dice «banda de la cuota» sin fórmula y sigue siendo cierto;
+- las políticas;
+- el esquema;
+- `fn_bono_de_la_cita()`.
+
+**El cuerpo**, que el implementador copia. No tiene ninguna barra invertida:
+
+```sql
+create or replace function public.fn_cotas_version_borrador()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  -- Puntos de código que no se ven (T-021, ronda 4). Tramos generados con Node 24.14.1
+  -- (Unicode 17.0): Default_Ignorable_Code_Point, Cf, White_Space y Cc, más las marcas
+  -- combinantes genéricas (0300-036F, 1AB0-1AFF, 1DC0-1DFF, 20D0-20FF, FE20-FE2F) y U+2800.
+  -- Enteros hexadecimales y chr(): el fichero no lleva ninguna barra invertida.
+  -- tramos:inicio
+  v_tramos constant integer[] := array[
+    [0x0001, 0x0020],
+    [0x007F, 0x00A0],
+    [0x00AD, 0x00AD],
+    [0x0300, 0x036F],
+    [0x0600, 0x0605],
+    [0x061C, 0x061C],
+    [0x06DD, 0x06DD],
+    [0x070F, 0x070F],
+    [0x0890, 0x0891],
+    [0x08E2, 0x08E2],
+    [0x115F, 0x1160],
+    [0x1680, 0x1680],
+    [0x17B4, 0x17B5],
+    [0x180B, 0x180F],
+    [0x1AB0, 0x1AFF],
+    [0x1DC0, 0x1DFF],
+    [0x2000, 0x200F],
+    [0x2028, 0x202F],
+    [0x205F, 0x206F],
+    [0x20D0, 0x20FF],
+    [0x2800, 0x2800],
+    [0x3000, 0x3000],
+    [0x3164, 0x3164],
+    [0xFE00, 0xFE0F],
+    [0xFE20, 0xFE2F],
+    [0xFEFF, 0xFEFF],
+    [0xFFA0, 0xFFA0],
+    [0xFFF0, 0xFFFB],
+    [0x110BD, 0x110BD],
+    [0x110CD, 0x110CD],
+    [0x13430, 0x1343F],
+    [0x1BCA0, 0x1BCA3],
+    [0x1D173, 0x1D17A],
+    [0xE0000, 0xE0FFF]
+  ];
+  -- tramos:fin
+  v_visible      text := '[^';
+  v_linea        jsonb;
+  v_tipo         numeric;
+  v_q            numeric;            -- cuota exacta de una línea general, en céntimos
+  v_cuota_exacta numeric := 0;       -- Q: suma de v_q
+  v_holgura      numeric := 0;       -- T: suma de least(1, |v_q|)
+  v_hay_general  boolean := false;
+begin
+  for i in 1 .. array_length(v_tramos, 1) loop
+    if v_tramos[i][1] = v_tramos[i][2] then
+      v_visible := v_visible || chr(v_tramos[i][1]);
+    else
+      v_visible := v_visible || chr(v_tramos[i][1]) || '-' || chr(v_tramos[i][2]);
+    end if;
+  end loop;
+  v_visible := v_visible || ']';
+
+  for v_linea in select e from jsonb_array_elements(new.lineas) as e loop
+    if (v_linea ->> 'concepto') !~ v_visible then
+      raise exception 'Un concepto invisible no vale: la línea solo lleva blancos o caracteres de anchura cero (T-021)'
+        using errcode = '23514';
+    end if;
+    v_tipo := (v_linea ->> 'tipo_iva_centesimas')::numeric;
+    if v_tipo > 10000 then
+      raise exception 'El tipo de IVA de una línea es como mucho 10000 centésimas, el cien por cien (T-021, D4)'
+        using errcode = '23514';
+    end if;
+    if (v_linea ->> 'regimen_iva') = 'general' then
+      v_q := (v_linea ->> 'cantidad')::numeric
+           * (v_linea ->> 'precio_unitario_centimos')::numeric * v_tipo / (10000 + v_tipo);
+      v_cuota_exacta := v_cuota_exacta + v_q;
+      v_holgura      := v_holgura + least(1, abs(v_q));
+      v_hay_general  := true;
+    end if;
+  end loop;
+
+  if v_hay_general and abs(new.cuota_iva * 100 - v_cuota_exacta) > v_holgura then
+    raise exception 'La cuota de IVA está fuera de la banda que admiten las líneas en régimen general con su tipo (T-021, D4)'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+```
+
+**Por qué la clase se construye así:**
+- **Sin `[:space:]`.** Su contenido depende del proveedor de locale; la lista explícita lo cubre entero (R4.0).
+- **Sin ningún extremo de tramo** que sea `]`, `^`, `-` o la barra invertida: todos son controles o símbolos que no se ven, así que nada se escapa.
+- **Los dos mensajes de error y su código son idénticos a los de la ronda 3.** El de la banda no cambia de texto: la banda es la misma, cambia la tolerancia.
+
+**El comentario nuevo**, en una sola cadena partida en líneas como en la ronda 3:
+
+> Disparador before insert sobre borradores_factura_versiones, hermano de fn_sellar_version_borrador (T-021, rondas 3 y 4). Corre después de él por orden de nombre, así que cada línea ya llega validada. Tres cotas, todas 23514:
+> - concepto con al menos un punto de código fuera de la lista fija de invisibles (generada de Unicode 17.0: Default_Ignorable_Code_Point, Cf, White_Space, Cc, marcas combinantes genéricas y U+2800);
+> - tipo de IVA como mucho 10000 centésimas;
+> - si hay alguna línea en régimen general, la cuota sellada a como mucho T céntimos de la cuota exacta Q de esas líneas, con T igual a la suma por línea general de least(1, |cuota exacta de la línea|).
+>
+> security invoker: no lee ninguna tabla. Redefine la de 20261011130000.
+
+### R4.2 · Banco: pruebas nuevas y cambiadas (`scripts/rls/26-economico.sql`)
+
+**Reglas comunes**
+- **Ningún carácter invisible se escribe como escape de barra invertida en el código nuevo.**
+  - Se escribe `chr(0x2060)`, o `string_agg(chr(c), '')` sobre un `generate_series` con enteros hexadecimales.
+  - Así la trampa de R3 (las herramientas de edición decodifican la secuencia de escape y dejan el carácter crudo) no tiene dónde caer.
+  - Las líneas de J28c-J28f que ya llevan escapes no se reescriben. El único cambio en ellas es el rótulo de J28e (abajo), y se edita apuntando solo al texto del rótulo.
+- **Dónde y cómo corre cada tipo de prueba:**
+  - Negativas: como `postgres` sobre BORR1, en el mismo contexto que J28c-J28e, con `pg_temp.sv(:BORR1, …, :PRO1, 'Ana Uno', :CA)`.
+  - Positivas: sobre BORR3, como J28f y J47g.
+  - La banda: J49-J53 van justo después de J48, con el mismo patrón que J43-J48 (sin centro).
+  - Fragmentos: `Un concepto invisible` para la clase y `fuera de la banda` para la banda.
+
+#### Bloque de la clase (después de J28g)
+
+**Comentario de cabecera del bloque**:
+- de dónde sale la lista: «el generador de R4.2 de `tickets/T-021/diseno.md`», con su versión de Node y de Unicode;
+- la nota de que los 34 pares del array son su salida.
+
+El comentario no copia el comando: lleva barras invertidas, y una herramienta de edición podría estropearlas. El comando entra literal en la evidencia, ejecutado por Bash.
+
+El generador (`tramos` imprime los pares; cualquier otro argumento, los vecinos):
+
+```
+node -e 'const re=/^[\p{Default_Ignorable_Code_Point}\p{Cf}\p{White_Space}\p{Cc}]$/u; const ex=[[0x300,0x36F],[0x1AB0,0x1AFF],[0x1DC0,0x1DFF],[0x20D0,0x20FF],[0x2800,0x2800],[0xFE20,0xFE2F]]; const h=x=>"0x"+x.toString(16).toUpperCase().padStart(4,"0"); const en=c=>c<=0x10FFFF&&(c<0xD800||c>0xDFFF)&&(re.test(String.fromCodePoint(c))||ex.some(([a,b])=>c>=a&&c<=b)); const t=[]; let s=-1; for(let c=1;c<=0x110000;c++){const ok=en(c); if(ok&&s<0)s=c; if(!ok&&s>=0){t.push([s,c-1]); s=-1;}} const modo=process.argv[1]; if(modo==="tramos") t.forEach(([a,b])=>console.log("["+h(a)+", "+h(b)+"]")); else t.flatMap(([a,b])=>a>1?[a-1,b+1]:[b+1]).forEach(v=>console.log(h(v)));' tramos
+```
+
+- Con `ex = []`, da los 29 tramos de referencia.
+- Con `ex`, da los 34 de la migración: `0300-036F` absorbe `034F`, y entran `1AB0-1AFF`, `1DC0-1DFF`, `20D0-20FF`, `2800` y `FE20-FE2F`.
+
+**J28h · un tramo, una negativa (34 aserciones)**
+- **Concepto**: un prefijo seguido de todos los puntos de código del tramo, en orden.
+  - El prefijo es U+2060 (unión de palabras).
+  - Para el tramo `205F-206F`, que contiene U+2060, el prefijo es U+200B.
+- **Por qué el prefijo.**
+  - Sin él, los tramos que son todo blanco (`1680`, `3000`, `2028-202F`…) los pararía antes el 6.3 con su fragmento, «El concepto de una línea», y la prueba no llegaría a la clase.
+  - El prefijo no es `[:space:]` en ninguna base, porque es Cf y no White_Space.
+  - Así, el 6.3 deja pasar el concepto y lo rechaza la clase.
+- **Forma.** Una sentencia sobre los 34 pares, delimitados por `-- tramos:inicio` y `-- tramos:fin` como en la migración:
+
+  ```sql
+  select pg_temp.assert_lanza_codigo_msg(
+    pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador(
+      chr(<prefijo>) || (select string_agg(chr(c), '' order by c) from generate_series(a, b) c), 1, 6000)),
+      60.00, 0.00, 60.00, :PRO1, 'Ana Uno', :CA),
+    '23514', 'Un concepto invisible',
+    format('26.J28h · tramo %s-%s', upper(to_hex(a)), upper(to_hex(b))))
+  from <los 34 pares> as t(a, b);
+  ```
+
+  - Las filas corren en orden.
+  - La primera que falla corta el banco (`ON_ERROR_STOP`), con el tramo en el rótulo.
+- **Fallan antes de la migración nueva** los 17 tramos con puntos que la ronda 3 no tenía:
+
+  `0300-036F, 0600-0605, 06DD, 070F, 0890-0891, 08E2, 1AB0-1AFF, 1DC0-1DFF, 20D0-20FF, FE20-FE2F, FFF0-FFFB, 110BD, 110CD, 13430-1343F, 1BCA0-1BCA3, 1D173-1D17A, E0000-E0FFF`
+
+- **Los otros 17 pasan ya con la ronda 3.** Son las negativas que faltaban por tramo, entre ellas las seis de B-H3: `E0000-E007F`, `00AD`, `FE00-FE0F`, `2028-202F` y `3000`, que ahora van dentro de sus tramos, y `0001-0020`.
+
+**J28i · los 67 vecinos se sellan (67 aserciones)**
+- **Concepto**: un solo carácter, `chr(v)`.
+- **La línea**: exenta 1 × 6000, sellada en BORR3 con `assert_no_lanza` y rótulo `format('26.J28i · U+%s', upper(to_hex(v)))`.
+- **Los vecinos**: la salida del generador sin el argumento `tramos`.
+
+  `0021 007E 00A1 00AC 00AE 02FF 0370 05FF 0606 061B 061D 06DC 06DE 070E 0710 088F 0892 08E1 08E3 115E 1161 167F 1681 17B3 17B6 180A 1810 1AAF 1B00 1DBF 1E00 1FFF 2010 2027 2030 205E 2070 20CF 2100 27FF 2801 2FFF 3001 3163 3165 FDFF FE10 FE1F FE30 FEFE FF00 FF9F FFA1 FFEF FFFC 110BC 110BE 110CC 110CE 1342F 13440 1BC9F 1BCA4 1D172 1D17B DFFFF E1000`
+
+- **Qué fijan.** Fijan los extremos de cada tramo desde fuera: un tramo ensanchado en un punto rompe una J28i.
+- **Coste.** 67 versiones más en BORR3. Cada `sv` usa `now()` y el sellado numera por máximo + 1, así que no hay colisión dentro de la transacción.
+
+**J28e · solo el rótulo**
+- Pasa a «`26.J28e · concepto de relleno hangul y espacio ideográfico`».
+- El control J28e.0 dice ya «U+3164 y U+3000»: se queda.
+
+#### Bloque de la banda (después de J48)
+
+Q se escribe en céntimos y T es la nueva tolerancia. Los importes son base / cuota / total, en euros.
+
+| Id | Líneas (`linea_borrador`) | Base / cuota / total | Q · T · diferencia | Espera | Cierra |
+|---|---|---|---|---|---|
+| **J49g** | 3 × `('Sesión de evaluación', 1, 3333, 'general', 2100)` | 82,65 / 17,34 / 99,99 | 1735,364 · 3 · 1,364 | se sella (BORR3) | S2 de B; mata MB1 (M49) |
+| J49 | `('Informe pericial', 1, 10000, 'general', 2100)` + `('Material de evaluación, incluido', 1, 0, 'general', 2100)` | 82,63 / 17,37 / 100,00 | 1735,537 · 1 · 1,463 | `fuera de la banda` | la línea de 0 € suma 0; mata MB2 (M50) |
+| J49h | las mismas | 82,64 / 17,36 / 100,00 | · 1 · 0,463 | se sella (BORR3) | la línea de 0 € es legítima |
+| J49u | `('Sesión de evaluación', 3, 3333, 'general', 2100)` | 82,65 / 17,34 / 99,99 | 1735,364 · 1 · 1,364 | `fuera de la banda` | el desglose por unidad ya no entra (R4.3-D3) |
+| J49ug | la misma | 82,64 / 17,35 / 99,99 | · 1 · 0,364 | se sella (BORR3) | `desglosarDesdeTotal(99,99)` de la línea entera |
+| J50 | `('Informe pericial', 1, 10000, 'general', 2100)` + `('Ajuste', 1000000, 0, 'general', 2100)` | 0,00 / 100,00 / 100,00 | 1735,537 · 1 · 8264,46 | `fuera de la banda` | A-R1 = B-S1b |
+| J50a | `('Informe pericial', 1, 10000, 'general', 2100)` + `('Material', 5000, 1, 'general', 2100)` + `('Descuento material', 5000, -1, 'general', 2100)` | 0,00 / 100,00 / 100,00 | 1735,537 · 3 · 8264,46 | `fuera de la banda` | A-R2 |
+| J50b | `('Sesión', 1, 6000)` + `('Material', 1000000, 1, 'general', 2100)` + `('Descuento material', 1000000, -1, 'general', 2100)` | 50,00 / 10,00 / 60,00 | 0 · 2 · 1000 | `fuera de la banda` | B-S1c |
+| J50c | `('Sesión', 1, 100000)` + `('Informe pericial', 1, 10000, 'general', 2100)` + `('Ajuste', 100000, 0, 'general', 2100)` | 600,00 / 500,00 / 1100,00 | 1735,537 · 1 · 48264 | `fuera de la banda` | A-R3 |
+| J50d | `('Sesión', 1, 20000)` + `('Abono del informe', 1, -10000, 'general', 2100)` + `('Ajuste', 100000, 0, 'general', 2100)` | 82,64 / 17,36 / 100,00 | −1735,537 · 1 · 3471,5 | `fuera de la banda` | A-R4 (signo contrario) |
+| J50e | J50, sellado por PRO1 autenticado sobre BORR1 | 0,00 / 100,00 / 100,00 | igual que J50 | `fuera de la banda` | A-R5 |
+| J50g | `('Sesión', 1, 50000)` + `('Informe pericial', 1, 10000, 'general', 2100)` + `('Ajuste', 60000, 0, 'general', 2100)` | 100,00 / 500,00 / 600,00 | 1735,537 · 1 · 48264 | `fuera de la banda` | B-S1d |
+| J50f | `('Sesión', 1, 6000)` + `('Material de evaluación, incluido', 1, 0, 'general', 2100)` | 50,00 / 10,00 / 60,00 | 0 · 0 · 1000 | `fuera de la banda` | la banda corre con T = 0: mata M55 |
+| J50fg | las mismas | 60,00 / 0,00 / 60,00 | 0 · 0 · 0 | se sella (BORR3) | el límite exacto: mata M58 (`>=`) |
+| J52g | `('Abono de un informe', 1, -10000, 'general', 2100)` | −82,64 / −17,36 / −100,00 | −1735,537 · 1 · 0,463 | se sella (BORR3) | `abs` dentro de `least`: mata M53 |
+| J53g | `('Fotocopias', 10, 2, 'general', 2100)` | 0,17 / 0,03 / 0,20 | 3,471 · 1 · 0,471 | se sella (BORR3) | la cantidad dentro de `least`: mata M54 |
+
+Notas:
+- **J50e** sigue el patrón de J39 y J40:
+  1. `call pg_temp.como(:PRO1);`
+  2. `select pg_temp.assert_lanza_codigo_msg(pg_temp.sv(:BORR1, <líneas de J50>, 0.00, 100.00, 100.00, :PRO1), '23514', 'fuera de la banda', '26.J50e · …');`
+  3. `call pg_temp.reset_sesion();`
+- **Las líneas exentas** usan los valores por defecto de `linea_borrador`: `exento_sanitario`, tipo 0.
+- **Comprobado que el resto del sellado no para antes ninguna fila de la tabla:**
+  - la suma de líneas es igual al total en todas;
+  - J50f y J50fg tienen parte general 0, así que «general ⇒ cuota ≠ 0» del 6.4 no salta;
+  - J50f no es «todo exento», así que la cuota 10 no la para el 6.4;
+  - signos: J52g es todo negativo y las demás, todo positivo o 0.
+- **Las pruebas existentes conservan su resultado con la T nueva** (comprobado a mano, con Q y T por fila):
+
+  | Prueba | Resultado | T | Diferencia |
+  |---|---|---|---|
+  | B2 | se sella | 1 | 0 |
+  | J42 | `signo_ck` | 1 | 0,46 |
+  | J43 | banda | 1 | 4982 |
+  | J43g | se sella | 1 | 0,36 |
+  | J44 | banda | 1 | 8264 |
+  | J45 | banda | 2 | 1000 |
+  | J45g | se sella | 2 | 0 |
+  | J46g | se sella | 1 | 0 |
+  | J47 | banda | 1 | 1,46 |
+  | J47g | se sella | 1 | 0,46 |
+  | J47b | banda | 1 | 1,54 |
+  | J47c | se sella | 1 | 0,54 |
+  | J47d | se sella | 1 | 0 |
+  | J48 | banda | 1 | 3471 |
+
+- **Fallan antes de la migración nueva**, con la ronda 3 aplicada:
+  - **los 17 J28h** de los tramos nuevos;
+  - **J49, J49u, J50, J50a, J50b, J50c, J50d, J50e y J50g.** Con `U = Σ cantidad` se sellan las nueve: J49 tiene U = 2 y diferencia 1,46; J49u, U = 3 y 1,36; las demás, U ≥ 5000.
+- **Las positivas pasan ya con la ronda 3 y deben seguir pasando**: J28i, J49g, J49h, J49ug, J50fg, J52g y J53g. J50f también pasa ya, porque con la ronda 3 tiene U = 1 y diferencia 1000.
+
+**Cabecera del banco (`26:5-30`)**
+- La sección O (ronda 3): «el profesional lee mientras tiene asignado al paciente».
+- En la J, la ronda 4:
+  - «la clase de invisibles, tramo a tramo, con sus vecinos (J28h, J28i)»;
+  - «la tolerancia de la banda por línea general (J49-J53)».
+
+**`scripts/rls/README.md`, fila 26**: añadir «Ronda 4: la clase de invisibles tramo a tramo con sus vecinos (J28h, J28i) y la tolerancia por línea general de la banda (J49-J53)».
+
+### R4.3 · Decisiones y alternativas descartadas
+
+**D1 · Una migración nueva, `20261011140000_economico_ronda_4.sql`. No se reescribe la 20261011130000.**
+
+Por qué:
+- **La regla de CLAUDE.md** («migraciones siempre hacia delante») no se mide contra `main`, sino contra cualquier base donde se haya aplicado. La base local compartida tiene registrada la `20261011130000` (R4.0).
+  - Si se edita el fichero, el historial de esa base dice «aplicada» con un contenido que ya no existe. La divergencia es silenciosa: el linter no la ve (R4.0).
+- **Un número nuevo da una señal fiable.** `max(version) = 20261011140000` dice que la ronda 4 está en la base que se verifica. Es la comprobación que la memoria del proyecto pide antes de lanzar un verificador.
+- **Es el precedente de la ronda 3** (D8 de R3: «la orden de la ronda es solo añadir»).
+- **El diff de la ronda 4 queda en una sola función**, y es lo que los revisores leen.
+
+Coste:
+- una segunda definición de `fn_cotas_version_borrador()`, que mitigan su comentario («Redefine la de 20261011130000») y la regla de `supabase.md:43`;
+- una línea en `territorio:` (P-R4.1).
+
+Descartado: reescribir la 20261011130000. Daría un historial más limpio antes del merge a cambio de una base local que miente.
+
+**D2 · Tolerancia `T = Σ_generales least(1, |Q_i|)`, con `Q_i = cantidad·precio·tipo/(10000+tipo)`.**
+
+Qué consigue:
+- **T no crece con lo que no mueve dinero.**
+  - Una línea de 0 € suma 0.
+  - Una pareja ±1 céntimo con un millón de unidades suma como mucho 1 por línea.
+- **Una línea legítima de 0 € («incluido») sigue entrando** (J49h). Solo deja de aflojar la banda.
+- **Un céntimo por línea**, y no 0,5, por tres razones:
+  - J47, J47b, J47c y J47g siguen en su sitio (la banda de ±1 de una línea que ya cerró la ronda 3);
+  - la tolerancia no depende de que T-026 redondee al más cercano o trunque;
+  - el error real de `desglosarDesdeTotal` por llamada (≤ 0,5) queda dentro con margen.
+- **El tope `least(1, |Q_i|)`, y no 1 a secas.** Una línea cuya cuota exacta es menor que un céntimo no puede desviar más que eso (J53g).
+
+Descartado:
+- **La de A, por unidad: `Σ cantidad·least(0,5, |p·t/(10000+t)|)`.** Una pareja ±1 céntimo con n unidades aún suma n·0,17·2: el millón de unidades de B-S1c da 347.000 céntimos.
+- **Rechazar las líneas generales de precio 0.** Mata un tipo de línea legítimo («material incluido»). Si se quiere, es una decisión de producto de T-026 o T-046, no de una cota de la base.
+- **Un céntimo fijo** (MB1). Rechaza S2, un documento legítimo (J49g).
+- **El número de líneas generales** (MB2). Una línea de 0 € seguiría sumando 1 (J49).
+- **Repetir el redondeo exacto en el disparador.** Excluido desde la ronda 2 (`diseno.md`, líneas 642-645 y 2130).
+
+**D3 · Consecuencia aceptada: el desglose por unidad ya no se sella.**
+- Una línea de 3 × 33,33 € desglosada unidad a unidad da una diferencia de 1,36 con T = 1 (J49u).
+- T-026 desglosa por línea (J49ug) o por documento y tipo, que es como se calcula la cuota sobre la base imponible.
+- Va a `state.md` como condición para T-026.
+
+**D4 · La banda corre si hay alguna línea general (`v_hay_general`), no si T > 0.**
+- Con la guarda en T > 0, una línea general de 0 € junto a líneas exentas dejaría sellar cualquier cuota con T = 0 (J50f).
+
+**D5 · Residuo aceptado: un céntimo por línea general visible que mueva al menos un céntimo de cuota.** Una línea así cuesta unos 6 céntimos de precio.
+
+| Para que pase | Hace falta |
+|---|---|
+| un error de cuota de k céntimos, sin mala fe | k líneas generales reales |
+| un documento de 100 € con base 0 y cuota llena | unas 8264 líneas visibles con concepto e importe |
+
+- Se anota en `state.md`, con la recomendación de que el esquema Zod de T-026 acote el número de líneas.
+- Un techo de líneas en la base es una decisión de producto: «Lo que no entra».
+
+**D6 · La clase de invisibles es una lista fija de tramos**, generada fuera (Node, Unicode 17.0) y guardada como enteros hexadecimales. Sin `[:space:]` y sin barras invertidas.
+- **Hace dos cosas:**
+  - es independiente del proveedor de locale (ICU, glibc o el `builtin` de Postgres 17 clasifican Cf de forma distinta);
+  - quita de raíz la trampa de la decodificación de escapes.
+- **El conjunto:**
+  - Default_Ignorable_Code_Point, la propiedad que Unicode define precisamente como «no se ve si no se sabe pintar»;
+  - Cf entera, que añade los signos de formato que sí ocupan sitio pero que, solos, no dicen nada: `0600-0605`, `06DD`, `070F`, `0890-0891`, `08E2`, `110BD`, `110CD`;
+  - White_Space y Cc, que cubren lo que antes daba `[:space:]`;
+  - las marcas combinantes genéricas, para la marca suelta de A-H2;
+  - U+2800, que estaba en la ronda 3.
+- **Descartado:**
+  - la clase de caracteres `[:print:]` o `[:graph:]`: depende del locale (ICU excluye Cf; glibc y `builtin`, no);
+  - generar la lista en SQL: Postgres 17 no expone la categoría general ni la propiedad.
+
+**D7 · J28h, uno por tramo con todos sus puntos, y J28i, uno por vecino.**
+- Juntas fijan cada tramo desde dentro y desde fuera.
+- La lista del banco se diffa contra el generador, no contra la migración. Así, un error común de copia entre los dos ficheros no se compensa.
+
+### R4.4 · Cómo se cierra cada hallazgo
+
+Todo con la base reseteada en el worktree: `npx supabase db reset`, y después `max(version) = 20261011140000`.
+
+**A-H1 = B-H1**
+- Primero, con la ronda 3 sola: J49, J49u, J50, J50a, J50b, J50c, J50d, J50e y J50g en rojo. Salida en la evidencia.
+- Después, con la ronda 4: el banco 00 + 01 + 26 en verde.
+- M48 muere.
+
+**B-H2**
+- J49g en verde.
+- M49 (MB1) muere en J49g y M50 (MB2) en J49. Los dos se anotan en `mutantes.json`.
+
+**A-H2 / B-H3**
+- J28h en verde para los 34 tramos, y en rojo antes para los 17 nuevos.
+- J28i en verde.
+- J28e con su rótulo nuevo.
+- Las tres comprobaciones de texto, salida literal en la evidencia:
+
+  | Comprobación | Resultado esperado |
+  |---|---|
+  | el generador (`tramos`) contra `sed -n '/tramos:inicio/,/tramos:fin/p' supabase/migrations/20261011140000_economico_ronda_4.sql \| grep -o '\[0x[0-9A-F]*, 0x[0-9A-F]*\]'` | diff vacío |
+  | el mismo generador contra la extracción equivalente del banco 26 | diff vacío |
+  | `grep -c '\\' supabase/migrations/20261011140000_economico_ronda_4.sql` | 0 |
+
+- M56·01-M56·34 y M57a-c mueren.
+
+**A-H3 = B-H4**
+- `docs/state.md` reescrito, ≤ 80 líneas, con las entradas de R4.9 (`wc -l`).
+- La bitácora con las tres reglas de R3.9 y la de la ronda 4.
+
+**Comunes**
+
+| Comando | Resultado |
+|---|---|
+| `npm run lint:migraciones` | sin hallazgos |
+| `npm run lint` | verde |
+| `npm run build` | verde |
+| `npm run tipos` | `git diff --stat lib/supabase/tipos-bd.ts` vacío |
+| `node ~/.claude/pipeline/territorio.mjs T-021` | limpio, tras P-R4.1 |
+
+`npm run test:rls` completo cae en 16 antes de llegar a 26 (state.md): vale el banco 00 + 01 + 26, como en la ronda 3, con la nota.
+
+### R4.5 · Qué revisar (revisores A y B, y autoevaluación)
+
+**Qué elige quien sella, y su efecto en T**
+
+| Entrada | Rango | Efecto en T |
+|---|---|---|
+| `concepto` | texto libre | no entra en T; la clase lo filtra |
+| `cantidad` | entero ≥ 1, sin techo | solo dentro de `least(1, \|Q_i\|)` |
+| `precio_unitario_centimos` | entero de cualquier signo, 0 incluido | ídem |
+| `regimen_iva` | `exento_sanitario` o `general` | decide si la línea entra en T |
+| `tipo_iva_centesimas` | 0..10000 | dentro de `Q_i` |
+| número de líneas | sin techo | ver D5 |
+| base / cuota / total | coherentes por `importes_ck` | la cuota se compara con Q |
+
+Para el revisor, la pregunta es: ¿hay alguna entrada que haga crecer T sin mover Q, más allá de 1 por línea general con |Q_i| ≥ 1? La respuesta del diseño es no. Que se ataque con:
+- líneas de 0 €;
+- parejas ±1;
+- tipos bajos con cantidades altas: tipo 1 y cantidad 10⁶ da |Q_i| ≥ 1, y suma 1;
+- documentos negativos.
+
+**La banda**
+1. **`v_hay_general`, no `v_holgura > 0`, abre la banda.** J50f debe fallar con M55, por `fuera de la banda`, que no aparece.
+2. **`abs` va dentro de `least`.** J52g debe fallar con M53, porque T sale negativo y la positiva da 23514.
+3. **La cantidad va dentro de `Q_i` y de `least`.** J53g debe fallar con M54, porque T = 0,347 < 0,471.
+4. **Es `>` y no `>=`.** J50fg debe fallar con M58: diferencia 0 y T 0.
+5. **Los mensajes y el código no cambian.** Los fragmentos `Un concepto invisible` y `fuera de la banda` siguen siendo únicos frente a los del paso 6.
+
+**La migración**
+
+6. **No lleva barras invertidas** (`grep -c '\\'` = 0) **ni ningún carácter crudo invisible.**
+   - Comprobación: `LC_ALL=C.UTF-8 grep -cP '[\x{0080}-\x{00A0}\x{00AD}\x{200B}-\x{200F}\x{2060}-\x{206F}\x{FEFF}\x{3000}\x{3164}]'` = 0 sobre la migración y sobre el banco 26.
+7. **Solo trae `create or replace function`, `revoke` y `comment`.**
+   - Ni `drop`, ni `create trigger`, ni `alter policy`, ni `grant`.
+   - El disparador sigue siendo el de la ronda 3 (L10r3 en verde).
+8. **Los 34 pares coinciden con el generador**, tanto en la migración como en el banco (R4.4).
+   - Un par que falte lo detecta su J28h: M56.
+   - Uno que sobre, sus J28i: M57.
+
+**Otras puertas**
+
+9. **Nulos.** Ningún nulo llega a las cotas: el 6.3 los rechaza antes (R4.0). Si se quitara el sellado, el 42501 del paso 0 tampoco correría; eso lo vigila J28g/M39, no esta ronda.
+10. **Concurrencia.** La función no lee ninguna tabla, así que no hay carrera nueva.
+11. **Permisos.** La función es invoker con `execute` revocado a `public`. No hay `grant` de tabla entera.
+12. **Solo adición.** `UPDATE`, `DELETE` y `TRUNCATE` sobre las versiones siguen cerrados por las tres capas que prueban A y `10-solo-adicion`. Esta ronda no las toca.
+13. **Las seis negativas de tramo que faltaban** (B-H3) están dentro de J28h, no aparte. Las que pide A-H2 son tramos de J28h:
+    - U+FFF9-FFFB y U+E0080, dentro de `FFF0-FFFB` y `E0000-E0FFF`;
+    - U+13430-1343F, U+1BCA0-1BCA3, U+1D173-1D17A y U+E01F0, también en sus tramos;
+    - la marca combinante suelta, dentro de `0300-036F`.
+
+### R4.6 · Riesgos, por probabilidad
+
+1. **(Media) Se cuela un carácter crudo o se decodifica un escape al editar el banco.**
+   - Mitigación: el código nuevo usa `chr(0x…)`, J28e solo cambia el rótulo, y está la comprobación de R4.5-6.
+   - Si el `grep -cP` da más de 0, el ticket no se cierra.
+2. **(Media) `state.md` pasa de 80 líneas al añadir tres entradas, y el hook lo bloquea.** Se reescribe:
+   - las tres entradas de T-021 (líneas 11, 13 y 62-64) se compactan;
+   - la línea 11 pasa a «ronda 4».
+3. **(Media) T-026 desglosa por unidad y sus borradores no se sellan.** Queda escrito como condición en `state.md` (D3), y J49u lo documenta.
+4. **(Baja) El residuo de D5 se usa con mala fe.** Hacen falta miles de líneas visibles. La cota de T-026 en Zod lo cierra del lado de la aplicación.
+5. **(Baja) Una marca combinante propia de una escritura** (hebrea, devanagari…), sola como concepto, se sella. Es un residuo anotado: se pinta sobre un círculo de puntos en casi todos los renderizadores.
+6. **(Baja) Dos definiciones de la función confunden a quien la lea.** Lo mitigan el comentario y `supabase.md:43`.
+7. **(Baja) Coste de J28h y J28i.** Son 34 + 67 altas, y la mayor lleva un concepto de 4096 puntos (16 KB). La auditoría recorta el sobre. Es despreciable frente al banco.
+
+### R4.7 · `mutantes.json` de la ronda 4
+
+- **Método**: el de la ronda 3, en `metodo_ronda3`:
+  1. `create or replace function` como `postgres` sobre la base viva;
+  2. bancos 00 + 01 + 26 con las aserciones convertidas en avisos;
+  3. restaurar desde la migración 20261011140000.
+- **Clave nueva**: `metodo_ronda4`, que dice lo mismo y nombra el fichero restaurado.
+
+| Id | Mutación | Muere en |
+|---|---|---|
+| M48 | la tolerancia de la ronda 3: `v_holgura + cantidad` | J49, J49u, J50, J50a, J50b, J50c, J50d, J50e, J50g |
+| M49 | MB1 de B: `> 1` fijo | J49g |
+| M50 | MB2 de B: T = número de líneas generales (`v_holgura + 1`) | J49 |
+| M51 | `least(0.5, abs(v_q))` | J47c |
+| M52 | sin tope: `v_holgura + abs(v_q)` | J47, J47b, J49, J49u |
+| M53 | sin `abs`: `least(1, v_q)` | J52g, J45g |
+| M54 | tope sin la cantidad: `least(1, abs(precio·tipo/(10000+tipo)))` | J53g |
+| M55 | la banda abre con `v_holgura > 0` en vez de `v_hay_general` | J50f |
+| M56·01-34 | quitar el par k del array | J28h del tramo k |
+| M57a | ensanchar `0001-0020` a `0001-0021` | J28i U+0021 |
+| M57b | ensanchar `3000` a `3000-3001` | J28i U+3001 |
+| M57c | ensanchar `FFF0-FFFB` a `FFF0-FFFC` | J28i U+FFFC |
+| M58 | `>` por `>=` | J50fg |
+
+**Se vuelven a correr y deben seguir muertos**, adaptados a los nombres nuevos:
+
+| Mutante | Muere en |
+|---|---|
+| M37 | J28c-e y J28h |
+| M39 | J28g |
+| M40 y M41 | J46 y J46g |
+| M42 (quitar la banda) | J43-J48, J49, J49u y J50* |
+| M43 (`> 0`) | J47g, J47c, J43g, J49g, J49h, J49ug, J52g y J53g |
+| M44 (`2·T`) | J47, J47b y J49 |
+| M45 | J47b |
+| M46 | J48 |
+| M47 | J47d |
+| M7 y M8 | K14, K15 y K17 |
+| M21 | J42 |
+| M22 | J28b |
+| M25 | J31b |
+
+M38 (quitar U+FEFF) queda subsumido en M56, en el par `FEFF`.
+
+**Equivalentes declarados, con su motivo:**
+- **Contar en T las líneas exentas.** El 6.3 obliga a que una exenta tenga tipo 0, así que `Q_i = 0` y suma 0. Si además abriera la banda, el 6.4 ya obliga a cuota 0 cuando todo es exento: diferencia 0 ≤ 0.
+- **Volver a añadir `[:space:]` a la clase.** En esta base (ICU), sus 29 puntos están todos en los tramos (R4.0).
+
+### R4.8 · Territorio y delegable
+
+**Escribe la ronda 4:**
+- `supabase/migrations/20261011140000_economico_ronda_4.sql`, **que no está en el `territorio:`** del contrato (P-R4.1);
+- `scripts/rls/26-economico.sql` y `scripts/rls/README.md`;
+- `tickets/T-021/**`: `mutantes.json`, la evidencia, y la de la ronda 3 archivada como `evidencia.ronda3.json`, igual que se hizo con la ronda 2;
+- `docs/bitacora/T-021.md`;
+- `docs/state.md`;
+- `lib/supabase/tipos-bd.ts`: solo si `npm run tipos` lo cambia, y no se espera.
+
+**No se tocan:**
+- la 20261011120000 ni la 20261011130000;
+- `00-ayudantes` y `01-fijacion`;
+- `11-cobertura`, porque no hay políticas nuevas;
+- el linter.
+
+**Delegable**: nada. Es una cota de dinero en la base, y el banco que la prueba.
+
+### R4.9 · Memoria al cerrar (A-H3 = B-H4)
+
+**`docs/state.md`**, reescrito y no ampliado, ≤ 80 líneas:
+- **En curso**: T-021 ronda 4 implementada, con la migración 20261011140000. La línea 13 pasa a «T-021 (20261011120000, 20261011130000, 20261011140000)».
+- **§Hallazgos**, entradas nuevas, compactando las de T-021 que ya hay:
+  - «T-021 · los documentos mixtos (exento negativo y general positivo) no se sellan por `signo_ck`; lo decide T-026.»
+  - «T-021 · la banda de la cuota tolera un céntimo por línea general (`least(1, |Q_i|)`). T-026 desglosa por línea o por documento y tipo, nunca por unidad (J49u). Residuo: un céntimo por línea general visible; el Zod de T-026 debe acotar el número de líneas.»
+  - «T-021 · una marca combinante de una escritura concreta (fuera de los bloques genéricos), sola como concepto, se sella. Residuo aceptado.»
+
+**`docs/bitacora/T-021.md`**:
+- **Las tres reglas de R3.9**, que faltaban:
+  1. «Las cotas del sellado viven en dos disparadores; el orden es por nombre.»
+  2. «Mensajes de error que no comparten prefijo.»
+  3. La segunda regla de R3.9, «Una banda con tolerancia U no es repetir el redondeo», con su enmienda de la ronda 4: «la tolerancia de una banda se mide en lo que mueve dinero: un céntimo por línea general que mueva al menos un céntimo, nunca por una cantidad que elige quien sella».
+- **La entrada de la ronda 4**:
+  - los hallazgos y su cierre;
+  - la clase como lista generada (Unicode 17.0) sin barras invertidas.
+
+**Para `.claude/rules/supabase.md`**, propuesta al usuario y no a este ticket: «Una lista de caracteres en una expresión de Postgres se escribe como enteros hexadecimales y `chr()`, nunca con escapes de barra invertida: las herramientas de edición los decodifican.»
+
+### Lo que no entra en la ronda 4, y por qué
+
+- **Un techo de líneas por documento, o de cantidad por línea, en la base.** Es una decisión de producto (cuántas líneas tiene un borrador real). Su sitio natural es el Zod de T-026 (D5).
+- **Rechazar las líneas generales de 0 €.** Matan un tipo de línea legítimo (D2).
+- **Repetir el redondeo de `lib/dinero` en el disparador.** Excluido desde la ronda 2.
+- **Las marcas combinantes propias de cada escritura.** No hay propiedad Unicode que las separe de las que se usan solas, y Postgres no da la categoría. Es un residuo anotado.
+- **Normalizar o limpiar el concepto.** La base no reescribe lo que se sella (R3).
+- **La comparación literal del catálogo en L10r3** (nota 1 de B). J28g y M39 ya cubren el orden de los disparadores; la aserción de catálogo se queda como está.
+- **Defender las cotas de un concepto nulo** con `coalesce`. El 6.3 lo rechaza antes, y el orden lo fijan J28g y M39.
+
+### Resumen de la ronda 4
+
+1. Se construye una migración nueva, `20261011140000_economico_ronda_4.sql`, que solo redefine `fn_cotas_version_borrador()`. No se reescribe la 20261011130000, porque la base local ya la tiene aplicada.
+2. **Decisión 1 · La tolerancia de la banda pasa a `T = Σ least(1, |Q_i|)` por línea general**, y la banda corre si hay alguna línea general. Las líneas de 0 € y las parejas ±1 ya no la inflan. S2 se sella (J49g).
+3. **Decisión 2 · La clase de invisibles es una lista fija de 34 tramos** (Unicode 17.0: Default_Ignorable_Code_Point, Cf, White_Space, Cc, marcas combinantes genéricas y U+2800). Se guarda como enteros hexadecimales y `chr()`: sin `[:space:]` ni barras invertidas, y diffada contra un generador Node.
+4. **Decisión 3 · El desglose por unidad deja de sellarse.** T-026 desglosa por línea o por documento (J49u). Residuo: un céntimo por línea general visible.
+5. **Pruebas nuevas:**
+   - J28h, uno por tramo (34), y J28i, uno por vecino (67);
+   - J49-J53, con los ataques A-R1 a A-R5 y B-S1b a B-S1d como negativas;
+   - S2, J49h, J49ug, J50fg, J52g y J53g como positivas.
+6. **Fallan primero:** 17 J28h, y J49, J49u, J50, J50a-e y J50g.
+7. **Mutantes M48-M58**, con M56·01-34 y M57a-c. MB1 y MB2 de B mueren en J49g y J49.
+8. **La memoria:** en `state.md`, `signo_ck` y los documentos mixtos, la condición de desglose para T-026 y los residuos; en la bitácora, las tres reglas de R3.9.
+9. **Revisar con más cuidado:**
+   - `v_hay_general` frente a `T > 0` (J50f);
+   - `abs` y la cantidad dentro de `least` (J52g, J53g);
+   - `>` en el límite exacto (J50fg);
+   - que no haya ninguna barra invertida ni carácter crudo en los dos ficheros.
+10. **Antes de implementar**, el contrato tiene que añadir la migración nueva a `territorio:` (P-R4.1).
+
+**Pregunta al propietario**
+- **P-R4.1** · Añadir `supabase/migrations/20261011140000_economico_ronda_4.sql` al `territorio:` de `tickets/T-021-economico-esquema.md`. Recomendación: sí. Es una migración nueva en vez de reescribir la 20261011130000, que ya está aplicada en la base local (R4.3-D1).
+
+### Respuestas del propietario a la ronda 4 (06-10-2026)
+
+- **P-R4.1: cerrada, aprobada con migración nueva.** `supabase/migrations/20261011140000_economico_ronda_4.sql` ya está en el `territorio:` de `tickets/T-021-economico-esquema.md`. El diseño de la ronda 4 queda listo para implementar.
