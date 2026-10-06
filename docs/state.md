@@ -8,7 +8,7 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048 y T-049.
-- **En curso**: T-023, implementación en su rama (`T-023-cobros-y-pendiente`, desde fcd4d49).
+- **En curso**: T-023, implementado en su rama (`T-023-cobros-y-pendiente`, HEAD fcc10e8, worktree `agent-ab24275cd0513aee2`); verificación y revisión **paradas a medias** el 06-10 por orden del propietario, sin artefactos.
 - **Siguiente en `supabase/`**: T-023 (20261013120000) → T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -18,7 +18,12 @@
 
 ## Siguiente paso
 
-1. T-023 (el banco 30 se ancla al primer lunes de marzo de Y+11 en lugar del `current_date + 1600` del diseño; la verificación necesitará `db reset` con permiso), luego T-026a → T-046 → T-023b → T-047.
+1. **Reanudar T-023 por la ronda 1 de verificación y revisión**, lanzando de nuevo, en paralelo, el verificador, el revisor A (base, RLS y dinero) y el revisor B (interfaz). Todos medirán sobre una copia `git archive fcc10e8`. Antes, pedir permiso para `db reset` desde el worktree de la rama y `npm run seed`: el verificador, cortado a medias, pudo dejar aplicado en la base local un mutante SQL. El banco 30 se ancla al primer lunes de marzo de Y+11. Fuera de alcance, para que los juzgue el revisor A:
+   - una cita que pasa de realizada a cancelada rebaja el devengado sin rastro;
+   - el técnico puede deducir el precio a partir del devengado;
+   - se admite un cobro a un paciente fusionado.
+
+   Después, la cola sigue con T-026a → T-046 → T-023b → T-047.
 2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove).
 
 ## Hallazgos anotados
