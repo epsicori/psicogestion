@@ -81,7 +81,8 @@ type Memoria = {
   cerrar: (p: Pendiente, texto: string) => void;
   descartar: () => void;
 };
-const ContextoMemoria = createContext<Memoria | null>(null);
+/** Exportado solo para la prueba de `cerrar`; nadie más lo lee. */
+export const ContextoMemoria = createContext<Memoria | null>(null);
 
 /**
  * La memoria de la resolución: el pendiente y la única región `role="status"` del bloque. En la
