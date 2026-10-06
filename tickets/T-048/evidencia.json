@@ -1,17 +1,80 @@
 {
   "ticket": "T-048",
-  "resumen": "Ronda 3, rama T-048-documentacion-pendiente-agrupada HEAD a65dfd1: npm test 193 ficheros / 2527 pruebas en verde; lint 0 errores (2 avisos ajenos en lib/cuentas/accesos.test.ts); next build --webpack ok; Playwright 4/4 en dos pasadas seguidas (puerto 3148); territorio.mjs ok (30 ficheros dentro); rg de storage/cookie y use cache vacios; rg latido|animate- solo da 2 aserciones negativas de test y 1 comentario (sin uso real). Tras las pasadas, 0 alertas abiertas y 0 notificaciones sin leer con origen_id b0480000-%. Los criterios manuales no se ejercen.",
+  "resumen": "Ronda 4, rama T-048-documentacion-pendiente-agrupada HEAD 63dd69e (worktree agent-a499e90fb57374002, node_modules por junction, deshecha al acabar). npm test 193 ficheros / 2531 pruebas en verde; lint 0 errores (2 avisos ajenos en lib/cuentas/accesos.test.ts); next build --webpack ok; Playwright documentacion-pendiente.spec.ts 4/4 (PUERTO=3148, next start del build de la rama); territorio.mjs: 30 ficheros, todos dentro. R4.5 verificado: rg ContextoMemoria solo en resolver-alerta.tsx y sin export; ultimoCerrado y '11 informes' sin resultados; diff de buscador.tsx/documentacion.tsx/layout.tsx contra a65dfd1 vacio; mutantes M1-M6 y M8 mueren; variante sin StrictMode cae por recuento de focos; rojo antes con resolver-alerta.tsx de a65dfd1 en las 4 pruebas nuevas. La evidencia de ronda 3 esta archivada en evidencia.ronda3.json. Criterios manuales no ejercidos. Observaciones: BAJA: rg latido|animate- devuelve 3 coincidencias inocuas (aserciones negativas y un comentario); el contrato dice 'no devuelve nada' literalmente. Los globs del contrato para rg (pendientes*, documentacion*) no se expanden en PowerShell; se verificaron con bash. Los 4 pacientes de fixture del spec quedan en la base local (aceptado).",
   "criterios": [
-    {"id":"logica-pura (1,4,6,D7,D8,Mas de 10,Coincidencia)","veredicto":"PASA","comando":"npm test (worktree, via junction a node_modules)","evidencia":"Test Files 193 passed (193); Tests 2527 passed (2527); incluye app/(app)/agenda/pendientes.test.ts"},
-    {"id":"componentes (2,3,D7 DOM,D9,5,7,9,D11,11,Errores)","veredicto":"PASA","comando":"npm test; rg -n \"localStorage|sessionStorage|document[.]cookie\" ...; rg -n \"latido|animate-\" ...","evidencia":"2527/2527. rg storage/cookie: sin resultados (rc=1). rg latido|animate-: 4 coincidencias, todas ajenas al uso: pendientes-fila.test.tsx:223 y documentacion/contenido.test.tsx:263 (aserciones not.toMatch) y documentacion/esqueleto.tsx:4 (comentario 'Sin animate-*'). Literalmente el contrato dice 'no devuelve nada'; la intencion (ninguna animacion) se cumple. Observacion BAJA."},
-    {"id":"9 foco tras resolver y remontaje por redireccion de ?pagina","veredicto":"PASA","comando":"npx vitest run \"app/(app)/agenda\" --reporter=verbose | grep remontaje","evidencia":"✓ remontaje.test.tsx > el ultimo de la ultima pagina: tras la redireccion real, foco al ultimo de la pagina 2 y anuncio en el mismo nodo; ✓ resuelta desde la busqueda y redirigida: foco al titulo, anuncio en el mismo nodo; ✓ gemelo: sin redireccion el foco va al vecino de su indice; ✓ resolver-alerta.test.tsx regla eraUltimo con un rerender"},
-    {"id":"pagina (8,8b)","veredicto":"PASA","comando":"npm test","evidencia":"Pruebas de app/(app)/agenda/documentacion/ en verde dentro de 2527 passed"},
-    {"id":"buscador (D10a,D10b,D10c)","veredicto":"PASA","comando":"npm test","evidencia":"documentacion/buscador.test.tsx, contenido.test.tsx y de la accion en verde dentro de 2527 passed"},
-    {"id":"10 lectura acotada y declarada","veredicto":"PASA","comando":"npm test","evidencia":"lib/citas/agenda.test.ts en verde dentro de 2527 passed"},
-    {"id":"12 accesibilidad (360 px, 44 px con nombre corto, Tab/Espacio, D10 punta a punta, sin modal)","veredicto":"PASA","comando":"PUERTO=3148 npx playwright test accesibilidad/documentacion-pendiente.spec.ts (dos pasadas seguidas)","evidencia":"Pasada 1: 4 passed (7.8s). Pasada 2: 4 passed (8.0s). Tests: panel de /agenda con Tab al boton, Space despliega, Tab hasta Marcar como resuelta, Intro y foco; /agenda -> Ver todos -> pagina sin dialogo y con 44 px; termino de busqueda fuera de URL e historial; ?paciente sin buscador. El spec mide con mide44 el nombre corto 'Il Z' (#panel-paciente-CORTO y #pagina-paciente-CORTO), boton de desplegar, enlaces, resolver, pie, paginacion, filtros, Buscar y campo >=44 de alto; usa keyboard.press('Tab') y ('Space')."},
-    {"id":"idempotencia y limpieza de datos","veredicto":"PASA","comando":"docker exec supabase_db_Psicogestion psql -U postgres -c \"select count(*) from alertas_documentacion where estado='abierta' and origen_id::text like 'b0480000-%' ...\"","evidencia":"alertas_abiertas=0, notif_sin_leer=0 tras las dos pasadas"},
-    {"id":"Nada se rompe alrededor","veredicto":"PASA","comando":"npm run lint; npx next build --webpack; rg -n \"use cache\" ...; node ~/.claude/pipeline/territorio.mjs T-048","evidencia":"lint: 0 errors, 2 warnings (lib/cuentas/accesos.test.ts, ajenos); build: rutas listadas sin error, incluye /agenda/documentacion; rg use cache: sin resultados (rc=1); territorio: 'T-048: 30 fichero(s) tocado(s), todos dentro de ...'"},
-    {"id":"manuales (lector de pantalla, grises, roles, enlaces, otra pestana, prototipo)","veredicto":"NO_VERIFICABLE","motivo":"Exigen NVDA/Narrador, impresion a PDF en grises, sesiones reales de tecnico/administrador y un telefono; guion en el contrato (Guion de comprobacion manual)."}
+    {
+      "id": "logica-pura (1,4,6,D7,D8,Mas de 10,Coincidencia)",
+      "veredicto": "PASA",
+      "comando": "npm test (worktree)",
+      "evidencia": "Test Files 193 passed (193); Tests 2531 passed (2531); incluye app/(app)/agenda/pendientes.test.ts"
+    },
+    {
+      "id": "componentes (2,3,D7 DOM,D9,5,7,9,D11,11,Errores)",
+      "veredicto": "PASA",
+      "comando": "npm test; rg storage/cookie y latido|animate- y use cache con globs expandidos por bash",
+      "evidencia": "2531/2531. rg localStorage|sessionStorage|document.cookie: rc=1 (vacio). rg use cache: rc=1 (vacio). rg latido|animate-: solo 3 coincidencias ajenas al uso (pendientes-fila.test.tsx:220,223 y contenido.test.tsx:263 aserciones not.toMatch; esqueleto.tsx:4 comentario 'Sin animate-*'); literalmente el contrato dice 'no devuelve nada', la intencion se cumple (observacion BAJA ya registrada en ronda 3)."
+    },
+    {
+      "id": "9 foco tras resolver y remontaje (incluye R3-H1 de la ronda 4)",
+      "veredicto": "PASA",
+      "comando": "npx vitest run resolver-alerta.test.tsx buscador.test.tsx remontaje.test.tsx",
+      "evidencia": "Test Files 3 passed (3); Tests 58 passed (58). Incluye P1 'Limpiar busqueda con la accion aun en vuelo', P2 'Buscar de nuevo con la accion aun en vuelo', P3 x2 (layout y panel) y P3-gemelo."
+    },
+    {
+      "id": "R4.5 R3-H1 rojo antes",
+      "veredicto": "PASA",
+      "comando": "git show a65dfd1:'app/(app)/agenda/resolver-alerta.tsx' > resolver-alerta.tsx; vitest run de los 3 ficheros; git checkout para restaurar",
+      "evidencia": "Tests 4 failed | 54 passed: caen exactamente las 4 pruebas nuevas (Activity layout, Activity panel, Limpiar busqueda, Buscar de nuevo) con foco en el sitio equivocado (activeElement != body / != campo / != antes). Restaurado, worktree limpio."
+    },
+    {
+      "id": "R4.5 R3-H1 mutantes M1,M2,M3,M4,M5,M6,M8",
+      "veredicto": "PASA",
+      "comando": "mutante aplicado a resolver-alerta.tsx o buscador.tsx, vitest run de los 3 ficheros, revertido (script desechable)",
+      "evidencia": "M1 (anotar sin comparar epoca): ROJO 4 (P1,P2,P3x2). M2 (preparar tras el await): ROJO 4. M3 (descartar sin epocaRef+=1): ROJO 4. M4 (limpiar sin descartar): ROJO 2 (la de Limpiar existente y P1), ninguna por timeout. M5 (enviar sin descartar): ROJO 2 (gemelo con Buscar y P2). M6 (sin useLayoutEffect de limpieza): ROJO 3 (Activity existente y P3x2). M8 (alAcertar condicionado a la epoca): ROJO 4. Todos coinciden con la tabla R4.2 d). Worktree limpio tras cada uno."
+    },
+    {
+      "id": "R4.5 R3-H2 ContextoMemoria privado, sin guarda, StrictMode",
+      "veredicto": "PASA",
+      "comando": "rg -n ContextoMemoria app; rg -n ultimoCerrado app; prueba de StrictMode con y sin <StrictMode>",
+      "evidencia": "ContextoMemoria solo en app/(app)/agenda/resolver-alerta.tsx (linea 88 'const ContextoMemoria = createContext', sin export); ultimoCerrado rc=1. cerrar(texto: string) sin guarda. Prueba de StrictMode en verde con <StrictMode>. Con el <StrictMode> quitado del arnes cae: 'AssertionError: expected 1 to be greater than or equal to 2' (resolver-alerta.test.tsx:450, recuento de focos 1). Restaurado."
+    },
+    {
+      "id": "R4.5 R3-H3 promesas en afterEach y comentario del spec",
+      "veredicto": "PASA",
+      "comando": "rg -n 'soltar\\(|responderRelanzada\\(|\\.resolver\\(' app/(app)/agenda; rg -n '11 informes' accesibilidad/; vitest con M4",
+      "evidencia": "afterEach de modulo con 'for (const soltar of sueltas.splice(0)) soltar()' en resolver-alerta.test.tsx:101, buscador.test.tsx:84 y remontaje.test.tsx:142; las demas .resolver( son del flujo de la prueba (buscador.test:376,400; resolver-alerta.test:513,528; remontaje.test:226), no la unica liberacion final. rg '11 informes' rc=1. Spec: '// El paciente sigue (le quedan 12 informes): el foco va a su enlace y se anuncia.' M4 hace caer solo las 2 pruebas de Limpiar, sin tiempo agotado."
+    },
+    {
+      "id": "R4.6.10 nada mas cambia",
+      "veredicto": "PASA",
+      "comando": "git diff a65dfd1 --stat -- buscador.tsx documentacion.tsx documentacion/layout.tsx",
+      "evidencia": "salida vacia"
+    },
+    {
+      "id": "pagina (8,8b), buscador (D10a,D10b,D10c), 10 lectura acotada",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "2531/2531 en verde, incluidos los ficheros de documentacion/ y lib/citas/agenda.test.ts"
+    },
+    {
+      "id": "12 accesibilidad (360 px, 44 px, teclado, D10 punta a punta, sin modal)",
+      "veredicto": "PASA",
+      "comando": "PUERTO=3148 npx playwright test accesibilidad/documentacion-pendiente.spec.ts (servidor next start del build de la rama, ya parado)",
+      "evidencia": "4 passed (9.2s): panel de /agenda desplegable con teclado y foco tras Intro (1.9s); /agenda -> Ver todos -> pagina sin dialogo y 44 px (1.7s); termino de busqueda fuera de direccion e historial (2.1s); con ?paciente sin buscador (1.1s)."
+    },
+    {
+      "id": "Nada se rompe alrededor (lint, build, use cache, territorio)",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npx next build --webpack; node ~/.claude/pipeline/territorio.mjs T-048",
+      "evidencia": "lint: 0 errores, 2 avisos preexistentes ajenos (lib/cuentas/accesos.test.ts). build: tabla de rutas completa, incluye /agenda/documentacion. territorio: 'T-048: 30 fichero(s) tocado(s), todos dentro de ...'."
+    },
+    {
+      "id": "Manuales (lector de pantalla, escala de grises, tecnico/administrador, enlace a nota, otra pestana, 360 px real)",
+      "veredicto": "NO_VERIFICABLE",
+      "comando": "-",
+      "evidencia": "-",
+      "motivo": "Exigen NVDA/Narrador, impresion a PDF, sesiones por rol y un telefono real; un verificador sin interaccion humana no puede ejercerlos. Guion exacto en tickets/T-048-documentacion-pendiente-agrupada.md §Guion de comprobacion manual."
+    }
   ],
   "regresiones": []
 }

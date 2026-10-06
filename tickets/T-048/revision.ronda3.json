@@ -1,0 +1,33 @@
+{
+  "ticket": "T-048",
+  "ronda": 3,
+  "altas": 0,
+  "medias": 1,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "R3-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/resolver-alerta.tsx",
+      "linea": 217,
+      "descripcion": "descartar() (limpiar, enviar, limpieza de Activity) solo tira el pendiente ya anotado. El ok de una acción enviada antes del gesto llega después, alResolver llama a anotar en la memoria del layout, que sobrevive, y el bloque visible roba el foco. En limpiar es una regresión de la ronda: antes, el setState sobre el proveedor desmontado no hacía nada.",
+      "escenario": "Medido en jsdom con resolverAlerta diferido. (1) Se busca, se pulsa Marcar como resuelta y, en Resolviendo…, Limpiar búsqueda: el foco está en el campo y, al llegar el ok, salta a documentacion-titulo. (2) Lo mismo con una búsqueda nueva que devuelve [p2]: el foco va a busqueda-paciente-p2. (3) Se pulsa Marcar y se sale de la ruta antes del ok; Next resuelve la promesa aunque descarte el estado (server-action-reducer.js:263). Al volver, Activity repite el efecto: el foco va a panel-paciente-pB y se anuncia «Marcada como resuelta.». Pasa también en el panel de /agenda."
+    },
+    {
+      "id": "R3-H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/resolver-alerta.test.tsx",
+      "linea": 439,
+      "descripcion": "La prueba «con StrictMode, un acierto anuncia una sola vez» dispara el efecto en una actualización, que StrictMode no repite, y compara un texto que es igual con uno o dos anuncios: no ve la guarda de cerrar.",
+      "escenario": "Mutante sin `if (ultimoCerrado.current === p) return;`: esta prueba sigue en verde (614/615) y solo cae la prueba directa de cerrar. Si alguien quita la directa porque el título de esta promete lo mismo, la guarda se queda sin prueba."
+    },
+    {
+      "id": "R3-H3",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/documentacion/buscador.test.tsx",
+      "linea": 325,
+      "descripcion": "La prueba de Limpiar solo suelta su relanzar en vuelo en la última línea (lo mismo en remontaje.test.tsx:209). Si falla antes, la acción pendiente retiene las transiciones de React y la prueba siguiente cae por contagio.",
+      "escenario": "Mutante sin descartar en limpiar: en el fichero caen Limpiar y el gemelo de Buscar (este por tiempo agotado, 1256 ms). Con -t \"gemelo con\", el gemelo pasa. La evidencia de mutantes atribuye al gemelo una muerte que no es suya, y un fallo real del gemelo queda tapado."
+    }
+  ]
+}
