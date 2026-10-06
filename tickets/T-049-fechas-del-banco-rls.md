@@ -2,21 +2,24 @@
 id: T-049
 titulo: Banco de RLS sin fechas que caducan — anclajes relativos, franjas por módulo y lint de fechas fijas
 modelo: sonnet
-# medio: solo toca el banco de pruebas; sin migración, sin código de producto
+# medio: solo toca el banco de pruebas y su lanzador; sin migración, sin código de producto
 riesgo: medio
 fase: 1
 # alta: mientras 15 cae, ningún ticket de riesgo alto puede cerrar «banco completo en verde»
 prioridad: alta
 depende_de: []
-# contrato aprobado por el propietario el 06-10-2026; listo para diseño corto
+# contrato aprobado por el propietario el 06-10-2026, con sus tres decisiones (§Decisiones del
+# propietario); diseño corto en tickets/T-049/diseno.md
 estado: pendiente
 # no: cada cambio toca una guarda del reloj y hay que razonar la colisión; ver §Delegable
 delegable: no
 # Notas por elemento (siempre en la línea anterior, nunca en la de la clave):
 # - 15: el bloque de fechas fijas pasa a ancla relativa (§Decisión D1);
 # - 17, 19, 26: solo la línea que define el ancla de sus citas y las inserciones que la usan (D2);
-# - 01, 26, 27: solo comentarios `-- fecha-fija:` en la línea anterior a cada literal futuro (D3);
-# - fechas-fijas.mjs: el lint nuevo (D4); README: regla 10 y tabla de franjas (D5).
+# - 01, 26, 27: solo comentarios `-- fecha-fija:` junto a cada literal futuro (D3);
+# - fechas-fijas.mjs: el lint nuevo (D4); README: regla 10 y tabla de franjas (D5);
+# - test-rls.mjs: solo el paso que ejecuta el lint antes de psql y corta con su código (decisión P1);
+# - docs/state.md: reescrito; corrige el hallazgo del 18 y anota los nuevos (decisión P3).
 territorio:
   - scripts/rls/15-agenda.sql
   - scripts/rls/17-vinculo-agenda.sql
@@ -26,6 +29,8 @@ territorio:
   - scripts/rls/27-exportaciones.sql
   - scripts/rls/fechas-fijas.mjs
   - scripts/rls/README.md
+  - scripts/test-rls.mjs
+  - docs/state.md
   - docs/bitacora/T-049.md
 ---
 
@@ -128,10 +133,11 @@ Con T-049 el banco 00-28 deja de escribir agenda en Y+5 y más allá salvo en lo
 **D1 · El 15 se ancla a `current_date`, no a un año fijo lejano.**
 `d15` = el martes que cae entre D+14 y D+20:
 `(current_date + 14 + ((9 - extract(isodow from current_date + 14)::int) % 7))::date`.
-Cada instante se escribe en hora local: `((:'d15'::date + n) + time 'HH:MM') at time zone 'Europe/Madrid'`
-(`n` = 0, 1, 2 para el martes, el miércoles y el jueves de antes), nunca con desplazamiento `+02` escrito
-a mano, porque la fecha relativa puede caer en horario de invierno. Las cadenas de `format(... %L ...)`
-reciben el instante ya calculado con `\gset`.
+Cada instante se escribe en hora local de Madrid (el martes, el miércoles y el jueves de antes como
+`d15 + 0/1/2`), nunca con desplazamiento `+02` escrito a mano, porque la fecha relativa puede caer en
+horario de invierno. Mecanismo: un ayudante `pg_temp.instante15(día, hora)` (diseño §1.1), y no
+variables `\gset`, porque psql no sustituye variables dentro de `do $$ … $$` (l.147-161) ni de las
+plantillas `$sql$` (l.115-138).
 Por qué: (1) es el patrón de la casa (16, 18, 21, 23 y 26 ya anclan relativo); (2) una cita en 2099
 es un dato irreal: la primera guarda de horizonte que añada el producto («no se agenda a más de N
 meses») la rompería igual que el reloj ha roto la de 2026; (3) D+14..D+22 no toca ninguna otra franja
@@ -143,7 +149,8 @@ obliga a anotar como excepción cada línea del bloque.
 
 **D2 · Ningún módulo ancla agenda a `current_date + k` con k > 30: lo largo va a un año propio.**
 - 26: `CITA1..3` y `CITAP2` pasan a `primer lunes de junio de Y+6 + 0/1/2`, a las mismas horas.
-- 17: `f29` pasa a `primer lunes de junio de Y+7`. Una sola línea: los 15 usos cuelgan de `f29`.
+- 17: `f29` pasa a `primer lunes de junio de Y+7`. Solo cambia la definición del ancla: los 15 usos
+  cuelgan de `f29`.
 - 19: `CITA` y `CITA2` pasan a `primer lunes de enero de Y+8` y `+7`, a las mismas horas locales y
   escritas en hora local (D1).
 
@@ -154,14 +161,19 @@ año ocupa siempre la misma franja. Los años propios Y+6..Y+8 quedan por encima
 **D3 · Los literales futuros que no son agenda se quedan y se anotan.** Se escribe
 `-- fecha-fija: <motivo>` en la línea anterior a cada literal de §C que no se mueve. La anotación nunca
 va en la misma línea si el literal está dentro de una cadena `$sql$`/`format`: ahí sería texto SQL.
+Dónde cae la línea anterior cuando también está dentro de una cadena, y qué caracteres no lleva el
+motivo: diseño §1.4.
 
 **D4 · Lint anti-recurrencia: `scripts/rls/fechas-fijas.mjs`.**
-- Recorre `scripts/rls/*.sql`, o los ficheros que se le pasen como argumentos.
+- Recorre `scripts/rls/*.sql` (resuelto desde la ubicación del propio fichero, no desde el directorio
+  de trabajo), o los ficheros que se le pasen como argumentos.
 - Busca literales `AAAA-MM-DD` con mes y día válidos y marca los que son **≥ hoy** (fecha de
   Europe/Madrid; con `--hoy AAAA-MM-DD` se puede fijar para probarlo).
 - Un literal se acepta si su línea, o la anterior, contiene `fecha-fija:` seguido de un motivo no vacío.
 - Sale con código 1 y lista `fichero:línea: fecha` si hay alguno sin anotar, y con 0 en otro caso.
 - Node puro, sin dependencias (no se toca `package.json`).
+- **`npm run test:rls` lo ejecuta antes de `psql` y, si falla, corta con su código sin tocar la base**
+  (decisión P1 del propietario).
 
 Es monótono: un literal pasado nunca se vuelve rojo, así que el lint no puede caer solo con el paso de
 los días; solo cae quien escribe una fecha futura sin justificarla.
@@ -170,8 +182,9 @@ los días; solo cae quien escribe una fecha futura sin justificarla.
 1. **Banda corta.** Un ancla al día de agenda (`now() ± interval`, `current_date ± k`) solo con
    |k| ≤ 30. Comprobación:
    `grep -nE "current_date *\+ *[0-9]{2,}|now\(\) *\+ *interval '([3-9][0-9]|[0-9]{3,}) days" scripts/rls/*.sql`.
-   No debe devolver nada salvo 16 (C7, D+40..D+68, citas de su propia serie S7) y `current_date + 14`
-   de 15, ambos en la tabla.
+   No debe devolver nada salvo 16 (C7, D+40..D+68, citas de su propia serie S7), la línea del ayudante
+   `current_date + 14` de 15, y dos comentarios fuera del territorio (`16-series.sql:702`, que aún
+   nombra el `current_date + 300` del 17, y `18-agenda-rango.sql:377`), todo en la tabla del README.
 2. **Año propio.** Cada ancla al año usa un desplazamiento declarado en la tabla del README:
    16 → +1; 21 → +3; 23 → +4; 26 → +6; 17 → +7; 19 → +8; 29 → +10.
    Comprobación: `grep -noE "extract\(year from (now\(\)|current_date)\)(::int)? *\+ *[0-9]+" scripts/rls/*.sql`.
@@ -183,19 +196,35 @@ Solape ya existente y conocido, que queda fuera: 16 (hasta ~febrero de Y+4) y 21
 comparten calendario. Coinciden un lunes (`lunes_21 + 259`) en 2026-2028 y en verde; dejan de coincidir
 en 2029-2031. Va a `docs/state.md` como hallazgo (§Lo que no entra).
 
+## Decisiones del propietario (06-10-2026)
+
+Eran las preguntas abiertas del contrato; el propietario respondió «sí» a las tres.
+
+- **P1 · El lint se engancha a `npm run test:rls`.** Se amplía el territorio con
+  `scripts/test-rls.mjs` (no con `package.json`). Ejecuta `fechas-fijas.mjs` antes de localizar el
+  contenedor y de `psql`, y corta con su código. Así el lint protege también a quien no se acuerde de
+  lanzarlo.
+- **P2 · 17, 19 y 26 entran en este ticket.** Sin ellas, «banco verde» duraría hasta el 18-12-2026 o
+  el 21-01-2027 (calculado, §B).
+- **P3 · T-049 reescribe `docs/state.md`.** Corrige el hallazgo del 18 (que no tiene fechas fijas),
+  anota los hallazgos nuevos de §Lo que no entra y deja el fichero en 80 líneas o menos.
+
 ## Tareas
 
-1. **Precondición: base limpia.** La base local compartida quedó con filas del banco confirmadas por
-   una simulación fallida del análisis de este contrato (ver Notas). `npx supabase db reset` desde el
-   árbol de T-049 (migraciones de `main`; `max(version)` = `20261011140000`), luego `npm run seed`.
-2. **15:** sustituir los literales de las líneas 101-216 y 492-497 por `d15` (D1). No cambia ningún
-   mensaje, código esperado ni número de aserciones.
-3. **26, 17, 19:** mover las anclas (D2), una línea de ancla y las inserciones que la usan.
+1. ~~**Precondición: base limpia.**~~ **Hecha el 06-10-2026**: la base local se reseteó y se sembró
+   ese día. No se repite: la base es compartida y hay revisores trabajando en ella. Antes de CA3, CA4 y
+   CA11 solo se **lee** `max(version)` (ver CA4).
+2. **15:** sustituir los literales de las líneas 101-216 y 492-497 por instantes relativos a `d15`
+   (D1). No cambia ningún mensaje, código esperado ni número de aserciones.
+3. **26, 17, 19:** mover las anclas (D2): la definición del ancla y las inserciones que la usan.
 4. **01, 26, 27:** anotar `-- fecha-fija:` los literales de §C que se quedan (D3).
 5. **`scripts/rls/fechas-fijas.mjs`** (D4).
-6. **README:** punto 10, con la regla D5 y la tabla de franjas; corregir en el punto 5 que «no dependas
-   del reloj» incluye «no escribas una fecha futura literal».
-7. **Bitácora** `docs/bitacora/T-049.md`: el inventario, las fechas calculadas de §B y el solape 16/21.
+6. **`scripts/test-rls.mjs`:** el paso del lint antes de `localizarContenedor()` (P1). Nada más cambia.
+7. **README:** punto 10, con la regla D5 y la tabla de franjas; corregir en el punto 5 que «no dependas
+   del reloj» incluye «no escribas una fecha futura literal»; y en «Cómo funciona», que `test:rls`
+   pasa primero el lint.
+8. **`docs/state.md`** reescrito (P3).
+9. **Bitácora** `docs/bitacora/T-049.md`: el inventario, las fechas calculadas de §B y el solape 16/21.
 
 ## Criterios de aceptación (verificables)
 
@@ -203,13 +232,16 @@ en 2029-2031. Va a `docs/state.md` como hallazgo (§Lo que no entra).
   `grep -cE "\b20[0-9]{2}-[01][0-9]-[0-3][0-9]\b" scripts/rls/15-agenda.sql` → `0`.
 - **CA2 · 15 sigue probando lo mismo.** Esta comparación, en `main` y en la rama, da salidas idénticas:
   `grep -oE "assert[a-z_]*\(|'(23P01|42501|23514|22023)'" scripts/rls/15-agenda.sql | sort | uniq -c`
-- **CA3 · La gemela del motivo correcto.** En una copia temporal (fuera del árbol) de la rama, con `d15`
-  forzado a `current_date - 7`, el banco 00-15 cae en la aserción de la antigua l.494 con
-  «lanzó 42501 en vez de 23P01 … Una cita pasada». Con `d15` sin tocar, pasa. Demuestra que lo que la
-  hace verde es que CITA1 sea futura, y no otra cosa.
-- **CA4 · Banco completo en verde.** Tras la Tarea 1, `npm run test:rls` sale con código `0`. La línea
-  `Módulos (N)` cuenta lo mismo que `ls scripts/rls/*.sql | wc -l`, y la salida incluye el último aviso
-  del último módulo (`28-…`). Se ejecuta en la rama de T-049 (= `main` + T-049), sin el 29.
+- **CA3 · La gemela del motivo correcto.** En una copia temporal (fuera del árbol) de `scripts/` de la
+  rama, sin los módulos 16-28 y con `d15` forzado a `current_date - 7`, el banco 00-15 cae en la
+  aserción de la antigua l.494 con «lanzó 42501 en vez de 23P01 … Una cita pasada». Con `d15` sin
+  tocar, pasa. Demuestra que lo que la hace verde es que CITA1 sea futura, y no otra cosa.
+- **CA4 · Banco completo en verde.** Con la base en las migraciones de `main` (lectura previa:
+  `select max(version) from supabase_migrations.schema_migrations` → `20261011140000`; si no coincide,
+  no se resetea por cuenta propia: se avisa al orquestador), `npm run test:rls` sale con código `0`. La
+  salida empieza por la línea de éxito del lint, la línea `Módulos (N)` cuenta lo mismo que
+  `ls scripts/rls/*.sql | wc -l`, y la salida incluye el último aviso del último módulo (`28-…`). Se
+  ejecuta en la rama de T-049 (= `main` + T-049), sin el 29.
 - **CA5 · Lint en verde sobre el árbol.** `node scripts/rls/fechas-fijas.mjs` → código `0`.
 - **CA6 · El lint caza el caso real.**
   `git show main:scripts/rls/15-agenda.sql > "$TMP/15.sql" && node scripts/rls/fechas-fijas.mjs --hoy 2026-10-01 "$TMP/15.sql"`
@@ -220,11 +252,23 @@ en 2029-2031. Va a `docs/state.md` como hallazgo (§Lo que no entra).
   Y `--hoy 2026-01-01` sobre `14-cadena-huellas.sql` → código `1`, porque `2026-08-29` es futuro para
   esa fecha: el umbral es la fecha y no el texto.
 - **CA8 · Regla de no colisión.** Las dos órdenes de grep de D5 devuelven exactamente lo que dice la
-  tabla del README. En particular, `current_date + 1500` y `current_date + 300` ya no aparecen.
-- **CA9 · Territorio.** `node ~/.claude/pipeline/territorio.mjs T-049` sale en verde.
-  `git diff main --stat -- scripts/rls/18-agenda-rango.sql scripts/rls/21-alta-de-cita.sql scripts/test-rls.mjs package.json`
+  tabla del README (lista exacta en el diseño §3). En particular,
+  `grep -nE "current_date *\+ *(300|150[0-2])" scripts/rls/17-vinculo-agenda.sql scripts/rls/26-economico.sql`
   sale vacío.
+- **CA9 · Territorio.** `node ~/.claude/pipeline/territorio.mjs T-049` sale en verde.
+  `git diff main --stat -- scripts/rls/16-series.sql scripts/rls/18-agenda-rango.sql scripts/rls/21-alta-de-cita.sql scripts/psql.mjs package.json`
+  sale vacío, y `git diff main -- scripts/test-rls.mjs | grep -E "^-[^-]"` también: en el lanzador
+  solo se añaden líneas.
 - **CA10 · Lint del proyecto.** `npm run lint` sale con código `0` (el `.mjs` nuevo entra en ESLint).
+- **CA11 · `test:rls` cae si cae el lint, y antes de tocar la base.** En una copia temporal de
+  `scripts/` de la rama se añade `rls/0-trampa.sql` con `select date '2099-01-01';` y `\q`.
+  `node <copia>/test-rls.mjs` sale con código `1`, lista `0-trampa.sql:1: 2099-01-01` y **no** imprime
+  `Contenedor:` (no llegó a `docker` ni a `psql`). Gemela: con `-- fecha-fija: prueba` en la línea
+  anterior, la misma orden imprime `Contenedor:` y sale con `0` (el `\q` corta el guion tras el
+  `begin`, sin confirmar nada). Demuestra que el corte lo produce el lint y no la copia.
+- **CA12 · Memoria.** `docs/state.md` tiene 80 líneas o menos; `grep -c "18-agenda-rango" docs/state.md`
+  → `0`; y nombra el solape 16/21, la colisión interna del 16 y el comentario desfasado de
+  `16-series.sql:702`.
 
 ## Guion de comprobación manual
 
@@ -237,30 +281,17 @@ Leer el diff de 15 junto a la salida de CA3. Cada negativa conserva su código y
   Su CA2 («banco completo en verde») no puede cerrarse mientras 15 caiga.
 - T-043 rebasa sobre T-049 y ancla el 29 en el primer lunes de febrero de **Y+10**, como ya decidió su
   ronda 2. Fuera de toda franja de la tabla, con o sin T-049. Añade su fila (29 → +10) a la tabla del
-  README y pasa el lint de D4.
-- Conflicto previsible: solo `scripts/rls/README.md`, que tocan los dos, y en secciones distintas.
-  Se resuelve conservando ambas.
-- La base: la verificación de T-049 resetea desde `main` y **quita la migración `20261012120000` de
-  T-043**. El verificador de T-043 debe resetear desde su árbol después (memoria «migración de rama
-  antes de verificar»).
+  README y pasa el lint de D4 (que desde T-049 corre dentro de `test:rls`).
+- Conflicto previsible: `scripts/rls/README.md`, que tocan los dos, en secciones distintas, y
+  `docs/state.md`. Se resuelve conservando ambas.
+- La base: si al verificar T-049 `max(version)` no es la de `main` (por ejemplo, porque está aplicada
+  la `20261012120000` de T-043), lo decide el orquestador; el verificador de T-043 debe resetear desde
+  su árbol después (memoria «migración de rama antes de verificar»).
 
 ## Delegable
 
 No. El lint (D4) es una función pura, pero va acoplado a la regla D5 y a CA6-CA7. Cada movimiento de
 ancla exige razonar la colisión. Sin parte de pintura.
-
-## Preguntas abiertas al propietario
-
-1. **¿Engancho el lint a `npm run test:rls`?** Hoy queda fuera del territorio: habría que tocar
-   `scripts/test-rls.mjs` o `package.json`. **Recomendación: sí**, ampliando el territorio solo con
-   `scripts/test-rls.mjs`. Ejecutaría `fechas-fijas.mjs` antes de `psql` y cortaría con su código. Si
-   no, el lint solo protege a quien se acuerde de lanzarlo.
-2. **¿Entran 17, 19 y 26 en este ticket o en uno aparte?** **Recomendación: entran.** Son tres líneas
-   de ancla y la misma clase de fallo. Sin ellas, «banco verde» dura hasta el 18-12-2026 o el
-   21-01-2027 (calculado, §B).
-3. **¿Puede T-049 reescribir `docs/state.md`?** Hay que corregir el hallazgo del 18 y anotar el solape
-   16/21, y la constitución (regla 4) pide dejar `state.md` al día. **Recomendación: sí**, añadiéndolo
-   al territorio; si no, lo hace el orquestador al cerrar.
 
 ## Lo que no entra
 
@@ -269,16 +300,16 @@ ancla exige razonar la colisión. Sin parte de pintura.
 - La colisión interna del 16: C7 (D+40..D+68 a la hora de `now()`) frente a la serie de 12:00 de
   `desde_8_martes`, solo si el banco se ejecuta un jueves hacia mediodía en enero-febrero. Es interna
   del 16; va a hallazgo.
+- El comentario de `16-series.sql:702`, que tras T-049 describe mal la franja del 17
+  (`current_date + 300`). El 16 queda fuera del territorio; va a hallazgo y CA8 lo da por esperado.
 - Simular el reloj: `now()` no se puede adelantar en Postgres sin tocar las guardas. Las fechas de §B
   están calculadas, no ejecutadas.
 - Cambiar los literales pasados del 14 (vector congelado), del 01, del 20, del 23 y del 28.
 
 ## Notas para el agente
 
-- **La base local está contaminada.** Una simulación del análisis de este contrato perdió su
-  `begin` y confirmó en autocommit un pase entero del banco más uno parcial: usuarios `@rls.test`,
-  citas y ~1 750 filas de auditoría. Hasta el `db reset` de la Tarea 1, `test:rls` cae por claves
-  duplicadas en 01. No es un fallo de T-049.
+- **La base local está limpia desde el 06-10-2026** (reseteada y sembrada). Es compartida: nada de
+  `db reset`, `seed` ni consultas que confirmen filas. `test:rls` corre en `begin … rollback`.
 - Para saber qué hace hoy una guarda, busca su última redefinición:
   `grep -ln fn_proteger_cita_pasada supabase/migrations/*.sql | tail -1`.
 - Las anclas nuevas de D2 se calculan con `make_date(extract(year from now())::int + k, mes, 1)` más el
