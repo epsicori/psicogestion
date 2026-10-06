@@ -127,7 +127,7 @@ guion suelto:
       Comprobación:
       `grep -noE "extract\(year from (now\(\)|current_date)\)(::int)? *\+ *[0-9]+" scripts/rls/*.sql`
       debe coincidir con la tabla, módulo por módulo (16:50 → +1, 17:26 → +7, 19:97 → +8,
-      21:37 → +3, 23:194 y 23:198 ×2 → +4, 26:191 → +6).
+      21:37 → +3, 23:194 y 23:198 ×2 → +4, 26:191 → +6, 29:34 → +10).
 
       | Módulo | Profesional/centro | Franja |
       |---|---|---|
