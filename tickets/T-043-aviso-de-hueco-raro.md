@@ -6,7 +6,8 @@ riesgo: alto
 fase: 1
 prioridad: media
 depende_de: [T-028, T-028a]
-estado: pendiente
+estado: hecho
+completado: 2026-10-06
 # Territorio cerrado por tickets/T-043/diseno.md §6 y Ronda 2 (R2.6). Notas por elemento:
 # - la migración 20261012120000 va en la cola de un solo dueño: después de T-041 (20261010120000)
 #   y de la reserva de T-021 (20261011120000);
