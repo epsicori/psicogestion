@@ -1,99 +1,141 @@
-Sin hallazgos ALTA (revisor B, ronda 3: 0 ALTA, 1 MEDIA, 1 BAJA).
+Sin hallazgos ALTA (revisor B, ronda 4: 0 ALTA, 1 MEDIA, 1 BAJA).
 
 <!-- REVISOR-B -->
-# T-043 · Revisión B (interfaz, foco y pruebas) · ronda 3
+# T-043 · Revisión B (interfaz, foco y pruebas) · ronda 4
 
-Diff de la ronda: `git diff f2670dc 0c2c87e` en la rama `T-043-aviso-de-hueco-raro`, en el contexto de
-`git diff main...0c2c87e`. Lo revisado: `app/(app)/agenda/nueva/formulario-alta.tsx` y su prueba,
-`aviso-hueco-raro.tsx` y su prueba, `estado-alta.ts` (contexto), `docs/interfaz.md` y `docs/bitacora/T-043.md`.
-La ronda 2 está archivada en `revision-b.ronda2.md` y `.json`.
+He revisado el diff de la ronda (`git diff 0c2c87e 4b1d9eb`) dentro del contexto de `git diff main...T-043-aviso-de-hueco-raro`,
+con HEAD en 4b1d9eb. Ficheros que he leído:
+- `formulario-alta.tsx` y su prueba;
+- `estado-alta.ts` y `vista-alta.ts`, como contexto (`lunesDe`, `desde`, `anterior` y `siguiente`);
+- `lib/i18n/es.ts`, `docs/interfaz.md`, `scripts/rls/README.md` y la bitácora.
 
-Cómo se midió:
-- Se sacó una copia con `git archive 0c2c87e` al scratchpad y se le puso una unión de `node_modules`.
-- En la copia se ejecutó `npx vitest run formulario-alta aviso-hueco-raro alternativas-hueco estado-alta`.
-  La línea base da 79/79 en verde, y `agenda/nueva` + `lib/citas` dan 379/379.
-- Los mutantes se aplicaron uno a uno con un guion (`scratchpad/rb3/mut-rb3.js`): sustitución exacta,
-  comprobando una sola coincidencia y con CRLF, y restaurando después.
-- Las sondas son pruebas temporales añadidas a una copia del fichero de prueba y borradas después.
-- El worktree no se tocó: `git status` queda vacío. Al acabar, `formulario-alta.tsx` de la copia
-  coincide con 0c2c87e (salvo CR).
+La ronda 3 está archivada en `revision-b.ronda3.*`.
+
+Cómo lo he medido:
+- **Copia de trabajo.** Saqué una copia con `git archive 4b1d9eb` al scratchpad y le puse una junction a `node_modules`.
+  Línea base: `app/(app)/agenda/nueva/` da 225/225 en verde.
+- **Mutantes.** Los apliqué uno a uno con `scratchpad/rb4/mut.js`: sustitución exacta, con una sola coincidencia, respetando el fin de
+  línea de la copia y restaurando el fichero al acabar.
+- **Sondas.** Son pruebas temporales que añadí al final del `describe` en la copia y que luego borré.
+- **Contra 0c2c87e.** Puse el `.tsx` de 0c2c87e en la copia con las pruebas de HEAD.
+- **El worktree no se ha tocado.** `git status` sale vacío y HEAD sigue en 4b1d9eb.
 
 ## Hallazgos
 
 ### MEDIA
 
-**B3-H1 · `app/(app)/agenda/nueva/formulario-alta.tsx:126` (con `estado-alta.ts:109-131`).** El aviso solo
-mira `vista.huecosRaros`, y ese mapa cubre la semana pintada y la ventana de 28 días desde hoy. El elegido
-sobrevive a la navegación de semana. Si está fuera de la ventana y el usuario mira otra semana, su clave ya
-no está en el mapa: `huecoRaroElegido` = null y Guardar guarda un hueco raro sin aviso.
-- **Escenario (sonda S2 medida; el mapa, por lectura de `estado-alta.ts`):**
-  1. Hoy es 04-10. El usuario va al calendario de la semana del 09-11 (día +36, fuera de `hoy..hoy+27`) y
-     elige un hueco que es raro. La vista de esa semana trae su clave en `huecosRaros`.
-  2. Pulsa «Semana anterior» para comparar con la del 02-11 (o «Semana siguiente»). `cargarVistaAlta` lee
-     `desde = hoy` y `hasta = max(semanaHasta, hoy+27)` (`:109-110`), o bien semana ∪ ventana (`:131`). En
-     ninguno de los dos casos entra el 09-11, así que el mapa nuevo no trae la clave del elegido.
-  3. El elegido sigue marcado: en la sonda, el resumen dice «Hueco elegido: martes, 6 de octubre…» después
-     de navegar.
-  4. Guardar → `guardarAlta` se llama una vez, con la fecha y hora del elegido y sin aviso. Sonda S2: vista
-     de la otra semana con `huecosRaros: {}` y resultado `guardarAlta=1 aviso=false`.
-- Contradice el criterio que el ticket recupera de T-028 («aviso… cuando la cita deja un hueco raro»).
-  También contradice la premisa de D4 («cubre a la vez calendario y tarjetas: el elegido puede venir de
-  otra semana»): D4 solo es cierta para tarjetas, que siempre caen en la ventana.
-- No es regresión de la ronda 3: pasa igual desde la ronda 1. Ningún revisor lo vio antes.
-- Arreglo posible: en `enviar`, si el elegido no está en `vista.calendario.huecos`, pedir su semana como ya
-  hace `elegirHueco` (`:253-259`) y decidir con esa vista. La otra opción es que `cargarVistaAlta` reciba la
-  fecha del elegido y la incluya en la lectura. Una prueba que lo fije: elegir raro, navegar a una vista
-  cuyo mapa no trae la clave, y Guardar ⇒ aviso o nueva petición, nunca `guardarAlta`.
+**B4-H1 · `app/(app)/agenda/nueva/formulario-alta.tsx:311` (con `:496` y `:570-572`).** El segundo rebote pone en la región de
+estado el mismo texto, que nadie ha borrado entre medias. React no toca el DOM, la región no cambia y el lector de pantalla no
+anuncia nada. Eso es justo lo que D-R4.3 dice evitar.
+- **Por qué pasa.** `aviso` solo se vacía en `elegirHueco` y en `guardar`. Navegar de semana (`alCambiarSemana={setFoco}`) no
+  lo toca.
+- **Escenario (sonda P1, medido):**
+  1. Se elige el hueco raro del 06-10 a las 17:00 y se pulsa «Semana siguiente». Al pulsar Guardar, el calendario vuelve al 05-10
+     y la región dice «El calendario vuelve a la semana del hueco elegido. Pulsa Guardar otra vez.». Aquí el anuncio sí suena.
+  2. El usuario vuelve a pulsar «Semana siguiente» para comparar. La región **sigue diciendo** «El calendario vuelve…», aunque
+     ahora pinta la semana del 12-10.
+  3. Pulsa Guardar. Otra vez se llama a `recalcularAlta` con `fechaFoco: '2026-10-05'`, el calendario salta y `guardarAlta` = 0.
+  4. Un `MutationObserver` sobre la región, con `childList`, `characterData` y `subtree`, registra **0 mutaciones**. Para un
+     lector de pantalla, Guardar no ha hecho nada audible y el calendario ha cambiado de semana en silencio.
+- **Qué no se cumple.** La frase nueva de `docs/interfaz.md:497-499` («…y lo dice en la región de estado») y el CA7 manual
+  («se anuncia el texto») solo se cumplen en el primer rebote.
+- **R11 no lo ve.** Hace un solo rebote y parte de la región vacía.
+- **Arreglo posible.** Vaciar `aviso` al cambiar de semana, envolviendo `setFoco` en `alCambiarSemana`. Con eso:
+  - el texto viejo deja de quedarse en otra semana;
+  - el segundo rebote pasa de `''` al texto, y la región sí cambia.
+
+  La prueba que lo fija es R11 con una segunda navegación y un segundo clic, comprobando que la región cambia: que pasa por `''`
+  o que se observa una mutación.
 
 ### BAJA
 
-**B3-H2 · `docs/interfaz.md:496-497` (con `formulario-alta.tsx:157-160` y `:175-179`).** La doc dice «Si el
-cálculo falla, Guardar guarda sin aviso (la rareza no se conoce) y nunca decide con los huecos de antes».
-Pero la rama de fallo solo avanza `clave` y conserva `claveVista`. Si la clave que falla es la misma de una
-vista anterior, esa vista vuelve a contar como vigente.
-- **Escenario (medido, sonda S1):**
-  1. Tipo A y 17:00, que con A es raro (30 min).
-  2. Se cambia a tipo B y `recalcularAlta` falla («FALLO B»). No hay aviso.
-  3. Se vuelve a tipo A y el recálculo vuelve a fallar («FALLO A»). Ahora `clave` = `claveVista` = clave de
-     A, y la vista que sigue pintada es la de A.
-  4. Guardar → `guardarAlta` = 0. Sale el aviso con «30 minutos» y sus alternativas mientras la alerta
-     «FALLO A» sigue visible.
-- Variante S1b: si el aviso ya estaba abierto antes de pasar a B, tras el segundo fallo **reaparece solo**,
-  con la alerta de fallo a la vez. El foco se queda en el select.
-- El código cumple el invariante del diseño (la vista es de la clave pedida): la vista de A sí es de A. Lo
-  que queda falso es la frase de la doc, y la pantalla enseña dos mensajes que se contradicen: «no se
-  pudieron calcular» y un aviso calculado.
-- Arreglo mínimo, a elegir uno:
-  - `claveVista: ''` en las dos ramas de fallo, para que un fallo invalide toda vista hasta el siguiente
-    ok. Así la doc pasa a ser cierta.
-  - Matizar la frase de la doc («…salvo que la vista pintada sea ya de esa misma elección»).
+**B4-H2 · `app/(app)/agenda/nueva/formulario-alta.tsx:159` y `:178` (con `:311`).** Si falla el recálculo de la vuelta, las
+ramas de fallo no tocan `aviso`. La región sigue diciendo que el calendario ha vuelto a la semana del elegido, y no ha vuelto.
+- **Escenario (sonda P3, medido; es el camino de R12):**
+  1. Se elige el hueco raro del 06-10 a las 17:00, se pulsa «Semana siguiente» y luego Guardar. El recálculo de la semana del
+     05-10 falla.
+  2. Las regiones de estado dicen «… | El calendario vuelve a la semana del hueco elegido. Pulsa Guardar otra vez.».
+  3. El calendario pintado sigue siendo la semana del 12-10 («lun 12, sin huecos libres», «mar 13, un hueco libre»). Ningún botón
+     de 17:00 está pintado.
+  4. El usuario sigue la instrucción y pulsa Guardar otra vez. Se guarda sin aviso el hueco del 06-10 a las 17:00 (R12, D-R3.3),
+     y lo hace tras un texto que afirma que el calendario volvió a esa semana para comprobarla.
+- **Por qué es BAJA.** La alerta «No se han podido calcular los huecos.» está a la vista y avisa de que algo falló. Pero la
+  región de estado afirma un hecho falso. Además, la frase nueva de `interfaz.md` («Guardar vuelve primero a la del hueco
+  elegido y lo dice») no contempla que la vuelta falle.
+- **Arreglo posible.** Que las dos ramas de fallo vacíen `aviso` (o lo sustituyan) cuando es el de la vuelta. Otra opción es
+  añadir a la frase de `interfaz.md` lo que pasa si falla. R12 podría comprobar que el texto «vuelve…» ya no está tras
+  `findByText(FALLO_CALCULO)`.
 
-## Lo que se pidió comprobar (diseño, «Qué revisar» R3.5)
+## Lo que se pidió juzgar
+
+### 1 · M_VV3 sobrevive: es equivalente, no un hueco
+
+- **Por qué es equivalente.** Tras R4, las cinco escrituras de `calculo` (`:116-119`, `:160`, `:164`, `:179` y `:367`) mantienen
+  este invariante: **`claveVista` vale `clave` o `''`**.
+  - El estado inicial y la rama `ok` ponen las dos claves.
+  - Los dos fallos ponen `''`.
+  - `hueco_ocupado` conserva las dos.
+
+  Como `claveCalculo` es un `join('|')` de seis campos y nunca vale `''`, `claveVista === claveCalculo` implica
+  `clave === claveCalculo`, es decir, `!recalculando`. El `!recalculando` de `:126` queda como cinturón redundante.
+- **El escenario que declara el implementador no existe tal cual.** Era: bueno para K, cambio a K2 en vuelo y vuelta a K con
+  otro recálculo en vuelo. Lo medí con la sonda P2:
+  - Al volver a K con K2 en vuelo, `calculo.clave` sigue siendo K, así que `recalculando` = false y el efecto sale en `:145` sin
+    pedir nada. Se hacen 2 llamadas en total, y Guardar pasa de `aria-disabled=true` a `false` nada más volver.
+  - La limpieza del efecto marca K2 como no vigente, y su respuesta tardía (`SIN_RARA`) se descarta.
+  - Guardar enseña el aviso de la vista de K.
+
+  No hay ningún recálculo en vuelo, y la vista de K vale para K. Ningún usuario puede observar la diferencia.
+- **Medición.** M_VV3 sobrevive en 3 ejecuciones seguidas (65/65).
+- **Nota sobre la bitácora.** La fila «M_VV3 sobrevive» no la clasifica como equivalente, y las otras filas de supervivientes sí
+  dicen «equivalentes». No hay escenario de fallo, así que no va como hallazgo.
+
+### 2 · R12 y M_SEM caen en otra línea: está bien
+
+| Mutante | Diseño | Medido | Juicio |
+|---|---|---|---|
+| M_SEM | R11 (1); R12 (2) | R11 `:1318`; R12 `:1345` (`findByText`) | Correcto. Sin el bloque, el primer clic ya guarda (SEMANA_SIGUIENTE no tiene rarezas), no hay 3.ª llamada y el fallo nunca sale. Cae antes, y por el motivo que la prueba protege. |
+| M_SEM_SIGUE | R11 (1) | R11 `:1318`; R12 `:1353` (`toHaveBeenCalledTimes(1)` da 2) | Correcto. |
+| M_SEM_MSG | R11 (2) | R11 `:1319` | Correcto. |
+| M_SEM_CAL | R12 (2) | R12 `:1351` (la espera R7 se agota) | Correcto. El segundo clic vuelve a rebotar porque la vista pintada sigue siendo la del 12-10. |
+| M_SEM_VA (mío: el bloque sin `volverAlElegido()`) | — | R11 `:1316`; R12 `:1345` | Lo cubren R11 y R12. |
+| M_FV_A / M_FV_C | R13 (2) / R14 (1) | `:1382` / `:1413` | Correcto. Cada rama tiene su prueba. |
+
+Contra el `.tsx` de 0c2c87e caen R11 `:1318`, R12 `:1345`, R13 `:1382` y R14 `:1413`: 4 fallos de 65, como dice la bitácora.
+
+### 3 · `respuestasDeRecalculo()` es correcta
+
+- **Lo que dice el comentario es cierto.** En `@vitest/spy` 4.1.11, `mockClear` (que es lo que hace `clearAllMocks` en el
+  `beforeEach` de `:78`) solo vacía `calls`, `results` y demás. `mockReset` es lo único que pone `onceMockImplementations = []`.
+- **Repone el mismo valor por defecto que el `beforeEach`** (`VISTA`), así que una llamada de más recibe lo mismo que en
+  cualquier otra prueba.
+- **Alcance.** Solo protege a R11-R14. Las cadenas `*Once` de R8-R10, que no la usan, seguirían filtrándose a la prueba
+  siguiente si una de ellas cayera. Eso solo pasa con una prueba ya roja, así que no hay escenario sobre una prueba verde y no va
+  como hallazgo.
+- **R11-R14 no dejan colas sin consumir cuando pasan.** Cada una gasta exactamente las 3 respuestas que encola.
+
+## «Qué revisar» de R4.4, punto por punto
 
 | Punto | Resultado |
 |---|---|
-| B2-H1: el aviso no está montado mientras se recalcula | Cerrado. `avisoVisible` exige `vistaVigente`, y esta exige `!recalculando`. R8 lo mide. Mutantes M_VV y M_VV2 mueren en R8 (1) `:1161`, R9 (3) `:1201`, R9b (3) `:1227` y R10 (1) `:1251`. |
-| B2-H2: un fallo no decide con la vista vieja | Cerrado, salvo la vuelta a una clave ya pintada (B3-H2). M_FAV y M_FCV (fallo que marca `claveVista`) mueren en `:1201`/`:1251` y en `:1227`. |
-| B2-H3: sacar de «recalculando» tras un fallo, probado | Cerrado. M_FA muere en R9 (2) `:1193` y R10 `:1256`. M_FC muere en R9b (2) `:1219` y en «hueco acaba de ocuparse» `:966`. |
-| B2-H4: «Agendar igualmente» no existe durante el recálculo | Cerrado: no se monta. M_R_aviso es equivalente por construcción (`avisoVisible ⇒ !recalculando`). |
-| Invariante `claveVista` | M_VV3 (sin `!recalculando`) muere en R10 (2) `:1256`. M_OK (la rama ok conserva `claveVista`) hace caer 14 pruebas. |
-| Las pruebas nuevas fallan sin el arreglo | Sí. Contra f2670dc, R8, R9, R9b y R10 fallan en `:1161`, `:1201`, `:1227` y `:1251`, como dice la bitácora. |
-| Sin efecto de foco genérico (D-R3.2) | Cierto. `focoPendiente = 'guardar'` solo está en el `.then` de `agendarIgualmente`, que ya existía. El grep de `huecosRaros`/`huecoRaroElegido` da solo `:126`, `:128`, `:305` y `:575-579`. |
-| Mutantes de rondas anteriores | M_R y M_R_submit mueren en `:998`/`:1036`, y M_R_aria en `:999`. M_E, M_F, M_L, M_M y M_BM tumban una prueba cada uno, M_H tumba 14 y M_V tumba H8. M_B sigue equivalente, como se declaró. |
-| Notas de la ronda 2 | Arregladas: el JSDoc de `ocupado` (`aviso-hueco-raro.tsx:14`) y la mención de «Agendar igualmente» en `interfaz.md`. La prueba «sin alternativas» comprueba ahora que el botón existe. |
+| El bloque de R4.1.1 va después de `esperandoSerie` y antes de la intercepción, y compara con `foco` | Sí, en `:305`, `:309-313` y `:314`. `foco` y `lunesDe(...)` son siempre lunes: `desde = lunesDe(fechaFoco)` (`vista-alta.ts:93`), y `anterior`/`siguiente` llegan por `alCambiarSemana`. El bloque no puede rebotar sin fin: tras `volverAlElegido()`, `foco` es el lunes del elegido, y nada lo vuelve a mover salvo el usuario. |
+| Las dos ramas de fallo ponen `claveVista: ''`; `ok` pone las dos claves; `hueco_ocupado` conserva el spread; ningún fallo pone `claveVista = claveCalculo` | Sí: `:160`, `:179`, `:164` y `:367`. |
+| R14 (1) y (2) son síncronas tras `waitFor(guardarActivo)`; R13 usa `ok:false` y R14 rechazos | Sí. La espera de R14 exige además 3 llamadas, así que solo pasa cuando el 3.er rechazo ya se ha procesado (Guardar sale de `recalculando`). |
+| Ni efecto nuevo, ni `focoPendiente`, ni servidor; en el README solo la celda; en `interfaz.md` solo la frase | Sí. `git diff 0c2c87e --stat` no toca `estado-alta.ts`, `acciones.ts` ni `lib/` salvo `es.ts`. |
+
+## B3-H1, B3-H2 y A3-H1: ¿cerrados?
+
+| Id | Estado | Comprobación |
+|---|---|---|
+| B3-H1 | **Cerrado.** Ya no se guarda un hueco raro sin aviso tras navegar. | La rareza solo se lee con `vistaVigente`, y eso exige que la vista sea de `claveCalculo`, que incluye `foco`. Con el bloque nuevo, `foco` es la semana del elegido, y la lectura de esa semana trae su clave en `huecosRaros`. R11 (6) lo mide. Lo que queda es el anuncio (B4-H1) y el texto tras un fallo (B4-H2). |
+| B3-H2 | **Cerrado.** | R13 y R14. La frase de `interfaz.md` («Si el cálculo falla, Guardar guarda sin aviso… y nunca decide con los huecos de antes») ya es cierta. |
+| A3-H1 | **Cerrado.** | `README.md:143` dice `.. +154`. |
 
 ## Notas sin hallazgo
 
-- **Bitácora.** La tabla de mutantes dice que M_R_aviso sobrevive porque «`ocupado` impide la llamada». Para
-  M_R_aviso no es así, porque ese mutante también muta `ocupado`. Sobrevive porque `avisoVisible ⇒
-  !recalculando`, y el aviso no existe mientras se recalcula. No hay escenario de fallo: el veredicto
-  (equivalente) es correcto.
-- **M_HOV y M_INI siguen verdes y son equivalentes en la práctica.**
-  - M_HOV pone `claveVista: ''` tras `hueco_ocupado`; M_INI la pone en el estado inicial.
-  - Al empezar no hay tipo, así que zod corta antes de `enviar`.
-  - Tras `hueco_ocupado` el elegido es null, y la clave cambia con `excluirHuecos`.
-- **No medido.** En Safari un clic de ratón no enfoca botones. Un clic en «semana» o en un hueco con el foco
-  en el aviso podría dejar el foco en `body` al desmontarse el aviso. Ya pasaba antes de esta ronda y no lo
-  he podido medir en jsdom, así que no va como hallazgo.
-- La lista de cambios que retiran el aviso en `interfaz.md:495` no nombra la exclusión de huecos
-  (`excluirHuecos`). No pasa nada por ello: es la rama de `hueco_ocupado`, donde el elegido ya se ha quitado.
+- **Prueba inestable bajo carga.** En la primera tanda de mutantes, la prueba «si al agendar igualmente el hueco acaba de
+  ocuparse, el foco no se pierde en body» (`:966`) cayó una vez con M_VV3, en 1092 ms: el `waitFor` por defecto tiene un plazo de
+  1 s. Con el mismo mutante salió verde en tres tandas seguidas. La prueba no es de esta ronda, pero puede hacer que un mutante
+  equivalente parezca muerto si la tabla se mide con la máquina cargada.
+- Tras el rebote, el texto «Pulsa Guardar otra vez» se queda junto al aviso cuando el segundo clic lo abre. Es el riesgo que
+  declara R4.3 («Baja»), y no lo cuento.
