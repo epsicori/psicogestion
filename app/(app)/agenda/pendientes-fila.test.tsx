@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AlertaPendiente } from '@/lib/citas/agenda';
@@ -112,7 +113,7 @@ describe('FilaPaciente: varios pendientes, desplegable', () => {
     for (const p of pildoras) expect(boton.contains(p)).toBe(false);
   });
 
-  it('abre y cierra con el clic y el teclado, y conserva el foco en el botón', () => {
+  it('abre y cierra con el clic y conserva el foco en el botón', () => {
     pintar(grupoDe(alertas));
     const boton = screen.getByRole('button', { name: /Ana López/ });
     const lista = document.getElementById(boton.getAttribute('aria-controls')!)!;
@@ -127,6 +128,54 @@ describe('FilaPaciente: varios pendientes, desplegable', () => {
     fireEvent.click(boton);
     expect(boton.getAttribute('aria-expanded')).toBe('false');
     expect(lista.hasAttribute('hidden')).toBe(true);
+  });
+
+  // R2-H2 (criterio 3), literal: Tab desde el nombre llega al botón, Intro abre y Espacio cierra y abre.
+  it('Tab desde el nombre llega al botón; Intro abre y Espacio cierra y vuelve a abrir', async () => {
+    const user = userEvent.setup();
+    pintar(grupoDe(alertas));
+    const boton = screen.getByRole('button', { name: /Ana López/ });
+    const lista = document.getElementById(boton.getAttribute('aria-controls')!)!;
+
+    screen.getByRole('link', { name: 'Ana López' }).focus();
+    await user.tab();
+    expect(document.activeElement).toBe(boton);
+
+    await user.keyboard('{Enter}');
+    expect(boton.getAttribute('aria-expanded')).toBe('true');
+    expect(lista.hasAttribute('hidden')).toBe(false);
+    expect(document.activeElement).toBe(boton);
+
+    await user.keyboard(' ');
+    expect(boton.getAttribute('aria-expanded')).toBe('false');
+    expect(lista.hasAttribute('hidden')).toBe(true);
+
+    await user.keyboard(' ');
+    expect(boton.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(boton);
+  });
+
+  // Criterio 3: no es un acordeón; abrir una fila no cierra otra.
+  it('dos filas abiertas a la vez, con el teclado', async () => {
+    const user = userEvent.setup();
+    render(
+      <ul>
+        <li>
+          <FilaPaciente grupo={grupoDe(alertas)} prefijo="panel" modo="desplegable" />
+        </li>
+        <li>
+          <FilaPaciente grupo={{ ...grupoDe(alertas), pacienteId: 'p2', nombre: 'Berta Ruiz', textoAccesible: 'Berta Ruiz, 3 pendientes' }} prefijo="panel" modo="desplegable" />
+        </li>
+      </ul>,
+    );
+    const primera = screen.getByRole('button', { name: /Ana López/ });
+    const segunda = screen.getByRole('button', { name: /Berta Ruiz/ });
+    primera.focus();
+    await user.keyboard('{Enter}');
+    segunda.focus();
+    await user.keyboard(' ');
+    expect(primera.getAttribute('aria-expanded')).toBe('true');
+    expect(segunda.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('no guarda el estado abierto en ningún sitio (D9)', () => {

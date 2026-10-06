@@ -13,7 +13,7 @@ import { idEnlacePaciente, idListaPendientes, idResumen, type Prefijo } from './
 import { ResolverAlerta } from './resolver-alerta';
 
 const ENLACE =
-  'focus-visible:ring-ring/50 inline-flex min-h-11 items-center font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-2';
+  'focus-visible:ring-ring/50 inline-flex min-h-11 min-w-11 items-center font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-2';
 
 function ItemPendiente({ pendiente, pacienteId }: { pendiente: PendientePresentado; pacienteId: string }) {
   return (
