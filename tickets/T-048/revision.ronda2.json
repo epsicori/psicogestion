@@ -1,0 +1,41 @@
+{
+  "ticket": "T-048",
+  "ronda": 2,
+  "altas": 0,
+  "medias": 2,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "R2-H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/agenda/documentacion/buscador.tsx",
+      "linea": 38,
+      "descripcion": "La key tipo|nivel|pagina del arreglo de H1 envuelve también children, es decir, la Lista con su ProveedorResolucion. Un cambio de página remonta el proveedor y pierde pendiente, eraUltimo y el anuncio. La prueba de H5 (resolver-alerta.test.tsx:217) modela con un rerender que conserva el estado un escenario que en la página siempre remonta (por la key y por RedirectErrorBoundary).",
+      "escenario": "En ?pagina=3, con un solo paciente y un pendiente, resuelvo y la acción da ok. La revalidación redirige a ?pagina=2, la key cambia y se monta un proveedor nuevo con pendiente=null. El foco cae en body y no se anuncia «Marcada como resuelta». Incumple el criterio 9 (b) y la suite sigue en verde."
+    },
+    {
+      "id": "R2-H2",
+      "severidad": "MEDIA",
+      "archivo": "accesibilidad/documentacion-pendiente.spec.ts",
+      "linea": 131,
+      "descripcion": "El spec llega al botón con .focus() y lo abre con Enter. El contrato pide Tab al botón y que Espacio lo despliegue, y el test jsdom 'con el clic y el teclado' (pendientes-fila.test.tsx:115) solo usa fireEvent.click. Ningún banco prueba Tab al botón ni Espacio.",
+      "escenario": "Con el Button cambiado por un div role=button tabIndex=-1 cuyo onKeyDown solo atiende Enter, el spec y jsdom siguen en verde. En producción, Tab salta el desplegable y Espacio no lo abre."
+    },
+    {
+      "id": "R2-H3",
+      "severidad": "BAJA",
+      "archivo": "accesibilidad/documentacion-pendiente.spec.ts",
+      "linea": 119,
+      "descripcion": "El enlace de nombre del paciente no se mide, y del botón de desplegar solo se mide el alto. El contrato pide 44 × 44 en los dos.",
+      "escenario": "El paciente 'Eva', sin apellidos, pinta un enlace inline-flex min-h-11 de unos 25 px de ancho, por debajo de 44. El spec sigue verde porque nunca mide ese enlace y los nombres de la marca son largos."
+    },
+    {
+      "id": "R2-H4",
+      "severidad": "BAJA",
+      "archivo": "accesibilidad/documentacion-pendiente.spec.ts",
+      "linea": 73,
+      "descripcion": "El UPDATE de referencia_en deja abierta una nota_sin_firmar de nivel 3 sobre una nota inexistente. escalar_notas_pendientes() (pg_cron, cada 15 minutos) la convierte en una notificación a cada administrador, y LIMPIAR no la retira.",
+      "escenario": "Si la pasada cruza un :00/:15/:30/:45, la campana del administrador guarda una 'nota sin firmar' de origen notas_clinicas/b0480000-…000 hasta el db reset. Si la ejecución se corta antes de afterAll, Ana ve a 'Zzmarca T048 00' como Muy atrasada y ninguna ruta de la app puede cerrarla."
+    }
+  ]
+}

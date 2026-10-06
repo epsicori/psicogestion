@@ -1,41 +1,33 @@
 {
   "ticket": "T-048",
-  "ronda": 2,
+  "ronda": 3,
   "altas": 0,
-  "medias": 2,
+  "medias": 1,
   "bajas": 2,
   "hallazgos": [
     {
-      "id": "R2-H1",
+      "id": "R3-H1",
       "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/documentacion/buscador.tsx",
-      "linea": 38,
-      "descripcion": "La key tipo|nivel|pagina del arreglo de H1 envuelve también children, es decir, la Lista con su ProveedorResolucion. Un cambio de página remonta el proveedor y pierde pendiente, eraUltimo y el anuncio. La prueba de H5 (resolver-alerta.test.tsx:217) modela con un rerender que conserva el estado un escenario que en la página siempre remonta (por la key y por RedirectErrorBoundary).",
-      "escenario": "En ?pagina=3, con un solo paciente y un pendiente, resuelvo y la acción da ok. La revalidación redirige a ?pagina=2, la key cambia y se monta un proveedor nuevo con pendiente=null. El foco cae en body y no se anuncia «Marcada como resuelta». Incumple el criterio 9 (b) y la suite sigue en verde."
+      "archivo": "app/(app)/agenda/resolver-alerta.tsx",
+      "linea": 217,
+      "descripcion": "descartar() (limpiar, enviar, limpieza de Activity) solo tira el pendiente ya anotado. El ok de una acción enviada antes del gesto llega después, alResolver llama a anotar en la memoria del layout, que sobrevive, y el bloque visible roba el foco. En limpiar es una regresión de la ronda: antes, el setState sobre el proveedor desmontado no hacía nada.",
+      "escenario": "Medido en jsdom con resolverAlerta diferido. (1) Se busca, se pulsa Marcar como resuelta y, en Resolviendo…, Limpiar búsqueda: el foco está en el campo y, al llegar el ok, salta a documentacion-titulo. (2) Lo mismo con una búsqueda nueva que devuelve [p2]: el foco va a busqueda-paciente-p2. (3) Se pulsa Marcar y se sale de la ruta antes del ok; Next resuelve la promesa aunque descarte el estado (server-action-reducer.js:263). Al volver, Activity repite el efecto: el foco va a panel-paciente-pB y se anuncia «Marcada como resuelta.». Pasa también en el panel de /agenda."
     },
     {
-      "id": "R2-H2",
-      "severidad": "MEDIA",
-      "archivo": "accesibilidad/documentacion-pendiente.spec.ts",
-      "linea": 131,
-      "descripcion": "El spec llega al botón con .focus() y lo abre con Enter. El contrato pide Tab al botón y que Espacio lo despliegue, y el test jsdom 'con el clic y el teclado' (pendientes-fila.test.tsx:115) solo usa fireEvent.click. Ningún banco prueba Tab al botón ni Espacio.",
-      "escenario": "Con el Button cambiado por un div role=button tabIndex=-1 cuyo onKeyDown solo atiende Enter, el spec y jsdom siguen en verde. En producción, Tab salta el desplegable y Espacio no lo abre."
-    },
-    {
-      "id": "R2-H3",
+      "id": "R3-H2",
       "severidad": "BAJA",
-      "archivo": "accesibilidad/documentacion-pendiente.spec.ts",
-      "linea": 119,
-      "descripcion": "El enlace de nombre del paciente no se mide, y del botón de desplegar solo se mide el alto. El contrato pide 44 × 44 en los dos.",
-      "escenario": "El paciente 'Eva', sin apellidos, pinta un enlace inline-flex min-h-11 de unos 25 px de ancho, por debajo de 44. El spec sigue verde porque nunca mide ese enlace y los nombres de la marca son largos."
+      "archivo": "app/(app)/agenda/resolver-alerta.test.tsx",
+      "linea": 439,
+      "descripcion": "La prueba «con StrictMode, un acierto anuncia una sola vez» dispara el efecto en una actualización, que StrictMode no repite, y compara un texto que es igual con uno o dos anuncios: no ve la guarda de cerrar.",
+      "escenario": "Mutante sin `if (ultimoCerrado.current === p) return;`: esta prueba sigue en verde (614/615) y solo cae la prueba directa de cerrar. Si alguien quita la directa porque el título de esta promete lo mismo, la guarda se queda sin prueba."
     },
     {
-      "id": "R2-H4",
+      "id": "R3-H3",
       "severidad": "BAJA",
-      "archivo": "accesibilidad/documentacion-pendiente.spec.ts",
-      "linea": 73,
-      "descripcion": "El UPDATE de referencia_en deja abierta una nota_sin_firmar de nivel 3 sobre una nota inexistente. escalar_notas_pendientes() (pg_cron, cada 15 minutos) la convierte en una notificación a cada administrador, y LIMPIAR no la retira.",
-      "escenario": "Si la pasada cruza un :00/:15/:30/:45, la campana del administrador guarda una 'nota sin firmar' de origen notas_clinicas/b0480000-…000 hasta el db reset. Si la ejecución se corta antes de afterAll, Ana ve a 'Zzmarca T048 00' como Muy atrasada y ninguna ruta de la app puede cerrarla."
+      "archivo": "app/(app)/agenda/documentacion/buscador.test.tsx",
+      "linea": 325,
+      "descripcion": "La prueba de Limpiar solo suelta su relanzar en vuelo en la última línea (lo mismo en remontaje.test.tsx:209). Si falla antes, la acción pendiente retiene las transiciones de React y la prueba siguiente cae por contagio.",
+      "escenario": "Mutante sin descartar en limpiar: en el fichero caen Limpiar y el gemelo de Buscar (este por tiempo agotado, 1256 ms). Con -t \"gemelo con\", el gemelo pasa. La evidencia de mutantes atribuye al gemelo una muerte que no es suya, y un fallo real del gemelo queda tapado."
     }
   ]
 }

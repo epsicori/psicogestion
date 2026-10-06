@@ -1,0 +1,15 @@
+{
+  "ticket": "T-048",
+  "resumen": "Ronda 2 sobre la rama worktree-agent-afd4c4801e9671c9e (HEAD 3108602): npm test 192 ficheros / 2506 pruebas en verde; lint 0 errores (2 avisos ajenos en lib/cuentas/accesos.test.ts); next build --webpack ok con /agenda/documentacion; Playwright 4/4 en verde (el criterio 12 que fallo en la ronda 1 pasa ahora). Los criterios manuales no se ejercen.",
+  "criterios": [
+    {"id":"logica-pura (1,4,6,D7,D8,Mas de 10,Coincidencia)","veredicto":"PASA","comando":"npm test (worktree, via junction)","evidencia":"Test Files 192 passed (192); Tests 2506 passed (2506); incluye app/(app)/agenda/pendientes.test.ts"},
+    {"id":"componentes (2,3,D7 DOM,D9,5,7,9,D11,11,Errores)","veredicto":"PASA","comando":"npm test","evidencia":"192/192 ficheros, 2506/2506 pruebas, incluidos pendientes-fila.test.tsx, documentacion.test.tsx, resolver-alerta.test.tsx. rg de localStorage|sessionStorage|document.cookie: sin resultados. rg latido|animate-: solo 2 aserciones negativas de test y 1 comentario, ningun uso real."},
+    {"id":"pagina (8,8b)","veredicto":"PASA","comando":"npm test","evidencia":"Pruebas de app/(app)/agenda/documentacion/ en verde dentro de 2506 passed"},
+    {"id":"buscador (D10a,D10b,D10c)","veredicto":"PASA","comando":"npm test","evidencia":"Pruebas de documentacion/contenido.test.tsx y de la accion en verde dentro de 2506 passed"},
+    {"id":"10 lectura acotada","veredicto":"PASA","comando":"npm test","evidencia":"lib/citas/agenda.test.ts en verde dentro de 2506 passed"},
+    {"id":12,"texto":"Playwright accesibilidad/documentacion-pendiente.spec.ts","veredicto":"PASA","comando":"PUERTO=3107 npx playwright test accesibilidad/documentacion-pendiente.spec.ts","evidencia":"4 passed (8.2s): panel de /agenda teclado y foco; /agenda -> Ver todos sin dialogo y objetivos 44px; termino de busqueda fuera de URL e historial; ?paciente sin buscador."},
+    {"id":"Nada se rompe alrededor","veredicto":"PASA","comando":"npm test; npm run lint; npx next build --webpack; rg 'use cache' en rutas del ticket y lib/citas/agenda.ts","evidencia":"tests 2506 passed; lint exit 0 (0 errores, 2 avisos no-unused-vars en lib/cuentas/accesos.test.ts, ajenos); build exit 0 y lista /agenda/documentacion; rg 'use cache': sin resultados. Nota: el build usa --webpack por la junction, no Turbopack."},
+    {"id":"Manuales (lector de pantalla, escala de grises, tecnico/admin, enlace a nota, otra pestana, prototipo)","veredicto":"NO_VERIFICABLE","motivo":"Requieren NVDA/Narrador, impresion a PDF, sesiones de varios roles y telefono real; un verificador automatico no puede ejercerlos. Seguir el guion manual del ticket."}
+  ],
+  "regresiones": []
+}
