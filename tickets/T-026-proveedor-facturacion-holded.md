@@ -9,6 +9,15 @@ estado: pendiente
 riesgo: alto
 ---
 
+> **Partido el 05-10-2026 (Q0 de `tickets/T-026/diseno.md`). No se implementa con este id.**
+> - `tickets/T-026a-proveedor-facturacion-sin-red.md`: esquema, cola, espejo, sincronizador,
+>   clave en el Vault, ajustes y ficha, con un adaptador simulado y `holded.ts` como esqueleto.
+> - `tickets/T-026b-adaptador-holded.md`: el cuerpo de `holded.ts` y los manuales con una cuenta
+>   real. Bloqueado hasta tener por escrito las respuestas de Holded y el informe sobre k.1.
+> - `tickets/T-046-editor-del-borrador.md`: el editor del borrador (Q1), antes de activar el envío.
+>
+> Lo de abajo queda como historia del contrato original; el diseño sigue en `tickets/T-026/diseno.md`.
+
 # Contexto
 
 Por el **ADR-053**, Psicogestión no expide facturas: deja un **borrador** en la cuenta del

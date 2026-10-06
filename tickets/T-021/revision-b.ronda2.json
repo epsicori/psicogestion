@@ -1,0 +1,34 @@
+{
+  "ticket": "T-021",
+  "ronda": 2,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 259,
+      "descripcion": "La congelación de citas.bono_id por old.fin <= now() bloquea también la primera asignación null → bono, para todo rol incluido postgres; el INSERT de citas está denegado a authenticated, así que una sesión terminada nunca puede descontar de un bono.",
+      "escenario": "Cita de P1 terminada hace 2 h, programada y sin bono; el paciente compra al salir un bono de 5 que la incluye. update citas set bono_id = BONO21 como ADM → 42501; set estado='realizada', bono_id=… como PRO1 → 42501; marcar realizada y luego asignar → 42501; como postgres → 42501 (medido). bonos_consumo no cuenta nunca esa sesión: 6 sesiones por 5, sin salida salvo migración."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 599,
+      "descripcion": "La cuota solo se comprueba como cero/no cero: no se acota frente a la suma de las líneas generales (y v_suma_general = 0 la desactiva), ni el tipo de IVA por arriba.",
+      "escenario": "Como postgres sobre BORR1 se sellan (verificar_cadena_borrador = 0 fallos): exenta 100 € + general 1 € al 21 % con base 51 / cuota 50 / total 101; general 100 € con base 0 / cuota 100; exenta 60 € + general +100 −100 con cuota 10; tipo_iva_centesimas 999900. 50 € de IVA sobre 1 € de base queda en una cadena de solo adición que T-026 enviaría."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011120000_economico_esquema.sql",
+      "linea": 513,
+      "descripcion": "La guarda de concepto vacío (!~ '[^[:space:]]') no ve los blancos de anchura cero (U+200B, U+FEFF).",
+      "escenario": "Línea con concepto = E'\\u200b' → se sella en BORR1 (medido; tab y U+00A0 sí dan 23514). El borrador y el espejo de T-026 pintan una línea con concepto vacío, lo que B-H10 quería impedir."
+    }
+  ]
+}

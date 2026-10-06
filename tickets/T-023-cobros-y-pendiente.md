@@ -9,6 +9,13 @@ estado: pendiente
 riesgo: alto
 ---
 
+> **Partido el 05-10-2026 (P4 de `tickets/T-023/diseno.md`).** Este ticket hace cobros, pendiente y
+> pantalla. La sección «Lo que depende de T-026» y el criterio «con T-026 integrado» pasan a
+> `tickets/T-023b-facturas-del-espejo-y-cobro-contra-factura.md`, junto con la asignación de cobros
+> anteriores (`cobros_facturas`). Respuestas del propietario: P1 (ii) lo devengado menos lo cobrado;
+> P2 la `no_asistida` no cuenta; P3 una cita sin precio cuenta 0 y se señala; P5 `cobros.motivo`
+> con check. El `territorio:` está en el diseño, §6.
+
 # Contexto
 
 `docs/interfaz.md` §Facturación pinta «pendiente de cobro» como una de las tres métricas de la

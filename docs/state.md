@@ -8,8 +8,9 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-015, T-011b, T-012 (A/B/C), T-012b/c, T-028 (A/B/C), T-016–T-020, T-029–T-042.
-- **En verificación**: T-021 (esquema económico, riesgo alto; rama `worktree-agent-a19ecdb63f2c1e386`, migración 20261011120000 ya aplicada en la base local).
-- **Siguiente en `supabase/`**: T-021 (migración 20261011120000, riesgo alto, diseño hecho con respuestas del propietario), luego T-043 (migración 20261012120000, idem, va tras T-021).
+- **T-021 en ronda 3** (rama `worktree-agent-a19ecdb63f2c1e386`, HEAD a982e0a, migración 20261011120000 aplicada en la base local). Ronda 2: evidencia 15/15 PASA (archivada `evidencia.ronda2.json`); A 0/0/2, B 0/1/2. **Decisiones del propietario (05-10) para la ronda 3**, en `tickets/T-021/diseno.md` §«Ronda 3»: bono a cita terminada se pone una vez (B-H1); borradores solo los lee el profesional asignado (A-H2); cota de la cuota de IVA y blancos de anchura cero (A-H1/B-H2/B-H3) entran ya.
+- **T-026 diseñado y respondido** (partir en T-026a/T-026b; editor del borrador en ticket nuevo; concepto según IVA; Ajustes solo admin). **T-023 diseñado y respondido** (T-023b tras T-026).
+- **Siguiente en `supabase/`**: T-021 (20261011120000) → T-043 (20261012120000) → T-023 (20261013120000) → T-026a (20261014120000).
 
 ## Bloqueos
 

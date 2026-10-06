@@ -2131,3 +2131,559 @@ Para el revisor y para la autoevaluación del implementador.
   ronda 2 son de categoría (tipo según régimen, cuota según régimen, signo), no aritméticas.
 - **Validar que el profesional de la cabecera esté activo.** Un profesional de baja ya no lee
   nada (ADR-032), así que su cabecera no expone datos.
+
+
+## Ronda 3 — decisiones del propietario (05-10-2026), diseño pendiente
+
+- **B-H1 (MEDIA)**: el bono de una cita realizada o pasada con `bono_id` nulo se puede poner **una sola vez**; después queda fijo (también para `postgres`). Quitarlo o cambiarlo sigue prohibido.
+- **A-H2 (BAJA)**: el profesional lee borradores y versiones **solo mientras tiene asignado al paciente**; tras reasignar, los ven el nuevo y el administrador.
+- **Ronda 3 corta antes del merge**: entran también la cota de la cuota de IVA respecto a las líneas generales (A-H1/B-H2: cuota mayor que la suma, base 0 con cuota llena, tipo 9999 %) y los blancos de anchura cero en el concepto (B-H3).
+
+
+## Ronda 3 (05-10-2026)
+
+Alcance: los cinco hallazgos que meten en la ronda las decisiones del propietario de arriba
+(B-H1, A-H2, A-H1 = B-H2, B-H3). Base: rama `worktree-agent-a19ecdb63f2c1e386`, HEAD a982e0a.
+
+**Solo añadir.** La migración de las rondas 1 y 2
+(`supabase/migrations/20261011120000_economico_esquema.sql`) **no se toca**: ya está aplicada en la
+base local. Todo lo de la ronda 3 va en una migración nueva hacia delante:
+
+**`supabase/migrations/20261011130000_economico_ronda_3.sql`**
+
+Queda entre la 20261011120000 (T-021) y la 20261012120000 (reservada a T-043).
+
+### R3.0 · Hechos verificados contra el código
+
+Rutas de la rama, salvo que se diga otra cosa. `mig` es `supabase/migrations/20261011120000_economico_esquema.sql`.
+
+**La congelación del bono**
+- La congelación vive en `fn_bono_de_la_cita()` (`mig:249-283`). Es definer, con `search_path = ''`.
+- Su disparador es `bono_de_la_cita`: `before insert or update of bono_id, paciente_id`, en `mig:285-287`.
+- La condición actual no mira si `old.bono_id` es nulo (`mig:260-262`). Por eso bloquea también el primer `null → bono` de una cita pasada (B-H1).
+- `comment on column public.citas.bono_id` (`mig:241-244`) y `comment on function` (`mig:277-281`) describen la congelación de la ronda 2. Hay que reescribirlos.
+- Precedente exacto de «de nulo a un valor sí; cambiarlo o quitarlo, no»: la regla de `episodio_id` en `fn_proteger_cita_pasada()` (T-039, `supabase/migrations/20261007120000_*.sql`, en main).
+- `fn_proteger_cita_pasada()` no bloquea ni `bono_id` ni `estado` en una cita pasada. Marcar realizada una cita pasada está permitido.
+- Al pasar a realizada una cita que ya terminó, `fn_alertar_nota_sin_firmar()` (`20260906120000_agenda_esquema.sql:453-499`) abre una alerta. Los módulos 27 y 28 del banco no leen `alertas_documentacion` ni citas (comprobado con grep).
+
+**La lectura de los borradores**
+- La política de lectura de la cabecera está en `mig:1119-1125`: administrador, o profesional con `profesional_id = auth.uid()`. **No exige asignación** (A-H2).
+- Quién sigue a esa política sin tocarse:
+  - `borradores_factura_versiones_lectura` es un `exists` sobre la cabecera, que corre bajo la RLS de quien consulta;
+  - `borradores_factura_estado` es `security_invoker`.
+- Las políticas de alta (`borradores_factura_alta`, `borradores_factura_versiones_alta`) y el paso 0 del sellado ya exigen `es_profesional_asignado`.
+- `es_profesional_asignado(p_paciente_id)` (`20260822160000_rls_funciones_y_politicas.sql:93-115`):
+  - es definer y no mira el rol;
+  - da verdadero si `auth.uid()` es el `profesional_id` del paciente o el del superviviente de una fusión, y el perfil está activo.
+- Reasignar un paciente lo permite `fn_proteger_columnas_reservadas_paciente()` solo al administrador. Tampoco exime a `postgres`.
+- Precedente de reasignar y revertir dentro del banco: `scripts/rls/12-resto-de-tablas.sql:79-98`.
+
+**El sellado**
+- El sellado vive en `fn_sellar_version_borrador()` (`mig:294-635`), con el disparador `sellar_version_borrador` (`mig:992-994`). No hay otro disparador `before insert` sobre las versiones.
+  - Recorre `v_sobre -> 'lineas'` como `json` (`mig:501`).
+  - Antes ha cotejado que esas líneas son jsonb-equivalentes a `new.lineas` (`mig:466`).
+  - Ha validado cada línea: seis claves sin repetir, cantidad entera ≥ 1, precio entero, régimen del enum, tipo entero ≥ 0 y tipo según régimen (`mig:505-561`).
+- El concepto se valida con `!~ '[^[:space:]]'` (`mig:513`). No ve U+200B ni U+FEFF (B-H3, medido por B).
+- 6.4 (`mig:589-602`) tiene tres comprobaciones:
+  - suma de líneas = total;
+  - todo exento ⇒ cuota 0;
+  - `v_suma_general <> 0` ⇒ cuota ≠ 0.
+
+  No hay cota de la cuota ni techo del tipo (A-H1, B-H2).
+- La tabla (`mig:120-141`) tiene `lineas jsonb`, `base`, `cuota_iva` y `total numeric(12,2)`, y dos restricciones:
+  - `importes_ck`: `base + cuota_iva = total`;
+  - `signo_ck`: `sign(base)` y `sign(cuota_iva)` ∈ (0, `sign(total)`).
+
+  Las restricciones `check` se comprueban **después** de los disparadores `before`.
+
+**El banco y los tipos**
+- `scripts/rls/26-economico.sql`:
+  - J42 (líneas 1028-1033) espera el fragmento `borradores_factura_versiones_signo_ck` con base −50, cuota 150 y total 100. La cota nueva la parará antes: **hay que reescribirla**.
+  - B2 (líneas 298-308) es la gemela positiva de la cota: cuota 21,00 sobre una general de 121 € al 21 %.
+  - Las positivas de J41p, J41q y J42g sellan sobre BORR3 y BORR4. Ninguna prueba posterior cuenta versiones de BORR3.
+- `scripts/rls/11-cobertura.sql` declara políticas por nombre. Los nombres no cambian.
+- `lib/supabase/tipos-bd.ts` no lista las funciones de disparador (`fn_sellar_version_borrador` no aparece). La función nueva tampoco aparecerá.
+- `.github/workflows/*.yml` corre:
+  - `supabase db reset` y `supabase migration up`;
+  - `lint:migraciones`;
+  - la comprobación de que los tipos están generados.
+
+### R3.1 · La migración nueva: piezas y contratos
+
+Cabecera de la migración. Comentario de lista, igual que el de la 20261011120000:
+- B-H1;
+- A-H2;
+- cotas del sellado.
+
+Ninguna palabra de las prohibidas por los criterios 12 y 13 (R2.3), ni en comentarios ni en las cadenas de `comment on`.
+
+#### R3.1.a · B-H1 · el bono de la cita terminada se pone una vez
+
+`create or replace function public.fn_bono_de_la_cita()` con el mismo cuerpo que `mig:249-275`. Cambian **solo** la condición de la congelación y el comentario de dentro:
+
+```sql
+  -- Ronda 3 (B-H1): de nulo a un bono se admite una vez; cambiarlo o quitarlo, no
+  -- (mismo patrón que episodio_id en fn_proteger_cita_pasada, T-039). Se mira old.
+  if tg_op = 'UPDATE'
+     and old.bono_id is not null
+     and old.bono_id is distinct from new.bono_id
+     and (old.estado = 'realizada'::public.estado_cita or old.fin <= now()) then
+    raise exception 'La cita realizada o pasada ya no se cambia de bono: el consumo de un bono pagado no se reescribe (T-021)'
+      using errcode = '42501';
+  end if;
+```
+
+- Lo demás no cambia:
+  - el mensaje y el código: los fragmentos de K14, K15 y K17 siguen valiendo;
+  - la comprobación del paciente, que se aplica también a la primera asignación;
+  - `security definer` y `set search_path = ''`.
+- Se repite `revoke execute on function public.fn_bono_de_la_cita() from public;`. `create or replace` conserva los privilegios; repetirlo cuesta una línea.
+- El disparador **no** se recrea.
+- `comment on column public.citas.bono_id is '...'`, reescrito: «Bono del que descuenta esta cita cuando se realiza (T-021, D8). Debe ser del mismo paciente. En la cita realizada o terminada, un bono nulo se puede poner una vez; el que ya tiene no se cambia ni se quita, porque reescribiría el consumo de un bono pagado (rondas 2 y 3).»
+- `comment on function public.fn_bono_de_la_cita() is '...'`, reescrito con la misma regla: 42501 si `old` está realizada o terminada, ya tenía bono y el bono cambia.
+
+#### R3.1.b · A-H2 · el profesional lee mientras tiene asignado al paciente
+
+```sql
+alter policy borradores_factura_lectura on public.borradores_factura
+  using (
+    (select public.rol_actual()) = 'administrador'::public.rol_usuario
+    or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+        and public.es_profesional_asignado(paciente_id))
+  );
+```
+
+- `alter policy`, no `drop`/`create`: el nombre que declara `11-cobertura` no cambia, y no hay un instante sin política.
+- Desaparece `profesional_id = auth.uid()`. Tras reasignar, la regla es:
+  - lee el profesional asignado ahora;
+  - el anterior deja de leer;
+  - el administrador lee siempre.
+- Las versiones y la vista de estado lo heredan sin tocarse (R3.0).
+- **Escribir no cambia.** El alta de versión (política y paso 0) sigue exigiendo `b.profesional_id = auth.uid()` **y** la asignación. Tras reasignar, nadie salvo el administrador añade versiones al borrador viejo: el nuevo profesional lo lee, no lo continúa. Es la pregunta P-R3.1 al propietario. Este diseño no la decide: deja lo que había.
+
+#### R3.1.c · A-H1, B-H2 y B-H3 · las cotas del sellado, en un disparador hermano
+
+**Pieza**: una función y un disparador nuevos. **No** se redefine `fn_sellar_version_borrador()` (decisión R3.3-D1).
+
+```sql
+create function public.fn_cotas_version_borrador()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  -- Un carácter que se ve: ni blanco Unicode, ni de control, ni de anchura cero, ni selector.
+  -- Escapes \u del motor de expresiones regulares en una cadena normal: ningún carácter crudo.
+  v_visible constant text := '[^[:space:]\u0001-\u0020\u007F-\u00A0\u00AD\u034F\u061C\u115F\u1160\u1680\u17B4\u17B5\u180B-\u180F\u2000-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3000\u3164\uFE00-\uFE0F\uFEFF\uFFA0\U000E0000-\U000E007F\U000E0100-\U000E01EF]';
+  v_linea         jsonb;
+  v_tipo          numeric;
+  v_cantidad      numeric;
+  v_cuota_exacta  numeric := 0;  -- céntimos, sin redondear
+  v_unidades      numeric := 0;  -- unidades en régimen general
+begin
+  for v_linea in select e from jsonb_array_elements(new.lineas) as e loop
+    if (v_linea ->> 'concepto') !~ v_visible then
+      raise exception 'Un concepto invisible no vale: la línea solo lleva blancos o caracteres de anchura cero (T-021)'
+        using errcode = '23514';
+    end if;
+    v_tipo := (v_linea ->> 'tipo_iva_centesimas')::numeric;
+    if v_tipo > 10000 then
+      raise exception 'El tipo de IVA de una línea es como mucho 10000 centésimas, el cien por cien (T-021, D4)'
+        using errcode = '23514';
+    end if;
+    if (v_linea ->> 'regimen_iva') = 'general' then
+      v_cantidad := (v_linea ->> 'cantidad')::numeric;
+      v_cuota_exacta := v_cuota_exacta
+        + v_cantidad * (v_linea ->> 'precio_unitario_centimos')::numeric * v_tipo / (10000 + v_tipo);
+      v_unidades := v_unidades + v_cantidad;
+    end if;
+  end loop;
+
+  if v_unidades > 0 and abs(new.cuota_iva * 100 - v_cuota_exacta) > v_unidades then
+    raise exception 'La cuota de IVA está fuera de la banda que admiten las líneas en régimen general con su tipo (T-021, D4)'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.fn_cotas_version_borrador() is '...';
+revoke execute on function public.fn_cotas_version_borrador() from public;
+
+create trigger sellar_version_borrador_cotas
+  before insert on public.borradores_factura_versiones
+  for each row execute function public.fn_cotas_version_borrador();
+
+comment on trigger sellar_version_borrador_cotas on public.borradores_factura_versiones is '...';
+comment on function public.fn_sellar_version_borrador() is '...';
+```
+
+**El orden de los disparadores es parte del contrato.**
+- Postgres dispara los `before` de la misma tabla por orden alfabético del nombre.
+- `sellar_version_borrador_cotas` va después de `sellar_version_borrador`, porque el segundo es prefijo del primero.
+- Así se garantizan tres cosas:
+  1. el paso 0 (permisos) corre antes que cualquier cotejo, como pide `.claude/rules/supabase.md`;
+  2. cada línea llega validada: seis claves sin repetir, números enteros y régimen del enum. Los `::numeric` no pueden fallar;
+  3. `new.lineas` ya es jsonb-equivalente a las líneas del sobre (`mig:466`). Recorrer `new.lineas` es recorrer lo que se sella.
+- J28g lo prueba y M39 lo mata (R3.7).
+
+**La función**
+- Es `security invoker`: no lee ninguna tabla.
+- Lleva `set search_path = ''` aunque el linter solo lo exija a las definer: así ninguna resolución de nombres depende del llamante.
+
+**Las tres cotas**
+1. **Concepto visible (B-H3).**
+   - El concepto tiene que contener al menos un carácter fuera de la clase `v_visible`.
+   - La clase es explícita y no depende del locale de la base: blancos ASCII y de control, C1, NBSP, guion blando, los espacios y marcas de anchura cero U+2000-200F, U+2028-202F, U+205F-206F, U+3000, los rellenos hangul, el braille en blanco, los selectores de variante, U+FEFF y las etiquetas.
+   - El mensaje **no** empieza como el de 6.3 («El concepto de una línea…»). Así el fragmento de J28 y J28b sigue señalando a la comprobación vieja, y el nuevo, «Un concepto invisible», a esta.
+   - Con mensajes iguales, M22 sobreviviría (R3.7).
+2. **Techo del tipo (B-H2 v7).**
+   - `tipo_iva_centesimas <= 10000`. El suelo y el «tipo según régimen» siguen en 6.3.
+   - El mensaje no lleva `%`: en un `raise` sería un marcador.
+3. **Banda de la cuota (A-H1, B-H2 v4, v5 y v6).**
+   - `Q` es la cuota exacta que contienen las líneas generales, porque sus precios llevan el IVA incluido: `Σ cantidad · precio · tipo / (10000 + tipo)`, en céntimos y sin redondear.
+   - La cuota sellada tiene que quedar a como mucho `U` céntimos de `Q`, donde `U` es el número de unidades en régimen general.
+   - **Esto no repite el redondeo de `lib/dinero`** (la exclusión de la ronda 2 sigue en pie):
+     - cualquier convención redondea cada unidad, cada línea o el total a medio céntimo como mucho, y `U ≥ 1` las cubre todas;
+     - `desglosarDesdeTotal` (`lib/dinero/iva.ts`) se equivoca en ≤ 0,5 céntimos por llamada.
+   - Es una banda de categoría, no un cálculo que compita con el de la aplicación.
+   - Sin líneas generales no se comprueba nada aquí: el «todo exento ⇒ cuota 0» de 6.4 ya ha corrido.
+
+**Comentarios que se reescriben**
+- El de `fn_sellar_version_borrador()` se reemite **sin redefinir la función**: el texto de `mig:627-631` más una frase: «Las cotas de la ronda 3 (concepto visible, tipo ≤ 10000, banda de la cuota) las pone fn_cotas_version_borrador(), en el disparador sellar_version_borrador_cotas, que corre después de este por orden de nombre.»
+- Es el aviso que leerá T-026 si redefine el sellado.
+
+### R3.2 · Banco: fijación y pruebas nuevas (`scripts/rls/26-economico.sql`)
+
+Ids nuevos, con el prefijo del módulo y libres (comprobado):
+
+```
+\set CITAPAS2 '\'a0260001-0000-4000-8000-0000000000f6\''
+\set BORRREA  '\'a0260001-0000-4000-8000-0000000000b5\''
+\set PREA     '\'a0260001-0000-4000-8000-000000000203\''
+```
+
+**Fijación**: como `postgres`, tras el `insert` de CITAPAS (línea ~197).
+- **CITAPAS2**: P1, PRO1, CA, de `(current_date - 39) + 07:05` a `07:55`, Europe/Madrid, programada y **sin bono**.
+  - Si choca con `citas_sin_solape_profesional` (23P01), se usa −40 o −41, y la elección queda escrita en el comentario.
+- **PREA**: paciente `('Rea', 'T021 Reasignación', :PRO1, :CA)`, con la forma de las líneas 175-177.
+- **BORRREA**: cabecera `(:BORRREA, :PREA, :PRO1, :PRO1)`.
+- **La v1 de BORRREA**: sellada con `assert_no_lanza(pg_temp.sql_version(...))`.
+  - Sobre `pg_temp.sobre_borrador(:BORRREA, :PRO1, timestamptz '2026-10-01 10:00:00+00', <una línea exenta de 60 €>, 60.00, 0.00, 60.00, 'Rea', :CA)`.
+  - Etiqueta `26.fij · la v1 de BORRREA se sella`.
+
+Todas las negativas usan `assert_lanza_codigo_msg` con código y fragmento exactos. Cada una tiene su gemela positiva sobre la misma fila o el mismo sobre.
+
+#### Bloque K, tras K17 (B-H1)
+
+| Id | Quién | Qué | Espera | Hoy (ronda 2) |
+|---|---|---|---|---|
+| K19a | ADM | `update citas set bono_id = BONO2 where id = CITAPAS2` (bono de P2) | 23514 `el bono es de otro paciente` | **falla primero**: da 42501 |
+| K19.0 | ADM | `contar_dml(update citas set estado = 'realizada' where id = CITAPAS2) = 1`, y después `\gset` del consumo de BONO3 (`consumidas_bono3`) | pasa | pasa |
+| K19 | ADM | `contar_dml(update citas set bono_id = BONO3 where id = CITAPAS2) = 1` | 1 | **falla primero**: 42501 |
+| K19b | — | el consumo de BONO3 es `consumidas_bono3 + 1`, y `citas.bono_id` de CITAPAS2 es BONO3 | pasa | falla |
+| K20 | ADM | CITAPAS2: BONO3 → BONO1 | 42501 `realizada o pasada ya no se cambia de bono` | pasa |
+| K21 | ADM | CITAPAS2: BONO3 → null | 42501, mismo fragmento | pasa |
+| K22 | postgres | CITAPAS2: BONO3 → BONO1 | 42501, mismo fragmento | pasa |
+| K23 | — | el consumo de BONO3 sigue en `consumidas_bono3 + 1` | pasa | — |
+
+- K19.0 marca la cita realizada para que el consumo se vea en `bonos_consumo`. No es objeto de prueba.
+  - Si una guarda de otro ticket impide al administrador marcarla, se marca como `postgres`, y se escribe en el comentario.
+- Gemelas:
+  - K19 es la gemela positiva de K20, K21 y K22 sobre la misma fila;
+  - K16 y K16b ya cubren la cita futura.
+- **K14, K15 y K17 no cambian.** Sus citas ya tenían bono, así que la condición nueva no las afecta.
+
+#### Bloque J, junto a J28b (B-H3)
+
+- Negativas como `postgres` sobre BORR1 con `:T0`, en la forma de J28b.
+- Positivas sobre BORR3 con centro `null`, como J42g. Ninguna prueba posterior cuenta las versiones de BORR3.
+- Todo carácter invisible va como `E'\uXXXX'` en el banco. **Nunca crudo.**
+
+| Id | Concepto | Espera |
+|---|---|---|
+| J28c.0 | `E'\u200B'` | control: el `concepto` del sobre es `E'\u200B'` y `octet_length` = 3 |
+| J28c | `E'\u200B'` | 23514 `Un concepto invisible`. **Falla primero**: hoy sella |
+| J28d.0 / J28d | `E'\uFEFF\u2060'` | control (`octet_length` = 6) / 23514 `Un concepto invisible` |
+| J28e.0 / J28e | `E'\u3000\u00A0'` | control (`octet_length` = 5) / 23514 `Un concepto invisible` |
+| J28f | `E'Sesi\u00F3n\u200B de psicoterapia'` sobre BORR3 | se sella: lo visible manda, el invisible entre medias no estorba |
+| J28g | `E'\u200B'`, como **TEC1** sobre BORRTEC con sobre coherente (forma de M7, `now()` y `creada_por` = TEC1) | 42501 `No puedes añadir una versión a este borrador`: los permisos van antes que la cota |
+
+#### Bloque J, tras J42g (A-H1, B-H2)
+
+Líneas con la forma `linea_borrador(concepto, cantidad, precio, regimen, tipo)`. Importes en euros (base / cuota / total).
+
+| Id | Líneas | Base / cuota / total | Q (cént.) | U | Espera |
+|---|---|---|---|---|---|
+| **J42 (reescrita)** | exenta 1 × −10000; general 1 × 10000 al 2100 | −17,36 / 17,36 / 0,00 | 1735,54 | 1 | 23514 `borradores_factura_versiones_signo_ck`. La banda pasa (0,46 ≤ 1) y para el signo |
+| J43 (B v4) | exenta 1 × 10000; general 1 × 100 al 2100 | 51,00 / 50,00 / 101,00 | 17,36 | 1 | 23514 `fuera de la banda`. **Falla primero** |
+| J43g | ídem | 100,83 / 0,17 / 101,00 | 17,36 | 1 | se sella (BORR3) |
+| J44 (A esc. 1, B v5) | general 1 × 10000 al 2100 | 0,00 / 100,00 / 100,00 | 1735,54 | 1 | `fuera de la banda`. **Falla primero**. Gemela: B2 y J47g |
+| J45 (B v6) | exenta 1 × 6000; general 1 × 10000 al 2100; general 1 × −10000 al 2100 | 50,00 / 10,00 / 60,00 | 0 | 2 | `fuera de la banda`. **Falla primero** |
+| J45g | ídem | 60,00 / 0,00 / 60,00 | 0 | 2 | se sella (BORR3) |
+| J46 (B v7) | general 1 × 10000 al **999900** | 82,64 / 17,36 / 100,00 | — | — | 23514 `como mucho 10000 centésimas`. **Falla primero** |
+| J46g | general 1 × 10000 al **10000** | 50,00 / 50,00 / 100,00 | 5000 | 1 | se sella: el límite exacto entra |
+| J47 | general 1 × 10000 al 2100 | 82,63 / 17,37 / 100,00 | 1735,54 | 1 | `fuera de la banda` (1,46 > 1) |
+| J47g | ídem | 82,64 / 17,36 / 100,00 | 1735,54 | 1 | se sella (0,46) |
+| J47b | ídem | 82,66 / 17,34 / 100,00 | 1735,54 | 1 | `fuera de la banda` (1,54 > 1): mitad inferior |
+| J47c | ídem | 82,65 / 17,35 / 100,00 | 1735,54 | 1 | se sella (0,54) |
+| J47d | general **2** × 6050 al 2100 | 100,00 / 21,00 / 121,00 | 2100 | 2 | se sella: la cantidad cuenta en `Q` |
+| J48 | exenta 1 × 20000; general 1 × −10000 al 2100 | 82,64 / 17,36 / 100,00 | −1735,54 | 1 | `fuera de la banda`: cuota de signo contrario a la parte general. `signo_ck` no lo para |
+
+- **J42 cambia de sobre, no de intención.** Sigue siendo la única prueba que muere si se quita `signo_ck` (M21).
+  - Con la banda, todo sobre que la pase lleva la cuota correcta. Por eso la única forma de llegar a `signo_ck` es un documento mixto: exento negativo y general positivo con total 0.
+  - Ver R3.6-3.
+- **Las demás siguen como están**:
+  - J27b y J27c (tipo según régimen, 6.3);
+  - J31b (general con cuota 0): 6.4 corre antes que la banda y conserva su fragmento.
+
+#### Bloque O nuevo, al final del módulo (A-H2)
+
+| Id | Quién | Qué | Espera |
+|---|---|---|---|
+| O0 | postgres | PREA tiene `profesional_id = PRO1`, y BORRREA tiene 1 versión | control |
+| O1 | PRO1 | cuenta la cabecera, las versiones y el estado de BORRREA | 1 / 1 / 1 (gemela de O3) |
+| O1b | PRO2 | lo mismo | 0 / 0 / 0 (gemela de O4) |
+| O2 | ADM | `contar_dml(update public.pacientes set profesional_id = PRO2 where id = PREA) = 1` | 1 |
+| O3 | PRO1 | lo mismo que O1 | 0 / 0 / 0. **Falla primero**: hoy 1 / 1 / 1 |
+| O4 | PRO2 | lo mismo que O1 | 1 / 1 / 1. **Falla primero**: hoy 0 / 0 / 0 |
+| O5 | ADM | lo mismo que O1 | 1 / 1 / 1 |
+| O6 | PRO2 | añade una versión a BORRREA con sobre coherente (`now()`, `creada_por` = PRO2) | 42501 `No puedes añadir una versión a este borrador`. Documenta R3.1.b; depende de P-R3.1 |
+| O6g | ADM | la misma versión, con `creada_por` = ADM | se sella |
+| O7 | TEC1 | cuenta la cabecera BORRTEC (PTEC, cuyo titular es TEC1) | 0. Gemela: ADM cuenta 1 |
+| O8 | ADM | revierte: `contar_dml(update … set profesional_id = PRO1 where id = PREA) = 1` | 1 |
+| O8b | PRO1 | cuenta la cabecera de BORRREA | 1: la política sigue a la asignación en los dos sentidos |
+
+- La reasignación se hace como ADM, porque `fn_proteger_columnas_reservadas_paciente()` no exime a `postgres`. Precedente en `12-resto-de-tablas.sql:79-98`.
+- **G1-G7 siguen valiendo sin tocarse.** P2 es de PRO2, y PROBAJA está inactivo, así que `es_profesional_asignado` da falso.
+
+**Catálogo** (bloque L, una aserción nueva, L10r3):
+- existe `sellar_version_borrador_cotas`: `before insert`, `for each row`, habilitado (`tgenabled = 'O'`), sobre `borradores_factura_versiones`;
+- su nombre ordena después de `sellar_version_borrador` (`collate "C"`);
+- `fn_cotas_version_borrador` no es `prosecdef` y tiene `search_path` en `proconfig`;
+- `pg_get_expr(polqual, polrelid)` de `borradores_factura_lectura` contiene `es_profesional_asignado` y no contiene `auth.uid`.
+
+**README** (`scripts/rls/README.md`, fila 26): añadir «Ronda 3:
+- bono de la cita terminada, una vez (K19-K23);
+- banda de la cuota, techo del tipo y concepto invisible (J28c-g, J42-J48);
+- lectura por asignación (O).»
+
+### R3.3 · Decisiones y alternativas descartadas
+
+- **D1 · Las cotas van en un disparador hermano, no en una copia de `fn_sellar_version_borrador()`.**
+  - Una copia de 340 líneas con tres cambios es el sitio exacto donde se cuela una deriva.
+  - Además, T-026 tendría que encontrar la redefinición buena entre dos migraciones (`.claude/rules/supabase.md`: se buscan todas las redefiniciones).
+  - El disparador hermano añade y no reescribe.
+  - Descartado: `create or replace` con copia íntegra y prueba de `diff`.
+- **D2 · Banda de dos lados (`|cuota·100 − Q| ≤ U`), no solo techo.**
+  - Cuesta lo mismo: una condición.
+  - Cierra además dos casos que el techo deja pasar:
+    - la cuota de signo contrario a la parte general (J48);
+    - la cuota de 1 céntimo sobre 100 € al 21 %.
+  - Descartados:
+    - el techo `cuota·100 ≤ suma_general` que proponen A y B: no para la cuota llena con base 0 (A esc. 1 y B v5, que la decisión del propietario nombra) porque la iguala en vez de superarla;
+    - `abs(cuota) ≤ abs(Q) + U`: deja pasar J48.
+- **D3 · La tolerancia es U (unidades generales), no un céntimo fijo.** Cubre el redondeo por unidad de cualquier convención sin repetir la de `lib/dinero`. Un céntimo fijo rechazaría documentos legítimos con cantidad > 2 redondeados por unidad.
+- **D4 · Techo del tipo en 10000 (100 %).** Es la cota de categoría más simple que hace finita la banda.
+  - Ningún tipo español pasa del 21 %, pero fijar 2100 sería decidir tipos, y eso es de T-026 y del programa.
+  - El propietario puede bajarlo (P-R3.2).
+- **D5 · Concepto: clase explícita de invisibles, no `[[:space:]]` ni un recorte previo.**
+  - `[[:space:]]` depende del locale para lo que no es ASCII.
+  - El `regexp_replace` que propone B y luego comprobar el vacío es equivalente, pero más largo.
+  - Mensaje distinto del de 6.3 para que los fragmentos no se pisen.
+- **D6 · B-H1 con `old.bono_id is not null`**, el patrón de `episodio_id` (T-039). Descartado mirar `new`: dejaría quitar el bono.
+- **D7 · A-H2 con `alter policy`** y `es_profesional_asignado(paciente_id)` en lugar de `profesional_id = auth.uid()`.
+  - Descartado el AND de las dos condiciones: el nuevo profesional no leería, en contra de la decisión.
+  - Descartado `drop` + `create`: deja un hueco y obliga a tocar `11`.
+- **D8 · Migración nueva, no editar la 20261011120000.**
+  - Aunque el linter lo permitiría (no está en main), la orden de la ronda es solo añadir.
+  - La base local ya la tiene aplicada.
+  - Coste: una línea más en el `territorio:` del contrato (R3.8).
+
+### R3.4 · Cómo se cierra cada criterio
+
+Los criterios del contrato no cambian. Lo que la ronda 3 toca de cada uno:
+
+| Criterio | Cierre en la ronda 3 |
+|---|---|
+| 1 · `db reset` aplica | `npx supabase db reset` aplica las dos migraciones sin error. En CI, `migration up` también, porque la nueva es posterior a la de main |
+| 2 · `update`/`delete`/`truncate` fallan | Sin cambios: el módulo 10 y el bloque A siguen verdes. La migración nueva no añade tablas |
+| 3 · cadena de tres versiones | Sin cambios, B1-B9b verdes. El disparador nuevo no toca `huella` ni el sobre |
+| 4 · cobro sin factura | Sin cambios |
+| 5 · consumo 3 / 2 | D3-D4 verdes. K19 y K19b prueban que la primera asignación en cita realizada suma uno, y K23 que no se reescribe |
+| 6 · bonos por rol | Sin cambios |
+| 7 · técnico: cobros sí; tarifas, versiones y estado no | F verde. O7 añade que el técnico titular de un paciente no lee su cabecera |
+| 8 · profesional: cero borradores de otro, uno propio | G1-G7 verdes. Con la decisión A-H2, «de otro profesional» se lee como del paciente que no tiene asignado: O1-O8b |
+| 9 · auditoría al insertar | Sin cambios, H verde: el disparador nuevo no inserta |
+| 10 · `test:rls`, `lint`, `build` | `npm run test:rls` con todas las aserciones de 26 en verde (menos las fallas conocidas de 16 y 23, idénticas en main; state.md), más `npm run lint` y `npm run build` |
+| 11 · linter de migraciones | `npm run lint:migraciones` sin avisos sobre la 20261011130000: nombre creciente, sin `update`/`delete`/`truncate` sobre tablas de solo adición, ninguna función definer nueva |
+| 12 · greps de facturación | Las tres órdenes de R2.3, **sobre las dos migraciones**. Sobre la nueva: (1) da 0; (2) da 0; (3) no devuelve ninguna línea |
+| 13 · `espejo`/`proveedor` fuera de comentarios | 0 en la nueva |
+| Tipos | `npx supabase db reset && npm run tipos`, y después `git diff --exit-code lib/supabase/tipos-bd.ts`: vacío |
+
+Evidencias de la ronda 3, para `evidencia.json`:
+- la lista de pruebas que fallaban antes de la migración nueva, con su salida: K19a, K19, J28c, J43, J44, J45, J46, O3, O4;
+- y la misma lista en verde después.
+
+Procedimiento:
+1. Escribir primero las pruebas y correr el banco **sin** la migración nueva.
+2. Correrlo de nuevo con ella.
+
+### R3.5 · Qué revisar (revisores A y B, y autoevaluación)
+
+**B-H1**
+1. La condición nueva mira `old.bono_id`, no `new.bono_id`.
+   - ¿Hay alguna forma de pasar de X a nulo y de nulo a Y en dos sentencias? No, si la primera falla: K21.
+   - ¿Y con `postgres`? K22.
+2. **Concurrencia.** Dos `update` simultáneos de nulo a X y de nulo a Y sobre la misma cita:
+   - el segundo espera el cerrojo de fila;
+   - en READ COMMITTED vuelve a evaluar con la fila nueva, y el `before` ve `old.bono_id = X`, así que lanza 42501.
+   - Sin prueba de dos conexiones (B-H9, aceptado); se revisa leyendo.
+3. **La comprobación del paciente sigue aplicándose a la primera asignación**: K19a, con 23514 y no 42501.
+4. **Otras puertas al `bono_id` de una cita pasada**:
+   - un `insert` con bono de una cita ya pasada: era así en la ronda 2 y no cambia;
+   - cambiar `paciente_id`: lo bloquean `fn_proteger_cita_pasada` y K2;
+   - cancelar una realizada: hallazgo de la ronda 2 en `state.md`.
+
+**A-H2**
+
+5. La política nueva no menciona `profesional_id`. Los revisores comprueban que ninguna otra política de lectura de las tablas de T-021 siga el patrón viejo:
+   ```
+   grep -n "profesional_id = (select auth.uid())" supabase/migrations/20261011*.sql
+   ```
+   Fuera de la `borradores_factura_lectura` original, que el `alter policy` sustituye, solo deben salir las altas (`borradores_factura_alta`, `borradores_factura_versiones_alta`) y el paso 0.
+6. **Fusiones**: `es_profesional_asignado` incluye al profesional del superviviente. Es coherente con citas y cobros, no es un hueco.
+7. **TEC1 titular de PTEC**: `es_profesional_asignado(PTEC)` da verdadero para TEC1, así que el rol en positivo es lo único que lo para (O7, M36).
+8. **Escribir no se ha abierto**: O6 sigue en 42501 para el nuevo profesional.
+
+**Cotas**
+
+9. **El orden de disparadores**:
+   - J28g da 42501 y no 23514;
+   - la aserción de catálogo comprueba el nombre;
+   - renombrar el disparador a algo que ordene antes mata J28g.
+10. **La banda es de dos lados y con signo**:
+    - J47b (mitad inferior) y J48 (signo contrario) tienen que estar;
+    - con `abs(cuota)` frente a `abs(Q)`, J48 pasaría.
+11. **Los límites exactos**:
+    - J46g (tipo 10000) entra y J46 (999900) no;
+    - J47g y J47c (0,46 y 0,54) entran, y J47 y J47b (1,46 y 1,54) no;
+    - con tolerancia 0 o 2U, alguna se pone roja (M43, M44).
+12. **Nulos**: `new.lineas` no puede ser nula (`not null` y `lineas_ck`), y el sellado ya ha exigido que cada clave sea del tipo correcto. ¿Algún `::numeric` puede recibir texto? Solo si el disparador corriera antes del sellado (punto 9).
+13. **Sin caracteres crudos**: `grep -nP '[\x{00A0}\x{200B}-\x{200F}\x{2060}\x{3000}\x{FEFF}]'` sobre la migración nueva y sobre `26-economico.sql` no devuelve nada.
+14. **Fragmentos únicos**:
+    - `Un concepto invisible`, `como mucho 10000 centésimas` y `fuera de la banda` no son prefijo de otro mensaje ni lo contienen;
+    - J28 y J28b siguen con `El concepto de una línea`.
+15. **`signo_ck` sigue viva**: M21 muere en la J42 reescrita.
+
+**Comunes**
+
+16. Ningún `comment on` ni comentario de la migración nueva contiene `serie`, `numeracion`, `qr`, `verifactu`, `registro_facturacion`, `espejo` ni `proveedor` (R2.3).
+17. **Solo añadir**: `git diff main -- supabase/migrations/20261011120000_economico_esquema.sql` es idéntico al de la ronda 2 (HEAD a982e0a). La ronda 3 no lo toca.
+
+### R3.6 · Riesgos, por probabilidad
+
+1. **Media · CITAPAS2 choca con una cita de PRO1 de otro módulo** (23P01).
+   - Mitigación: cambiar el día (−40, −41) y escribirlo en el comentario.
+   - Las fallas conocidas de 16 y 23 (`state.md`) no son esta.
+2. **Media · el implementador redefine `fn_sellar_version_borrador()` «para tenerlo todo junto»**, contra D1.
+   - El revisor lo ve en `grep -c "fn_sellar_version_borrador" supabase/migrations/20261011130000_*.sql`: solo puede aparecer en el `comment on function` y en el comentario de la cabecera.
+3. **Baja · documentos de signo mixto.**
+   - Con la banda, `signo_ck` solo rechaza documentos cuya cuota es la correcta: un exento negativo junto a un general positivo. J42 lo fija como comportamiento.
+   - Si un día hiciera falta sellar un abono parcial mixto, lo decide T-026. Se anota en `state.md`.
+4. **Baja · la banda deja hasta U céntimos de holgura.** Sobre una parte general neta 0 (J45) admite una cuota de ±U céntimos. Es residual y se acepta: es el precio de no repetir el redondeo.
+5. **Baja · `[[:space:]]` y el locale**: la clase es explícita, así que el resultado no depende del locale. J28e usa U+3000 para comprobarlo.
+6. **Baja · O6 cambia si el propietario responde distinto a P-R3.1.** Entonces O6 pasa a ser positiva en otro ticket; este no abre la escritura.
+
+### R3.7 · `mutantes.json` de la ronda 3
+
+| Id | Mutación | Muere en |
+|---|---|---|
+| M31 | quitar `old.bono_id is not null` | K19a (cambia el código), K19 |
+| M32 | `old.bono_id is not null` → `new.bono_id is not null` | K21 |
+| M33 | congelar solo para `authenticated` (envolver en `current_setting('role', true) = 'authenticated'`) | K22 |
+| M34 | volver a la política de la ronda 2 | O3, O4 |
+| M35 | AND de `profesional_id = auth.uid()` y `es_profesional_asignado` | O4 |
+| M36 | quitar el rol de la rama del profesional | O7 |
+| M37 | quitar la comprobación del concepto invisible | J28c, J28d, J28e |
+| M38 | quitar `\uFEFF` de la clase | J28d |
+| M39 | renombrar el disparador a `aa_cotas_version_borrador` (corre antes del sellado) | J28g (23514 en vez de 42501) y la aserción de catálogo |
+| M40 | quitar el techo del tipo | J46 |
+| M41 | `> 10000` → `>= 10000` | J46g |
+| M42 | quitar la banda | J43, J44, J45, J47, J47b, J48 |
+| M43 | banda sin tolerancia (`> 0`) | J47g, J47c, J43g |
+| M44 | tolerancia `2 * v_unidades` | J47, J47b |
+| M45 | solo techo con signo (`new.cuota_iva * 100 - v_cuota_exacta > v_unidades`) | J47b |
+| M46 | `abs(new.cuota_iva * 100) > abs(v_cuota_exacta) + v_unidades` (techo en valor absoluto) | J48 |
+| M47 | `Q` sin la cantidad (`precio · tipo / (10000 + tipo)`) | J47d |
+
+Los de la ronda 2 que la ronda 3 podría tapar se vuelven a correr y deben seguir muertos:
+- **M21** (quitar `signo_ck`) muere en la J42 reescrita.
+- **M22** (6.3 con `length(trim(…)) = 0`) muere en J28b: el tabulador y el salto de línea los caza la cota nueva, pero con el fragmento `Un concepto invisible`, que no es el que espera J28b.
+- **M25** (quitar «general ⇒ cuota ≠ 0») muere en J31b por el mismo motivo: la banda la caza con otro fragmento.
+- **M7 y M8** (congelación) siguen muriendo en K14, K15 y K17.
+
+La ronda 3 no deja supervivientes nuevos.
+
+### R3.8 · Territorio y delegable
+
+- **El territorio necesita una línea más en el contrato**: `supabase/migrations/20261011130000_economico_ronda_3.sql`. Sin ella, `territorio.mjs T-021` marca la migración. Este diseño no edita el contrato: lo añade el usuario o el arquitecto antes de implementar (P-R3.3).
+- El resto ya está en el `territorio:`:
+  - `scripts/rls/26-economico.sql` y `README.md`;
+  - `tickets/T-021/**`;
+  - la bitácora y `state.md`.
+- **No se tocan**:
+  - `11-cobertura` (mismos nombres de política);
+  - `01-fijacion` y `00-ayudantes` (la fijación nueva es local a 26);
+  - el linter;
+  - `tipos-bd.ts` (se regenera y sale idéntico).
+- **Delegable**: nada. Todo es RLS, disparadores, dinero y el banco que los prueba.
+
+### R3.9 · Memoria al cerrar
+
+- **Bitácora** (`docs/bitacora/T-021*.md`): la ronda 3, citando las decisiones del 05-10. Tres reglas que deja:
+  1. «Las cotas del sellado viven en dos disparadores; el orden es por nombre.»
+  2. «Una banda con tolerancia U no es repetir el redondeo.»
+  3. «Mensajes de error que no comparten prefijo.»
+- **`state.md`**, reescrito:
+  - T-021 pasa a verificación de la ronda 3;
+  - §Hallazgos, una entrada: «documentos mixtos (exento negativo y general positivo) no se sellan por `signo_ck`; lo decide T-026» (R3.6-3).
+- **Para `.claude/rules/supabase.md`**, propuesta al usuario o al arquitecto, no a este ticket: «Un disparador hermano que añade cotas se nombra con el del sellado como prefijo, para correr después del paso 0.»
+
+### Lo que no entra en la ronda 3, y por qué
+
+- **Que el nuevo profesional continúe el borrador del anterior** (alta de versión tras reasignar). La decisión del propietario habla de leer. Abrir la escritura cambia el paso 0 y la política de alta, y depende de P-R3.1.
+- **Revisar `signo_ck` para documentos mixtos.** Es una decisión de la ronda 2 que la ronda 3 no reabre (R3.6-3).
+- **Prueba de dos conexiones** para la primera asignación del bono. Es la misma familia que B-H9, aceptado en la ronda 2.
+- **Bajar el techo del tipo a los tipos españoles vigentes.** Es una decisión de tipos que corresponde a T-026 (D4).
+- **Normalizar o limpiar el concepto** (quitar los invisibles en vez de rechazar). La base no reescribe lo que se sella. La limpieza, si se quiere, es de la validación Zod de T-023 y T-026.
+
+### Resumen de la ronda 3
+
+1. Se construye una migración nueva, `20261011130000_economico_ronda_3.sql`. No se edita la 20261011120000.
+2. B-H1: la congelación de `citas.bono_id` exige `old.bono_id is not null`. El primer bono de una cita terminada entra una vez; cambiarlo o quitarlo sigue en 42501, también para `postgres`.
+3. A-H2: `alter policy borradores_factura_lectura` cambia `profesional_id = auth.uid()` por `es_profesional_asignado(paciente_id)`. Versiones y estado lo heredan.
+4. Cotas: un disparador hermano, `sellar_version_borrador_cotas`, que corre después del sellado por orden de nombre, con tres cotas:
+   - concepto con al menos un carácter visible (clase explícita de invisibles);
+   - tipo ≤ 10000;
+   - banda `|cuota·100 − Q| ≤ U`.
+5. Decisión clave 1: hermano en vez de copiar 340 líneas del sellado (D1).
+6. Decisión clave 2: banda de dos lados con tolerancia de una unidad por unidad general, que no repite el redondeo y cierra la base 0 con cuota llena (D2, D3).
+7. Decisión clave 3: la escritura tras reasignar no se abre; solo el administrador continúa el borrador (P-R3.1).
+8. Pruebas que fallan primero: K19a, K19, J28c, J43, J44, J45, J46, O3 y O4. J42 se reescribe para seguir matando M21. Mutantes M31-M47, sin supervivientes.
+9. Revisar con más cuidado:
+   - el orden de los disparadores (J28g, M39);
+   - los límites exactos de la banda (J47 a J47c);
+   - que O3 y O4 cuenten cabecera, versiones y estado.
+10. Antes de implementar, el contrato tiene que añadir la migración nueva a `territorio:` (P-R3.3).
+
+**Preguntas al propietario**
+- **P-R3.1** · Tras reasignar al paciente, el nuevo profesional **lee** el borrador del anterior pero no le añade versiones: el borrador sigue a nombre del anterior y solo el administrador lo continúa. ¿Lo confirmas?
+- **P-R3.2** · Techo de `tipo_iva_centesimas` en 10000 (100 %). ¿Vale, o prefieres fijarlo ya en 2100 (21 %)?
+- **P-R3.3** · Añadir `supabase/migrations/20261011130000_economico_ronda_3.sql` al `territorio:` de `tickets/T-021-economico-esquema.md`.
+
+### Respuestas del propietario (06-10-2026)
+
+- **P-R3.1: sí.** Tras reasignar al paciente, el nuevo profesional lee el borrador del anterior y no le añade versiones. Solo el administrador lo continúa. Por eso O6 y O6g quedan como están en R3.2, y R3.1.b no cambia.
+- **P-R3.2: techo en 10000 (100 %).** `tipo_iva_centesimas <= 10000`, como en R3.1.c (D4). J46 y J46g y los mutantes M40 y M41 quedan como están.
+- **P-R3.3: hecho.** `supabase/migrations/20261011130000_economico_ronda_3.sql` ya está en el `territorio:` del contrato. Los demás ficheros que escribe la ronda 3 ya estaban listados (R3.8).
