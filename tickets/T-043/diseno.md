@@ -1672,3 +1672,135 @@ la medición de mutantes.
 - **Anunciar la reaparición del aviso tras un recálculo**: D-R3.4; si se quiere, irá en el ticket de textos de
   R2.
 - **Cambiar la migración**: ningún hallazgo la toca, y K10-K12 pasan con la de la rama.
+
+## Ronda 4 (06-10-2026)
+
+Entrada: `revision-b.ronda3.md` (B3-H1 MEDIA, B3-H2 BAJA) y `revision-a.ronda3.md` (su H1 BAJA, aquí A3-H1). Código
+leído en `T-043-aviso-de-hueco-raro` @ 0c2c87e. Ronda corta: sin migración, sin banco SQL y sin `db reset`.
+
+### R4.0 · Hechos verificados contra el código (@ 0c2c87e)
+
+- **B3-H1.** `enviar` (`formulario-alta.tsx:303-314`) decide solo con `huecoRaroElegido` (`:126`, sobre
+  `vista.huecosRaros`). `estado-alta.ts:109-131` llena el mapa con la semana pedida ∪ `hoy..hoy+27`, y el elegido
+  sobrevive a la navegación (`alCambiarSemana={setFoco}`, `:487`).
+- **Cuándo sale el elegido del mapa.** Al elegirlo siempre está en él: viene de la semana pintada, de sus
+  alternativas o de una tarjeta, que mueve `foco` (`:236`). Solo sale si `foco` se mueve después: al navegar, o al
+  cambiar de paciente sin cambiar de profesional.
+- **La función que cita el revisor.** Su «`elegirHueco` `:253-259`» es en realidad `volverAlElegido`
+  (`:257-261`): compara `lunesDe(elegido)` con `foco` (la semana **pedida**).
+- **B3-H2.** Las ramas de fallo (`:159`, `:178`) conservan `claveVista` con el spread. `claveCalculo` (`:115`) es
+  un `join('|')` y nunca vale `''`.
+- **A3-H1.** `README.md:143` dice `.. +84`; el 29 llega a `+154`. `lib/i18n/es.ts` está en el `territorio:`.
+
+### R4.1 · Piezas y contratos
+
+**R4.1.1 · B3-H1, en `enviar`, justo tras `if (esperandoSerie) return;`:**
+```ts
+// B3-H1 (T-043 R4): la rareza del elegido solo se conoce con su semana pedida. Si se navegó a otra, Guardar vuelve a
+// ella y no decide. Se compara con `foco` y no con los huecos pintados: tras un fallo la vista pintada no cambia y
+// Guardar no saldría nunca de aquí (D-R3.3).
+if (elegido && lunesDe(elegido.clave.slice(0, 10)) !== foco) {
+  volverAlElegido();
+  setAviso(t('agenda.alta.semanaDelElegido'));
+  return;
+}
+```
+En `es.ts`, tras `sinHueco`, va
+`semanaDelElegido: 'El calendario vuelve a la semana del hueco elegido. Pulsa Guardar otra vez.',`. No cambia nada
+más, y el foco se queda en Guardar (`aria-disabled`).
+
+**R4.1.2 · B3-H2 (sustituye a R3.1.1.4).** Las dos ramas de fallo pasan a
+`setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, claveVista: '' }));`. El comentario de `:121-123`
+gana una línea: `// Un fallo deja \`claveVista\` vacía: ninguna vista vale hasta el siguiente cálculo bueno (R4, B3-H2).`
+
+**R4.1.3 · Textos.**
+- `docs/interfaz.md`: tras «…y nunca decide con los huecos de antes.» se añade «Si tras elegir se ha cambiado de
+  semana, Guardar vuelve primero a la del hueco elegido y lo dice en la región de estado: se pulsa otra vez para
+  guardar o para ver el aviso.».
+- La frase de B3-H2 se queda como está: con R4.1.2 pasa a ser cierta.
+- A3-H1: en `README.md:143`, `.. +84` pasa a `.. +154`.
+
+**R4.1.4 · Pruebas**, al final del `describe` de `:840`, con sus ayudantes (`pinta`, `RARA`, `AVISO`,
+`FALLO_CALCULO`, `guardarActivo`, `elegirTipoYHueco`, `avisos`) y una constante local:
+`SEMANA_SIGUIENTE = { ...RARA, huecosRaros: {}, calendario: construirCalendarioAlta({ fechaFoco: '2026-10-13', zona: 'Europe/Madrid', hoy: '2026-10-04', sugerencias: { modo: 'enFrio', sugerencias: [] }, bloques: [bloque('2026-10-13', '10:00', 'libre')] }) }`.
+La «espera R7» es el patrón de `:859`: esperar a que `guardarAlta` tenga llamadas o a una condición alternativa.
+
+- **R11 · S2.**
+  - Preparación: `recalcularAlta` responde `RARA`, `SEMANA_SIGUIENTE` y una promesa diferida (`resolver3`). Se
+    elige A y su hueco y se pulsa «Semana siguiente» en `act`. Se espera `/10:00, libre/` y `guardarActivo`. Después,
+    `guardar.focus()`, clic y espera R7, con la 3.ª llamada a `recalcularAlta` como alternativa.
+  - (1) `guardarAlta` no se ha llamado. **Caen 0c2c87e, M_SEM y M_SEM_SIGUE.**
+  - (2) `avisos()` trae el texto nuevo. **Cae M_SEM_MSG.**
+  - (3) La última llamada lleva `fechaFoco: '2026-10-05'`. (4) El foco está en Guardar. (5) No hay región.
+  - Después se resuelve `resolver3` con `RARA`, se espera `guardarActivo` y se hace clic. (6) Aparece la región con
+    `/30 minutos/`. (7) `guardarAlta` sigue sin llamarse.
+- **R12 · S2 con fallo.** Igual que R11, pero la 3.ª respuesta es `{ ok: false, motivo: 'fallo', mensaje: FALLO_CALCULO }`.
+  - Clic y `findByText(FALLO_CALCULO)`. (1) `guardarActivo()`. Segundo clic con espera R7.
+  - (2) `guardarAlta` se llama una vez, con `fecha: '2026-10-06'` y `horaLocal: '17:00'`. **Cae M_SEM_CAL**, la
+    condición literal del revisor: la vista pintada sigue siendo la del 12-10 y nunca se sale de la rama.
+  - (3) No hay región (D-R3.3).
+- **R13 · S1, rama `!resultado.ok`.**
+  - Respuestas: `RARA`, `{ok:false, mensaje:'FALLO B'}` y `{ok:false, mensaje:'FALLO A'}`.
+  - Se elige A y su hueco; luego B, esperando «FALLO B»; luego A otra vez, esperando «FALLO A».
+  - (1) No hay región. Clic con espera R7.
+  - (2) No hay región, y `guardarAlta` se llama una vez con `TIPO_A` y `'17:00'`. **Caen 0c2c87e y M_FV_A.**
+- **R14 · S1b, rama `catch`.** Igual que R13, pero con el aviso abierto antes de pasar a B. Los dos fallos son
+  `mockRejectedValueOnce(new Error('red'))` y dan el mismo texto, así que, tras volver a A, se espera
+  `guardarActivo` y que haya 3 llamadas.
+  - Aserciones síncronas: (1) no hay región (**caen 0c2c87e y M_FV_C**); (2) el foco está en el selector;
+    (3) `guardarAlta` no se ha llamado.
+
+| Mutante | Cambio | Cae en |
+|---|---|---|
+| M_SEM / M_SEM_SIGUE | sin el bloque de R4.1.1 / el bloque sin `return;` | R11 (1); M_SEM también en R12 (2) |
+| M_SEM_MSG | sin `setAviso(t('agenda.alta.semanaDelElegido'));` | R11 (2) |
+| M_SEM_CAL | condición → `elegido && !vista.calendario.huecos.some((h) => h.clave === elegido.clave)` | R12 (2) |
+| M_FV_A / M_FV_C | `:159` / `:178` sin `, claveVista: ''` | R13 (2) / R14 (1) |
+| Los de R3.1.6 | sin cambios | donde caían; M_R_aviso y M_B siguen siendo equivalentes |
+
+### R4.2 · Decisiones y alternativas descartadas
+
+- **D-R4.1 · B3-H1 se arregla en el cliente.** Guardar vuelve a la semana del elegido y decide en el clic siguiente.
+  - Descartado: que `cargarVistaAlta` lea la fecha del elegido. Cambia el contrato de `recalcularAlta` y la
+    `claveCalculo`, y pasados los 62 días de la RPC obliga a una tercera lectura.
+  - Descartado: reanudar el envío al llegar la vista. Un efecto que envía puede guardar tras cambios hechos
+    entretanto (D-R3.2).
+- **D-R4.2 · Se compara con `foco`, no con los huecos pintados.** Con los pintados, tras un fallo Guardar no saldría
+  nunca de la rama (R2.5, D-R3.3). R12 lo fija.
+- **D-R4.3 · Mensaje en la región de estado, sin mover el foco.** Sin él, un lector de pantalla pulsa Guardar y no
+  oye nada (WCAG 4.1.3).
+- **D-R4.4 · B3-H2 se corrige en el código y no en la frase.** Matizar la frase dejaría S1b: la alerta de fallo y el
+  aviso calculado a la vez. Ningún camino de servidor cambia (CA6, D8).
+
+### R4.3 · Criterios, riesgos y territorio
+
+- **CA5.** `npm test` en verde con R11-R14. Tabla medida con `mut-rb3.js` sobre una copia. Contra el `.tsx` de
+  0c2c87e caen R11 (1), R12 (2), R13 (2) y R14 (1).
+- **CA6.** El grep de R3.3 solo da `aria-disabled`. `git diff 0c2c87e --stat` no toca `estado-alta.ts`, `acciones.ts`
+  ni `lib/`, salvo `es.ts`.
+- **CA7, manual.** Elegir hueco, «Semana siguiente», Guardar. Se anota que el calendario vuelve, que se anuncia el
+  texto y que el foco sigue en Guardar.
+- **CA8.** Lint, build y `territorio.mjs`.
+- **CA1-CA4.** Solo `grep -n "Y+10 .. +154" scripts/rls/README.md`.
+- **Riesgos.**
+  - Media: R11 (1) pasa sin discriminar si se mira antes de que acabe `handleSubmit`. Lo cubren la espera R7 y la
+    medición contra 0c2c87e.
+  - Media: el segundo clic sorprende. Lo mitigan el salto y el texto.
+  - Baja: el texto de estado queda junto al aviso, sin contradecirlo.
+- **Territorio.** El de R3.6 más `lib/i18n/es.ts`, que ya está en el contrato. Nada es delegable.
+
+### R4.4 · Qué revisar
+
+- [ ] El bloque de R4.1.1 va **después** de `esperandoSerie` y **antes** de la intercepción, y compara con `foco`.
+- [ ] Las dos ramas de fallo ponen `claveVista: ''`. `ok` pone las dos claves y `hueco_ocupado` mantiene el spread.
+      Ningún fallo pone `claveVista` a `claveCalculo` (B2-H2).
+- [ ] R14 (1) y (2) son síncronas tras `waitFor(guardarActivo)`. R13 usa `ok:false` y R14 rechazos, así que cada
+      rama tiene su mutante.
+- [ ] Ningún efecto nuevo, ni `focoPendiente`, ni servidor. En el README solo la celda; en `interfaz.md`, solo la
+      frase.
+
+### Lo que no entra en la ronda 4, y por qué
+
+- Navegando dentro de la ventana, el aviso puede reaparecer con alternativas de la semana pintada. La interfaz ya lo
+  dice y ningún hallazgo lo pide.
+- Reanudar el envío al llegar la vista (D-R4.1) y cualquier cambio de servidor.
