@@ -37,6 +37,18 @@ function hayLibres(...bloques: BloqueAlta[]) {
   m.leerBloques.mockImplementation(async (_sesion: Sesion, entrada: { desde: string; hasta: string }) => ({
     ok: true,
     bloques: bloques.filter((b) => b.fecha >= entrada.desde && b.fecha <= entrada.hasta),
+    huecosRaros: {},
+  }));
+}
+
+/** Como `hayLibres`, y la base marca como raros los huecos de `raros` (clave → minutos) que caen en el rango. */
+function hayLibresYRaros(bloques: BloqueAlta[], raros: Record<string, number>) {
+  m.leerBloques.mockImplementation(async (_sesion: Sesion, entrada: { desde: string; hasta: string }) => ({
+    ok: true,
+    bloques: bloques.filter((b) => b.fecha >= entrada.desde && b.fecha <= entrada.hasta),
+    huecosRaros: Object.fromEntries(
+      Object.entries(raros).filter(([clave]) => clave.slice(0, 10) >= entrada.desde && clave.slice(0, 10) <= entrada.hasta),
+    ),
   }));
 }
 
@@ -86,5 +98,32 @@ describe('cargarVistaAlta · semana con la que abre el calendario', () => {
 
     expect(vista.calendario.desde).toBe('2026-09-28');
     expect(vista.tarjetas).toEqual([]);
+  });
+});
+
+// T-043 · el hueco raro llega a la vista junto al calendario y las tarjetas.
+describe('cargarVistaAlta · huecosRaros', () => {
+  it('con una sola lectura, la vista lleva el mapa de la lectura y su clave es la de un hueco del calendario', async () => {
+    hayLibresYRaros([libre('2026-10-06', '10:00'), libre('2026-10-06', '11:00')], { '2026-10-06T10:00': 40 });
+
+    const vista = await cargar({ fechaFoco: '2026-10-06' });
+
+    expect(m.leerBloques).toHaveBeenCalledTimes(1);
+    expect(vista.huecosRaros).toEqual({ '2026-10-06T10:00': 40 });
+    // Fija la forma de la clave (H6): la del mapa es la de un hueco pintado.
+    expect(vista.calendario.huecos.map((h) => h.clave)).toContain('2026-10-06T10:00');
+  });
+
+  it('con dos lecturas (semana lejana y ventana), junta ambos mapas', async () => {
+    hayLibresYRaros(
+      [libre('2026-10-06', '10:00'), libre('2027-01-05', '10:00')],
+      { '2026-10-06T10:00': 40, '2027-01-05T10:00': 25 },
+    );
+
+    const vista = await cargar({ fechaFoco: '2027-01-05' });
+
+    expect(m.leerBloques).toHaveBeenCalledTimes(2);
+    expect(vista.huecosRaros).toEqual({ '2026-10-06T10:00': 40, '2027-01-05T10:00': 25 });
+    expect(vista.calendario.huecos.map((h) => h.clave)).toContain('2027-01-05T10:00');
   });
 });

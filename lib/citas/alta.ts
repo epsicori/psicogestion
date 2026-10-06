@@ -40,7 +40,7 @@ export type BloqueAlta = {
 export async function leerBloques(
   sesion: Sesion,
   entrada: { profesionalId: string; centroId: string; desde: string; hasta: string; duracionMinutos: number },
-): Promise<ResultadoCitas<{ bloques: BloqueAlta[] }>> {
+): Promise<ResultadoCitas<{ bloques: BloqueAlta[]; huecosRaros: Record<string, number> }>> {
   const { data, error } = await sesion.supabase.rpc('agenda_bloques_profesional', {
     p_profesional_id: entrada.profesionalId,
     p_centro_id: entrada.centroId,
@@ -55,8 +55,20 @@ export async function leerBloques(
     return { ok: false, motivo, mensaje: mensajeParaMotivo(motivo) };
   }
 
+  // Hueco raro (T-043) por clave de tramo libre. La clave debe coincidir con `HuecoVista.clave`
+  // (`${fecha}T${HH:MM}`). El tipo generado no dice `| null` en las columnas de una función
+  // `table`, pero la base lo manda: `?? null` y la guarda de entero positivo.
+  const huecosRaros: Record<string, number> = {};
+  for (const fila of data ?? []) {
+    const minutos: number | null = fila.hueco_raro_minutos ?? null;
+    if (fila.estado === 'libre' && typeof minutos === 'number' && Number.isInteger(minutos) && minutos > 0) {
+      huecosRaros[`${fila.fecha}T${fila.hora_local.slice(0, 5)}`] = minutos;
+    }
+  }
+
   return {
     ok: true,
+    huecosRaros,
     bloques: (data ?? []).map((fila) => ({
       fecha: fila.fecha,
       horaLocal: fila.hora_local.slice(0, 5),
