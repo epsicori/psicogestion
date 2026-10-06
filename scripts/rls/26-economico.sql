@@ -19,12 +19,16 @@
 --   I · paso 1 del sellado: una negativa por columna que calcula la base; paso 0: el mismo
 --       42501 con sobre coherente, incoherente o borrador inexistente.
 --   J · paso 6: una negativa 23514 por comprobación, cada una con su fragmento de mensaje.
+--       Ronda 4: la clase de invisibles, tramo a tramo, con sus vecinos (J28h, J28i), y la
+--       tolerancia de la banda por línea general (J49-J53).
 --   K · bono de otro paciente, tarifas por vigencia derivada (ronda 2), congelación de
 --       `citas.bono_id` en la cita realizada o pasada, altas por rol.
 --   L · catálogo: privilegios, `execute` del verificador denegado, `tablas_solo_adicion`.
 --   M · rol en positivo (ronda 2): el técnico que figura como profesional de un paciente no
 --       lee ni escribe su economía por esa rama.
 --   N · validación de la cabecera del borrador (ronda 2).
+--   O · lectura por asignación (ronda 3): el profesional lee mientras tiene asignado al
+--       paciente.
 --
 -- Ids propios con prefijo `a0260001-`. Los recuentos se filtran por esos ids (y por los de
 -- `01`), nunca por totales de tabla: el banco entero es UNA transacción.
@@ -1073,7 +1077,7 @@ select pg_temp.assert(
   '26.J28e.0 · control: el concepto del sobre es U+3164 y U+3000 (6 octetos)');
 select pg_temp.assert_lanza_codigo_msg(
   pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador(E'\u3164\u3000', 1, 6000)), 60.00, 0.00, 60.00, :PRO1, 'Ana Uno', :CA),
-  '23514', 'Un concepto invisible', '26.J28e · concepto de espacio ideográfico y espacio duro');
+  '23514', 'Un concepto invisible', '26.J28e · concepto de relleno hangul y espacio ideográfico');
 select pg_temp.assert_no_lanza(
   pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador(E'Sesión\u200B de psicoterapia', 1, 6000)), 60.00, 0.00, 60.00, :PRO1),
   '26.J28f · lo visible manda: un invisible entre letras no estorba (BORR3)');
@@ -1085,6 +1089,88 @@ select pg_temp.assert_lanza_codigo_msg(
   :'sql_j28g',
   '42501', 'No puedes añadir una versión a este borrador', '26.J28g · TEC1 con concepto invisible: los permisos van antes que la cota (gemela: M7)');
 call pg_temp.reset_sesion();
+-- Ronda 4 (A-H2, B-H3) · la clase de invisibles, tramo a tramo. La lista de tramos es la salida
+-- del generador de R4.2 de `tickets/T-021/diseno.md` (Node 24.14.1, Unicode 17.0:
+-- Default_Ignorable_Code_Point, Cf, White_Space y Cc, más las marcas combinantes genéricas y
+-- U+2800); los 34 pares de abajo se comparan con él, no con la migración. Cada carácter se
+-- escribe con chr() sobre enteros hexadecimales: ni escapes ni caracteres crudos.
+-- J28h · una negativa por tramo: un prefijo invisible (U+2060; U+200B en el tramo que contiene
+-- U+2060) y todos los puntos del tramo. El prefijo es Cf y no blanco, así que el paso 6.3 deja
+-- pasar el concepto y lo rechaza la clase. Como postgres sobre BORR1.
+with tramos(m) as (
+  select array[
+    -- tramos:inicio
+    [0x0001, 0x0020],
+    [0x007F, 0x00A0],
+    [0x00AD, 0x00AD],
+    [0x0300, 0x036F],
+    [0x0600, 0x0605],
+    [0x061C, 0x061C],
+    [0x06DD, 0x06DD],
+    [0x070F, 0x070F],
+    [0x0890, 0x0891],
+    [0x08E2, 0x08E2],
+    [0x115F, 0x1160],
+    [0x1680, 0x1680],
+    [0x17B4, 0x17B5],
+    [0x180B, 0x180F],
+    [0x1AB0, 0x1AFF],
+    [0x1DC0, 0x1DFF],
+    [0x2000, 0x200F],
+    [0x2028, 0x202F],
+    [0x205F, 0x206F],
+    [0x20D0, 0x20FF],
+    [0x2800, 0x2800],
+    [0x3000, 0x3000],
+    [0x3164, 0x3164],
+    [0xFE00, 0xFE0F],
+    [0xFE20, 0xFE2F],
+    [0xFEFF, 0xFEFF],
+    [0xFFA0, 0xFFA0],
+    [0xFFF0, 0xFFFB],
+    [0x110BD, 0x110BD],
+    [0x110CD, 0x110CD],
+    [0x13430, 0x1343F],
+    [0x1BCA0, 0x1BCA3],
+    [0x1D173, 0x1D17A],
+    [0xE0000, 0xE0FFF]
+    -- tramos:fin
+  ]::integer[]
+)
+-- Cada fila genera su propia sentencia y psql la ejecuta aparte (gexec): así cada alta lee el
+-- borrador con una instantánea nueva y el número de versión del sobre (máximo + 1) es el bueno
+-- aunque una fila anterior haya sellado.
+select format(
+  'select pg_temp.assert_lanza_codigo_msg(pg_temp.sv(%L::uuid, jsonb_build_array(pg_temp.linea_borrador('
+  'chr(%s) || (select string_agg(chr(c), %L order by c) from generate_series(%s, %s) as c), 1, 6000)), '
+  '60.00, 0.00, 60.00, %L::uuid, %L, %L::uuid), %L, %L, %L)',
+  :BORR1, case when t.a <= 0x2060 and 0x2060 <= t.b then 0x200B else 0x2060 end, '', t.a, t.b,
+  :PRO1, 'Ana Uno', :CA, '23514', 'Un concepto invisible',
+  format('26.J28h · tramo %s-%s', upper(to_hex(t.a)), upper(to_hex(t.b))))
+from tramos, generate_subscripts(tramos.m, 1) as i,
+     lateral (select tramos.m[i][1] as a, tramos.m[i][2] as b) as t
+order by i
+\gexec
+-- J28i · los 67 vecinos (el punto anterior y el posterior de cada tramo, salida del mismo
+-- generador sin el argumento `tramos`) se sellan solos como concepto: fijan cada tramo desde
+-- fuera. Línea exenta 1 × 60,00 en BORR3, una sentencia por vecino (gexec, como J28h).
+select format(
+  'select pg_temp.assert_no_lanza(pg_temp.sv(%L::uuid, jsonb_build_array(pg_temp.linea_borrador(chr(%s), 1, 6000)), '
+  '60.00, 0.00, 60.00, %L::uuid), %L)',
+  :BORR3, v, :PRO1, format('26.J28i · U+%s', upper(to_hex(v))))
+from unnest(array[
+  -- vecinos:inicio
+  0x0021, 0x007E, 0x00A1, 0x00AC, 0x00AE, 0x02FF, 0x0370, 0x05FF, 0x0606, 0x061B,
+  0x061D, 0x06DC, 0x06DE, 0x070E, 0x0710, 0x088F, 0x0892, 0x08E1, 0x08E3, 0x115E,
+  0x1161, 0x167F, 0x1681, 0x17B3, 0x17B6, 0x180A, 0x1810, 0x1AAF, 0x1B00, 0x1DBF,
+  0x1E00, 0x1FFF, 0x2010, 0x2027, 0x2030, 0x205E, 0x2070, 0x20CF, 0x2100, 0x27FF,
+  0x2801, 0x2FFF, 0x3001, 0x3163, 0x3165, 0xFDFF, 0xFE10, 0xFE1F, 0xFE30, 0xFEFE,
+  0xFF00, 0xFF9F, 0xFFA1, 0xFFEF, 0xFFFC, 0x110BC, 0x110BE, 0x110CC, 0x110CE, 0x1342F,
+  0x13440, 0x1BC9F, 0x1BCA4, 0x1D172, 0x1D17B, 0xDFFFF, 0xE1000
+  -- vecinos:fin
+]) with ordinality as u(v, n)
+order by n
+\gexec
 -- J41 (B-H8) · el centro_id de la versión es null, el del paciente o uno del profesional.
 select pg_temp.assert_lanza_codigo_msg(
   pg_temp.sql_version(:BORR3,
@@ -1177,6 +1263,94 @@ select pg_temp.assert_lanza_codigo_msg(
                                        pg_temp.linea_borrador('Abono del informe', 1, -10000, 'general', 2100)),
     82.64, 17.36, 100.00, :PRO1),
   '23514', 'fuera de la banda', '26.J48 · cuota positiva sobre una parte general negativa: signo contrario (signo_ck no la para)');
+
+-- Ronda 4 (A-H1 = B-H1, B-H2) · la tolerancia de la banda es T = suma, por línea general, de
+-- least(1, |Q_i|): un céntimo por línea general que mueva al menos un céntimo de cuota. Las
+-- líneas de 0 € y las parejas ±1 céntimo no la inflan. Q y T en céntimos.
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Sesión de evaluación', 1, 3333, 'general', 2100),
+                                       pg_temp.linea_borrador('Sesión de evaluación', 1, 3333, 'general', 2100),
+                                       pg_temp.linea_borrador('Sesión de evaluación', 1, 3333, 'general', 2100)),
+    82.65, 17.34, 99.99, :PRO1),
+  '26.J49g · tres líneas de 33,33 desglosadas cada una (Q = 1735,364; T = 3; diferencia 1,364) se sellan (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Material de evaluación, incluido', 1, 0, 'general', 2100)),
+    82.63, 17.37, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J49 · una línea general de 0 € no suma a T (T = 1; diferencia 1,463; gemela: J49h)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Material de evaluación, incluido', 1, 0, 'general', 2100)),
+    82.64, 17.36, 100.00, :PRO1),
+  '26.J49h · la línea general de 0 € es legítima: diferencia 0,463 con T = 1 (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión de evaluación', 3, 3333, 'general', 2100)),
+    82.65, 17.34, 99.99, :PRO1),
+  '23514', 'fuera de la banda', '26.J49u · una línea de 3 × 33,33 desglosada por unidad (T = 1; diferencia 1,364; gemela: J49ug)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Sesión de evaluación', 3, 3333, 'general', 2100)),
+    82.64, 17.35, 99.99, :PRO1),
+  '26.J49ug · la misma línea desglosada entera (diferencia 0,364) se sella (BORR3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Ajuste', 1000000, 0, 'general', 2100)),
+    0.00, 100.00, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50 · un millón de unidades a 0 € no inflan T: base 0 y cuota llena');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Material', 5000, 1, 'general', 2100),
+                                       pg_temp.linea_borrador('Descuento material', 5000, -1, 'general', 2100)),
+    0.00, 100.00, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50a · una pareja ±1 céntimo de 5000 unidades suma 1 por línea (T = 3)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 6000),
+                                       pg_temp.linea_borrador('Material', 1000000, 1, 'general', 2100),
+                                       pg_temp.linea_borrador('Descuento material', 1000000, -1, 'general', 2100)),
+    50.00, 10.00, 60.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50b · una pareja ±1 céntimo de un millón de unidades (Q = 0; T = 2; diferencia 1000)');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 100000),
+                                       pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Ajuste', 100000, 0, 'general', 2100)),
+    600.00, 500.00, 1100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50c · la cuota de la parte exenta pasada a una general con 0 € de relleno');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 20000),
+                                       pg_temp.linea_borrador('Abono del informe', 1, -10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Ajuste', 100000, 0, 'general', 2100)),
+    82.64, 17.36, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50d · signo contrario con 0 € de relleno (Q = -1735,537; T = 1)');
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Ajuste', 1000000, 0, 'general', 2100)),
+    0.00, 100.00, 100.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50e · J50 sellado por PRO1 autenticado sobre su borrador');
+call pg_temp.reset_sesion();
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 50000),
+                                       pg_temp.linea_borrador('Informe pericial', 1, 10000, 'general', 2100),
+                                       pg_temp.linea_borrador('Ajuste', 60000, 0, 'general', 2100)),
+    100.00, 500.00, 600.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50g · cuota de 500,00 sobre una parte general de 100,00 con 0 € de relleno');
+select pg_temp.assert_lanza_codigo_msg(
+  pg_temp.sv(:BORR1, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 6000),
+                                       pg_temp.linea_borrador('Material de evaluación, incluido', 1, 0, 'general', 2100)),
+    50.00, 10.00, 60.00, :PRO1),
+  '23514', 'fuera de la banda', '26.J50f · con una sola línea general de 0 € la banda corre con T = 0 (gemela: J50fg)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Sesión', 1, 6000),
+                                       pg_temp.linea_borrador('Material de evaluación, incluido', 1, 0, 'general', 2100)),
+    60.00, 0.00, 60.00, :PRO1),
+  '26.J50fg · las mismas líneas con cuota 0: diferencia 0 y T = 0, el límite exacto (BORR3)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Abono de un informe', 1, -10000, 'general', 2100)),
+    -82.64, -17.36, -100.00, :PRO1),
+  '26.J52g · un abono general: T toma el valor absoluto de Q (diferencia 0,463) (BORR3)');
+select pg_temp.assert_no_lanza(
+  pg_temp.sv(:BORR3, jsonb_build_array(pg_temp.linea_borrador('Fotocopias', 10, 2, 'general', 2100)),
+    0.17, 0.03, 0.20, :PRO1),
+  '26.J53g · diez fotocopias de 0,02: la cantidad cuenta en el tope (Q = 3,471; T = 1; diferencia 0,471) (BORR3)');
 
 -- =========================================================================================
 -- K · Bono de otro paciente, tarifas por vigencia derivada, congelación del bono de la cita
