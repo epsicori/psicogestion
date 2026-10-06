@@ -10,7 +10,8 @@ prioridad: alta
 depende_de: []
 # contrato aprobado por el propietario el 06-10-2026, con sus tres decisiones (§Decisiones del
 # propietario); diseño corto en tickets/T-049/diseno.md
-estado: pendiente
+estado: hecho
+completado: 2026-10-06
 # no: cada cambio toca una guarda del reloj y hay que razonar la colisión; ver §Delegable
 delegable: no
 # Notas por elemento (siempre en la línea anterior, nunca en la de la clave):
