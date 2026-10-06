@@ -10,6 +10,7 @@ riesgo: alto
 # territorio: adenda del diseño (A.6, 03-10-2026); no cambia con P3 (§Adenda P3 aplicada, PA.6)
 territorio:
   - supabase/migrations/20261011120000_economico_esquema.sql
+  - supabase/migrations/20261011130000_economico_ronda_3.sql
   - scripts/rls/00-ayudantes.sql
   - scripts/rls/01-fijacion.sql
   - scripts/rls/11-cobertura.sql
