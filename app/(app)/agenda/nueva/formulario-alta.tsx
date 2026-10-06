@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import type { RolUsuario } from '@/components/armazon/modulos';
@@ -13,6 +13,8 @@ import { esquemaAltaCita, type DatosAltaCita } from '@/lib/citas/esquemas';
 import { t, tCon } from '@/lib/i18n';
 
 import { guardarAlta, previsualizarAltaSerie, recalcularAlta } from './acciones';
+import { alternativasSinHueco } from './alternativas-hueco';
+import { AvisoHuecoRaro } from './aviso-hueco-raro';
 import { BuscadorPaciente, type PacienteElegido } from './buscador-paciente';
 import { SelectorHueco } from './selector-hueco';
 import type { VistaAlta } from './estado-alta';
@@ -69,6 +71,12 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   const [guardando, setGuardando] = useState(false);
   // Si alguien eligió profesional a mano, elegir paciente no se lo cambia.
   const [profesionalManual, setProfesionalManual] = useState(false);
+  // Hueco raro (T-043): la clave para la que se enseñó el aviso, y a dónde va el foco tras el próximo commit.
+  const [avisoHueco, setAvisoHueco] = useState<string | null>(null);
+  const refAviso = useRef<HTMLElement>(null);
+  const refResumen = useRef<HTMLParagraphElement>(null);
+  const refGuardar = useRef<HTMLButtonElement>(null);
+  const focoPendiente = useRef<'aviso' | 'resumen' | 'guardar' | null>(null);
 
   const {
     register,
@@ -105,11 +113,33 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
 
   // Los huecos: lo último que llegó y la clave de lo que se pidió, para ignorar lo que llega tarde.
   const claveCalculo = [paciente?.id ?? '', profesionalId, centroId, tipoId ?? '', foco ?? '', excluirHuecos.join(',')].join('|');
-  const [calculo, setCalculo] = useState<{ clave: string; vista: VistaAlta }>({
-    clave: [inicial.paciente?.id ?? '', inicial.profesionalId, inicial.centroId, '', vistaInicial.calendario.desde, ''].join('|'),
-    vista: vistaInicial,
+  const [calculo, setCalculo] = useState<{ clave: string; claveVista: string; vista: VistaAlta }>(() => {
+    const clave = [inicial.paciente?.id ?? '', inicial.profesionalId, inicial.centroId, '', vistaInicial.calendario.desde, ''].join('|');
+    return { clave, claveVista: clave, vista: vistaInicial };
   });
   const vista = calculo.vista;
+  // `clave`: la última pedida que ya contestó (bien o mal). `claveVista`: la de los huecos pintados.
+  // Con un recálculo en vuelo, Guardar espera (`bloqueado`). Con una vista de otra clave (en vuelo o
+  // tras un fallo), nada decide la rareza y el aviso no se monta (T-043 R3, B2-H1/B2-H2).
+  // Un fallo deja `claveVista` vacía: ninguna vista vale hasta el siguiente cálculo bueno (R4, B3-H2).
+  const recalculando = calculo.clave !== claveCalculo;
+  const vistaVigente = !recalculando && calculo.claveVista === claveCalculo;
+  const huecoRaroElegido = elegido && vistaVigente ? (vista.huecosRaros[elegido.clave] ?? null) : null;
+  // Derivado, no sincronizado: si un recálculo quita la rareza o el elegido, el aviso se va solo.
+  const avisoVisible = avisoHueco !== null && avisoHueco === elegido?.clave && huecoRaroElegido !== null;
+
+  // Foco diferido: corre tras cada commit y solo actúa si alguien lo dejó pendiente.
+  useEffect(() => {
+    const destino = focoPendiente.current;
+    if (!destino) return;
+    focoPendiente.current = null;
+    if (destino === 'guardar') {
+      // Solo si el foco se perdió (el aviso se desmontó con él dentro): si no, no se le quita a nadie.
+      if (document.activeElement === null || document.activeElement === document.body) refGuardar.current?.focus();
+      return;
+    }
+    (destino === 'aviso' ? refAviso : refResumen).current?.focus();
+  });
 
   useEffect(() => {
     if (calculo.clave === claveCalculo) return;
@@ -127,11 +157,12 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         if (!vigente) return;
         if (!resultado.ok) {
           setFallo(resultado.mensaje);
-          setCalculo((anterior) => ({ ...anterior, clave: claveCalculo }));
+          setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, claveVista: '' }));
+          setAviso(''); // B4-H2 (R5): si era la vuelta a la semana del elegido, no ha vuelto.
           return;
         }
         setFallo('');
-        setCalculo({ clave: claveCalculo, vista: resultado.vista });
+        setCalculo({ clave: claveCalculo, claveVista: claveCalculo, vista: resultado.vista });
         const nuevo = resultado.vista.calendario;
         if (
           elegido &&
@@ -146,7 +177,8 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
       } catch {
         if (!vigente) return;
         setFallo(t('agenda.alta.error.calcular'));
-        setCalculo((anterior) => ({ ...anterior, clave: claveCalculo }));
+        setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, claveVista: '' }));
+        setAviso(''); // B4-H2 (R5)
       }
     })();
     return () => {
@@ -198,6 +230,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   const falloSerie = claveSerie !== null && serieFallida?.clave === claveSerie ? serieFallida.mensaje : null;
 
   function elegirHueco(clave: string, etiqueta: string) {
+    setAvisoHueco(null);
     setElegido({ clave, etiqueta });
     setValue('fecha', clave.slice(0, 10), { shouldValidate: false });
     setValue('horaLocal', clave.slice(11), { shouldValidate: false });
@@ -228,6 +261,16 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
     if (!elegido) return;
     const lunes = lunesDe(elegido.clave.slice(0, 10));
     if (lunes !== foco) setFoco(lunes);
+  }
+
+  /**
+   * Navegación del usuario (semana anterior o siguiente). Vacía la región de estado: el texto de la vuelta (B3-H1)
+   * no se queda en otra semana, y el siguiente rebote pasa de '' al texto, así que se anuncia (B4-H1, T-043 R5).
+   * `volverAlElegido` no pasa por aquí: llama a `setFoco` directamente y no vacía lo que `enviar` pone.
+   */
+  function cambiarSemana(lunes: string) {
+    setAviso('');
+    setFoco(lunes);
   }
 
   function cambiarPeriodicidad(valor: (typeof PERIODICIDADES)[number]) {
@@ -269,8 +312,47 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
   // si falló, Guardar la vuelve a pedir.
   const esperandoSerie = claveSerie !== null && serieVigente === null && falloSerie === null;
 
+  // El aviso intercepta el envío (el servidor nunca mira el hueco, D8); `guardar` es el cuerpo de siempre.
   async function enviar(datos: DatosAltaCita) {
     if (esperandoSerie) return;
+    // B3-H1 (T-043 R4): la rareza del elegido solo se conoce con su semana pedida. Si se navegó a otra, Guardar vuelve a
+    // ella y no decide. Se compara con `foco` y no con los huecos pintados: tras un fallo la vista pintada no cambia y
+    // Guardar no saldría nunca de aquí (D-R3.3).
+    if (elegido && lunesDe(elegido.clave.slice(0, 10)) !== foco) {
+      volverAlElegido();
+      setAviso(t('agenda.alta.semanaDelElegido'));
+      return;
+    }
+    if (elegido && huecoRaroElegido !== null) {
+      if (avisoHueco === elegido.clave) refAviso.current?.focus();
+      else {
+        focoPendiente.current = 'aviso';
+        setAvisoHueco(elegido.clave);
+      }
+      return;
+    }
+    await guardar(datos);
+  }
+
+  function agendarIgualmente() {
+    if (bloqueado) return; // misma guarda que onSubmit (H27)
+    if (falloSerie !== null) {
+      setSerieFallida(null);
+      return;
+    }
+    // Si lo que tenía el foco se desmontó (hueco_ocupado desmarca el elegido y el aviso se va), el foco se queda en el
+    // formulario: se pide para el commit que viene tras la respuesta, cuando el DOM ya no lo tiene.
+    void handleSubmit(guardar)().then(() => {
+      focoPendiente.current = 'guardar';
+    });
+  }
+
+  function elegirAlternativa(clave: string, etiqueta: string) {
+    focoPendiente.current = 'resumen';
+    elegirHueco(clave, etiqueta);
+  }
+
+  async function guardar(datos: DatosAltaCita) {
     setGuardando(true);
     setFallo('');
     setAviso('');
@@ -294,7 +376,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         setExcluirHuecos((previos) => (elegido && !previos.includes(elegido.clave) ? [...previos, elegido.clave].slice(-10) : previos));
         if (resultado.vista) {
           const nueva = resultado.vista;
-          setCalculo((anterior) => ({ clave: anterior.clave, vista: nueva }));
+          setCalculo((anterior) => ({ ...anterior, vista: nueva }));
         }
         setAviso(resultado.mensaje);
         return;
@@ -317,6 +399,8 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
 
   const sinHueco = errors.fecha !== undefined || errors.horaLocal !== undefined;
   const catalogoVacio = tipos.length === 0;
+  // Una sola guarda para los cuatro sitios que la repetían (H27, B-H3).
+  const bloqueado = guardando || catalogoVacio || esperandoSerie || recalculando;
   const idTipo = `${prefijo}-tipo`;
 
   return (
@@ -324,7 +408,7 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
       noValidate
       onSubmit={(evento) => {
         // `aria-disabled` no impide el envío (Intro en un campo, segundo clic): se corta aquí (H27).
-        if (guardando || catalogoVacio || esperandoSerie) {
+        if (bloqueado) {
           evento.preventDefault();
           return;
         }
@@ -414,17 +498,17 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         error={vista.errorSugerencias}
         elegida={elegido?.clave ?? null}
         alElegir={elegirTarjeta}
-        cargando={calculo.clave !== claveCalculo}
+        cargando={recalculando}
       />
 
       <SelectorHueco
         calendario={vista.calendario}
         elegido={elegido?.clave ?? null}
         alElegir={elegirHueco}
-        alCambiarSemana={setFoco}
+        alCambiarSemana={cambiarSemana}
       />
 
-      <p className="text-sm">
+      <p ref={refResumen} tabIndex={-1} className="focus-visible:ring-ring/50 text-sm outline-none focus-visible:ring-2">
         <span className="font-medium">{t('agenda.alta.campos.hueco')}: </span>
         {elegido ? elegido.etiqueta : <span className="text-muted-foreground">{t('agenda.alta.sinHueco')}</span>}
       </p>
@@ -509,12 +593,26 @@ export function FormularioAlta({ rol, centros, profesionales, tipos, inicial, vi
         </p>
       )}
 
+      {avisoVisible && elegido && huecoRaroElegido !== null && (
+        <AvisoHuecoRaro
+          ref={refAviso}
+          minutos={huecoRaroElegido}
+          alternativas={alternativasSinHueco(vista.calendario.huecos, vista.huecosRaros, elegido.clave).flatMap((clave) => {
+            const h = vista.calendario.huecos.find((x) => x.clave === clave);
+            return h ? [{ clave, texto: `${vista.calendario.dias[h.diaIndice].etiquetaLarga}, ${h.horaLocal}`, etiqueta: h.etiqueta }] : [];
+          })}
+          ocupado={bloqueado}
+          alElegir={elegirAlternativa}
+          alAgendarIgualmente={agendarIgualmente}
+        />
+      )}
+
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variante="contorno" onClick={alCancelar}>
           {t('comunes.cancelar')}
         </Button>
         {/* `aria-disabled` y no `disabled`: un botón `disabled` con el foco dentro lo suelta a `body` (H27). */}
-        <Button type="submit" aria-disabled={guardando || catalogoVacio || esperandoSerie} className="aria-disabled:cursor-default aria-disabled:opacity-50">
+        <Button ref={refGuardar} type="submit" aria-disabled={bloqueado} className="aria-disabled:cursor-default aria-disabled:opacity-50">
           {guardando ? t('agenda.alta.guardando') : t('agenda.alta.guardar')}
         </Button>
       </div>

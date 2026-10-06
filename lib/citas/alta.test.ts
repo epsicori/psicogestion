@@ -115,6 +115,36 @@ describe('leerBloques', () => {
     });
     expect(r).toMatchObject({ ok: true, bloques: [{ horaLocal: '10:00', estado: 'libre' }, { horaLocal: '11:00', estado: 'ocupado' }] });
   });
+
+  it('recoge el hueco raro de los libres por su clave «fecha T HH:MM» (T-043)', async () => {
+    const { sesion } = sesionFalsa({
+      rpc: {
+        agenda_bloques_profesional: {
+          data: [
+            { fecha: '2026-10-06', hora_local: '10:00:00', inicio: 'a', fin: 'b', estado: 'libre', hueco_raro_minutos: 30 },
+            { fecha: '2026-10-06', hora_local: '11:00:00', inicio: 'c', fin: 'd', estado: 'libre', hueco_raro_minutos: null },
+            { fecha: '2026-10-06', hora_local: '12:00:00', inicio: 'e', fin: 'f', estado: 'libre', hueco_raro_minutos: 0 },
+            { fecha: '2026-10-06', hora_local: '13:00:00', inicio: 'g', fin: 'h', estado: 'libre', hueco_raro_minutos: 12.5 },
+            { fecha: '2026-10-07', hora_local: '10:00:00', inicio: 'i', fin: 'j', estado: 'ocupado', hueco_raro_minutos: 25 },
+            { fecha: '2026-10-07', hora_local: '11:00:00', inicio: 'k', fin: 'l', estado: 'libre' },
+          ],
+          error: null,
+        },
+      },
+    });
+    const r = await leerBloques(sesion, {
+      profesionalId: PROFESIONAL,
+      centroId: CENTRO,
+      desde: '2026-10-06',
+      hasta: '2026-10-12',
+      duracionMinutos: 50,
+    });
+    expect(r).toMatchObject({ ok: true });
+    if (!r.ok) return;
+    // null, 0, un no entero, un ocupado con número y una fila sin la columna no entran.
+    expect(r.huecosRaros).toEqual({ '2026-10-06T10:00': 30 });
+    expect(r.bloques).toHaveLength(6);
+  });
 });
 
 const PREVIA_BD = {

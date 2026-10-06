@@ -40,6 +40,11 @@ export type VistaAlta = {
   tarjetas: TarjetaVista[];
   /** El cálculo de sugerencias falló: se dice, y el calendario sigue sirviendo. */
   errorSugerencias: boolean;
+  /**
+   * Hueco raro (minutos) por clave de tramo libre, de todo lo leído: semana y ventana. Lo usa
+   * solo el aviso (T-043).
+   */
+  huecosRaros: Record<string, number>;
 };
 
 /** El rol de quien actúa, leído en el servidor; sin perfil legible, `null`. */
@@ -107,11 +112,13 @@ export async function cargarVistaAlta(
 
   let bloquesSemana: BloqueAlta[];
   let bloquesVentana: BloqueAlta[];
+  let huecosRaros: Record<string, number>;
   if (juntas) {
     const lectura = await leerBloques(sesion, { ...base, desde, hasta });
     if (!lectura.ok) return lectura;
     bloquesSemana = lectura.bloques;
     bloquesVentana = lectura.bloques.filter((b) => b.fecha >= hoy && b.fecha <= ventanaHasta);
+    huecosRaros = lectura.huecosRaros;
   } else {
     const [semana, ventana] = await Promise.all([
       leerBloques(sesion, { ...base, desde: semanaDesde, hasta: semanaHasta }),
@@ -121,6 +128,7 @@ export async function cargarVistaAlta(
     if (!ventana.ok) return ventana;
     bloquesSemana = semana.bloques;
     bloquesVentana = ventana.bloques;
+    huecosRaros = { ...ventana.huecosRaros, ...semana.huecosRaros };
   }
 
   let sugerencias: ResultadoSugerencias = { modo: 'enFrio', sugerencias: [] };
@@ -166,6 +174,7 @@ export async function cargarVistaAlta(
       modo,
       tarjetas,
       errorSugerencias,
+      huecosRaros,
     },
   };
 }
