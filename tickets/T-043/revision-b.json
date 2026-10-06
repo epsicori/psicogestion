@@ -1,26 +1,18 @@
 {
   "ticket": "T-043",
   "revisor": "B",
-  "ronda": 4,
+  "ronda": 5,
   "altas": 0,
-  "medias": 1,
+  "medias": 0,
   "bajas": 1,
   "hallazgos": [
     {
-      "id": "B4-H1",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 311,
-      "descripcion": "En el segundo rebote a la semana del elegido, setAviso vuelve a poner el mismo texto, que nadie ha vaciado (navegar de semana no toca `aviso`, :496). La región de estado no cambia y el lector de pantalla no anuncia nada, que es justo lo que D-R4.3 dice evitar. Además, el texto viejo se queda mientras se mira otra semana.",
-      "escenario": "Se elige el hueco raro del 06-10 a las 17:00, se pulsa «Semana siguiente» y luego Guardar: rebote anunciado. Se pulsa «Semana siguiente» otra vez y la región sigue diciendo «El calendario vuelve…». Se pulsa Guardar: recalcularAlta recibe fechaFoco 2026-10-05, el calendario salta, guardarAlta=0 y un MutationObserver sobre la región cuenta 0 mutaciones (sonda P1). Guardar no hace nada audible."
-    },
-    {
-      "id": "B4-H2",
+      "id": "B5-H1",
       "severidad": "BAJA",
       "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 159,
-      "descripcion": "Si el recálculo de la vuelta falla, las ramas de fallo (:159 y :178) no tocan `aviso`. La región de estado sigue afirmando que el calendario volvió a la semana del elegido, cuando el calendario pintado es el de la otra semana.",
-      "escenario": "Se elige el hueco raro del 06-10 a las 17:00, se pulsa «Semana siguiente» y luego Guardar, y el recálculo de la semana del 05-10 falla. La región dice «El calendario vuelve a la semana del hueco elegido. Pulsa Guardar otra vez.», pero lo pintado es «lun 12» y «mar 13», sin ningún botón de 17:00 (sonda P3). El usuario pulsa Guardar como le indican y se guarda sin aviso el hueco del 06-10 a las 17:00 (R12)."
+      "linea": 161,
+      "descripcion": "El setAviso('') de las dos ramas de fallo del recálculo (:161 y :181) es incondicional. Borra también el «acaba de ocuparse» de hueco_ocupado (:381), cuyo propio setExcluirHuecos (:376) dispara el recálculo que falla. Es una regresión de esta ronda. La variante condicional (vaciar solo si aviso es el texto de la vuelta) pasa 71/71, R15 y R16 incluidas, y conserva el mensaje. Ninguna prueba distingue las dos variantes.",
+      "escenario": "Se elige tipo y el hueco del 06-10 a las 17:00, y se pulsa Guardar. guardarAlta responde hueco_ocupado y el recálculo con excluir falla (!resultado.ok o rechazo). La región pasa de «… | Ese hueco acaba de ocuparse. Elige otro de los que quedan.» a «… | » (sonda Q1, medida en las dos ramas). Quedan la alerta «No se han podido calcular los huecos.» y el resumen «Elige un hueco libre del calendario.», y ningún texto dice que el hueco lo ocupó otro. Con vista: null, las 17:00 siguen pintadas como libres: el usuario las vuelve a elegir y el servidor responde otra vez hueco_ocupado."
     }
   ]
 }

@@ -1,62 +1,18 @@
 {
   "ticket": "T-043",
-  "ronda": 2,
+  "ronda": 5,
   "altas": 0,
-  "medias": 1,
-  "bajas": 5,
+  "medias": 0,
+  "bajas": 1,
+  "nota": "Rondas 4 y 5 solo tocan cliente y documentación (diff 0c2c87e..eb81753 sin supabase/ ni bancos). Revisor A: su último hallazgo (A3-H1, README:143) quedó cerrado en la ronda 4 (README:143 = \"Y+10 .. +154\", comprobado por el verificador). Revisor B: B3-H1, B3-H2, B4-H1 y B4-H2 cerrados con mutantes medidos.",
   "hallazgos": [
     {
-      "id": "H1",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
-      "linea": 153,
-      "descripcion": "El filtro de estado de la búsqueda de S se prueba con un solo valor: todas las citas de 29 son 'programada', y in ('programada', 'confirmada', 'realizada') -> in ('programada') deja 29 en verde.",
-      "escenario": "Sonda Y1: cita de PRO1 a las 10:30 pasada a 'confirmada'. HEAD da 09:00:00/libre/40 y el mutante 09:00:00/libre/-, así que el aviso desaparece en cuanto el paciente confirma la cita siguiente, con test:rls verde.",
-      "revisor": "A"
-    },
-    {
-      "id": "H2",
-      "severidad": "BAJA",
-      "archivo": "supabase/migrations/20261012120000_hueco_raro.sql",
-      "linea": 162,
-      "descripcion": "El not exists de la ausencia sigue sin fijar el festivo parcial ni la ausencia abierta (hasta null): quitar 'festivo' de d.tipo in (...) (l. 162) o 'd.hasta is null or' (l. 166) deja 29 en verde.",
-      "escenario": "Sonda Y2: festivo parcial de PRO1 de 10:00 a 10:20 y cita a las 10:30. HEAD da 09:00:00/libre/- y el mutante sin 'festivo' da 09:00:00/libre/40 (gemela Y4 sin festivo: 40). Sonda Y3: ausencia de 10:00 a 10:20 con hasta null. HEAD da - y el mutante sin 'hasta is null' da 40.",
-      "revisor": "A"
-    },
-    {
-      "id": "B2-H1",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 123,
-      "descripcion": "El aviso sigue montado durante el recálculo; si la vista nueva quita la rareza con el foco dentro del aviso, se desmonta y el foco cae a body (la premisa del diseño para no poner el efecto genérico es falsa).",
-      "escenario": "Tipo A, 17:00 raro, Guardar → aviso. Cambio a tipo B con recalcularAlta en vuelo; el usuario vuelve al aviso y pulsa «Agendar igualmente» (aria-disabled, no hace nada, foco en el botón). Llega la vista sin rareza: la sección se desmonta y document.activeElement = BODY (sonda S7).",
-      "revisor": "B"
-    },
-    {
-      "id": "B2-H2",
+      "id": "B5-H1",
       "severidad": "BAJA",
       "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 154,
-      "descripcion": "Un recálculo fallido marca la clave como vigente con la vista anterior, y Guardar vuelve a decidir con la rareza de la duración vieja (B-H2 por la puerta del fallo); el comentario de :376 y interfaz.md:491 dicen que no.",
-      "escenario": "Tipo A, 17:00 no raro; cambio a B y recalcularAlta devuelve ok:false; Guardar → guardarAlta llamado con tipoTerapiaId B y sin aviso, aunque con B el hueco es raro (40 min) (sonda S8). A la inversa, aviso con los minutos de A.",
-      "revisor": "B"
-    },
-    {
-      "id": "B2-H3",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 173,
-      "descripcion": "La salida de «recalculando» tras un fallo (setCalculo con la clave en :154 y :173) no tiene prueba, y desde esta ronda es lo único que impide que Guardar se quede bloqueado.",
-      "escenario": "Mutantes M_FA (sin setCalculo en la rama !ok) y M_FC (sin él en el catch): 75/75 en verde. Con ellos, un recálculo que falla deja recalculando = true para siempre; Guardar queda aria-disabled y onSubmit corta cada clic e Intro sin decir nada.",
-      "revisor": "B"
-    },
-    {
-      "id": "B2-H4",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
-      "linea": 580,
-      "descripcion": "La puerta lateral que nombra R2.5 («Agendar igualmente» con el aviso visible y un recálculo en vuelo) no tiene prueba: R1 y R2 solo cubren Guardar.",
-      "escenario": "Mutante M_R_aviso (guarda de agendarIgualmente y ocupado sin recalculando): 75/75. Con él, durante el recálculo de tipo B, «Agendar igualmente» guarda (guardarAlta = 1, tipoTerapiaId B) aceptando el aviso de 30 minutos de la duración de A (sonda S7 con el mutante).",
+      "linea": 161,
+      "descripcion": "El setAviso('') de las dos ramas de fallo del recálculo (:161 y :181) es incondicional. Borra también el «acaba de ocuparse» de hueco_ocupado (:381), cuyo propio setExcluirHuecos (:376) dispara el recálculo que falla. Es una regresión de esta ronda. La variante condicional (vaciar solo si aviso es el texto de la vuelta) pasa 71/71, R15 y R16 incluidas, y conserva el mensaje. Ninguna prueba distingue las dos variantes.",
+      "escenario": "Se elige tipo y el hueco del 06-10 a las 17:00, y se pulsa Guardar. guardarAlta responde hueco_ocupado y el recálculo con excluir falla (!resultado.ok o rechazo). La región pasa de «… | Ese hueco acaba de ocuparse. Elige otro de los que quedan.» a «… | » (sonda Q1, medida en las dos ramas). Quedan la alerta «No se han podido calcular los huecos.» y el resumen «Elige un hueco libre del calendario.», y ningún texto dice que el hueco lo ocupó otro. Con vista: null, las 17:00 siguen pintadas como libres: el usuario las vuelve a elegir y el servidor responde otra vez hueco_ocupado.",
       "revisor": "B"
     }
   ]

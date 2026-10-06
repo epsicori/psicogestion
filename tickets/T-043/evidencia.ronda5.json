@@ -1,0 +1,62 @@
+{
+  "ticket": "T-043",
+  "resumen": "Ronda 5, sobre eb81753 (worktree agent-aceab5e51b7500771, rama T-043-aviso-de-hueco-raro). git diff --stat 4b1d9eb eb81753 da 3 ficheros: formulario-alta.tsx (+14 -2), formulario-alta.test.tsx (+63) y docs/bitacora/T-043.md (+28 -2). El mismo diff restringido a supabase/, scripts/ y lib/ sale vacío, así que CA1, CA3 y CA4 se arrastran de evidencia.ronda4.json; aun así hoy se repiten test:rls, el catálogo y max(version). CA2, CA5, CA6 y CA8 se ejecutan de nuevo. En CA5, R15 y R16 (las dos ramas del it.each) caen contra el .tsx de 4b1d9eb; los mutantes nuevos M_NAV, M_FA_A y M_FA_C caen, y la muestra de la ronda 4 (M_SEM, M_SEM_SIGUE, M_SEM_MSG, M_SEM_CAL, M_FV_A y M_FV_C) sigue cayendo. CA7 es manual: NO_VERIFICABLE, con el guion ampliado con el segundo rebote. Veredicto: PASA en CA1-CA6 y CA8; CA7 NO_VERIFICABLE. Sin regresiones.",
+  "criterios": [
+    {
+      "id": "CA1",
+      "texto": "Base: la migración se aplica, lint:migraciones con 0 hallazgos, forma de salida, una sola función, security definer, search_path vacío, grants",
+      "veredicto": "PASA",
+      "comando": "git -C <wt> diff --stat 4b1d9eb eb81753 -- supabase/ scripts/ lib/ (vacío); docker exec supabase_db_Psicogestion psql -U postgres -tAc \"select max(version) from supabase_migrations.schema_migrations; select pg_get_function_result('public.agenda_bloques_profesional(uuid,uuid,date,date,smallint)'::regprocedure)\"; banco 29.A/21.A dentro de test:rls de hoy. Sin db reset, por instrucción. La aplicación de la migración y lint:migraciones se arrastran de evidencia.ronda4.json (la ronda 5 no toca supabase/).",
+      "evidencia": "diff de la ronda 5 fuera de app/ y docs/: vacío (rc=0, sin salida). max(version)=20261012120000. pg_get_function_result='TABLE(fecha date, hora_local time without time zone, inicio timestamp with time zone, fin timestamp with time zone, estado text, hueco_raro_minutos integer)'. test:rls de hoy: 'OK: A · agenda_bloques_profesional devuelve exactamente (fecha, hora_local, inicio, fin, estado, hueco_raro_minutos)'. Arrastrado de la ronda 4: 'lint-migraciones: 33 migración(es) limpias.', 'OK: A · existe UNA sola agenda_bloques_profesional', '… sigue siendo security definer', '… sigue con search_path vacío', 'authenticated ejecuta … y anon no', '… no tiene grant a public'."
+    },
+    {
+      "id": "CA2",
+      "texto": "Valor: test:rls con código 0 y 29-hueco-raro completo (secciones B a J)",
+      "veredicto": "PASA",
+      "comando": "docker exec supabase_db_Psicogestion psql … select max(version) (antes); ( cd <wt> && npm run test:rls ) > scratchpad/v43r5/rls.log 2>&1",
+      "evidencia": "exit=0. 'Contenedor: supabase_db_Psicogestion'. max(version)=20261012120000. 'Módulos (29): 00-ayudantes.sql … 28-altas-de-centro.sql, 29-hueco-raro.sql'. Del módulo 29: 'OK: B0 · sin citas: cinco tramos libres … todos con hueco null'; 'OK: B1 · dos citas candidatas (10:30 y 11:40): … manda la MENOR, la de 10:30: 40 minutos'; 'OK: C · cita a las 10:00 … (g = d): null'; 'OK: D · cita a las 10:01: quedan 11 minutos (g = d + 1), ya es raro'; 'OK: E1 · cita a las 10:59: quedan 69 minutos (g = 69 < 70), raro'; 'OK: E2 · cita a las 11:00: quedan 70 minutos … null'; 'OK: F · descanso apagado (d = 0) y cita a las 09:55: … quedan 5 minutos'; 'OK: G · el técnico de CA ve el valor calculado con una cita de PRO1 en CB: 40 minutos (P4)'; 'OK: H · ausencia de 10:00 a 10:20 y cita a las 10:30: … null'; 'OK: I · cita a las 14:10, pasado el fin de la franja (14:00): el 13:00 no la ve y da null'; 'OK: J · una cita cancelada no cuenta: todo libre y null'; K1-K12 OK, entre ellas 'K2 · … el 11:00 ocupado no mira la de 09:00 hacia atrás: null'. Termina con '29-hueco-raro: OK' y ROLLBACK."
+    },
+    {
+      "id": "CA3",
+      "texto": "Permisos intactos: TEC2 pidiendo CA y PRO2 pidiendo a PRO1 dan 42501; TEC1 y ADM pasan",
+      "veredicto": "PASA",
+      "comando": "( cd <wt> && npm run test:rls ), sección 29.G (la misma ejecución que CA2, sobre eb81753)",
+      "evidencia": "'OK (lanzó 42501 y el mensaje dice «No autorizado para ver esta agenda»): G · el técnico de CB pidiendo CA: 42501'; 'OK (lanzó 42501 y el mensaje dice «No autorizado para ver esta agenda»): G · un profesional ajeno (PRO2 pidiendo a PRO1): 42501'; 'OK: G · el técnico de CA ve el valor calculado con una cita de PRO1 en CB: 40 minutos (P4)'; 'OK: G · GEMELA: el administrador ve el mismo array'; 'OK: G · GEMELA: el propio profesional ve el mismo array'."
+    },
+    {
+      "id": "CA4",
+      "texto": "Mutantes M1 a M9 hacen caer test:rls en la aserción nombrada",
+      "veredicto": "PASA",
+      "comando": "Arrastrado de tickets/T-043/evidencia.ronda4.json (que lo arrastra de la ronda 3). La ronda 5 no toca la migración ni el banco: git -C <wt> diff --stat 4b1d9eb eb81753 -- supabase/ scripts/ lib/ sale vacío.",
+      "evidencia": "Tabla de origen (mutante | esperado | obtenido | línea psql): M1 E2 E2 :1014 · M2 C C :980 · M3 C C :980 · M4 I I :1111 · M5 B1 B1 :966 · M6 H H :1098 · M7 J J :1126 · M8 B1 B1 :966 · M9 B1 B1 :966. N1-N13 caen en su K. El banco sin mutar sigue verde hoy ('29-hueco-raro: OK', CA2), con la migración y el banco idénticos a los mutados entonces."
+    },
+    {
+      "id": "CA5",
+      "texto": "Unitarias: npm test en verde; alternativas-hueco (orden y sin elegido), aviso-hueco-raro (ARIA, «Agendar igualmente» sin alternativas, nunca disabled), formulario-alta (siete casos del diseño)",
+      "veredicto": "PASA",
+      "comando": "( cd <wt> && npm test ) > scratchpad/v43r5/npmtest.log; node scratchpad/v43r5/mut.cjs <wt> scratchpad/v43r5 ORIG M_NAV M_FA_A M_FA_C HEAD_4b1d9eb M_SEM M_SEM_SIGUE M_SEM_MSG M_SEM_CAL M_FV_A M_FV_C. El ejecutor muta formulario-alta.tsx en el worktree (una sola coincidencia, CRLF en cuenta), corre 'npx vitest run formulario-alta aviso-hueco-raro alternativas-hueco estado-alta --reporter=json' y restaura en un finally; HEAD_4b1d9eb sustituye el .tsx por 'git show 4b1d9eb:<tsx>' con las pruebas de eb81753. Después, git status del worktree sale vacío y HEAD sigue en eb81753. Mutantes nuevos: M_NAV quita setAviso('') de cambiarSemana; M_FA_A lo quita de la rama !resultado.ok; M_FA_C lo quita del catch.",
+      "evidencia": "npm test: exit=0, 'Test Files  195 passed (195)', 'Tests  2572 passed (2572)' (2569 de la ronda 4 + R15 + los dos casos de R16). ORIG: 0/86 rojos en los cuatro ficheros. CONTRA 4b1d9eb: 3/86 rojos: R15 @:1445 (2) 'expected … not to contain «El calendario vuelve a la semana del …»'; R16 (!resultado.ok) @:1477 y R16 (catch) @:1477, mismo mensaje. MUTANTES NUEVOS: M_NAV 2 rojos → R15 @:1445 (2) y R10 @:1264 (foco en body); M_FA_A 1 → R16 (!resultado.ok) @:1477; M_FA_C 1 → R16 (catch) @:1477. MUESTRA DE LA RONDA 4 (siguen cayendo): M_SEM 5 → R11 @:1318, R12 @:1345, R15 @:1434, R16×2 @:1475; M_SEM_SIGUE 5 → R11 @:1318, R12 @:1353, R15 @:1437, R16×2 @:1478; M_SEM_MSG 2 → R11 @:1319, R15 @:1437; M_SEM_CAL 1 → R12 @:1351; M_FV_A 1 → R13 @:1382; M_FV_C 1 → R14 @:1413. Los casos que pide el contrato (alternativas-hueco orden y sin elegido; aviso-hueco-raro ARIA, «Agendar igualmente» sin alternativas, nunca disabled; los siete del formulario) siguen en verde dentro de los 86."
+    },
+    {
+      "id": "CA6",
+      "texto": "No bloquea: guardarAlta y lib/citas/alta.ts no leen huecosRaros; Guardar y «Agendar igualmente» nunca disabled",
+      "veredicto": "PASA",
+      "comando": "git -C <wt> grep -nE \"huecosRaros|hueco_raro\" eb81753 -- \"app/(app)/agenda/nueva/acciones.ts\" lib/citas/alta.ts; git -C <wt> grep -nE \"^export (async )?function\" eb81753 -- lib/citas/alta.ts \"app/(app)/agenda/nueva/acciones.ts\"; git -C <wt> grep -nwE disabled eb81753 -- aviso-hueco-raro.tsx formulario-alta.tsx",
+      "evidencia": "acciones.ts (guardarAlta en :134): sin coincidencias, rc=1. lib/citas/alta.ts: solo :43, :61, :63, :65 y :71, todas dentro de leerBloques (:40, mapeo de lectura); crearCitaSuelta (:232) y crearSerieAlta (:266) no lo leen. disabled: aviso-hueco-raro.tsx :23 (comentario), :65 'aria-disabled={ocupado}', :66 (clase); formulario-alta.tsx :410 y :614 (comentarios), :615 '<Button ref={refGuardar} type=\"submit\" aria-disabled={bloqueado} …'. Ningún atributo disabled. Los tres setAviso('') de la ronda 5 solo vacían la región de estado: no tocan el servidor ni el botón."
+    },
+    {
+      "id": "CA7",
+      "texto": "Manual, en Chromium: aviso con «40 minutos» y foco, Tab, alternativa, «Agendar igualmente», sin rareza, 360 px",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "El contrato lo declara manual y no trae E2E: no hay ningún Playwright de /agenda/nueva. Ejercerlo exige crear citas en la base compartida con T-041 y T-021, y el seed no trae ningún hueco raro. jsdom cubre foco, orden, alternativa, «Agendar igualmente», el caso sin rareza, la vuelta a la semana y la región de estado (CA5), pero no los 360 px ni un lector de pantalla real. Guion exacto: 1) npx supabase db reset && npm run seed (o una base desechable); comprobar max(version)=20261012120000 y arrancar npm run dev. 2) Como admin@psicogestion.test, en /agenda/nueva: profesional con franja de mañana, su centro, tipo de 50 min, día futuro; crear una cita a las 10:30. 3) Volver a /agenda/nueva con lo mismo, elegir las 09:00 y pulsar Guardar: el aviso dice «40 minutos» y document.activeElement es la section del aviso. 4) Tab recorre alternativas → «Agendar igualmente» → Cancelar → Guardar; pulsar Guardar otra vez no guarda y el foco vuelve al aviso. 5) Elegir la primera alternativa: el aviso desaparece, el calendario la marca y el foco está en «Hueco elegido»; Guardar crea la cita sin aviso. 6) Repetir el paso 3 y pulsar «Agendar igualmente»: la cita se crea y el diálogo se cierra con el anuncio de siempre. 7) Repetir 3 a 6 como tecnico@psicogestion.test. 8) Rebote (ronda 4): elegir las 09:00, pulsar «Semana siguiente» y Guardar: el calendario vuelve a la semana del elegido, el lector anuncia «El calendario vuelve a la semana del hueco elegido. Pulsa Guardar otra vez.» y el foco sigue en Guardar. 9) Segundo rebote (ronda 5): sin guardar, pulsar otra vez «Semana siguiente»; la región de estado deja de decir que el calendario vuelve (en DevTools, el texto de la región role=status no contiene esa frase). Pulsar Guardar: el calendario vuelve de nuevo a la semana del elegido y el lector lo anuncia OTRA VEZ (la región pasa de vacío al texto); el foco sigue en Guardar y no se guarda. Un Guardar más enseña el aviso de «40 minutos». 10) Fallo en la vuelta (ronda 5): elegir las 09:00 y pulsar «Semana siguiente» con red; esperar a que pinte la semana; poner DevTools en Network → Offline y pulsar Guardar: aparece «No se han podido calcular los huecos.» y la región de estado ya no dice que el calendario vuelve. 11) Repetir el paso 3 a 360 px: document.documentElement.scrollWidth === clientWidth y nada sale de la caja del aviso."
+    },
+    {
+      "id": "CA8",
+      "texto": "lint sin errores, build limpio, territorio dentro",
+      "veredicto": "PASA",
+      "comando": "( cd <wt> && npm run lint ); ( cd <wt> && node ~/.claude/pipeline/territorio.mjs T-043 ); ( cd <wt> && npx next build --webpack )",
+      "evidencia": "lint: exit=0, '✖ 2 problems (0 errors, 2 warnings)'; los dos avisos son de lib/cuentas/accesos.test.ts (:1 'SupabaseClient' y :4 'Database' sin usar), fuera del ticket y ya presentes en la ronda 4. territorio: exit=0, 'T-043: 20 fichero(s) tocado(s), todos dentro de supabase/migrations/20261012120000_hueco_raro.sql, … docs/state.md.' build: exit=0, '▲ Next.js 16.3.1 (webpack)', '✓ Compiled successfully in 3.1s', 'Finished TypeScript in 2.0s', con '/(.)agenda/nueva' y '/agenda/nueva' en la tabla de rutas. Después, git status del worktree limpio y HEAD en eb81753."
+    }
+  ],
+  "regresiones": []
+}

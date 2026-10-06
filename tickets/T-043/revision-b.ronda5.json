@@ -1,0 +1,18 @@
+{
+  "ticket": "T-043",
+  "revisor": "B",
+  "ronda": 5,
+  "altas": 0,
+  "medias": 0,
+  "bajas": 1,
+  "hallazgos": [
+    {
+      "id": "B5-H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/agenda/nueva/formulario-alta.tsx",
+      "linea": 161,
+      "descripcion": "El setAviso('') de las dos ramas de fallo del recálculo (:161 y :181) es incondicional. Borra también el «acaba de ocuparse» de hueco_ocupado (:381), cuyo propio setExcluirHuecos (:376) dispara el recálculo que falla. Es una regresión de esta ronda. La variante condicional (vaciar solo si aviso es el texto de la vuelta) pasa 71/71, R15 y R16 incluidas, y conserva el mensaje. Ninguna prueba distingue las dos variantes.",
+      "escenario": "Se elige tipo y el hueco del 06-10 a las 17:00, y se pulsa Guardar. guardarAlta responde hueco_ocupado y el recálculo con excluir falla (!resultado.ok o rechazo). La región pasa de «… | Ese hueco acaba de ocuparse. Elige otro de los que quedan.» a «… | » (sonda Q1, medida en las dos ramas). Quedan la alerta «No se han podido calcular los huecos.» y el resumen «Elige un hueco libre del calendario.», y ningún texto dice que el hueco lo ocupó otro. Con vista: null, las 17:00 siguen pintadas como libres: el usuario las vuelve a elegir y el servidor responde otra vez hueco_ocupado."
+    }
+  ]
+}
