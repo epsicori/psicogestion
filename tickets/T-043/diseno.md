@@ -1124,3 +1124,551 @@ Nada: las secciones del banco y las pruebas de foco y de carrera son comportamie
 
 **Respuestas del propietario (06-10-2026):** Q1, «Sí, esperar»: R2.1.3 se aplica entero. Q2, «Con tres
 ejecuciones»: CA2 se cierra como dice R2.3. El ticket de las fechas fijas del 15 y del 18 está abierto como T-049.
+
+## Ronda 3 (06-10-2026)
+
+Entrada: la revisión combinada de la ronda 2 (`tickets/T-043/revision.md`: B2-H1 MEDIA; B2-H2, B2-H3 y B2-H4
+BAJA; H1 y H2 del revisor A) y la evidencia de la ronda 2 (CA4 NO_VERIFICABLE, CA2 por plan B). Código leído en
+la rama `T-043-aviso-de-hueco-raro`, HEAD f2670dc, con `git show`. La migración no cambia en esta ronda.
+
+### R3.0 · Hechos verificados contra el código
+
+- **El aviso sigue montado durante el recálculo** (`formulario-alta.tsx` @ f2670dc):
+  - `:121` toma la rareza de `calculo.vista` sin mirar de qué clave es;
+  - `:123` deriva `avisoVisible` de ella;
+  - `:572` monta el aviso con `ocupado={bloqueado}`.
+  Mientras `recalculando` es verdadero, el aviso está en pantalla con un «Agendar igualmente» inerte, y el
+  usuario puede entrar en él. Cuando llega la vista, el aviso se desmonta con el foco dentro (B2-H1, sonda S7).
+- **Tras un fallo se decide con la vista vieja.** Las ramas de fallo (`:152-155` y `:171-174`) hacen
+  `setCalculo((anterior) => ({ ...anterior, clave: claveCalculo }))`, así que la clave queda «al día» con la
+  vista de antes, y `:121` decide con ella (B2-H2, sonda S8). Esas dos líneas son lo único que saca a Guardar de
+  `recalculando` tras un fallo, porque el efecto `:138-179` no vuelve a correr sin otro cambio de clave. Ninguna
+  prueba las fija: M_FA y M_FC sobreviven 75/75 (B2-H3).
+- **Todo cambio de clave nace en un control de fuera del aviso**, que conserva el foco:
+  - el buscador de paciente (`elegirPaciente`, `:272-289`);
+  - los selects de profesional, centro y tipo (`:413`, `:430`, `:438`, `:459`);
+  - la navegación de semana (`alCambiarSemana={setFoco}`, `:484`);
+  - `excluirHuecos` en la rama `hueco_ocupado` (`:350`), que además deja `elegido = null` y ya pone
+    `focoPendiente = 'guardar'` (prueba de `:950`).
+- **`huecoRaroElegido` solo se lee en dos sitios**: la intercepción de `enviar` (`:300`) y el montaje del aviso
+  (`:572-576`). `vista.huecosRaros` solo se lee en `:121` y en las alternativas del aviso (`:576`), que solo
+  existen con el aviso montado.
+- **Ya no son verdad**:
+  - el comentario de `:376`, «nada decide con ellos»;
+  - `docs/interfaz.md:491` @ rama, «no decide con los huecos de antes».
+  Las dos frases son falsas por la puerta del fallo (B2-H2).
+- **Banco 29 @ f2670dc**:
+  - El `\gset` acaba en `l133` (`:60`) y la franja llega a `lunes_29 + 140` (`:66`).
+  - Los ids de cita usados van de 1 a 23.
+  - Ningún caso tiene una cita confirmada, un festivo parcial ni una ausencia con `hasta` nulo.
+  - La cabecera (`:6-12`) afirma que «ningún banco 00-28 escribe agenda más allá de febrero de año + 5». T-049
+    la vuelve falsa: según su mapa de franjas (`tickets/T-049-fechas-del-banco-rls.md:115-129`), 26 pasa a
+    Y+6, 17 a Y+7 y 19 a Y+8. La conclusión (29 en Y+10 está libre) sigue siendo verdad.
+  - `:18` y el bloque de anotaciones (`:466-486`) solo nombran M1-M9 y N1-N10. N9 se mide pero no está
+    anotado.
+- **README @ rama, fila 29 (`scripts/rls/README.md:53`)**: dice «Anclas en el año + 4» y lista solo A-J y
+  M1-M9. Está desfasada desde la ronda 2.
+- **Esquema**:
+  - `disponibilidad_forma_ck` (`20260906120000_agenda_esquema.sql:343-369`) admite ausencia y festivo con
+    `hasta` nulo.
+  - `disponibilidad` no es de solo-añadir: borrar una fila de prueba dentro de la transacción del banco es
+    legítimo, y la auditoría la deja anotada.
+- **Medido por mí** en `begin; <migración de la rama>; 00; 01; 29 con K10-K12; rollback;` contra
+  `supabase_db_Psicogestion`, con una copia del 29 en el scratchpad (`r3/arma.js` + `r3/k.sql`) y el
+  ejecutor del revisor A (`mut43r2.mjs`):
+
+  | Caso | Resultado |
+  |---|---|
+  | ORIG | `29-hueco-raro: OK`, con las cinco aserciones K10-K12 en OK |
+  | N11 (`estado in ('programada')`) | cae en **K10** |
+  | N12 (`tipo in ('ausencia')`) | cae en **K11** |
+  | N13 (`d.hasta >= v_dia`) | cae en **K12** |
+  | M1-M9, N1-N10, N8_round/trunc/cast, N9_sin_reset_null | cada uno en su sección de siempre (tabla R3.1.6) |
+  | X_centro_null y X_aus_fin_tras | caen en H |
+  | Sin `'realizada'` en el filtro de estado | **sobrevive**: ver «Lo que no entra» |
+
+  No se ha tocado la base fuera de esas transacciones.
+- **T-049**:
+  - Su rama existe (`T-049-fechas-del-banco-rls`), sin fusionar; `main` = ab6c959.
+  - Su contrato (`:280-289`) fija el orden: T-049 se fusiona antes que T-043, y T-043 rebasa y añade «29 → +10» a
+    la tabla del README.
+  - Su CA4 espera la base en `max(version) = 20261011140000`.
+- **Docker** levanta dos stacks: `supabase_db_Psicogestion` y `supabase_db_cinfa-e2e`.
+  `scripts/psql.mjs:13-27` (`localizarContenedor`) toma el primer `supabase_db_*` de `docker ps`. Hoy es el
+  de Psicogestión, pero depende del orden de arranque.
+
+### R3.1 · Piezas y contratos
+
+#### R3.1.1 · `app/(app)/agenda/nueva/formulario-alta.tsx`: «la vista solo cuenta si es de la clave pedida» (B2-H1, B2-H2, B2-H4)
+
+Un solo invariante cierra los tres hallazgos: **la rareza del elegido solo se lee de una vista calculada para
+la clave vigente, y nada en vuelo es vigente.** El aviso deja de existir durante el recálculo y tras un fallo.
+
+1. **Estado** (sustituye `:116-119`). La clave inicial es la misma expresión de hoy:
+   ```ts
+   const [calculo, setCalculo] = useState<{ clave: string; claveVista: string; vista: VistaAlta }>(() => {
+     const clave = [inicial.paciente?.id ?? '', inicial.profesionalId, inicial.centroId, '', vistaInicial.calendario.desde, ''].join('|');
+     return { clave, claveVista: clave, vista: vistaInicial };
+   });
+   ```
+   - `clave` es la última clave pedida que ya contestó, bien o mal.
+   - `claveVista` es la clave para la que se calcularon los huecos pintados.
+2. **Derivados**, justo después de `const vista = calculo.vista;` (sustituyen `:121`). Se quitan `:376-377`; la
+   línea de `bloqueado` (`:379`) no cambia:
+   ```ts
+   // `clave`: la última pedida que ya contestó (bien o mal). `claveVista`: la de los huecos pintados.
+   // Con un recálculo en vuelo, Guardar espera (`bloqueado`). Con una vista de otra clave (en vuelo o
+   // tras un fallo), nada decide la rareza y el aviso no se monta (T-043 R3, B2-H1/B2-H2).
+   const recalculando = calculo.clave !== claveCalculo;
+   const vistaVigente = !recalculando && calculo.claveVista === claveCalculo;
+   const huecoRaroElegido = elegido && vistaVigente ? (vista.huecosRaros[elegido.clave] ?? null) : null;
+   ```
+   `avisoVisible` (`:123`) no cambia: hereda el invariante a través de `huecoRaroElegido`.
+3. **Rama `ok`** (`:158`):
+   `setCalculo({ clave: claveCalculo, claveVista: claveCalculo, vista: resultado.vista });`
+4. **Ramas de fallo** (`:154` y `:173`): **sin cambios**. El spread conserva la `claveVista` vieja, y eso es
+   justo lo que impide decidir con ella.
+5. **`hueco_ocupado`** (`:353`): `setCalculo((anterior) => ({ ...anterior, vista: nueva }));`
+   - Conserva `clave` y `claveVista`, y no inventa vigencia.
+   - En esa rama el `elegido` pasa a `null` y `excluirHuecos` cambia la clave, así que llega un recálculo
+     de todos modos.
+6. **El efecto de foco diferido y `elegirHueco` no cambian.** No se añade ningún efecto de «foco a Guardar
+   si el aviso se desmonta» (R3.2, D-R3.2).
+
+**Qué consiguen esas piezas:**
+- **B2-H1.** El aviso se desmonta en el mismo commit que el cambio de clave. Ese cambio lo hace siempre un
+  control de fuera del aviso, que conserva el foco. **El destino del foco es el control que cambió la clave**, y
+  no se mueve. La llegada de la vista ya no desmonta nada, porque el aviso no estaba montado.
+- **B2-H4.** «Agendar igualmente» no existe mientras se recalcula, así que la puerta lateral desaparece.
+  `ocupado={bloqueado}` y la guarda `if (bloqueado) return;` de `agendarIgualmente` se quedan como cinturón:
+  siguen cubriendo `guardando`, `catalogoVacio` y `esperandoSerie`, que sí pueden coincidir con el aviso.
+- **B2-H2.** Tras un fallo, Guardar está activo (lo que pidió R2.5) y guarda sin aviso: la rareza es
+  desconocida y el servidor no mira el hueco (D8). No decide nunca con la vista vieja, ni para avisar ni para
+  callar.
+- **Si llega una vista vigente y el elegido sigue raro**, el aviso reaparece sin robar el foco: `avisoHueco` se
+  conserva y no se pone `focoPendiente`. Es el mismo comportamiento que la actualización silenciosa de HEAD.
+
+#### R3.1.2 · Textos (B2-H2, B2-H4)
+
+- **`formulario-alta.tsx`**: el comentario de `:376` desaparece con su línea. El nuevo es el del bloque de
+  R3.1.1.2.
+- **`docs/interfaz.md:491`** (rama). Se sustituye la frase «Mientras se recalculan los huecos (cambio de tipo, de
+  profesional o de semana), Guardar espera al cálculo vigente y no decide con los huecos de antes.» por:
+  > Mientras se recalculan los huecos (cambio de tipo, de paciente, de profesional, de centro o de semana), el
+  > aviso se retira y Guardar espera al cálculo vigente. Si el cálculo falla, Guardar guarda sin aviso (la
+  > rareza no se conoce) y nunca decide con los huecos de antes. «Agendar igualmente» solo existe con el aviso.
+- **`aviso-hueco-raro.tsx:14`**. Se sustituye el JSDoc de `ocupado` por
+  `/** Lo que bloquea Guardar en el formulario (\`bloqueado\`): «Agendar igualmente» no hace nada (H27). */`.
+  Sin cambio de comportamiento: el comentario actual omite `recalculando` y miente por omisión.
+
+#### R3.1.3 · `app/(app)/agenda/nueva/formulario-alta.test.tsx`: R8, R9, R9b y R10, y R1 (dentro del `describe` de `:840`)
+
+Usan lo que ya hay: `pinta`, `vistaCon`, `bloque`, `RARA`, `SIN_RARA`, `AVISO`, `guardarActivo`,
+`elegirTipoYHueco`, `TIPO_A`, `TIPO_B` y la espera `await act(async () => { await new Promise((r) => setTimeout(r, 0)); })`
+de R4. Cada aserción lleva su número en comentario, y la que discrimina un mutante dice cuál.
+
+- **R8 · B2-H1: el recálculo retira el aviso al cambiar la clave y el foco se queda en el control.**
+  - **Preparación:**
+    - `m.recalcularAlta` responde, por orden: `RARA` (50); una promesa diferida (`resolver2`); `SIN_RARA` (90).
+    - `pinta({ vista: RARA })`; `await elegirTipoYHueco(TIPO_A)`.
+    - Clic en Guardar; `findByRole('region', { name: AVISO })`; `waitFor` hasta que `activeElement` sea el aviso.
+    - `const selector = screen.getByLabelText('Tipo de terapia'); selector.focus();`
+    - `await act(async () => { fireEvent.change(selector, { target: { value: TIPO_B } }); });`
+  - **Aserciones:**
+    - (1) `queryByRole('region', { name: AVISO })` es `null` y `queryByRole('button', { name: 'Agendar igualmente' })`
+      es `null`. **Aquí cae HEAD f2670dc y cae M_VV.**
+    - (2) `document.activeElement === selector`.
+    - Se resuelve `resolver2` con `SIN_RARA` dentro de `act`, `await waitFor(guardarActivo)` y la espera de
+      `setTimeout(0)`.
+    - (3) La región sigue `null`.
+    - (4) `document.activeElement === selector`, y no `document.body`.
+    - (5) `m.guardarAlta` no se ha llamado.
+
+- **R9 · B2-H2 y B2-H3: tras un fallo del recálculo, Guardar está activo y no decide con la vista vieja.**
+  - **Preparación:**
+    - `m.recalcularAlta` responde `RARA` (50) y después
+      `{ ok: false, motivo: 'fallo', mensaje: 'No se han podido calcular los huecos.' }`.
+    - `m.guardarAlta` responde `{ ok: true, anuncio: 'Cita guardada.', fecha: '2026-10-06' }`.
+    - `pinta({ vista: RARA })`; `await elegirTipoYHueco(TIPO_A)`, sin pulsar Guardar.
+    - Cambio a `TIPO_B` dentro de `act`; `await screen.findByText('No se han podido calcular los huecos.')`.
+  - **Aserciones:**
+    - (1) `m.guardarAlta` no se ha llamado: el fallo no guarda nada por sí solo.
+    - (2) `guardarActivo()`, inmediatamente y sin `waitFor`. **Aquí cae M_FA.**
+    - Clic en Guardar dentro de `act`; `waitFor` hasta que `guardarAlta` tenga llamadas **o** exista la región
+      (el patrón R7 de `:859`).
+    - (3) `queryByRole('region', { name: AVISO })` es `null`. **Aquí cae HEAD f2670dc, y caen M_VV y M_VV2.**
+    - (4) `m.guardarAlta` se ha llamado una vez, con
+      `expect.objectContaining({ tipoTerapiaId: TIPO_B, horaLocal: '17:00' })`.
+
+- **R9b · igual que R9, con el recálculo rechazado** (`mockRejectedValueOnce(new Error('red'))` en la segunda
+  llamada). El texto de la alerta es `'No se han podido calcular los huecos.'` (`lib/i18n/es.ts:1053`,
+  `agenda.alta.error.calcular`). **Aquí cae M_FC, en (2).** Se escribe como un `it` aparte, no como
+  `it.each`: así el nombre del caso que cae dice qué rama es.
+
+- **R10 · una vista de otra clave no cuenta, ni tras un fallo ni volviendo a la clave de la vista pintada.**
+  - **Preparación:**
+    - `m.recalcularAlta` responde, por orden: `RARA` (50); `{ ok: false, motivo: 'fallo', mensaje: 'No se han
+      podido calcular los huecos.' }`; una promesa diferida (`resolver3`); `RARA` (50).
+    - `pinta({ vista: RARA })`; `await elegirTipoYHueco(TIPO_A)`.
+    - Clic en Guardar → aviso. Se enfoca el selector y se cambia a `TIPO_B`; `findByText` del fallo.
+  - **Aserciones:**
+    - (1) Región `null`. **Aquí cae HEAD f2670dc, y caen M_VV y M_VV2.**
+    - Se cambia de vuelta a `TIPO_A` dentro de `act`. La clave pedida vuelve a ser la de la vista pintada,
+      pero hay un recálculo en vuelo.
+    - (2) Región `null`. **Aquí cae M_VV3.**
+    - Se resuelve `resolver3` con `RARA` (50) dentro de `act`; `await waitFor(guardarActivo)`.
+    - (3) `await screen.findByRole('region', { name: AVISO })` con la descripción `/30 minutos/`. La vista vigente
+      vuelve a avisar.
+    - (4) `document.activeElement === selector`: la reaparición no roba el foco.
+    - (5) `m.guardarAlta` no se ha llamado.
+
+- **R1 (`:976`), solo comentarios.**
+  - (1) deja de discriminar: con el invariante, el aviso no se monta ni con el arreglo ni sin `recalculando` en
+    `bloqueado`. Su comentario pasa a `// (1) el aviso no se monta (R3)`.
+  - Ahora discrimina (2): `// (2) discrimina M_R y M_R_submit`.
+  - Ninguna aserción cambia.
+
+#### R3.1.4 · `scripts/rls/29-hueco-raro.sql`: K10, K11 y K12 (H1 y H2 del revisor A)
+
+Solo el banco; la migración no cambia, porque la función ya filtra bien los tres casos (ORIG en verde).
+
+1. **`\gset` (`:41-60`).** Tras `l133` se añaden `l140`, `l147` y `l154` (`(:'lunes_29'::date + N)::text as lN`).
+   La franja de `:62-67` pasa de `+ 140` a `+ 154`, y su comentario de «veinte semanas» a «veintidós semanas».
+2. **Tras K9 y antes del bloque de anotaciones**, tres secciones con el mismo patrón que K1-K9: cita con
+   `pg_temp.cita29`, `pg_temp.como(:PRO1)`, aserción del array completo de `pg_temp.dia29` y
+   `pg_temp.reset_sesion()`. El texto exacto, ya medido, está en el scratchpad de la sesión (`r3/k.sql`):
+   - **K10 · cita confirmada (mata N11).**
+     - `cita29(24, :CA, :'l140', 10:30, 11:20, …)`.
+     - `update public.citas set estado = 'confirmada' where id = 'a2900004-0000-4000-8000-000000000024'`, como
+       `postgres` y antes de `como`.
+     - Aserción de fijación: el estado leído es `'confirmada'`, con mensaje
+       `'K10 · fijación: la cita de las 10:30 está confirmada'`.
+     - Esperado:
+       `['09:00:00/libre/40','10:00:00/ocupado/-','11:30:00/libre/-','12:30:00/libre/-']`, el mismo array que G.
+   - **K11 · festivo parcial (mata N12).**
+     - `insert into public.disponibilidad (perfil_id, centro_id, tipo, desde, hasta, hora_inicio, hora_fin, zona_horaria, motivo)`
+       `values (:PRO1, null, 'festivo', :'l147'::date, :'l147'::date, time '10:00', time '10:20', 'Europe/Madrid', 'T-043 K11')`.
+     - `cita29(25, :CA, :'l147', 10:30, 11:20, …)`.
+     - Esperado: `['09:00:00/libre/-','10:00:00/ocupado/-','11:30:00/libre/-','12:30:00/libre/-']`, el de H.
+   - **K12 · ausencia abierta, con `hasta` nulo (mata N13).**
+     - Igual que K11, con `'ausencia'`, desde `l154`, `hasta` `null` y motivo `'T-043 K12'`.
+     - `cita29(26, :CA, :'l154', …)`.
+     - Esperado: el array de H.
+     - Al acabar, la ausencia abierta se retira con una aserción de recuento:
+       ```sql
+       with borrada as (
+         delete from public.disponibilidad
+          where perfil_id = :PRO1 and motivo = 'T-043 K12' and hasta is null
+         returning 1
+       )
+       select pg_temp.assert((select count(*) from borrada) = 1,
+         'K12 · la ausencia abierta se retira al acabar: ningún banco posterior la hereda');
+       ```
+       Una ausencia sin fin de PRO1 apagaría la agenda de cualquier banco que se añada detrás del 29.
+   - **Formato de los mensajes**: id de sección + « · » + frase, como todos los del 29. El ejecutor de
+     mutantes captura la sección con `ASERCIÓN FALLIDA: (\S+) ·`.
+3. **Cabecera (`:6-12`)**. Se reescribe contra la tabla de T-049, sin cifras que T-049 vaya a mover. Texto:
+   > ANCLA: primer lunes de febrero de año + 10. Los años de los demás bancos están en la tabla de
+   > `scripts/rls/README.md` (T-049, D5.2): ninguno pasa de año + 8 y el 29 es el único en año + 10. Ninguna
+   > `disponibilidad` sembrada antes del 29 queda abierta, y la que abre el 29 (K12) se borra al acabar su
+   > sección. Un banco nuevo que siembre agenda de PRO1 en año + 10 tiene que mirar esto.
+
+   La frase de las offsets de 16, 21, 23 y 26 se va: la tabla del README es la fuente.
+4. **`:18` y el bloque de anotaciones.**
+   - `:18` pasa a «Los mutantes M1-M9 y N1-N13 están al final, anotados.»
+   - El bloque añade:
+     - `-- N9  sin \`hueco_raro_minutos := null\` al empezar el tramo            cae en B1`
+     - `-- N11 \`c.estado in (...)\` del hueco -> \`in ('programada')\`              cae en K10`
+     - `-- N12 \`d.tipo in ('festivo', 'ausencia')\` del not exists -> \`in ('ausencia')\`   cae en K11`
+     - `-- N13 \`(d.hasta is null or d.hasta >= v_dia)\` del not exists -> \`d.hasta >= v_dia\`   cae en K12`
+     - `-- Sobrevive: quitar 'realizada' del filtro de estado del hueco (haría falta una cita realizada en el futuro).`
+5. **README, fila 29** (`scripts/rls/README.md:53`). Se reescribe con: año + 10; las secciones A-J y K1-K12,
+   cada una con su frase corta (las de K1-K9 salen de sus mensajes); los mutantes M1-M9 y N1-N13 medidos en
+   `begin … rollback` con la migración dentro; y el superviviente declarado. La tabla de años de T-049 ya trae
+   «29 → +10» (diseño de T-049, punto 10). Si al rebasar no estuviera, se añade.
+
+#### R3.1.5 · CA4: cómo lo mide el verificador (ya no puede quedar NO_VERIFICABLE)
+
+- **Encargo.** El orquestador escribe **CA4 y CA5-mutantes** en el encargo del verificador, con un puntero a
+  esta sección. La ronda 2 quedó NO_VERIFICABLE porque el encargo no lo pedía.
+- **Ejecutor** (un `.mjs` en el scratchpad del verificador). La referencia es `mut43r2.mjs` del revisor A, en el
+  scratchpad de esta sesión: `C:\Users\Usuario\AppData\Local\Temp\claude\C--Users-Usuario-Desktop-01-Proyectos-Psicogestion\54fcd837-7d30-474a-83d1-2bf97ac7852f\scratchpad\mut43r2.mjs`.
+  Si ya no existe, se rehace con estas reglas:
+  1. Lee la migración `20261012120000_hueco_raro.sql` y `00-ayudantes.sql`, `01-fijacion.sql` y
+     `29-hueco-raro.sql` **del árbol verificado**, normalizando CRLF a LF.
+  2. Cada mutante es una sustitución de texto sobre la migración. Antes de sustituir, el ejecutor comprueba que
+     el patrón aparece **exactamente una vez**; si no, aborta con código 2 y no cuenta el mutante. Los
+     patrones del tipo y el estado se repiten en la función: se anclan en varias líneas, como hace
+     `mut43r2.mjs`.
+  3. Guion por mutante: `begin;` + migración mutada + `00` + `01` + `29` + `rollback;`, enviado por stdin a
+     `docker exec -i supabase_db_Psicogestion psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f -` con
+     `spawnSync` y salida capturada.
+     - **Contenedor fijado por nombre**, comprobado antes en `docker ps`. No se usa `localizarContenedor` ni
+       `ejecutarSql`: el primero puede elegir `supabase_db_cinfa-e2e` y el segundo no deja capturar la salida.
+     - Vale con cualquier `max(version)` de la base, porque la migración va dentro de la transacción. No
+       necesita `db reset`.
+  4. Base: **ORIG** (sin sustituir) tiene que imprimir `29-hueco-raro: OK` con estado 0. Si no, la medición no
+     vale.
+  5. De cada mutante se registra el estado, la primera línea con `ASERCIÓN FALLIDA` y la sección capturada con
+     `/ASERCIÓN FALLIDA: (\S+) ·/`.
+     - Veredicto MUERE si la sección capturada es la esperada.
+     - **MUERE EN OTRA** si cae en otra sección: es un hallazgo y no cuenta como PASA.
+     - **SOBREVIVE** si sale OK.
+- **Tabla de mutantes esperada**. Patrones como en `mut43r2.mjs`; resultado medido el 06-10-2026 sobre el 29 con
+  K10-K12:
+
+  | Mutante | Sustitución en la función | Cae en |
+  |---|---|---|
+  | M1 | `and v_sig < v_tras + v_dur + v_desc` → `<=` | E2 |
+  | M2 | `and v_sig > v_tras` → `>=` | C |
+  | M3 | `v_tras := v_cursor + v_dur + v_desc;` → `v_tras := v_cursor + v_dur;` | C |
+  | M4 | `and c.inicio <  v_f_fin;` → `;` | I |
+  | M5 | `select min(c.inicio) into v_sig` → `max` | B1 |
+  | M6 | `where d.perfil_id` del `not exists` → `where false and d.perfil_id` | H |
+  | M7 | sin `and c.estado in (...)` antes de `and c.inicio >= v_tras` | J |
+  | M8 | `(v_sig - (v_cursor + v_dur))` → `(v_sig - v_tras)` | B1 |
+  | M9 | `if v_limite is null then` + `v_tras` → `if true then` | B1 |
+  | N1 | `and c.inicio >= v_tras` → `>` | K3 |
+  | N2b | `and c.inicio >= v_tras` → `>= v_f_ini` | K2 |
+  | N3 | `where c.profesional_id = p_profesional_id` (con el estado y `>= v_tras` de ancla) → `where true` | K1 |
+  | N4 | `and c.inicio <  v_f_fin;` → `<=` | K4 |
+  | N5 | sin `d.desde <= v_dia` ni `d.hasta` en el `not exists` | K5 |
+  | N6 | sin el filtro de centro en el `not exists` | K6 |
+  | N7 | `where d.perfil_id = p_profesional_id` + tipo → `where true` | K7 |
+  | N8, N8_round, N8_trunc, N8_cast | `ceil(` → `floor(` / `round(` / `trunc(` / sin función | K9 |
+  | N9 | sin `hueco_raro_minutos := null;` antes de `if v_limite` | B1 |
+  | N10 | `tstzrange(v_cursor + v_dur, v_sig, '[)')` → `tstzrange(v_tras, v_sig, '[)')` | K8 |
+  | **N11** | estado del hueco (ancla `… 'realizada')\n               and c.inicio >= v_tras`) → `in ('programada')` | **K10** |
+  | **N12** | en el bloque `and d.tipo in ('festivo', 'ausencia')\n … and tstzrange(v_cursor + v_dur` → `in ('ausencia')` | **K11** |
+  | **N13** | en el mismo bloque, `(d.hasta is null or d.hasta >= v_dia)` → `(d.hasta >= v_dia)` | **K12** |
+
+  En `mut43r2.mjs`, N11, N12 y N13 se llaman `X_estado_solo_prog`, `X_sin_festivo` y `X_hasta_null`. La
+  evidencia usa los nombres N11-N13.
+- **Evidencia.** Una tabla `mutante | esperado | obtenido | mensaje | veredicto`, la salida de ORIG, la línea de
+  `docker ps` y el hash (`git hash-object`) del ejecutor usado.
+
+#### R3.1.6 · CA5, mutantes de interfaz: lista y ejecutor
+
+- **Ejecutor.** `mut-rb2.js` del revisor B, en el mismo scratchpad
+  (`…\scratchpad\mut-rb2.js <raizCopia> [ids]`). Trabaja sobre una **copia** del árbol, tiene en cuenta CRLF,
+  exige una sola coincidencia, corre
+  `npx vitest run formulario-alta aviso-hueco-raro alternativas-hueco estado-alta` y restaura el fichero.
+- **Entradas.** Se añaden cuatro con las cadenas exactas del código de R3.1.1. Las demás siguen con sus cadenas,
+  porque las líneas que tocan no cambian:
+
+| Mutante | Cambio | Debe caer en |
+|---|---|---|
+| **M_VV** | `const huecoRaroElegido = elegido && vistaVigente ? ` → `const huecoRaroElegido = elegido ? ` | R8 (1); también R9 (3) y R10 (1) |
+| **M_VV2** | `const vistaVigente = !recalculando && calculo.claveVista === claveCalculo;` → `const vistaVigente = !recalculando;` | R9 (3), R10 (1) |
+| **M_VV3** | la misma línea → `const vistaVigente = calculo.claveVista === claveCalculo;` | R10 (2) |
+| **M_OK** | `setCalculo({ clave: claveCalculo, claveVista: claveCalculo, vista: resultado.vista });` → `setCalculo((anterior) => ({ ...anterior, clave: claveCalculo, vista: resultado.vista }));` | el primer caso del `describe` (`:852`), porque `guardarAlta` se llama: la vista nunca es vigente tras el primer recálculo |
+| M_FA | sin `setCalculo(… clave: claveCalculo)` en la rama `!resultado.ok` | **R9 (2)** |
+| M_FC | lo mismo en el `catch` | **R9b (2)** |
+| M_R | `recalculando` fuera de `bloqueado` | R1 (2) (antes, (1)) |
+| M_R_submit | `recalculando` fuera de la guarda de `onSubmit` | R1 (2) |
+| M_R_aria | `recalculando` fuera de `aria-disabled` | R1 (3) |
+| M_R_aviso | `recalculando` fuera de `ocupado` y de la guarda de `agendarIgualmente` | **equivalente por construcción**: con el aviso montado, `recalculando` es falso (`avisoVisible ⇒ vistaVigente ⇒ !recalculando`). Se mide igual y **debe salir todo verde**; si cae algo, el invariante no está donde se dice |
+| M_E, M_F, M_L, M_M, M_BM, M_H, M_V | los de la ronda 2 | donde caían en la ronda 2: R4 (2), R5, R6 (1), R3 (1), R3 (1), `:863` (con otros 11 rojos), y `:256` y `:288`. Si alguno cae en otro sitio, es un hallazgo |
+| M_B | solo la guarda de `agendarIgualmente` | equivalente desde la ronda 2 (la cubre `ocupado`): debe seguir todo verde |
+
+- **Contra HEAD f2670dc.** Con las pruebas nuevas, R8, R9 y R10 se ejecutan contra el `formulario-alta.tsx`
+  de f2670dc (`git show f2670dc:… > copia`) y caen en R8 (1), R9 (3) y R10 (1). Eso demuestra que reproducen
+  B2-H1 y B2-H2 de verdad. R9b no cae contra HEAD, porque HEAD ya libera Guardar tras el fallo: R9b solo
+  existe para M_FC.
+
+#### R3.1.7 · CA2: la ejecución (2) de R2.3, reescrita
+
+**La ejecución (2) de R2.3 no se puede hacer.** El orden `00 … 14, 16, … 29, 15` cae en 18, que necesita
+citas del centro B que siembra el 15 (evidencia de la ronda 2). Queda sustituida por esta:
+
+- **(2') Banco completo, en orden alfabético, con el 15 desplazado semanas enteras, en memoria.**
+  - k es el menor entero ≥ 0 tal que `2026-10-06 + 7k ≥ current_date + 14`. Hoy (06-10-2026), k = 2, y las
+    fechas pasan a 20, 21 y 22 de octubre.
+  - Es la misma ventana que T-049 da al 15 (martes de D+14..D+20).
+  - Al ser semanas enteras se conserva el día de la semana, que es lo que miran las franjas del 15.
+  - Se reemplazan los 25 literales `2026-10-0(6|7|8)` del 15 (comprobado: son exactamente 25, todos con
+    `+02`). Los desfases `+02` se dejan como están. Son exactos para octubre antes del día 25 (horario de
+    verano), y el revisor A midió en verde incluso diciembre (invierno, `+01`): una hora de desfase no rompe
+    el 15.
+  - Se ejecuta con el mismo método de R3.1.5 (contenedor fijado, `begin … rollback`), con todos los módulos
+    del árbol y la migración de la rama dentro de la transacción si la base no la tiene.
+  - Esperado: estado 0, `29-hueco-raro: OK` después de 16, 21, 23 y 26, y las líneas K10-K12.
+  - La evidencia anota k, las tres fechas y que la prueba depende de la fecha del día.
+- **(2') solo hace falta si se verifica antes de que T-049 esté en `main`.** Con T-049 fusionada y la rama
+  rebasada (R3.3), CA2 se cierra al pie de la letra: `npm run test:rls` sale con 0, el lint D4 de T-049 corre
+  dentro y la salida trae `Contenedor: supabase_db_Psicogestion`. Las ejecuciones (1) y (2') sobran.
+
+### R3.2 · Decisiones y alternativas descartadas
+
+- **D-R3.1 · Una vigencia de la vista (`claveVista`) en lugar de parches por hallazgo.** Un solo invariante
+  cierra B2-H1, B2-H2 y B2-H4, y deja equivalente el mutante que B2-H4 no podía matar.
+  - Descartado: cerrar `avisoHueco` en cada sitio que cambia la clave. Son seis sitios, y el siguiente que se
+    añada lo olvida.
+- **D-R3.2 · Sin efecto de foco «si el aviso se desmonta con el foco dentro, foco a Guardar».** Con el
+  invariante, ese caso no puede darse: el aviso solo se desmonta por una acción en un control de fuera
+  (que conserva el foco) o por `hueco_ocupado`, que ya está resuelto. Un efecto defensivo inalcanzable dejaría
+  un mutante superviviente para siempre y movería el foco en casos que hoy no lo necesitan.
+- **D-R3.3 · Tras un fallo, Guardar guarda sin aviso.** No se reintenta el cálculo al pulsar Guardar, como hace
+  la serie. Reintentar bloquearía guardar por una función informativa (el servidor no mira el hueco, D8), y
+  R2.5 pidió no bloquear tras un fallo. La alerta del fallo ya dice que los huecos no se han calculado.
+- **D-R3.4 · El aviso reaparece en silencio si la vista vigente lo sigue haciendo raro.** Así se conserva el
+  comportamiento de HEAD («actualización silenciosa»).
+  - Descartado: cerrarlo del todo al cambiar de clave. Obligaría a pulsar Guardar otra vez para ver un aviso
+    que el usuario ya había pedido.
+  - Descartado: robar el foco al reaparecer, porque el usuario está en el control que acaba de tocar.
+- **D-R3.5 · Y1-Y3 como K10-K12 en el banco, sin tocar la migración.** La función ya es correcta en los tres
+  casos (ORIG verde); faltaba fijarlo. Los mutantes N11-N13 caen cada uno en su sección.
+- **D-R3.6 · K12 borra la ausencia abierta que siembra.** Es la única fila de `disponibilidad` sin fin del
+  banco. Dejarla convertiría la cabecera en mentira y apagaría la agenda de PRO1 desde Y+10 para cualquier
+  banco posterior. El borrado lleva una aserción de recuento, para que un cambio del motivo o del perfil no lo
+  vuelva mudo.
+- **D-R3.7 · Ejecutor de mutantes en `begin … rollback` con la migración dentro y el contenedor fijado.**
+  - No obliga a resetear la base y vale con T-049 a medio verificar.
+  - Descartado: `create or replace` sobre la base compartida (el método de CA4 en §3). Deja la base mutada si
+    algo se interrumpe y choca con la verificación de T-049.
+
+### R3.3 · Cómo se cierra cada criterio en la ronda 3, y el orden con T-049
+
+**Orden con T-049. Recomendación: implementar ya, en paralelo, y verificar en serie, después de que T-049
+esté en `main` y la rama se haya rebasado.** Decide el orquestador.
+
+- **Por qué se puede implementar en paralelo:**
+  - El implementador de la ronda 3 no necesita `db reset` ni `npm run test:rls`. Mide el 29 y los mutantes con
+    el ejecutor de R3.1.5, que lleva la migración dentro de la transacción, y vitest no toca la base.
+  - Los ficheros de T-049 que comparten (README y `docs/state.md`) se resuelven conservando ambos, como dice
+    el contrato de T-049 (`:285-286`).
+  - La cabecera del 29 se escribe contra la tabla del README (R3.1.4.3), sin cifras de otros bancos.
+- **Por qué hay que verificar en serie:**
+  - La base es una sola. El CA4 de T-049 exige `max(version) = 20261011140000`, y el CA1 y el CA2 de T-043
+    exigen `20261012120000`.
+  - CA2 al pie de la letra (`test:rls` con 0) solo existe con el 15 de T-049.
+  - Verificar T-043 antes obligaría a otra vez al plan B y a una nota de «no se cumple a la letra».
+- **Secuencia:**
+  1. El implementador de la ronda 3 trabaja sobre la rama de T-043 y no toca la base fuera de
+     `begin … rollback`.
+  2. T-049 se verifica, se revisa y se fusiona.
+  3. La rama T-043 se rebasa sobre `main`. Conflictos previstos: `scripts/rls/README.md` (la tabla de años de
+     T-049 y la fila 29) y `docs/state.md`.
+  4. Tras rebasar:
+     - `grep -noE "extract\(year from (now\(\)|current_date)\)(::int)? *\+ *[0-9]+" scripts/rls/*.sql` da
+       como máximo +8 fuera del 29 y +10 en el 29;
+     - el lint D4 de T-049 sale limpio con el 29 dentro.
+  5. El verificador de T-043 hace `npx supabase db reset` desde el árbol rebasado y comprueba que
+     `max(version) = 20261012120000` (memoria «migración de rama antes de verificar»).
+- **Si T-049 se atasca**, se verifica antes con (2') de R3.1.7. Se le dice al propietario que CA2 se cierra
+  otra vez por el camino de Q2, no al pie de la letra.
+
+**Criterios:**
+
+- **CA1**: sin cambios, porque la migración no cambia.
+- **CA2**:
+  - con T-049 en `main`: `npm run test:rls` con estado 0, `Contenedor: supabase_db_Psicogestion` en la salida y
+    las líneas `OK: K10 ·`, `OK: K11 ·`, `OK: K12 ·` y `29-hueco-raro: OK`;
+  - sin T-049: (1) y (3) de R2.3, más (2') de R3.1.7.
+- **CA3**: sin cambios (G y K1).
+- **CA4**: la tabla completa de R3.1.5, con ORIG en OK y los 25 mutantes (M1-M9, N1-N13 y las variantes de N8)
+  cayendo en la sección esperada.
+- **CA5**:
+  - `npm test` en verde, con R8, R9, R9b y R10;
+  - la tabla de R3.1.6 completa;
+  - R8, R9 y R10 contra f2670dc, cayendo donde dice R3.1.6.
+- **CA6**: `grep -n "disabled=" app/(app)/agenda/nueva/formulario-alta.tsx app/(app)/agenda/nueva/aviso-hueco-raro.tsx`
+  solo da `aria-disabled`. La ronda 3 no añade `disabled`.
+- **CA7, manual en Chromium.** Se repite el paso del aviso con un cambio de tipo con el aviso abierto, y se
+  anota:
+  - que el aviso desaparece al instante;
+  - que `document.activeElement` es el `select` de tipo;
+  - que tras el recálculo el foco no cambia.
+- **CA8**: `npm run lint`, `npm run build` y `node ~/.claude/pipeline/territorio.mjs T-043`.
+
+### R3.4 · Riesgos, por probabilidad
+
+1. **Alta. El ejecutor de `test:rls` elige el contenedor equivocado.** `localizarContenedor` toma el primer
+   `supabase_db_*`, y hay dos stacks levantados.
+   - Mitigación: la evidencia de CA2 tiene que traer `Contenedor: supabase_db_Psicogestion`; si no, no vale.
+   - Arreglar `scripts/psql.mjs` no es de T-043: se anota en `docs/state.md` §Hallazgos.
+2. **Media. El rebase sobre T-049 deja la cabecera del 29 o la fila del README contra una tabla que T-049
+   implementó distinta de su contrato.** Mitigación: el grep de R3.3, paso 4, tras rebasar. El revisor compara
+   la cabecera con la tabla del README rebasado, no con el contrato de T-049.
+3. **Media. R8 o R10 pasan sin discriminar** por esperar mal: una aserción (1) dentro de `waitFor` que acaba
+   pasando cuando llega la vista. Mitigación: las aserciones (1) y (2) de R8 y R10 son **síncronas**, justo
+   después del `act` del cambio, y la tabla de R3.1.6 exige medir los mutantes contra HEAD.
+4. **Baja. El aviso reaparece sin foco (D-R3.4)** y un lector de pantalla no lo anuncia. Es el comportamiento
+   de HEAD tras un recálculo. El usuario lo encuentra al pulsar Guardar, porque Guardar vuelve a llevar el
+   foco al aviso (caso 5 de §3).
+5. **Baja. Las fechas de (2') tienen un `+02` fijo.** Pasado el 25 de octubre, la hora local se corre una hora.
+   Diciembre se midió en verde con ese mismo desfase. Si alguna vez cae, se anota la fecha y se usa la k
+   siguiente.
+
+### R3.5 · Qué revisar
+
+**B2-H1 (foco):**
+- [ ] No queda ninguna lectura de `vista.huecosRaros` ni de `huecoRaroElegido` que no pase por `vistaVigente`:
+  `grep -n "huecosRaros\|huecoRaroElegido" formulario-alta.tsx` da `:121`, la intercepción de `enviar`, el
+  montaje y las alternativas del aviso, y nada más.
+- [ ] No se ha añadido ningún efecto de foco nuevo, ni un `focoPendiente = 'guardar'` fuera de `hueco_ocupado`.
+- [ ] Las aserciones (1) y (2) de R8 son síncronas, no están dentro de `waitFor`, y R8 cae contra f2670dc en
+  (1).
+
+**B2-H2, B2-H3 y B2-H4 (fallo y puerta lateral):**
+- [ ] Las ramas de fallo **no** tocan `claveVista`; si alguien la pone a `claveCalculo`, B2-H2 vuelve. La rama
+  `ok` pone las dos claves, y `hueco_ocupado` las conserva con un spread.
+- [ ] R9 (2) se comprueba sin `waitFor` tras ver la alerta. M_FA y M_FC caen donde dice la tabla.
+- [ ] M_R_aviso sale todo verde, y la evidencia lo declara equivalente con la implicación
+  `avisoVisible ⇒ !recalculando`. Si cae, el invariante tiene una grieta.
+- [ ] `docs/interfaz.md` y los comentarios dicen lo que hace el código: el aviso se retira durante el
+  recálculo, y tras un fallo Guardar guarda sin aviso.
+
+**Banco (H1 y H2 del revisor A):**
+- [ ] K10 tiene su aserción de fijación (`estado = 'confirmada'`); sin ella, un trigger que reescriba el estado
+  haría que K10 midiera una programada.
+- [ ] K11 usa `festivo` con `centro_id null`, y K12 usa `hasta null`. El esperado de los dos es el array de H
+  (09:00 con `-`).
+- [ ] El borrado de K12 filtra por perfil, motivo **y** `hasta is null`, y su aserción exige exactamente 1.
+- [ ] Ningún literal de fecha ni `current_date` nuevo en el 29: el lint D4 de T-049 tiene que pasar. Los ids
+  24-26 no chocan con 1-23.
+- [ ] La cabecera y la fila del README cuadran con la tabla de años del README rebasado. La fila 29 dice año
+  + 10, K1-K12 y N1-N13.
+
+**CA4 y CA5 (medición):**
+- [ ] La evidencia trae ORIG en OK, el contenedor por nombre, la sección capturada de cada mutante y la de
+  esperada. «MUERE EN OTRA» es hallazgo, no PASA.
+- [ ] Los mutantes de interfaz se midieron sobre una copia, y el fichero de la rama quedó intacto
+  (`git status` limpio tras medir).
+
+**Orden:**
+- [ ] Si se verificó tras T-049: `max(version) = 20261012120000` antes de `test:rls`, y CA2 por la vía directa.
+- [ ] Si se verificó antes: (2') con k y fechas anotadas.
+
+### R3.6 · Territorio
+
+Sin cambios. Todo lo que toca la ronda 3 ya está en el `territorio:` del contrato:
+- `app/(app)/agenda/nueva/formulario-alta.tsx` y su `.test.tsx`;
+- `app/(app)/agenda/nueva/aviso-hueco-raro.tsx`;
+- `scripts/rls/29-hueco-raro.sql`;
+- `scripts/rls/README.md`;
+- `docs/interfaz.md`;
+- `docs/state.md`;
+- `docs/bitacora/`.
+
+Los ejecutores de mutantes viven en scratchpads y no se versionan.
+
+### R3.7 · Delegable
+
+Nada. Los cuatro cambios tienen comportamiento: el invariante de vigencia, pruebas de foco, el banco de RLS y
+la medición de mutantes.
+
+### Lo que no entra en la ronda 3, y por qué
+
+- **Matar «sin `'realizada'`» en el filtro de estado del hueco.**
+  - Para matarlo haría falta una cita `realizada` en el futuro. Ninguna guarda de la base la impide (el trigger
+    de `agenda_esquema.sql:462` solo la salta), pero sembrarla sería fijar un estado que la aplicación no
+    produce.
+  - Ningún hallazgo lo pide.
+  - Queda anotado como superviviente en el 29 y en el README.
+- **Arreglar `localizarContenedor` en `scripts/psql.mjs`.** Está fuera del territorio y afecta a todos los
+  bancos. Se anota en `docs/state.md` §Hallazgos.
+- **Reintentar el recálculo tras un fallo**, con un botón o al pulsar Guardar: D-R3.3.
+- **Anunciar la reaparición del aviso tras un recálculo**: D-R3.4; si se quiere, irá en el ticket de textos de
+  R2.
+- **Cambiar la migración**: ningún hallazgo la toca, y K10-K12 pasan con la de la rama.
