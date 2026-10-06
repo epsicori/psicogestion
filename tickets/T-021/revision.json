@@ -1,0 +1,39 @@
+{
+  "ticket": "T-021",
+  "hallazgos": [
+    {
+      "id": "A-H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011130000_economico_ronda_3.sql",
+      "linea": 111,
+      "descripcion": "La holgura U de la banda la elige quien sella: una línea general de 0 céntimos (o parejas de ±1 céntimo) con cantidad alta ensancha la banda sin cambiar total ni Q.",
+      "escenario": "General 1×10000 al 2100 + general 1.000.000×0 al 2100, base 0 / cuota 100 / total 100: SELLA (como PRO1 authenticated y como postgres); sin la línea de relleno J44 da 23514. Igual reabre cuota 5× la parte general y la cuota de signo contrario (J48)."
+    },
+    {
+      "id": "A-H2",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011130000_economico_ronda_3.sql",
+      "linea": 86,
+      "descripcion": "La clase de invisibles deja fuera caracteres de formato Cf: U+FFF9-FFFB, U+13430-1343F, U+1BCA0-1BCA3, U+1D173-1D17A (y la marca combinante sola).",
+      "escenario": "Concepto E'U0001D173' (o ￹, U0001BCA0, U00013430, ̀) en una línea exenta de 60 €: la versión se sella con un concepto que no se ve."
+    },
+    {
+      "id": "A-H3",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 27,
+      "descripcion": "Falta en §Hallazgos la anotación de los documentos mixtos rechazados por signo_ck que piden R3.6-3 y R3.9.",
+      "escenario": "T-026 implementa un abono parcial mixto (exento negativo + general positivo), recibe 23514 signo_ck (J42 lo fija) y la decisión solo está en diseno.md; grep \"mixto|signo_ck\" en state.md y la bitácora: vacío."
+    }
+  ],
+  "altas": 0,
+  "medias": 1,
+  "bajas": 2,
+  "ronda": 3,
+  "revisor_a": {
+    "ronda": 3,
+    "altas": 0,
+    "medias": 1,
+    "bajas": 2
+  }
+}

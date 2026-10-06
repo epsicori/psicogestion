@@ -1,0 +1,42 @@
+{
+  "ticket": "T-021",
+  "ronda": 3,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "supabase/migrations/20261011130000_economico_ronda_3.sql",
+      "linea": 107,
+      "descripcion": "La tolerancia de la banda es U = suma de cantidades generales. Una línea general de precio 0, o un par +1/-1 céntimo con cantidad grande, la infla sin cambiar suma, Q ni total, y desactiva la cota que la ronda debía cerrar.",
+      "escenario": "Medido como postgres sobre BORR3. J44 tal cual da 23514 «fuera de la banda». J44 más la línea general 'Ajuste' 100000 × 0 (base 0 / cuota 100 / total 100) SELLA. J45 más el par 1000000 × +1 y 1000000 × -1 céntimo (50 / 10 / 60) SELLA. Exenta 500 + general 100 + 'Ajuste' 60000 × 0 con cuota 500 SELLA. La base 0 con cuota llena que nombra la decisión del 05-10 vuelve a la cadena de solo adición."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/26-economico.sql",
+      "linea": 1174,
+      "descripcion": "Ninguna positiva sella un documento legítimo con una diferencia entre 1 y U céntimos. La decisión D3 (tolerancia por unidad general y no un céntimo fijo) no tiene prueba.",
+      "escenario": "Con el banco 26 completo sobreviven el mutante «> 1» en lugar de «> v_unidades» (MB1, la alternativa que descarta D3) y «U = número de líneas» (MB2). El documento legítimo de tres líneas generales de 33,33 € desglosadas con desglosarDesdeTotal (82,65 / 17,34 / 99,99; diferencia 1,36) se sella hoy, daría 23514 con MB1, y el banco seguiría verde."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261011130000_economico_ronda_3.sql",
+      "linea": 86,
+      "descripcion": "A la clase de invisibles le faltan ignorables por defecto (U+1D173-1D17A, U+1BCA0-1BCA3, U+FFF0-FFFB, U+E0080-E0FFF), y 6 de sus tramos no tienen negativa. J28e (26-economico.sql:1076) no prueba la independencia del locale que le atribuye el diseño, y su etiqueta nombra un espacio duro que no lleva.",
+      "escenario": "Un concepto que sea un solo U+1D173, U+1BCA0, U+FFF9, U+E0080 o U+E01F0 SELLA (medido, una sentencia por carácter). Quitar \\U000E0000-\\U000E007F, \\u00AD, \\uFE00-\\uFE0F, \\u2028-\\u202F o \\u3000 de la clase deja el banco 26 en verde (MB3-MB6 y MB8). Quitar \\u3164 muere en J28e, que es el control de que el método aplica el mutante."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 27,
+      "descripcion": "Falta en §Hallazgos la entrada que piden R3.6-3 y R3.9: los documentos mixtos (exento negativo y general positivo) no se sellan por signo_ck, y lo decide T-026. La decisión solo vive en el comentario de J42. La bitácora tampoco deja las tres reglas de R3.9.",
+      "escenario": "T-026 diseña una rectificación que devuelve una sesión exenta (-100) y factura un informe pericial (+100 al 21 %): total 0, base -17,36, cuota 17,36. El sellado da 23514 borradores_factura_versiones_signo_ck al implementar, y nada en state.md lo avisaba. grep -i 'mixt|signo' docs/state.md devuelve 0 líneas."
+    }
+  ]
+}
