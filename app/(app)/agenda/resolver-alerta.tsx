@@ -37,7 +37,7 @@ import { idEnlacePaciente, type Prefijo } from './pendientes-ids';
  */
 
 type Resolucion = { alertaId: string; pacienteId: string };
-type Contexto = { alResolver: (r: Resolucion) => void };
+type Contexto = { preparar: () => (r: Resolucion) => void };
 const ContextoResolucion = createContext<Contexto | null>(null);
 
 /** Lo que el proveedor necesita saber de lo pintado: quién está, en qué orden y con qué alertas. */
@@ -77,12 +77,15 @@ export function decidirDestino(
 
 type Memoria = {
   pendiente: Pendiente | null;
-  anotar: (p: Pendiente) => void;
-  cerrar: (p: Pendiente, texto: string) => void;
+  /** La época vigente; se lee AL ENVIAR y viaja hasta el acierto. */
+  epoca: () => number;
+  /** Si `epoca` ya no es la vigente (hubo un descarte entre el envío y el acierto), no hace nada. */
+  anotar: (p: Pendiente, epoca: number) => void;
+  cerrar: (texto: string) => void;
+  /** Sube la época y tira el pendiente. */
   descartar: () => void;
 };
-/** Exportado solo para la prueba de `cerrar`; nadie más lo lee. */
-export const ContextoMemoria = createContext<Memoria | null>(null);
+const ContextoMemoria = createContext<Memoria | null>(null);
 
 /**
  * La memoria de la resolución: el pendiente y la única región `role="status"` del bloque. En la
@@ -95,14 +98,21 @@ export const ContextoMemoria = createContext<Memoria | null>(null);
 export function MemoriaResolucion({ children }: { children: ReactNode }) {
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
   const [anuncio, setAnuncio] = useState({ texto: '', n: 0 });
-  const ultimoCerrado = useRef<Pendiente | null>(null);
+  // La época es un ref y no un estado: `descartar` puede llegar dentro de una transición (`enviar`)
+  // que la acción en vuelo retiene, y tiene que surtir efecto en el acto. Se captura al enviar: leída
+  // al acertar siempre sería la vigente y no invalidaría nada.
+  const epocaRef = useRef(0);
 
-  const anotar = useCallback((p: Pendiente) => setPendiente(p), []);
-  const descartar = useCallback(() => setPendiente(null), []);
-  // Idempotente por identidad: StrictMode repite el efecto que llama aquí y el anuncio saltaría dos veces.
-  const cerrar = useCallback((p: Pendiente, texto: string) => {
-    if (ultimoCerrado.current === p) return;
-    ultimoCerrado.current = p;
+  const epoca = useCallback(() => epocaRef.current, []);
+  const anotar = useCallback((p: Pendiente, e: number) => {
+    if (e !== epocaRef.current) return;
+    setPendiente(p);
+  }, []);
+  const descartar = useCallback(() => {
+    epocaRef.current += 1;
+    setPendiente(null);
+  }, []);
+  const cerrar = useCallback((texto: string) => {
     setPendiente(null);
     setAnuncio((previo) => ({ texto, n: previo.n + 1 }));
   }, []);
@@ -111,7 +121,10 @@ export function MemoriaResolucion({ children }: { children: ReactNode }) {
   // roba el foco (preserving-ui-state.md).
   useLayoutEffect(() => () => descartar(), [descartar]);
 
-  const valor = useMemo(() => ({ pendiente, anotar, cerrar, descartar }), [pendiente, anotar, cerrar, descartar]);
+  const valor = useMemo(
+    () => ({ pendiente, epoca, anotar, cerrar, descartar }),
+    [pendiente, epoca, anotar, cerrar, descartar],
+  );
 
   return (
     <ContextoMemoria.Provider value={valor}>
@@ -158,8 +171,8 @@ export function ProveedorResolucion(props: PropiedadesBloque) {
 }
 
 function BloqueResolucion({ prefijo, encabezadoId, pacientes, alAcertar, children }: PropiedadesBloque) {
-  const { pendiente, anotar, cerrar } = useContext(ContextoMemoria)!;
-  // Lo pintado «ahora», para que `alResolver` calcule el sitio del paciente aunque la acción de
+  const { pendiente, epoca, anotar, cerrar } = useContext(ContextoMemoria)!;
+  // Lo pintado «ahora», para que lo que devuelve `preparar` calcule el sitio del paciente aunque la acción de
   // `useActionState` lo llame con el cierre de un render anterior.
   const pacientesAhora = useRef(pacientes);
   useEffect(() => {
@@ -171,21 +184,23 @@ function BloqueResolucion({ prefijo, encabezadoId, pacientes, alAcertar, childre
     const destino = decidirDestino(pendiente, { prefijo, encabezadoId, pacientes });
     if (!destino) return;
     document.getElementById(destino.id)?.focus();
-    cerrar(pendiente, destino.texto);
+    cerrar(destino.texto);
   }, [pendiente, pacientes, prefijo, encabezadoId, cerrar]);
 
-  const alResolver = useCallback(
-    (r: Resolucion) => {
+  // Se llama al ENVIAR y devuelve lo que se llama al acertar, ya con la época capturada.
+  const preparar = useCallback(() => {
+    const e = epoca();
+    return (r: Resolucion) => {
       const lista = pacientesAhora.current;
       const indice = lista.findIndex((p) => p.id === r.pacienteId);
-      anotar({ ...r, prefijo, indice: Math.max(indice, 0), eraUltimo: indice === lista.length - 1 });
+      anotar({ ...r, prefijo, indice: Math.max(indice, 0), eraUltimo: indice === lista.length - 1 }, e);
+      // Siempre, aunque la época sea vieja: decide el foco, no la frescura de los datos.
       alAcertar?.();
-    },
-    [alAcertar, anotar, prefijo],
-  );
+    };
+  }, [alAcertar, anotar, epoca, prefijo]);
 
   return (
-    <ContextoResolucion.Provider value={{ alResolver }}>
+    <ContextoResolucion.Provider value={{ preparar }}>
       <div data-bloque-pendientes>{children}</div>
     </ContextoResolucion.Provider>
   );
@@ -206,6 +221,8 @@ export function ResolverAlerta({
 
   const [estado, accion, pendiente] = useActionState<Resultado, FormData>(
     async (previo, datos) => {
+      // Antes del `await`: la época que cuenta es la del envío.
+      const confirmar = bloque?.preparar();
       let resultado: EstadoResolver;
       try {
         resultado = await resolverAlerta(null, datos);
@@ -214,7 +231,7 @@ export function ResolverAlerta({
         console.error('ResolverAlerta: la acción ha fallado', error);
         resultado = { ok: false, error: 'fallo' };
       }
-      if (resultado?.ok) bloque?.alResolver({ alertaId, pacienteId });
+      if (resultado?.ok) confirmar?.({ alertaId, pacienteId });
       return { resultado, intento: previo.intento + 1 };
     },
     { resultado: null, intento: 0 },

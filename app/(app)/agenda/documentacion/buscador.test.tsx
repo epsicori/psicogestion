@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GrupoPresentado } from '../pendientes';
 
@@ -67,6 +67,23 @@ async function buscar(termino: string) {
   await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
   return campo;
 }
+
+// Toda promesa en vuelo se suelta al acabar cada prueba, falle o no: una acción sin resolver retiene
+// las transiciones de todo el árbol de React y contagiaría a la prueba siguiente (T-048, ronda 4).
+const sueltas: Array<() => void> = [];
+function diferido<T>(alSoltar: T) {
+  let resolver!: (v: T) => void;
+  const promesa = new Promise<T>((r) => {
+    resolver = r;
+  });
+  sueltas.push(() => resolver(alSoltar));
+  return { promesa, resolver };
+}
+afterEach(async () => {
+  await act(async () => {
+    for (const soltar of sueltas.splice(0)) soltar();
+  });
+});
 
 describe('Buscador', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -189,15 +206,14 @@ describe('Buscador', () => {
   });
 
   it('mientras busca, el botón queda aria-disabled y un segundo clic no despacha', async () => {
-    let resolver: (v: unknown) => void = () => {};
-    m.buscarPendientes.mockReturnValue(new Promise((r) => (resolver = r)));
+    const d = diferido(resultados([]));
+    m.buscarPendientes.mockReturnValue(d.promesa);
     pintar();
     await buscar('ana');
     const boton = screen.getByRole('button', { name: 'Buscar' });
     await waitFor(() => expect(boton.getAttribute('aria-disabled')).toBe('true'));
     fireEvent.click(boton);
     expect(m.buscarPendientes).toHaveBeenCalledTimes(1);
-    await act(async () => resolver(resultados([grupo(1)])));
   });
 
   // D10c: resolver desde los resultados repite la búsqueda, mueve el foco, anuncia y actualiza el recuento.
@@ -279,7 +295,7 @@ describe('Buscador', () => {
 });
 
 // R3 (ronda 3): la resolución en vuelo no roba el foco del campo que el usuario acaba de elegir.
-describe('Buscador: descartar la resolución en vuelo (R2-H1)', () => {
+describe('Buscador: descartar la resolución, ya anotada o en vuelo (R2-H1, R3-H1)', () => {
   beforeEach(() => {
     m.buscarPendientes.mockReset();
     m.resolverAlerta.mockReset();
@@ -309,8 +325,8 @@ describe('Buscador: descartar la resolución en vuelo (R2-H1)', () => {
     m.resolverAlerta.mockResolvedValue({ ok: true });
     m.buscarPendientes.mockResolvedValueOnce(resultados([grupo(1, 'Paciente 1', true)]));
     // `relanzar` queda en vuelo: la lista que vuelve tras limpiar no contiene al paciente resuelto.
-    let soltar: (v: unknown) => void = () => {};
-    m.buscarPendientes.mockReturnValue(new Promise((r) => (soltar = r)));
+    const d = diferido(resultados([]));
+    m.buscarPendientes.mockReturnValue(d.promesa);
     pintarConMemoria();
     const campo = await buscar('paciente');
     await waitFor(() => screen.getByRole('button', { name: /Marcar como resuelta/ }));
@@ -321,8 +337,6 @@ describe('Buscador: descartar la resolución en vuelo (R2-H1)', () => {
     await act(async () => {});
     expect(screen.getByText('LISTA PAGINADA')).toBeTruthy();
     expect(document.activeElement).toBe(campo);
-    // Una acción sin resolver retiene las transiciones de todo el árbol de React: se suelta.
-    await act(async () => soltar(resultados([])));
   });
 
   it('gemelo con «Buscar»: una búsqueda nueva con una resolución pendiente no manda el foco a un resultado ajeno', async () => {
@@ -343,5 +357,52 @@ describe('Buscador: descartar la resolución en vuelo (R2-H1)', () => {
     await act(async () => {});
     expect(document.activeElement?.id).not.toBe('busqueda-paciente-p2');
     expect(document.activeElement?.id).not.toBe(ID_TITULO);
+  });
+
+  it('"Limpiar búsqueda" con la acción aún en vuelo: el ok que llega después no roba el foco del campo ni anuncia', async () => {
+    const d = diferido<{ ok: true } | { ok: false; error: string }>({ ok: false, error: 'fallo' });
+    m.resolverAlerta.mockReturnValue(d.promesa);
+    m.buscarPendientes.mockResolvedValueOnce(resultados([grupo(1, 'Paciente 1', true)]));
+    m.buscarPendientes.mockResolvedValue(resultados([]));
+    pintarConMemoria();
+    const campo = await buscar('paciente');
+    await userEvent.click(await screen.findByRole('button', { name: /Marcar como resuelta/ }));
+    await screen.findByRole('button', { name: 'Guardando…' });
+    expect(m.buscarPendientes).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }));
+    expect(document.activeElement).toBe(campo);
+
+    await act(async () => d.resolver({ ok: true }));
+    // Señal de que el ok ya se procesó: `relanzar` se llama aunque la época sea vieja.
+    await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(2));
+    await act(async () => {});
+    expect(document.activeElement).toBe(campo);
+    expect(document.querySelector('[data-estado-bloque]')?.textContent).toBe('');
+  });
+
+  it('"Buscar" de nuevo con la acción aún en vuelo: el ok que llega después no lleva el foco a un resultado de la búsqueda nueva', async () => {
+    const d = diferido<{ ok: true } | { ok: false; error: string }>({ ok: false, error: 'fallo' });
+    m.resolverAlerta.mockReturnValue(d.promesa);
+    m.buscarPendientes.mockResolvedValueOnce(
+      resultados([grupo(1, 'Paciente 1', true), grupo(2, 'Paciente 2', true)]),
+    );
+    m.buscarPendientes.mockResolvedValue(resultados([grupo(2, 'Paciente 2', true)]));
+    pintarConMemoria();
+    await buscar('paciente');
+    await userEvent.click((await screen.findAllByRole('button', { name: /Marcar como resuelta/ }))[0]);
+    await screen.findByRole('button', { name: 'Guardando…' });
+
+    await buscar('paciente');
+    await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(2));
+    const antes = document.activeElement;
+
+    await act(async () => d.resolver({ ok: true }));
+    await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Paciente 1' })).toBeNull());
+    await act(async () => {});
+    expect(document.activeElement).toBe(antes);
+    expect(document.activeElement?.id).not.toBe('busqueda-paciente-p2');
+    expect(document.querySelector('[data-estado-bloque]')?.textContent).toBe('');
   });
 });

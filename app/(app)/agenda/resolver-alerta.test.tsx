@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Activity, StrictMode, useContext, useEffect, type ContextType } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Activity, StrictMode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const m = vi.hoisted(() => ({ resolverAlerta: vi.fn(), rethrow: vi.fn() }));
 
@@ -10,7 +10,6 @@ vi.mock('./acciones-alertas', () => ({ resolverAlerta: m.resolverAlerta }));
 
 import { idEnlacePaciente } from './pendientes-ids';
 import {
-  ContextoMemoria,
   decidirDestino,
   MemoriaResolucion,
   ProveedorResolucion,
@@ -83,13 +82,25 @@ async function pulsar() {
   });
 }
 
-function diferido<T>() {
+type Res = { ok: true } | { ok: false; error: string };
+const FALLO: Res = { ok: false, error: 'fallo' };
+
+// Toda promesa en vuelo se suelta al acabar cada prueba, falle o no: una acción que se queda
+// colgada deja a React con trabajo pendiente y contagia a la prueba siguiente (T-048, ronda 4).
+const sueltas: Array<() => void> = [];
+function diferido<T>(alSoltar: T) {
   let resolver!: (valor: T) => void;
   const promesa = new Promise<T>((r) => {
     resolver = r;
   });
+  sueltas.push(() => resolver(alSoltar));
   return { promesa, resolver };
 }
+afterEach(async () => {
+  await act(async () => {
+    for (const soltar of sueltas.splice(0)) soltar();
+  });
+});
 
 describe('ResolverAlerta: fallos (T-015, R3)', () => {
   beforeEach(() => {
@@ -135,7 +146,7 @@ describe('ResolverAlerta: mientras se envía (T-015, R4)', () => {
   beforeEach(() => m.resolverAlerta.mockReset());
 
   it('aria-disabled y no disabled: conserva el foco y un segundo clic no envía otra vez', async () => {
-    const d = diferido<{ ok: true }>();
+    const d = diferido<Res>(FALLO);
     m.resolverAlerta.mockReturnValue(d.promesa);
     render(<Bloque conFila />);
 
@@ -152,10 +163,6 @@ describe('ResolverAlerta: mientras se envía (T-015, R4)', () => {
       fireEvent.click(pendiente);
     });
     expect(m.resolverAlerta).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      d.resolver({ ok: true });
-    });
   });
 
   it('gemela: sin envío pendiente el botón no lleva aria-disabled', () => {
@@ -311,7 +318,7 @@ describe('ResolverAlerta: el segundo clic mientras envía (T-015, R4)', () => {
   beforeEach(() => m.resolverAlerta.mockReset());
 
   it('con el envío pendiente, el clic llega con defaultPrevented y no se envía otra vez', async () => {
-    const d = diferido<{ ok: true }>();
+    const d = diferido<Res>(FALLO);
     m.resolverAlerta.mockReturnValue(d.promesa);
     render(<Bloque conFila />);
     await pulsar();
@@ -323,10 +330,6 @@ describe('ResolverAlerta: el segundo clic mientras envía (T-015, R4)', () => {
     });
     expect(prevenido).toBe(true);
     expect(m.resolverAlerta).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      d.resolver({ ok: true });
-    });
   });
 });
 
@@ -408,55 +411,57 @@ describe('decidirDestino: reglas en orden', () => {
   });
 });
 
-describe('MemoriaResolucion: cerrar y Activity (T-048, ronda 3)', () => {
+describe('MemoriaResolucion: StrictMode y Activity', () => {
   beforeEach(() => m.resolverAlerta.mockReset());
 
-  it('cerrar es idempotente por identidad del Pendiente: el segundo cierre del mismo objeto no anuncia', async () => {
-    const memoria: { actual: ContextType<typeof ContextoMemoria> } = { actual: null };
-    function Espia() {
-      const c = useContext(ContextoMemoria);
-      useEffect(() => {
-        memoria.actual = c;
-      });
-      return null;
-    }
-    render(
-      <MemoriaResolucion>
-        <Espia />
-      </MemoriaResolucion>,
-    );
-    const p: Pendiente = { alertaId: 'a', pacienteId: 'pA', prefijo: 'panel', indice: 0, eraUltimo: false };
-    await act(async () => {
-      memoria.actual!.cerrar(p, 'primero');
-      memoria.actual!.cerrar(p, 'segundo');
-    });
-    expect(estadoBloque().textContent).toBe('primero');
-    // Otro objeto, aunque sea la misma alerta: es otro acierto y se anuncia.
-    await act(async () => memoria.actual!.cerrar({ ...p }, 'tercero'));
-    expect(estadoBloque().textContent).toBe('tercero');
-  });
+  const B2 = { id: 'pB', alertas: ['b1'] };
+  const C2 = { id: 'pC', alertas: ['c1'] };
 
-  it('con StrictMode, un acierto anuncia una sola vez y la región es un solo nodo', async () => {
+  it('con StrictMode, un bloque que nace con el pendiente anotado (remontaje) enfoca y anuncia una sola vez, aunque StrictMode repita su efecto', async () => {
+    // Esta prueba NO prueba ninguna guarda de `cerrar`: el anuncio único lo garantiza el lote de
+    // React. Fija que el arnés remonta de verdad bajo StrictMode (2 focos) y que hay un anuncio por acierto.
     m.resolverAlerta.mockResolvedValue({ ok: true });
-    const { rerender } = render(
+    const Arnes = ({ clave, pacientes }: { clave: string; pacientes: Paciente[] }) => (
       <StrictMode>
-        <Bloque pacientes={[ANA, { id: 'pB', alertas: ['b1'] }]} />
-      </StrictMode>,
+        <MemoriaResolucion>
+          <Bloque key={clave} pacientes={pacientes} />
+        </MemoriaResolucion>
+      </StrictMode>
     );
+    const { rerender } = render(<Arnes clave="antes" pacientes={[ANA, B2]} />);
     await pulsar();
-    rerender(
-      <StrictMode>
-        <Bloque pacientes={[{ id: 'pB', alertas: ['b1'] }]} />
-      </StrictMode>,
-    );
-    expect(document.querySelectorAll('[data-estado-bloque]')).toHaveLength(1);
-    expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
+    expect(estadoBloque().textContent).toBe('');
+
+    let insertados = 0;
+    const contar = (registros: MutationRecord[]) => {
+      for (const r of registros) {
+        r.addedNodes.forEach((n) => {
+          if (n.nodeName === 'SPAN') insertados += 1;
+        });
+      }
+    };
+    const observador = new MutationObserver(contar);
+    observador.observe(estadoBloque(), { childList: true });
+    const foco = vi.spyOn(HTMLElement.prototype, 'focus');
+    try {
+      rerender(<Arnes clave="despues" pacientes={[B2]} />);
+      await act(async () => {});
+      contar(observador.takeRecords());
+
+      const enB = foco.mock.contexts.filter((c) => (c as HTMLElement).id === 'panel-paciente-pB');
+      expect(enB.length).toBeGreaterThanOrEqual(2);
+      expect(insertados).toBe(1);
+      expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
+      expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+      expect(document.querySelectorAll('[data-estado-bloque]')).toHaveLength(1);
+    } finally {
+      foco.mockRestore();
+      observador.disconnect();
+    }
   });
 
   it('la memoria oculta por Activity tira el pendiente: al volver, nada roba el foco ni anuncia', async () => {
     m.resolverAlerta.mockResolvedValue({ ok: true });
-    const B2 = { id: 'pB', alertas: ['b1'] };
-    const C2 = { id: 'pC', alertas: ['c1'] };
     const Arnes = ({ modo, pacientes }: { modo: 'visible' | 'hidden'; pacientes: Paciente[] }) => (
       <Activity mode={modo}>
         <MemoriaResolucion>
@@ -473,5 +478,57 @@ describe('MemoriaResolucion: cerrar y Activity (T-048, ronda 3)', () => {
     expect(document.activeElement).not.toBe(document.getElementById('panel-paciente-pB'));
     expect(document.activeElement).toBe(document.body);
     expect(estadoBloque().textContent).toBe('');
+  });
+
+  type PropsArnes = { modo: 'visible' | 'hidden'; pacientes: Paciente[]; alAcertar: () => void };
+
+  it.each([
+    [
+      'la memoria del layout',
+      ({ modo, pacientes, alAcertar }: PropsArnes) => (
+        <Activity mode={modo}>
+          <MemoriaResolucion>
+            <Bloque pacientes={pacientes} alAcertar={alAcertar} />
+          </MemoriaResolucion>
+        </Activity>
+      ),
+    ],
+    [
+      'la memoria propia del proveedor, el panel',
+      ({ modo, pacientes, alAcertar }: PropsArnes) => (
+        <Activity mode={modo}>
+          <Bloque pacientes={pacientes} alAcertar={alAcertar} />
+        </Activity>
+      ),
+    ],
+  ])('Activity con la acción aún en vuelo (%s): el ok llega con la ruta oculta y al volver nada roba el foco ni anuncia', async (_nombre, Arnes) => {
+    const d = diferido<Res>(FALLO);
+    m.resolverAlerta.mockReturnValue(d.promesa);
+    const alAcertar = vi.fn();
+    const { rerender } = render(<Arnes modo="visible" pacientes={[ANA, B2, C2]} alAcertar={alAcertar} />);
+    await pulsar();
+    expect(screen.getByRole('button', { name: 'Guardando…' })).toBeTruthy();
+
+    rerender(<Arnes modo="hidden" pacientes={[ANA, B2, C2]} alAcertar={alAcertar} />);
+    await act(async () => d.resolver({ ok: true }));
+    expect(alAcertar).toHaveBeenCalledTimes(1);
+
+    rerender(<Arnes modo="hidden" pacientes={[B2, C2]} alAcertar={alAcertar} />);
+    rerender(<Arnes modo="visible" pacientes={[B2, C2]} alAcertar={alAcertar} />);
+    await act(async () => {});
+    expect(document.activeElement).toBe(document.body);
+    expect(estadoBloque().textContent).toBe('');
+  });
+
+  it('gemelo: con la acción diferida y sin salir de la ruta, el ok sí mueve el foco y anuncia', async () => {
+    const d = diferido<Res>(FALLO);
+    m.resolverAlerta.mockReturnValue(d.promesa);
+    const { rerender } = render(<Bloque pacientes={[ANA, B2, C2]} />);
+    await pulsar();
+    await act(async () => d.resolver({ ok: true }));
+    rerender(<Bloque pacientes={[B2, C2]} />);
+    await act(async () => {});
+    expect(document.activeElement).toBe(document.getElementById('panel-paciente-pB'));
+    expect(estadoBloque().textContent).toBe('Marcada como resuelta.');
   });
 });

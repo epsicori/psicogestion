@@ -171,7 +171,7 @@ test('el panel de /agenda: desplegable con teclado, Tab hasta «Marcar como resu
 
   await page.keyboard.press('Enter');
 
-  // El paciente sigue (le quedan 11 informes y la nota): el foco va a su enlace y se anuncia.
+  // El paciente sigue (le quedan 12 informes): el foco va a su enlace y se anuncia.
   await expect(panel.locator('[data-estado-bloque]')).toContainText('Marcada como resuelta.');
   await expect(enlacePaciente).toBeFocused();
   await expect(boton).toContainText('12 pendientes');

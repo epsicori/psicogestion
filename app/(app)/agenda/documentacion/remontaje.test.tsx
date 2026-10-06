@@ -127,6 +127,22 @@ function grupoDeP21(): GrupoPresentado {
 const botonResolver = () => screen.getByRole('button', { name: `Marcar como resuelta: ${etiquetaDe('P21')}` });
 const regiones = () => document.querySelectorAll('[data-estado-bloque]');
 
+// Toda promesa en vuelo se suelta al acabar cada prueba, falle o no (T-048, ronda 4).
+const sueltas: Array<() => void> = [];
+function diferido<T>(alSoltar: T) {
+  let resolver!: (v: T) => void;
+  const promesa = new Promise<T>((r) => {
+    resolver = r;
+  });
+  sueltas.push(() => resolver(alSoltar));
+  return { promesa, resolver };
+}
+afterEach(async () => {
+  await act(async () => {
+    for (const soltar of sueltas.splice(0)) soltar();
+  });
+});
+
 async function resolverYEsperar(user: ReturnType<typeof userEvent.setup>) {
   await user.click(botonResolver());
   await waitFor(() => expect(m.resolverAlerta).toHaveBeenCalledTimes(1));
@@ -187,8 +203,9 @@ describe('remontaje por la redirección de ?pagina (R2-H1)', () => {
       total: 2,
     });
     // `relanzar` queda en vuelo: la redirección llega antes que su respuesta.
-    let responderRelanzada: (v: unknown) => void = () => {};
-    m.buscarPendientes.mockReturnValue(new Promise((r) => (responderRelanzada = r)));
+    const vacio = { fase: 'resultados', grupos: [], coincidencias: 0, recortada: false, leidos: 0, total: 0 };
+    const relanzada = diferido(vacio);
+    m.buscarPendientes.mockReturnValue(relanzada.promesa);
     render(<Arnes inicial={INICIAL} />);
 
     await user.type(screen.getByLabelText('Buscar por nombre o apellidos'), 'p21');
@@ -206,7 +223,7 @@ describe('remontaje por la redirección de ?pagina (R2-H1)', () => {
     // La acción en vuelo retiene las transiciones de React: se contesta cuando la redirección ya
     // pidió la página nueva (el buscador viejo ya está desmontado, esa respuesta no lo alcanza).
     await waitFor(() => expect(routerFalso.replace).toHaveBeenCalledTimes(1));
-    await act(async () => responderRelanzada({ fase: 'resultados', grupos: [], coincidencias: 0, recortada: false, leidos: 0, total: 0 }));
+    await act(async () => relanzada.resolver(vacio));
 
     await waitFor(() => expect(document.activeElement?.id).toBe(ID_TITULO));
     expect(document.getElementById(ID_TITULO)).not.toBe(h2Antes);
