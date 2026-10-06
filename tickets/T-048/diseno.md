@@ -1345,3 +1345,440 @@ pintura (`min-w-11`) no justifica un encargo.
    de las reglas de `decidirDestino`.
 10. **Revisar con más cuidado (3):** las puertas del pendiente (`limpiar`, `enviar`, Activity,
     navegación manual aceptada), y que el spec no inserte ninguna nota ni borre nada.
+
+## Ronda 4 (06-10-2026)
+
+Anexo de riesgo medio que cierra R3-H1 (MEDIA), R3-H2 y R3-H3 (BAJA) de `tickets/T-048/revision.md`.
+Se ha leído la implementación vigente en la rama `T-048-documentacion-pendiente-agrupada`, HEAD
+`a65dfd1`, worktree `.claude/worktrees/agent-a69f77c2852a5d107`, sin modificarla. Lo que este
+anexo dice **prevalece** sobre R3 donde choque; la fe de erratas de R4.1 lo enumera.
+
+**Cómo se ha medido.** En una copia desechable de `a65dfd1` (`git archive` en el scratchpad, con
+una unión a `node_modules`, ya borradas las dos) se escribieron las pruebas de R4.2 c) y se
+ejecutaron contra el código de la rama: **las cuatro caen**, con el foco donde dice el revisor.
+Después se aplicó en la copia un prototipo del arreglo de R4.2 b) (no se entrega; el implementador
+lo escribe desde este anexo) y se midieron los mutantes de R4.2 d). Los números de este anexo son
+de esas ejecuciones.
+
+### R4.0 · Hechos verificados contra el código
+
+| Hecho | Dónde |
+|---|---|
+| Next 16.3.1. `serverActionReducer` resuelve la promesa de quien llamó a la acción con `resolve(actionResult)` **sin mirar `discarded`**. El `resolve` es el de la promesa que crea `callServer`. | `node_modules/next/dist/client/components/router-reducer/reducers/server-action-reducer.js:263`; `node_modules/next/dist/client/app-call-server.js:15-22` |
+| Una navegación marca la acción en curso como `discarded` (`dispatchAction`), y `handleResult` solo tira el `nextState` del enrutador (y pide un `refresh` si la acción revalidó). La promesa de la acción ya se ha resuelto. | `node_modules/next/dist/client/components/app-router-instance.js:80-96, :147-161` |
+| `ResolverAlerta` llama a `bloque?.alResolver(...)` **después** del `await`, con el `bloque` del render en que se envió. Nada comprueba si entre medias hubo un descarte. | worktree `app/(app)/agenda/resolver-alerta.tsx:207-219` |
+| `descartar` es `setPendiente(null)` y nada más: no deja rastro que un `anotar` posterior pueda consultar. | ídem `:101` |
+| `enviar` es la `action` de un `<form>` (React lo envuelve en una transición); `limpiar` es un `onClick` (carril normal). Con la resolución en vuelo, las actualizaciones de una transición quedan **retenidas** hasta que acabe la acción asíncrona pendiente (entrelazado de acciones de React 19). | worktree `documentacion/buscador.tsx:74-85, :93-101, :114, :161` |
+| La guarda `ultimoCerrado.current === p` de `cerrar` **no tiene efecto observable con StrictMode**. Medido: un bloque que nace con el pendiente anotado bajo `<StrictMode>` ejecuta su efecto dos veces (dos `focus()` sobre el destino), y **con y sin la guarda** la región recibe **un** `span` nuevo, el mismo texto y el mismo foco. Las dos llamadas a `cerrar` caen en el mismo lote antes del siguiente render: `n` sube 1 o 2, y la `key` del `span` cambia una sola vez. | worktree `resolver-alerta.tsx:102-108, :119-121`; medición en la copia |
+| La única prueba que ve la guarda es la directa (`resolver-alerta.test.tsx:414`), y la ve porque llama a `cerrar` dos veces **con textos distintos** en el mismo lote. El producto no hace eso con un solo bloque por memoria. | worktree `resolver-alerta.test.tsx:414-437` |
+| Promesas que una prueba deja sin soltar si falla antes de su última línea: `buscador.test.tsx:192-200` y `:312-325`; `remontaje.test.tsx:190-209`; `resolver-alerta.test.tsx:138-158` y `:314-329`. `vitest.setup.ts` registra `afterEach(cleanup)`. Vitest 4.1.11 ejecuta los `afterEach` en orden inverso de registro, así que uno del fichero de prueba corre antes del `cleanup`. | worktree; `vitest.setup.ts`; `package.json` |
+| El comentario obsoleto del spec está en la línea **174** de `a65dfd1` (la revisión dice `:171`): «le quedan 11 informes y la nota». `PRIMERO` tiene 13 informes y ninguna nota; tras resolver uno le quedan 12, que es lo que comprueba `:177`. | worktree `accesibilidad/documentacion-pendiente.spec.ts:174, :177` |
+
+### R4.1 · Fe de erratas de R3
+
+- **R3.2 a), `cerrar` «idempotente por identidad»**: la razón que daba («StrictMode repite el efecto
+  y el anuncio saltaría dos veces») es **falsa** (R4.0). Desaparecen la guarda y `ultimoCerrado`.
+  `cerrar` pasa a recibir solo el texto (R4.3).
+- **R3.2 a), «Invariante»**: dos bloques bajo la misma memoria tampoco anuncian dos veces (mismo
+  lote). Lo único que decidía la guarda era qué texto ganaba. El invariante «un solo bloque por
+  memoria» se mantiene, y lo sigue revisando R3.9.
+- **R3.2 a), `descartar()`**: además de `setPendiente(null)`, sube la época (R4.2).
+- **R3.2 a), `alResolver` y «`ResolverAlerta` no cambia»**: `alResolver` se sustituye por
+  `preparar`, y `ResolverAlerta` lo llama antes del `await` (R4.2).
+- **R3.2 a), «un contexto privado (`ContextoMemoria`)»**: la implementación lo exportó para una
+  prueba. Vuelve a ser privado (R4.3).
+- **R3.2 e)**: la prueba «`cerrar` es idempotente» se elimina, y la de StrictMode se redefine
+  (R4.3).
+- **R3.9.2**: «que su `span` cambie de `key` una vez por acierto (no dos con StrictMode)» se lee
+  como «**un `span` nuevo por acierto**». `n` puede subir de dos en dos en desarrollo, y eso no se
+  ve.
+- **R3.9.3**: invertir el orden de «lista vacía» y «prefijo ajeno» es un mutante **equivalente**
+  (lo midió el revisor); no se le pide a ninguna prueba que lo mate.
+- **R3.9.4**: se sustituye por R4.6.7 y R4.6.8.
+
+### R4.2 · R3-H1: el descarte alcanza a la resolución en vuelo
+
+#### a) Decisión: la época del revisor, en un ref de la memoria y capturada al enviar
+
+La memoria lleva un contador (`epoca`). `descartar` lo incrementa. `ResolverAlerta` lee la época
+**al enviar** y la lleva hasta el acierto. `anotar` ignora un acierto cuya época ya no es la
+vigente. Cubre las tres puertas con un solo mecanismo, porque las tres ya llaman a `descartar`:
+`limpiar`, `enviar` y la limpieza del `useLayoutEffect` cuando Activity oculta la ruta.
+
+Por qué así y no de otro modo:
+
+- **Ref y no estado.** `descartar` tiene que surtir efecto en el instante del gesto. Llamado desde
+  `enviar`, que es una transición, un estado quedaría retenido por la propia acción en vuelo, y un
+  `anotar` llegado por el carril normal se procesaría antes del descarte. El ref se escribe en el
+  acto, sin carriles. No es lectura en render: solo se lee en `preparar` (dentro de la acción) y
+  en `anotar`.
+- **Capturada al enviar, no al acertar.** Si se lee al acertar, ve siempre la época vigente y no
+  invalida nada (mutante M2).
+- **`alAcertar` se sigue llamando aunque la época sea vieja.** La época decide el foco y el
+  anuncio, no la frescura de los datos. Si se sale de la ruta con la búsqueda abierta, `relanzar`
+  deja los resultados al día para cuando se vuelva. Es el comportamiento de hoy, y una prueba lo
+  fija (M8).
+- **Descartado: «el bloque sigue montado».** Solo cerraría la puerta 1 (lo dice el revisor). En la
+  2 el bloque sigue montado, y en la 3 está oculto pero no desmontado.
+- **Descartado: abortar la acción.** Una Server Action no se puede cancelar, y Next resuelve su
+  promesa aunque la navegación la descarte (R4.0).
+- **Descartado: una marca por alerta («descartadas»).** Hace lo mismo que un contador, pero con un
+  conjunto que crece y hay que vaciar.
+
+#### b) Piezas: solo `app/(app)/agenda/resolver-alerta.tsx`
+
+`buscador.tsx`, `documentacion.tsx`, `contenido.tsx` y `layout.tsx` **no cambian**.
+
+```ts
+type Contexto = { preparar: () => (r: Resolucion) => void };   // sustituye a { alResolver }
+
+type Memoria = {
+  pendiente: Pendiente | null;
+  epoca: () => number;                           // lee el ref; se llama al ENVIAR
+  anotar: (p: Pendiente, epoca: number) => void; // si epoca !== vigente, no hace nada
+  cerrar: (texto: string) => void;               // sin guarda (R4.3)
+  descartar: () => void;                         // sube la época y hace setPendiente(null)
+};
+const ContextoMemoria = createContext<Memoria | null>(null);   // SIN export
+```
+
+**`MemoriaResolucion`.**
+
+- `const epocaRef = useRef(0)`.
+- `epoca = useCallback(() => epocaRef.current, [])`.
+- `anotar = useCallback((p, e) => { if (e !== epocaRef.current) return; setPendiente(p); }, [])`.
+- `descartar = useCallback(() => { epocaRef.current += 1; setPendiente(null); }, [])`. Primero
+  la época y después el estado.
+- `cerrar = useCallback((texto) => { setPendiente(null); setAnuncio((a) => ({ texto, n: a.n + 1 })); }, [])`.
+  Desaparece `ultimoCerrado`.
+- El `useLayoutEffect(() => () => descartar(), [descartar])` se queda tal cual: ahora además sube
+  la época al ocultar.
+- El valor del contexto (`useMemo`) incluye `epoca`. Se borra el comentario «Exportado solo para
+  la prueba…».
+- Comentario junto al ref, en una o dos líneas: por qué ref (el descarte puede llegar dentro de
+  una transición retenida) y por qué se captura al enviar.
+
+**`BloqueResolucion`.** `alResolver` se sustituye por:
+
+```ts
+const preparar = useCallback(() => {
+  const e = epoca();
+  return (r: Resolucion) => {
+    const lista = pacientesAhora.current;                 // como hoy: lo pintado AL ACERTAR
+    const indice = lista.findIndex((p) => p.id === r.pacienteId);
+    anotar({ ...r, prefijo, indice: Math.max(indice, 0), eraUltimo: indice === lista.length - 1 }, e);
+    alAcertar?.();                                        // siempre, aunque la época sea vieja
+  };
+}, [alAcertar, anotar, epoca, prefijo]);
+```
+
+El efecto que decide llama a `cerrar(destino.texto)`. El proveedor del contexto pasa
+`value={{ preparar }}` (memorizado como hoy).
+
+**`ResolverAlerta`.** Dentro de la acción de `useActionState`, la **primera línea**, antes del
+`try` y del `await`, es `const confirmar = bloque?.preparar();`. Tras el `await`:
+`if (resultado?.ok) confirmar?.({ alertaId, pacienteId });`. Sin bloque, `confirmar` es
+`undefined` y no pasa nada, como hoy.
+
+#### c) Pruebas: una por puerta, con la acción **todavía en vuelo** durante el gesto
+
+En las tres, `resolverAlerta` devuelve un `diferido` (R4.4) que se resuelve con `{ ok: true }`
+**después** del gesto. Antes de mirar el foco, cada prueba espera a una señal de que el `ok` ya se
+ha procesado. Sin esa espera, la prueba pasaría en el código roto solo porque el `ok` aún no ha
+llegado. Medido en `a65dfd1`: las cuatro caen.
+
+**P1 · `buscador.test.tsx`**, en el `describe` de `:282`, que pasa a llamarse
+«Buscador: descartar la resolución, ya anotada o en vuelo (R2-H1, R3-H1)». Título:
+«"Limpiar búsqueda" con la acción aún en vuelo: el ok que llega después no roba el foco del campo
+ni anuncia».
+
+1. El arnés es `pintarConMemoria()` (`:289`).
+2. Respuestas de `buscarPendientes`: la primera, `resultados([grupo(1, 'Paciente 1', true)])`; por
+   defecto, `resultados([])`.
+3. `buscar('paciente')`. Se pulsa «Marcar como resuelta» y se comprueba que la acción sigue en
+   vuelo: hay un botón «Guardando…» y `buscarPendientes` se ha llamado una vez.
+4. Se pulsa «Limpiar búsqueda». Precondición: `document.activeElement === campo`.
+5. `await act(async () => d.resolver({ ok: true }))`.
+6. Señal de que el `ok` se procesó: `await waitFor(() => expect(m.buscarPendientes).toHaveBeenCalledTimes(2))`.
+   Es `relanzar`, que se llama aunque la época sea vieja. Después, `await act(async () => {})`.
+7. Se espera:
+   - `document.activeElement === campo`;
+   - `[data-estado-bloque]` con `textContent === ''`.
+8. En `a65dfd1` cae con el foco en `h2#documentacion-titulo` (la regla del prefijo ajeno, sobre la
+   lista paginada).
+
+**P2 · `buscador.test.tsx`**, mismo `describe`. Título: «"Buscar" de nuevo con la acción aún en
+vuelo: el ok que llega después no lleva el foco a un resultado de la búsqueda nueva».
+
+1. Respuestas de `buscarPendientes`: la primera,
+   `resultados([grupo(1, 'Paciente 1', true), grupo(2, 'Paciente 2', true)])`; por defecto,
+   `resultados([grupo(2, 'Paciente 2', true)])`. El defecto sirve a la búsqueda nueva y a
+   `relanzar`.
+2. `buscar('paciente')`. Se pulsa el primer «Marcar como resuelta» y se comprueba que está en
+   «Guardando…».
+3. `buscar('paciente')` otra vez, y se espera a que `buscarPendientes` lleve 2 llamadas. Se guarda
+   `antes = document.activeElement` (el botón «Buscar»). Los resultados nuevos aún no se pintan:
+   la transición está retenida por la acción en vuelo, y es el caso real.
+4. `await act(async () => d.resolver({ ok: true }))`.
+5. Señales:
+   - `waitFor` de 3 llamadas (`relanzar`);
+   - `waitFor` de que el enlace «Paciente 1» ya no está;
+   - `await act(async () => {})`.
+6. Se espera:
+   - `document.activeElement === antes`;
+   - `activeElement.id !== 'busqueda-paciente-p2'`;
+   - región vacía.
+7. En `a65dfd1` cae con el foco en `busqueda-paciente-p2`.
+
+**P3 · `resolver-alerta.test.tsx`**, en el `describe` «MemoriaResolucion…» (`:411`), que pasa a
+llamarse «MemoriaResolucion: StrictMode y Activity». Es un `it.each` con dos arneses: «la memoria
+del layout» (`<Activity><MemoriaResolucion><Bloque/></MemoriaResolucion></Activity>`) y «la memoria
+propia del proveedor, el panel» (`<Activity><Bloque/></Activity>`). Título: «Activity con la acción
+aún en vuelo (%s): el ok llega con la ruta oculta y al volver nada roba el foco ni anuncia».
+
+1. `alAcertar = vi.fn()`, que se pasa a `Bloque`.
+2. Se pinta `visible` con `[ANA, B2, C2]`, se pulsa y se comprueba «Guardando…».
+3. `rerender` a `hidden` con la misma lista.
+4. `await act(async () => d.resolver({ ok: true }))`. Señal: `expect(alAcertar).toHaveBeenCalledTimes(1)`.
+5. `rerender` a `hidden` con `[B2, C2]`, y después a `visible` con `[B2, C2]`. Luego
+   `await act(async () => {})`.
+6. Se espera:
+   - `document.activeElement === document.body`;
+   - región vacía.
+7. En `a65dfd1` caen las dos variantes con el foco en `panel-paciente-pB`.
+
+**P3-gemelo**, mismo `describe`: «gemelo: con la acción diferida y sin salir de la ruta, el ok sí
+mueve el foco y anuncia».
+
+- `visible` todo el rato. Se pulsa, se resuelve el diferido y se cambia la lista a `[B2, C2]`.
+- Se espera el foco en `panel-paciente-pB` y la región con «Marcada como resuelta.».
+- Demuestra que la época no se come el camino normal cuando el acierto tarda. Mata, por ejemplo,
+  un `descartar` puesto en la limpieza de un efecto del bloque.
+
+La prueba de Activity que ya existe (el `ok` llega **antes** de ocultar) se queda: cubre el
+pendiente ya anotado.
+
+#### d) Mutantes, medidos sobre el prototipo
+
+| Mutante | Cae (pruebas nuevas) | Por qué |
+|---|---|---|
+| M1 · `anotar` sin comparar la época | P1, P2, P3 ×2 | El acierto viejo se anota. |
+| M2 · la época se lee al acertar: `bloque?.preparar()(…)` tras el `await` | P1, P2, P3 ×2 | La época leída es siempre la vigente. |
+| M3 · `descartar` sin `epocaRef.current += 1` | P1, P2, P3 ×2 | Nada invalida el envío. |
+| M4 · `limpiar` sin `descartar()` | P1 (y la de `:308`) | La puerta 1 no sube la época. |
+| M5 · `enviar` sin `descartar()` | P2 (y el gemelo de `:328`) | La puerta 2 no sube la época. |
+| M6 · sin el `useLayoutEffect` de limpieza | P3 ×2 (y la de Activity existente) | La puerta 3 no sube la época. |
+| M8 · `alAcertar` también condicionado a la época | P1, P2, P3 ×2 | Por sus señales: `relanzar` y `alAcertar` no llegan. |
+
+Con el prototipo y sin mutantes: 620 de 621 en verde en `app/(app)/agenda`. La que cae es la prueba
+directa de `cerrar`, que se elimina (R4.3), porque importa el `ContextoMemoria` que ya no se
+exporta. Lint del prototipo: limpio.
+
+**No medido y revisado leyendo:** «época en estado en vez de ref». En P2 no se ve, porque el
+render intermedio aún pinta la alerta y espera. Va en R4.6.2.
+
+### R4.3 · R3-H2: la guarda de `cerrar` se quita, y StrictMode se prueba con un remontaje real
+
+**Valoración de la alternativa del revisor.** Montar bajo StrictMode un bloque que nace con el
+pendiente anotado y dejar de exportar `ContextoMemoria` **no hace caer nada si se quita la
+guarda**. Medido (R4.0): StrictMode sí repite el efecto, pero las dos llamadas a `cerrar` caen en
+el mismo lote y el DOM sale idéntico. No hay prueba del comportamiento que pueda fallar sin la
+guarda, porque la guarda no protege ningún comportamiento observable. Peor: cuando dos llamadas
+con textos distintos caen en un lote, la guarda conserva el primer texto mientras el foco (sin
+guarda) sigue a la última decisión, así que puede desalinear foco y anuncio.
+
+**Decisión.**
+
+- **Se quitan la guarda, `ultimoCerrado` y el `export` de `ContextoMemoria`** (R4.2 b). La
+  privacidad del módulo vuelve a garantizar R3.9.5 sin depender de un `grep`.
+- Sin la guarda no hay que probar la guarda. Lo que sí se prueba es la promesa que la justificaba:
+  un anuncio por acierto con StrictMode. Ahora se prueba en el caso en que StrictMode **sí** repite.
+- En `resolver-alerta.test.tsx`:
+  - se **elimina** «cerrar es idempotente por identidad…» (`:414-437`), con los imports que queden
+    sin uso (`ContextoMemoria`, `useContext`, `useEffect`, `ContextType`, `Pendiente`);
+  - se **sustituye** «con StrictMode, un acierto anuncia una sola vez…» (`:439-454`) por la
+    prueba de abajo.
+
+**Prueba nueva.** Título: «con StrictMode, un bloque que nace con el pendiente anotado (remontaje)
+enfoca y anuncia una sola vez, aunque StrictMode repita su efecto».
+
+1. El arnés va bajo `<StrictMode><MemoriaResolucion><Bloque key={clave} pacientes={…} /></MemoriaResolucion></StrictMode>`.
+   La `key` fuerza el remontaje del bloque, como el `RedirectBoundary`.
+2. Se pinta con `clave="antes"` y `[ANA, B]`, y `resolverAlerta` responde `{ ok: true }`. Se pulsa.
+   El pendiente queda anotado y espera, porque ANA sigue pintada. Se comprueba la región vacía.
+3. Se observa la región con un `MutationObserver` (`childList`) que cuenta los `SPAN` añadidos.
+4. `const foco = vi.spyOn(HTMLElement.prototype, 'focus')`, y el resto va dentro de un
+   `try { … } finally { foco.mockRestore(); }`.
+5. `rerender` con `clave="despues"` y `[B]`, y después `await act(async () => {})`.
+6. Se espera:
+   - `foco.mock.contexts` con **al menos 2** llamadas sobre `#panel-paciente-pB`. Esto prueba que
+     StrictMode repitió el efecto de montaje, que era lo que la prueba vieja no podía ver;
+   - **1** `SPAN` añadido;
+   - texto «Marcada como resuelta.»;
+   - foco en `panel-paciente-pB`;
+   - una sola `[data-estado-bloque]`.
+7. Medido: bajo StrictMode, 2 focos y 1 inserción; el mismo arnés sin StrictMode da 1 foco y 1
+   inserción.
+
+Qué fija y qué no:
+
+- Fija que el arnés de verdad remonta bajo StrictMode. Si degenera en un `rerender` sin `key`, o
+  se pierde el `<StrictMode>`, cae por el recuento de focos.
+- Fija que hay un anuncio por acierto.
+- **No** mata ningún mutante de `cerrar`: ese anuncio único lo garantiza el lote de React. Se dice
+  en un comentario de la prueba, para que nadie la venda como prueba de una guarda.
+
+### R4.4 · R3-H3: soltar en `afterEach`, y el comentario del spec
+
+**Patrón**, el mismo en los tres ficheros de T-048 que dejan promesas en vuelo
+(`resolver-alerta.test.tsx`, `documentacion/buscador.test.tsx` y `documentacion/remontaje.test.tsx`).
+En el nivel del módulo, no dentro de un `describe`:
+
+```ts
+const sueltas: Array<() => void> = [];
+function diferido<T>(alSoltar: T) {
+  let resolver!: (v: T) => void;
+  const promesa = new Promise<T>((r) => { resolver = r; });
+  sueltas.push(() => resolver(alSoltar));
+  return { promesa, resolver };
+}
+afterEach(async () => {
+  await act(async () => { for (const soltar of sueltas.splice(0)) soltar(); });
+});
+```
+
+- **Valores de suelta.** Para `resolverAlerta`, `{ ok: false, error: 'fallo' }`: no anota y no
+  relanza. Para `buscarPendientes`, `resultados([])` (en `remontaje`, el objeto vacío de `:209`).
+- Una promesa ya resuelta ignora la segunda resolución, así que la llamada dentro del flujo de la
+  prueba se mantiene donde el flujo la necesita (`remontaje.test.tsx:209`).
+- Lo que sobra es la suelta **solo al final**. Se quitan `buscador.test.tsx:324-325` y la última
+  instrucción de `:199`, `resolver-alerta.test.tsx:156-158` y `:327-329`.
+- **Sitios a migrar:**
+  - `buscador.test.tsx:192-193`, `:312-313` y las nuevas P1 y P2;
+  - `remontaje.test.tsx:190-191`;
+  - `resolver-alerta.test.tsx:86-92` (el `diferido` de hoy pasa a recibir `alSoltar`), `:138`,
+    `:314` y las nuevas P3 y P3-gemelo.
+- Fuera de T-048 (`calendario`, `zona-por-confirmar`, `dialogo-reprogramar`) no se toca nada (ver
+  «Lo que no entra»).
+- **Medido**, con la suelta en `afterEach` y el mutante M4:
+  - en el fichero entero cae **solo** «"Limpiar búsqueda"…» (antes caía también el gemelo, por
+    tiempo agotado);
+  - `-t "gemelo con"` da verde;
+  - sin el mutante, 20 de 20.
+
+**Spec** (`accesibilidad/documentacion-pendiente.spec.ts:174`): el comentario pasa a ser
+`// El paciente sigue (le quedan 12 informes): el foco va a su enlace y se anuncia.` No cambia
+ninguna instrucción.
+
+### R4.5 · Cómo se cierra cada hallazgo
+
+| Hallazgo | Evidencia |
+|---|---|
+| R3-H1 | `npm test -- "app/(app)/agenda/resolver-alerta.test.tsx" "app/(app)/agenda/documentacion/buscador.test.tsx" "app/(app)/agenda/documentacion/remontaje.test.tsx"` en verde. **Rojo antes**: P1, P2 y P3 ×2 ejecutadas con el `resolver-alerta.tsx` de `a65dfd1` (`git show a65dfd1:"app/(app)/agenda/resolver-alerta.tsx"` en su sitio, y después restaurado). Caen con el foco en `documentacion-titulo`, `busqueda-paciente-p2` y `panel-paciente-pB`. **Mutantes** M1 a M6 y M8 de R4.2 d), cada uno en rojo en las pruebas de la tabla y revertido. |
+| R3-H2 | `rg -n "ContextoMemoria" app` solo devuelve `app/(app)/agenda/resolver-alerta.tsx`, sin `export`. `rg -n "ultimoCerrado" app` no devuelve nada. La prueba nueva de StrictMode en verde. Pegar además su salida con el `<StrictMode>` quitado del arnés: debe caer por el recuento de focos (1). |
+| R3-H3 | Con M4: `npx vitest run "app/(app)/agenda/documentacion/buscador.test.tsx"` hace caer solo las dos pruebas de «Limpiar» (la de `:308` y P1), ninguna por tiempo agotado. `rg -n "soltar\(|responderRelanzada\(|\.resolver\(" "app/(app)/agenda"` no muestra ninguna suelta como **única** liberación al final de una prueba. `rg -n "11 informes" accesibilidad/` no devuelve nada. |
+| Nada se rompe | `npm test`, `npm run lint` y `npm run build` limpios. `node ~/.claude/pipeline/territorio.mjs T-048`: todo dentro. Playwright no hace falta repetirlo (solo cambia un comentario); si se repite, en verde. |
+
+### R4.6 · Qué revisar (ronda 4)
+
+1. **`preparar()` es la primera línea de la acción de `ResolverAlerta`, antes del `try` y del
+   `await`.** Si va después, M2: la época siempre es la vigente y no se invalida nada.
+2. **La época es un `useRef` y `descartar` la incrementa antes del `setPendiente(null)`.** Nunca
+   estado de React: `enviar` es una transición y la acción en vuelo la retiene (R4.2 a). Esta es la
+   única variante que las pruebas no matan; se revisa leyendo.
+3. **`anotar` compara la época, y `alAcertar` se llama siempre.** M8 lo fija. Si alguien «limpia»
+   y también salta `alAcertar`, caen las cuatro pruebas por sus señales.
+4. **En cada prueba nueva, el gesto va antes de `d.resolver`, y hay una señal de procesado antes
+   de mirar el foco.** Sin la señal, la prueba pasaría en `a65dfd1`. La evidencia de «rojo antes» es
+   la que lo demuestra.
+5. **Puertas: siguen siendo tres, y nadie más llama a `descartar`.**
+   - `rg -n "useDescartarResolucion|descartar\(" app` solo devuelve `buscador.tsx` y
+     `resolver-alerta.tsx`.
+   - `relanzar` no descarta.
+   - La navegación por la paginación sigue sin descartar (riesgo 4 de R3, aceptado; la época no lo
+     cambia).
+6. **Concurrencia.**
+   - Dos resoluciones en vuelo en el mismo bloque y un descarte: las dos se ignoran.
+   - Sin descarte entre medias, el último `ok` reemplaza al pendiente, como hoy.
+   - Una `ResolverAlerta` sin bloque no falla (`confirmar` es `undefined`).
+7. **`ContextoMemoria` sin `export`, sin `ultimoCerrado`, y `cerrar(texto)`.** Que no quede ningún
+   comentario que siga prometiendo «idempotente por identidad».
+8. **La prueba de StrictMode** remonta por `key`, cuenta focos (≥ 2) y `SPAN` insertados (1),
+   restaura el espía en `finally` y dice en un comentario que no prueba ninguna guarda.
+9. **R3-H3.** `afterEach` en el nivel del módulo en los tres ficheros. Ninguna prueba depende de
+   su última línea para liberar React.
+10. **Nada más cambia.** `git diff a65dfd1 -- "app/(app)/agenda/documentacion/buscador.tsx" "app/(app)/agenda/documentacion.tsx" "app/(app)/agenda/documentacion/layout.tsx"` sale vacío.
+
+### R4.7 · Riesgos, por probabilidad
+
+1. **Baja-media: tiempos de P2.** Depende de que la búsqueda nueva quede retenida hasta el `ok` y
+   de esperar la tercera llamada. Medido en verde de forma estable en la copia. Si fuera
+   intermitente, se añade como señal `waitFor` del enlace «Paciente 2» de la búsqueda nueva. No se
+   cambian las aserciones.
+2. **Baja: el recuento de focos de la prueba de StrictMode depende de que React repita los efectos
+   de montaje en desarrollo.** Si una versión futura deja de hacerlo, la prueba cae con un mensaje
+   claro, no en silencio. Nadie sube versiones en este ticket.
+3. **Baja (ya existía): tras «Limpiar», el `relanzar` de un acierto viejo deja «Buscar» en
+   `aria-disabled` durante una ida y vuelta.** Un Intro rápido en el campo se ignora en esa
+   ventana. Es el comportamiento de `a65dfd1`, que la ronda conserva a propósito (R4.2 a). Se
+   anota en la bitácora.
+4. **Baja: alguien añade un `descartar` en un efecto de montaje.** Subiría la época al remontar, y
+   la redirección perdería su foco. Lo detectan `remontaje.test.tsx` (caso 1) y el P3-gemelo.
+
+### R4.8 · Territorio
+
+No cambia. Ficheros que se tocan:
+
+- `app/(app)/agenda/resolver-alerta.tsx` y `resolver-alerta.test.tsx` (explícitos en el contrato);
+- `app/(app)/agenda/documentacion/buscador.test.tsx` y `remontaje.test.tsx` (glob
+  `app/(app)/agenda/documentacion/**`);
+- `accesibilidad/documentacion-pendiente.spec.ts`;
+- `docs/bitacora/T-048.md` y `docs/state.md`.
+
+No se crea ningún fichero. El `diferido` se repite en cada fichero de prueba, en lugar de ir a un
+módulo compartido que exigiría ampliar el territorio.
+
+### R4.9 · Delegable
+
+Nada. Es el ciclo de vida de React, el foco y la concurrencia de acciones.
+
+### R4.10 · Preguntas para el propietario
+
+Ninguna. Las decisiones de esta ronda son técnicas y no cambian lo que ve el usuario: el arreglo
+solo quita un robo de foco.
+
+### Lo que no entra en la ronda 4, y por qué
+
+- **Que la paginación manual descarte** (riesgo 4 de R3). Sigue aceptado, y la época no lo cambia.
+- **Saltar `relanzar` tras un descarte.** Ahorraría una petición después de «Limpiar», pero
+  dejaría resultados viejos al volver por Activity con la búsqueda abierta (R4.2 a).
+- **Promesas sin soltar fuera de T-048** (`dialogo-reprogramar.test.tsx:150, :318` usa
+  `new Promise(() => {})`; `calendario.test.tsx` y `zona-por-confirmar.test.tsx` sueltan al
+  final). No son territorio de este ticket. Vitest aísla cada fichero, así que no contagian a
+  T-048. Va a `docs/state.md` §Hallazgos como patrón para el revisor.
+- **Un módulo compartido de utilidades de prueba.** Ampliaría el territorio para ahorrar diez
+  líneas.
+
+### Resumen de la ronda 4 (para el gate)
+
+1. **Qué se construye:** una época en `MemoriaResolucion`. `descartar` la sube, `ResolverAlerta` la
+   captura al enviar, y `anotar` ignora un acierto de una época vieja. Solo cambia
+   `resolver-alerta.tsx` en producción.
+2. **Decisión 1:** la época es un ref y no un estado. El descarte de `enviar` llega dentro de una
+   transición que la propia acción en vuelo retiene, y un estado lo aplicaría tarde.
+3. **Decisión 2:** se captura al enviar, y `alAcertar` (`relanzar`) se sigue llamando. La época
+   decide el foco, no la frescura de los datos.
+4. **Decisión 3 (R3-H2):** se quitan la guarda de `cerrar` y el `export` de `ContextoMemoria`.
+   Medido: con StrictMode, con y sin guarda, el DOM sale idéntico. La prueba de StrictMode pasa a
+   un remontaje real que cuenta focos (≥ 2) y anuncios (1).
+5. **R3-H3:** las promesas diferidas se sueltan en un `afterEach` en el nivel del módulo, en los
+   tres ficheros. El comentario del spec (`:174`) dice «12 informes».
+6. **Medido en una copia:** las cuatro pruebas nuevas caen en `a65dfd1` con el foco que describe
+   el revisor. Con el prototipo, M1 a M6 y M8 mueren, y M4 ya no contagia al gemelo.
+7. **Territorio:** sin cambios, y ningún fichero nuevo.
+8. **Revisar con más cuidado (1):** `preparar()` antes del `await` y la época en un ref (R4.6.1-2).
+   La variante «estado» no la mata ninguna prueba.
+9. **Revisar con más cuidado (2):** que cada prueba nueva espere a la señal de procesado antes de
+   mirar el foco, y que la evidencia incluya el «rojo antes».
+10. **Revisar con más cuidado (3):** que no quede ningún rastro de la guarda (código, comentarios,
+    pruebas) y que `ContextoMemoria` sea privado otra vez.
