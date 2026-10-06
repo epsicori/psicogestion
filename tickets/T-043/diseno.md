@@ -724,3 +724,403 @@ También se dice qué cambia si se elige otra cosa.
 - **P7 · Series.** **Recomendación: avisar solo por la primera sesión**, que es el hueco que se
   elige. El texto no dice «primera» porque ya habla de «esta cita». Si quiere el aviso por cada
   ocurrencia, es otro ticket sobre `agenda_previsualizar_alta`.
+
+## Ronda 2 (06-10-2026)
+
+Entrada: `tickets/T-043/evidencia.json` (CA2 FALLA), `tickets/T-043/revision.md`, `revision-a.md`
+(H1-H5, sondas X1-X7) y `revision-b.md` (B-H1..B-H6). Implementación leída: rama
+`worktree-agent-a84f11f89963e2cc9`, HEAD c8759df. Este anexo **sustituye** a lo anterior solo donde lo
+dice; todo lo que no nombra sigue en vigor. **La migración `20261012120000_hueco_raro.sql` no cambia en
+esta ronda**: todos los hallazgos son de pruebas, de la cabecera del banco o del formulario.
+
+### R2.0 · Hechos verificados contra el código
+
+- **Colisión** (`scripts/rls/29-hueco-raro.sql:31-53` frente a `21-alta-de-cita.sql:37`). El 29 ancla en el
+  primer lunes de febrero de `año + 4`; el 21 ancla en el primer lunes de mayo de `año + 3` con offsets hasta
+  `l343`, y siembra festivos y ausencias de PRO1 en `l280`-`l300`, que caen en febrero y marzo de `año + 4`.
+  La cabecera del 29 (líneas 6-7: «21 usa año + 3» y no llega) es falsa.
+- **Alcance de los bancos 00-28**, comprobado con estos greps sobre `scripts/rls/[0-2]*.sql` (`Y` = año en
+  curso):
+
+  | Comprobación | Resultado |
+  |---|---|
+  | `grep -nE "extract\(year from (now\|current_date)" …` | 16 → `Y+1` (último domingo de marzo, offsets hasta ~800 días: julio de `Y+4`); 21 → `Y+3` (mayo, +343: abril de `Y+4`); 23 → `Y+4` (mayo, +70: julio de `Y+4`). |
+  | `grep -noE "current_date \+ [0-9]+" … \| sort` | máximo `+1502` (26): como mucho febrero de `Y+5` a final de año. |
+  | `grep -ohE "now\(\) \+ interval '[0-9]+ (hours?\|days?…)'" …` | máximo `1488 hours` (18), ~62 días. |
+  | `grep -ohE "'20[2-9][0-9]-[0-9]{2}" … \| sort -u` | el mayor literal es `'2033-06'` (26, caducidad de bonos, sin agenda); los de agenda son `2026-10` (15) y `2030-01` (19). |
+  | `grep -lE "insert into public.disponibilidad" …` | solo 16, 21 y 23, y todas las filas con `hasta` no nulo: ninguna franja, festivo ni ausencia queda abierta hacia el futuro. |
+  | `grep -nE "(now\(\)\|current_date)\s*\+" supabase/migrations/*.sql` | vacío: ninguna función ni restricción limita cuán lejos puede estar una cita o una franja. |
+
+  Conclusión: ningún banco escribe agenda más allá de febrero de `Y+5`. Como todas las anclas relativas se
+  mueven con `Y`, la separación es la misma cualquier año; los literales fijos solo pueden quedar más atrás.
+- **Formulario** (`app/(app)/agenda/nueva/formulario-alta.tsx`): `claveCalculo` (:115) es la clave de lo
+  pedido; `calculo.clave` (:116), la de lo pintado; `vista = calculo.vista` (:120). `enviar` (:298-309)
+  decide con `huecoRaroElegido` (:121), que sale de esa vista, **sin mirar si `calculo.clave === claveCalculo`**.
+  La única señal de recálculo en vuelo es `cargando` de las tarjetas (:473). Las guardas de envío repiten la
+  misma conjunción en cuatro sitios: `agendarIgualmente` (:312), `onSubmit` (:383), `ocupado=` (:576) y
+  `aria-disabled=` (:587). `catalogoVacio` se declara en :375, **después** de las funciones que lo usan (vale
+  porque se lee al llamarlas, no al pintar).
+- **Precedente**: Guardar ya espera a otra petición en vuelo, la serie (`esperandoSerie`, :295; `aria-disabled`
+  y corte en `onSubmit`), fijado por la prueba H15 «mientras la serie está en vuelo, Guardar sigue
+  desactivado» (`formulario-alta.test.tsx:707`).
+- **Prueba de T-028 que choca con el arreglo de B-H1**: `formulario-alta.test.tsx:256` («si el guardado dice
+  que el hueco se ocupó mientras se recalcula la duración…») pulsa Guardar **con el recálculo en vuelo** y
+  espera que `guardarAlta` se llame.
+- **`territorio.mjs`** (`~/.claude/pipeline/territorio.mjs`): el bloque solo se reconoce si `territorio:` va
+  solo en su línea (`/^territorio:[ \t]*\r?\n…/m`); con el comentario pegado devuelve «sin territorio
+  declarado» y sale en verde. Una línea de comentario **entre** elementos corta la lista (la expresión exige
+  que cada línea empiece por `-`); los comentarios al final de un elemento sí se limpian (`limpia`).
+  `docs/bitacora/**` y `docs/state.md` ya son rutas comunes siempre permitidas.
+
+### R2.1 · Piezas y contratos
+
+#### R2.1.1 · El ancla del 29 (sustituye §1.2, «anclas»)
+
+En `scripts/rls/29-hueco-raro.sql`:
+
+- `select (extract(year from now())::int + 10) as anio_29 \gset`. `lunes_29` sigue siendo el primer lunes de
+  febrero de ese año (misma expresión de la línea 34).
+- Offsets: a los actuales (`l007` … `l070`) se añaden, en el mismo `\gset`, `l077`, `l084`, `l091`, `l098`,
+  `l105`, `l106` (= `lunes_29 + 106`, el martes de K5), `l112`, `l119`, `l126`, `l133`.
+- Franja: `hasta = :'lunes_29'::date + 140` (veinte semanas). El comentario «doce semanas» pasa a «veinte
+  semanas».
+- Cabecera, líneas 6-8, sustituidas por (mismo sangrado de comentario):
+
+  ```
+  -- TEC2 de CB, P1, P2). ANCLA: primer lunes de febrero de año + 10. Ningún banco 00-28 escribe
+  -- agenda más allá de febrero de año + 5 (16, 21 y 23 anclan en año + 1, + 3 y + 4 con offsets de
+  -- como mucho dos años y medio; 26 llega a current_date + 1502; los literales, a 2033 y sin agenda),
+  -- y ninguna `disponibilidad` sembrada queda abierta (todas con `hasta`). Comprobado con grep en
+  -- tickets/T-043/diseno.md, Ronda 2, R2.0. Un banco nuevo que siembre agenda de PRO1 más allá de año + 5
+  -- tiene que mirar esto. Cada sección tiene su propio lunes (offsets sobre `lunes_29`) porque las
+  -- citas de una ocupan el lunes de PRO1 para el resto.
+  ```
+
+  (La línea 5, «Reutiliza los actores…», queda igual salvo que la enumeración termina en «P1, P2)».)
+
+#### R2.1.2 · Secciones nuevas K1-K9 (después de J, antes de la lista de mutantes)
+
+Reglas comunes: todas en lunes salvo la ausencia de K5; citas de P1/PRO1/TT29 en CA salvo indicación, ids
+`pg_temp.cita29(12…)` consecutivos; llamada como PRO1 (`call pg_temp.como(:PRO1)` … `call
+pg_temp.reset_sesion()`) salvo indicación; cada aserción compara el **array completo**. Las ausencias se
+insertan con las mismas columnas que H (`perfil_id, centro_id, tipo, desde, hasta, hora_inicio, hora_fin,
+zona_horaria, motivo`), `tipo = 'ausencia'`, `desde = hasta = el día`, `motivo 'T-043 Kn'`.
+
+| Sección | Día | Fijación | Llamada | Array esperado (HEAD) | Mata, y qué da el mutante |
+|---|---|---|---|---|---|
+| **K1 · otro profesional** (H1) | `l077` | Solo una cita **de PRO2 con P2 en CB**, 10:30-11:20 (`cita29(12, :CB, :'l077', '10:30', '11:20', :P2, :PRO2, :TT29)`) | como **TEC1** | `{09:00:00/libre/-, 10:00:00/libre/-, 11:00:00/libre/-, 12:00:00/libre/-, 13:00:00/libre/-}` | N3 (sin `c.profesional_id = p_profesional_id`): `09:00:00/libre/40` |
+| **K2 · cita anterior al tramo** (H2) | `l084` | Citas 09:00-09:50 y 11:30-12:20 | PRO1 | `{09:00:00/ocupado/-, 10:00:00/libre/40, 11:00:00/ocupado/-, 12:30:00/libre/-}` | N2b (`c.inicio >= v_f_ini`): `10:00:00/libre/-` |
+| **K3 · adyacente más una segunda dentro del umbral** (H2) | `l091` | Citas 10:00-10:20 y 10:30-11:20 | PRO1 | `{09:00:00/libre/-, 10:00:00/ocupado/-, 11:30:00/libre/-, 12:30:00/libre/-}` | N1 (`c.inicio > v_tras`): `09:00:00/libre/40` |
+| **K4 · cita en `F_fin` exacto** (H3) | `l098` | Cita en CA 09:00-09:20, y cita **de PRO1 en CB** 14:00-14:50 | PRO1 | `{09:00:00/ocupado/-, 09:30:00/libre/-, 10:30:00/libre/-, 11:30:00/libre/-, 12:30:00/libre/-}` | N4 (`c.inicio <= v_f_fin`): `12:30:00/libre/40` |
+| **K5 · ausencia de otro día** (H4) | `l105` | Cita 10:30-11:20 el `l105`; ausencia de PRO1, `centro_id null`, **el `l106`** (martes), 10:00-10:20 | PRO1 | `{09:00:00/libre/40, 10:00:00/ocupado/-, 11:30:00/libre/-, 12:30:00/libre/-}` | N5 (ausencia sin `desde/hasta`): `09:00:00/libre/-` |
+| **K6 · ausencia en otro centro** (H4) | `l112` | Cita 10:30-11:20; ausencia de PRO1 **en CB**, 10:00-10:20, el `l112` | PRO1 | el mismo array que K5 | N6 (ausencia sin filtro de centro): `09:00:00/libre/-` |
+| **K7 · ausencia de otro profesional** (H4) | `l119` | Cita 10:30-11:20; ausencia **de PRO2**, `centro_id null`, 10:00-10:20, el `l119` | PRO1 | el mismo array que K5 | N7 (ausencia sin `d.perfil_id`): `09:00:00/libre/-` |
+| **K8 · ausencia dentro del descanso** (H4) | `l126` | Cita 10:30-11:20; ausencia de PRO1, `centro_id null`, **09:52-09:58**, el `l126` | PRO1 | `{09:00:00/libre/-, 10:00:00/ocupado/-, 11:30:00/libre/-, 12:30:00/libre/-}` | N10 (rango de la ausencia desde `v_tras` en vez de `v_cursor + v_dur`): `09:00:00/libre/40` |
+| **K9 · segundos y `ceil`** (H5) | `l133` | Cita **10:30:20-11:20:20** (`time '10:30:20'`) | PRO1 | `{09:00:00/libre/41, 10:00:00/ocupado/-, 11:30:20/libre/-, 12:30:20/libre/-}` | N8 (`floor`): 40; también `round` (40) y el cast `::integer` sin `ceil` (40) |
+
+Cuentas que respaldan cada array (tramo libre en `c`: salta 60 min; coteja citas sobre `[c, c+60)` y
+ausencias sobre `[c, c+50)`; `T = c + 60`):
+
+- **K1**: PRO1 no tiene citas, todo libre. Con N3, `S = 10:30` para `c = 09:00` → `10:30 − 09:50 = 40`.
+- **K2**: 09:00 ocupado → salta a 10:00. 10:00 libre: `T = 11:00`, `S = 11:30` → `11:30 − 10:50 = 40`. 11:00
+  ocupado → salta a 12:30, libre sin `S`. Con N2b, `S = 09:00` y `09:00 > 11:00` es falso → null.
+- **K3**: 09:00 libre, `T = 10:00`, `S = 10:00` → `S > T` falso → null. 10:00 choca con las dos → salta a
+  `max(10:30, 11:30) = 11:30`. Con N1, `S = 10:30` → 40.
+- **K4**: 09:00 ocupado (rango hasta 09:30); los tramos se desplazan a :30. En 12:30, `T = 13:30`; la cita de
+  las 14:00 no cumple `< 14:00` → null. Con N4, `14:00 − 13:20 = 40`. 13:30 no cabe (`13:30 + 50 > 14:00`).
+- **K5-K7**: el caso de G (40); la ausencia está en otro día, otro centro u otro profesional, y `v_limite2`,
+  que filtra igual, tampoco la ve, así que ningún tramo cambia.
+- **K8**: la ausencia (09:52-09:58) no toca `[09:00, 09:50)`, así que el 09:00 es libre; `[09:50, 10:30)` sí
+  solapa → null. Con N10, `[10:00, 10:30)` no solapa → 40.
+- **K9**: `ceil(40 min 20 s / 60 s) = 41`; el ocupado salta a `upper(rango) = 11:30:20`; 13:30:20 no cabe.
+
+**Dónde cae primero cada mutante** (aislado, `00 + 01 + 29`; comprobado sección a sección contra B-J y las K
+anteriores):
+
+- **N1** cae en K3. C tiene `S = T` con una sola cita: con `>`, `S` es null, igual que en HEAD.
+- **N2b** cae en K2. En B-J, el mínimo desde `v_f_ini` es la misma cita que desde `T`, o una anterior con
+  `S ≤ T`, que da null como en HEAD.
+- **N3** cae en K1.
+- **N4** cae en K4; en I la cita está a las 14:10.
+- **N5** cae en K5: es el primer día con una ausencia de **otro** día ya sembrada (la de H, `l056` 10:00-10:20,
+  basta; la de K5 lo hace explícito). B1 y G corren antes de que exista la de H.
+- **N6** cae en K6. **N7** cae en K7.
+- **N10** cae en K8. En H la ausencia (10:00-10:20) también solapa con `[10:00, 10:30)`.
+- **N8** cae en K9.
+
+Ninguna K va antes de J, así que **M1-M9 siguen cayendo donde caían**. En el banco completo, N5 puede caer
+antes (en B1), si otro banco sembró una ausencia parcial de PRO1 a una hora que cruce 09:50-10:30; vale igual:
+lo exigido es que caiga.
+
+Anotación de mutantes, al final del fichero: debajo de M9, las líneas N1, N2b, N3, N4, N5, N6, N7, N8 y N10
+con el formato de las actuales (`-- N3  sin c.profesional_id = p_profesional_id   cae en K1`).
+
+#### R2.1.3 · El formulario: Guardar espera al cálculo vigente (B-H1 y B-H2)
+
+En `app/(app)/agenda/nueva/formulario-alta.tsx`:
+
+1. Justo **después** de `const catalogoVacio = tipos.length === 0;` (:375), no antes (ahí se declara
+   `catalogoVacio`):
+   ```ts
+   // Los huecos pintados son de otra clave que la pedida: nada decide con ellos (T-043 R2, B-H1).
+   const recalculando = calculo.clave !== claveCalculo;
+   // Una sola guarda para los cuatro sitios que la repetían (H27, B-H3).
+   const bloqueado = guardando || catalogoVacio || esperandoSerie || recalculando;
+   ```
+2. `bloqueado` sustituye a la conjunción literal en los cuatro sitios, sin otro cambio:
+   `agendarIgualmente` (:312, `if (bloqueado) return;`), `onSubmit` (:383, `if (bloqueado) {
+   evento.preventDefault(); return; }`), `ocupado={bloqueado}` (:576) y `aria-disabled={bloqueado}` (:587).
+3. `TarjetasSugerencia cargando={recalculando}` (:473): el mismo valor, con nombre. Opcional.
+4. **Nada más.** `enviar` no cambia: ahora solo se ejecuta con la vista vigente, porque `onSubmit` corta
+   antes. No hay textos nuevos; Guardar no cambia de etiqueta (`aria-disabled` lo anuncia como no disponible,
+   igual que con la serie en vuelo). No se tocan `guardar`, el efecto de foco ni el del recálculo.
+
+Efecto: un clic en Guardar (o en «Agendar igualmente») con un recálculo en vuelo no hace nada, igual que con
+la serie en vuelo; cuando llega la vista, el siguiente clic decide con ella. El aviso ya no puede montarse con
+la vista vieja, así que tampoco desmontarse con el foco dentro cuando llega la nueva (B-H1), ni guardarse sin
+aviso, ni avisar con los minutos de la duración anterior (B-H2).
+
+`docs/interfaz.md`, en el párrafo de T-043 del alta, una frase: «Mientras se recalculan los huecos, Guardar y
+"Agendar igualmente" esperan, como esperan a la serie: no deciden con los huecos de antes».
+
+#### R2.1.4 · Pruebas nuevas y cambiadas del formulario (`formulario-alta.test.tsx`)
+
+**Ayuda**: `elegirTipoYHueco` termina con
+`await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar' }).getAttribute('aria-disabled')).not.toBe('true'));`
+para que toda prueba que la usa parta de un cálculo vigente.
+
+**Prueba existente que se ajusta (H27, `tras %s, Guardar sigue enfocado y activable`, :794)**: tras
+`hueco_ocupado`, `excluirHuecos` cambia y hay un recálculo legítimo en vuelo. Si la aserción `aria-disabled`
+cae por eso, **lo único permitido** es envolver esa línea en `waitFor`; `disabled === false` y el foco siguen
+inmediatos.
+
+**Prueba de T-028 que se reescribe (:256)**. Ya no se puede pulsar Guardar con el recálculo en vuelo; el orden
+nuevo es el único en que esa carrera sigue existiendo:
+`recalcularAlta`: 1.ª `VISTA`; 2.ª (tipo B) diferida; resto `SIN_EL_HUECO`. `guardarAlta` diferida.
+`elegirTipoYHueco(TIPO_A)` → clic en Guardar → cambio a tipo B (2.ª llamada, en vuelo) → se resuelve
+`guardarAlta` con `hueco_ocupado` y `SIN_EL_HUECO` → se resuelve la 2.ª llamada con `SIN_EL_HUECO`. Esperado,
+el de ahora: `avisos()` contiene «acaba de ocuparse» y no «ya no cabe». Mutante que debe matar: quitar
+`if (!vigente) return;` tras `await recalcularAlta(...)` (:151); la respuesta vieja desmarca y escribe «ya no
+cabe». El nombre dice «mientras se guarda, cambia la duración».
+
+**Nuevas, en el `describe` del aviso de hueco raro** (ids para la evidencia):
+
+- **R1 · (B-H1, sonda S5) «con un recálculo en vuelo, Guardar no decide con la vista vieja y el foco no cae a
+  body»**. `recalcularAlta`: 1.ª `RARA` (`17:00` raro, 30); 2.ª (tipo B) diferida; resto `SIN_RARA` (bloques
+  17, 18 y 19 libres, sin raros). `pinta({ vista: RARA })`; `elegirTipoYHueco(TIPO_A)`; `act` con el cambio a
+  `TIPO_B`; `const guardar = getByRole('button', { name: 'Guardar' }); guardar.focus();`;
+  `await act(async () => { fireEvent.click(guardar); })`; `await act(async () => {})` para drenar.
+  Aserciones, en este orden (la primera discrimina):
+  (1) `queryByRole('region', { name: AVISO })` es null; (2) `guardarAlta` no llamada; (3) `guardar` con
+  `aria-disabled="true"`. Se resuelve la 2.ª con `SIN_RARA`; se espera `aria-disabled` distinto de `"true"`;
+  (4) `document.activeElement === guardar`; (5) el aviso sigue null. Por último, con `guardarAlta` resolviendo
+  `ok`: clic en Guardar → una llamada con `objectContaining({ tipoTerapiaId: TIPO_B, horaLocal: '17:00' })`.
+  **Contra HEAD** cae en (1): aparece la región del aviso, calculada con `RARA`. Si (1) se comentara, caería en
+  (4) con `BODY`, que es la sonda S5.
+- **R2 · (B-H2, sonda S6) «con un recálculo en vuelo, Guardar no guarda sin aviso; con la vista nueva,
+  avisa»**. 1.ª `VISTA` (sin raros); 2.ª (tipo B) diferida; resto `RARA_40` (como `RARA` con
+  `{ '2026-10-06T17:00': 40 }`). `guardarAlta` resuelve `ok`. Tipo A, 17:00; cambio a B; clic en Guardar; se
+  resuelve la 2.ª con `RARA_40`; se espera Guardar activo. **Primera aserción**:
+  `expect(m.guardarAlta).not.toHaveBeenCalled()`. Contra HEAD cae aquí («called 1 times»: guardó con tipo B y
+  sin aviso). Después, clic en Guardar → región del aviso con la descripción `/40 minutos/`, y `guardarAlta`
+  sigue sin llamar.
+- **R3 · (B-H3, sonda S1, y el caso 7 de §3 en el formulario) «durante el guardado, "Agendar igualmente" no
+  lleva disabled y un segundo clic no repite»**. `guardarAlta` diferida; `pintaRara()`; hueco, Guardar, región;
+  `const agendar = getByRole('button', { name: 'Agendar igualmente' })`; `act` con un clic; se espera que
+  Guardar diga «Guardando…». (1) `agendar.disabled === false` y `agendar.getAttribute('aria-disabled') ===
+  'true'`; (2) otro clic con `act` → `expect(m.guardarAlta).toHaveBeenCalledTimes(1)`; se resuelve `ok`;
+  (3) sigue `toHaveBeenCalledTimes(1)`. Mutantes: M_M (`ocupado={false}`) cae en (1); M_BM (quitar la guarda de
+  `agendarIgualmente` **y** `ocupado={false}`) cae en (1), y si (1) se comentara, en (2) con 2 llamadas. M_B
+  solo (quitar la guarda de la función) **sigue siendo equivalente** y se declara así en la evidencia: con
+  `ocupado` cableado, el componente no llama a `alAgendarIgualmente` (lo fija `aviso-hueco-raro.test.tsx`), y la
+  guarda de la función es una segunda capa sin efecto observable.
+- **R4 · (B-H4a, sonda S2) «si "Agendar igualmente" falla sin desmontar el aviso, el foco se queda en
+  "Agendar igualmente"»**. `guardarAlta` resuelve `{ ok: false, motivo: 'fallo', mensaje: 'No se pudo
+  guardar.' }`; `pintaRara()`; hueco, Guardar, región; `agendar.focus()`; clic con `act`;
+  `await screen.findByText('No se pudo guardar.')`; se espera que Guardar ya no diga «Guardando…»;
+  `await act(async () => { await new Promise((r) => setTimeout(r, 0)); })` (drena los efectos pasivos).
+  (1) La región del aviso sigue en el documento; (2) `document.activeElement === agendar`. Mutante M_E
+  (`refGuardar.current?.focus()` sin mirar `body`) cae en (2), con Guardar enfocado. Gemela: la prueba existente
+  de `hueco_ocupado` (el aviso se desmonta y el foco va a Guardar).
+- **R5 · (B-H4b) «con la serie fallida y el aviso visible, "Agendar igualmente" reintenta la serie y no
+  guarda»**. `previsualizarAltaSerie`: 1.ª `ok` con `FIRMA_A`; 2.ª rechaza (`new Error('red')`); resto `ok`.
+  `pintaRara()`; hueco; periodicidad «semanal» (8 por defecto); se espera «Así quedaría la serie»; Guardar;
+  región; número de sesiones a `9` (2.ª llamada, falla); se espera la alerta «No se ha podido calcular la
+  serie»; clic en «Agendar igualmente». **Primera aserción**:
+  `await waitFor(() => expect(m.previsualizarAltaSerie).toHaveBeenCalledTimes(3))`; después, `guardarAlta` no
+  llamada. Mutante M_F (quitar `if (falloSerie !== null) { setSerieFallida(null); return; }` de
+  `agendarIgualmente`): quedan 2 llamadas (la validación corta por la firma y no reintenta).
+- **R6 · (B-H5, sonda S4) «las alternativas del aviso excluyen los otros huecos raros»**. `RARA2` = bloques 17,
+  18 y 19 libres con `{ '2026-10-06T17:00': 30, '2026-10-06T18:00': 20 }`; `recalcularAlta` resuelve `RARA2`;
+  `pinta({ vista: RARA2 })`; 17:00; Guardar. En `getByRole('list', { name: 'Huecos que no lo dejan' })`:
+  (1) exactamente un `li`; (2) su texto contiene `19:00`; (3) ningún `li` contiene `18:00`. Mutante M_L
+  (`alternativasSinHueco(vista.calendario.huecos, {}, …)`) cae en (1) con 2.
+- **R7 · (B-H6) El caso 1 reordenado** («al pulsar Guardar sobre un hueco raro no guarda…», :845). Tras el
+  clic, se espera a que el envío termine por cualquiera de los dos caminos:
+  `await waitFor(() => expect(m.guardarAlta.mock.calls.length > 0 || screen.queryByRole('region', { name: AVISO }) !== null).toBe(true))`;
+  luego, **primero**, `expect(m.guardarAlta).not.toHaveBeenCalled()`, y después `getByRole('region', …)`, la
+  descripción y el foco. Mutante M_H (sin intercepción): tiene que caer con «expected "spy" to not be called», no
+  con «Unable to find role="region"».
+
+#### R2.1.5 · Bitácora
+
+`docs/bitacora/T-043.md:19` se corrige: «`ocupado` ignorado … matado» y «alternativas con raros … matado» pasan
+a decir dónde muere cada uno (la guarda del componente en `aviso-hueco-raro.test.tsx`, la función pura en
+`alternativas-hueco.test.ts`, el cableado del formulario en R3 y R6). M_B se declara equivalente solo, con el
+porqué de R3. La ronda 2 deja la tabla N1-N10 y M_E, M_F, M_L, M_M y M_BM con su resultado.
+
+### R2.2 · Decisiones y alternativas descartadas
+
+- **Ancla relativa en `año + 10`**: separación constante con todo banco relativo y unos cinco años de margen
+  sobre el alcance máximo (febrero de `Y+5`). Descartado un literal (`2100-02-01`): los bancos relativos se
+  le acercan un año cada año; es el mismo tipo de defecto que el de 15 y 18. Descartado `año + 6`: cabe, pero
+  con un año de margen; bastaría un banco nuevo con offsets largos para repetir la colisión.
+- **Secciones nuevas detrás de J, una por mutante, sin modificar ninguna existente**: M1-M9 conservan su
+  sección de caída (CA4 no se mueve) y cada mutante nuevo tiene una única sección que lo nombra. Descartado
+  llevar I a `F_fin` exacto (H3, la otra opción): I mata hoy M4 con una fijación más simple; K4 añade el borde
+  sin perderla.
+- **K1 como TEC1**: es el escenario del hallazgo (la fuga es para quien solo ve a PRO1). Como PRO1 también
+  mataría N3, pero no fijaría la frontera que importa.
+- **K9 con 20 s y no 30 s**: con 10:30:30 da 40,5 y `round` da 41, igual que `ceil`: ese mutante
+  sobreviviría. Con 20 s, `ceil` da 41 y `floor`, `round` y el truncado dan 40.
+- **B-H1: Guardar espera al cálculo vigente, como espera a la serie**. Es una conjunción más y repite un patrón
+  que ya existe y está probado (H15). Arregla B-H1 y B-H2 por construcción. Descartado aplazar el envío y
+  decidirlo al llegar la vista: necesita una intención pendiente, un efecto que vuelva a enviar y otro destino
+  de foco, y guardaría después de que el usuario viera cambiar la pantalla («ya no cabe»), lo que sorprende y
+  tiene más puertas a fallos. Descartado, con un recálculo en vuelo, guardar sin decidir: deja intacta la
+  prueba de T-028 pero deja B-H2 tal cual (se pierde el aviso justo al cambiar de tipo). Descartado arreglar
+  solo el foco (un efecto que lleve el foco a Guardar cuando el aviso se desmonta): tapa B-H1 y deja la
+  decisión vieja.
+- **Una sola constante `bloqueado` para las cuatro guardas**: B-H3 nace de cuatro conjunciones copiadas; añadir
+  a mano una quinta condición en cuatro sitios repetiría el problema.
+- **Todas las BAJA entran**: cada una es una prueba en ficheros que ya son territorio, sin código de producción
+  nuevo salvo R2.1.3; anotarlas costaría lo mismo que hacerlas.
+- **No se añade una opción de orden a `scripts/test-rls.mjs`**: está fuera del territorio, y la necesidad
+  desaparece cuando se arreglen 15 y 18.
+
+### R2.3 · Cómo se cierra cada criterio en la ronda 2
+
+Antes de verificar: `max(version)` de la base = `20261012120000`; si un `db reset` desde `main` la ha quitado,
+se aplica la de la rama.
+
+- **CA2, mientras 15 tenga fechas pasadas.** `npm run test:rls` no puede salir con 0 por un fallo ajeno, y el
+  contrato no puede cerrarse al pie de la letra (pregunta Q2). Se cierra con tres ejecuciones, todas en la
+  evidencia con su salida:
+  1. `npm run test:rls` en la rama **y en `main`**: las dos caen en `15-agenda` con el mismo 42501 «cita
+     pasada». Demuestra que el fallo es ajeno y anterior.
+  2. **El banco completo, con 15 al final y sin tocar 15 ni 18**: concatenación ad hoc en el scratchpad del
+     verificador (el mismo `ejecutarSql`/`localizarContenedor` de `scripts/psql.mjs`, `begin;` … `rollback;`), en
+     el orden `00 … 14, 16, 17, 18, 19, … 28, 29, 15`. El 18 no tiene literales de fecha
+     (`grep -nE "20[0-9]{2}-" scripts/rls/18-*.sql` sale vacío); 21 y 26 encuentran C18TEC; ningún banco 16-29
+     nombra ids del 15 (grep vacío). Esperado: `29-hueco-raro: OK` en el log y, después, el mismo fallo de 15;
+     el código de salida es distinto de 0 solo por el 15. Es la prueba de convivencia con 16, 21, 23 y 26, que
+     siembran agenda de PRO1. **Plan B**, si algún módulo de 16-29 cae porque falta algo que deja el 15: la
+     transformación en memoria de la ronda 1 (literales `2026-10-0x` del 15 → `2026-12-0x`) con el orden
+     alfabético, anotando que depende de la fecha.
+  3. `00 + 01 + 29` aislado: termina en `OK`. Es la base para los mutantes.
+- **CA4, ampliado**: M1-M9 y además N1, N2b, N3, N4, N5, N6, N7, N8 y N10, por sustitución de texto sobre una
+  copia de la migración (comprobando que el patrón aparece una sola vez), medidos en
+  `begin; <migración mutada>; 00; 01; 29; rollback;` (el método del revisor A). Cada uno cae en la sección que
+  dice R2.1.2, con la línea del `\echo` o el mensaje del `assert`. Tabla mutante → sección → línea en la
+  evidencia.
+- **CA3**: G sin cambios; K1 añade el caso de TEC1 con una cita ajena.
+- **CA5**: `npm test` en verde; R1-R7 pasan en la rama; cada mutante de interfaz medido en una copia cae en la
+  aserción numerada que dice R2.1.4: M_E, M_F, M_L, M_M, M_BM, M_H (por la llamada), quitar `recalculando` de
+  `bloqueado`, y quitar `if (!vigente) return;` para la :256 reescrita. Además, **R1 y R2 se ejecutan contra el
+  `formulario-alta.tsx` de HEAD c8759df** (con las pruebas nuevas) y caen: demuestra que reproducen la carrera
+  de verdad.
+- **CA8**: `node ~/.claude/pipeline/territorio.mjs T-043` ya no dice «sin territorio declarado»: enumera el
+  territorio y sale con 0. Si dice «sin territorio», la corrección del contrato no está aplicada.
+- **CA1, CA6 y CA7**: sin cambios. CA6 sigue: R2.1.3 no añade `disabled`, y `grep -n "disabled=" formulario-alta.tsx`
+  solo da `aria-disabled`.
+
+### R2.4 · Riesgos, por probabilidad
+
+1. **Alta.** Pruebas del formulario que hoy pulsan Guardar sin esperar al recálculo pueden caer o volverse
+   intermitentes con `recalculando`. Remedio: la ayuda de R2.1.4 y, solo en H27, el `waitFor` sobre
+   `aria-disabled`. Prohibido quitar `recalculando` de `bloqueado` o debilitar otra expectativa; toda prueba
+   cambiada se lista en la bitácora con su motivo.
+2. **Media.** R4 queda verde con M_E si no se drenan los efectos pasivos antes de mirar el foco. El drenaje con
+   `setTimeout(0)` de R2.1.4 lo cubre; la prueba solo vale si M_E la pone en rojo.
+3. **Media.** El orden «15 al final» puede romperse si algún módulo 16-29 depende en silencio del estado del
+   15: para eso está el plan B de R2.3.
+4. **Baja.** Un banco futuro que siembre agenda de PRO1 más allá de `año + 5`: la cabecera nueva lo avisa.
+5. **Baja.** Cambio de hora en el año + 10: las horas son locales en los dos lados (`cita29` y la franja en
+   `Europe/Madrid`), así que el cálculo no depende de en qué semana cae marzo. Ya ocurría con `año + 4`.
+6. **Baja.** El sello de la migración no cambia y el banco no nombra su versión. Si la integración la
+   renombrara, solo cambia la primera línea del `territorio:`.
+
+### R2.5 · Qué revisar
+
+- **Ancla**: ¿`anio_29` es `+ 10`? ¿La franja llega a `+ 140` y el `\gset` define `l077` … `l133` y `l106`?
+  ¿La cabecera ya no dice «21 usa año + 3» y nombra el grep?
+- **Cada K compara el array completo**, sin `like` ni `@>`: un array con un tramo de más o de menos tiene que
+  fallar.
+- **K1 se llama como TEC1** y la cita es de PRO2 con P2 en CB, no de PRO1 (si fuera de PRO1, sería G y no
+  mataría N3).
+- **K4**: la cita de las 14:00 es de PRO1 en CB, no en CA (en CA haría ocupado el tramo y no mediría la cota).
+- **K5**: la ausencia está en `l106`, no en `l105` (en el mismo día, el array sería el de H).
+- **K8**: la ausencia (09:52-09:58) no puede tocar `[09:00, 09:50)`; si la tocara, el 09:00 sería ocupado y K8
+  no mediría N10.
+- **K9**: la cita lleva `:20`, no `:30`, y el array tiene `11:30:20` y `12:30:20`. Comprobar que `round` cae.
+- **Mutantes**: cada N cae en su K al medirse aislado; M1-M9 siguen en su sección (tabla de CA4).
+- **Formulario**:
+  - `bloqueado` va después de `catalogoVacio`. Si va antes, el primer render lanza `ReferenceError` y todas
+    las pruebas caen por un motivo equivocado.
+  - Las cuatro guardas usan `bloqueado`; ninguna conserva la conjunción vieja. `enviar` no cambia. Ningún
+    `disabled=`.
+- **R1 y R2 caen contra HEAD c8759df** en la aserción numerada (1), la que discrimina, no en una posterior ni
+  por un selector.
+- **La :256 reescrita** sigue fallando sin `if (!vigente) return;`. Si ya no falla, la carrera que protegía
+  quedó sin prueba.
+- **H27**: si se tocó, solo con `waitFor` sobre la línea de `aria-disabled`.
+- **Puertas laterales**:
+  - Intro en un campo y segundo clic durante el recálculo: los corta `onSubmit`, con `bloqueado`.
+  - «Agendar igualmente» con el aviso visible y un recálculo en vuelo: no hace nada (`ocupado` y la guarda de
+    la función usan `bloqueado`).
+  - Un recálculo que falla (`ok: false` o excepción) pone `calculo.clave = claveCalculo` (:154, :173): Guardar
+    no se queda bloqueado para siempre. No añadir nada, pero comprobar que sigue así.
+- **CA2**: la evidencia trae las tres ejecuciones de R2.3, con el orden exacto de módulos y la línea
+  `29-hueco-raro: OK` antes del fallo del 15.
+- **Territorio**: `territorio.mjs T-043` enumera la lista y sale con 0.
+
+### R2.6 · Territorio
+
+No hace falta territorio de código nuevo: el 29, el formulario y su prueba, `docs/interfaz.md` y la bitácora ya
+están dentro. Se corrige la forma del bloque en el contrato: los comentarios pasan a líneas `#` **antes** de
+`territorio:`, que queda solo en su línea, y ningún elemento lleva comentario. Se añaden `docs/bitacora/T-043.md`
+y `docs/state.md`: ya son rutas comunes de `territorio.mjs`, pero se declaran para que el verificador no los
+marque como fuera, como en la ronda 1. Aplicado en `tickets/T-043-aviso-de-hueco-raro.md`.
+
+### R2.7 · Delegable
+
+Nada: las secciones del banco y las pruebas de foco y de carrera son comportamiento.
+
+### Lo que no entra en la ronda 2, y por qué
+
+- **Arreglar las fechas fijas de 15 (y revisar 18)**: no es de este ticket; está en `docs/state.md` como
+  «requiere ticket».
+- **Una opción `--orden`/`--sin` en `scripts/test-rls.mjs`**: fuera del territorio, y sobra en cuanto se arregle
+  el 15.
+- **Un efecto genérico «si el aviso se desmonta con el foco dentro, foco a Guardar»** para otros caminos: con
+  R2.1.3, todo desmontaje del aviso sale de un control fuera del aviso (tipo, semana, profesional), que conserva
+  el foco, o de «Agendar igualmente» con `hueco_ocupado`, que ya está resuelto.
+- **Anunciar «calculando huecos» al pulsar Guardar con un recálculo en vuelo**: la serie en vuelo tampoco lo
+  anuncia. Si se quiere, va en un ticket de textos para las dos esperas a la vez.
+- **Cambiar la migración**: ningún hallazgo la toca.
+
+### Preguntas al propietario (ronda 2)
+
+- **Q1 · Guardar espera al recálculo de huecos.** Cambia un comportamiento de T-028: hoy, pulsar Guardar con el
+  cálculo en vuelo guarda en el acto; con el arreglo, el clic no hace nada hasta que llegan los huecos
+  (normalmente menos de un segundo), igual que con la serie. **Recomendación: aceptarlo.** La alternativa es
+  guardar sin mirar la rareza durante esa ventana, y entonces el aviso se pierde justo al cambiar de tipo. Si se
+  elige la alternativa, R2.1.3 se reduce a «con `recalculando`, `enviar` llama a `guardar` sin decidir», y B-H2
+  se anota como aceptado.
+- **Q2 · CA2 con el 15 roto.** El contrato pide que `npm run test:rls` salga con 0, y eso depende de otro
+  ticket. **Recomendación**: dar CA2 por PASA con las tres ejecuciones de R2.3, siempre que la (2) muestre
+  `29-hueco-raro: OK` después de 16, 21, 23 y 26 y la (1) el mismo fallo en `main`. Y abrir ya el ticket de las
+  fechas fijas del 15 (y del 18, si lo confirma), para que `test:rls` en verde vuelva a ser la puerta.
+
+**Respuestas del propietario (06-10-2026):** Q1, «Sí, esperar»: R2.1.3 se aplica entero. Q2, «Con tres
+ejecuciones»: CA2 se cierra como dice R2.3. El ticket de las fechas fijas del 15 y del 18 está abierto como T-049.

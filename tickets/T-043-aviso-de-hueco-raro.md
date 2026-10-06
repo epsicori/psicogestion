@@ -7,12 +7,20 @@ fase: 1
 prioridad: media
 depende_de: [T-028, T-028a]
 estado: pendiente
-territorio:                           # cerrado por tickets/T-043/diseno.md §6
-  - supabase/migrations/20261012120000_hueco_raro.sql     # cola de un solo dueño: después de T-041 (20261010120000) y de la reserva de T-021 (20261011120000)
+# Territorio cerrado por tickets/T-043/diseno.md §6 y Ronda 2 (R2.6). Notas por elemento:
+# - la migración 20261012120000 va en la cola de un solo dueño: después de T-041 (20261010120000)
+#   y de la reserva de T-021 (20261011120000);
+# - de scripts/rls/21-alta-de-cita.sql, SOLO la aserción A de la forma de
+#   agenda_bloques_profesional (líneas 149-152);
+# - lib/supabase/tipos-bd.ts, solo regenerado con `npm run tipos`;
+# - acciones.test.ts y contenido-alta.test.tsx, solo `huecosRaros: {}` en las vistas de prueba;
+# - docs/interfaz.md: la línea 466 deja de decir «va aparte», y la frase de R2.1.3.
+territorio:
+  - supabase/migrations/20261012120000_hueco_raro.sql
   - scripts/rls/29-hueco-raro.sql
-  - scripts/rls/21-alta-de-cita.sql   # SOLO la aserción A de la forma de agenda_bloques_profesional (líneas 149-152)
+  - scripts/rls/21-alta-de-cita.sql
   - scripts/rls/README.md
-  - lib/supabase/tipos-bd.ts          # solo regenerado con `npm run tipos`
+  - lib/supabase/tipos-bd.ts
   - lib/citas/alta.ts
   - lib/citas/alta.test.ts
   - lib/i18n/es.ts
@@ -24,9 +32,11 @@ territorio:                           # cerrado por tickets/T-043/diseno.md §6
   - app/(app)/agenda/nueva/aviso-hueco-raro.test.tsx
   - app/(app)/agenda/nueva/formulario-alta.tsx
   - app/(app)/agenda/nueva/formulario-alta.test.tsx
-  - app/(app)/agenda/nueva/acciones.test.ts          # solo `huecosRaros: {}` en las vistas de prueba
-  - app/(app)/agenda/nueva/contenido-alta.test.tsx   # ídem
-  - docs/interfaz.md                  # la línea 466 deja de decir «va aparte»
+  - app/(app)/agenda/nueva/acciones.test.ts
+  - app/(app)/agenda/nueva/contenido-alta.test.tsx
+  - docs/interfaz.md
+  - docs/bitacora/T-043.md
+  - docs/state.md
 ---
 
 # Contexto
