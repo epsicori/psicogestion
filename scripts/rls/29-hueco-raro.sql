@@ -3,15 +3,19 @@
 -- cabe otra sesión con sus descansos (tickets/T-043/diseno.md, definiciones y §1.2).
 --
 -- Reutiliza los actores de 01-fijacion.sql (ADM, PRO1 con alta en CA y CB, PRO2, TEC1 de CA,
--- TEC2 de CB, P1). ANCLAS EN EL AÑO + 4, en el primer lunes de febrero: 21 usa año + 3, y
--- 26 y 28 no siembran franjas ni citas de PRO1 en esas fechas. Cada sección tiene su propio
--- lunes (offsets sobre `lunes_29`) porque las citas de una ocupan el lunes de PRO1 para el resto.
+-- TEC2 de CB, P1, P2). ANCLA: primer lunes de febrero de año + 10. Ningún banco 00-28 escribe
+-- agenda más allá de febrero de año + 5 (16, 21 y 23 anclan en año + 1, + 3 y + 4 con offsets de
+-- como mucho dos años y medio; 26 llega a current_date + 1502; los literales, a 2033 y sin agenda),
+-- y ninguna `disponibilidad` sembrada queda abierta (todas con `hasta`). Comprobado con grep en
+-- tickets/T-043/diseno.md, Ronda 2, R2.0. Un banco nuevo que siembre agenda de PRO1 más allá de año + 5
+-- tiene que mirar esto. Cada sección tiene su propio lunes (offsets sobre `lunes_29`) porque las
+-- citas de una ocupan el lunes de PRO1 para el resto.
 --
 -- Cada aserción compara el ARRAY COMPLETO `hora/estado/hueco` de un día: fija a la vez que los
 -- tramos no se movieron (el arreglo no mueve ningún hueco) y el valor nuevo. Un fallo dice qué
 -- tramo se movió. Sesión de 50 minutos y descanso de 10; el raro es 10 < g < 70.
 --
--- Los mutantes M1-M9 están al final, anotados.
+-- Los mutantes M1-M9 y N1-N10 están al final, anotados.
 
 \echo ''
 \echo '=== 29-hueco-raro ==='
@@ -28,9 +32,9 @@ insert into public.tipos_terapia (id, nombre, duracion_minutos, regimen, activo)
 -- Descanso explícito: lo que el banco mide depende de él.
 update public.perfiles set descanso_activo = true, descanso_minutos = 10 where id = :PRO1;
 
-select (extract(year from now())::int + 4) as anio_29 \gset
+select (extract(year from now())::int + 10) as anio_29 \gset
 
--- Primer lunes de febrero del año + 4.
+-- Primer lunes de febrero del año + 10.
 select (make_date(:anio_29, 2, 1) + ((8 - extract(isodow from make_date(:anio_29, 2, 1))::int) % 7))::text
   as lunes_29 \gset
 
@@ -43,13 +47,23 @@ select (:'lunes_29'::date +  7)::text as l007,
        (:'lunes_29'::date + 49)::text as l049,
        (:'lunes_29'::date + 56)::text as l056,
        (:'lunes_29'::date + 63)::text as l063,
-       (:'lunes_29'::date + 70)::text as l070 \gset
+       (:'lunes_29'::date + 70)::text as l070,
+       (:'lunes_29'::date + 77)::text as l077,
+       (:'lunes_29'::date + 84)::text as l084,
+       (:'lunes_29'::date + 91)::text as l091,
+       (:'lunes_29'::date + 98)::text as l098,
+       (:'lunes_29'::date + 105)::text as l105,
+       (:'lunes_29'::date + 106)::text as l106,
+       (:'lunes_29'::date + 112)::text as l112,
+       (:'lunes_29'::date + 119)::text as l119,
+       (:'lunes_29'::date + 126)::text as l126,
+       (:'lunes_29'::date + 133)::text as l133 \gset
 
--- Una franja de PRO1: lunes de 09:00 a 14:00 en CA, doce semanas.
+-- Una franja de PRO1: lunes de 09:00 a 14:00 en CA, veinte semanas.
 insert into public.disponibilidad
   (perfil_id, centro_id, tipo, dia_semana, hora_inicio, hora_fin, desde, hasta, zona_horaria, motivo)
 values
-  (:PRO1, :CA, 'franja', 1, time '09:00', time '14:00', :'lunes_29'::date, (:'lunes_29'::date + 84),
+  (:PRO1, :CA, 'franja', 1, time '09:00', time '14:00', :'lunes_29'::date, (:'lunes_29'::date + 140),
    'Europe/Madrid', 'T-043');
 
 -- Una cita de PRO1 (ids a2900004-…): `p_n` es el sufijo del id.
@@ -305,7 +319,152 @@ select pg_temp.assert(
 call pg_temp.reset_sesion();
 
 -- =========================================================================
--- Mutantes M1-M9 (medidos a mano sobre la función en la base, uno por uno; ver la evidencia)
+-- K1 · Una cita de OTRO profesional no cuenta (mata N3, sin filtro de profesional)
+-- =========================================================================
+
+select pg_temp.cita29(12, :CB, :'l077'::date, time '10:30', time '11:20', :P2, :PRO2, :TT29);
+
+call pg_temp.como(:TEC1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l077'::date)
+    = array['09:00:00/libre/-', '10:00:00/libre/-', '11:00:00/libre/-', '12:00:00/libre/-', '13:00:00/libre/-'],
+  'K1 · el técnico de CA ve la agenda de PRO1 y la única cita del día es de PRO2: todo libre y null'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K2 · Una cita anterior al tramo no cuenta (mata N2b, sin `c.inicio >= v_f_ini`)
+-- =========================================================================
+
+select pg_temp.cita29(13, :CA, :'l084'::date, time '09:00', time '09:50', :P1, :PRO1, :TT29);
+select pg_temp.cita29(14, :CA, :'l084'::date, time '11:30', time '12:20', :P1, :PRO1, :TT29);
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l084'::date)
+    = array['09:00:00/ocupado/-', '10:00:00/libre/40', '11:00:00/ocupado/-', '12:30:00/libre/-'],
+  'K2 · citas 09:00 y 11:30: el 10:00 mide contra la de 11:30 (40) y el 11:00 ocupado no mira la de 09:00 hacia atrás: null'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K3 · Adyacente más una segunda dentro del umbral (mata N1, `c.inicio > v_tras`)
+-- =========================================================================
+
+select pg_temp.cita29(15, :CA, :'l091'::date, time '10:00', time '10:20', :P1, :PRO1, :TT29);
+select pg_temp.cita29(16, :CA, :'l091'::date, time '10:30', time '11:20', :P1, :PRO1, :TT29);
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l091'::date)
+    = array['09:00:00/libre/-', '10:00:00/ocupado/-', '11:30:00/libre/-', '12:30:00/libre/-'],
+  'K3 · una cita adyacente (10:00) y otra a 40 minutos: la adyacente manda y da null, la segunda no rescata el hueco'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K4 · Cita exactamente en el fin de la franja (mata N4, `c.inicio <= v_f_fin`)
+-- =========================================================================
+
+select pg_temp.cita29(17, :CA, :'l098'::date, time '09:00', time '09:20', :P1, :PRO1, :TT29);
+select pg_temp.cita29(18, :CB, :'l098'::date, time '14:00', time '14:50', :P1, :PRO1, :TT29);
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l098'::date)
+    = array['09:00:00/ocupado/-', '09:30:00/libre/-', '10:30:00/libre/-', '11:30:00/libre/-', '12:30:00/libre/-'],
+  'K4 · cita de PRO1 en CB a las 14:00, justo en el fin de la franja: el 12:30 no la cuenta y da null'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K5 · Una ausencia de OTRO día no corta el hueco (mata N5)
+-- =========================================================================
+
+select pg_temp.cita29(19, :CA, :'l105'::date, time '10:30', time '11:20', :P1, :PRO1, :TT29);
+insert into public.disponibilidad
+  (perfil_id, centro_id, tipo, desde, hasta, hora_inicio, hora_fin, zona_horaria, motivo)
+values
+  (:PRO1, null, 'ausencia', :'l106'::date, :'l106'::date, time '10:00', time '10:20', 'Europe/Madrid', 'T-043 K5');
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l105'::date)
+    = array['09:00:00/libre/40', '10:00:00/ocupado/-', '11:30:00/libre/-', '12:30:00/libre/-'],
+  'K5 · ausencia de PRO1 el martes siguiente: el lunes no la ve y el hueco del 09:00 sigue siendo 40'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K6 · Una ausencia en OTRO centro no corta el hueco (mata N6)
+-- =========================================================================
+
+select pg_temp.cita29(20, :CA, :'l112'::date, time '10:30', time '11:20', :P1, :PRO1, :TT29);
+insert into public.disponibilidad
+  (perfil_id, centro_id, tipo, desde, hasta, hora_inicio, hora_fin, zona_horaria, motivo)
+values
+  (:PRO1, :CB, 'ausencia', :'l112'::date, :'l112'::date, time '10:00', time '10:20', 'Europe/Madrid', 'T-043 K6');
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l112'::date)
+    = array['09:00:00/libre/40', '10:00:00/ocupado/-', '11:30:00/libre/-', '12:30:00/libre/-'],
+  'K6 · ausencia de PRO1 en CB: la agenda de CA no la ve y el hueco del 09:00 sigue siendo 40'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K7 · Una ausencia de OTRO profesional no corta el hueco (mata N7)
+-- =========================================================================
+
+select pg_temp.cita29(21, :CA, :'l119'::date, time '10:30', time '11:20', :P1, :PRO1, :TT29);
+insert into public.disponibilidad
+  (perfil_id, centro_id, tipo, desde, hasta, hora_inicio, hora_fin, zona_horaria, motivo)
+values
+  (:PRO2, null, 'ausencia', :'l119'::date, :'l119'::date, time '10:00', time '10:20', 'Europe/Madrid', 'T-043 K7');
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l119'::date)
+    = array['09:00:00/libre/40', '10:00:00/ocupado/-', '11:30:00/libre/-', '12:30:00/libre/-'],
+  'K7 · ausencia de PRO2: no es de PRO1 y el hueco del 09:00 sigue siendo 40'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K8 · Una ausencia dentro del descanso no corta el hueco... pero sí uno que la solapa (mata N10)
+-- =========================================================================
+
+select pg_temp.cita29(22, :CA, :'l126'::date, time '10:30', time '11:20', :P1, :PRO1, :TT29);
+insert into public.disponibilidad
+  (perfil_id, centro_id, tipo, desde, hasta, hora_inicio, hora_fin, zona_horaria, motivo)
+values
+  (:PRO1, null, 'ausencia', :'l126'::date, :'l126'::date, time '09:52', time '09:58', 'Europe/Madrid', 'T-043 K8');
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l126'::date)
+    = array['09:00:00/libre/-', '10:00:00/ocupado/-', '11:30:00/libre/-', '12:30:00/libre/-'],
+  'K8 · ausencia 09:52-09:58 (no toca la sesión de 09:00 a 09:50): el 09:00 es libre y el hueco lo corta la ausencia, null'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- K9 · Segundos: el hueco se redondea hacia arriba (mata N8, `floor`)
+-- =========================================================================
+
+select pg_temp.cita29(23, :CA, :'l133'::date, time '10:30:20', time '11:20:20', :P1, :PRO1, :TT29);
+
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.dia29(:PRO1, :CA, :'l133'::date)
+    = array['09:00:00/libre/41', '10:00:00/ocupado/-', '11:30:20/libre/-', '12:30:20/libre/-'],
+  'K9 · cita a las 10:30:20: 40 minutos y 20 segundos de hueco son 41 (ceil), no 40'
+);
+call pg_temp.reset_sesion();
+
+-- =========================================================================
+-- Mutantes M1-M9 y N1-N10 (medidos a mano sobre la función en la base, uno por uno; ver la evidencia)
 -- =========================================================================
 -- M1  `v_sig < v_tras + v_dur + v_desc`  -> `<=`            cae en E2
 -- M2  `v_sig > v_tras`                   -> `>=`            cae en C
@@ -316,5 +475,14 @@ call pg_temp.reset_sesion();
 -- M7  sin el filtro de `estado`                             cae en J
 -- M8  minutos `v_sig - v_tras` en vez de `v_sig - (v_cursor + v_dur)`   cae en B1 y D
 -- M9  calcular también en tramos ocupados (sin `if v_limite is null`)   cae en B1
+-- N1  `c.inicio >= v_tras` -> `>` (la cita adyacente deja de contar)   cae en K3
+-- N2b `c.inicio >= v_tras` -> `>= v_f_ini` (cuenta también lo anterior al tramo)   cae en K2
+-- N3  sin `c.profesional_id = p_profesional_id`            cae en K1
+-- N4  `c.inicio < v_f_fin` -> `<=`                         cae en K4
+-- N5  ausencia del `not exists` sin `d.desde/d.hasta`      cae en K5
+-- N6  ausencia del `not exists` sin el filtro de centro    cae en K6
+-- N7  ausencia del `not exists` sin `d.perfil_id`          cae en K7
+-- N8  `ceil` -> `floor`                                    cae en K9
+-- N10 rango de la ausencia desde `v_tras` en vez de `v_cursor + v_dur`   cae en K8
 
 \echo '29-hueco-raro: OK'
