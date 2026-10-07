@@ -8,7 +8,7 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048 y T-049 (T-023 incluido, migración 20261013120000).
-- **En curso**: T-050 revisado (ronda 1, 6acbd3f: 0 ALTA, 0 MEDIA, 3 BAJA de texto en este fichero), rama `worktree-agent-a49560e9e3018f241` (b4cc1f6) sin integrar ni verificar.
+- **En curso**: T-050 revisado (ronda 1, 6acbd3f: 0 ALTA, 0 MEDIA, 3 BAJA de texto), llevado sobre `main` en `worktree-agent-a49560e9e3018f241` con H1-H3 corregidos; falta la verificación de CA1.
 - **Siguiente en `supabase/`**: T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -18,7 +18,7 @@
 
 ## Siguiente paso
 
-1. **T-050**: llevar sus dos commits sobre `main`, corregir H1-H3 de `tickets/T-050/revision.md` y verificar CA1 con `db reset` + `seed` + `test:rls`, sin arrancar entre 05:00–05:40 ni 02:10–03:30 de Madrid. Después, la cola: T-026a → T-046 → T-023b → T-047 (pintura de MiniMax en `minimax/respuestas/T-026a-pintura.md` y `T-047-pintura.md`; la prueba de T-026a debe esperar `bg-muted text-primary` para `success`).
+1. **T-050**: verificar CA1 con `db reset` + `seed` + `test:rls`, sin arrancar entre 05:00–05:40 ni 02:10–03:30 de Madrid. Después, la cola: T-026a → T-046 → T-023b → T-047 (pintura de MiniMax en `minimax/respuestas/T-026a-pintura.md` y `T-047-pintura.md`; la prueba de T-026a debe esperar `bg-muted text-primary` para `success`).
 2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove). Los de T-023 ya están quitados.
 
 ## Hallazgos anotados
@@ -60,7 +60,6 @@
 - **T-040 R2A-H1 (MEDIA)**: `offset`+`count=exact` con 416 bit en cuerpo no contado. PostgREST v16+ requiere S7.
 - **Lint**: 2 avisos en `lib/cuentas/accesos.test.ts` (`SupabaseClient`, `Database` sin usar).
 - **Base compartida `test:rls`**: verificador hace `db reset` (con permiso del propietario); revisores trabajan en `begin…rollback` esperando `max(version)`.
-- **T-050 · C3b del 23 latente**: D+0 03:00 (baja de V39) choca con 22 c2 (`now() − 2 h 20`) si `test:rls` arranca hacia las 05:00-05:40, y con 16 C7N3 (`now() − 5 min`) hacia las 02:10-03:30 (Madrid). Arreglo: baja de V39 y C3b a un día sin citas de PRO1 ancladas a `now()` (D−5, D−6, D−8, D−9), revisando R(e), C3, D3 y H2. Requiere ticket.
-- **T-050 · regla 10.4 propuesta para `scripts/rls/README.md`** («dos anclas, días distintos»): la tabla de franjas omite la cita H de PRO1 en `now() − 2 días` (15). Detector: `tickets/T-050/simulacion.sql`. Decide el propietario.
-- **T-050 · `26.C4` falla en la base compartida** (23514 `cobros_devolucion_motivo_ck`) con la base en 20261013 (rama de T-023, ausente aquí). Ajeno al 23, que sale `completa.`.
+- **T-050 · C3b del 23 latente**: D+0 03:00 (baja de V39) choca con 22 c2 (`now() − 2 h 20`) si `test:rls` arranca hacia las 05:00-05:40, y con 16 C7N3 (`now() − 5 min`) hacia las 02:10-03:30 (Madrid). Arreglo: baja de V39 y C3b a D−5 o D−8, libres a cualquier hora; D−6 y D−9 no lo están en las primeras horas (`current_date` es la fecha UTC: una cita a las 00:30 choca con 16.C7PAS o 16.C5P1). Revisar R(e), C3, D3 y H2. Requiere ticket.
+- **T-050 · regla 10.4 propuesta para `scripts/rls/README.md`** («dos anclas, días distintos»): la tabla de franjas omite la cita H de PRO1 en `now() − 2 días` (15). Simulación (inventario escrito a mano, no ve anclas nuevas): `tickets/T-050/simulacion.sql`. Decide el propietario.
 - Anteriores 13-09: `docs/bitacora/estado-hasta-2026-09-13.md`.

@@ -973,7 +973,9 @@ select pg_temp.assert((select modalidad_asistencia = 'online' from public.citas 
   '23.S5b la cita quedó online tras PRO1 y ADM');
 
 -- Una cita pasada no cambia de presencial a online ni al revés.
--- T-050 · D−9 y no D−10: el 16 deja C5P1 en now() − 10 días, que barre D−10 según la hora de arranque.
+-- T-050 · D−9 05:00 y no D−10: el 16 deja C5P1 en now() − 10 días, que barre D−10 según la hora de arranque.
+-- D−9 no está libre todo el día: como current_date es la fecha UTC, C5P1 cae en las primeras horas de D−9
+-- (00:00-03:00 de Madrid); a las 05:00 el margen medido es de 125 min.
 select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:P39, :PRO1, -9, time '05:00', null), 'S · fijación de la cita pasada');
 select id as c_pasada from public.citas where paciente_id = :P39 and inicio = pg_temp.ts39(-9, time '05:00') \gset
 call pg_temp.como(:PRO1);
