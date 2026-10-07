@@ -1,55 +1,42 @@
 {
   "ticket": "T-023",
-  "ronda": 4,
+  "ronda": 5,
   "altas": 0,
   "medias": 0,
-  "bajas": 4,
-  "nota": "Combinación de revision-a.ronda4.json (A: acción del servidor, datos y constitución; 0 ALTA, 0 MEDIA, 2 BAJA) y revision-b.ronda4.json (B: cliente, accesibilidad y spec; 0 ALTA, 0 MEDIA, 3 BAJA). Rama revisada worktree-agent-af4665097e6d61770, HEAD afcc774, diff de la ronda worktree-agent-a875b9deffe28f1da..worktree-agent-af4665097e6d61770. Ids con el prefijo del revisor y su número original. Duplicado unido: A-H1 + B-H1 (la clave de un resultado desconocido que sí entró no caduca y el paso 2b confirma con «Cobro registrado» sin insertar el siguiente cobro idéntico), BAJA. Por eso no hay B-H1. A no midió en base (sin migraciones en el diff); su juicio de los mutantes M24, M27, M28, M29 y M34 está en revision-a.ronda4.json. B midió el mutante de B-H3 sobre una copia git archive de afcc774 (11 ficheros, 207 pruebas en verde).",
-  "ronda3": {
-    "A-H1": "cerrado",
-    "A-H2": "cerrado para fusión y zona; residuo por pérdida de visibilidad en A-H2 de esta ronda",
-    "A-H3": "cerrado",
-    "A-H4": "cerrado (incluye B-H5 de la ronda 3)",
-    "B-H1": "cerrado; residuo por otra puerta en B-H2 de esta ronda",
-    "B-H2": "cerrado",
-    "B-H3": "cerrado",
-    "B-H4": "cerrado (residuo por recorte de página anotado como nota de B, no contado)"
+  "bajas": 3,
+  "nota": "Combinación de revision-a.ronda5.json (A: acción del servidor, datos y constitución; 0 ALTA, 0 MEDIA, 0 BAJA) y revision-b.ronda5.json (B: cliente, accesibilidad y spec; 0 ALTA, 0 MEDIA, 3 BAJA). Rama revisada worktree-agent-aaa4e03b1bd13834a, HEAD 5604fa0, diff de la ronda worktree-agent-af4665097e6d61770..worktree-agent-aaa4e03b1bd13834a. Ids con el prefijo del revisor y su número original. Sin duplicados que unir. A midió M35, M36 y M40 y seis mutantes propios sobre una copia git archive de 5604fa0 (30/30 en acciones y page en la línea base); su juicio está en revision-a.ronda5.json. B midió dos mutantes sobre una copia git archive de 5604fa0 (11 ficheros, 213 pruebas en verde en la línea base): clear() en alRegistrar cae (B-H3 de la ronda 4 cerrado) y key={pacientes.ok ? \"ok\" : \"ko\"} sobrevive (B-H1). Ninguno ejecutó el spec.",
+  "ronda4": {
+    "A-H1": "cerrado (une B-H1 de la ronda 4): texto propio cobroYaRegistrado en el 2b y en la relectura tras el 23505 (M35, M36 rojos medidos por A); el cliente lo trata como éxito, olvida esa huella y lo anuncia (M39 cae, según B). Residuo aceptado en R5.1: el usuario tiene que leer el aviso.",
+    "A-H2": "cerrado como riesgo aceptado: anotado byte a byte en docs/state.md, en su grupo (R5.4)",
+    "B-H2": "cerrado (RegistrarCobro montado siempre, M40 y M41 caen), con dos residuos de la misma puerta: B-H1 (key sin probar) y B-H2 (sin salida salvo recargar) de esta ronda",
+    "B-H3": "cerrado (medido por B: claves.current.clear() en alRegistrar cae en la prueba A-B-A)"
   },
   "hallazgos": [
     {
-      "id": "A-H1",
+      "id": "B-H1",
       "severidad": "BAJA",
-      "archivo": "app/(app)/facturacion/acciones.ts",
-      "linea": 61,
-      "descripcion": "La clave de un resultado desconocido que sí insertó no se olvida nunca (solo un éxito la borra, registrar-cobro.tsx:28) y, con Activity (cacheComponents, 3 rutas), dura toda la jornada aunque se salga de la página; la confirmación por clave (paso 2b y relectura tras 23505) dice lo mismo que un alta nueva, así que un cobro distinto pero idéntico se da por registrado y no se inserta. [Une B-H1 (registrar-cobro.tsx:28, BAJA).]",
-      "escenario": "10:00, 60,00 EUR en efectivo de Lucía, hoy, sin referencia: corte tras insertar y queda resultadoDesconocido. El usuario no reenvía: lo comprueba paginando o cambiando el filtro en /facturacion (RegistrarCobro sigue montado), o va a Agenda y vuelve (Activity conserva el Map). 18:00, Lucía paga otra sesión de 60,00 EUR en efectivo el mismo día: misma huella → claveDeEnvio devuelve idA → el 2b encuentra la fila de las 10:00 → «Cobro registrado» sin insert. El segundo cobro no existe y el pendiente cobra 60 EUR de más a Lucía; confirmación falsa de una acción económica. Arreglo: un texto propio («ya estaba registrado; no se ha añadido otro») que el cliente trata como éxito, o que la clave caduque.",
-      "revisor": "A+B"
-    },
-    {
-      "id": "A-H2",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/facturacion/acciones.ts",
-      "linea": 59,
-      "descripcion": "El 2b lee bajo RLS y cobros_lectura no tiene rama por registrado_por. Si el usuario deja de ver al paciente entre el envío y el reintento, la fila propia no aparece y se contesta fallo() aunque el cobro exista. Es el residuo de R3 A-H2.",
-      "escenario": "Ana registra 60 € a P con corte de red (resultadoDesconocido). El administrador traspasa P a Bea. Ana reenvía y el 2b ve 0 filas porque es_profesional_asignado es falso. La lectura de pacientes también da 0 filas, la acción responde fallo() y el administrador lo registra de nuevo: queda un cobro duplicado que no se puede borrar. No conviene ampliar la RLS. Se anota en state.md como riesgo aceptado.",
-      "revisor": "A"
+      "archivo": "app/(app)/facturacion/page.test.tsx",
+      "linea": 150,
+      "descripcion": "Las pruebas de AccionRegistrar comparan type y props pero no la key: un key que dependa de pacientes.ok reabre B-H2 con toda la batería en verde (medido: 213/213).",
+      "escenario": "key={pacientes.ok ? 'ok' : 'ko'} en page.tsx:26 → 'No sabemos…' (entró), cambio de filtro con pacientes fallando desmonta la isla, otro cambio la remonta con el Map vacío, el reenvío lleva un id nuevo → cobro duplicado imborrable.",
+      "revisor": "B"
     },
     {
       "id": "B-H2",
       "severidad": "BAJA",
-      "archivo": "app/(app)/facturacion/page.tsx",
-      "linea": 25,
-      "descripcion": "Si cargarPacientesParaCobro falla en un re-render (cambio de filtro, paginación, enlace «Ver las cifras de todos los profesionales»), AccionRegistrar sustituye RegistrarCobro por AvisoDeError: la isla se desmonta y el Map de claves se pierde sin salir de la página.",
-      "escenario": "Base a tirones: el primer envío de 60,00 EUR entró y sale «No sabemos…». El administrador cierra y cambia el filtro; los pacientes dan timeout y el botón pasa a ser el aviso de error. Otro cambio de filtro devuelve un RegistrarCobro nuevo con el Map vacío; reenvía los mismos datos como pide el aviso y va con un id nuevo: cobro duplicado que no se puede borrar (regla 6).",
+      "archivo": "app/(app)/facturacion/registrar-cobro.tsx",
+      "linea": 42,
+      "descripcion": "Con pacientes null la isla conserva el Map pero el aviso no ofrece salida en la página; sin filtro ni paginación, la única salida visible es recargar, que vacía el Map.",
+      "escenario": "Técnico: A da 'No sabemos…' (entró), B sale bien, en el repintado del revalidatePath falla la lista → aviso sin botón → F5 → Map vacío → reenvía A con id nuevo → duplicado.",
       "revisor": "B"
     },
     {
       "id": "B-H3",
       "severidad": "BAJA",
-      "archivo": "app/(app)/facturacion/registrar-cobro-clave.test.tsx",
-      "linea": 56,
-      "descripcion": "«Solo un éxito olvida SU clave» solo se prueba con éxito de la misma huella: el mutante claves.current.clear() en alRegistrar sobrevive a toda la batería de facturación (medido en git archive de afcc774: 11 ficheros, 207 pruebas en verde). M25 es otro (clear antes de guardar).",
-      "escenario": "A (60,00 EUR a Lucía) da resultado desconocido y sí entró; se registra con éxito B (40,00 EUR a otro paciente) y el mutante vacía el Map; se reenvía A como pide el aviso con un id nuevo: cobro duplicado. Ninguna prueba lo ve; falta «A desconocido, B éxito, A otra vez → idA».",
+      "archivo": "app/(app)/facturacion/registrar-cobro.tsx",
+      "linea": 42,
+      "descripcion": "Si la lista falla en el repintado que sigue a un éxito, el disparador se sustituye por el aviso y el foco que devuelve Dialogo cae en un nodo desmontado (body).",
+      "escenario": "Usuario de teclado registra 60,00 EUR; revalidatePath con cargarPacientesParaCobro {ok:false} → diálogo cerrado, botón cambiado por el aviso, foco en body; el siguiente Tab no sale del encabezado de Facturación. No es regresión (R4 perdía además el status).",
       "revisor": "B"
     }
   ]

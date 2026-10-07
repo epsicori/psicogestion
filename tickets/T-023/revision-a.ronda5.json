@@ -1,0 +1,19 @@
+{
+  "ticket": "T-023",
+  "ronda": 5,
+  "revisor": "A",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 0,
+  "ronda4": {
+    "A-H1": "cerrado: texto propio cobroYaRegistrado en el 2b y en la relectura (M35, M36 rojos medidos); el cliente olvida la clave (lado B)",
+    "A-H2": "cerrado como riesgo aceptado: anotado byte a byte en docs/state.md, en su grupo (R5.4)"
+  },
+  "mutantes": {
+    "M35": "cae por el motivo correcto (acciones.test.ts, paciente fusionado con clave propia, camino 2b)",
+    "M36": "cae por el motivo correcto (acciones.test.ts, 23505 propio, insertar 1 vez, camino relectura)",
+    "M40": "cae por el motivo correcto (page.test.tsx, isla con pacientes null; también cae la variante ': []')"
+  },
+  "medido": "git archive de 5604fa0 con junction a node_modules (quitado). Línea base: 30/30 en acciones y page. M35, M36 y M40 y seis mutantes propios (relectura con error, relectura sin fila y errorPrevia que dan 'ya estaba'; sin revalidatePath en el 2b y en la relectura; alta nueva con 'ya estaba'): todos rojos con la prueba de su rama. state.md comparado con node frente al bloque literal de R5.4 (subpunto, líneas 11 y 21 iguales; 61 líneas; grep = 1). Diff sin cambios en supabase/, lib/supabase/ ni scripts/. El único .delete( añadido es el del Map del cliente.",
+  "hallazgos": []
+}

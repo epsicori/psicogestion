@@ -1,0 +1,39 @@
+{
+  "ticket": "T-023",
+  "ronda": 5,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 3,
+  "cierre_ronda_4": {
+    "B-H1": "cerrado (cobroYaRegistrado en 2b y relectura; el cliente cierra, olvida la huella y lo anuncia; M39 cae)",
+    "B-H2": "cerrado, con residuos H1 (key sin probar) y H2 (sin salida salvo recargar)",
+    "B-H3": "cerrado (medido: clear() cae en la prueba A-B-A)"
+  },
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/page.test.tsx",
+      "linea": 150,
+      "descripcion": "Las pruebas de AccionRegistrar comparan type y props pero no la key: un key que dependa de pacientes.ok reabre B-H2 con toda la batería en verde (medido: 213/213).",
+      "escenario": "key={pacientes.ok ? 'ok' : 'ko'} en page.tsx:26 → 'No sabemos…' (entró), cambio de filtro con pacientes fallando desmonta la isla, otro cambio la remonta con el Map vacío, el reenvío lleva un id nuevo → cobro duplicado imborrable."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/registrar-cobro.tsx",
+      "linea": 42,
+      "descripcion": "Con pacientes null la isla conserva el Map pero el aviso no ofrece salida en la página; sin filtro ni paginación, la única salida visible es recargar, que vacía el Map.",
+      "escenario": "Técnico: A da 'No sabemos…' (entró), B sale bien, en el repintado del revalidatePath falla la lista → aviso sin botón → F5 → Map vacío → reenvía A con id nuevo → duplicado."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/registrar-cobro.tsx",
+      "linea": 42,
+      "descripcion": "Si la lista falla en el repintado que sigue a un éxito, el disparador se sustituye por el aviso y el foco que devuelve Dialogo cae en un nodo desmontado (body).",
+      "escenario": "Usuario de teclado registra 60,00 EUR; revalidatePath con cargarPacientesParaCobro {ok:false} → diálogo cerrado, botón cambiado por el aviso, foco en body; el siguiente Tab no sale del encabezado de Facturación. No es regresión (R4 perdía además el status)."
+    }
+  ]
+}
