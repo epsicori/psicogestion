@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Suspense } from 'react';
 
 import { AvisoDeError, EncabezadoDeModulo } from '@/components/ui/piezas';
@@ -33,7 +34,23 @@ async function SelectorSiAdministrador({ searchParams }: { searchParams: Paramet
   const { rol, profesionalFiltrado } = await cargarContexto(searchParams);
   if (rol !== 'administrador') return null;
   const resultado = await cargarOpcionesProfesional(profesionalFiltrado);
-  if (!resultado.ok) return <AvisoDeError mensaje={t('cobros.errorProfesionales')} />;
+  if (!resultado.ok) {
+    if (profesionalFiltrado === null) return <AvisoDeError mensaje={t('cobros.errorProfesionales')} />;
+    // Con filtro, las cifras son las de un solo profesional: el aviso lo dice y ofrece quitarlo (A-H4).
+    return (
+      <AvisoDeError
+        mensaje={t('cobros.errorProfesionalesConFiltro')}
+        accion={
+          <Link
+            href="/facturacion"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-destructive underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {t('cobros.verTodosLosProfesionales')}
+          </Link>
+        }
+      />
+    );
+  }
   return <SelectorProfesional opciones={resultado.opciones} elegido={profesionalFiltrado} />;
 }
 

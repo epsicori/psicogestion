@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 
 import { t } from '@/lib/i18n';
 
@@ -18,24 +18,28 @@ const ENLACE_DE_PAGINA =
 
 /**
  * Marca de módulo, no de componente: la navegación puede desmontarse y montarse al cambiar de
- * página (el bloque se vuelve a servir), y entonces un ref o un estado se perderían. El clic en un
- * enlace la enciende; el efecto de la página nueva la apaga y lleva el foco al rango (B-H6). Montar
- * sin clic previo (primera carga, atrás/adelante del navegador) no mueve el foco.
+ * página (el bloque se vuelve a servir), y entonces un ref o un estado se perderían. Guarda la
+ * PÁGINA a la que se pidió ir: el efecto de la página nueva la apaga y solo lleva el foco al rango
+ * si la página que llega es la pedida (B-H6, R4.5). Un clic con modificador (nueva pestaña) no la
+ * marca; una navegación sustituida, que llega a otra página, la apaga sin enfocar. Montar sin clic
+ * previo (primera carga, atrás/adelante del navegador) no mueve el foco.
  */
-let seguirFoco = false;
+let destino: number | null = null;
 
 /** La navegación de «Pendiente de cobro»: tras pasar de página, el foco va al rango, no se pierde. */
 export function PaginacionPendientes({ pagina, rango, anterior, siguiente }: Props) {
   const rangoRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
-    if (!seguirFoco) return;
-    seguirFoco = false;
-    rangoRef.current?.focus();
+    if (destino === null) return;
+    const esperado = destino;
+    destino = null;
+    if (esperado === pagina) rangoRef.current?.focus();
   }, [pagina]);
 
-  const alHacerClic = () => {
-    seguirFoco = true;
+  const alHacerClic = (paginaDestino: number) => (evento: MouseEvent) => {
+    if (evento.button !== 0 || evento.metaKey || evento.ctrlKey || evento.shiftKey || evento.altKey) return;
+    destino = paginaDestino;
   };
 
   return (
@@ -48,12 +52,12 @@ export function PaginacionPendientes({ pagina, rango, anterior, siguiente }: Pro
       </p>
       <div className="flex gap-2">
         {anterior !== null && (
-          <Link href={anterior} onClick={alHacerClic} className={ENLACE_DE_PAGINA}>
+          <Link href={anterior} onClick={alHacerClic(pagina - 1)} className={ENLACE_DE_PAGINA}>
             {t('cobros.paginacion.anteriores')}
           </Link>
         )}
         {siguiente !== null && (
-          <Link href={siguiente} onClick={alHacerClic} className={ENLACE_DE_PAGINA}>
+          <Link href={siguiente} onClick={alHacerClic(pagina + 1)} className={ENLACE_DE_PAGINA}>
             {t('cobros.paginacion.siguientes')}
           </Link>
         )}

@@ -110,7 +110,7 @@ describe('PaginaFacturacion', () => {
     expect(cargarOpcionesProfesional).toHaveBeenCalledWith('1b2c3d4e-5f60-4a71-8b82-9c0d1e2f3a40');
   });
 
-  it('A-H3: si no se pueden cargar los profesionales, el aviso y ningún selector', async () => {
+  it('A-H3 / R4.5: con filtro y sin lista de profesionales, el aviso con filtro y el enlace a todos', async () => {
     cargarContexto.mockResolvedValue(contextoDe('administrador'));
     cargarOpcionesProfesional.mockResolvedValue({ ok: false });
     const nodo = porNombre('SelectorSiAdministrador');
@@ -118,7 +118,24 @@ describe('PaginaFacturacion', () => {
 
     render(<>{await tipo(nodo.props)}</>);
 
+    expect(screen.getByText(t('cobros.errorProfesionalesConFiltro'))).toBeInTheDocument();
+    expect(screen.queryByText(t('cobros.errorProfesionales'))).toBeNull();
+    expect(screen.queryByRole('combobox', { name: /profesional/i })).toBeNull();
+    const enlace = screen.getByRole('link', { name: t('cobros.verTodosLosProfesionales') });
+    expect(enlace).toHaveAttribute('href', '/facturacion');
+    expect(enlace.className).toMatch(/min-h-11/);
+  });
+
+  it('gemela: sin filtro y sin lista de profesionales, el aviso de siempre y ningún enlace', async () => {
+    cargarContexto.mockResolvedValue({ ...contextoDe('administrador'), profesionalFiltrado: null });
+    cargarOpcionesProfesional.mockResolvedValue({ ok: false });
+    const nodo = porNombre('SelectorSiAdministrador');
+    const tipo = nodo.tipo as (p: Record<string, unknown>) => Promise<ReactNode>;
+
+    render(<>{await tipo(nodo.props)}</>);
+
     expect(screen.getByText(t('cobros.errorProfesionales'))).toBeInTheDocument();
+    expect(screen.queryByRole('link')).toBeNull();
     expect(screen.queryByRole('combobox', { name: /profesional/i })).toBeNull();
   });
 

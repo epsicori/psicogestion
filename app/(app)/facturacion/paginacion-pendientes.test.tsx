@@ -82,4 +82,30 @@ describe('PaginacionPendientes (B-H6)', () => {
     render(pintarPagina(2));
     expect(document.activeElement).toBe(document.body);
   });
+
+  it.each(['ctrlKey', 'metaKey', 'shiftKey', 'altKey'])(
+    'R4.5: un clic con %s no enciende la marca: aunque llegue la página 3, el foco no se mueve',
+    (modificador) => {
+      const { rerender } = render(pintarPagina(2));
+      fireEvent.click(screen.getByRole('link', { name: t('cobros.paginacion.siguientes') }), { [modificador]: true });
+      rerender(pintarPagina(3));
+      expect(document.activeElement).toBe(document.body);
+    },
+  );
+
+  it('R4.5: un clic con otro botón del ratón no enciende la marca', () => {
+    const { rerender } = render(pintarPagina(2));
+    fireEvent.click(screen.getByRole('link', { name: t('cobros.paginacion.siguientes') }), { button: 1 });
+    rerender(pintarPagina(3));
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('R4.5: navegación sustituida: se pide la 3 y llega la 1, el foco no se mueve; después la 3 tampoco', () => {
+    const { rerender } = render(pintarPagina(2));
+    fireEvent.click(screen.getByRole('link', { name: t('cobros.paginacion.siguientes') }));
+    rerender(pintarPagina(1));
+    expect(document.activeElement).toBe(document.body);
+    rerender(pintarPagina(3));
+    expect(document.activeElement).toBe(document.body);
+  });
 });
