@@ -196,5 +196,58 @@
       "rojo": true,
       "falla": "registrar-cobro-clave.test.tsx · el aviso no nombra el botón"
     }
+  },
+  "fecha_ronda_5": "2026-10-07",
+  "ts_ronda_5": {
+    "M35": {
+      "mutacion": "el paso 2b devuelve `cobroRegistrado`, como en R4",
+      "rojo": true,
+      "falla": "acciones.test.ts · clave propia ya registrada y paciente fusionado; spec paso 9 (rebuild): no hay región con «ya estaba registrado»"
+    },
+    "M36": {
+      "mutacion": "la relectura propia tras el 23505 devuelve `cobroRegistrado`",
+      "rojo": true,
+      "falla": "acciones.test.ts · 23505 de cobros_pkey con el cobro propio ya registrado es «ya estaba registrado»"
+    },
+    "M37": {
+      "mutacion": "el formulario solo da por éxito `cobroRegistrado`",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · «ya estaba registrado»: alRegistrar recibe la huella y ese texto; registrar-cobro-clave.test.tsx · «ya estaba registrado» cierra…; spec paso 9 (rebuild): el diálogo sigue visible"
+    },
+    "M38": {
+      "mutacion": "`alRegistrar` ignora el aviso y pinta siempre `cobroRegistrado`",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · «ya estaba registrado» cierra…; spec paso 9 (rebuild): no hay región con el texto"
+    },
+    "M39": {
+      "mutacion": "con `cobroYaRegistrado` se cierra pero no se borra la clave",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · «ya estaba registrado» cierra, lo anuncia y olvida la clave (tercer id igual al primero)"
+    },
+    "M40": {
+      "mutacion": "`AccionRegistrar` vuelve a devolver `<AvisoDeError>` si fallan los pacientes",
+      "rojo": true,
+      "falla": "page.test.tsx · la isla se monta igual, con pacientes null"
+    },
+    "M41": {
+      "mutacion": "`RegistrarCobro` delega en un hijo que solo se monta con pacientes (el `Map` vive en el hijo)",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · B-H2: la lista de pacientes falla… mismo id (y registrar-cobro.test.tsx · con pacientes null, por la región de estado que ya no está)"
+    },
+    "M42": {
+      "mutacion": "`alRegistrar` hace `claves.current.clear()` en lugar de `delete(huella)`",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · A desconocido, B con éxito, A otra vez lleva idA"
+    },
+    "M43": {
+      "mutacion": "con `pacientes === null` la isla sigue pintando el disparador y el diálogo",
+      "rojo": true,
+      "falla": "registrar-cobro.test.tsx · con pacientes null: …ningún disparador…; también registrar-cobro-clave.test.tsx · B-H2"
+    },
+    "M44": {
+      "mutacion": "`cobroYaRegistrado` = 'Cobro registrado (ya estaba)'",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · el aviso de «ya estaba registrado» ni contiene «cobro registrado» ni nombra el botón"
+    }
   }
 }
