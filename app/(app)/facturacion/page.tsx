@@ -21,9 +21,9 @@ type ParametrosDeBusqueda = Promise<Record<string, string | string[] | undefined
 /** El botón de registrar cobro: necesita los pacientes (bajo RLS) y el «hoy» de la organización. */
 async function AccionRegistrar({ searchParams }: { searchParams: ParametrosDeBusqueda }) {
   const [{ hoy }, pacientes] = await Promise.all([cargarContexto(searchParams), cargarPacientesParaCobro()]);
-  // Una lista incompleta no se ofrece: se avisa en lugar de dejar registrar a ciegas.
-  if (!pacientes.ok) return <AvisoDeError mensaje={t('cobros.errorPacientes')} />;
-  return <RegistrarCobro pacientes={pacientes.pacientes} hoy={hoy} />;
+  // La isla se monta siempre, también sin lista de pacientes: su `Map` de claves de envío no puede
+  // perderse con un fallo pasajero en un render posterior (R5.2).
+  return <RegistrarCobro pacientes={pacientes.ok ? pacientes.pacientes : null} hoy={hoy} />;
 }
 
 /**

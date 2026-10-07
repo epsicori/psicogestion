@@ -60,7 +60,7 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
   if (errorPrevia) console.error('registrarCobro: fallo al buscar la clave de envío', errorPrevia.code);
   if (previa && !errorPrevia) {
     revalidatePath('/facturacion');
-    return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroRegistrado') };
+    return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroYaRegistrado') };
   }
 
   // 3. Bajo RLS: un paciente que no se ve es el mismo mensaje que un 42501.
@@ -130,7 +130,7 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
       }
       if (propio) {
         revalidatePath('/facturacion');
-        return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroRegistrado') };
+        return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroYaRegistrado') };
       }
     }
     // Solo el código: ni importe ni paciente en el registro.

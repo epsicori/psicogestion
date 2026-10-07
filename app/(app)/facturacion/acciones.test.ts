@@ -262,7 +262,7 @@ describe('registrarCobro', () => {
       expect(revalidatePath).not.toHaveBeenCalled();
     });
 
-    it('un 23505 de cobros_pkey con el cobro propio ya registrado es éxito, sin duplicar', async () => {
+    it('un 23505 de cobros_pkey con el cobro propio ya registrado es «ya estaba registrado», sin duplicar', async () => {
       const supabase = crearSupabaseFalso({
         insert: {
           data: null,
@@ -274,7 +274,8 @@ describe('registrarCobro', () => {
 
       const estado = await registrarCobro(BASE);
 
-      expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
+      expect(estado).toEqual({ mensaje: t('cobros.cobroYaRegistrado') });
+      expect(supabase.insertar).toHaveBeenCalledTimes(1);
       expect(revalidatePath).toHaveBeenCalledWith('/facturacion');
       expect(supabase.selectCobros).toHaveBeenCalledWith('id');
       expect(supabase.eqCobros).toHaveBeenCalledWith('id', ID);
@@ -341,7 +342,7 @@ describe('registrarCobro', () => {
 
       const estado = await registrarCobro(BASE);
 
-      expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
+      expect(estado).toEqual({ mensaje: t('cobros.cobroYaRegistrado') });
       expect(revalidatePath).toHaveBeenCalledWith('/facturacion');
       expect(supabase.select).not.toHaveBeenCalled();
       expect(supabase.rpc).not.toHaveBeenCalled();

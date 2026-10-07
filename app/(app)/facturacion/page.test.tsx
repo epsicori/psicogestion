@@ -139,16 +139,16 @@ describe('PaginaFacturacion', () => {
     expect(screen.queryByRole('combobox', { name: /profesional/i })).toBeNull();
   });
 
-  it('si no se pueden cargar los pacientes, el aviso de error y ningún botón de registrar', async () => {
+  it('si no se pueden cargar los pacientes, la isla se monta igual, con pacientes null', async () => {
     cargarContexto.mockResolvedValue(contextoDe('tecnico_administrativo'));
     cargarPacientesParaCobro.mockResolvedValue({ ok: false });
     const nodo = porNombre('AccionRegistrar');
     const tipo = nodo.tipo as (p: Record<string, unknown>) => Promise<ReactNode>;
 
-    render(<>{await tipo(nodo.props)}</>);
+    const r = await tipo(nodo.props);
 
-    expect(screen.getByText(t('cobros.errorPacientes'))).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /registrar cobro/i })).toBeNull();
+    expect(isValidElement(r) && r.type).toBe(RegistrarCobro);
+    expect(isValidElement(r) && r.props).toEqual({ pacientes: null, hoy: '2026-10-06' });
   });
 
   it('el botón de registrar cobro recibe los pacientes y el hoy del contexto, dentro de un Suspense', async () => {

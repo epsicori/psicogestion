@@ -5,12 +5,14 @@ import { useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialogo } from '@/components/ui/dialogo';
+import { AvisoDeError } from '@/components/ui/piezas';
 import { t } from '@/lib/i18n';
 
 import { FormularioCobro } from './formulario-cobro';
 
 type Props = {
-  pacientes: { id: string; nombre: string; apellidos: string }[];
+  /** `null`: no se pudo cargar la lista. No se ofrece registrar a ciegas. */
+  pacientes: { id: string; nombre: string; apellidos: string }[] | null;
   hoy: string;
 };
 
@@ -37,42 +39,48 @@ export function RegistrarCobro({ pacientes, hoy }: Props) {
 
   return (
     <>
-      <Button
-        type="button"
-        className="min-h-11"
-        onClick={() => {
-          setAviso('');
-          setAbierto(true);
-        }}
-      >
-        <Plus />
-        {t('cobros.registrarCobro')}
-      </Button>
+      {pacientes === null ? (
+        <AvisoDeError mensaje={t('cobros.errorPacientes')} />
+      ) : (
+        <Button
+          type="button"
+          className="min-h-11"
+          onClick={() => {
+            setAviso('');
+            setAbierto(true);
+          }}
+        >
+          <Plus />
+          {t('cobros.registrarCobro')}
+        </Button>
+      )}
       {/* Visible: «Cobro registrado» es la confirmación de una acción económica, no solo para lectores. */}
       <p role="status" className="text-sm text-foreground">
         {aviso}
       </p>
-      <Dialogo
-        abierto={abierto}
-        // Con un envío en vuelo no se cierra: el usuario no vería su resultado (B-H11).
-        alCerrar={() => {
-          if (!enviando) setAbierto(false);
-        }}
-        titulo={t('cobros.registrarCobro')}
-        ancho="amplio"
-      >
-        <FormularioCobro
-          pacientes={pacientes}
-          hoy={hoy}
-          alCambiarEnvio={setEnviando}
-          claveDeEnvio={claveDeEnvio}
-          alRegistrar={(huella) => {
-            claves.current.delete(huella);
-            setAbierto(false);
-            setAviso(t('cobros.cobroRegistrado'));
+      {pacientes !== null && (
+        <Dialogo
+          abierto={abierto}
+          // Con un envío en vuelo no se cierra: el usuario no vería su resultado (B-H11).
+          alCerrar={() => {
+            if (!enviando) setAbierto(false);
           }}
-        />
-      </Dialogo>
+          titulo={t('cobros.registrarCobro')}
+          ancho="amplio"
+        >
+          <FormularioCobro
+            pacientes={pacientes}
+            hoy={hoy}
+            alCambiarEnvio={setEnviando}
+            claveDeEnvio={claveDeEnvio}
+            alRegistrar={(huella, avisoDeExito) => {
+              claves.current.delete(huella);
+              setAbierto(false);
+              setAviso(avisoDeExito);
+            }}
+          />
+        </Dialogo>
+      )}
     </>
   );
 }

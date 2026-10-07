@@ -27,8 +27,8 @@ type Props = {
   hoy: string;
   /** El id de envío de esa huella: el mismo mientras no haya un éxito (R4.1; lo guarda `RegistrarCobro`). */
   claveDeEnvio: (huella: string) => string;
-  /** Se llama cuando la acción confirma el cobro, con la huella del envío. */
-  alRegistrar: (huella: string) => void;
+  /** Se llama cuando la acción confirma que el cobro existe, con la huella del envío y el texto que hay que anunciar. */
+  alRegistrar: (huella: string, aviso: string) => void;
   /** Se llama con `true` al empezar un envío y con `false` al acabar (el diálogo no se cierra a mitad). */
   alCambiarEnvio?: (enviando: boolean) => void;
 };
@@ -37,7 +37,10 @@ type CampoCobro = 'pacienteId' | 'importe' | 'fecha' | 'formaPago' | 'referencia
 /** El orden en que se pintan los campos: el foco va al primero con error. */
 const ORDEN_DE_CAMPOS: CampoCobro[] = ['pacienteId', 'importe', 'fecha', 'formaPago', 'referencia', 'motivo'];
 
-const OPCIONES_FORMA = FORMAS_DE_PAGO.map((forma) => ({ valor: forma, texto: t(`cobros.formas.${forma}`) }));
+/** Las dos respuestas que confirman que el cobro existe (R5.1): las dos cierran y olvidan la clave. */
+const MENSAJES_DE_EXITO = [t('cobros.cobroRegistrado'), t('cobros.cobroYaRegistrado')];
+
+const OPCIONES_FORMA =FORMAS_DE_PAGO.map((forma) => ({ valor: forma, texto: t(`cobros.formas.${forma}`) }));
 
 /** El motivo se pinta solo con un importe que se lee como negativo; lo ilegible no lo es. */
 function esNegativo(importe: string | undefined): boolean {
@@ -97,9 +100,9 @@ export function FormularioCobro({ pacientes, hoy, claveDeEnvio, alRegistrar, alC
     iniciarTransicion(async () => {
       try {
         const estado = (await registrarCobro({ ...datos, id })) ?? ESTADO_INICIAL;
-        if (!estado.errores && estado.mensaje === t('cobros.cobroRegistrado')) {
+        if (!estado.errores && estado.mensaje !== undefined && MENSAJES_DE_EXITO.includes(estado.mensaje)) {
           // Solo un éxito olvida la clave: un cobro igual registrado después es otro cobro.
-          alRegistrar(huella);
+          alRegistrar(huella, estado.mensaje);
           return;
         }
         aplicarErroresDelServidor(estado, setError);

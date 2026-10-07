@@ -146,7 +146,18 @@ describe('FormularioCobro', () => {
       rellenar('60');
       await enviar();
       await waitFor(() => expect(alRegistrar).toHaveBeenCalledTimes(1));
-      expect(alRegistrar).toHaveBeenCalledWith(claveDeEnvio.mock.calls[0][0]);
+      expect(alRegistrar).toHaveBeenCalledWith(claveDeEnvio.mock.calls[0][0], t('cobros.cobroRegistrado'));
+    });
+
+    it('con «ya estaba registrado», alRegistrar recibe la huella y ese texto, y no se pinta como error', async () => {
+      registrarCobro.mockResolvedValue({ mensaje: t('cobros.cobroYaRegistrado') });
+      const claveDeEnvio = vi.fn<(huella: string) => string>(() => ID_FIJO);
+      const alRegistrar = pintar(vi.fn(), undefined, claveDeEnvio);
+      rellenar('60');
+      await enviar();
+      await waitFor(() => expect(alRegistrar).toHaveBeenCalledTimes(1));
+      expect(alRegistrar).toHaveBeenCalledWith(claveDeEnvio.mock.calls[0][0], t('cobros.cobroYaRegistrado'));
+      expect(screen.queryByText(t('cobros.cobroYaRegistrado'))).toBeNull();
     });
   });
 

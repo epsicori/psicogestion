@@ -9,11 +9,11 @@ vi.mock('./formulario-cobro', () => ({
     alRegistrar,
     alCambiarEnvio,
   }: {
-    alRegistrar: (huella: string) => void;
+    alRegistrar: (huella: string, aviso: string) => void;
     alCambiarEnvio: (enviando: boolean) => void;
   }) => (
     <>
-      <button type="button" onClick={() => alRegistrar('huella-de-pega')}>
+      <button type="button" onClick={() => alRegistrar('huella-de-pega', t('cobros.cobroRegistrado'))}>
         enviar-de-pega
       </button>
       <button type="button" onClick={() => alCambiarEnvio(true)}>
@@ -34,6 +34,14 @@ describe('RegistrarCobro', () => {
     const region = screen.getByRole('status');
     expect(region).toBeEmptyDOMElement();
     expect(region.className).not.toContain('empty:hidden');
+  });
+
+  it('con pacientes null: el aviso de pacientes, ningún disparador, ningún diálogo y la región de estado montada', () => {
+    render(<RegistrarCobro pacientes={null} hoy="2026-10-06" />);
+    expect(screen.getByText(t('cobros.errorPacientes'))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t('cobros.registrarCobro') })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('abre el diálogo; al registrar se cierra, el foco vuelve al botón y se anuncia', async () => {

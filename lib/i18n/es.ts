@@ -1359,6 +1359,8 @@ export const es = {
     registrarCobro: 'Registrar cobro',
     registrando: 'Registrando…',
     cobroRegistrado: 'Cobro registrado',
+    cobroYaRegistrado:
+      'Este cobro ya estaba registrado; no se ha añadido otro. Si es un cobro nuevo con los mismos datos, regístralo otra vez.',
     paciente: 'Paciente',
     eligePaciente: 'Elige un paciente',
     importe: 'Importe',
