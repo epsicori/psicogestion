@@ -8,7 +8,7 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048 y T-049.
-- **En curso**: T-023, implementado en su rama (`T-023-cobros-y-pendiente`, HEAD fcc10e8, worktree `agent-ab24275cd0513aee2`); verificación y revisión **paradas a medias** el 06-10 por orden del propietario, sin artefactos.
+- **En curso**: T-023 **ronda 2 implementada** el 07-10 en el worktree `agent-a65aa0bb5f872243e` (migración, banco 30 con M11-M17, interfaz, contraste, spec); falta verificación y revisión de la ronda 2. T-050 (diseño) en marcha.
 - **Siguiente en `supabase/`**: T-023 (20261013120000) → T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -18,16 +18,18 @@
 
 ## Siguiente paso
 
-1. **Reanudar T-023 por la ronda 1 de verificación y revisión**, lanzando de nuevo, en paralelo, el verificador, el revisor A (base, RLS y dinero) y el revisor B (interfaz). Todos medirán sobre una copia `git archive fcc10e8`. Antes, pedir permiso para `db reset` desde el worktree de la rama y `npm run seed`: el verificador, cortado a medias, pudo dejar aplicado en la base local un mutante SQL. El banco 30 se ancla al primer lunes de marzo de Y+11. Fuera de alcance, para que los juzgue el revisor A:
-   - una cita que pasa de realizada a cancelada rebaja el devengado sin rastro;
-   - el técnico puede deducir el precio a partir del devengado;
-   - se admite un cobro a un paciente fusionado.
-
-   Después, la cola sigue con T-026a → T-046 → T-023b → T-047.
+1. **T-023 ronda 2: verificador y dos revisores** sobre una copia `git archive <HEAD de la rama>`. Antes, `db reset` + `npm run seed` (el spec de `accesibilidad/facturacion.spec.ts` deja un cobro de 0,01 EUR con referencia `T-023 spec <ts>`; no se borra). Después, la cola: T-026a → T-046 → T-023b → T-047.
 2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove).
 
 ## Hallazgos anotados
 
+- **T-023 ronda 2 (R2.7), fuera de alcance**:
+  - una cita que pasa de `realizada` a `cancelada` rebaja el devengado y mueve el pendiente sin rastro;
+  - el técnico puede deducir el precio de una sesión a partir del devengado;
+  - la base admite un cobro a un paciente fusionado (la acción lo rechaza; la RLS/disparador no);
+  - «Últimos cobros» con filtro de profesional usa el profesional del registro, no el del paciente, y no coincide con el pendiente;
+  - `directorio_perfiles` ahora la ejerce `30-cobros` vía `profesionales_del_pendiente()` (cierra el hallazgo de «sin prueba RLS» para esa vista, no para las tres pantallas admin).
+- **Banco `test:rls` (07-10)**: una sesión `psql` huérfana (`create temp table t6_codigos_pro2…`) provocó `deadlock detected` en reejecuciones seguidas; `pg_terminate_backend` y repetir. Pasa limpio con la base sin huérfanas.
 - **B5-H1 (BAJA, T-043)**: el `setAviso('')` de las dos ramas de fallo del recálculo, en `formulario-alta.tsx:161` y `:181`, borra también el mensaje «acaba de ocuparse» de `hueco_ocupado`. Arreglo: vaciar solo si el aviso es el texto de la vuelta, más prueba negativa en las dos ramas. Detalle en `tickets/T-043/revision-b.ronda5.md`.
 - **Pruebas de `formulario-alta.test.tsx` (T-043)**: las anteriores a R11 encadenan `mockResolvedValueOnce` sin `mockReset`; si una falla, sus colas pasan a las siguientes. R11-R16 usan `respuestasDeRecalculo()`.
 - **T-043 (BAJA)**: con varias ejecuciones de vitest en paralelo, la prueba de `formulario-alta.test.tsx:966` cayó una vez por el plazo de 1 s de `waitFor`.
@@ -48,7 +50,6 @@
 - **T-048 (BAJA)**: `rg "latido|animate-"` devuelve 3 coincidencias inocuas (aserciones negativas y un comentario).
 - **T-028 R5-H32 (BAJA)**: `role="status"` en sugerencias nace relleno cuando cambia el tipo. Arreglo: región montada siempre.
 - **Paciente fusionado o traspasado (T-028 R7)**: ni `agenda_crear_cita`/`agenda_crear_serie` ni disparadores impiden agendar fusionado/traspasado. Requiere ticket.
-- **`directorio_perfiles` sin prueba RLS**: ningún módulo `scripts/rls/` la nombra; tres pantallas admin (centros, dar de baja, TOTP) la usan desde T-041/T-045.
 - **T-042 R2-H1 (BAJA)**: predicado `update` `bloquear_historia()` sin prueba ni mutante; cada «Bloquear» escribe en `auditoria`.
 - **T-039 R3-B-H1 (MEDIA)**: reprogramar fuera ventana episodio y dar de baja participante sin dueño; T-034 cubre solo cierre.
 - **T-039 R3-A-H1 (BAJA)**: `fn_exigir_vinculo_agenda` solo `before insert`; profesional pasa cita suelta a paciente ajeno.
