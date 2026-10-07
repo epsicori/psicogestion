@@ -219,7 +219,9 @@ test('4 · un corte de red tras insertar no recarga ni pierde lo escrito, y reen
 
   await expect(reabierto.dialogo).toBeHidden();
   await expect(boton).toBeFocused();
-  await expect(page.getByRole('status').filter({ hasText: 'Cobro registrado' })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText(
+    'Este cobro ya estaba registrado; no se ha añadido otro. Si es un cobro nuevo con los mismos datos, regístralo otra vez.',
+  );
   await expect(filasDeLucia, 'el reintento duplicó el cobro (o no se vio el nuevo)').toHaveCount(antes + 1);
   await expect(lista, 'el reintento duplicó el cobro').toHaveCount(totalAntes + 1);
 
