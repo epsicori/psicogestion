@@ -9,11 +9,11 @@ vi.mock('./formulario-cobro', () => ({
     alRegistrar,
     alCambiarEnvio,
   }: {
-    alRegistrar: () => void;
+    alRegistrar: (huella: string) => void;
     alCambiarEnvio: (enviando: boolean) => void;
   }) => (
     <>
-      <button type="button" onClick={alRegistrar}>
+      <button type="button" onClick={() => alRegistrar('huella-de-pega')}>
         enviar-de-pega
       </button>
       <button type="button" onClick={() => alCambiarEnvio(true)}>

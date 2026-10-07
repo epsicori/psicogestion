@@ -13,14 +13,22 @@ import { ESTADO_INICIAL, aplicarErroresDelServidor } from '@/lib/formularios';
 import { t } from '@/lib/i18n';
 
 import { registrarCobro } from './acciones';
-import { FORMAS_DE_PAGO, crearEsquemaCobro, type DatosCobro, type EntradaCobro } from './esquemas';
+import {
+  FORMAS_DE_PAGO,
+  crearEsquemaCobro,
+  huellaDeCobro,
+  type DatosCobro,
+  type EntradaCobro,
+} from './esquemas';
 
 type Props = {
   pacientes: { id: string; nombre: string; apellidos: string }[];
   /** «Hoy» en la zona de la organización, calculado en servidor (ADR-034). */
   hoy: string;
-  /** Se llama cuando la acción confirma el cobro. */
-  alRegistrar: () => void;
+  /** El id de envío de esa huella: el mismo mientras no haya un éxito (R4.1; lo guarda `RegistrarCobro`). */
+  claveDeEnvio: (huella: string) => string;
+  /** Se llama cuando la acción confirma el cobro, con la huella del envío. */
+  alRegistrar: (huella: string) => void;
   /** Se llama con `true` al empezar un envío y con `false` al acabar (el diálogo no se cierra a mitad). */
   alCambiarEnvio?: (enviando: boolean) => void;
 };
@@ -45,11 +53,9 @@ function esNegativo(importe: string | undefined): boolean {
  * el mismo esquema en cliente y en la acción, y a la acción va la SALIDA del esquema. Aquí no se
  * emite ni se aprueba nada (ADR-078): se anota lo que se ha cobrado.
  */
-export function FormularioCobro({ pacientes, hoy, alRegistrar, alCambiarEnvio }: Props) {
+export function FormularioCobro({ pacientes, hoy, claveDeEnvio, alRegistrar, alCambiarEnvio }: Props) {
   const [enviando, iniciarTransicion] = useTransition();
   const enviandoRef = useRef(false);
-  // Clave de envío (R3.1): el mismo envío repetido lleva el mismo id y la base no admite dos filas con él.
-  const claveRef = useRef<{ huella: string; id: string } | null>(null);
   const [mensaje, setMensaje] = useState('');
   const [campoConFoco, setCampoConFoco] = useState<{ campo: CampoCobro } | null>(null);
   const esquema = useMemo(() => crearEsquemaCobro(hoy), [hoy]);
@@ -85,16 +91,15 @@ export function FormularioCobro({ pacientes, hoy, alRegistrar, alCambiarEnvio }:
     enviandoRef.current = true;
     setMensaje('');
     setCampoConFoco(null);
-    const huella = JSON.stringify(datos);
-    if (claveRef.current?.huella !== huella) claveRef.current = { huella, id: crypto.randomUUID() };
-    const id = claveRef.current.id;
+    // La clave de envío vive fuera del diálogo (R4.1): cerrar y reabrir no la pierde.
+    const huella = huellaDeCobro(datos);
+    const id = claveDeEnvio(huella);
     iniciarTransicion(async () => {
       try {
         const estado = (await registrarCobro({ ...datos, id })) ?? ESTADO_INICIAL;
         if (!estado.errores && estado.mensaje === t('cobros.cobroRegistrado')) {
-          // Un cobro igual registrado después es otro cobro.
-          claveRef.current = null;
-          alRegistrar();
+          // Solo un éxito olvida la clave: un cobro igual registrado después es otro cobro.
+          alRegistrar(huella);
           return;
         }
         aplicarErroresDelServidor(estado, setError);

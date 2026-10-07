@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { t } from '@/lib/i18n';
 
-import { FORMAS_DE_PAGO, LIMITE_CENTIMOS, crearEsquemaCobro, importeParaBd } from './esquemas';
+import { FORMAS_DE_PAGO, LIMITE_CENTIMOS, crearEsquemaCobro, huellaDeCobro, importeParaBd } from './esquemas';
 
 const HOY = '2026-10-06';
 // Un uuid v4, como los de `gen_random_uuid()`: `z.uuid()` exige la versión y la variante.
@@ -135,5 +135,44 @@ describe('importeParaBd · céntimos a numeric sin coma flotante', () => {
 
   it('lanza con algo que no son céntimos enteros', () => {
     expect(() => importeParaBd(12.5)).toThrow();
+  });
+});
+
+describe('huellaDeCobro (R4.1)', () => {
+  const datos = (resto: Record<string, unknown> = {}) =>
+    crearEsquemaCobro(HOY).parse({ ...base, ...resto });
+
+  it.each(['60', '60.00', ' 60,00 € '])('«%s» da la misma huella que «60,00»', (importe) => {
+    expect(huellaDeCobro(datos({ importe }))).toBe(huellaDeCobro(datos({ importe: '60,00' })));
+  });
+
+  it('el orden de las claves no cambia la huella', () => {
+    const a = datos();
+    const b = {
+      formaPago: a.formaPago,
+      fecha: a.fecha,
+      importe: a.importe,
+      pacienteId: a.pacienteId,
+    } as typeof a;
+    expect(huellaDeCobro(b)).toBe(huellaDeCobro(a));
+  });
+
+  it('un importe positivo con motivo y sin motivo da la misma huella', () => {
+    expect(huellaDeCobro(datos({ motivo: 'x' }))).toBe(huellaDeCobro(datos()));
+  });
+
+  it('una devolución con motivos distintos da huellas distintas', () => {
+    expect(huellaDeCobro(datos({ importe: '-20,00', motivo: 'a' }))).not.toBe(
+      huellaDeCobro(datos({ importe: '-20,00', motivo: 'b' })),
+    );
+  });
+
+  it.each([
+    ['pacienteId', '7f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60'],
+    ['fecha', '2026-10-05'],
+    ['formaPago', 'bizum'],
+    ['referencia', 'TR-1'],
+  ])('cambiar %s cambia la huella', (campo, valor) => {
+    expect(huellaDeCobro(datos({ [campo]: valor }))).not.toBe(huellaDeCobro(datos()));
   });
 });

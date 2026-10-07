@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialogo } from '@/components/ui/dialogo';
@@ -23,6 +23,17 @@ export function RegistrarCobro({ pacientes, hoy }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [aviso, setAviso] = useState('');
   const [enviando, setEnviando] = useState(false);
+  // Claves de envío por huella (R4.1). Viven aquí y no en el formulario: el diálogo desmonta el
+  // formulario al cerrarse. Solo un éxito olvida una clave.
+  const claves = useRef(new Map<string, string>());
+
+  function claveDeEnvio(huella: string): string {
+    const guardada = claves.current.get(huella);
+    if (guardada !== undefined) return guardada;
+    const nueva = crypto.randomUUID();
+    claves.current.set(huella, nueva);
+    return nueva;
+  }
 
   return (
     <>
@@ -54,7 +65,9 @@ export function RegistrarCobro({ pacientes, hoy }: Props) {
           pacientes={pacientes}
           hoy={hoy}
           alCambiarEnvio={setEnviando}
-          alRegistrar={() => {
+          claveDeEnvio={claveDeEnvio}
+          alRegistrar={(huella) => {
+            claves.current.delete(huella);
             setAbierto(false);
             setAviso(t('cobros.cobroRegistrado'));
           }}

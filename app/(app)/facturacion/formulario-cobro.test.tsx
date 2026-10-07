@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { t } from '@/lib/i18n';
 
+import { crearEsquemaCobro, huellaDeCobro } from './esquemas';
+
 const registrarCobro = vi.fn();
 vi.mock('./acciones', () => ({ registrarCobro: (...a: unknown[]) => registrarCobro(...a) }));
 const refresh = vi.fn();
@@ -13,10 +15,21 @@ const { FormularioCobro } = await import('./formulario-cobro');
 const PACIENTE = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const PACIENTES = [{ id: PACIENTE, nombre: 'Ana', apellidos: 'Ruiz' }];
 const HOY = '2026-10-06';
+const ID_FIJO = '3f2b8c1e-9d4a-4b6e-8f10-2a7c5d9e1b34';
 
-function pintar(alRegistrar = vi.fn(), alCambiarEnvio?: (enviando: boolean) => void) {
+function pintar(
+  alRegistrar = vi.fn(),
+  alCambiarEnvio?: (enviando: boolean) => void,
+  claveDeEnvio: (huella: string) => string = vi.fn(() => ID_FIJO),
+) {
   render(
-    <FormularioCobro pacientes={PACIENTES} hoy={HOY} alRegistrar={alRegistrar} alCambiarEnvio={alCambiarEnvio} />,
+    <FormularioCobro
+      pacientes={PACIENTES}
+      hoy={HOY}
+      claveDeEnvio={claveDeEnvio}
+      alRegistrar={alRegistrar}
+      alCambiarEnvio={alCambiarEnvio}
+    />,
   );
   return alRegistrar;
 }
@@ -111,38 +124,29 @@ describe('FormularioCobro', () => {
     expect(screen.getByRole('button', { name: t('cobros.registrarCobro') })).toBeInTheDocument();
   });
 
-  describe('R3.1: clave de envío', () => {
-    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-    it('un segundo envío igual lleva el mismo id (UUID); con el importe cambiado, otro', async () => {
-      registrarCobro.mockRejectedValue(new Error('red'));
-      pintar();
-      rellenar('60,00');
+  describe('R4.1: clave de envío', () => {
+    it('claveDeEnvio recibe la huella de los datos validados y la acción, el id que devuelve', async () => {
+      registrarCobro.mockResolvedValue({ mensaje: t('cobros.noSePudoRegistrar') });
+      const claveDeEnvio = vi.fn(() => ID_FIJO);
+      pintar(vi.fn(), undefined, claveDeEnvio);
+      rellenar('60');
       await enviar();
-      await screen.findByText(t('cobros.resultadoDesconocido'));
-      await enviar();
-      await waitFor(() => expect(registrarCobro).toHaveBeenCalledTimes(2));
-      const [primero, segundo] = registrarCobro.mock.calls.map((c) => c[0] as { id: string });
-      expect(primero.id).toMatch(UUID);
-      expect(segundo.id).toBe(primero.id);
-
-      fireEvent.change(screen.getByLabelText(t('cobros.importe')), { target: { value: '61,00' } });
-      await enviar();
-      await waitFor(() => expect(registrarCobro).toHaveBeenCalledTimes(3));
-      expect((registrarCobro.mock.calls[2][0] as { id: string }).id).not.toBe(primero.id);
+      await waitFor(() => expect(registrarCobro).toHaveBeenCalledTimes(1));
+      const esperada = huellaDeCobro(
+        crearEsquemaCobro(HOY).parse({ pacienteId: PACIENTE, importe: '60', fecha: HOY, formaPago: 'bizum' }),
+      );
+      expect(claveDeEnvio).toHaveBeenCalledWith(esperada);
+      expect(registrarCobro.mock.calls[0][0]).toMatchObject({ id: ID_FIJO });
     });
 
-    it('tras un éxito, el mismo envío lleva un id distinto', async () => {
+    it('con éxito, alRegistrar recibe esa misma huella', async () => {
       registrarCobro.mockResolvedValue({ mensaje: t('cobros.cobroRegistrado') });
-      const alRegistrar = pintar();
-      rellenar('60,00');
+      const claveDeEnvio = vi.fn(() => ID_FIJO);
+      const alRegistrar = pintar(vi.fn(), undefined, claveDeEnvio);
+      rellenar('60');
       await enviar();
       await waitFor(() => expect(alRegistrar).toHaveBeenCalledTimes(1));
-      await enviar();
-      await waitFor(() => expect(registrarCobro).toHaveBeenCalledTimes(2));
-      const [a, b] = registrarCobro.mock.calls.map((c) => c[0] as { id: string });
-      expect(a.id).toMatch(UUID);
-      expect(b.id).not.toBe(a.id);
+      expect(alRegistrar).toHaveBeenCalledWith(claveDeEnvio.mock.calls[0][0]);
     });
   });
 

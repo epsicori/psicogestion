@@ -84,3 +84,16 @@ export function importeParaBd(c: Centimos): string {
   const euros = (absoluto - centimos) / 100;
   return `${c < 0 ? '-' : ''}${euros}.${String(centimos).padStart(2, '0')}`;
 }
+
+/** La huella de un envío (R4.1): lo que la base guardaría, en orden fijo y con el importe en céntimos. */
+export function huellaDeCobro(datos: DatosCobro): string {
+  const centimos = aCentimos(datos.importe);
+  return JSON.stringify([
+    datos.pacienteId,
+    centimos,
+    datos.fecha,
+    datos.formaPago,
+    datos.referencia ?? null,
+    centimos < 0 ? (datos.motivo ?? null) : null,
+  ]);
+}
