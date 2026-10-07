@@ -1323,3 +1323,73 @@ Las claves de i18n van con el código que las usa.
   cifra; va a `state.md`.
 - **CA15 por el banco 23**: es de T-050.
 - **Cambios en `Dialogo` o en `lib/formularios.ts`**: no hacen falta y están fuera de territorio.
+
+## Anexo · Ronda 3 (07-10-2026)
+
+Cierra `revision.json` de la ronda 2 (0 ALTA, 3 MEDIA, 7 BAJA) sobre la rama `worktree-agent-a65aa0bb5f872243e` (27cd231). Todo cabe en el territorio de R2.10. **No cambian la migración ni `tipos-bd.ts`.**
+
+### R3.0 · Hechos verificados
+- Next 16.3.1: si el fetch RSC de `router.refresh()` lanza, `fetch-server-response.js:237-242` devuelve la URL; si la respuesta no es 200, `:143-148` llama a `doMpaNavigation`. `ppr-navigations.js:1123` lo marca `exitStatus: 2` y `:997` pone `isHardRetry = true`: recarga completa. `next.config.ts` no activa el modo sin conexión. Que falle el POST de la acción solo rechaza la promesa (`reducers/server-action-reducer.js:85-98`), sin navegar.
+- `cobros.id` es la clave primaria (`20261011120000_economico_esquema.sql:171`) y `authenticated` ya puede insertarlo (`:1255-1256`): la base ya impide dos filas con el mismo id.
+- Zod 4.4.3, medido: `z.coerce.number().int().min(1)` acepta `'999999'` y rechaza `'1e21'`, `'9007199254740993'`, `'abc'`, `'0'` y `'2.5'`. El `superRefine` no corre si falla otro campo: con Paciente vacío no hay error de Motivo.
+- `formulario-cobro.tsx:197` repite el patrón de B-H8: un `aria-live` con `empty:hidden`.
+
+### R3.1 · B-H1 (MEDIA): el `catch` no refresca, y el reintento es seguro por clave de envío
+- `formulario-cobro.tsx`: fuera `useRouter` y `router.refresh()`. El `catch` solo pinta `resultadoDesconocido`; el formulario sigue montado y con lo escrito.
+  - `claveRef = useRef<{ huella: string; id: string } | null>(null)`. En `alSerValido`, antes de la transición: `huella = JSON.stringify(datos)`; si difiere de `claveRef.current?.huella`, `claveRef.current = { huella, id: crypto.randomUUID() }`. Se llama a `registrarCobro({ ...datos, id })`.
+  - Con éxito, `claveRef.current = null` antes de `alRegistrar()`: un cobro igual registrado después es otro cobro.
+- `acciones.ts`: antes del paso 2, `z.object({ id: z.uuid() }).safeParse(datos)`; si falla, `fallo()` sin insertar. El `insert` lleva `id` (cambia el comentario del paso 6).
+  - Paso 7, antes del genérico: `23505` con `cobros_pkey` en el mensaje → `from('cobros').select('id').eq('id', id).eq('registrado_por', usuario.id).maybeSingle()`. Con fila: `revalidatePath` y `cobroRegistrado`. Sin fila o con error: `fallo()`. Solo confirma cobros propios y visibles: no abre oráculo.
+- `es.ts`: `resultadoDesconocido: 'No sabemos si el cobro se ha registrado. Vuelve a pulsar «Registrar cobro» sin cambiar nada: si ya estaba registrado, no se duplica.'`
+- Descartadas: refrescar solo con `navigator.onLine` (un 500 con el servidor caído recarga igual); remitir a «Últimos cobros» (B-H7); una columna `clave_envio` (la clave primaria ya lo es).
+- Pruebas:
+  - `formulario-cobro.test.tsx` (sustituye la de B-H1): si rechaza, aviso visible, `refresh` sin llamar e Importe intacto; un segundo envío igual lleva el mismo `id` (UUID); con el importe cambiado, `id` distinto; tras un éxito, el mismo envío lleva `id` distinto.
+  - `acciones.test.ts`: el `insert` lleva el `id` (sustituye «sin id»); sin `id` o no UUID → `fallo()` sin `insert`; `23505` de `cobros_pkey` con fila propia → `cobroRegistrado` y `revalidatePath`; sin fila → `fallo()`; `23505` de otra restricción → `fallo()` sin `select`.
+  - Banco 30, **E12** (E11 ya existe): como PRO1, dos `insert` con el mismo `id`: el segundo da `23505` y `count(*) = 1`. Gemela: otro `id` en la misma sesión entra.
+  - El paso 4 del spec (R3.2), en Chromium. `grep -n refresh "app/(app)/facturacion/formulario-cobro.tsx"` sale vacío.
+
+### R3.2 · B-H2 (MEDIA): `accesibilidad/facturacion.spec.ts`
+- Cabecera: el paso 4 admite como mucho 18 filas «Lucía Márquez · 0,01 €» en «Últimos cobros»; con más, falla con «resetea: db reset && npm run seed».
+- Paso 1: además, `getByRole('combobox', { name: 'Profesional' })` visible, con `x ≥ 0` y `x + width ≤ 360`.
+- Paso 2: el `boundingBox` del diálogo se mide **después** del envío vacío y del foco en Paciente. Se añade el botón de envío del diálogo: tras `scrollIntoViewIfNeeded()`, dentro de 360 × 740. La página no desborda.
+- Paso 3: con `-5,00` y Motivo a la vista, `fill('')` en Fecha, 121 caracteres en Referencia y envío. `[aria-invalid="true"]` del diálogo `toHaveCount(4)` (Paciente, Fecha, Forma de pago, Referencia), foco en Paciente y las tres medidas del paso 2.
+- Paso 4, que prueba también B-H1:
+  1. `antes` = filas de «Últimos cobros» con «Lucía Márquez» y «0,01». Se rellena el cobro como ahora.
+  2. `page.route` del primer POST con cabecera `next-action`: `await route.fetch()` (el servidor inserta), `context.setOffline(true)` y `route.abort('internetdisconnected')`. Se cuentan los `framenavigated` del marco principal.
+  3. Se pulsa Registrar: `resultadoDesconocido` visible. Tras `waitForTimeout(1500)`: cero navegaciones, el aviso sigue y el Importe vale `0,01`.
+  4. `setOffline(false)`, `unroute` y otra pulsación: el diálogo se cierra, el foco vuelve a «Registrar cobro», «Cobro registrado» es visible y las filas valen `antes + 1`, no `+ 2`.
+  5. En la región «Por paciente», la línea del importe de «Lucía Márquez» cumple `scrollWidth ≤ clientWidth` y `right ≤ 360`.
+- Con el código de la ronda 2 cae el paso 4.3: el `refresh` sin red recarga la página.
+
+### R3.3 · B-H3 (MEDIA): `formulario-cobro.test.tsx`
+- Nuevo: el servidor devuelve `{ fecha: [fechaFutura] }` → `waitFor(() => document.activeElement?.id === 'fecha')`.
+- Nuevo: `rellenar('-5,00')`, Motivo «Error de cobro» y el servidor devuelve `{ motivo: [devolucionNecesitaMotivo] }` → foco en `motivo`.
+- Se queda el de `{ fecha, pacienteId }` → `pacienteId`. El mutante `if (estado.errores) setCampoConFoco({ campo: 'pacienteId' })` cae por los dos nuevos.
+
+### R3.4 · Las siete BAJA: todas se arreglan
+| Id | Cómo, y con qué prueba |
+|---|---|
+| A-H1, A-H2 | `docs/state.md` con el texto de R3.5. Prueba: su lectura |
+| A-H3 (+B-H5) | `cargarOpcionesProfesional` → `{ ok: true; opciones } \| { ok: false }`. Fallo de la RPC o error del directorio → `{ ok: false }`; «Profesional no encontrado» solo sin fila y sin error. `page.tsx` pinta `AvisoDeError` (`cobros.errorProfesionales: 'No se ha podido cargar la lista de profesionales'`) en lugar del selector. `datos.test.ts`: sustituye la de `:362` y añade el error del directorio. `page.test.tsx`: con `{ ok: false }`, aviso y ningún combobox «Profesional» |
+| B-H4 | `esquemaPagina = z.coerce.number().int().min(1)`, sin `max`. `datos.test.ts`: `'999999'` → 999999 (sustituye `'100001'` → 1); `'1e21'`, `'abc'` y `'0'` → 1. `bloques.test.tsx`: el contexto lleva 999999 y, con 120 filas, pinta «Del 101 al 120 de 120» y pide la página 3 |
+| B-H6 | La `<nav>` pasa a `paginacion-pendientes.tsx` (`'use client'`; recibe `pagina`, el texto del rango y los dos `href` o `null`). El clic en un enlace pone a `true` una variable de módulo. Un efecto sobre `pagina` (también al montar), si la ve, la apaga y enfoca el `<p>` del rango (`tabIndex={-1}`). Prueba en `paginacion-pendientes.test.tsx`, con `next/link` como `<a>`: clic en «Siguientes» y nuevo render con la página siguiente → foco en el rango; lo mismo desmontando y montando; montar sin clic no mueve el foco |
+| B-H7 | El texto de R3.1 ya no remite a «Últimos cobros». Lo prueban R3.1 y el paso 4 |
+| B-H8 | Fuera `empty:hidden` de `registrar-cobro.tsx:41` y de `formulario-cobro.tsx:197`: las dos regiones existen, vacías, desde el montaje. Prueba: al pintar, la región existe y no lleva la clase. El paso 1 vigila el desbordamiento |
+
+### R3.5 · `docs/state.md` (A-H1, A-H2): sustituye las líneas 26-31 de la rama
+```
+- **T-023, fuera de alcance (R2.7 y ronda 3)**:
+  - una cita que pasa de `realizada` a `cancelada` rebaja el devengado (medido: 6000 → 0; quien ya había pagado pasa a `cobrado_de_mas` 6000). Queda rastro en `auditoria` (2 filas, `auditar_citas`) y el técnico no puede hacerlo (UPDATE 0). Falta una guarda de transición en `citas` (R2.8 de T-021). Ticket aparte, de agenda;
+  - el técnico puede deducir el precio de una sesión restando el pendiente antes y después de una cita realizada. Riesgo aceptado: la vista no lleva sesiones, tipo ni fechas (familia de R2-H1 de T-021);
+  - la base admite un cobro a un paciente fusionado (`cobros_alta`, `fn_validar_cobro`); la acción lo rechaza. Ticket aparte, con su banco;
+  - «Últimos cobros» recorta por el paciente del registro y el pendiente consolida en el superviviente, así que no casan en tres casos: con el filtro de profesional del administrador; el técnico del centro del superviviente ve sumado el cobro hecho al absorbido de otro centro y no lo ve en la lista (`cobros_lectura`); el profesional del absorbido ve sus cobros en la lista y no tiene fila en el pendiente. No cambia ninguna cifra. Ticket aparte.
+- **`directorio_perfiles` sin prueba RLS**: ningún módulo de `scripts/rls/` la prueba como vista; la usan tres pantallas admin (centros, dar de baja, TOTP) desde T-041/T-045. `30-cobros` la ejerce a través de `profesionales_del_pendiente()` (ADM, PRO1, rol nulo); sigue sin módulo propio.
+```
+
+### R3.6 · Verificador, mutantes y qué revisar
+- El verificador repite R2.8 (sin `npm run tipos`) y anota en `mutantes.json`: M18, el `refresh` de vuelta en el `catch` (caen la prueba de `refresh` y el paso 4.3); M19, el foco siempre en `pacienteId` (R3.3); M20, un `id` nuevo en cada envío (R3.1, y el paso 4.4 da `+ 2`); M21, cualquier `23505` como éxito y sin `select` (`acciones.test.ts`); M22, el foco al rango sin la marca de módulo (la prueba «sin clic»).
+- Revisor B: que ningún camino del `catch` navegue; que el `id` se renueve tras un éxito y con datos distintos, y en ningún otro caso; que el paso 4 cuente `+ 1` y no se conforme con «visible»; el foco tras paginar en los dos sentidos.
+- Revisor A: que el `23505` solo se dé por bueno con `cobros_pkey` y fila propia bajo RLS; que E12 lleve su gemela; que nada nuevo lea `perfiles`.
+
+### Lo que no entra en la ronda 3
+- B-H6 en Chromium: la siembra no llega a 51 filas en el pendiente. Se prueba en jsdom, con el caso de remontaje.
