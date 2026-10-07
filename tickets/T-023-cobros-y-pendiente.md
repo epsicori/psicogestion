@@ -16,12 +16,21 @@ territorio:
   - app/(app)/facturacion/**
   - components/armazon/modulos.ts
   - components/armazon/modulos.test.ts
+  - components/ui/piezas.tsx
+  - components/ui/piezas.test.tsx
+  - lib/contraste/**
   - lib/i18n/es.ts
   - accesibilidad/facturacion.spec.ts
   - tickets/T-023/**
   - docs/bitacora/T-023*.md
   - docs/state.md
 ---
+
+> **Ronda 2 (07-10-2026), decisiones del propietario.** (1) A-H2: el pendiente sigue la flecha de
+> `fusionado_en` y suma lo del duplicado en el superviviente, dentro de T-023. (2) B-H4: el territorio
+> se amplía a `components/ui/piezas.tsx` (y su prueba) y `lib/contraste/**` para corregir el tono
+> `success` de `Pildora` en todas las pantallas. (3) CA15: el fallo del banco 23 es ajeno y pasa a
+> T-050; CA15 se juzga con el resto de bancos en verde.
 
 > **Partido el 05-10-2026 (P4 de `tickets/T-023/diseno.md`).** Este ticket hace cobros, pendiente y
 > pantalla. La sección «Lo que depende de T-026» y el criterio «con T-026 integrado» pasan a
