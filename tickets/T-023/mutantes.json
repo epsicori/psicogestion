@@ -133,5 +133,68 @@
       "rojo": true,
       "falla": "paginacion-pendientes.test.tsx · el foco se mueve una sola vez por clic; montar sin clic previo no mueve el foco"
     }
+  },
+  "fecha_ronda_4": "2026-10-07",
+  "ts_ronda_4": {
+    "M23": {
+      "mutacion": "la clave vuelve a un `useRef` de `FormularioCobro`, como en R3",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · cerrar y reabrir mismo id (también A,B,A y resultadoDesconocido del servidor); spec paso 9: «el reintento duplicó el cobro» (medido con rebuild)"
+    },
+    "M24": {
+      "mutacion": "`huellaDeCobro` = `JSON.stringify(datos)`, sin normalizar",
+      "rojo": true,
+      "falla": "esquemas.test.ts · '60', '60.00', ' 60,00 € ', orden de claves y motivo; registrar-cobro-clave.test.tsx · cerrar y reabrir ('60'); spec paso 9 con '0.01': «el reintento duplicó el cobro» (rebuild)"
+    },
+    "M25": {
+      "mutacion": "una sola clave en lugar del `Map` (`claves.current.clear()` antes de guardar)",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · A, B, A"
+    },
+    "M26": {
+      "mutacion": "la clave se olvida con cualquier respuesta del servidor, no solo con un éxito",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · tras resultadoDesconocido del servidor, mismo id"
+    },
+    "M27": {
+      "mutacion": "relectura fallida tras 23505 → `fallo()` (lo de R3)",
+      "rojo": true,
+      "falla": "acciones.test.ts · 23505 con error al releer → resultadoDesconocido"
+    },
+    "M28": {
+      "mutacion": "sin el paso 2b (`if (false && previa …)`)",
+      "rojo": true,
+      "falla": "acciones.test.ts · clave propia ya registrada y paciente fusionado"
+    },
+    "M29": {
+      "mutacion": "paso 2b sin `.eq('registrado_por', …)`",
+      "rojo": true,
+      "falla": "acciones.test.ts · clave propia ya registrada y paciente fusionado (eqCobros con registrado_por)"
+    },
+    "M30": {
+      "mutacion": "el `onClick` de la paginación no mira los modificadores ni el botón",
+      "rojo": true,
+      "falla": "paginacion-pendientes.test.tsx · it.each ctrlKey/metaKey/shiftKey/altKey y otro botón"
+    },
+    "M31": {
+      "mutacion": "el efecto enfoca sin comparar la página de destino",
+      "rojo": true,
+      "falla": "paginacion-pendientes.test.tsx · navegación sustituida"
+    },
+    "M32": {
+      "mutacion": "sin el texto del enlace «Ver las cifras de todos los profesionales»",
+      "rojo": true,
+      "falla": "page.test.tsx · A-H3 / R4.5 con filtro"
+    },
+    "M33": {
+      "mutacion": "en el spec, la ruta aborta sin `route.fetch()` y finge `primera = { estado: 200, cuerpo: 'Cobro registrado' }`",
+      "rojo": true,
+      "falla": "spec paso 7: «el primer envío no insertó: el paso no prueba la deduplicación»"
+    },
+    "M34": {
+      "mutacion": "`resultadoDesconocido` con el texto de R3 (nombra «Registrar cobro»)",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · el aviso no nombra el botón"
+    }
   }
 }
