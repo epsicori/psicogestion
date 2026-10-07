@@ -1,94 +1,55 @@
 {
   "ticket": "T-023",
-  "ronda": 3,
+  "ronda": 4,
   "altas": 0,
-  "medias": 2,
-  "bajas": 6,
-  "nota": "Combinación de revision-a.ronda3.json (A: datos, acción del servidor, banco y constitución; 0 ALTA, 0 MEDIA, 4 BAJA) y revision-b.ronda3.json (B: cliente, accesibilidad y spec; 0 ALTA, 2 MEDIA, 3 BAJA). Rama revisada worktree-agent-a875b9deffe28f1da, HEAD e7c356f. Ids con el prefijo del revisor y su número original. Duplicados unidos con la gravedad más alta: B-H1 + nota de A «Fuera de mi ámbito, para B» sobre claveRef (A no la contaba), MEDIA; A-H4 + B-H5 (filtro de profesional invisible cuando falla la lista de profesionales), BAJA. Por eso no hay B-H5. A-H1 (relectura fallida tras 23505 contestada como fallo()) es otra causa del mismo efecto de duplicado que B-H1 y se mantiene aparte. Lo medido por A (sondas S1-S5, E12/E12b/E12c/E12g) y el juicio de los mutantes M18-M22 están en revision-a.ronda3.json.",
-  "ronda2": {
+  "medias": 0,
+  "bajas": 4,
+  "nota": "Combinación de revision-a.ronda4.json (A: acción del servidor, datos y constitución; 0 ALTA, 0 MEDIA, 2 BAJA) y revision-b.ronda4.json (B: cliente, accesibilidad y spec; 0 ALTA, 0 MEDIA, 3 BAJA). Rama revisada worktree-agent-af4665097e6d61770, HEAD afcc774, diff de la ronda worktree-agent-a875b9deffe28f1da..worktree-agent-af4665097e6d61770. Ids con el prefijo del revisor y su número original. Duplicado unido: A-H1 + B-H1 (la clave de un resultado desconocido que sí entró no caduca y el paso 2b confirma con «Cobro registrado» sin insertar el siguiente cobro idéntico), BAJA. Por eso no hay B-H1. A no midió en base (sin migraciones en el diff); su juicio de los mutantes M24, M27, M28, M29 y M34 está en revision-a.ronda4.json. B midió el mutante de B-H3 sobre una copia git archive de afcc774 (11 ficheros, 207 pruebas en verde).",
+  "ronda3": {
     "A-H1": "cerrado",
-    "A-H2": "cerrado",
-    "A-H3": "cerrado (residuo en H4); mismo residuo que B-H5 de esta ronda",
-    "B-H1": "cerrado; residuo por otra puerta en R3-H1",
-    "B-H2": "cerrado; el paso 4 depende de la base (R3-H2, R3-H3)",
+    "A-H2": "cerrado para fusión y zona; residuo por pérdida de visibilidad en A-H2 de esta ronda",
+    "A-H3": "cerrado",
+    "A-H4": "cerrado (incluye B-H5 de la ronda 3)",
+    "B-H1": "cerrado; residuo por otra puerta en B-H2 de esta ronda",
+    "B-H2": "cerrado",
     "B-H3": "cerrado",
-    "B-H4": "cerrado",
-    "B-H5": "cerrado; residuo R3-H5",
-    "B-H6": "cerrado en el clic normal; residuo R3-H4",
-    "B-H7": "cerrado",
-    "B-H8": "cerrado"
+    "B-H4": "cerrado (residuo por recorte de página anotado como nota de B, no contado)"
   },
   "hallazgos": [
-    {
-      "id": "B-H1",
-      "severidad": "MEDIA",
-      "archivo": "app/(app)/facturacion/formulario-cobro.tsx",
-      "linea": 52,
-      "descripcion": "La clave de envio vive en FormularioCobro, que Dialogo desmonta al cerrarse (return null). Tras el catch el dialogo se puede cerrar con Escape, con la X o con un mousedown fuera, y se pierden la clave y lo escrito. El aviso manda pulsar 'Registrar cobro', que tambien es el nombre del disparador de la pagina, y sin refresh la lista no ensena el cobro que si entro. [Une la nota de A «Fuera de mi ámbito, para B» (sin contar): claveRef vive en FormularioCobro; si se cierra y se vuelve a abrir el diálogo tras resultadoDesconocido, o se cambia un campo y se deja como estaba, la huella o el montaje cambian y el id también; el texto pide «sin cambiar nada» y no menciona cerrar el diálogo.]",
-      "escenario": "Se corta la red y el primer POST si inserto 60,00 EUR. Aparece 'No sabemos...'. El usuario toca fuera del panel para mirar la lista, que no ensena el cobro. Pulsa el 'Registrar cobro' de la pagina, le sale un formulario vacio y reescribe 60,00. Va con un id nuevo y queda un cobro duplicado que no se puede borrar (regla 6).",
-      "revisor": "A+B"
-    },
-    {
-      "id": "B-H2",
-      "severidad": "MEDIA",
-      "archivo": "accesibilidad/facturacion.spec.ts",
-      "linea": 135,
-      "descripcion": "El paso 4 espera un listitem en 'Ultimos cobros', pero la siembra no inserta cobros: solo pasa con filas de ejecuciones anteriores. Ademas, el tope de 18 cuenta las filas de Lucia y no las de la lista (limit 20), asi que no garantiza que se vea el +1.",
-      "escenario": "Tras 'db reset && npm run seed', que es lo que pide el propio spec, la lista pinta 'Todavia no hay cobros' y la linea 135 agota el tiempo: rojo sin bug. Otro caso: una fila L1 del spec en la posicion 20 con 19 cobros ajenos posteriores y antes=1. El codigo bueno da 1 (rojo) y M20 da 2 = antes+1 (verde con el mutante).",
-      "revisor": "B"
-    },
     {
       "id": "A-H1",
       "severidad": "BAJA",
       "archivo": "app/(app)/facturacion/acciones.ts",
-      "linea": 109,
-      "descripcion": "Si la relectura falla después de un 23505 de la propia clave, se contesta «No se ha podido registrar el cobro», aunque el cobro ya existe. El log solo guarda 23505, no el código de la relectura, y la prueba no mira la consola.",
-      "escenario": "Hay un corte de red tras un primer envío que sí entró. Al reintentar sale 23505 cobros_pkey y la relectura da 57014, así que la acción devuelve fallo(). El usuario cree que no se registró, cierra y vuelve a rellenar con otro id: queda un cobro duplicado que no se puede borrar. Aquí corresponde resultadoDesconocido.",
-      "revisor": "A"
+      "linea": 61,
+      "descripcion": "La clave de un resultado desconocido que sí insertó no se olvida nunca (solo un éxito la borra, registrar-cobro.tsx:28) y, con Activity (cacheComponents, 3 rutas), dura toda la jornada aunque se salga de la página; la confirmación por clave (paso 2b y relectura tras 23505) dice lo mismo que un alta nueva, así que un cobro distinto pero idéntico se da por registrado y no se inserta. [Une B-H1 (registrar-cobro.tsx:28, BAJA).]",
+      "escenario": "10:00, 60,00 EUR en efectivo de Lucía, hoy, sin referencia: corte tras insertar y queda resultadoDesconocido. El usuario no reenvía: lo comprueba paginando o cambiando el filtro en /facturacion (RegistrarCobro sigue montado), o va a Agenda y vuelve (Activity conserva el Map). 18:00, Lucía paga otra sesión de 60,00 EUR en efectivo el mismo día: misma huella → claveDeEnvio devuelve idA → el 2b encuentra la fila de las 10:00 → «Cobro registrado» sin insert. El segundo cobro no existe y el pendiente cobra 60 EUR de más a Lucía; confirmación falsa de una acción económica. Arreglo: un texto propio («ya estaba registrado; no se ha añadido otro») que el cliente trata como éxito, o que la clave caduque.",
+      "revisor": "A+B"
     },
     {
       "id": "A-H2",
       "severidad": "BAJA",
       "archivo": "app/(app)/facturacion/acciones.ts",
-      "linea": 55,
-      "descripcion": "El reintento con la misma clave vuelve a pasar por las guardas previas al insert. Si una de ellas cambia entre los dos intentos, contesta como si el cobro no existiera.",
-      "escenario": "El cobro de P entra y se pierde la respuesta. P se fusiona en Q antes del reintento. El reintento devuelve pacienteFusionado («Registra el cobro en el que se conserva»), el usuario lo registra en Q y el pendiente consolidado suma los dos: queda cobrado_de_mas. Es improbable; se cerraría releyendo la clave propia antes de las guardas.",
+      "linea": 59,
+      "descripcion": "El 2b lee bajo RLS y cobros_lectura no tiene rama por registrado_por. Si el usuario deja de ver al paciente entre el envío y el reintento, la fila propia no aparece y se contesta fallo() aunque el cobro exista. Es el residuo de R3 A-H2.",
+      "escenario": "Ana registra 60 € a P con corte de red (resultadoDesconocido). El administrador traspasa P a Bea. Ana reenvía y el 2b ve 0 filas porque es_profesional_asignado es falso. La lectura de pacientes también da 0 filas, la acción responde fallo() y el administrador lo registra de nuevo: queda un cobro duplicado que no se puede borrar. No conviene ampliar la RLS. Se anota en state.md como riesgo aceptado.",
       "revisor": "A"
     },
     {
-      "id": "A-H3",
-      "severidad": "BAJA",
-      "archivo": "docs/state.md",
-      "linea": 21,
-      "descripcion": "«Siguiente paso» sigue pidiendo el verificador y los revisores de la ronda 2, aunque la línea 11 ya dice «ronda 3 implementada». Además, la línea 11 sitúa M18-M22 en el «banco 30», cuando son mutantes TS.",
-      "escenario": "La sesión siguiente lee las 80 primeras líneas y relanza la verificación de la ronda 2, o busca M18-M22 en scripts/rls/30-cobros.sql y no los encuentra.",
-      "revisor": "A"
-    },
-    {
-      "id": "A-H4",
+      "id": "B-H2",
       "severidad": "BAJA",
       "archivo": "app/(app)/facturacion/page.tsx",
-      "linea": 36,
-      "descripcion": "Si falla la lista de profesionales, el selector desaparece, pero la métrica y las listas siguen filtradas por ?profesional= sin que nada en pantalla diga por quién. [Une B-H5 (page.tsx:36, BAJA): AvisoDeError sustituye al selector; las cifras siguen filtradas, pero nada dice por quién ni ofrece volver a «todos».]",
-      "escenario": "Con /facturacion?profesional=<Ana> y profesionales_del_pendiente en timeout, el administrador ve el aviso de error y «Pendiente total» con solo la cifra de Ana. La toma por el total de la consulta. B-H5: el administrador ve el pendiente de Ana como si fuera el de toda la clínica, sin ningún control para quitar el filtro.",
-      "revisor": "A+B"
+      "linea": 25,
+      "descripcion": "Si cargarPacientesParaCobro falla en un re-render (cambio de filtro, paginación, enlace «Ver las cifras de todos los profesionales»), AccionRegistrar sustituye RegistrarCobro por AvisoDeError: la isla se desmonta y el Map de claves se pierde sin salir de la página.",
+      "escenario": "Base a tirones: el primer envío de 60,00 EUR entró y sale «No sabemos…». El administrador cierra y cambia el filtro; los pacientes dan timeout y el botón pasa a ser el aviso de error. Otro cambio de filtro devuelve un RegistrarCobro nuevo con el Map vacío; reenvía los mismos datos como pide el aviso y va con un id nuevo: cobro duplicado que no se puede borrar (regla 6).",
+      "revisor": "B"
     },
     {
       "id": "B-H3",
       "severidad": "BAJA",
-      "archivo": "accesibilidad/facturacion.spec.ts",
-      "linea": 154,
-      "descripcion": "route.fetch() descarta la respuesta: no se comprueba que el primer POST inserto. Si no inserto, el reintento crea la unica fila y el paso da verde sin haber probado la deduplicacion.",
-      "escenario": "Con npm run dev, el primer POST a la accion devuelve 500 mientras Turbopack recompila. El cliente ve igualmente 'No sabemos...' (respuesta abortada), el reintento inserta y queda antes+1: verde, y M20 sobrevive en esa pasada.",
-      "revisor": "B"
-    },
-    {
-      "id": "B-H4",
-      "severidad": "BAJA",
-      "archivo": "app/(app)/facturacion/paginacion-pendientes.tsx",
-      "linea": 38,
-      "descripcion": "La marca de modulo se enciende con cualquier clic, tambien con Ctrl/Cmd/Mayus+clic, que en Next Link abre otra pestana sin navegar en esta, y con navegaciones sustituidas. Se queda encendida y roba el foco en el siguiente cambio de pagina o montaje que no viene de un clic.",
-      "escenario": "En la pagina 2, Ctrl+clic en 'Siguientes'. Despues se cambia el selector de profesional (router.replace sin pagina, scroll:false). Con mas de 50 filas, pagina pasa de 2 a 1 y el foco salta del selector al rango del pie, desplazando la pagina. Con 50 o menos, el salto llega al volver a /facturacion desde otro modulo.",
+      "archivo": "app/(app)/facturacion/registrar-cobro-clave.test.tsx",
+      "linea": 56,
+      "descripcion": "«Solo un éxito olvida SU clave» solo se prueba con éxito de la misma huella: el mutante claves.current.clear() en alRegistrar sobrevive a toda la batería de facturación (medido en git archive de afcc774: 11 ficheros, 207 pruebas en verde). M25 es otro (clear antes de guardar).",
+      "escenario": "A (60,00 EUR a Lucía) da resultado desconocido y sí entró; se registra con éxito B (40,00 EUR a otro paciente) y el mutante vacía el Map; se reenvía A como pide el aviso con un id nuevo: cobro duplicado. Ninguna prueba lo ve; falta «A desconocido, B éxito, A otra vez → idA».",
       "revisor": "B"
     }
   ]

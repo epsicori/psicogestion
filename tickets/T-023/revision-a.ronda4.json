@@ -1,0 +1,40 @@
+{
+  "ticket": "T-023",
+  "ronda": 4,
+  "revisor": "A",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 2,
+  "ronda3": {
+    "A-H1": "cerrado",
+    "A-H2": "cerrado para fusión y zona; residuo por pérdida de visibilidad en H2",
+    "A-H3": "cerrado",
+    "A-H4": "cerrado"
+  },
+  "mutantes": {
+    "M24": "cae por el motivo correcto",
+    "M27": "cae por el motivo correcto",
+    "M28": "cae por el motivo correcto",
+    "M29": "cae por el motivo correcto (solo por eqCobros: el doble no filtra)",
+    "M34": "cae por el motivo correcto"
+  },
+  "medido": "Solo lectura del diff y de las políticas cobros_lectura y cobros_alta y de es_profesional_asignado. Sin migraciones en el diff y sin sonda de base. En el grep del diff no aparece UPDATE, DELETE ni upsert; el único .delete es el del Map del cliente.",
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/acciones.ts",
+      "linea": 61,
+      "descripcion": "La confirmación por clave (paso 2b y relectura tras 23505) dice lo mismo que un alta nueva. Como la clave vive toda la página (R4.1), un cobro idéntico pero distinto, registrado después de un resultadoDesconocido que no se resolvió reenviando, se da por registrado y no se inserta.",
+      "escenario": "El cobro A (Lucía, 60 €, hoy, efectivo, sin referencia) entra con corte de red y queda resultadoDesconocido. El usuario no reenvía: lo comprueba paginando en /facturacion, donde RegistrarCobro sigue montado. Después registra una segunda sesión pagada igual. claveDeEnvio devuelve el id de A, el 2b la encuentra y la acción contesta «Cobro registrado» sin insertar, así que el pendiente cobra de más a Lucía. Arreglo: un texto propio («ya estaba registrado; no se ha añadido otro») que el cliente trata como éxito."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/acciones.ts",
+      "linea": 59,
+      "descripcion": "El 2b lee bajo RLS y cobros_lectura no tiene rama por registrado_por. Si el usuario deja de ver al paciente entre el envío y el reintento, la fila propia no aparece y se contesta fallo() aunque el cobro exista. Es el residuo de R3 A-H2.",
+      "escenario": "Ana registra 60 € a P con corte de red (resultadoDesconocido). El administrador traspasa P a Bea. Ana reenvía y el 2b ve 0 filas porque es_profesional_asignado es falso. La lectura de pacientes también da 0 filas, la acción responde fallo() y el administrador lo registra de nuevo: queda un cobro duplicado que no se puede borrar. No conviene ampliar la RLS. Se anota en state.md como riesgo aceptado."
+    }
+  ]
+}

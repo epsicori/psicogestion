@@ -1,0 +1,42 @@
+{
+  "ticket": "T-023",
+  "ronda": 4,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 3,
+  "rama": "worktree-agent-af4665097e6d61770 (afcc774) sobre worktree-agent-a875b9deffe28f1da (e7c356f)",
+  "ronda3": {
+    "B-H1": "cerrado; residuo por otra puerta en H2",
+    "B-H2": "cerrado",
+    "B-H3": "cerrado",
+    "B-H4": "cerrado (residuo por recorte de página anotado como nota, no contado)",
+    "B-H5 (= A-H4)": "cerrado; enlace 44 px, texto ~5,0:1 y anillo ~3,7:1 sobre bg-destructive/10"
+  },
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/registrar-cobro.tsx",
+      "linea": 28,
+      "descripcion": "La clave de un resultado desconocido que sí insertó no se olvida nunca (solo un éxito la borra) y, con Activity (cacheComponents, 3 rutas), dura toda la jornada aunque se salga de la página; el paso 2b (acciones.ts:61) reconoce la clave y contesta «Cobro registrado» sin insertar el siguiente cobro idéntico.",
+      "escenario": "10:00, 60,00 EUR efectivo de Lucía sin referencia: corte tras insertar, «No sabemos…»; el usuario lo ve en la lista tras cambiar el filtro y no reenvía. Va a Agenda y vuelve (Activity conserva el Map). 18:00, Lucía paga otra sesión de 60,00 EUR en efectivo el mismo día: misma huella → idA → 2b encuentra la fila de las 10:00 → «Cobro registrado» sin insert. El segundo cobro no existe y el pendiente sale 60 EUR de más; confirmación falsa de una acción económica."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/page.tsx",
+      "linea": 25,
+      "descripcion": "Si cargarPacientesParaCobro falla en un re-render (cambio de filtro, paginación, enlace «Ver las cifras de todos los profesionales»), AccionRegistrar sustituye RegistrarCobro por AvisoDeError: la isla se desmonta y el Map de claves se pierde sin salir de la página.",
+      "escenario": "Base a tirones: el primer envío de 60,00 EUR entró y sale «No sabemos…». El administrador cierra y cambia el filtro; los pacientes dan timeout y el botón pasa a ser el aviso de error. Otro cambio de filtro devuelve un RegistrarCobro nuevo con el Map vacío; reenvía los mismos datos como pide el aviso y va con un id nuevo: cobro duplicado que no se puede borrar (regla 6)."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/registrar-cobro-clave.test.tsx",
+      "linea": 56,
+      "descripcion": "«Solo un éxito olvida SU clave» solo se prueba con éxito de la misma huella: el mutante claves.current.clear() en alRegistrar sobrevive a toda la batería de facturación (medido en git archive de afcc774: 11 ficheros, 207 pruebas en verde). M25 es otro (clear antes de guardar).",
+      "escenario": "A (60,00 EUR a Lucía) da resultado desconocido y sí entró; se registra con éxito B (40,00 EUR a otro paciente) y el mutante vacía el Map; se reenvía A como pide el aviso con un id nuevo: cobro duplicado. Ninguna prueba lo ve; falta «A desconocido, B éxito, A otra vez → idA»."
+    }
+  ]
+}

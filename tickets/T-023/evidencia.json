@@ -1,55 +1,55 @@
 {
   "ticket": "T-023",
-  "resumen": "Ronda 3 sobre e7c356f (git archive en scratchpad, node_modules por junction, retirada al acabar). Base: max(version)=20261013120000; resumen_pendiente y profesionales_del_pendiente existen; sin db reset. Lint 0 errores (2 warnings ajenos); lint:migraciones 34 limpias; npm test 205 ficheros / 2764 tests verdes; next build --webpack verde (/facturacion presente); npm run test:rls arranque 12:06:56, fin 12:08:02, exit 0, sin FALLO, 29-hueco-raro OK, 30-cobros OK (incluye E12 clave de envio: id propio, reintento 23505, una sola fila). Playwright --workers=1: 36/36. Cobros de Lucia Marquez: antes del spec 5, tras facturacion.spec.ts 6 (+1 exacto, paso 4 con corte de red y reintento); la bateria completa sumo otra (6->7), de nuevo +1. Navegador (puerto 3457): con la respuesta de la accion forzada a 500 el dialogo sigue abierto, 0 navegaciones, marca de window conservada, importe 0,01, referencia, forma y paciente intactos, y el aviso 'No sabemos si el cobro se ha registrado...'; ese POST no llego al servidor (cobros 7 antes y despues). CA8 NO_VERIFICABLE (T-023b); CA12 NO_VERIFICABLE (juicio visual). Efectos laterales: dos cobros de 0,01 EUR a Lucia (append-only); tarifa_base de 'Sesion individual' puesta a 60 temporalmente para ver moverse la metrica y revertida a NULL (comprobado).",
+  "resumen": "Ronda 4 sobre afcc774 (git archive en scratchpad, node_modules por junction retirada al acabar; node_modules de main intacto). Base: max(version)=20261013120000, sin db reset. Lint 0 errores (2 warnings ajenos); lint:migraciones 34 limpias; npm test 206 ficheros / 2788 tests verdes; next build --webpack verde (/facturacion presente); npm run test:rls arranque 12:53:35, fin 12:54:40, exit 0, 0 FALLO, 29-hueco-raro OK, 30-cobros OK (incluye E12/E12b/E12c/E12g); Playwright --workers=1 completo 36/36. Spec de facturacion dos veces seguidas: cobros totales en BD (todos de Lucia; la lista 'Ultimos cobros' enseña todos mientras sean menos de 20) 7 -> 8 en la pasada 1 y 8 -> 9 en la pasada 2 (+1 exacto cada una); bateria completa 10 -> 11. CA18 y CA19 ejercidos en navegador real. CA8 NO_VERIFICABLE (T-023b); CA12 NO_VERIFICABLE (juicio visual). Efectos laterales: cuatro cobros de 0,01 EUR a Lucia Marquez en esta ronda (append-only); durante CA19 se renombro un instante la funcion profesionales_del_pendiente() y se restauro (comprobado, 1 fila en pg_proc). No se toco ninguna tarifa.",
   "criterios": [
     {
       "id": 1,
       "texto": "100 EUR debidos: dos parciales dejan pendiente y estado pendiente; el tercero 0 y cobrado",
       "veredicto": "PASA",
       "comando": "npm run test:rls (banco 30, bloque B)",
-      "evidencia": "R3: OK: 30.B0 · tarifa del dia D; 30.B1 dev=10000 cob=3000 pen=7000 est=pendiente | 30.B2 pen=4000 pendiente | 30.B3 cob=10000 pen=0 exc=0 cobrado. 30-cobros: OK (rls exit 0, 12:08:02)"
+      "evidencia": "R4: OK 30.B0 tarifa del dia D; 30.B1 dev=10000 cob=3000 pen=7000 pendiente | 30.B2 pen=4000 pendiente | 30.B3 cob=10000 pen=0 exc=0 cobrado. 30-cobros: OK (rls exit 0, 12:54:40)"
     },
     {
       "id": 2,
       "texto": "Cobro que supera lo debido deja cobrado_de_mas con excedente y la pantalla lo senala",
       "veredicto": "PASA",
       "comando": "npm run test:rls (30.B4) + navegador como tecnico en /facturacion",
-      "evidencia": "R3: OK: 30.B4 cob=11000 pen=0 exc=1000 est=cobrado_de_mas. Navegador (admin, 3457): 'Diego Ferrer | Cobrado de mas | Cobrado de mas: 0,01 EUR, revisa sus cobros' y metrica '1 con cobros de mas'."
+      "evidencia": "R4: OK 30.B4 cob=11000 pen=0 exc=1000 cobrado_de_mas. Navegador (admin, 3457): 'Lucia Marquez | Cobrado de mas | Cobrado de mas: 0,11 EUR, revisa sus cobros' y metrica '1 con cobros de mas'."
     },
     {
       "id": 3,
       "texto": "update cobros y delete from cobros fallan",
       "veredicto": "PASA",
       "comando": "npm run test:rls (banco 30, bloque E)",
-      "evidencia": "R3: OK 30.E1/E2/E3 ADM update/delete/truncate (42501), E4/E5 TEC1, E6 PRO1; gemelas E1g/E4g/E6g; E11 vista sin UPDATE/INSERT/DELETE; A9 cobertura_solo_adicion()=0"
+      "evidencia": "R4: OK 30.E1/E2/E3 ADM update/delete/truncate (42501), E4/E5 TEC1, E6 PRO1; gemelas E1g/E4g/E6g; E11 vista sin UPDATE/INSERT/DELETE; A9 cobertura."
     },
     {
       "id": 4,
       "texto": "Devolucion como fila negativa y el pendiente se mueve",
       "veredicto": "PASA",
       "comando": "npm run test:rls (30.B5, B6, E7)",
-      "evidencia": "R3: OK 30.B5 devolucion -> cobrado 0/0; 30.B6 cob=8000 pen=2000 pendiente; E7/E7b sin motivo 23514; E7g con motivo entra"
+      "evidencia": "R4: OK 30.B5 devolucion -> cobrado 0/0; 30.B6 cob=8000 pen=2000 pendiente; E7/E7b 23514; E7g con motivo entra."
     },
     {
       "id": 5,
       "texto": "Un cobro sin factura entra y cuenta en el pendiente del paciente",
       "veredicto": "PASA",
       "comando": "npm run test:rls (30.B1-B3, B7, E8) + navegador",
-      "evidencia": "R3: OK B1-B3 sin factura alguna, B7 seis filas con registrado_por, E8. Navegador: 'Lucia Marquez | Parcial | Debe 359,93 EUR · ha pagado 0,07 EUR' (admin, con tarifa temporal)."
+      "evidencia": "R4: OK B1-B3 sin factura alguna, B7 seis filas con registrado_por, E8. Navegador: los cobros sin factura de Lucia Marquez cuentan en su fila ('Cobrado de mas: 0,11 EUR': 11 cobros de 0,01 contra devengado 0, con '6 sesiones sin precio')."
     },
     {
       "id": 6,
       "texto": "Tecnico: filas de su centro en cobros y vista, cero de otro centro (gemela), cero en tarifas_paciente; la vista sin tipo_terapia_id ni cita_id",
       "veredicto": "PASA",
       "comando": "npm run test:rls (banco 30, A2, A3, D, F5, F6)",
-      "evidencia": "R3: OK D1 TEC1 ve P30A/P30C; D2 0 de P30B con D2g; D3 0 tarifas_paciente con D3g/D3g2; D8; D9; A2 ocho columnas; A3 sin tipo_terapia_id ni cita_id; F5/F6"
+      "evidencia": "R4: OK 30.A2, A3, D1, D2/D2g, D3/D3g/D3g2, D8, D9, F5, F6 (cero de otro centro con gemela, cero tarifas_paciente, sin tipo_terapia_id ni cita_id)."
     },
     {
       "id": 7,
       "texto": "Profesional: cero cobros y cero pendiente de no asignados, y los suyos si (gemela)",
       "veredicto": "PASA",
       "comando": "npm run test:rls (banco 30, D4-D6, F3, F4)",
-      "evidencia": "R3: OK D4 PRO2 0 de P30A / D4g PRO1 1 fila; D5 PRO1 0 de P30B / D5g; D6 rol nulo 0; F3, F4 (cadena fusionada)"
+      "evidencia": "R4: OK D4/D4g, D5/D5g, D6, F3, F4. Navegador: bruno ve 0 cobros y 0 pendiente; ana ve los de Lucia."
     },
     {
       "id": 8,
@@ -61,22 +61,22 @@
       "id": 9,
       "texto": "Manual: como profesional no existe el selector de profesional",
       "veredicto": "PASA",
-      "comando": "node ad hoc (playwright, next start de la copia, puerto 3457) con ana, bruno, tecnico (1280 y 360 px)",
-      "evidencia": "R3: getByRole('combobox',{name:/Profesional/}).count(): admin 1; ana 0; bruno 0; tecnico 0; tecnico a 360 px 0. scrollWidth<=innerWidth true en los cinco."
+      "comando": "node ad hoc (playwright, next start de la copia, puerto 3457) con admin, ana, bruno, tecnico (1280 y 360 px)",
+      "evidencia": "R4: combobox 'Profesional': admin 1; ana 0; bruno 0; tecnico 0; tecnico 360 px 0. scrollWidth<=innerWidth true en los cinco."
     },
     {
       "id": 10,
       "texto": "Manual: como administrador el selector filtra y la metrica se mueve con el",
       "veredicto": "PASA",
-      "comando": "node ad hoc (playwright) como admin@psicogestion.test en /facturacion, con tarifa_base=60 temporal en 'Sesion individual' (revertida a NULL)",
-      "evidencia": "R3: opciones [Todos los profesionales, Ana Marquez, Bruno Ferrer]. Todos: 'Pendiente de cobro 359,93 EUR, 1 paciente con pendiente, 1 con cobros de mas'. Ana (?profesional=1111...): 359,93 EUR, 1 paciente. Bruno (?profesional=2222...): 0,00 EUR, 0 pacientes, 1 con cobros de mas (Diego Ferrer). Banco 30 G1-G5 verdes."
+      "comando": "node ad hoc (playwright) como admin sobre /facturacion y ?profesional=<id> (sin tocar tarifas)",
+      "evidencia": "R4: selector 'Todos los profesionales'; con Ana (?profesional=1111...): 'Ana Marquez | Pendiente 0,00 | 1 con cobros de mas | Lucia Marquez | Cobrado de mas 0,11'; con Bruno (?profesional=2222...): '0 pacientes con pendiente | No hay nada pendiente | Todavia no hay cobros' y desaparece 'cobros de mas'. La metrica se mueve con el selector. No se repitio el importe en euros con tarifa temporal (tarifa_base es NULL en la base); lo cubren 30.G1-G5 en test:rls (OK)."
     },
     {
       "id": 11,
       "texto": "Manual: no existe control para editar o borrar un cobro",
       "veredicto": "PASA",
       "comando": "playwright ad hoc en /facturacion con admin, ana, bruno, tecnico (1280) y tecnico (360), con filas de cobro reales",
-      "evidencia": "R3: getByRole('button',{name:/editar|borrar|eliminar|anular/i}).count() = 0 con admin, ana, bruno, tecnico (1280) y tecnico (360), con 'Ultimos cobros' visibles."
+      "evidencia": "R4: getByRole('button',{name:/editar|borrar|eliminar|anular/i}).count() = 0 con admin, ana, bruno, tecnico (1280) y tecnico (360), con filas de 'Ultimos cobros' visibles."
     },
     {
       "id": 12,
@@ -89,38 +89,52 @@
       "texto": "Manual: la misma ruta con cada rol ensena lo que concede la matriz, ni un campo mas",
       "veredicto": "PASA",
       "comando": "playwright ad hoc con admin, ana, bruno, tecnico sobre /facturacion (texto de pagina)",
-      "evidencia": "R3: admin: selector + metrica + por paciente + ultimos cobros; ana y bruno sin selector; tecnico sin selector, importes y estados; la regex /terapia|tarifa|Sesion individual/ no aparece en ningun rol. Banco 30 A2/A3/D3/D8 lo respaldan."
+      "evidencia": "R4: admin: selector + metrica + por paciente + ultimos cobros; ana, bruno y tecnico sin selector; la regex /terapia|tarifa|Sesion individual/i no aparece en ningun rol. Banco 30 A2/A3/D3/D8 lo respaldan."
     },
     {
       "id": 14,
       "texto": "Manual: a 360 px se puede registrar un cobro",
       "veredicto": "PASA",
       "comando": "PUERTO=3457 npx playwright test accesibilidad/facturacion.spec.ts --workers=1 + script ad hoc tecnico 360 px",
-      "evidencia": "R3: 5 passed (10.2s): 1 (360 px sin desborde, boton 44 px), 2 (dialogo cabe, foco), 3 (importe negativo pide motivo), 4 (corte de red tras insertar: sin recarga, conserva lo escrito, reintento no duplica), 5 (Escape). Ad hoc tecnico 360 px: boton Registrar cobro presente, scrollWidth<=innerWidth true. Cobros de Lucia: 5 -> 6 (+1 exacto)."
+      "evidencia": "R4: Playwright facturacion.spec.ts 5 passed dos veces seguidas (1 a 360 px sin desborde y boton 44 px; 2 dialogo cabe y foco; 3 importe negativo pide motivo; 4 corte de red, Escape, reabrir con '0.01' y reenviar no duplica; 5 Escape). Tecnico a 360 px: boton 'Registrar cobro' presente, sin desborde."
     },
     {
       "id": 15,
       "texto": "Automatico: accesibilidad T-009 verde, test:rls verde, lint y build limpios",
       "veredicto": "PASA",
-      "comando": "npm run lint; npm run lint:migraciones; npm test; npx next build --webpack; npm run test:rls (arranque 12:06:56); PUERTO=3457 npx playwright test --workers=1",
-      "evidencia": "R3: lint 0 errores (2 warnings ajenos en lib/cuentas/accesos.test.ts); lint:migraciones 34 limpias; npm test 205 files, 2764 passed; build --webpack Compiled successfully, /facturacion presente; test:rls exit 0 (12:06:56-12:08:02), 29-hueco-raro OK, 30-cobros OK, ROLLBACK, sin FALLO; Playwright --workers=1 36 passed (2.1m)."
+      "comando": "npm run lint; npm run lint:migraciones; npm test; npx next build --webpack; npm run test:rls (arranque 12:53:35); PUERTO=3457 npx playwright test --workers=1",
+      "evidencia": "R4: lint 0 errores (2 warnings ajenos en lib/cuentas/accesos.test.ts); lint:migraciones 34 limpias; npm test 206 files, 2788 passed; build --webpack Compiled, /facturacion presente; test:rls exit 0 (12:53:35-12:54:40), 0 FALLO, 29-hueco-raro OK, 30-cobros OK; Playwright --workers=1 36 passed (2.2m)."
     },
     {
       "id": 16,
       "texto": "Ronda 3: el paso 4 (corte de red y reintento) suma exactamente un cobro por ejecucion",
       "veredicto": "PASA",
-      "comando": "select count(*) from cobros de Lucia Marquez antes y despues de playwright test facturacion.spec.ts --workers=1 y de la bateria completa",
-      "evidencia": "5 -> 6 tras el spec (referencia unica 'T-023 spec 1791367722598'); 6 -> 7 tras la bateria completa de 36. +1 por ejecucion. Banco 30 E12/E12b/E12c/E12g respaldan la clave de envio."
+      "comando": "select count(*) from cobros antes y despues de playwright test accesibilidad/facturacion.spec.ts --workers=1, dos pasadas seguidas, y de la bateria completa",
+      "evidencia": "Pasada 1: 7 -> 8 (lista de 7 filas antes). Pasada 2: 8 -> 9 (lista de 8 filas antes). Bateria completa de 36: 10 -> 11 (el ad hoc de CA18 puso el 10). +1 exacto en cada una; el spec comprueba ademas con un contexto testigo que el primer POST (200, 'Cobro registrado') inserto antes del reintento."
     },
     {
       "id": 17,
       "texto": "Ronda 3: tras un error del servidor en el formulario no hay recarga y lo escrito se conserva",
       "veredicto": "PASA",
-      "comando": "node err500.mjs (playwright, admin, respuesta de la server action forzada a 500 con page.route)",
-      "evidencia": "POST interceptados 1; navegaciones 0; window.__marca='sigo-aqui' (sin recarga); dialogo visible true; importe 0,01, ref 'R3 error servidor', forma efectivo, paciente 'Marquez, Lucia'; texto: 'No sabemos si el cobro se ha registrado. Vuelve a pulsar «Registrar cobro» sin cambiar nada: si ya estaba registrado, no se duplica.' Captura: scratchpad/err500.png. Limite: el 500 se simulo, no se provoco un fallo real del servidor."
+      "comando": "node ca1819.mjs + accesibilidad/facturacion.spec.ts paso 4",
+      "evidencia": "R4: con la respuesta de la accion abortada tras route.fetch, el dialogo sigue abierto con el aviso, sin navegacion; el spec paso 4 verifica 0 navegaciones, importe '0,01' conservado y aviso visible (2 pasadas verdes)."
+    },
+    {
+      "id": 18,
+      "texto": "El cobro no se duplica al cerrar el dialogo (clave de envio con importe normalizado)",
+      "veredicto": "PASA",
+      "comando": "node ca1819.mjs (playwright, admin, page.route con route.fetch y abort) + accesibilidad/facturacion.spec.ts paso 4 x2; select count(*) from cobros",
+      "evidencia": "Lista antes 9, BD antes 9. Primer POST de la accion: estado 200 (llego al servidor), respuesta abortada. Aviso: 'No sabemos si el cobro se ha registrado. Envialo otra vez con los mismos datos, aqui o al volver a abrir esta ventana, sin salir de la pagina: si ya estaba registrado, no se duplica.' BD tras primer envio 10. Escape cierra, se reabre con el boton, se reescribe con importe '0.01' (antes '0,01') y misma referencia, se envia: el dialogo se cierra, BD 10 (sin cambio), filas con esa referencia = 1. Suma exacta +1. El spec 4 hace lo mismo con +1 en dos pasadas."
+    },
+    {
+      "id": 19,
+      "texto": "Con filtro de profesional activo y la lista de profesionales caida sale el aviso con el enlace 'Ver las cifras de todos los profesionales'",
+      "veredicto": "PASA",
+      "comando": "node ca1819.mjs: alter function profesionales_del_pendiente() rename (temporal, restaurada) y GET /facturacion?profesional=<uuid> como admin",
+      "evidencia": "Con filtro: 'No se ha podido cargar la lista de profesionales. Las cifras de abajo son solo las del profesional del enlace.' y enlace 'Ver las cifras de todos los profesionales' (1 presente); su clic lleva a http://127.0.0.1:3457/facturacion (sin query). Sin filtro: solo 'No se ha podido cargar la lista de profesionales' y enlace 0. Funcion restaurada (pg_proc = 1). Respaldo unitario: app/(app)/facturacion/page.test.tsx."
     }
   ],
   "regresiones": [
-    "Sin regresiones. Efectos laterales en la base local: dos cobros de 0,01 EUR a Lucia Marquez (append-only); la bateria Playwright detiene imgproxy y pooler de Supabase al terminar (preexistente)."
+    "Sin regresiones. Efectos laterales en la base local: cobros de 0,01 EUR a Lucia Marquez (append-only; 11 filas en total). La bateria Playwright detiene imgproxy y pooler de Supabase al terminar (preexistente)."
   ]
 }
