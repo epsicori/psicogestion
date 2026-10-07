@@ -8,7 +8,7 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048 y T-049.
-- **En curso**: T-023 **ronda 2 implementada** el 07-10 en el worktree `agent-a65aa0bb5f872243e` (migración, banco 30 con M11-M17, interfaz, contraste, spec); falta verificación y revisión de la ronda 2. T-050 (diseño) en marcha.
+- **En curso**: T-023 **ronda 3 implementada** el 07-10 sobre la ronda 2 (clave de envío, banco 30 con E12 y M18-M22, foco, BAJA); falta verificación y revisión de la ronda 3. T-050 (diseño) en marcha.
 - **Siguiente en `supabase/`**: T-023 (20261013120000) → T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -23,12 +23,12 @@
 
 ## Hallazgos anotados
 
-- **T-023 ronda 2 (R2.7), fuera de alcance**:
-  - una cita que pasa de `realizada` a `cancelada` rebaja el devengado y mueve el pendiente sin rastro;
-  - el técnico puede deducir el precio de una sesión a partir del devengado;
-  - la base admite un cobro a un paciente fusionado (la acción lo rechaza; la RLS/disparador no);
-  - «Últimos cobros» con filtro de profesional usa el profesional del registro, no el del paciente, y no coincide con el pendiente;
-  - `directorio_perfiles` ahora la ejerce `30-cobros` vía `profesionales_del_pendiente()` (cierra el hallazgo de «sin prueba RLS» para esa vista, no para las tres pantallas admin).
+- **T-023, fuera de alcance (R2.7 y ronda 3)**:
+  - una cita que pasa de `realizada` a `cancelada` rebaja el devengado (medido: 6000 → 0; quien ya había pagado pasa a `cobrado_de_mas` 6000). Queda rastro en `auditoria` (2 filas, `auditar_citas`) y el técnico no puede hacerlo (UPDATE 0). Falta una guarda de transición en `citas` (R2.8 de T-021). Ticket aparte, de agenda;
+  - el técnico puede deducir el precio de una sesión restando el pendiente antes y después de una cita realizada. Riesgo aceptado: la vista no lleva sesiones, tipo ni fechas (familia de R2-H1 de T-021);
+  - la base admite un cobro a un paciente fusionado (`cobros_alta`, `fn_validar_cobro`); la acción lo rechaza. Ticket aparte, con su banco;
+  - «Últimos cobros» recorta por el paciente del registro y el pendiente consolida en el superviviente, así que no casan en tres casos: con el filtro de profesional del administrador; el técnico del centro del superviviente ve sumado el cobro hecho al absorbido de otro centro y no lo ve en la lista (`cobros_lectura`); el profesional del absorbido ve sus cobros en la lista y no tiene fila en el pendiente. No cambia ninguna cifra. Ticket aparte.
+- **`directorio_perfiles` sin prueba RLS**: ningún módulo de `scripts/rls/` la prueba como vista; la usan tres pantallas admin (centros, dar de baja, TOTP) desde T-041/T-045. `30-cobros` la ejerce a través de `profesionales_del_pendiente()` (ADM, PRO1, rol nulo); sigue sin módulo propio.
 - **Banco `test:rls` (07-10)**: una sesión `psql` huérfana (`create temp table t6_codigos_pro2…`) provocó `deadlock detected` en reejecuciones seguidas; `pg_terminate_backend` y repetir. Pasa limpio con la base sin huérfanas.
 - **B5-H1 (BAJA, T-043)**: el `setAviso('')` de las dos ramas de fallo del recálculo, en `formulario-alta.tsx:161` y `:181`, borra también el mensaje «acaba de ocuparse» de `hueco_ocupado`. Arreglo: vaciar solo si el aviso es el texto de la vuelta, más prueba negativa en las dos ramas. Detalle en `tickets/T-043/revision-b.ronda5.md`.
 - **Pruebas de `formulario-alta.test.tsx` (T-043)**: las anteriores a R11 encadenan `mockResolvedValueOnce` sin `mockReset`; si una falla, sus colas pasan a las siguientes. R11-R16 usan `respuestasDeRecalculo()`.
