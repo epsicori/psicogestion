@@ -1,0 +1,60 @@
+{
+  "ticket": "T-023",
+  "ronda": 3,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 2,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/facturacion/formulario-cobro.tsx",
+      "linea": 52,
+      "descripcion": "La clave de envio vive en FormularioCobro, que Dialogo desmonta al cerrarse (return null). Tras el catch el dialogo se puede cerrar con Escape, con la X o con un mousedown fuera, y se pierden la clave y lo escrito. El aviso manda pulsar 'Registrar cobro', que tambien es el nombre del disparador de la pagina, y sin refresh la lista no ensena el cobro que si entro.",
+      "escenario": "Se corta la red y el primer POST si inserto 60,00 EUR. Aparece 'No sabemos...'. El usuario toca fuera del panel para mirar la lista, que no ensena el cobro. Pulsa el 'Registrar cobro' de la pagina, le sale un formulario vacio y reescribe 60,00. Va con un id nuevo y queda un cobro duplicado que no se puede borrar (regla 6)."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "accesibilidad/facturacion.spec.ts",
+      "linea": 135,
+      "descripcion": "El paso 4 espera un listitem en 'Ultimos cobros', pero la siembra no inserta cobros: solo pasa con filas de ejecuciones anteriores. Ademas, el tope de 18 cuenta las filas de Lucia y no las de la lista (limit 20), asi que no garantiza que se vea el +1.",
+      "escenario": "Tras 'db reset && npm run seed', que es lo que pide el propio spec, la lista pinta 'Todavia no hay cobros' y la linea 135 agota el tiempo: rojo sin bug. Otro caso: una fila L1 del spec en la posicion 20 con 19 cobros ajenos posteriores y antes=1. El codigo bueno da 1 (rojo) y M20 da 2 = antes+1 (verde con el mutante)."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "accesibilidad/facturacion.spec.ts",
+      "linea": 154,
+      "descripcion": "route.fetch() descarta la respuesta: no se comprueba que el primer POST inserto. Si no inserto, el reintento crea la unica fila y el paso da verde sin haber probado la deduplicacion.",
+      "escenario": "Con npm run dev, el primer POST a la accion devuelve 500 mientras Turbopack recompila. El cliente ve igualmente 'No sabemos...' (respuesta abortada), el reintento inserta y queda antes+1: verde, y M20 sobrevive en esa pasada."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/paginacion-pendientes.tsx",
+      "linea": 38,
+      "descripcion": "La marca de modulo se enciende con cualquier clic, tambien con Ctrl/Cmd/Mayus+clic, que en Next Link abre otra pestana sin navegar en esta, y con navegaciones sustituidas. Se queda encendida y roba el foco en el siguiente cambio de pagina o montaje que no viene de un clic.",
+      "escenario": "En la pagina 2, Ctrl+clic en 'Siguientes'. Despues se cambia el selector de profesional (router.replace sin pagina, scroll:false). Con mas de 50 filas, pagina pasa de 2 a 1 y el foco salta del selector al rango del pie, desplazando la pagina. Con 50 o menos, el salto llega al volver a /facturacion desde otro modulo."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/page.tsx",
+      "linea": 36,
+      "descripcion": "Con un filtro de profesional en la URL y la RPC de opciones caida, AvisoDeError sustituye al selector. Las cifras siguen filtradas, pero nada dice por quien ni ofrece volver a 'todos'.",
+      "escenario": "/facturacion?profesional=<Ana> con profesionales_del_pendiente en timeout: el administrador ve 'No se ha podido cargar la lista de profesionales' y el pendiente de Ana como si fuera el de toda la clinica, sin ningun control para quitar el filtro."
+    }
+  ],
+  "ronda_anterior": {
+    "B-H1": "cerrado; residuo por otra puerta en R3-H1",
+    "B-H2": "cerrado; el paso 4 depende de la base (R3-H2, R3-H3)",
+    "B-H3": "cerrado",
+    "B-H4": "cerrado",
+    "B-H5": "cerrado; residuo R3-H5",
+    "B-H6": "cerrado en el clic normal; residuo R3-H4",
+    "B-H7": "cerrado",
+    "B-H8": "cerrado"
+  }
+}

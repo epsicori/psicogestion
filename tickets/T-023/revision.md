@@ -1,312 +1,282 @@
-**Sin hallazgos ALTA.** T-023 · ronda 2 · revisión combinada (A: base, RLS y dinero · B: interfaz) · diff `T-023-cobros-y-pendiente..worktree-agent-a65aa0bb5f872243e` (HEAD `27cd231`)
+**Sin hallazgos ALTA.** T-023 · ronda 3 · revisión combinada (A: datos, acción del servidor, banco y constitución · B: cliente, accesibilidad y spec) · rama `worktree-agent-a875b9deffe28f1da` (HEAD `e7c356f`), diff de la ronda `worktree-agent-a65aa0bb5f872243e..worktree-agent-a875b9deffe28f1da`
 
-Recuento combinado: **0 ALTA, 3 MEDIA, 7 BAJA**. Los ids llevan el prefijo del revisor y su número original.
+Recuento combinado: **0 ALTA, 2 MEDIA, 6 BAJA**. Los ids llevan el prefijo del revisor y su número original.
 Duplicados unidos con la gravedad más alta:
-- **A-H1** (BAJA) + la nota de B «Fuera de mi ámbito, para el revisor A» (`docs/state.md` dice «sin rastro»; B no la contaba).
-- **A-H3** (BAJA) + **B-H5** (BAJA): error de la RPC o del directorio presentado como «Todos los profesionales» o «Profesional no encontrado». Por eso no hay B-H5 en la tabla.
+- **B-H1** (MEDIA) + la nota de A «Fuera de mi ámbito, para B» (`claveRef` vive en `FormularioCobro` y muere al cerrar el diálogo; A no la contaba).
+- **A-H4** (BAJA) + **B-H5** (BAJA): con `?profesional=` y la lista de profesionales caída, las cifras siguen filtradas sin que nada lo diga ni permita quitar el filtro. Por eso no hay B-H5 en la tabla.
 
-Los textos de cada revisor siguen abajo sin cambios, salvo los ids.
+A-H1 (relectura fallida tras el 23505 de la propia clave contestada con `fallo()`) lleva al mismo duplicado que B-H1 por otra causa (servidor y no cliente) y se cuenta aparte.
+
+Hallazgos de la ronda 2: A-H1, A-H2 y B-H2..B-H4, B-H7, B-H8 cerrados; B-H1, A-H3/B-H5 y B-H6 cerrados con residuo en B-H1, A-H4 y B-H4 de esta ronda.
+
+Los textos de cada revisor siguen abajo sin cambios, salvo los ids y el nivel de los títulos.
 
 | Id | Severidad | Dónde | Revisor |
 |---|---|---|---|
-| B-H1 | MEDIA | `app/(app)/facturacion/formulario-cobro.tsx:103` | B |
-| B-H2 | MEDIA | `accesibilidad/facturacion.spec.ts:38` | B |
-| B-H3 | MEDIA | `app/(app)/facturacion/formulario-cobro.test.tsx:135` | B |
-| A-H1 | BAJA | `docs/state.md:27` | A+B |
-| A-H2 | BAJA | `docs/state.md:30` | A |
-| A-H3 | BAJA | `app/(app)/facturacion/datos.ts:281` | A+B |
-| B-H4 | BAJA | `app/(app)/facturacion/bloques.test.tsx:240` | B |
-| B-H6 | BAJA | `app/(app)/facturacion/bloques.tsx:177` | B |
-| B-H7 | BAJA | `lib/i18n/es.ts:1383` | B |
-| B-H8 | BAJA | `app/(app)/facturacion/registrar-cobro.tsx:41` | B |
+| B-H1 | MEDIA | `app/(app)/facturacion/formulario-cobro.tsx:52` | A+B |
+| B-H2 | MEDIA | `accesibilidad/facturacion.spec.ts:135` | B |
+| A-H1 | BAJA | `app/(app)/facturacion/acciones.ts:109` | A |
+| A-H2 | BAJA | `app/(app)/facturacion/acciones.ts:55` | A |
+| A-H3 | BAJA | `docs/state.md:21` | A |
+| A-H4 | BAJA | `app/(app)/facturacion/page.tsx:36` | A+B |
+| B-H3 | BAJA | `accesibilidad/facturacion.spec.ts:154` | B |
+| B-H4 | BAJA | `app/(app)/facturacion/paginacion-pendientes.tsx:38` | B |
 
 ---
 
-# Revisor A (base, RLS y dinero)
+# Revisor A (datos, acción del servidor, banco y constitución)
 
-**Sin hallazgos ALTA.** T-023 · ronda 2 · revisor A (base, RLS, dinero y constitución). 0 ALTA, 0 MEDIA, 3 BAJA.
+Sin hallazgos ALTA. Revisor A, ronda 3: 0 ALTA, 0 MEDIA, 4 BAJA.
 
-Base: `worktree-agent-a65aa0bb5f872243e` (HEAD 27cd231), diff de la ronda `T-023-cobros-y-pendiente..` y
-diff completo `main...`. He leído el código y no he ejecutado nada contra la base: la revisión es de solo
-lectura y no he hecho reset ni seed.
+## T-023 · Ronda 3 · Revisor A (datos, acción del servidor, banco y constitución)
 
-## Hallazgos de la ronda 1 que me tocan
+Diff: `git diff worktree-agent-a65aa0bb5f872243e..worktree-agent-a875b9deffe28f1da -- . ':!tickets'` (19 ficheros).
+Contrato: anexo R3 de `tickets/T-023/diseno.md` (R3.1, R3.4, R3.5 y R3.6, «Revisor A»).
+No he leído `evidencia.json` ni el informe del implementador.
 
-| R1 | Estado | Por qué |
+### Medido
+
+Ejecuté `00-ayudantes + 01-fijacion + 30-cobros` de la rama (HEAD e7c356f) dentro de `begin … rollback`
+en `supabase_db_Psicogestion` (max(version) = 20261013120000) y añadí al final una sonda propia.
+Resultado: rc=0, con E12, E12b, E12c y E12g en OK. La sonda dio esto:
+
+| Sonda | Qué | Salida |
 |---|---|---|
-| A-H1 ALTA | **Cerrado** | `profesionales_del_pendiente()` saca el nombre de `directorio_perfiles` (migración:192-200). En `app/(app)/facturacion/` no queda ningún `from('perfiles')`. G1 llama a la función como ADM, sin RLS fingida, y M16 cae en G1 porque `perfiles` solo devuelve la fila propia. |
-| A-H2 MEDIA | **Cerrado** | La vista consolida en el superviviente: `p.fusionado_en is null` más `union all` de los absorbidos en los tres laterales, con un salto, que `fn_repuntar_fusionados` mantiene. La acción rechaza `fusionado_en` en `pacienteId` antes de insertar (acciones.ts:48-50), con su prueba y su gemela. Si una fusión ocurre entre la lectura y el insert, el cobro queda en el absorbido y la vista lo suma igual, así que no se pierde. |
-| A-H3 MEDIA | **Cerrado** | La métrica sale de `resumen_pendiente` (un agregado, una fila). La lista se pide con `.range` de 50 y los nombres con `.in` de 50 ids como mucho. Los pacientes del formulario se leen de 1000 en 1000, con desempate por id y deduplicados. «Últimos cobros» lleva `limit 20`. No queda ninguna lectura sin tope ni ningún `.in()` sin tope. |
-| A-H4 BAJA | **Cerrado** | E10a-d en los centros CK (Kiritimati) y CP (Pago Pago). La función lee el centro del paciente, no la sesión (`fn_validar_cobro`:51-52). |
-| A-H5 BAJA | **Cerrado** | A5a da «sin fila», y su gemela A5b, con un bono de 10,00, da la fila exacta. M14 cae en A5a. |
-| A-H6 BAJA | **Cerrado a medias** | Los cinco puntos están en `state.md`, pero dos no dicen lo que fija R2.7: uno niega un hecho medido y otro da por cerrado lo que el diseño deja abierto. Va como A-H1. |
+| S1 | PRO2 (CB) inserta con el id del cobro de PRO1 y su propio paciente P30B | `23505 … "cobros_pkey"` |
+| S2 | relectura del servidor como PRO2 (`id = X and registrado_por = auth.uid()`) | 0 filas |
+| S3 | PRO2 con el mismo id y un paciente que no ve (P30A) | `42501` (la RLS va antes que el índice único) |
+| S4 | PRO1 con su id existente y fecha futura | `23514` (el disparador before va antes que el índice único) |
+| S5 | relectura del servidor como PRO1 | 1 fila |
 
-## Lista R2.9 (revisor A), punto por punto
+### «Qué revisar» de R3.6 (Revisor A), punto por punto
 
-- **El absorbido no tiene fila y el superviviente sale una vez.** Se cumple: `where p.fusionado_en is null`
-  (migración:138) y `p.id` es la clave, con tres laterales que agregan. F1 y F2 lo comprueban, este con
-  `count = 1`.
-- **Cada lateral suma el `union all`, en un solo salto y sin `coalesce`.** Se cumple: las tres ramas usan
-  `m.fusionado_en = p.id` (líneas 117-119, 127-129 y 134-136). Busqué las variantes que no se dan:
-  - `m.fusionado_en is not null` sumaría lo de P30F a P30A, y caerían los casos B;
-  - mirar la familia en el recorte del técnico o del profesional caería en F6 y en F4.
-- **La tarifa contra `c.paciente_id`.** Se cumple (línea 109). M13 da `dev=27000`. La variante contraria,
-  buscar la tarifa en toda la familia, pondría la cita de P30E a 70 en lugar de 60 y daría `dev=29000`; F2
-  la caza.
-- **El recorte por rol mira el `p.id` del superviviente.** Se cumple. `es_profesional_asignado(p.id)`, con
-  `p` superviviente, solo es cierto para su profesional (rls_funciones:100-106), y por eso F4 da cero filas a
-  PRO2.
-- **F5/F6, la decisión deliberada. La juzgo aceptable y no es un BLOQUEO.**
-  - El absorbido y el superviviente son la misma persona (ADR-031).
-  - La fila solo lleva importes y no lleva sesiones, tipos ni fechas.
-  - El técnico de CA ya podía ver el pendiente de esa persona en su centro. La fusión le suma importes de
-    CB sin ningún dato clínico.
-  - TEC2 deja de ver la fila, y es coherente: la persona ya no es de su centro. Tampoco puede registrar un
-    cobro, porque la acción rechaza al absorbido.
-  - La consecuencia que sí queda sin anotar es una incoherencia de pantalla (A-H2).
-- **PRO2 sigue leyendo en `cobros` lo de P30F, sin fila en la vista.** Se cumple, pero el diseño dice
-  «queda anotado» y no está ni en `state.md` ni en la bitácora (A-H2).
-- **Las dos funciones.**
-  - Son `security invoker`, con `search_path = ''`, `revoke … from public, anon` y `grant` a `authenticated`.
-    A9b lo lee del catálogo.
-  - `p_profesional_id` no puede ampliar nada. El filtro es una conjunción sobre una vista que ya recorta por
-    `rol_actual()`, y aunque el planificador lo empuje bajo la barrera, `uuid_eq` es leakproof y solo quita
-    filas. G5 lo comprueba con su gemela.
-  - `profesionales_del_pendiente` no lee `perfiles` (M16) y devuelve solo `id, nombre_completo`.
-  - Al técnico solo le da nombres que `directorio_perfiles` ya le enseña.
-- **`max_rows` y `.in()`.** Ver A-H3: no queda ninguna lectura sin tope.
-- **E10.** La zona sale del centro del paciente. M15 se midió una vez, a las 10:42 de Madrid en horario de
-  verano. A esa hora Pago Pago va 13 h por detrás, así que «hoy» allí es ayer en Madrid y el mutante acepta
-  E10d. La tabla de R2.2 se sostiene:
-  - en invierno, [11, 24) ∪ [0, 12) cubre el día;
-  - en verano, [12, 24) ∪ [0, 13) también;
-  - ni Kiritimati ni Pago Pago tienen horario de verano;
-  - `now()` es constante en la transacción compartida, así que `\gset` y el disparador ven el mismo instante.
-  - Con la tabla basta, sin medir a una segunda hora.
-- **Aserciones existentes.**
-  - No cambia ningún valor esperado.
-  - No había recuentos por prefijo: D1-D9 ya iban por lista explícita.
-  - P30D (con el bono de A5b), P30E, P30K y P30P son de PRO1 o de CA y no tocan ninguna lista de los
-    bloques B, C y D.
-- **Gemelas y códigos.** F4 y F6 llevan su gemela (`P30B ≠ sin fila`) y G5 la suya (`filas >= 3`). E10b y
-  E10d comprueban 23514 y el fragmento del mensaje.
-- **Constitución, regla 6.** El diff no tiene ningún UPDATE ni DELETE sobre `cobros`, `bonos`, `facturas`
-  ni `auditoria`. Los únicos `update` son de `citas.estado`, en la fijación y como `postgres`. Los `update`,
-  `delete` y `truncate` sobre `cobros` solo aparecen como negativas (E1-E6, 42501).
+- **El 23505 solo se da por bueno con `cobros_pkey` y fila propia bajo RLS.** Se cumple
+  (`acciones.ts:100-112`). La condición pide `code === '23505'` y `cobros_pkey` en el mensaje. Después,
+  `select('id').eq('id', id).eq('registrado_por', usuario.id).maybeSingle()` con el cliente de sesión.
+  Si un usuario reutiliza el id de otro, recibe el mensaje genérico. Lo he medido: S1 + S2 dan 23505
+  y 0 filas, así que la acción devuelve `fallo()`. Para el administrador, que con la RLS lo ve todo,
+  la única guarda es `registrado_por`. La prueba positiva la fija con
+  `toHaveBeenCalledWith('registrado_por', USUARIO)`, y un mutante que la quitara cae.
+- **Sondeo de un cobro ajeno.** Con un id ajeno existente sale el genérico. Con uno inexistente, el cobro
+  entra de verdad y no se puede borrar (regla 6). Ese diferencial ya existía antes de este diff, porque
+  `authenticated` tiene `insert (id, …)` sobre `cobros` desde T-021 (`20261011120000_economico_esquema.sql:1255`)
+  y PostgREST devuelve el 23505 tal cual. Además, solo sirve si ya se conoce el uuid, y conocerlo ya es el
+  dato. Este diff no abre un oráculo nuevo, así que no lo cuento como hallazgo.
+- **E12 lleva su gemela.** Sí: E12g mete otro id en la misma sesión con el mismo importe y entra. E12b usa
+  `assert_lanza_codigo_msg` con el código y el fragmento `cobros_pkey`, así que no se pondría verde con un
+  23505 de otra restricción.
+- **Nada nuevo lee `perfiles`.** Revisé las líneas añadidas del diff: no aparece ningún `from('perfiles')`.
+  `cargarOpcionesProfesional` sigue usando `directorio_perfiles` y la RPC.
+- **`z.uuid()` antes de todo lo demás.** Va antes del paciente (`acciones.ts:33-35`). Sin id, o con un id
+  que no es UUID, devuelve `fallo()` y no llega al insert. Las pruebas cubren `undefined`, `'x'` y `7`.
 
-## Mutantes M11-M17: ¿caen por el motivo correcto?
+### Mutantes M18-M22 y banco E12
 
-| M | Cae en | ¿Motivo correcto? |
-|---|---|---|
-| M11 | F1, con `dev=22000` | Sí. 22000 son la cita de P30F a 70 más su bono de 150, que salen como fila propia. F2 también caería por el `count = 1`. |
-| M12a | F2, con `dev=21000` | Sí: 60 + 150, sin la cita del absorbido. |
-| M12b | F2, con `dev=13000` | Sí: 60 + 70, sin el bono. |
-| M12c | F2, con `cob=2000` | Sí: solo el cobro de P30E. |
-| M13 | F2, con `dev=27000` | Sí: la cita de P30F a la tarifa base de 60, porque P30E no tiene tarifa propia. |
-| M14 | A5a, con `dev=0 est=cobrado` | Sí: P30D sale con ceros. |
-| M15 | E10d a las 10:42 | Sí, y en la otra franja caería en E10a (ver arriba). |
-| M16 | G1 | Sí: el administrador lee 0 perfiles ajenos, el `array_agg` sale nulo y `assert` trata el nulo como fallo (`is distinct from true`). |
-| M17 | G4 y G5 | Sí: el agregado sin filtro no iguala al de PRO1, y como PRO1 ve sus filas y no ceros. |
+- **M21** (cualquier 23505 cuenta como éxito y no se relee): cae por el motivo correcto. «Sin fila propia»
+  y «error al releer» esperan `fallo()`, y «otra restricción» espera además que no se llame a
+  `selectCobros`. He razonado también tres variantes intermedias:
+  - quitar `.eq('registrado_por', …)`: cae por `toHaveBeenCalledWith` en la positiva;
+  - quitar `includes('cobros_pkey')`: cae «otra restricción», cuya fixture trae una fila existente;
+  - quitar la validación del id: caen los tres `it.each`, que esperan que no se inserte.
+  Quitar `&& !errorRelectura` no lo caza ninguna prueba, pero es equivalente: `maybeSingle` no devuelve
+  `data` junto con `error`.
+- **M18** (`router.refresh()` de vuelta en el catch): la prueba sigue simulando `next/navigation`
+  (`formulario-cobro.test.tsx:8-9`), así que cae por `refresh not.toHaveBeenCalled` y no porque se rompa
+  el renderizado.
+- **M19, M20, M22**: son de interfaz (revisor B). Las pruebas que los cazan existen y comprueban lo que dice
+  `mutantes.json`.
+- **E12**: no tiene mutante SQL porque la guarda es la clave primaria, y el diseño lo acepta. Sin
+  `cobros_pkey`, E12b caería («no lanzó nada»).
 
-## Hallazgos
+### Constitución (regla 6)
 
-### A-H1 · BAJA · `docs/state.md:27` y `:31`: dos de los textos de R2.7 cambian el hecho que anotan
+El diff no trae ningún `UPDATE`, `DELETE` ni `upsert` sobre tablas económicas. La acción hace un `insert` y,
+si ese insert falla, un `select`. El banco solo inserta. La migración no cambia. **Sin violaciones.**
 
-- **Línea 27.** Dice que el paso `realizada → cancelada` mueve el pendiente «**sin rastro**». R2.7 y el
-  juicio de la ronda 1 (revision-a.ronda1.md:89) dicen lo contrario, medido: quedan 2 filas en `auditoria`
-  (`auditar_citas`) y el técnico no puede hacerlo (UPDATE 0). La línea también pierde «ticket aparte, de
-  agenda».
-- **Línea 31.** Borra la línea antigua «`directorio_perfiles` sin prueba RLS» y dice que 30-cobros «cierra el
-  hallazgo … para esa vista». R2.7 pedía añadir el texto a la línea existente con «sigue sin módulo propio».
-  G1-G3 solo ejercen la vista a través de `profesionales_del_pendiente()` y con tres sesiones (ADM, PRO1 y
-  rol nulo). Ninguna aserción lee la vista directamente ni mira qué ven el técnico o un profesional de las
-  columnas `rol`, `estado` y `centro_id`.
-- **Escenario.** Quien abra el ticket de la guarda de transición lee «sin rastro» y lo prioriza o lo diseña
-  como un hueco de auditoría que no existe. Quien triage los hallazgos lee «cierra» y descarta el módulo
-  RLS de `directorio_perfiles`. Así, una política que el técnico lea de más en las tres pantallas de
-  administración seguiría sin ninguna prueba que la cace.
+### Hallazgos A de la ronda 2
 
-### A-H2 · BAJA · `docs/state.md:30`: la nota de «Últimos cobros» cubre una puerta de tres
+- **A-H1: cerrado.** `docs/state.md:26-31` de la rama coincide byte a byte con el bloque de R3.5 (`diff` vacío).
+  Ya dice «Queda rastro en `auditoria`» y «sigue sin módulo propio».
+- **A-H2: cerrado.** Están los tres casos (filtro del administrador, técnico del centro del superviviente y
+  profesional del absorbido), con «No cambia ninguna cifra. Ticket aparte.».
+- **A-H3: cerrado** en lo que pedía, que era no presentar un error como ausencia. Un fallo de la RPC o un
+  error del directorio dan `{ ok: false }`, «Profesional no encontrado» solo sale sin fila y sin error, y
+  hay pruebas para la RPC, el directorio (57014) y la página. Queda el residuo de H4.
 
-- **Qué pasa.** La vista suma al superviviente los cobros de sus absorbidos. `cobros_lectura`, en cambio,
-  recorta por el registro del cobro (economico_esquema:1157-1168, sin resolver la fusión para el técnico).
-- **Qué está anotado.** Solo el caso del filtro del administrador.
-- **Qué falta.** Dos casos más:
-  - el técnico del centro del superviviente;
-  - el profesional del absorbido. R2.9 dice que su caso «queda anotado», y no está ni en `state.md` ni en
-    `docs/bitacora/T-023.md`.
-- **Escenario, con la fijación del banco.**
-  - TEC1, de CA, ve a «Elsa» con `cobrado = 70,00 €` (F5). En «Últimos cobros» solo encuentra el cobro de
-    20,00 de P30E: el de 50,00 de P30F, en CB, no lo ve, y no puede cuadrar la cifra con la lista.
-  - PRO2 ve en «Últimos cobros» el cobro de 50,00 de «Fede» y ningún pendiente de esa persona.
-  - No cambia ninguna cifra, y no hay ninguna nota que lo explique ni ticket que lo recoja.
+### Hallazgos
 
-### A-H3 · BAJA · `app/(app)/facturacion/datos.ts:281-282`: un error al leer el directorio se rotula como «Profesional no encontrado»
+#### A-H1 · BAJA · `app/(app)/facturacion/acciones.ts:109`
+Si la relectura falla después de un 23505 de la propia clave, el usuario lee «No se ha podido registrar el
+cobro», y es falso: el cobro con ese id ya está en la base. El registro solo guarda `23505`, no el código de
+la relectura (`:115`). La prueba «con error al releer» no comprueba la consola.
 
-- **Qué pasa.** Si la lectura de `directorio_perfiles` del elegido falla, el error se registra y la opción se
-  pinta con `t('cobros.profesionalDesconocido')`, el mismo texto que «no existe». Ninguna prueba de
-  `datos.test.ts` cubre esa rama: la de la línea 216 simula `data: null` sin error.
-- **Escenario.**
-  1. El administrador abre `?profesional=<uuid de Bruno>` y Bruno no tiene filas en la vista, así que no
-     sale entre las opciones.
-  2. La lectura del directorio da un error transitorio.
-  3. El desplegable afirma «Profesional no encontrado» de un profesional que existe, mientras la lista y la
-     métrica siguen filtradas por él.
-- **Lo que esperaría.** Que un error pinte un rótulo neutro, o el uuid. «No encontrado» solo debería
-  salir cuando la lectura acaba bien y no trae la fila.
+**Escenario.** Un corte de red tras el primer envío, que sí entró. El usuario vuelve a pulsar, el insert da
+23505 `cobros_pkey` y la relectura cae (57014 o se agota la conexión). La acción devuelve `fallo()`. El
+usuario entiende que no quedó registrado, cierra el diálogo y lo vuelve a rellenar. El formulario se monta
+de nuevo con otro id, así que queda un cobro duplicado que no se puede borrar.
 
-## Mirado sin hallazgo
+El texto que corresponde aquí es `resultadoDesconocido`. No abre ningún oráculo, porque un error de lectura
+no depende de que el cobro sea de otro. El diseño (R3.1, «sin fila o con error: `fallo()`») dicta lo que hay
+ahora.
 
-- `resumen_pendiente` devuelve siempre una fila, porque es un agregado sin `group by`, y `cargarResumen`
-  trata como error cualquier otra cosa y los números que no sean enteros seguros.
-- La paginación usa el mismo orden que el diseño: `excedente desc, pendiente desc, paciente_id`.
-  `?pagina` fuera de rango cae en la última página.
-- La acción solo rechaza al absorbido a quien ya lo ve bajo RLS, así que no abre ningún oráculo nuevo.
-- La columna `fusionado_en` se lee con el grant de tabla (`grant select … pacientes to authenticated`).
-- El `fusionado_en` del simulador de `acciones.test.ts` es una marca de tiempo y no un uuid. Es inocuo,
-  porque la guarda solo mira que no sea nulo, y no hay ningún escenario de fallo.
-- `tipos-bd.ts` está regenerado, con `p_profesional_id?` opcional y `Args: never`.
-- El 30 es el último módulo de la transacción compartida. Las filas de PRO1 en `perfiles_centros` (CK y CP)
-  y los centros nuevos no alcanzan a ningún módulo posterior.
+#### A-H2 · BAJA · `app/(app)/facturacion/acciones.ts:55`
+El reintento con la misma clave vuelve a pasar por todas las guardas previas al insert. Si una de ellas
+cambia entre los dos intentos, contesta como si el cobro no existiera.
+
+**Escenario.** El primer envío del cobro de P entra, pero la red corta la respuesta. Antes del reintento,
+un administrador fusiona P en Q. Al reintentar, la acción devuelve `pacienteFusionado` («Registra el cobro
+en el que se conserva») sin llegar al insert. El usuario lo registra en Q y el pendiente consolidado de Q
+suma los dos: queda `cobrado_de_mas`.
+
+El caso es improbable, porque exige que la fusión caiga justo entre el corte y el reintento. Lo cerraría
+comprobar la clave propia antes de las guardas: `select … where id = :id and registrado_por = :yo` y, si
+devuelve la fila, éxito.
+
+#### A-H3 · BAJA · `docs/state.md:21`
+El §«Siguiente paso» no se reescribió y sigue pidiendo «T-023 ronda 2: verificador y dos revisores», cuando
+la línea 11 ya dice «ronda 3 implementada». Además, la línea 11 sitúa «M18-M22» dentro del «banco 30»,
+pero son mutantes TS (`mutantes.json` → `ts_ronda_3`). El pie de `30-cobros.sql` se queda en M17, como
+corresponde.
+
+**Escenario.** La sesión siguiente lee las primeras 80 líneas (regla 4) y lanza otra vez el verificador y
+los revisores de la ronda 2. O busca M18-M22 en `scripts/rls/30-cobros.sql` y no los encuentra.
+
+#### A-H4 · BAJA · `app/(app)/facturacion/page.tsx:36`
+Cuando falla la carga de profesionales, la página quita el selector y pinta el aviso. Pero la métrica, el
+pendiente y «Últimos cobros» siguen filtrados por `?profesional=` y nada en pantalla dice por quién.
+
+**Escenario.** El administrador abre un enlace guardado, `/facturacion?profesional=<Ana>`, y
+`profesionales_del_pendiente` agota el tiempo. Ve «No se ha podido cargar la lista de profesionales» y, debajo,
+«Pendiente total» con la cifra solo de Ana. Lo toma por el total de la consulta. Antes la mentira era
+«Todos»; ahora es una omisión.
+
+Lo arreglaría que el aviso dijera que las cifras están filtradas, o un enlace «quitar filtro» cuando
+`profesionalFiltrado !== null`. El diseño R3.4 dicta el comportamiento actual.
+
+### Fuera de mi ámbito, para B (sin contar) [unido a B-H1]
+
+`claveRef` vive en `FormularioCobro`. Si el usuario cierra y vuelve a abrir el diálogo tras
+`resultadoDesconocido`, o cambia un campo y lo deja como estaba, la huella o el montaje cambian y el id
+también. El texto pide «sin cambiar nada» y no menciona cerrar el diálogo.
 
 ---
 
-# Revisor B (interfaz)
+# Revisor B (cliente, accesibilidad y spec)
 
-Sin hallazgos ALTA. Revisor B (interfaz, foco, formularios), ronda 2: 3 MEDIA y 5 BAJA.
+Sin hallazgos ALTA. 0 ALTA, 2 MEDIA, 3 BAJA.
 
-# T-023 · Revisión B (interfaz) · ronda 2
+## T-023 · Ronda 3 · Revisor B (cliente, accesibilidad y spec)
 
-- **Diff revisado:** `T-023-cobros-y-pendiente..worktree-agent-a65aa0bb5f872243e` (HEAD `27cd231`), sin `tickets/`. Contexto: diseño §R2.3, §R2.4, §R2.6 y §R2.9 (lista del revisor B).
-- **Medido** (solo lectura, el worktree queda limpio):
-  - `npx vitest run components/ui/piezas.test.tsx lib/contraste "app/(app)/facturacion"`: 12 ficheros y 192 pruebas, todo verde.
-  - `npx eslint "app/(app)/facturacion" components/ui/piezas.tsx accesibilidad/facturacion.spec.ts`: limpio.
-  - Contrastes con `lib/contraste` sobre los tokens de `app/globals.css`, a partir de una copia en el scratchpad: `primary` sobre `muted` da 7,95:1, `muted-foreground` sobre `card` da 5,33:1 y `foreground` sobre `background` (warning) da 14,70:1.
-  - La conducta de `router.refresh()` ante un fallo de red está leída en `node_modules/next/dist/client/components/router-reducer/` (fetch-server-response.js:142-148 y :236-241; ppr-navigations.js:988-999 y :1117-1125).
-- **No ejecutado:** el spec de Playwright, porque escribe en la base compartida. Lo ejecuta el verificador.
+Diff revisado: `git diff worktree-agent-a65aa0bb5f872243e..worktree-agent-a875b9deffe28f1da -- . ':!tickets'` (cinco commits, de b86848e a e7c356f). Lo he medido con `git show` sobre la rama. No he ejecutado el spec.
 
-## Lista «Qué revisar» (R2.9, revisor B), punto por punto
+### La lista de «qué revisar» (R3.6, revisor B)
 
-| Punto | Resultado |
-|---|---|
-| El botón nunca es `disabled` | **OK.** Lleva `aria-disabled={enviando}` (`formulario-cobro.tsx:192`) y la prueba exige `not.toBeDisabled()`. |
-| Con doble envío, la acción se llama una vez | **OK.** La guarda es `enviandoRef` (`:84`). Si se quita la guarda, la segunda pulsación pasa por `handleSubmit` y llega a `registrarCobro`, así que la prueba de la `:115` caería. |
-| Foco al primer campo con error, en orden, también con `motivo` | **El código está bien; la prueba no basta (B-H3).** |
-| `catch`: estado con salida; el texto no afirma ni niega | **El texto está bien y el diálogo vuelve a poder cerrarse.** El `router.refresh()` del `catch` lo anula justo en el caso para el que existe (B-H1). El canal de comprobación que propone el texto no siempre enseña el cobro (B-H7). |
-| Cierre: con envío en vuelo no cierra; sin envío sí, y el foco vuelve | **OK.** Escape, la X y el clic fuera pasan por el mismo `alCerrar` (`dialogo.tsx:29`, `:71`). El efecto que avisa del fin del envío se vuelve a lanzar al remontar, así que el `enviando=true` que queda en el padre tras un éxito no bloquea la siguiente apertura. |
-| Paginación: el enlace que no aplica no se pinta | **OK**, pero al quitar el enlace enfocado se pierde el foco (B-H6). |
-| El `href` conserva `?profesional` y el selector quita `pagina` | **OK**, con prueba en los dos sitios. |
-| `?pagina=999999` cae en la última y `?pagina=abc` en la 1 | **`abc` va a la 1. `999999` también va a la 1, no a la última** (B-H4). |
-| `Pildora success`: ¿algún sitio dependía del verde para distinguir estados? | **No.** Recorridas las 7 pantallas de R2-V7, cada píldora lleva su propio texto. El único caso en que el tono cambia y el texto no es `panel-datos.tsx:61` (representante vigente o no), y allí `:76-79` lo dice con texto («Ya no vigente» o «Vigente desde…»). |
-| La prueba de `piezas.test.tsx` cae con el `success` antiguo por el `/` | **OK.** `bg-primary/10` da `fondo[2] = '/10'`, así que cae en la aserción «el fondo lleva opacidad», que es la correcta. |
-| El importe se lee entero a 360 px | **En jsdom sí** (`bloques.test.tsx`, sin `truncate` y con `break-words`). **El paso 1 del spec no mira la lista** (B-H2). |
-| Si fallan los pacientes, `AvisoDeError` en lugar del botón | **OK** (`page.tsx:24` y `page.test.tsx`). |
-| Atajo `(evento) => handleSubmit(fn)(evento)` del React Compiler | **Correcto.** Aplaza al evento la lectura del ref que `react-hooks/refs` prohíbe en el render. Se crea un manejador por envío, que es barato, y el lint queda limpio. Hay precedente en `dialogo-de-copia.tsx:227` (con `void`). Sin hallazgo. |
+- **Ningún camino del `catch` navega.** Se cumple. `formulario-cobro.tsx:104-108` solo llama a `setMensaje`, `useRouter` ya no se importa y `grep refresh` sale vacío. Queda un hueco: tras el `catch` la lista y la métrica no se actualizan hasta que un reintento salga bien (por el `revalidatePath` de la acción) o hasta la siguiente navegación. Eso alimenta H1.
+- **El `id` se renueva tras un éxito y con datos distintos, y en ningún otro caso.** Dentro del formulario montado se cumple (`:88-90`, `:96`):
+  - El orden de las claves no importa. `datos` es la salida de Zod, que sigue el orden del `shape` y no el de la entrada, y `JSON.stringify` omite los `undefined` de los opcionales vacíos.
+  - Los valores equivalentes cambian la huella. `importe` sale recortado pero sin normalizar, así que `0,01`, `0.01` y `0,010` dan tres `id`. Solo pasa si el usuario vuelve a escribir el importe, cosa que el mensaje le pide no hacer. Pero eso es justo lo que pasa en H1.
+  - Hay un caso fuera de la regla: el `id` también muere cuando se desmonta el formulario, y el diálogo lo desmonta al cerrarse. Ver H1.
+- **El paso 4 cuenta `+ 1` y no se conforma con «visible».** Sí cuenta (`toHaveCount(antes + 1)` sobre filas filtradas, `spec:182`). La revalidación entrega la lista de golpe, sin pasar por un `+ 1` intermedio, así que M20 (`+ 2`) cae. Pero el paso depende de lo que haya en la base. Ver H2 y H3.
+- **El foco tras paginar, en los dos sentidos.** Se cumple: «Siguientes» y «Anteriores», con reconciliación y con remontaje (`paginacion-pendientes.test.tsx`). El residuo está en H4.
 
-## Hallazgos de la ronda 1 (B)
+### Lo que preguntaba el orquestador, fuera de la lista
 
-| R1 | Estado |
-|---|---|
-| B-H1 (`try/catch`) | **Cerrado en jsdom.** El `catch` existe y el formulario sigue montado. Queda una variante nueva: el `refresh` del `catch` recarga la página entera cuando falla la red (B-H1). |
-| B-H2 (`disabled` y foco) | **Cerrado** en el código. Solo hay prueba de una de las tres ramas del orden (B-H3). |
-| B-H3 (selector con valor ajeno) | **Cerrado para la URL escrita a mano.** Sigue abierto en la otra mitad de mi escenario, «opciones [] por un fallo», y ahora una prueba lo da por bueno (B-H5). |
-| B-H4 (`Pildora success` a 1,13:1) | **Cerrado.** Medido: 7,95:1, y el par está en `PARES`. |
-| B-H5 (`.in` sin límite) | **Cerrado.** Como mucho 50 ids por `.range`. |
-| B-H6 (spec) | **A medias.** Ya entra como administrador y hace un envío completo. Sigue sin mirar el selector ni el diálogo con los errores o el motivo a la vista, que eran mi escenario (B-H2). |
-| B-H7 (`truncate`) | **Cerrado en jsdom.** No hay medida en navegador (B-H2). |
-| B-H8 (matiz de `Metrica`) | **Cerrado.** Medido: 5,33:1, y solo lo usa Facturación. |
-| B-H9 (pacientes como `[]`) | **Cerrado.** |
-| B-H10 (más de 1000 pacientes) | **Cerrado.** Se leen por páginas de 1000 hasta agotarlos. |
-| B-H11 (Escape en vuelo, aviso `sr-only`) | **Cerrado.** Pero el aviso visible lleva ahora `empty:hidden` (B-H8). |
+- **Regiones `aria-live` siempre montadas.** Se cumple. `registrar-cobro.tsx:41` y `formulario-cobro.tsx:201` ya no llevan `empty:hidden`. La del formulario nace vacía con el diálogo. Un segundo «No sabemos…» idéntico se vuelve a anunciar: el `setMensaje('')` del manejador se confirma antes de que el `await` de red falle. No encuentro escenario de fallo.
+- **La marca de módulo y las fugas.**
+  - Entre pestañas no se filtra: cada pestaña es otro realm.
+  - En el servidor el módulo se evalúa en SSR y comparte la variable entre peticiones. Solo la enciende `onClick`, que no corre en el servidor, así que no hay fuga entre usuarios.
+  - Entre pruebas tampoco: `vi.resetModules()` en `beforeEach`.
+  - Sí se queda encendida dentro de la misma pestaña cuando el clic no navega en ella. Ver H4.
+- **El aviso de profesionales.** Cierra el «Todos» falso de B-H5, pero deja el filtro invisible. Ver H5.
+- **«Más de 18 cobros acumulados falla a propósito».** Si la base no tuviera más cobros que los del propio spec, el tope sería exacto: es el mayor `antes` con el que un `+ 2` aún cabe en las 20 filas. Como fallo explícito y con instrucción, sería aceptable. No lo es tal como está, por dos motivos (H2):
+  - Con 0 filas, el estado justo después del `db reset && npm run seed` que pide su propio mensaje, el paso falla antes de empezar.
+  - El tope cuenta las filas de Lucía, no las de la lista. Lo que hace falta es que no se caiga ninguna fila por abajo.
 
-## MEDIA
+### MEDIA
 
-### B-H1 · `app/(app)/facturacion/formulario-cobro.tsx:103`: el `router.refresh()` del `catch` recarga la página entera justo cuando ha fallado la red, y se pierde el aviso que el `catch` acaba de poner
+#### B-H1 · `app/(app)/facturacion/formulario-cobro.tsx:52`: la clave de envío muere al cerrar el diálogo, y el aviso manda pulsar un botón que se llama igual que el que abre un formulario en blanco
 
-- Si el fetch RSC falla, Next 16 no hace el `refresh` en cliente: cae a una navegación de página completa. Lo hace en dos casos:
-  - el fetch lanza (`fetch-server-response.js:236-241`, «Falling back to browser navigation»);
-  - la respuesta no es 200 (`:142-148`).
-- Después, `ppr-navigations.js:988-999` lo trata como `isHardRetry`. Su propio comentario dice: «when the network fails, we fall back to the browser behavior for offline navigations».
-- **Escenario:**
-  1. Se cae la wifi al pulsar «Registrar cobro» y la acción rechaza con `TypeError`.
-  2. El `catch` pinta «No sabemos si el cobro se ha registrado…» y llama a `router.refresh()`.
-  3. El fetch del refresco también falla y el navegador recarga `/facturacion` sin conexión: sale la página de error del navegador.
-  4. Se pierden el aviso y lo escrito en el formulario.
-  5. Cuando vuelve la red, el usuario recarga, ve un formulario limpio sin ninguna advertencia y vuelve a registrar el cobro. Si el primer `insert` llegó a la base, queda duplicado. Un cobro no se borra (regla 6): solo se compensa con una devolución.
-- Ese es el escenario exacto de B-H1 de la ronda 1. El arreglo lo cubre en jsdom porque allí `router` es un doble (`formulario-cobro.test.tsx:9`). El `refresh` lo manda el diseño (R2.3), así que la decisión vuelve al arquitecto.
+`claveRef` vive en `FormularioCobro`, y `Dialogo` hace `return null` cuando está cerrado (`components/ui/dialogo.tsx`, `if (!abierto) return null`). Tras el `catch`, `enviando` vale `false` y el diálogo se cierra con Escape, con la «X» o con un `mousedown` fuera del panel (`useCierreExterior`). Al cerrarse se pierden la clave y lo escrito.
 
-### B-H2 · `accesibilidad/facturacion.spec.ts:38-82`: el spec sigue sin cubrir lo que el escenario de B-H6 y R2.6 piden medir
+El aviso (`lib/i18n/es.ts:1383`) dice «Vuelve a pulsar «Registrar cobro» sin cambiar nada: si ya estaba registrado, no se duplica». Pero «Registrar cobro» es también el disparador de la página (`registrar-cobro.tsx:38`). Además, sin `refresh`, «Últimos cobros» y la métrica siguen sin el cobro que sí entró.
 
-- **Paso 1 (`:38-50`):** no mira el selector de profesional. R2.6 dice: «El selector de profesional se ve y está dentro de la ventana (es el administrador)».
-  - Escenario: el selector del administrador se sale por la derecha a 360 px (`max-w-xs` dentro de un contenedor que no lo encoge) y el spec sigue verde.
-- **Paso 2 (`:58-60` frente a `:67`):** el `boundingBox` del diálogo se mide **antes** del envío vacío. R2.6 lo pide «con los mensajes de error pintados».
-- **Paso 3 (`:75-82`):** comprueba que aparece «Motivo», pero no que el diálogo siga dentro de la ventana.
-  - Escenario: los mensajes de error de cuatro campos y el motivo alargan el diálogo y sacan el botón de la ventana, y el spec sigue verde. Era la segunda mitad del escenario de B-H6.
-- **Paso 4 (`:100-101`):** «Lucía Márquez» `.first()` en «Últimos cobros» ya está verde por el cobro de 0,01 € de una pasada anterior, porque la base no se borra.
-  - El cierre del diálogo y «Cobro registrado» sí prueban el éxito. La línea de «Últimos cobros» no prueba nada propio de esta pasada.
-- **R2.9:** dice que el importe entero a 360 px lo cubre «el paso 1 del spec», y ningún paso mira la lista del pendiente. Con la siembra recién hecha, además, la lista está vacía en el paso 1 (R2-V10).
+**Escenario:**
+1. En el móvil se corta la red al registrar 60,00 € a un paciente. El primer POST insertó.
+2. Sale «No sabemos…». El usuario toca fuera del panel, o pulsa Escape para mirar la lista.
+3. La lista no enseña el cobro.
+4. Pulsa el «Registrar cobro» de la página, que es lo que el aviso nombra, y le sale un formulario vacío.
+5. Vuelve a escribir 60,00 €. La clave es otra, así que entra una segunda fila.
 
-### B-H3 · `app/(app)/facturacion/formulario-cobro.test.tsx:135`: el orden del foco se prueba con un único caso, y ese caso no distingue «el primero del orden» de «siempre `pacienteId`»
+El cobro queda duplicado y no se puede borrar (regla 6): solo se compensa con una devolución con motivo. Es el escenario de B-H1 de la ronda 2 por otra puerta.
 
-- El único caso trae errores en `fecha` y en `pacienteId`, y espera el foco en «Paciente».
-- Faltan dos casos:
-  - El que pide R2.3: «con errores del servidor en `fecha`, `document.activeElement.id === 'fecha'`». La prueba de la `:82` solo tiene el error de `fecha` y no mira el foco.
-  - El de `motivo`, que pide R2.9.
-- Escenario (razonado, sin ejecutar el mutante): un mutante `if (estado.errores) setCampoConFoco({ campo: 'pacienteId' })` deja la prueba verde.
-  - Con él, un 23514 de fecha futura, que es el caso real de un paciente de Canarias, manda el foco a «Paciente».
-  - Un error de `motivo` (`cobros_devolucion_motivo_ck`) también lo manda allí.
-  - En los dos, el lector de pantalla no anuncia el campo que está mal.
-- El mutante que ordena por `Object.keys` sí cae, porque el objeto de prueba empieza por `fecha`.
+**Qué haría falta, con prueba de cada parte:**
+- **Que la clave sobreviva al cierre.** Subirla a `RegistrarCobro`, junto con lo escrito o con una huella normalizada (importe en céntimos, `aCentimos`), para que reescribir el mismo cobro reutilice el `id`. O bien que el diálogo no se cierre sin confirmar mientras el resultado sea desconocido.
+- **Que el aviso no nombre un botón ambiguo.** Por ejemplo: «sin cerrar esta ventana».
+- **Pruebas:**
+  - en `registrar-cobro.test.tsx`, un rechazo, cerrar, abrir, mismo envío y el mismo `id`;
+  - un paso del spec que cierre el diálogo entre el corte y el reintento.
 
-## BAJA
+#### B-H2 · `accesibilidad/facturacion.spec.ts:135`: el paso 4 solo pasa con cobros de ejecuciones anteriores, y su tope de 18 no garantiza que se vea el `+ 1`
 
-### B-H4 · `app/(app)/facturacion/bloques.test.tsx:240` y `datos.ts:67`: `?pagina=999999` va a la página 1, no a la última, y la prueba que dice lo contrario simula 99999
+La siembra no inserta cobros: `supabase/seed.sql` y `seed-completo.sql` no los tienen, y los bancos de `scripts/rls/` corren en `begin … rollback`. Esto falla de dos maneras.
 
-- `esquemaPagina` acepta como mucho 100000, y `datos.test.ts:152` fija que `'100001'` da 1. La prueba de bloques se titula «(?pagina=999999)» pero pasa `pagina: 99999` directamente al contexto simulado.
-- Afirman que va a la última:
-  - el comentario de `bloques.tsx:120`;
-  - la bitácora («una página fuera de rango cae en la última»);
-  - R2.9.
-- Escenario: con 120 filas, `?pagina=999999` pinta «Del 1 al 50 de 120», sin «Anteriores». Cualquier número de más de 100000 se comporta igual.
-- El diseño se contradice a sí mismo (`max(100000)` en R2.3 frente a «999999 cae en la última» en R2.9). Hay que alinear la prueba, el comentario y la bitácora con lo que se decida.
+**Primer escenario (base recién sembrada):**
+1. Se ejecuta `npx supabase db reset && npm run seed` y después el spec. Es lo que pide la cabecera (`:7`) y lo que pide el mensaje del tope (`:137`).
+2. «Últimos cobros» pinta `EstadoVacio` («Todavía no hay cobros»), que no tiene ningún `<li>`.
+3. `await expect(recientes.getByRole('listitem').first()).toBeVisible()` (`:135`) agota el tiempo, y el paso 4 sale rojo sin haber registrado nada.
 
-### B-H5 (unido a A-H3) · `app/(app)/facturacion/datos.ts:270`: si falla `profesionales_del_pendiente`, el selector enseña «Todos los profesionales» con el filtro activo, y `datos.test.ts:362` lo da por bueno
+El verde de la verificación se apoya en filas de 0,01 € de rondas anteriores en la base compartida. La bitácora recoge la trampa de Suspense, pero no esta.
 
-- Escenario:
-  1. El administrador está en `?profesional=<Ana>` y la función falla (timeout o 42501).
-  2. `cargarOpcionesProfesional(PRO)` devuelve `[]` sin anteponer el elegido.
-  3. `Desplegable` pinta su `marcador`, «Todos los profesionales» (`desplegable.tsx:109`).
-  4. La métrica y la lista siguen filtradas por Ana.
-- Era la segunda mitad del escenario de B-H3 («o opciones [] por un fallo»). R2.3 lo dejó así («Un fallo deja `[]`, como ahora»), y la prueba nueva lo fija con `PRO` como elegido.
-- Pasa lo mismo en `:281-282`: un error al leer `directorio_perfiles` sale como «Profesional no encontrado». Es un error pintado como ausencia.
+**Segundo escenario (el tope cuenta lo que no es):** `:136-138` limita las filas de Lucía y no las de la lista (`order fecha desc, registrado_en desc, limit 20`, `datos.ts`). Supongamos que una ejecución del spec el 01-10 dejó una fila L1 y que después se registraron 19 cobros de otros pacientes con fecha 02-10 a 06-10, por ejemplo con pruebas manuales en la base compartida. L1 queda en la posición 20 y `antes = 1`:
+- Con el código bueno entra una fila arriba y L1 sale por abajo. El recuento da 1 = `antes`, rojo «el reintento duplicó el cobro».
+- Con M20 entran dos filas y salen L1 y otra. El recuento da 2 = `antes + 1`: **verde con el mutante**.
 
-### B-H6 · `app/(app)/facturacion/bloques.tsx:177-186`: al llegar a la primera o a la última página se desmonta el enlace que tenía el foco
+**Qué haría falta:**
+- Esperar a la lista o a su estado vacío. Por ejemplo `recientes.getByRole('listitem').or(recientes.getByText('Todavía no hay cobros')).first()`.
+- Poner el tope sobre `recientes.getByRole('listitem').count() ≤ 18`, todas las filas. Así ningún `+ 1` ni `+ 2` empuja una fila fuera.
 
-- Los enlaces son dos expresiones en posiciones fijas. React conserva el elemento de `Link` cuando sigue en su posición, pero lo desmonta cuando la condición pasa a `false`. `stateKey` no lleva la búsqueda (`layout-router.js:549`), así que el árbol se reconcilia y no se remonta.
-- Escenario:
-  1. Con el teclado, en la página 2 de 3, se pulsa Intro en «Siguientes».
-  2. En la página 3 no hay «Siguientes»: el nodo enfocado desaparece y el foco cae en `body`. Pasa lo mismo de la 2 a la 1 con «Anteriores».
-  3. El siguiente Tab vuelve a empezar desde arriba, y ninguna región anuncia el nuevo «Del 101 al 120 de 120».
-- Es lo que pide el diseño («no se pinta»). El arreglo cabe sin pintar controles sin acción: por ejemplo, llevar el foco al rango o al título de la lista cuando cambia la página.
+### BAJA
 
-### B-H7 · `lib/i18n/es.ts:1383` y `datos.ts:226-229`: el aviso manda a comprobar en «Últimos cobros», y esa lista no enseña un cobro con fecha atrasada ni uno que quede fuera del filtro de profesional
+#### B-H3 · `accesibilidad/facturacion.spec.ts:154`: no se comprueba que el primer POST insertó
 
-- «Últimos cobros» son los 20 primeros ordenados por `fecha desc`.
-- Escenario 1:
-  1. El 07-10 se registra un cobro con fecha del 30-09, que el formulario permite (`max={hoy}`).
-  2. Falla la red y sale «Mira «Últimos cobros» antes de repetirlo».
-  3. Hay más de 20 cobros con fecha posterior al 30-09, así que el cobro que sí entró no aparece.
-  4. El usuario concluye que no se registró y lo repite.
-- Escenario 2: el administrador tiene puesto el filtro de otro profesional y el paciente no es suyo. El resultado es el mismo.
-- El texto no afirma ni niega, como pide R2.9, pero el canal de comprobación que nombra no es fiable. La fila del paciente en el pendiente sí refleja el cobro.
+`await route.fetch()` descarta la respuesta. Si ese POST no inserta, el cliente ve igualmente «No sabemos…» (la respuesta se aborta), el reintento inserta la única fila y el paso queda verde con `antes + 1`. En esa pasada la deduplicación no se ha probado, y M20 sobrevive.
 
-### B-H8 · `app/(app)/facturacion/registrar-cobro.tsx:41`: el `role="status"` pasa de `sr-only`, siempre en el árbol de accesibilidad, a `empty:hidden`, que es `display:none` mientras está vacío
+**Escenario:** con `npm run dev`, el primer POST a la acción recién editada devuelve un 500 mientras Turbopack recompila. El paso 4 sale verde sin haber pasado por el 23505.
 
-- Con `empty:hidden`, la región no existe para el lector de pantalla hasta que se le mete texto, y aparece ya rellena. Un `role="status"` (educado) que nace con su contenido no se anuncia de forma fiable (patrón «región viva creada ya rellena», T-028 B R2).
-- Además coincide con la vuelta del foco al botón, que se anuncia antes.
-- Escenario: un usuario de NVDA registra un cobro. Oye «Registrar cobro, botón» y no oye «Cobro registrado». En la ronda 1, con `sr-only`, la región existía desde el montaje.
-- No lo he medido con un lector de pantalla. La clase la fija R2.3 tal cual. Basta con quitar `empty:hidden` y dejar el `<p>` vacío, que no ocupa nada visible.
+**Arreglo:** `const r = await route.fetch(); expect(r.status()).toBe(200)`, y que el cuerpo contenga «Cobro registrado».
 
-## Fuera de mi ámbito, para el revisor A
+#### B-H4 · `app/(app)/facturacion/paginacion-pendientes.tsx:38`: la marca se enciende con cualquier clic, también con los que no navegan en esta pestaña, y se queda encendida
 
-`docs/state.md` (diff) dice que la transición `realizada → cancelada` mueve el pendiente «sin rastro». El texto de R2.7 dice lo contrario: «Queda rastro en `auditoria` (2 filas, `auditar_citas`)». No lo cuento.
+El `onClick` del usuario corre siempre antes que la lógica de `Link` (`node_modules/next/dist/client/app-dir/link.js:328`). Con Ctrl, Cmd o Mayúsculas, `linkClicked` deja que el navegador abra otra pestaña (`isModifiedEvent`, `:45-56`), y en la pestaña actual `pagina` no cambia. Lo mismo pasa si la navegación se sustituye por otra antes de llegar. La marca sigue en `true` hasta el siguiente cambio de `pagina` o el siguiente montaje, aunque no venga de un clic.
+
+**Escenario:**
+1. El administrador, en la página 2, abre «Siguientes» en otra pestaña con Ctrl+clic.
+2. En la pestaña original cambia el selector de profesional. `router.replace` sin `pagina`, con `scroll: false` (`selector-profesional.tsx`).
+3. Si el filtro sigue teniendo más de 50 filas, `pagina` pasa de 2 a 1 y el foco salta del selector al rango, al pie de la lista. La página se desplaza aunque `scroll: false` pretendía evitarlo.
+4. Con 50 filas o menos, el salto llega al volver a `/facturacion` desde otro módulo: montar «sin clic» mueve el foco, que es lo que la prueba `:82` dice que no pasa.
+
+**Arreglo:**
+- Ignorar los clics modificados (`e.metaKey || e.ctrlKey || e.shiftKey || e.altKey`).
+- Guardar la página de destino en vez de un booleano y enfocar solo si `pagina` coincide con ella.
+- Probarlo con un `fireEvent.click(..., { ctrlKey: true })` seguido de un `rerender` con otra página: el foco no se mueve.
+
+#### B-H5 · `app/(app)/facturacion/page.tsx:36`: si falla la lista de profesionales con un filtro puesto, la página enseña cifras filtradas sin decir que lo están ni ofrecer quitar el filtro [unido a A-H4; no se cuenta aparte]
+
+`AvisoDeError` sustituye al selector, y con él desaparece el único sitio donde se ve el profesional elegido. La métrica, «Por paciente» y «Últimos cobros» siguen filtrados por `profesionalFiltrado` (`bloques.tsx`, `datos.ts`).
+
+**Escenario:** con `/facturacion?profesional=<Ana>` (un marcador, o un enlace compartido) y `profesionales_del_pendiente` caída, el administrador ve «No se ha podido cargar la lista de profesionales» y, debajo, el pendiente de Ana como si fuera el de la clínica, sin ningún control para volver a «todos».
+
+**Arreglo:** cuando `profesionalFiltrado !== null`, usar la `accion` que `AvisoDeError` ya admite para poner un enlace «Ver todos los profesionales» a `/facturacion`. En `page.test.tsx`, el caso `{ ok: false }` con elegido.
+
+### Hallazgos B de la ronda 2
+
+| Id | Estado | Nota |
+|---|---|---|
+| B-H1 (MEDIA) | **Cerrado** | El `catch` ya no refresca ni navega. Lo prueban `formulario-cobro.test.tsx` y el paso 4.3. Por otra puerta queda un residuo: H1 de esta ronda |
+| B-H2 (MEDIA) | **Cerrado** | Selector a 360 px (paso 1), diálogo medido después de los errores y con Motivo (pasos 2 y 3), botón de envío dentro, `+ 1` en vez de «visible», línea del importe en «Por paciente» (4.5). El paso 4 depende de la base: H2 y H3 de esta ronda |
+| B-H3 (MEDIA) | **Cerrado** | Hay pruebas de foco para Fecha y para Motivo. Con el mutante de foco fijo en Paciente caen las dos |
+| B-H4 (BAJA) | **Cerrado** | Sin `max`. `bloques.test.tsx` usa 999999 y comprueba «Del 101 al 120 de 120» |
+| B-H5 (BAJA) | **Cerrado** | `{ ok: false }` y aviso, sin «Todos» falso. Residuo: H5 de esta ronda |
+| B-H6 (BAJA) | **Cerrado** en el clic normal | El foco va al rango en los dos sentidos, también al remontar. Residuo: H4 de esta ronda |
+| B-H7 (BAJA) | **Cerrado** | El aviso ya no remite a «Últimos cobros». Su texto nuevo promete algo que H1 rompe |
+| B-H8 (BAJA) | **Cerrado** | Sin `empty:hidden` en las dos regiones. Las dos pruebas comprueban que la región existe vacía desde el montaje |

@@ -1,0 +1,48 @@
+{
+  "ticket": "T-023",
+  "ronda": 3,
+  "revisor": "A",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 4,
+  "ronda2": {
+    "A-H1": "cerrado",
+    "A-H2": "cerrado",
+    "A-H3": "cerrado (residuo en H4)"
+  },
+  "medido": "00+01+30 de la rama en begin…rollback, rc=0, E12/E12b/E12c/E12g OK; sonda: id ajeno → 23505 cobros_pkey y relectura 0 filas; paciente no visible → 42501; fecha futura → 23514 antes que el índice único.",
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/acciones.ts",
+      "linea": 109,
+      "descripcion": "Si la relectura falla después de un 23505 de la propia clave, se contesta «No se ha podido registrar el cobro», aunque el cobro ya existe. El log solo guarda 23505, no el código de la relectura, y la prueba no mira la consola.",
+      "escenario": "Hay un corte de red tras un primer envío que sí entró. Al reintentar sale 23505 cobros_pkey y la relectura da 57014, así que la acción devuelve fallo(). El usuario cree que no se registró, cierra y vuelve a rellenar con otro id: queda un cobro duplicado que no se puede borrar. Aquí corresponde resultadoDesconocido."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/acciones.ts",
+      "linea": 55,
+      "descripcion": "El reintento con la misma clave vuelve a pasar por las guardas previas al insert. Si una de ellas cambia entre los dos intentos, contesta como si el cobro no existiera.",
+      "escenario": "El cobro de P entra y se pierde la respuesta. P se fusiona en Q antes del reintento. El reintento devuelve pacienteFusionado («Registra el cobro en el que se conserva»), el usuario lo registra en Q y el pendiente consolidado suma los dos: queda cobrado_de_mas. Es improbable; se cerraría releyendo la clave propia antes de las guardas."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 21,
+      "descripcion": "«Siguiente paso» sigue pidiendo el verificador y los revisores de la ronda 2, aunque la línea 11 ya dice «ronda 3 implementada». Además, la línea 11 sitúa M18-M22 en el «banco 30», cuando son mutantes TS.",
+      "escenario": "La sesión siguiente lee las 80 primeras líneas y relanza la verificación de la ronda 2, o busca M18-M22 en scripts/rls/30-cobros.sql y no los encuentra."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/page.tsx",
+      "linea": 36,
+      "descripcion": "Si falla la lista de profesionales, el selector desaparece, pero la métrica y las listas siguen filtradas por ?profesional= sin que nada en pantalla diga por quién.",
+      "escenario": "Con /facturacion?profesional=<Ana> y profesionales_del_pendiente en timeout, el administrador ve el aviso de error y «Pendiente total» con solo la cifra de Ana. La toma por el total de la consulta."
+    }
+  ]
+}
