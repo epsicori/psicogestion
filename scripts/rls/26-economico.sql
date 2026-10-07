@@ -500,8 +500,8 @@ select pg_temp.assert_lanza_codigo(
   '42501', '26.C3 · TEC1 no registra un cobro a nombre de otro (registrado_por)');
 call pg_temp.como(:ADM);
 select pg_temp.assert_no_lanza(
-  format($f$insert into public.cobros (paciente_id, importe, fecha, forma_pago, referencia, registrado_por)
-            values (%L, -20.00, current_date, 'transferencia', 'Devolución parcial', %L)$f$, :P2, :ADM),
+  format($f$insert into public.cobros (paciente_id, importe, fecha, forma_pago, referencia, motivo, registrado_por)
+            values (%L, -20.00, current_date, 'transferencia', 'Devolución parcial', 'Devolución parcial', %L)$f$, :P2, :ADM),
   '26.C4 · ADM registra un cobro (una devolución, importe negativo) de P2 sin factura');
 select pg_temp.assert_lanza_codigo(
   format($f$insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por)

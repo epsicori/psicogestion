@@ -1,0 +1,253 @@
+{
+  "ticket": "T-023",
+  "fecha": "2026-10-06",
+  "nota": "Cada mutante SQL es una copia de 20261013120000_cobros_y_pendiente.sql con un cambio, aplicada dentro de begin … rollback antes de 00-ayudantes + 01-fijacion + 30-cobros (nunca en la base). 'falla' es la primera aserción que cae. M7, M8 y M9 se midieron además con el bloque A (catálogo) quitado del banco, para saber si el comportamiento también los detecta.",
+  "sql_banco": {
+    "M1": {
+      "mutacion": "sin la condición de centro del técnico en el where de la vista",
+      "rojo": true,
+      "falla": "30.D2 · TEC1 ve 0 filas de P30B (otro centro)"
+    },
+    "M2": {
+      "mutacion": "sin `and public.es_profesional_asignado(p.id)`",
+      "rojo": true,
+      "falla": "30.D5 · PRO1 ve 0 filas de P30B (no asignado); D5 va antes que D4 en el fichero, y D4/D9 caerían igual"
+    },
+    "M3": {
+      "mutacion": "`c.inicio::date` en lugar de `(c.inicio at time zone c.zona_horaria)::date`",
+      "rojo": true,
+      "falla": "30.B0 · sale dev=6000 (tarifa base del día anterior en UTC) en lugar de 10000"
+    },
+    "M4": {
+      "mutacion": "sin `and c.bono_id is null`",
+      "rojo": true,
+      "falla": "30.C4 · sale dev=27000: la cita del bono cuenta además del bono"
+    },
+    "M5": {
+      "mutacion": "`c.estado in ('realizada', 'no_asistida')`",
+      "rojo": true,
+      "falla": "30.C5b · sale dev=36000: la no asistida devenga"
+    },
+    "M6": {
+      "mutacion": "sin `t.orden desc` en el order by de la tarifa",
+      "rojo": true,
+      "falla": "30.C5 · sale dev=29000: coge la tarifa de 80,00 en lugar de la de 90,00 del mismo día. No es equivalente"
+    },
+    "M7": {
+      "mutacion": "`security_barrier = false`",
+      "rojo": true,
+      "falla": "30.A1 · pendiente_paciente es una vista definer con security_barrier=true. Sin el bloque A el banco queda verde (64 OK): la barrera solo la vigila el catálogo"
+    },
+    "M8": {
+      "mutacion": "sin `cobros_devolucion_motivo_ck`",
+      "rojo": true,
+      "falla": "30.A6 (catálogo); sin el bloque A, 30.E7 · debía lanzar 23514 y no lanzó nada"
+    },
+    "M9": {
+      "mutacion": "sin el disparador `validar_cobro`",
+      "rojo": true,
+      "falla": "30.A8 (catálogo); sin el bloque A, 30.E9 · debía lanzar 23514 y no lanzó nada"
+    },
+    "M10": {
+      "mutacion": "`>=` en lugar de `>` en `when s.importe + b.importe > k.importe then 'pendiente'`",
+      "rojo": true,
+      "falla": "30.B3 · sale est=pendiente con pen=0 en lugar de cobrado"
+    },
+    "M11": {
+      "mutacion": "sin `p.fusionado_en is null` en la vista",
+      "rojo": true,
+      "falla": "30.F1 · sale la fila del absorbido (dev=22000)"
+    },
+    "M12a": {
+      "mutacion": "sin la rama `union all` de absorbidos en el lateral de citas",
+      "rojo": true,
+      "falla": "30.F2 · sale dev=21000"
+    },
+    "M12b": {
+      "mutacion": "sin la rama `union all` de absorbidos en el lateral de bonos",
+      "rojo": true,
+      "falla": "30.F2 · sale dev=13000"
+    },
+    "M12c": {
+      "mutacion": "sin la rama `union all` de absorbidos en el lateral de cobros",
+      "rojo": true,
+      "falla": "30.F2 · sale cob=2000"
+    },
+    "M13": {
+      "mutacion": "`t.paciente_id = p.id` en lugar de `c.paciente_id`",
+      "rojo": true,
+      "falla": "30.F2 · sale dev=27000"
+    },
+    "M14": {
+      "mutacion": "sin `(s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)`",
+      "rojo": true,
+      "falla": "30.A5a · sale dev=0 est=cobrado"
+    },
+    "M15": {
+      "mutacion": "`zona_horaria_centro(null)` en fn_validar_cobro",
+      "rojo": true,
+      "falla": "30.E10d (a las 10:42 de Madrid; con Madrid entre las 11:00 y las 24:00 caería en E10a) · debía lanzar 23514 y no lanzó nada"
+    },
+    "M16": {
+      "mutacion": "`public.perfiles` en lugar de `public.directorio_perfiles` en profesionales_del_pendiente",
+      "rojo": true,
+      "falla": "30.G1 · el administrador no ve los nombres"
+    },
+    "M17": {
+      "mutacion": "sin el `where` de p_profesional_id en resumen_pendiente",
+      "rojo": true,
+      "falla": "30.G4 · resumen_pendiente(PRO1) no iguala al agregado de la vista; G5 también lo cubre"
+    }
+  },
+  "fecha_ronda_2": "2026-10-07",
+  "fecha_ronda_3": "2026-10-07",
+  "sql_banco_ronda_3": {
+    "E12": {
+      "prueba": "30.E12 a E12g (scripts/rls/30-cobros.sql): el mismo id dos veces da 23505 cobros_pkey y una sola fila; otro id entra",
+      "nota": "La R3 no cambia la migración: no hay mutante SQL; la clave primaria ya es la guarda."
+    }
+  },
+  "ts_ronda_3": {
+    "M18": {
+      "mutacion": "`router.refresh()` de vuelta en el catch de formulario-cobro.tsx",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · B-H1: si la acción rechaza, el formulario sigue montado y no navega"
+    },
+    "M19": {
+      "mutacion": "el foco del error del servidor siempre en `pacienteId`",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · R3.3 foco en Fecha y en Motivo"
+    },
+    "M20": {
+      "mutacion": "un id nuevo en cada envío (sin comparar la huella)",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · R3.1 un segundo envío igual lleva el mismo id"
+    },
+    "M21": {
+      "mutacion": "cualquier 23505 como éxito, sin relectura",
+      "rojo": true,
+      "falla": "acciones.test.ts · 23505 sin fila propia, con error al releer y de otra restricción"
+    },
+    "M22": {
+      "mutacion": "el foco al rango sin la marca de módulo (clic y efecto sin `seguirFoco`)",
+      "rojo": true,
+      "falla": "paginacion-pendientes.test.tsx · el foco se mueve una sola vez por clic; montar sin clic previo no mueve el foco"
+    }
+  },
+  "fecha_ronda_4": "2026-10-07",
+  "ts_ronda_4": {
+    "M23": {
+      "mutacion": "la clave vuelve a un `useRef` de `FormularioCobro`, como en R3",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · cerrar y reabrir mismo id (también A,B,A y resultadoDesconocido del servidor); spec paso 9: «el reintento duplicó el cobro» (medido con rebuild)"
+    },
+    "M24": {
+      "mutacion": "`huellaDeCobro` = `JSON.stringify(datos)`, sin normalizar",
+      "rojo": true,
+      "falla": "esquemas.test.ts · '60', '60.00', ' 60,00 € ', orden de claves y motivo; registrar-cobro-clave.test.tsx · cerrar y reabrir ('60'); spec paso 9 con '0.01': «el reintento duplicó el cobro» (rebuild)"
+    },
+    "M25": {
+      "mutacion": "una sola clave en lugar del `Map` (`claves.current.clear()` antes de guardar)",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · A, B, A"
+    },
+    "M26": {
+      "mutacion": "la clave se olvida con cualquier respuesta del servidor, no solo con un éxito",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · tras resultadoDesconocido del servidor, mismo id"
+    },
+    "M27": {
+      "mutacion": "relectura fallida tras 23505 → `fallo()` (lo de R3)",
+      "rojo": true,
+      "falla": "acciones.test.ts · 23505 con error al releer → resultadoDesconocido"
+    },
+    "M28": {
+      "mutacion": "sin el paso 2b (`if (false && previa …)`)",
+      "rojo": true,
+      "falla": "acciones.test.ts · clave propia ya registrada y paciente fusionado"
+    },
+    "M29": {
+      "mutacion": "paso 2b sin `.eq('registrado_por', …)`",
+      "rojo": true,
+      "falla": "acciones.test.ts · clave propia ya registrada y paciente fusionado (eqCobros con registrado_por)"
+    },
+    "M30": {
+      "mutacion": "el `onClick` de la paginación no mira los modificadores ni el botón",
+      "rojo": true,
+      "falla": "paginacion-pendientes.test.tsx · it.each ctrlKey/metaKey/shiftKey/altKey y otro botón"
+    },
+    "M31": {
+      "mutacion": "el efecto enfoca sin comparar la página de destino",
+      "rojo": true,
+      "falla": "paginacion-pendientes.test.tsx · navegación sustituida"
+    },
+    "M32": {
+      "mutacion": "sin el texto del enlace «Ver las cifras de todos los profesionales»",
+      "rojo": true,
+      "falla": "page.test.tsx · A-H3 / R4.5 con filtro"
+    },
+    "M33": {
+      "mutacion": "en el spec, la ruta aborta sin `route.fetch()` y finge `primera = { estado: 200, cuerpo: 'Cobro registrado' }`",
+      "rojo": true,
+      "falla": "spec paso 7: «el primer envío no insertó: el paso no prueba la deduplicación»"
+    },
+    "M34": {
+      "mutacion": "`resultadoDesconocido` con el texto de R3 (nombra «Registrar cobro»)",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · el aviso no nombra el botón"
+    }
+  },
+  "fecha_ronda_5": "2026-10-07",
+  "ts_ronda_5": {
+    "M35": {
+      "mutacion": "el paso 2b devuelve `cobroRegistrado`, como en R4",
+      "rojo": true,
+      "falla": "acciones.test.ts · clave propia ya registrada y paciente fusionado; spec paso 9 (rebuild): no hay región con «ya estaba registrado»"
+    },
+    "M36": {
+      "mutacion": "la relectura propia tras el 23505 devuelve `cobroRegistrado`",
+      "rojo": true,
+      "falla": "acciones.test.ts · 23505 de cobros_pkey con el cobro propio ya registrado es «ya estaba registrado»"
+    },
+    "M37": {
+      "mutacion": "el formulario solo da por éxito `cobroRegistrado`",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · «ya estaba registrado»: alRegistrar recibe la huella y ese texto; registrar-cobro-clave.test.tsx · «ya estaba registrado» cierra…; spec paso 9 (rebuild): el diálogo sigue visible"
+    },
+    "M38": {
+      "mutacion": "`alRegistrar` ignora el aviso y pinta siempre `cobroRegistrado`",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · «ya estaba registrado» cierra…; spec paso 9 (rebuild): no hay región con el texto"
+    },
+    "M39": {
+      "mutacion": "con `cobroYaRegistrado` se cierra pero no se borra la clave",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · «ya estaba registrado» cierra, lo anuncia y olvida la clave (tercer id igual al primero)"
+    },
+    "M40": {
+      "mutacion": "`AccionRegistrar` vuelve a devolver `<AvisoDeError>` si fallan los pacientes",
+      "rojo": true,
+      "falla": "page.test.tsx · la isla se monta igual, con pacientes null"
+    },
+    "M41": {
+      "mutacion": "`RegistrarCobro` delega en un hijo que solo se monta con pacientes (el `Map` vive en el hijo)",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · B-H2: la lista de pacientes falla… mismo id (y registrar-cobro.test.tsx · con pacientes null, por la región de estado que ya no está)"
+    },
+    "M42": {
+      "mutacion": "`alRegistrar` hace `claves.current.clear()` en lugar de `delete(huella)`",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · A desconocido, B con éxito, A otra vez lleva idA"
+    },
+    "M43": {
+      "mutacion": "con `pacientes === null` la isla sigue pintando el disparador y el diálogo",
+      "rojo": true,
+      "falla": "registrar-cobro.test.tsx · con pacientes null: …ningún disparador…; también registrar-cobro-clave.test.tsx · B-H2"
+    },
+    "M44": {
+      "mutacion": "`cobroYaRegistrado` = 'Cobro registrado (ya estaba)'",
+      "rojo": true,
+      "falla": "registrar-cobro-clave.test.tsx · el aviso de «ya estaba registrado» ni contiene «cobro registrado» ni nombra el botón"
+    }
+  }
+}

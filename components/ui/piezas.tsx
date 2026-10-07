@@ -40,7 +40,7 @@ export function Metrica({
         )}
         <span className="font-serif text-2xl font-medium text-foreground">{valor}</span>
       </div>
-      {matiz && <span className="text-xs text-muted-foreground/70">{matiz}</span>}
+      {matiz && <span className="text-xs text-muted-foreground">{matiz}</span>}
     </div>
   );
 }
@@ -77,6 +77,17 @@ export function FilaConAvatar({
 }
 
 /**
+ * Un par de clases, fondo y texto, por tono, sin opacidad (`/10`): con opacidad el fondo real
+ * depende de lo que haya debajo y el contraste no se puede medir. Cada par está en `PARES`
+ * (`lib/contraste/tokens.ts`) y `piezas.test.tsx` lo exige.
+ */
+export const ESTILOS_PILDORA = {
+  success: 'bg-muted text-primary',
+  info: 'bg-secondary text-secondary-foreground',
+  warning: 'bg-background text-foreground',
+} as const;
+
+/**
  * Píldora de estado: success (verde), info (azul), warning (ámbar).
  * No usa rojo - ese es para errores.
  */
@@ -87,17 +98,11 @@ export function Pildora({
   tono: 'success' | 'info' | 'warning';
   children: ReactNode;
 }) {
-  const estilos = {
-    success: 'bg-primary/10 text-primary-foreground',
-    info: 'bg-secondary text-secondary-foreground',
-    warning: 'bg-background text-foreground',
-  };
-
   return (
     <span
       className={cn(
         'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-        estilos[tono]
+        ESTILOS_PILDORA[tono]
       )}
     >
       {children}

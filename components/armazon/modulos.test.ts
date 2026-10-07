@@ -48,6 +48,11 @@ describe('modulosDe · el armazón enseña lo que la matriz concede, y nada más
     expect(agenda?.disponible).toBe(true);
   });
 
+  it('Facturación está disponible: T-023 construye /facturacion', () => {
+    const facturacion = MODULOS.find((m) => m.href === '/facturacion');
+    expect(facturacion?.disponible).toBe(true);
+  });
+
   it('ningún módulo se queda sin rol: una lista vacía lo escondería de todos en silencio', () => {
     for (const modulo of MODULOS) {
       expect(modulo.roles.length).toBeGreaterThan(0);

@@ -57,6 +57,7 @@ export const PARES: Par[] = [
   { texto: 'destructive', fondo: 'card', donde: 'Mensaje de error de formulario, dentro de la tarjeta' },
   { texto: 'destructive', fondo: 'background', donde: 'Mensaje de error sobre el fondo de página' },
   { texto: 'primary', fondo: 'background', donde: 'Rótulo «Espacio de trabajo» de la cabecera de Pacientes' },
+  { texto: 'primary', fondo: 'muted', donde: 'Píldora success de Pildora (components/ui/piezas.tsx): Cobrado, Firmada, Al día, Vigente…' },
   { texto: 'primary', fondo: 'card', donde: 'Barra de 3 px del hueco habitual en el alta de cita (D7, T-028 B); va con su texto «Habitual»' },
 ];
 

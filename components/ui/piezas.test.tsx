@@ -1,7 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { PARES } from '@/lib/contraste/tokens';
+
 import {
+  ESTILOS_PILDORA,
   AvisoDeError,
   BarraDeProgreso,
   Cargando,
@@ -58,6 +61,30 @@ describe('Piezas de pintura', () => {
 
     expect(screen.getByText('12').className).toContain('font-serif');
     expect(screen.getByText('esta semana').className).not.toContain('font-serif');
+  });
+
+  it('el matiz de una métrica no usa opacidad (un texto con /70 no tiene contraste medible)', () => {
+    render(<Metrica etiqueta="Pendientes" valor="12" matiz="esta semana" />);
+
+    const clases = screen.getByText('esta semana').className;
+    expect(clases).not.toMatch(/\/\d/);
+    expect(clases).toContain('text-muted-foreground');
+  });
+
+  it('cada tono de la píldora combina dos tokens sin opacidad y el par está en PARES', () => {
+    for (const [tono, clases] of Object.entries(ESTILOS_PILDORA)) {
+      const fondo = /(?:^|\s)bg-([a-z-]+)(\/\d+)?(?=\s|$)/.exec(clases);
+      const texto = /(?:^|\s)text-([a-z-]+)(\/\d+)?(?=\s|$)/.exec(clases);
+      expect(fondo, `${tono}: sin bg-<token>`).not.toBeNull();
+      expect(texto, `${tono}: sin text-<token>`).not.toBeNull();
+      // Con opacidad el fondo real depende de lo que haya debajo: el par no se puede medir.
+      expect(fondo![2], `${tono}: el fondo lleva opacidad`).toBeUndefined();
+      expect(texto![2], `${tono}: el texto lleva opacidad`).toBeUndefined();
+      expect(
+        PARES.some((p) => p.texto === texto![1] && p.fondo === fondo![1]),
+        `${tono}: ${texto![1]} sobre ${fondo![1]} no está en PARES`,
+      ).toBe(true);
+    }
   });
 
   it('el estado vacío dice qué pasa y qué hacer', () => {
