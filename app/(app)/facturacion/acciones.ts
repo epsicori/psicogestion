@@ -19,6 +19,18 @@ const esquemaPaciente = z.object({ pacienteId: z.uuid({ error: t('cobros.eligePa
 const fallo = (): EstadoFormulario => ({ ...ESTADO_INICIAL, mensaje: t('cobros.noSePudoRegistrar') });
 
 /**
+ * ¿Existe ya un cobro con esta clave, registrado por esta sesión y visible por RLS? Con `registrado_por`
+ * un id ajeno no se ve: ni oráculo ni confirmación de un cobro de otro (R4.3).
+ */
+async function leerCobroPropio(
+  supabase: Awaited<ReturnType<typeof exigirSesion>>['supabase'],
+  id: string,
+  usuarioId: string,
+) {
+  return supabase.from('cobros').select('id').eq('id', id).eq('registrado_por', usuarioId).maybeSingle();
+}
+
+/**
  * Registra un cobro, o una devolución si el importe es negativo (T-023 §1.6).
  *
  * `datos` es `unknown`: una Server Action es un punto de entrada público. Se valida con el MISMO
@@ -40,6 +52,16 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
     return { ...ESTADO_INICIAL, errores: z.flattenError(paciente.error).fieldErrors };
   }
   const { pacienteId } = paciente.data;
+
+  // 2b. La clave propia, antes de las guardas (R4.3): si el primer envío ya entró, un reintento no
+  // debe caer en una guarda transitoria (paciente fusionado después, zona). La autoridad sigue siendo
+  // la clave primaria: un error aquí no corta el flujo.
+  const { data: previa, error: errorPrevia } = await leerCobroPropio(supabase, id, usuario.id);
+  if (errorPrevia) console.error('registrarCobro: fallo al buscar la clave de envío', errorPrevia.code);
+  if (previa && !errorPrevia) {
+    revalidatePath('/facturacion');
+    return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroRegistrado') };
+  }
 
   // 3. Bajo RLS: un paciente que no se ve es el mismo mensaje que un 42501.
   const { data: fila, error: errorPaciente } = await supabase
@@ -100,13 +122,13 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
     // Reintento de un envío que ya entró: la clave primaria repetida. Solo se da por bueno si el
     // cobro existe, es de esta sesión y la RLS lo deja ver; con otra cosa no hay oráculo (R3.1).
     if (error.code === '23505' && error.message?.includes('cobros_pkey')) {
-      const { data: propio, error: errorRelectura } = await supabase
-        .from('cobros')
-        .select('id')
-        .eq('id', id)
-        .eq('registrado_por', usuario.id)
-        .maybeSingle();
-      if (propio && !errorRelectura) {
+      const { data: propio, error: errorRelectura } = await leerCobroPropio(supabase, id, usuario.id);
+      if (errorRelectura) {
+        // No sabemos si el cobro entró (R4.2). Un error de lectura no depende de quién sea el dueño: no hay oráculo.
+        console.error('registrarCobro: falló la relectura tras 23505', errorRelectura.code);
+        return { ...ESTADO_INICIAL, mensaje: t('cobros.resultadoDesconocido') };
+      }
+      if (propio) {
         revalidatePath('/facturacion');
         return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroRegistrado') };
       }

@@ -26,13 +26,15 @@ function crearSupabaseFalso({
   zona = { data: 'Europe/Madrid', error: null } as Resultado,
   insert = { data: null, error: null } as Resultado,
   existente = { data: null, error: null } as Resultado,
+  previa = { data: null, error: null } as Resultado,
 } = {}) {
   const insertar = vi.fn().mockResolvedValue(insert);
   const eq = vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue(paciente) });
   const select = vi.fn().mockReturnValue({ eq });
   // cobros.select('id').eq('id', …).eq('registrado_por', …).maybeSingle(): la relectura tras un 23505.
   const eqCobros = vi.fn();
-  const maybeSingleCobros = vi.fn().mockResolvedValue(existente);
+  // La primera lectura es la consulta previa de la clave propia (paso 2b); las siguientes, la relectura tras el 23505.
+  const maybeSingleCobros = vi.fn().mockResolvedValueOnce(previa).mockResolvedValue(existente);
   eqCobros.mockReturnValue({ eq: eqCobros, maybeSingle: maybeSingleCobros });
   const selectCobros = vi.fn().mockReturnValue({ eq: eqCobros });
   const from = vi.fn((tabla: string) =>
@@ -294,18 +296,22 @@ describe('registrarCobro', () => {
       expect(consola).toHaveBeenCalled();
     });
 
-    it('un 23505 de cobros_pkey con error al releer es el mensaje genérico', async () => {
-      vi.spyOn(console, 'error').mockImplementation(() => {});
+    it('un 23505 de cobros_pkey con error al releer es resultadoDesconocido (R4.2), sin revalidar ni importe en el registro', async () => {
+      const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
       const supabase = crearSupabaseFalso({
         insert: { data: null, error: { code: '23505', message: 'duplicate key … "cobros_pkey"' } },
-        existente: { data: null, error: { code: '42501', message: 'rls' } },
+        existente: { data: null, error: { code: '57014', message: 'canceling statement' } },
       });
       exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
 
-      const estado = await registrarCobro(BASE);
+      const estado = await registrarCobro({ ...BASE, importe: '77,77' });
 
-      expect(estado).toEqual({ mensaje: t('cobros.noSePudoRegistrar') });
+      expect(estado).toEqual({ mensaje: t('cobros.resultadoDesconocido') });
       expect(revalidatePath).not.toHaveBeenCalled();
+      const registrado = JSON.stringify(consola.mock.calls);
+      expect(registrado).toContain('57014');
+      expect(registrado).not.toContain('77');
+      expect(registrado).not.toContain(PACIENTE);
     });
 
     it('un 23505 de otra restricción es el mensaje genérico y no relee', async () => {
@@ -319,8 +325,43 @@ describe('registrarCobro', () => {
       const estado = await registrarCobro(BASE);
 
       expect(estado).toEqual({ mensaje: t('cobros.noSePudoRegistrar') });
-      expect(supabase.selectCobros).not.toHaveBeenCalled();
+      // Solo cuenta la consulta previa (2b): el 23505 de otra restricción no relee.
+      expect(supabase.selectCobros).toHaveBeenCalledTimes(1);
       expect(revalidatePath).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('R4.3: la clave propia se busca antes de las guardas', () => {
+    it('clave propia ya registrada y paciente fusionado: éxito, sin leer el paciente, ni zona ni insert', async () => {
+      const supabase = crearSupabaseFalso({
+        previa: { data: { id: ID }, error: null },
+        paciente: { data: { centro_id: CENTRO, fusionado_en: '2026-09-30T10:00:00Z' }, error: null },
+      });
+      exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+      const estado = await registrarCobro(BASE);
+
+      expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
+      expect(revalidatePath).toHaveBeenCalledWith('/facturacion');
+      expect(supabase.select).not.toHaveBeenCalled();
+      expect(supabase.rpc).not.toHaveBeenCalled();
+      expect(supabase.insertar).not.toHaveBeenCalled();
+      expect(supabase.eqCobros).toHaveBeenCalledWith('id', ID);
+      expect(supabase.eqCobros).toHaveBeenCalledWith('registrado_por', USUARIO);
+    });
+
+    it('la consulta previa falla (57014): se sigue, se inserta y el registro lleva el código', async () => {
+      const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const supabase = crearSupabaseFalso({
+        previa: { data: null, error: { code: '57014', message: 'canceling statement' } },
+      });
+      exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+      const estado = await registrarCobro(BASE);
+
+      expect(supabase.insertar).toHaveBeenCalledTimes(1);
+      expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
+      expect(JSON.stringify(consola.mock.calls)).toContain('57014');
     });
   });
 });
