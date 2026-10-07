@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { t } from '@/lib/i18n';
 
-import { aFilaDePendiente, importeDeBd, ordenar, pildoraDe, totalPendiente, type FilaVista } from './presentacion';
+import { aFilaDePendiente, importeDeBd, pildoraDe, type FilaVista } from './presentacion';
 
 function vista(devengado: number, cobrado: number, extra: Partial<FilaVista> = {}): FilaVista {
   const diferencia = devengado - cobrado;
@@ -103,29 +103,5 @@ describe('importeDeBd · el numeric que devuelve PostgREST como texto, a céntim
 
   it.each(['12,50', '1.234,56', '12.5', '', 'doce'])('lanza con «%s»', (texto) => {
     expect(() => importeDeBd(texto)).toThrow();
-  });
-});
-
-describe('ordenar y totalPendiente', () => {
-  const filas = [
-    aFilaDePendiente(vista(100, 100, { paciente_id: 'cobrado' })),
-    aFilaDePendiente(vista(5000, 0, { paciente_id: 'pend-50' })),
-    aFilaDePendiente(vista(100, 300, { paciente_id: 'de-mas-2' })),
-    aFilaDePendiente(vista(9000, 1000, { paciente_id: 'pend-80' })),
-    aFilaDePendiente(vista(100, 900, { paciente_id: 'de-mas-8' })),
-  ];
-
-  it('primero cobrado_de_mas, luego pendiente por importe descendente y al final cobrado', () => {
-    expect(ordenar(filas).map((f) => f.pacienteId)).toEqual(['de-mas-8', 'de-mas-2', 'pend-80', 'pend-50', 'cobrado']);
-  });
-
-  it('no muta la lista que recibe', () => {
-    const copia = [...filas];
-    ordenar(filas);
-    expect(filas).toEqual(copia);
-  });
-
-  it('el total pendiente suma solo lo pendiente: un cobro de más no resta', () => {
-    expect(totalPendiente(filas)).toBe(5000 + 8000);
   });
 });

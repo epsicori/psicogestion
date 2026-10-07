@@ -5,10 +5,24 @@ import { t } from '@/lib/i18n';
 
 // El formulario se sustituye: aquí se prueba el diálogo, el foco y el aviso, no los campos.
 vi.mock('./formulario-cobro', () => ({
-  FormularioCobro: ({ alRegistrar }: { alRegistrar: () => void }) => (
-    <button type="button" onClick={alRegistrar}>
-      enviar-de-pega
-    </button>
+  FormularioCobro: ({
+    alRegistrar,
+    alCambiarEnvio,
+  }: {
+    alRegistrar: () => void;
+    alCambiarEnvio: (enviando: boolean) => void;
+  }) => (
+    <>
+      <button type="button" onClick={alRegistrar}>
+        enviar-de-pega
+      </button>
+      <button type="button" onClick={() => alCambiarEnvio(true)}>
+        empieza-de-pega
+      </button>
+      <button type="button" onClick={() => alCambiarEnvio(false)}>
+        acaba-de-pega
+      </button>
+    </>
   ),
 }));
 
@@ -39,5 +53,29 @@ describe('RegistrarCobro', () => {
     fireEvent.click(screen.getByRole('button', { name: t('interfaz.cerrar') }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
+  it('B-H11: con un envío en vuelo Escape no cierra el diálogo; al acabar sí', async () => {
+    render(<RegistrarCobro pacientes={[]} hoy="2026-10-06" />);
+    fireEvent.click(screen.getByRole('button', { name: t('cobros.registrarCobro') }));
+    fireEvent.click(screen.getByRole('button', { name: 'empieza-de-pega' }));
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'acaba-de-pega' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('el aviso «Cobro registrado» es visible, no solo para lectores de pantalla', async () => {
+    render(<RegistrarCobro pacientes={[]} hoy="2026-10-06" />);
+    fireEvent.click(screen.getByRole('button', { name: t('cobros.registrarCobro') }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'enviar-de-pega' }));
+    });
+    const aviso = screen.getByRole('status');
+    expect(aviso).toHaveTextContent(t('cobros.cobroRegistrado'));
+    expect(aviso.className).not.toContain('sr-only');
   });
 });

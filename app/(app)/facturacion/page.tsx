@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import { EncabezadoDeModulo } from '@/components/ui/piezas';
+import { AvisoDeError, EncabezadoDeModulo } from '@/components/ui/piezas';
 import { t } from '@/lib/i18n';
 
 import {
@@ -20,7 +20,9 @@ type ParametrosDeBusqueda = Promise<Record<string, string | string[] | undefined
 /** El botón de registrar cobro: necesita los pacientes (bajo RLS) y el «hoy» de la organización. */
 async function AccionRegistrar({ searchParams }: { searchParams: ParametrosDeBusqueda }) {
   const [{ hoy }, pacientes] = await Promise.all([cargarContexto(searchParams), cargarPacientesParaCobro()]);
-  return <RegistrarCobro pacientes={pacientes} hoy={hoy} />;
+  // Una lista incompleta no se ofrece: se avisa en lugar de dejar registrar a ciegas.
+  if (!pacientes.ok) return <AvisoDeError mensaje={t('cobros.errorPacientes')} />;
+  return <RegistrarCobro pacientes={pacientes.pacientes} hoy={hoy} />;
 }
 
 /**
@@ -30,7 +32,7 @@ async function AccionRegistrar({ searchParams }: { searchParams: ParametrosDeBus
 async function SelectorSiAdministrador({ searchParams }: { searchParams: ParametrosDeBusqueda }) {
   const { rol, profesionalFiltrado } = await cargarContexto(searchParams);
   if (rol !== 'administrador') return null;
-  const opciones = await cargarOpcionesProfesional();
+  const opciones = await cargarOpcionesProfesional(profesionalFiltrado);
   return <SelectorProfesional opciones={opciones} elegido={profesionalFiltrado} />;
 }
 

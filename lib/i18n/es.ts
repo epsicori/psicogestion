@@ -1378,6 +1378,16 @@ export const es = {
     motivoDemasiadoLargo: 'El motivo es demasiado largo',
     devolucionNecesitaMotivo: 'Una devolución necesita su motivo',
     noSePudoRegistrar: 'No se ha podido registrar el cobro',
+    profesionalDesconocido: 'Profesional no encontrado',
+    errorPacientes: 'No se ha podido cargar la lista de pacientes',
+    resultadoDesconocido: 'No sabemos si el cobro se ha registrado. Mira «Últimos cobros» antes de repetirlo.',
+    pacienteFusionado: 'Este paciente se unió a otro registro. Registra el cobro en el que se conserva.',
+    paginacion: {
+      nombre: 'Páginas de pacientes',
+      rango: 'Del {desde} al {hasta} de {total}',
+      anteriores: 'Anteriores',
+      siguientes: 'Siguientes',
+    },
   },
 
   // Notificaciones (T-015). `tipos` es EL sitio de las etiquetas por tipo: T-038 las reutiliza.

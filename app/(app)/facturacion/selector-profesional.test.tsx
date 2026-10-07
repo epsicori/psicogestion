@@ -23,6 +23,17 @@ describe('SelectorProfesional', () => {
     expect(replace).toHaveBeenCalledWith(`/facturacion?profesional=${LAURA}`, { scroll: false });
   });
 
+  it('el profesional elegido se muestra en el desplegable y cambiar de filtro no arrastra la página', () => {
+    const OTRO = '2c3d4e5f-6071-4b82-9c93-0d1e2f3a4b51';
+    render(<SelectorProfesional opciones={[...OPCIONES, { id: OTRO, nombre: 'Marta Sanz' }]} elegido={LAURA} />);
+    const combo = screen.getByRole('combobox', { name: t('cobros.profesional') });
+    expect(combo).toHaveTextContent('Laura Gil');
+    fireEvent.click(combo);
+    fireEvent.click(screen.getByRole('option', { name: 'Marta Sanz' }));
+    expect(replace).toHaveBeenCalledWith(`/facturacion?profesional=${OTRO}`, { scroll: false });
+    expect(replace.mock.calls[0][0]).not.toContain('pagina');
+  });
+
   it('«Todos los profesionales» quita el parámetro', () => {
     render(<SelectorProfesional opciones={OPCIONES} elegido={LAURA} />);
     fireEvent.click(screen.getByRole('combobox', { name: t('cobros.profesional') }));

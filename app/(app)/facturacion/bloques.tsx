@@ -1,4 +1,5 @@
 import { Clock3, WalletCards } from 'lucide-react';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { iniciales } from '@/components/armazon/modulos';
@@ -15,8 +16,15 @@ import { formatearImporte } from '@/lib/dinero/importe';
 import { formatearFechaSinZona } from '@/lib/fechas/relativo';
 import { t, tCon } from '@/lib/i18n';
 
-import { cargarCobrosRecientes, cargarContexto, cargarPendientes, type PendienteConNombre } from './datos';
-import { pildoraDe, totalPendiente } from './presentacion';
+import {
+  TAMANO_PAGINA,
+  cargarCobrosRecientes,
+  cargarContexto,
+  cargarPendientes,
+  cargarResumen,
+  type PendienteConNombre,
+} from './datos';
+import { pildoraDe } from './presentacion';
 
 /**
  * Los tres bloques de `/facturacion` (T-023 §1.4). Server Components: los importes se formatean
@@ -55,17 +63,17 @@ const ICONO_AMBAR = (
 
 export async function BloqueMetrica({ searchParams }: Props) {
   const { profesionalFiltrado } = await cargarContexto(searchParams);
-  const resultado = await cargarPendientes(profesionalFiltrado);
+  // Las cifras salen de la base y cubren todas las filas, no solo la página que se pinta.
+  const resultado = await cargarResumen(profesionalFiltrado);
   if (!resultado.ok) return <AvisoDeError mensaje={t('cobros.errorPendientes')} />;
 
-  const conPendiente = resultado.filas.filter((f) => f.estado === 'pendiente').length;
-  const deMas = resultado.filas.filter((f) => f.estado === 'cobrado_de_mas').length;
+  const { pendienteTotal, conPendiente, deMas } = resultado.resumen;
 
   return (
     <Tarjeta className="p-5">
       <Metrica
         etiqueta={t('cobros.pendienteDeCobro')}
-        valor={formatearImporte(totalPendiente(resultado.filas))}
+        valor={formatearImporte(pendienteTotal)}
         matiz={tCon(conPendiente === 1 ? 'cobros.pacientesConPendiente.una' : 'cobros.pacientesConPendiente.varias', {
           n: conPendiente,
         })}
@@ -92,9 +100,29 @@ function subtituloDe(fila: PendienteConNombre): string {
   }
 }
 
+/** `/facturacion` con el filtro de profesional y la página; la 1 va sin `pagina`. */
+function hrefDePagina(profesional: string | null, pagina: number): string {
+  const parametros = new URLSearchParams();
+  if (profesional) parametros.set('profesional', profesional);
+  if (pagina > 1) parametros.set('pagina', String(pagina));
+  const consulta = parametros.toString();
+  return consulta ? `/facturacion?${consulta}` : '/facturacion';
+}
+
+const ENLACE_DE_PAGINA =
+  'inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
+
 export async function BloquePendientes({ searchParams }: Props) {
-  const { profesionalFiltrado } = await cargarContexto(searchParams);
-  const resultado = await cargarPendientes(profesionalFiltrado);
+  const { profesionalFiltrado, pagina: paginaPedida } = await cargarContexto(searchParams);
+  const resumen = await cargarResumen(profesionalFiltrado);
+  if (!resumen.ok) return <AvisoDeError mensaje={t('cobros.errorPendientes')} />;
+
+  // Una página que pasa de la última (?pagina=999999) cae en la última.
+  const total = resumen.resumen.filas;
+  const ultima = Math.max(1, Math.ceil(total / TAMANO_PAGINA));
+  const pagina = Math.min(paginaPedida, ultima);
+
+  const resultado = await cargarPendientes(profesionalFiltrado, pagina);
   if (!resultado.ok) return <AvisoDeError mensaje={t('cobros.errorPendientes')} />;
 
   if (resultado.filas.length === 0) {
@@ -108,29 +136,58 @@ export async function BloquePendientes({ searchParams }: Props) {
   }
 
   return (
-    <ul className="flex flex-col gap-3">
-      {resultado.filas.map((fila) => {
-        const pildora = pildoraDe(fila);
-        return (
-          <li key={fila.pacienteId} className="flex flex-col gap-1">
-            <FilaConAvatar
-              iniciales={iniciales(nombreDe(fila))}
-              nombre={nombreDe(fila)}
-              subtitulo={subtituloDe(fila)}
-              derecha={<Pildora tono={pildora.tono}>{pildora.texto}</Pildora>}
-            />
-            {fila.citasSinTarifa > 0 && (
-              // P3: la sesión sin precio cuenta 0 y se señala, en ámbar, bajo el subtítulo.
-              <p className="ml-12 text-xs font-medium text-accent-foreground">
-                {tCon(fila.citasSinTarifa === 1 ? 'cobros.sesionesSinPrecio.una' : 'cobros.sesionesSinPrecio.varias', {
-                  n: fila.citasSinTarifa,
-                })}
-              </p>
+    <>
+      <ul className="flex flex-col gap-3">
+        {resultado.filas.map((fila) => {
+          const pildora = pildoraDe(fila);
+          return (
+            <li key={fila.pacienteId} className="flex flex-col gap-1">
+              <FilaConAvatar
+                iniciales={iniciales(nombreDe(fila))}
+                nombre={nombreDe(fila)}
+                derecha={<Pildora tono={pildora.tono}>{pildora.texto}</Pildora>}
+              />
+              {/* B-H7: el importe va en su propia línea, que rompe y no se trunca; `FilaConAvatar` corta. */}
+              <p className="ml-12 text-xs break-words text-muted-foreground">{subtituloDe(fila)}</p>
+              {fila.citasSinTarifa > 0 && (
+                // P3: la sesión sin precio cuenta 0 y se señala, en ámbar, bajo el subtítulo.
+                <p className="ml-12 text-xs font-medium text-accent-foreground">
+                  {tCon(fila.citasSinTarifa === 1 ? 'cobros.sesionesSinPrecio.una' : 'cobros.sesionesSinPrecio.varias', {
+                    n: fila.citasSinTarifa,
+                  })}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {total > TAMANO_PAGINA && (
+        <nav
+          aria-label={t('cobros.paginacion.nombre')}
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3"
+        >
+          <p className="text-xs text-muted-foreground">
+            {tCon('cobros.paginacion.rango', {
+              desde: (pagina - 1) * TAMANO_PAGINA + 1,
+              hasta: Math.min(pagina * TAMANO_PAGINA, total),
+              total,
+            })}
+          </p>
+          <div className="flex gap-2">
+            {pagina > 1 && (
+              <Link href={hrefDePagina(profesionalFiltrado, pagina - 1)} className={ENLACE_DE_PAGINA}>
+                {t('cobros.paginacion.anteriores')}
+              </Link>
             )}
-          </li>
-        );
-      })}
-    </ul>
+            {pagina < ultima && (
+              <Link href={hrefDePagina(profesionalFiltrado, pagina + 1)} className={ENLACE_DE_PAGINA}>
+                {t('cobros.paginacion.siguientes')}
+              </Link>
+            )}
+          </div>
+        </nav>
+      )}
+    </>
   );
 }
 

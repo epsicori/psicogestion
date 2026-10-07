@@ -37,12 +37,16 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
   // 3. Bajo RLS: un paciente que no se ve es el mismo mensaje que un 42501.
   const { data: fila, error: errorPaciente } = await supabase
     .from('pacientes')
-    .select('centro_id')
+    .select('centro_id, fusionado_en')
     .eq('id', pacienteId)
     .maybeSingle();
   if (errorPaciente || !fila) {
     if (errorPaciente) console.error('registrarCobro: fallo al leer el paciente', errorPaciente.code);
     return fallo();
+  }
+  // Un paciente fusionado ya no recibe cobros: su pendiente vive en el superviviente (ADR-031).
+  if (fila.fusionado_en !== null) {
+    return { ...ESTADO_INICIAL, errores: { pacienteId: [t('cobros.pacienteFusionado')] } };
   }
 
   // 4. «Hoy» en la zona del centro del paciente (o la de la organización si no tiene centro).

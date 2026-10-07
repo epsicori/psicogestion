@@ -22,6 +22,7 @@ type Props = {
 export function RegistrarCobro({ pacientes, hoy }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [aviso, setAviso] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
   return (
     <>
@@ -36,13 +37,23 @@ export function RegistrarCobro({ pacientes, hoy }: Props) {
         <Plus />
         {t('cobros.registrarCobro')}
       </Button>
-      <p role="status" className="sr-only">
+      {/* Visible: «Cobro registrado» es la confirmación de una acción económica, no solo para lectores. */}
+      <p role="status" className="text-sm text-foreground empty:hidden">
         {aviso}
       </p>
-      <Dialogo abierto={abierto} alCerrar={() => setAbierto(false)} titulo={t('cobros.registrarCobro')} ancho="amplio">
+      <Dialogo
+        abierto={abierto}
+        // Con un envío en vuelo no se cierra: el usuario no vería su resultado (B-H11).
+        alCerrar={() => {
+          if (!enviando) setAbierto(false);
+        }}
+        titulo={t('cobros.registrarCobro')}
+        ancho="amplio"
+      >
         <FormularioCobro
           pacientes={pacientes}
           hoy={hoy}
+          alCambiarEnvio={setEnviando}
           alRegistrar={() => {
             setAbierto(false);
             setAviso(t('cobros.cobroRegistrado'));

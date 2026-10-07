@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { Suspense, isValidElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { t } from '@/lib/i18n';
+
 const cargarContexto = vi.fn();
 const cargarOpcionesProfesional = vi.fn();
 const cargarPacientesParaCobro = vi.fn();
@@ -68,7 +70,7 @@ const contextoDe = (rol: string) => ({
 beforeEach(() => {
   cargarContexto.mockReset();
   cargarOpcionesProfesional.mockReset().mockResolvedValue([{ id: 'x', nombre: 'Laura Gil' }]);
-  cargarPacientesParaCobro.mockReset().mockResolvedValue([{ id: 'p', nombre: 'Ana', apellidos: 'Ruiz' }]);
+  cargarPacientesParaCobro.mockReset().mockResolvedValue({ ok: true, pacientes: [{ id: 'p', nombre: 'Ana', apellidos: 'Ruiz' }] });
 });
 
 describe('PaginaFacturacion', () => {
@@ -105,6 +107,19 @@ describe('PaginaFacturacion', () => {
 
     expect(screen.getByRole('combobox', { name: /profesional/i })).toHaveTextContent('Laura Gil');
     expect(cargarOpcionesProfesional).toHaveBeenCalledTimes(1);
+    expect(cargarOpcionesProfesional).toHaveBeenCalledWith('1b2c3d4e-5f60-4a71-8b82-9c0d1e2f3a40');
+  });
+
+  it('si no se pueden cargar los pacientes, el aviso de error y ningún botón de registrar', async () => {
+    cargarContexto.mockResolvedValue(contextoDe('tecnico_administrativo'));
+    cargarPacientesParaCobro.mockResolvedValue({ ok: false });
+    const nodo = porNombre('AccionRegistrar');
+    const tipo = nodo.tipo as (p: Record<string, unknown>) => Promise<ReactNode>;
+
+    render(<>{await tipo(nodo.props)}</>);
+
+    expect(screen.getByText(t('cobros.errorPacientes'))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /registrar cobro/i })).toBeNull();
   });
 
   it('el botón de registrar cobro recibe los pacientes y el hoy del contexto, dentro de un Suspense', async () => {

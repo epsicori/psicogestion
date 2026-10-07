@@ -1,7 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { AreaTexto } from '@/components/ui/area-texto';
@@ -21,7 +22,13 @@ type Props = {
   hoy: string;
   /** Se llama cuando la acción confirma el cobro. */
   alRegistrar: () => void;
+  /** Se llama con `true` al empezar un envío y con `false` al acabar (el diálogo no se cierra a mitad). */
+  alCambiarEnvio?: (enviando: boolean) => void;
 };
+
+type CampoCobro = 'pacienteId' | 'importe' | 'fecha' | 'formaPago' | 'referencia' | 'motivo';
+/** El orden en que se pintan los campos: el foco va al primero con error. */
+const ORDEN_DE_CAMPOS: CampoCobro[] = ['pacienteId', 'importe', 'fecha', 'formaPago', 'referencia', 'motivo'];
 
 const OPCIONES_FORMA = FORMAS_DE_PAGO.map((forma) => ({ valor: forma, texto: t(`cobros.formas.${forma}`) }));
 
@@ -39,15 +46,19 @@ function esNegativo(importe: string | undefined): boolean {
  * el mismo esquema en cliente y en la acción, y a la acción va la SALIDA del esquema. Aquí no se
  * emite ni se aprueba nada (ADR-078): se anota lo que se ha cobrado.
  */
-export function FormularioCobro({ pacientes, hoy, alRegistrar }: Props) {
+export function FormularioCobro({ pacientes, hoy, alRegistrar, alCambiarEnvio }: Props) {
+  const router = useRouter();
   const [enviando, iniciarTransicion] = useTransition();
+  const enviandoRef = useRef(false);
   const [mensaje, setMensaje] = useState('');
+  const [campoConFoco, setCampoConFoco] = useState<{ campo: CampoCobro } | null>(null);
   const esquema = useMemo(() => crearEsquemaCobro(hoy), [hoy]);
 
   const {
     register,
     handleSubmit,
     setError,
+    setFocus,
     control,
     formState: { errors },
   } = useForm<EntradaCobro, unknown, DatosCobro>({
@@ -58,23 +69,48 @@ export function FormularioCobro({ pacientes, hoy, alRegistrar }: Props) {
   // useWatch y no watch(): watch() no se puede memoizar y el compilador de React lo salta.
   const devolucion = esNegativo(useWatch({ control, name: 'importe' }));
 
+  // El diálogo necesita saber si hay un envío en vuelo para no cerrarse con Escape (B-H11).
+  useEffect(() => {
+    alCambiarEnvio?.(enviando);
+  }, [enviando, alCambiarEnvio]);
+
+  // El foco va al primer campo con error del servidor, cuando el envío ya ha terminado (B-H2).
+  useEffect(() => {
+    if (campoConFoco && !enviando) setFocus(campoConFoco.campo);
+  }, [campoConFoco, enviando, setFocus]);
+
   function alSerValido(datos: DatosCobro) {
+    // aria-disabled no impide el clic ni el Enter: la guarda es esta, no el atributo.
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
     setMensaje('');
+    setCampoConFoco(null);
     iniciarTransicion(async () => {
-      const estado = (await registrarCobro(datos)) ?? ESTADO_INICIAL;
-      if (!estado.errores && estado.mensaje === t('cobros.cobroRegistrado')) {
-        alRegistrar();
-        return;
+      try {
+        const estado = (await registrarCobro(datos)) ?? ESTADO_INICIAL;
+        if (!estado.errores && estado.mensaje === t('cobros.cobroRegistrado')) {
+          alRegistrar();
+          return;
+        }
+        aplicarErroresDelServidor(estado, setError);
+        const primero = ORDEN_DE_CAMPOS.find((campo) => estado.errores?.[campo]?.length);
+        if (primero) setCampoConFoco({ campo: primero });
+        setMensaje(estado.errores ? '' : (estado.mensaje ?? t('cobros.noSePudoRegistrar')));
+      } catch {
+        // Un fallo de red o un 500 no dice si el cobro se registró: se avisa de que se compruebe
+        // y se refresca la lista, sin desmontar el formulario ni perder lo escrito (B-H1).
+        setMensaje(t('cobros.resultadoDesconocido'));
+        router.refresh();
+      } finally {
+        enviandoRef.current = false;
       }
-      aplicarErroresDelServidor(estado, setError);
-      setMensaje(estado.errores ? '' : (estado.mensaje ?? t('cobros.noSePudoRegistrar')));
     });
   }
 
   const errorDe = (mensajeError: string | undefined) => (mensajeError ? [mensajeError] : undefined);
 
   return (
-    <form onSubmit={handleSubmit(alSerValido)} noValidate className="flex flex-col gap-4">
+    <form onSubmit={(evento) => handleSubmit(alSerValido)(evento)} noValidate className="flex flex-col gap-4">
       <Seleccion
         id="pacienteId"
         etiqueta={t('cobros.paciente')}
@@ -153,7 +189,7 @@ export function FormularioCobro({ pacientes, hoy, alRegistrar }: Props) {
       )}
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={enviando}>
+        <Button type="submit" aria-disabled={enviando} className="aria-disabled:opacity-60">
           {enviando ? t('cobros.registrando') : t('cobros.registrarCobro')}
         </Button>
       </div>

@@ -9,23 +9,39 @@ vi.mock('@/lib/cuentas/candado', () => ({ estadoDeCuenta: (...a: unknown[]) => e
 const connection = vi.fn().mockResolvedValue(undefined);
 vi.mock('next/server', () => ({ connection: () => connection() }));
 
-const { cargarCobrosRecientes, cargarContexto, cargarOpcionesProfesional, cargarPacientesParaCobro, cargarPendientes } =
-  await import('./datos');
+const {
+  TAMANO_PAGINA,
+  cargarCobrosRecientes,
+  cargarContexto,
+  cargarOpcionesProfesional,
+  cargarPacientesParaCobro,
+  cargarPendientes,
+  cargarResumen,
+} = await import('./datos');
 
 const PRO = '1b2c3d4e-5f60-4a71-8b82-9c0d1e2f3a40';
 const PRO2 = '2c3d4e5f-6071-4b82-9c93-0d1e2f3a4b50';
 
 type Llamada = [metodo: string, argumentos: unknown[]];
+type Resultado = { data: unknown; error: unknown };
+type Resultados = Record<string, Resultado | Resultado[]>;
+type ResultadosRpc = Record<string, Resultado>;
 
 /**
  * Un `from(tabla)` de supabase-js que encadena cualquier método, apunta cada llamada y, al
- * esperarse, devuelve el resultado que se le dio para esa tabla.
+ * esperarse, devuelve el resultado que se le dio para esa tabla. Si se da una lista, cada
+ * consulta a esa tabla consume la siguiente (la última se repite): así se prueban las páginas.
+ * `rpc` responde por nombre; la zona del centro es la de siempre.
  */
-function crearSupabaseFalso(resultados: Record<string, { data: unknown; error: unknown }> = {}, zona = 'Europe/Madrid') {
+function crearSupabaseFalso(resultados: Resultados = {}, zona = 'Europe/Madrid', resultadosRpc: ResultadosRpc = {}) {
   const llamadas: Record<string, Llamada[]> = {};
+  const consultas: Record<string, number> = {};
   const from = vi.fn((tabla: string) => {
     const registro: Llamada[] = (llamadas[tabla] ??= []);
-    const resultado = resultados[tabla] ?? { data: [], error: null };
+    const dado = resultados[tabla] ?? { data: [], error: null };
+    const indice = (consultas[tabla] ??= 0);
+    consultas[tabla] += 1;
+    const resultado = Array.isArray(dado) ? dado[Math.min(indice, dado.length - 1)] : dado;
     const consulta: Record<string | symbol, unknown> = new Proxy(
       {},
       {
@@ -42,12 +58,17 @@ function crearSupabaseFalso(resultados: Record<string, { data: unknown; error: u
     );
     return consulta;
   });
-  const rpc = vi.fn().mockResolvedValue({ data: zona, error: null });
-  return { supabase: { from, rpc }, llamadas };
+  const llamadasRpc: [string, unknown][] = [];
+  const rpc = vi.fn((nombre: string, parametros?: unknown) => {
+    llamadasRpc.push([nombre, parametros]);
+    if (nombre === 'zona_horaria_centro') return Promise.resolve({ data: zona, error: null });
+    return Promise.resolve(resultadosRpc[nombre] ?? { data: [], error: null });
+  });
+  return { supabase: { from, rpc }, llamadas, llamadasRpc };
 }
 
-function comoRol(rol: string, resultados?: Parameters<typeof crearSupabaseFalso>[0], zona?: string) {
-  const falso = crearSupabaseFalso(resultados, zona);
+function comoRol(rol: string, resultados?: Resultados, zona?: string, resultadosRpc?: ResultadosRpc) {
+  const falso = crearSupabaseFalso(resultados, zona, resultadosRpc);
   exigirSesion.mockResolvedValue({ supabase: falso.supabase, usuario: { id: 'usr' } });
   estadoDeCuenta.mockResolvedValue({ rol, estado: 'activo' });
   return falso;
@@ -79,7 +100,7 @@ describe('cargarContexto · el filtro de profesional es solo del administrador',
     const contexto = await cargarContexto(Promise.resolve({ profesional: PRO }));
     expect(contexto.profesionalFiltrado).toBe(PRO);
 
-    await cargarPendientes(contexto.profesionalFiltrado);
+    await cargarPendientes(contexto.profesionalFiltrado, 1);
     expect(llamadas.pendiente_paciente).toContainEqual(['eq', ['profesional_id', PRO]]);
   });
 
@@ -90,7 +111,7 @@ describe('cargarContexto · el filtro de profesional es solo del administrador',
       const contexto = await cargarContexto(Promise.resolve({ profesional: PRO }));
       expect(contexto.profesionalFiltrado).toBeNull();
 
-      await cargarPendientes(contexto.profesionalFiltrado);
+      await cargarPendientes(contexto.profesionalFiltrado, 1);
       expect(llamadas.pendiente_paciente.some(([m]) => m === 'eq')).toBe(false);
     },
   );
@@ -122,26 +143,100 @@ describe('cargarContexto · el filtro de profesional es solo del administrador',
   });
 });
 
-describe('cargarPendientes', () => {
-  it('une los nombres leídos aparte, por id, y ordena', async () => {
+describe('cargarContexto · la página sale de ?pagina y la leen todos los roles', () => {
+  it.each(['administrador', 'profesional_sanitario', 'tecnico_administrativo'])('%s con ?pagina=3 → 3', async (rol) => {
+    comoRol(rol);
+    expect((await cargarContexto(Promise.resolve({ pagina: '3' }))).pagina).toBe(3);
+  });
+
+  it.each([['abc'], ['0'], ['-2'], ['1.5'], ['100001'], [['2', '3']], [undefined], ['']])(
+    '?pagina=%j no valida → 1',
+    async (valor) => {
+      comoRol('administrador');
+      expect((await cargarContexto(Promise.resolve({ pagina: valor }))).pagina).toBe(1);
+    },
+  );
+
+  it('el máximo, 100000, sí vale', async () => {
+    comoRol('administrador');
+    expect((await cargarContexto(Promise.resolve({ pagina: '100000' }))).pagina).toBe(100000);
+  });
+});
+
+describe('cargarResumen · cifras exactas de la base (resumen_pendiente)', () => {
+  const fila = { pendiente_total_centimos: 21000, pacientes_con_pendiente: 3, pacientes_cobrado_de_mas: 1, filas: 7 };
+
+  it('sin filtro llama a la función sin parámetros; con filtro, con p_profesional_id', async () => {
+    const { supabase } = comoRol('administrador', {}, undefined, { resumen_pendiente: { data: [fila], error: null } });
+
+    const sin = await cargarResumen(null);
+    expect(supabase.rpc).toHaveBeenCalledWith('resumen_pendiente', {});
+    expect(sin).toEqual({ ok: true, resumen: { pendienteTotal: 21000, conPendiente: 3, deMas: 1, filas: 7 } });
+
+    const con = await cargarResumen(PRO);
+    expect(supabase.rpc).toHaveBeenCalledWith('resumen_pendiente', { p_profesional_id: PRO });
+    expect(con.ok).toBe(true);
+  });
+
+  it.each([
+    ['dos filas', [fila, fila]],
+    ['ninguna fila', []],
+    ['un número no entero', [{ ...fila, pendiente_total_centimos: 10.5 }]],
+    ['un número negativo', [{ ...fila, filas: -1 }]],
+    ['un número que no es número', [{ ...fila, pacientes_con_pendiente: '3' }]],
+    ['un número fuera del entero seguro', [{ ...fila, pendiente_total_centimos: 2 ** 60 }]],
+  ])('%s → { ok: false }', async (_, data) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    comoRol('administrador', {}, undefined, { resumen_pendiente: { data, error: null } });
+    expect(await cargarResumen(PRO2)).toEqual({ ok: false });
+  });
+
+  it('un error de la base → { ok: false }', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    comoRol('administrador', {}, undefined, { resumen_pendiente: { data: null, error: { code: '42501' } } });
+    expect(await cargarResumen(PRO)).toEqual({ ok: false });
+  });
+});
+
+describe('cargarPendientes · la base ordena y pagina; aquí solo se cablea', () => {
+  it('la página 2 pide .range(50, 99) y los tres .order, en ese orden', async () => {
     const { llamadas } = comoRol('administrador', {
-      pendiente_paciente: { data: [vista('p-a', 5000, 0), vista('p-b', 100, 1100)], error: null },
-      pacientes: {
-        data: [
-          { id: 'p-a', nombre: 'Ana', apellidos: 'Ruiz' },
-          { id: 'p-b', nombre: 'Bea', apellidos: 'Sanz' },
-        ],
-        error: null,
-      },
+      pendiente_paciente: { data: [vista('p-a', 5000, 0)], error: null },
+      pacientes: { data: [{ id: 'p-a', nombre: 'Ana', apellidos: 'Ruiz' }], error: null },
     });
 
-    const resultado = await cargarPendientes(null);
+    await cargarPendientes(null, 2);
 
-    expect(llamadas.pacientes).toContainEqual(['in', ['id', ['p-a', 'p-b']]]);
-    expect(resultado.ok && resultado.filas.map((f) => [f.pacienteId, f.nombre, f.estado])).toEqual([
-      ['p-b', 'Bea', 'cobrado_de_mas'],
-      ['p-a', 'Ana', 'pendiente'],
+    expect(TAMANO_PAGINA).toBe(50);
+    const consulta = llamadas.pendiente_paciente;
+    expect(consulta).toContainEqual(['range', [50, 99]]);
+    expect(consulta.filter(([m]) => m === 'order')).toEqual([
+      ['order', ['excedente_centimos', { ascending: false }]],
+      ['order', ['pendiente_centimos', { ascending: false }]],
+      ['order', ['paciente_id']],
     ]);
+  });
+
+  it('la página 1 pide .range(0, 49)', async () => {
+    const { llamadas } = comoRol('administrador');
+    await cargarPendientes(null, 1);
+    expect(llamadas.pendiente_paciente).toContainEqual(['range', [0, 49]]);
+  });
+
+  it('une los nombres leídos aparte, por id, con .in sobre 50 ids como mucho, y respeta el orden de la base', async () => {
+    const ids = Array.from({ length: TAMANO_PAGINA }, (_, i) => `p-${String(i).padStart(2, '0')}`);
+    const { llamadas } = comoRol('administrador', {
+      pendiente_paciente: { data: ids.map((id) => vista(id, 5000, 0)), error: null },
+      pacientes: { data: ids.map((id) => ({ id, nombre: `N${id}`, apellidos: 'Ruiz' })), error: null },
+    });
+
+    const resultado = await cargarPendientes(null, 1);
+
+    const enIn = llamadas.pacientes.filter(([m]) => m === 'in');
+    expect(enIn).toHaveLength(1);
+    expect((enIn[0][1][1] as string[]).length).toBeLessThanOrEqual(TAMANO_PAGINA);
+    expect(resultado.ok && resultado.filas.map((f) => f.pacienteId)).toEqual(ids);
+    expect(resultado.ok && resultado.filas[0].nombre).toBe('Np-00');
   });
 
   it('una fila que no casa con pendiente() es un error del bloque, no una cifra', async () => {
@@ -149,13 +244,13 @@ describe('cargarPendientes', () => {
     comoRol('administrador', {
       pendiente_paciente: { data: [{ ...vista('p-a', 5000, 0), estado: 'cobrado' }], error: null },
     });
-    expect((await cargarPendientes(null)).ok).toBe(false);
+    expect((await cargarPendientes(null, 1)).ok).toBe(false);
   });
 
   it('un error de la vista es un error del bloque', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     comoRol('administrador', { pendiente_paciente: { data: null, error: { code: '42501' } } });
-    expect((await cargarPendientes(null)).ok).toBe(false);
+    expect((await cargarPendientes(null, 1)).ok).toBe(false);
   });
 });
 
@@ -207,38 +302,131 @@ describe('cargarCobrosRecientes', () => {
   });
 });
 
-describe('cargarOpcionesProfesional y cargarPacientesParaCobro', () => {
-  it('los profesionales distintos de la vista sin filtrar, con su nombre', async () => {
-    const { llamadas } = comoRol('administrador', {
-      pendiente_paciente: { data: [{ profesional_id: PRO }, { profesional_id: PRO2 }, { profesional_id: PRO }], error: null },
-      perfiles: {
-        data: [
-          { id: PRO2, nombre_completo: 'Beatriz Gil' },
-          { id: PRO, nombre_completo: 'Alberto Paz' },
-        ],
-        error: null,
-      },
-    });
+describe('cargarOpcionesProfesional · por la función, nunca por perfiles', () => {
+  const dosProfesionales = {
+    profesionales_del_pendiente: {
+      data: [
+        { id: PRO, nombre_completo: 'Ana Márquez' },
+        { id: PRO2, nombre_completo: 'Bruno Ferrer' },
+      ],
+      error: null,
+    },
+  };
 
-    const opciones = await cargarOpcionesProfesional();
+  it('llama a rpc(profesionales_del_pendiente), nunca a from(perfiles), y devuelve id y nombre', async () => {
+    const { supabase, llamadasRpc } = comoRol('administrador', {}, undefined, dosProfesionales);
 
-    expect(llamadas.pendiente_paciente.some(([m]) => m === 'eq')).toBe(false);
-    expect(llamadas.perfiles).toContainEqual(['in', ['id', [PRO, PRO2]]]);
+    const opciones = await cargarOpcionesProfesional(null);
+
+    expect(llamadasRpc.map(([n]) => n)).toContain('profesionales_del_pendiente');
+    expect(supabase.from).not.toHaveBeenCalledWith('perfiles');
+    expect(supabase.from).not.toHaveBeenCalledWith('directorio_perfiles');
     expect(opciones).toEqual([
-      { id: PRO2, nombre: 'Beatriz Gil' },
-      { id: PRO, nombre: 'Alberto Paz' },
+      { id: PRO, nombre: 'Ana Márquez' },
+      { id: PRO2, nombre: 'Bruno Ferrer' },
     ]);
   });
 
-  it('los pacientes para el cobro: sin fusionados, por apellidos', async () => {
-    const { llamadas } = comoRol('administrador', {
-      pacientes: { data: [{ id: 'p-a', nombre: 'Ana', apellidos: 'Ruiz' }], error: null },
-    });
+  it('con elegido entre las opciones no lee el directorio', async () => {
+    const { supabase } = comoRol('administrador', {}, undefined, dosProfesionales);
+    const opciones = await cargarOpcionesProfesional(PRO2);
+    expect(supabase.from).not.toHaveBeenCalled();
+    expect(opciones).toHaveLength(2);
+  });
 
-    const pacientes = await cargarPacientesParaCobro();
+  it('con elegido fuera de la lista lee directorio_perfiles y lo antepone con su nombre', async () => {
+    const OTRO = '3d4e5f60-7182-4c93-8da4-1e2f3a4b5c60';
+    const { supabase, llamadas } = comoRol(
+      'administrador',
+      { directorio_perfiles: { data: { id: OTRO, nombre_completo: 'Carla Sanz' }, error: null } },
+      undefined,
+      dosProfesionales,
+    );
+
+    const opciones = await cargarOpcionesProfesional(OTRO);
+
+    expect(supabase.from).toHaveBeenCalledWith('directorio_perfiles');
+    expect(supabase.from).not.toHaveBeenCalledWith('perfiles');
+    expect(llamadas.directorio_perfiles).toContainEqual(['eq', ['id', OTRO]]);
+    expect(opciones[0]).toEqual({ id: OTRO, nombre: 'Carla Sanz' });
+    expect(opciones).toHaveLength(3);
+  });
+
+  it('con elegido que no existe, lo antepone como «Profesional no encontrado»', async () => {
+    const OTRO = '3d4e5f60-7182-4c93-8da4-1e2f3a4b5c60';
+    comoRol('administrador', { directorio_perfiles: { data: null, error: null } }, undefined, dosProfesionales);
+    const opciones = await cargarOpcionesProfesional(OTRO);
+    expect(opciones[0]).toEqual({ id: OTRO, nombre: 'Profesional no encontrado' });
+  });
+
+  it('un fallo de la función deja la lista vacía', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    comoRol('administrador', {}, undefined, { profesionales_del_pendiente: { data: null, error: { code: '42501' } } });
+    expect(await cargarOpcionesProfesional(PRO)).toEqual([]);
+  });
+});
+
+describe('cargarPacientesParaCobro · por páginas de 1000', () => {
+  const pagina = (desde: number, n: number) =>
+    Array.from({ length: n }, (_, i) => ({ id: `p-${desde + i}`, nombre: 'N', apellidos: 'A' }));
+
+  it('una página corta: una sola consulta, sin fusionados, ordenada y con range(0, 999)', async () => {
+    const { llamadas } = comoRol('administrador', { pacientes: { data: pagina(0, 3), error: null } });
+
+    const resultado = await cargarPacientesParaCobro();
 
     expect(llamadas.pacientes).toContainEqual(['is', ['fusionado_en', null]]);
-    expect(llamadas.pacientes).toContainEqual(['order', ['apellidos']]);
-    expect(pacientes).toEqual([{ id: 'p-a', nombre: 'Ana', apellidos: 'Ruiz' }]);
+    expect(llamadas.pacientes.filter(([m]) => m === 'order')).toEqual([
+      ['order', ['apellidos']],
+      ['order', ['nombre']],
+      ['order', ['id']],
+    ]);
+    expect(llamadas.pacientes.filter(([m]) => m === 'range')).toEqual([['range', [0, 999]]]);
+    expect(resultado).toEqual({ ok: true, pacientes: pagina(0, 3) });
+  });
+
+  it('pide una segunda página cuando la primera trae 1000 filas, y para con la corta', async () => {
+    const { llamadas } = comoRol('administrador', {
+      pacientes: [
+        { data: pagina(0, 1000), error: null },
+        { data: pagina(1000, 5), error: null },
+      ],
+    });
+
+    const resultado = await cargarPacientesParaCobro();
+
+    expect(llamadas.pacientes.filter(([m]) => m === 'range')).toEqual([
+      ['range', [0, 999]],
+      ['range', [1000, 1999]],
+    ]);
+    expect(resultado.ok && resultado.pacientes).toHaveLength(1005);
+  });
+
+  it('deduplica por id', async () => {
+    comoRol('administrador', {
+      pacientes: [
+        { data: pagina(0, 1000), error: null },
+        { data: pagina(999, 3), error: null },
+      ],
+    });
+    const resultado = await cargarPacientesParaCobro();
+    expect(resultado.ok && resultado.pacientes).toHaveLength(1002);
+  });
+
+  it('un error en la segunda página es { ok: false }, no una lista a medias', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    comoRol('administrador', {
+      pacientes: [
+        { data: pagina(0, 1000), error: null },
+        { data: null, error: { code: '57014' } },
+      ],
+    });
+    expect(await cargarPacientesParaCobro()).toEqual({ ok: false });
+  });
+
+  it('un error en la primera es { ok: false }', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    comoRol('administrador', { pacientes: { data: null, error: { code: '42501' } } });
+    expect(await cargarPacientesParaCobro()).toEqual({ ok: false });
   });
 });

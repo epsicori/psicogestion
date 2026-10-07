@@ -21,7 +21,7 @@ type Resultado = { data?: unknown; error?: unknown };
  * zona y `cobros.insert()`. Cada llamada queda registrada para comprobar qué se mandó.
  */
 function crearSupabaseFalso({
-  paciente = { data: { centro_id: CENTRO }, error: null } as Resultado,
+  paciente = { data: { centro_id: CENTRO, fusionado_en: null }, error: null } as Resultado,
   zona = { data: 'Europe/Madrid', error: null } as Resultado,
   insert = { data: null, error: null } as Resultado,
 } = {}) {
@@ -156,6 +156,32 @@ describe('registrarCobro', () => {
     expect(estado).toEqual({ mensaje: t('cobros.noSePudoRegistrar') });
     expect(supabase.rpc).not.toHaveBeenCalled();
     expect(supabase.insertar).not.toHaveBeenCalled();
+  });
+
+  it('un paciente fusionado se rechaza en el campo pacienteId y no llega a insertar; lee fusionado_en', async () => {
+    const supabase = crearSupabaseFalso({
+      paciente: { data: { centro_id: CENTRO, fusionado_en: '2026-09-30T10:00:00Z' }, error: null },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+    const estado = await registrarCobro(BASE);
+
+    expect(estado).toEqual({ errores: { pacienteId: [t('cobros.pacienteFusionado')] } });
+    expect(supabase.select).toHaveBeenCalledWith('centro_id, fusionado_en');
+    expect(supabase.rpc).not.toHaveBeenCalled();
+    expect(supabase.insertar).not.toHaveBeenCalled();
+  });
+
+  it('gemela: un paciente con fusionado_en null sí se inserta', async () => {
+    const supabase = crearSupabaseFalso({
+      paciente: { data: { centro_id: CENTRO, fusionado_en: null }, error: null },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+    const estado = await registrarCobro(BASE);
+
+    expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
+    expect(supabase.insertar).toHaveBeenCalledTimes(1);
   });
 
   it('el 23514 del disparador de la fecha vuelve como error del campo fecha', async () => {

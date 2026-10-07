@@ -84,18 +84,6 @@ export function pildoraDe(fila: FilaDePendiente): { tono: 'success' | 'warning';
   }
 }
 
-const RANGO: Record<EstadoCobro, number> = { cobrado_de_mas: 0, pendiente: 1, cobrado: 2 };
-
-/**
- * Primero lo cobrado de más (hay que revisarlo), luego lo pendiente de mayor a menor y al
- * final lo cobrado. No muta la lista.
- */
-export function ordenar<T extends FilaDePendiente>(filas: readonly T[]): T[] {
-  return [...filas].sort(
-    (a, b) => RANGO[a.estado] - RANGO[b.estado] || b.excedente - a.excedente || b.pendiente - a.pendiente,
-  );
-}
-
 const PATRON_NUMERIC = /^(-)?(\d+)\.(\d{2})$/;
 
 /**
@@ -109,9 +97,4 @@ export function importeDeBd(texto: string): Centimos {
   const [, signo, euros, centimos] = partes;
   const valor = Number(euros) * 100 + Number(centimos);
   return signo ? -valor : valor;
-}
-
-/** La suma de lo pendiente. Un cobro de más no resta: no se compensa entre pacientes. */
-export function totalPendiente(filas: readonly FilaDePendiente[]): Centimos {
-  return filas.reduce((suma, fila) => suma + fila.pendiente, 0);
 }
