@@ -1611,3 +1611,171 @@ El verificador repite R2.8 y añade dos comprobaciones:
 
 ### Lo que no entra en la ronda 4
 - Que la clave sobreviva a una recarga o a salir de la página: habría que guardar el paciente y el importe en el navegador. El aviso lo dice.
+
+---
+
+## Anexo · Ronda 5 (07-10-2026)
+
+Cierra `revision.json` de la ronda 4 (0 ALTA, 0 MEDIA, 4 BAJA) sobre la rama `worktree-agent-af4665097e6d61770` (afcc774). **No hay migraciones ni cambios en `tipos-bd.ts` ni en el banco 30.** La acción no escribe nada nuevo: solo cambia el texto de dos respuestas que ya existían. Todo cabe en el `territorio:` de §6 y R2.10. Lo que no se nombra aquí no cambia respecto de R4.
+
+### R5.0 · Hechos verificados (afcc774)
+- `acciones.ts:61-64` (paso 2b) y `:131-134` (relectura propia tras el 23505) devuelven `cobros.cobroRegistrado`, el mismo texto que un alta nueva (`:142-143`).
+- `formulario-cobro.tsx:100`: el éxito es `!estado.errores && estado.mensaje === t('cobros.cobroRegistrado')`. Cualquier otro mensaje se pinta en la región `aria-live` del formulario y no olvida la clave.
+- `registrar-cobro.tsx:69-73`: `alRegistrar(huella)` hace `claves.current.delete(huella)`, cierra el diálogo y fija el aviso a `cobroRegistrado`, sin mirar qué contestó la acción.
+- `page.tsx:25`: si falla `cargarPacientesParaCobro`, `AccionRegistrar` devuelve `<AvisoDeError>` **en lugar de** `<RegistrarCobro>`. En ese punto del árbol cambia el tipo del elemento, así que React desmonta la isla y su `useRef`.
+- `page.test.tsx:141-151` exige justo eso («el aviso de error y ningún botón de registrar»), y `page.test.tsx:153-166` comprueba que `RegistrarCobro` recibe exactamente `{ pacientes, hoy }`.
+- `registrar-cobro.test.tsx`: el formulario es un doble que llama a `alRegistrar('huella-de-pega')`, y las cinco pruebas pintan `pacientes={[]}`.
+- `registrar-cobro-clave.test.tsx`: ninguna prueba combina un éxito de otra huella con un reenvío. Así lo midió B: el mutante `clear()` deja 207 pruebas en verde.
+- `accesibilidad/facturacion.spec.ts:222` espera `getByRole('status').filter({ hasText: 'Cobro registrado' })` después del reintento. Ese reintento entra por el paso 2b. Y `:187` espera `'Cobro registrado'` en el cuerpo del **primer** envío, que es un alta nueva.
+- `docs/state.md` (rama) tiene 60 líneas. §«Hallazgos anotados» agrupa lo de T-023 en el primer punto (líneas 26-30).
+
+### R5.1 · A-H1 + B-H1: «ya estaba registrado» es un resultado propio, y el cliente lo trata como éxito y olvida la clave
+
+**Catálogo** (`lib/i18n/es.ts`, sección `cobros`, justo después de `cobroRegistrado`):
+```ts
+cobroYaRegistrado: 'Este cobro ya estaba registrado; no se ha añadido otro. Si es un cobro nuevo con los mismos datos, regístralo otra vez.',
+```
+En minúsculas, el texto no contiene «cobro registrado». Por eso se distingue también con el `hasText` del spec, que no distingue mayúsculas y busca subcadenas. Tampoco nombra ningún botón.
+
+**`acciones.ts`**: solo cambian dos líneas.
+- En el paso 2b (`:63`) y en la relectura con fila propia (`:133`): `return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroYaRegistrado') };`. Las dos conservan el `revalidatePath('/facturacion')` de la línea anterior.
+- El alta nueva (`:143`) sigue con `cobroRegistrado`.
+- No cambia ninguna otra rama: `errorPrevia` sigue adelante, la relectura sin fila da `fallo()` y la relectura con error da `resultadoDesconocido`.
+
+**`formulario-cobro.tsx`**:
+- Constante de módulo, junto a `OPCIONES_FORMA`:
+  ```ts
+  /** Las dos respuestas que confirman que el cobro existe (R5.1): las dos cierran y olvidan la clave. */
+  const MENSAJES_DE_EXITO = [t('cobros.cobroRegistrado'), t('cobros.cobroYaRegistrado')];
+  ```
+- La línea 100 pasa a ser `if (!estado.errores && estado.mensaje !== undefined && MENSAJES_DE_EXITO.includes(estado.mensaje)) { alRegistrar(huella, estado.mensaje); return; }`.
+- La prop pasa a ser `alRegistrar: (huella: string, aviso: string) => void`, con el JSDoc «Se llama cuando la acción confirma que el cobro existe, con la huella del envío y el texto que hay que anunciar».
+
+**`registrar-cobro.tsx`**: `alRegistrar={(huella, avisoDeExito) => { claves.current.delete(huella); setAbierto(false); setAviso(avisoDeExito); }}`. El aviso visible (`role="status"`) dice cuál de los dos casos ha sido.
+
+**Se cierra el diálogo y no se deja abierto.** El caso frecuente es el reintento tras un resultado desconocido, y ahí el usuario ha terminado. Un segundo cobro idéntico el mismo día es raro: le basta reabrir y volver a escribirlo, como le pide el aviso.
+
+**No caduca la clave. Basta con el mensaje propio.** Motivos:
+1. El daño de A-H1 era el silencio. Con el texto propio, el usuario ve que no se añadió nada y la clave ya está olvidada: un segundo envío entra con un id nuevo. Lo que queda es un clic más con aviso explícito, no un cobro perdido.
+2. Una caducidad por tiempo vuelve a abrir el duplicado que la clave impide, precisamente en el caso para el que existe: el reintento tardío después de un corte largo. Además, obligaría a usar relojes falsos en las pruebas.
+3. Caducar «al verse en la lista» exigiría mandar a la isla los ids de «Últimos cobros». Esa lista enseña 20 filas como mucho, recortadas por el filtro de profesional, así que la caducidad no alcanzaría las demás.
+4. El tamaño del `Map` es despreciable (B, ronda 4). Que dure más por Activity ya no hace daño: lo único que puede pasar es que salga este aviso.
+
+**Oráculo.** No hay ninguno nuevo. `cobroYaRegistrado` solo sale con una fila **propia** (`registrado_por = usuario.id`), y la sesión ya conoce sus propios ids. Con un id ajeno, la respuesta sigue siendo `fallo()`.
+
+**Pruebas**
+- `acciones.test.ts`:
+  - «un 23505 de cobros_pkey con el cobro propio ya registrado…» espera `{ mensaje: t('cobros.cobroYaRegistrado') }` y añade `expect(supabase.insertar).toHaveBeenCalledTimes(1)`. Así se prueba la relectura y no el 2b, porque `previa` vale `null` por defecto. El título pasa a terminar en «…es "ya estaba registrado", sin duplicar».
+  - «clave propia ya registrada y paciente fusionado» espera `{ mensaje: t('cobros.cobroYaRegistrado') }`.
+  - «la consulta previa falla (57014)» **sigue** esperando `cobroRegistrado`: es la gemela, porque inserta.
+  - Las demás que esperan `cobroRegistrado` son altas nuevas y no cambian.
+- `formulario-cobro.test.tsx`:
+  - En la línea 149, `toHaveBeenCalledWith(claveDeEnvio.mock.calls[0][0], t('cobros.cobroRegistrado'))`.
+  - Prueba nueva, **«con "ya estaba registrado", alRegistrar recibe la huella y ese texto, y no se pinta como error»**: la acción resuelve `{ mensaje: t('cobros.cobroYaRegistrado') }`. `alRegistrar` se llama una vez, con `(huella, t('cobros.cobroYaRegistrado'))`, y la región `aria-live` del formulario está vacía.
+- `registrar-cobro.test.tsx`: el doble llama a `alRegistrar('huella-de-pega', t('cobros.cobroRegistrado'))`. Sin pruebas nuevas por R5.1.
+- `registrar-cobro-clave.test.tsx`:
+  - Prueba nueva, **«"ya estaba registrado" cierra, lo anuncia y olvida la clave»**:
+    1. `pintar()`. La primera llamada rechaza (`new Error('red')`): se abre, se rellena `'60,00'`, se envía y sale `resultadoDesconocido`.
+    2. La segunda resuelve `{ mensaje: t('cobros.cobroYaRegistrado') }`: se envía otra vez en el mismo diálogo.
+    3. `idDe(1)` es igual a `idDe(0)`. El diálogo desaparece, y `screen.getByRole('status').textContent` es **exactamente** `t('cobros.cobroYaRegistrado')`.
+    4. La tercera resuelve `cobroRegistrado`: se reabre, se rellena `'60,00'` y se envía. `idDe(2)` es distinto de `idDe(0)`.
+  - Junto a la prueba de M34: `expect(t('cobros.cobroYaRegistrado').toLowerCase()).not.toContain(t('cobros.cobroRegistrado').toLowerCase())` y `expect(t('cobros.cobroYaRegistrado')).not.toContain(t('cobros.registrarCobro'))`.
+- **Spec, paso 9** (`facturacion.spec.ts:222`): se sustituye por `await expect(page.getByRole('status')).toHaveText('Este cobro ya estaba registrado; no se ha añadido otro. Si es un cobro nuevo con los mismos datos, regístralo otra vez.')`. El paso 6 (`:187`, el cuerpo del primer envío contiene `'Cobro registrado'`) no cambia. En `:186-187`, el mensaje de error del paso 6 tampoco cambia.
+
+### R5.2 · B-H2: `RegistrarCobro` se monta siempre y pinta él el aviso de pacientes
+
+**`page.tsx`, `AccionRegistrar`**: se quita el `if` de la línea 25. Queda una sola salida:
+```tsx
+// La isla se monta siempre, también sin lista de pacientes: su `Map` de claves de envío no puede
+// perderse con un fallo pasajero en un render posterior (R5.2).
+return <RegistrarCobro pacientes={pacientes.ok ? pacientes.pacientes : null} hoy={hoy} />;
+```
+
+**`registrar-cobro.tsx`**:
+- `Props.pacientes` pasa a ser `{ id: string; nombre: string; apellidos: string }[] | null`, con el JSDoc «`null`: no se pudo cargar la lista. No se ofrece registrar a ciegas».
+- Los hooks no cambian y van primero.
+- Hay un solo `return`, con tres piezas en este orden:
+  1. `{pacientes === null ? <AvisoDeError mensaje={t('cobros.errorPacientes')} /> : <Button …>…</Button>}`, con el import de `AvisoDeError` desde `@/components/ui/piezas`;
+  2. el `<p role="status">`, **siempre montado**, como ahora (B-H8);
+  3. `{pacientes !== null && <Dialogo …>…</Dialogo>}`.
+- **No** se resetea `abierto` cuando `pacientes` es `null`. Solo la acción puede repintar la página con el diálogo abierto, por medio de `revalidatePath`. Y la acción solo revalida con `cobroRegistrado` o con `cobroYaRegistrado`, que cierran el diálogo en la misma transición. No hay ningún camino real que lo deje abierto, así que no se escribe una guarda sin prueba.
+- **Descartado: un `Map` a nivel de módulo.** Sobreviviría a todo, también a un cambio de sesión sin recarga en la misma pestaña. Además, filtraría estado entre pruebas.
+- **Descartado: subir el `Map` a un proveedor en el `layout`.** Toca ficheros fuera de territorio y no hace falta.
+
+**Pruebas**
+- `page.test.tsx`: la prueba «si no se pueden cargar los pacientes, el aviso de error y ningún botón de registrar» se **sustituye** por **«si no se pueden cargar los pacientes, la isla se monta igual, con pacientes null»**. Usa `cargarPacientesParaCobro.mockResolvedValue({ ok: false })`, y el resultado de `AccionRegistrar` cumple `isValidElement(r) && r.type === RegistrarCobro`, con `r.props` igual a `{ pacientes: null, hoy: '2026-10-06' }`.
+- `registrar-cobro.test.tsx`: prueba nueva, **«con pacientes null: el aviso de pacientes, ningún disparador, ningún diálogo y la región de estado montada»**. Se pinta `pacientes={null}` y se comprueba:
+  - `getByText(t('cobros.errorPacientes'))`;
+  - `queryByRole('button', { name: t('cobros.registrarCobro') })` es `null`;
+  - `queryByRole('dialog')` es `null`;
+  - `getByRole('status')` existe.
+- `registrar-cobro-clave.test.tsx`: `pintar()` devuelve `{ disparador, rerender }`, y las pruebas actuales desestructuran `disparador`. Prueba nueva, **«B-H2: la lista de pacientes falla en un render posterior y vuelve; el reenvío lleva el mismo id»**:
+  1. La acción rechaza siempre. Se abre, se rellena `'60,00'`, se envía, sale `resultadoDesconocido` y se cierra con la «X».
+  2. `rerender(<RegistrarCobro pacientes={null} hoy={HOY} />)`: aparece `t('cobros.errorPacientes')` y no hay ningún botón «Registrar cobro».
+  3. `rerender(<RegistrarCobro pacientes={PACIENTES} hoy={HOY} />)`. El disparador **se vuelve a buscar**, porque es otro nodo. Se abre, se rellena `'60,00'` y se envía.
+  4. `idDe(1)` es igual a `idDe(0)`.
+
+### R5.3 · B-H3: «A desconocido, B con éxito, A otra vez → idA»
+Prueba nueva en `registrar-cobro-clave.test.tsx`, **«solo se olvida la clave del envío que sale bien: A desconocido, B con éxito, A otra vez lleva idA»**:
+1. `registrarCobro.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce({ mensaje: t('cobros.cobroRegistrado') }).mockRejectedValueOnce(new Error('red'))`.
+2. Se abre, se rellena `'60,00'`, se envía y sale `resultadoDesconocido`.
+3. En el mismo diálogo, el Importe pasa a `'40,00'` y se envía. Se espera a que el diálogo desaparezca y el estado diga `cobroRegistrado`.
+4. Se reabre, se rellena `'60,00'` y se envía. Se espera la tercera llamada.
+5. `idDe(1)` es distinto de `idDe(0)`, e `idDe(2)` es igual a `idDe(0)`.
+
+Esta prueba mata `claves.current.clear()` dentro de `alRegistrar` (M42).
+
+### R5.4 · A-H2: riesgo aceptado, sin diseño
+Al implementador solo le toca anotarlo en `docs/state.md` §«Hallazgos anotados», como **último subpunto** del grupo «**T-023, fuera de alcance (R2.7 y ronda 3)**». En la misma línea, el título del grupo pasa a ser «**T-023, fuera de alcance (R2.7, ronda 3 y ronda 4)**». El subpunto, con este texto exacto:
+```
+  - **A-H2 de la ronda 4, riesgo aceptado**: si entre un envío con resultado desconocido y su reintento el usuario deja de ver al paciente (traspaso de `profesional_id`, cambio de centro del paciente o de los `centros_actuales` del técnico), el paso 2b no encuentra su propio cobro (`cobros_lectura` no tiene rama por `registrado_por`) y el reintento contesta «No se ha podido registrar el cobro» aunque el cobro exista; si otro lo registra de nuevo, queda duplicado y no se puede borrar. No se amplía `cobros_lectura` (daría datos económicos a quien ya no atiende al paciente). Exige un corte de red y un traspaso dentro de la vida de la página.
+```
+Las líneas 11 y 21 de `state.md` se sustituyen por estas:
+```
+- **En curso**: T-023 **ronda 5 implementada** el 07-10 sobre la ronda 4 («ya estaba registrado» como resultado propio que cierra y olvida la clave, `RegistrarCobro` montado siempre aunque falle la lista de pacientes, prueba de que un éxito solo olvida su clave); falta verificación y revisión de la ronda 5. Los mutantes M18 en adelante son de TypeScript y del spec (`tickets/T-023/mutantes.json`, `ts_ronda_3` a `ts_ronda_5`); el banco 30 llega hasta M17. T-050 revisado (ronda 1, 6acbd3f), sin integrar.
+```
+```
+1. **T-023 ronda 5: verificador y dos revisores** sobre una copia `git archive <HEAD de la rama>`. Antes, `npx supabase db reset` y `npm run seed`: el paso 4 de `accesibilidad/facturacion.spec.ts` pasa con «Últimos cobros» vacío y con hasta 18 filas, y cada ejecución deja un cobro de 0,01 EUR a Lucía Márquez con referencia `T-023 spec <ts>` (no se borra). Después, la cola: T-026a → T-046 → T-023b → T-047.
+```
+Para comprobarlo: `sed -n '11p;21p' docs/state.md`, `grep -c "A-H2 de la ronda 4" docs/state.md` = 1 y `wc -l docs/state.md` ≤ 80.
+
+### R5.5 · Verificador y mutantes nuevos (`mutantes.json` → `ts_ronda_5`)
+El verificador repite lo de R4.6, con el spec dos veces seguidas justo después de `db reset && npm run seed`, y añade dos comprobaciones:
+- `grep -n "cobroYaRegistrado" "app/(app)/facturacion/acciones.ts"` da exactamente 2 líneas;
+- `grep -n "AvisoDeError" "app/(app)/facturacion/page.tsx"` ya no aparece dentro de `AccionRegistrar`: solo en `SelectorSiAdministrador`.
+
+| Id | Mutación | Debe caer |
+|---|---|---|
+| M35 | El paso 2b devuelve `cobroRegistrado`, como en R4 | `acciones.test.ts` · clave propia ya registrada y paciente fusionado. Spec, paso 9 |
+| M36 | La relectura propia tras el 23505 devuelve `cobroRegistrado` | `acciones.test.ts` · 23505 de `cobros_pkey` con el cobro propio ya registrado |
+| M37 | El formulario solo da por éxito `cobroRegistrado` | `formulario-cobro.test.tsx` · «ya estaba registrado: alRegistrar recibe…». `registrar-cobro-clave.test.tsx` · «"ya estaba registrado" cierra…». Spec, paso 9 |
+| M38 | `alRegistrar` ignora el aviso y pinta siempre `cobroRegistrado` | `registrar-cobro-clave.test.tsx` · «"ya estaba registrado" cierra…»: el estado no coincide exactamente. Spec, paso 9 |
+| M39 | Con `cobroYaRegistrado` se cierra pero no se borra la clave (el `delete` solo se hace si el aviso es `cobroRegistrado`) | `registrar-cobro-clave.test.tsx` · «"ya estaba registrado" cierra…»: el tercer id sale igual que el primero |
+| M40 | `AccionRegistrar` vuelve a devolver `<AvisoDeError>` si fallan los pacientes | `page.test.tsx` · «la isla se monta igual, con pacientes null» |
+| M41 | `RegistrarCobro` delega en un hijo que solo se monta con pacientes (el `Map` vive en el hijo) | `registrar-cobro-clave.test.tsx` · «B-H2: la lista de pacientes falla… mismo id» |
+| M42 | `alRegistrar` hace `claves.current.clear()` en lugar de `delete(huella)` | `registrar-cobro-clave.test.tsx` · «A desconocido, B con éxito, A otra vez lleva idA» |
+| M43 | Con `pacientes === null`, la isla sigue pintando el disparador y el diálogo, con la lista vacía | `registrar-cobro.test.tsx` · «con pacientes null: …ningún disparador…» |
+| M44 | `cobroYaRegistrado` = `'Cobro registrado (ya estaba)'` | `registrar-cobro-clave.test.tsx` · la prueba de catálogo en minúsculas |
+
+### R5.6 · Qué revisar en la ronda 5
+**Revisor A (acción y constitución):**
+- `cobroYaRegistrado` sale **solo** de una fila propia: en el paso 2b con `previa && !errorPrevia`, y en la relectura con `propio`. Nunca sale de `errorPrevia`, de una relectura con error ni de una relectura sin fila.
+- Las dos salidas «ya estaba» llaman a `revalidatePath('/facturacion')` y no insertan. El alta nueva sigue devolviendo `cobroRegistrado`.
+- No hay un oráculo nuevo: con un id ajeno, la respuesta es la de R4 (`fallo()`).
+- El texto de `state.md` de A-H2 está letra por letra, en su grupo, y `wc -l` ≤ 80.
+- Sin `UPDATE`, `DELETE`, `upsert` ni migraciones. `supabase/`, `lib/supabase/` y `scripts/` no cambian.
+
+**Revisor B (cliente, accesibilidad y spec):**
+- `MENSAJES_DE_EXITO` tiene exactamente los dos textos. Un mensaje fuera de la lista (`fallo()` o `resultadoDesconocido`) no cierra el diálogo ni olvida la clave.
+- `alRegistrar` borra **solo** su huella y anuncia el texto que recibe. El `role="status"` dice cuál de los dos casos ha sido, y con «ya estaba» no dice «Cobro registrado».
+- `RegistrarCobro` mantiene los hooks antes de cualquier rama. Con `pacientes === null` no hay disparador ni `Dialogo`, pero sí `AvisoDeError` (que es `role="alert"`) y el `role="status"` montado. `page.tsx` monta la isla en los dos casos y nada en el árbol cambia su tipo ni su `key` entre renders.
+- Las pruebas nuevas comprueban ids (`idDe`), no solo el número de llamadas. La de B-H2 vuelve a buscar el disparador después del `rerender`.
+- Paso 9 del spec: `toHaveText` con el texto entero. El paso 6 sigue esperando `'Cobro registrado'` en el primer envío.
+- El texto del catálogo no nombra ningún botón y no contiene «cobro registrado» en minúsculas.
+
+### Lo que no entra en la ronda 5
+- **La caducidad de la clave.** Está descartada en R5.1, con sus motivos.
+- **A-H2 (visibilidad perdida entre el envío y el reintento).** Es un riesgo aceptado (R5.4). Ampliar la RLS es peor que el riesgo.
+- **El residuo de B-H4 (recorte de página) y los efectos de Activity sobre la paginación.** Son notas de B, sin un camino real.
+- **Cambiar `resultadoDesconocido` porque Activity conserva el `Map` al salir.** El texto se queda corto pero no causa daño, y M34 y el spec lo fijan.
+- **Un límite de error (`error.tsx`) que desmonte el segmento si `cargarContexto` lanza.** Eso es un fallo de la página entera, no un fallo pasajero de la lista, y cae fuera del territorio.
