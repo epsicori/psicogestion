@@ -1,0 +1,63 @@
+{
+  "ticket": "T-023",
+  "ronda": 1,
+  "revisor": "A (base, RLS y dinero)",
+  "altas": 1,
+  "medias": 2,
+  "bajas": 3,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "ALTA",
+      "archivo": "app/(app)/facturacion/datos.ts",
+      "linea": 197,
+      "descripcion": "cargarOpcionesProfesional lee nombres de `perfiles`, cuya única política es perfiles_lectura_propia: el administrador recibe 0 filas ajenas y el selector queda solo con «todos» (usar directorio_perfiles); datos.test.ts:214 simula perfiles y queda verde por el motivo equivocado.",
+      "escenario": "ADM b0080001-…-0001: select count(*) from perfiles where id in (Ana, Bruno) → 0; en directorio_perfiles → 2. El CA manual «como administrador, el selector filtra y la métrica se mueve con él» no se cumple y queda un control sin acción real detrás."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/facturacion/datos.ts",
+      "linea": 216,
+      "descripcion": "La vista agrega por p.id sin resolver fusionado_en y el formulario excluye a los fusionados: la deuda del absorbido no se puede saldar desde la pantalla, y cerrar en la base el cobro al fusionado quitaría la única salida.",
+      "escenario": "A con una realizada de 60 € se fusiona en B. El TEC ve A pendiente 6000 y el formulario solo ofrece B. Si cobra 60 € a B, A sigue pendiente 6000 y B queda cobrado_de_mas 6000. Solo un insert por la API a A lo deja en cobrado."
+    },
+    {
+      "id": "H3",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/facturacion/datos.ts",
+      "linea": 118,
+      "descripcion": "Los nombres se leen con .in('id', ids) sin trocear y la vista sin limit: a partir de ~215 pacientes con movimiento el gateway responde 414 y el bloque del pendiente falla siempre; por encima de 1000 filas, max_rows trunca en silencio.",
+      "escenario": "Medido en :54321/rest/v1/pacientes?select=id,nombre,apellidos&id=in.(…): con 210 uuids pasa y con 220 da HTTP 414. Una consulta con 220 pacientes históricos (los que están al día también salen en la vista) → errorPacientes → { ok: false } → AvisoDeError permanente."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "scripts/rls/30-cobros.sql",
+      "linea": 431,
+      "descripcion": "E9/E9g usan CA, que hereda la zona de la organización (Europe/Madrid), así que no distinguen la zona del centro del paciente de la de la organización, aunque el diseño dice que 30.E9 cubre esa puerta.",
+      "escenario": "Mutante zona_horaria_centro(null) en lugar de zona_horaria_centro(v_centro) en fn_validar_cobro (migración:50) → el 30 entero en verde. Con esa regresión, a las 23:30 canarias un paciente de Las Palmas admitiría un cobro con fecha de mañana canaria."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "supabase/migrations/20261013120000_cobros_y_pendiente.sql",
+      "linea": 128,
+      "descripcion": "Ninguna aserción del 30 prueba el filtro «tiene alguna partida» (sesiones, bonos o cobros > 0).",
+      "escenario": "Mutante sin `(s.sesiones > 0 or b.bonos > 0 or k.cobros > 0) and` → el 30 en verde. Todos los pacientes visibles salen como «al día, 0,00 €» y la lista de ids de H3 crece hasta el total de pacientes."
+    },
+    {
+      "id": "H6",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 1,
+      "descripcion": "El diseño (riesgos 5 y 6, §5) manda anotar en state.md §Hallazgos los tres puntos fuera de alcance; solo están en docs/bitacora/T-023.md:55-60 y state.md no cambia en el diff.",
+      "escenario": "El ticket se cierra sin la línea. El siguiente lector de las 80 líneas no sabe que el pendiente puede bajar por una realizada→cancelada (medido: devengado 6000→0 y el pagador pasa a cobrado_de_mas), y la guarda de transición no tiene ticket."
+    }
+  ],
+  "juicio_tres_puntos": {
+    "realizada_a_cancelada": "Ticket aparte (guarda de transición en citas). Hay rastro en auditoria (2 filas, auditar_citas); el TEC no puede hacerlo (UPDATE 0). Debe ir a state.md.",
+    "tecnico_deduce_precio": "Nada en T-023: riesgo aceptado (el contrato pide «el mismo pendiente»; la vista no lleva sesiones, tipo ni fechas). Debe ir a state.md.",
+    "cobro_a_fusionado": "El bug de T-023 es H2 (la deuda del absorbido no tiene salida por la UI). Cerrar el cobro al fusionado en la base sin consolidar antes quitaría la única salida: ticket aparte, después de que el propietario decida H2."
+  }
+}
