@@ -13,6 +13,7 @@ const { registrarCobro } = await import('./acciones');
 const PACIENTE = '6f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60';
 const CENTRO = '7a2b3c4d-5e6f-4a70-9b81-1c2d3e4f5a60';
 const USUARIO = 'usr-sesion';
+const ID = '1b2c3d4e-5f60-4a71-8b92-2d3e4f5a6b70';
 
 type Resultado = { data?: unknown; error?: unknown };
 
@@ -24,16 +25,25 @@ function crearSupabaseFalso({
   paciente = { data: { centro_id: CENTRO, fusionado_en: null }, error: null } as Resultado,
   zona = { data: 'Europe/Madrid', error: null } as Resultado,
   insert = { data: null, error: null } as Resultado,
+  existente = { data: null, error: null } as Resultado,
 } = {}) {
   const insertar = vi.fn().mockResolvedValue(insert);
   const eq = vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue(paciente) });
   const select = vi.fn().mockReturnValue({ eq });
-  const from = vi.fn((tabla: string) => (tabla === 'cobros' ? { insert: insertar } : { select }));
+  // cobros.select('id').eq('id', …).eq('registrado_por', …).maybeSingle(): la relectura tras un 23505.
+  const eqCobros = vi.fn();
+  const maybeSingleCobros = vi.fn().mockResolvedValue(existente);
+  eqCobros.mockReturnValue({ eq: eqCobros, maybeSingle: maybeSingleCobros });
+  const selectCobros = vi.fn().mockReturnValue({ eq: eqCobros });
+  const from = vi.fn((tabla: string) =>
+    tabla === 'cobros' ? { insert: insertar, select: selectCobros } : { select },
+  );
   const rpc = vi.fn().mockResolvedValue(zona);
-  return { from, rpc, insertar, select, eq };
+  return { from, rpc, insertar, select, eq, selectCobros, eqCobros };
 }
 
 const BASE = {
+  id: ID,
   pacienteId: PACIENTE,
   importe: '60,00',
   fecha: '2026-10-06',
@@ -54,7 +64,7 @@ describe('registrarCobro', () => {
     vi.restoreAllMocks();
   });
 
-  it('una devolución de -20,00 con motivo se inserta en negativo, con el motivo y sin id ni registrado_en', async () => {
+  it('una devolución de -20,00 con motivo se inserta en negativo, con el motivo, el id de la clave de envío y sin registrado_en', async () => {
     const supabase = crearSupabaseFalso();
     exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
 
@@ -62,6 +72,7 @@ describe('registrarCobro', () => {
 
     expect(supabase.insertar).toHaveBeenCalledTimes(1);
     expect(supabase.insertar).toHaveBeenCalledWith({
+      id: ID,
       paciente_id: PACIENTE,
       importe: '-20.00',
       fecha: '2026-10-06',
@@ -100,12 +111,12 @@ describe('registrarCobro', () => {
     const supabase = crearSupabaseFalso();
     exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
 
-    await registrarCobro({ ...BASE, registradoPor: 'otro', registrado_por: 'otro', id: 'x', registrado_en: 'y' });
+    await registrarCobro({ ...BASE, registradoPor: 'otro', registrado_por: 'otro', registrado_en: 'y' });
 
     const fila = supabase.insertar.mock.calls[0][0];
     expect(fila.registrado_por).toBe(USUARIO);
     expect(Object.keys(fila).sort()).toEqual(
-      ['fecha', 'forma_pago', 'importe', 'motivo', 'paciente_id', 'referencia', 'registrado_por'].sort(),
+      ['fecha', 'forma_pago', 'id', 'importe', 'motivo', 'paciente_id', 'referencia', 'registrado_por'].sort(),
     );
   });
 
@@ -231,5 +242,85 @@ describe('registrarCobro', () => {
     expect(registrado).toContain('42501');
     expect(registrado).not.toContain('77');
     expect(registrado).not.toContain(PACIENTE);
+  });
+
+  describe('R3.1: clave de envío', () => {
+    it.each([
+      ['sin id', undefined],
+      ['con un id que no es UUID', 'x'],
+      ['con un id numérico', 7],
+    ])('%s: mensaje genérico y no llega a insertar', async (_nombre, id) => {
+      const supabase = crearSupabaseFalso();
+      exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+      const estado = await registrarCobro({ ...BASE, id });
+
+      expect(estado).toEqual({ mensaje: t('cobros.noSePudoRegistrar') });
+      expect(supabase.insertar).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    });
+
+    it('un 23505 de cobros_pkey con el cobro propio ya registrado es éxito, sin duplicar', async () => {
+      const supabase = crearSupabaseFalso({
+        insert: {
+          data: null,
+          error: { code: '23505', message: 'duplicate key value violates unique constraint "cobros_pkey"' },
+        },
+        existente: { data: { id: ID }, error: null },
+      });
+      exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+      const estado = await registrarCobro(BASE);
+
+      expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
+      expect(revalidatePath).toHaveBeenCalledWith('/facturacion');
+      expect(supabase.selectCobros).toHaveBeenCalledWith('id');
+      expect(supabase.eqCobros).toHaveBeenCalledWith('id', ID);
+      expect(supabase.eqCobros).toHaveBeenCalledWith('registrado_por', USUARIO);
+    });
+
+    it('un 23505 de cobros_pkey sin fila propia visible es el mensaje genérico', async () => {
+      const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const supabase = crearSupabaseFalso({
+        insert: { data: null, error: { code: '23505', message: 'duplicate key … "cobros_pkey"' } },
+        existente: { data: null, error: null },
+      });
+      exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+      const estado = await registrarCobro(BASE);
+
+      expect(estado).toEqual({ mensaje: t('cobros.noSePudoRegistrar') });
+      expect(revalidatePath).not.toHaveBeenCalled();
+      expect(consola).toHaveBeenCalled();
+    });
+
+    it('un 23505 de cobros_pkey con error al releer es el mensaje genérico', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const supabase = crearSupabaseFalso({
+        insert: { data: null, error: { code: '23505', message: 'duplicate key … "cobros_pkey"' } },
+        existente: { data: null, error: { code: '42501', message: 'rls' } },
+      });
+      exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+      const estado = await registrarCobro(BASE);
+
+      expect(estado).toEqual({ mensaje: t('cobros.noSePudoRegistrar') });
+      expect(revalidatePath).not.toHaveBeenCalled();
+    });
+
+    it('un 23505 de otra restricción es el mensaje genérico y no relee', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const supabase = crearSupabaseFalso({
+        insert: { data: null, error: { code: '23505', message: 'duplicate key … "otra_ukey"' } },
+        existente: { data: { id: ID }, error: null },
+      });
+      exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+
+      const estado = await registrarCobro(BASE);
+
+      expect(estado).toEqual({ mensaje: t('cobros.noSePudoRegistrar') });
+      expect(supabase.selectCobros).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    });
   });
 });

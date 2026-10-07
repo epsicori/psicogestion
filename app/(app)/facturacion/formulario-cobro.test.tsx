@@ -98,18 +98,81 @@ describe('FormularioCobro', () => {
     expect(alRegistrar).not.toHaveBeenCalled();
   });
 
-  it('B-H1: si la acción rechaza, el formulario sigue montado, avisa de que se compruebe y refresca', async () => {
+  it('B-H1: si la acción rechaza, el formulario sigue montado, avisa, no navega y conserva lo escrito', async () => {
     registrarCobro.mockRejectedValue(new Error('red'));
     const alRegistrar = pintar();
     rellenar('60,00');
     await enviar();
 
     expect(await screen.findByText(t('cobros.resultadoDesconocido'))).toBeInTheDocument();
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
     expect(alRegistrar).not.toHaveBeenCalled();
-    // Sigue montado y con lo escrito: no se pierde el trabajo del usuario.
     expect((screen.getByLabelText(t('cobros.importe')) as HTMLInputElement).value).toBe('60,00');
     expect(screen.getByRole('button', { name: t('cobros.registrarCobro') })).toBeInTheDocument();
+  });
+
+  describe('R3.1: clave de envío', () => {
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    it('un segundo envío igual lleva el mismo id (UUID); con el importe cambiado, otro', async () => {
+      registrarCobro.mockRejectedValue(new Error('red'));
+      pintar();
+      rellenar('60,00');
+      await enviar();
+      await screen.findByText(t('cobros.resultadoDesconocido'));
+      await enviar();
+      await waitFor(() => expect(registrarCobro).toHaveBeenCalledTimes(2));
+      const [primero, segundo] = registrarCobro.mock.calls.map((c) => c[0] as { id: string });
+      expect(primero.id).toMatch(UUID);
+      expect(segundo.id).toBe(primero.id);
+
+      fireEvent.change(screen.getByLabelText(t('cobros.importe')), { target: { value: '61,00' } });
+      await enviar();
+      await waitFor(() => expect(registrarCobro).toHaveBeenCalledTimes(3));
+      expect((registrarCobro.mock.calls[2][0] as { id: string }).id).not.toBe(primero.id);
+    });
+
+    it('tras un éxito, el mismo envío lleva un id distinto', async () => {
+      registrarCobro.mockResolvedValue({ mensaje: t('cobros.cobroRegistrado') });
+      const alRegistrar = pintar();
+      rellenar('60,00');
+      await enviar();
+      await waitFor(() => expect(alRegistrar).toHaveBeenCalledTimes(1));
+      await enviar();
+      await waitFor(() => expect(registrarCobro).toHaveBeenCalledTimes(2));
+      const [a, b] = registrarCobro.mock.calls.map((c) => c[0] as { id: string });
+      expect(a.id).toMatch(UUID);
+      expect(b.id).not.toBe(a.id);
+    });
+  });
+
+  it('R3.3: un error de fecha del servidor lleva el foco a Fecha', async () => {
+    registrarCobro.mockResolvedValue({ errores: { fecha: [t('cobros.fechaFutura')] } });
+    pintar();
+    rellenar('60,00');
+    await enviar();
+    await screen.findByText(t('cobros.fechaFutura'));
+    await waitFor(() => expect(document.activeElement?.id).toBe('fecha'));
+  });
+
+  it('R3.3: un error de motivo del servidor lleva el foco a Motivo', async () => {
+    registrarCobro.mockResolvedValue({ errores: { motivo: [t('cobros.devolucionNecesitaMotivo')] } });
+    pintar();
+    rellenar('-5,00');
+    fireEvent.change(screen.getByLabelText(t('cobros.motivo')), { target: { value: 'Error de cobro' } });
+    await enviar();
+    await screen.findByText(t('cobros.devolucionNecesitaMotivo'));
+    await waitFor(() => expect(document.activeElement?.id).toBe('motivo'));
+  });
+
+  it('B-H8: la región de avisos existe desde el montaje, vacía y sin empty:hidden', () => {
+    const { container } = render(
+      <FormularioCobro pacientes={PACIENTES} hoy={HOY} alRegistrar={vi.fn()} />,
+    );
+    const region = container.querySelector('p[aria-live="polite"]');
+    expect(region).not.toBeNull();
+    expect(region).toBeEmptyDOMElement();
+    expect(region?.className).not.toContain('empty:hidden');
   });
 
   it('B-H2: mientras envía el botón usa aria-disabled (no disabled) y un segundo envío no repite la acción', async () => {

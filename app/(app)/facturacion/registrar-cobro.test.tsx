@@ -29,6 +29,13 @@ vi.mock('./formulario-cobro', () => ({
 const { RegistrarCobro } = await import('./registrar-cobro');
 
 describe('RegistrarCobro', () => {
+  it('B-H8: la región de estado existe, vacía, desde el montaje y sin empty:hidden', () => {
+    render(<RegistrarCobro pacientes={[]} hoy="2026-10-06" />);
+    const region = screen.getByRole('status');
+    expect(region).toBeEmptyDOMElement();
+    expect(region.className).not.toContain('empty:hidden');
+  });
+
   it('abre el diálogo; al registrar se cierra, el foco vuelve al botón y se anuncia', async () => {
     render(<RegistrarCobro pacientes={[]} hoy="2026-10-06" />);
     const boton = screen.getByRole('button', { name: t('cobros.registrarCobro') });

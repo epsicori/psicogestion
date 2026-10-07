@@ -1,7 +1,6 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -47,9 +46,10 @@ function esNegativo(importe: string | undefined): boolean {
  * emite ni se aprueba nada (ADR-078): se anota lo que se ha cobrado.
  */
 export function FormularioCobro({ pacientes, hoy, alRegistrar, alCambiarEnvio }: Props) {
-  const router = useRouter();
   const [enviando, iniciarTransicion] = useTransition();
   const enviandoRef = useRef(false);
+  // Clave de envío (R3.1): el mismo envío repetido lleva el mismo id y la base no admite dos filas con él.
+  const claveRef = useRef<{ huella: string; id: string } | null>(null);
   const [mensaje, setMensaje] = useState('');
   const [campoConFoco, setCampoConFoco] = useState<{ campo: CampoCobro } | null>(null);
   const esquema = useMemo(() => crearEsquemaCobro(hoy), [hoy]);
@@ -85,10 +85,15 @@ export function FormularioCobro({ pacientes, hoy, alRegistrar, alCambiarEnvio }:
     enviandoRef.current = true;
     setMensaje('');
     setCampoConFoco(null);
+    const huella = JSON.stringify(datos);
+    if (claveRef.current?.huella !== huella) claveRef.current = { huella, id: crypto.randomUUID() };
+    const id = claveRef.current.id;
     iniciarTransicion(async () => {
       try {
-        const estado = (await registrarCobro(datos)) ?? ESTADO_INICIAL;
+        const estado = (await registrarCobro({ ...datos, id })) ?? ESTADO_INICIAL;
         if (!estado.errores && estado.mensaje === t('cobros.cobroRegistrado')) {
+          // Un cobro igual registrado después es otro cobro.
+          claveRef.current = null;
           alRegistrar();
           return;
         }
@@ -97,10 +102,9 @@ export function FormularioCobro({ pacientes, hoy, alRegistrar, alCambiarEnvio }:
         if (primero) setCampoConFoco({ campo: primero });
         setMensaje(estado.errores ? '' : (estado.mensaje ?? t('cobros.noSePudoRegistrar')));
       } catch {
-        // Un fallo de red o un 500 no dice si el cobro se registró: se avisa de que se compruebe
-        // y se refresca la lista, sin desmontar el formulario ni perder lo escrito (B-H1).
+        // Un fallo de red o un 500 no dice si el cobro se registró. No se refresca (un refresh sin
+        // red recarga la página y pierde lo escrito): se avisa y se deja reintentar con la misma clave (B-H1).
         setMensaje(t('cobros.resultadoDesconocido'));
-        router.refresh();
       } finally {
         enviandoRef.current = false;
       }
@@ -194,7 +198,7 @@ export function FormularioCobro({ pacientes, hoy, alRegistrar, alCambiarEnvio }:
         </Button>
       </div>
 
-      <p aria-live="polite" className="text-destructive text-sm empty:hidden">
+      <p aria-live="polite" className="text-destructive text-sm">
         {mensaje}
       </p>
     </form>

@@ -38,7 +38,7 @@ export function RegistrarCobro({ pacientes, hoy }: Props) {
         {t('cobros.registrarCobro')}
       </Button>
       {/* Visible: «Cobro registrado» es la confirmación de una acción económica, no solo para lectores. */}
-      <p role="status" className="text-sm text-foreground empty:hidden">
+      <p role="status" className="text-sm text-foreground">
         {aviso}
       </p>
       <Dialogo

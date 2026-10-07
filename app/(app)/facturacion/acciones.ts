@@ -11,6 +11,8 @@ import { exigirSesion } from '@/lib/supabase/sesion';
 import { hoyEn } from '../agenda/bloques';
 import { crearEsquemaCobro, importeParaBd } from './esquemas';
 
+/** La clave de envío (R3.1): la genera el formulario y es la clave primaria del cobro. */
+const esquemaClave = z.object({ id: z.uuid() });
 const esquemaPaciente = z.object({ pacienteId: z.uuid({ error: t('cobros.eligePaciente') }) });
 
 /** Mensaje genérico: el mismo para «no existe», «no es tuyo» y «la base dijo que no». Sin oráculo. */
@@ -26,6 +28,11 @@ const fallo = (): EstadoFormulario => ({ ...ESTADO_INICIAL, mensaje: t('cobros.n
 export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> {
   // 1. La autorización, dentro de la acción.
   const { supabase, usuario } = await exigirSesion();
+
+  // 1b. La clave de envío: sin ella un reintento tras un corte de red podría duplicar el cobro.
+  const clave = esquemaClave.safeParse(datos);
+  if (!clave.success) return fallo();
+  const { id } = clave.data;
 
   // 2. El paciente primero: de él sale la zona con la que se valida la fecha.
   const paciente = esquemaPaciente.safeParse(datos);
@@ -67,9 +74,10 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
   }
   const { importe, fecha, formaPago, referencia, motivo } = resultado.data;
 
-  // 6. Sin `id` ni `registrado_en` (los pone la base) y `registrado_por` de la sesión.
+  // 6. El `id` es la clave de envío; `registrado_en` lo pone la base y `registrado_por` sale de la sesión.
   const centimos = aCentimos(importe);
   const { error } = await supabase.from('cobros').insert({
+    id,
     paciente_id: pacienteId,
     // El generador tipa `numeric` como `number`, pero PostgREST acepta el texto y así el importe
     // no pasa nunca por coma flotante (diseño §1.5, D8). El cast es solo para el tipo.
@@ -88,6 +96,20 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
     }
     if (error.code === '23514' && error.message?.includes('cobros_devolucion_motivo_ck')) {
       return { ...ESTADO_INICIAL, errores: { motivo: [t('cobros.devolucionNecesitaMotivo')] } };
+    }
+    // Reintento de un envío que ya entró: la clave primaria repetida. Solo se da por bueno si el
+    // cobro existe, es de esta sesión y la RLS lo deja ver; con otra cosa no hay oráculo (R3.1).
+    if (error.code === '23505' && error.message?.includes('cobros_pkey')) {
+      const { data: propio, error: errorRelectura } = await supabase
+        .from('cobros')
+        .select('id')
+        .eq('id', id)
+        .eq('registrado_por', usuario.id)
+        .maybeSingle();
+      if (propio && !errorRelectura) {
+        revalidatePath('/facturacion');
+        return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroRegistrado') };
+      }
     }
     // Solo el código: ni importe ni paciente en el registro.
     console.error('registrarCobro: la base rechazó el cobro', error.code);

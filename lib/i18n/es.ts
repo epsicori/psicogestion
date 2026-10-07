@@ -1380,7 +1380,9 @@ export const es = {
     noSePudoRegistrar: 'No se ha podido registrar el cobro',
     profesionalDesconocido: 'Profesional no encontrado',
     errorPacientes: 'No se ha podido cargar la lista de pacientes',
-    resultadoDesconocido: 'No sabemos si el cobro se ha registrado. Mira «Últimos cobros» antes de repetirlo.',
+    resultadoDesconocido:
+      'No sabemos si el cobro se ha registrado. Vuelve a pulsar «Registrar cobro» sin cambiar nada: si ya estaba registrado, no se duplica.',
+    errorProfesionales: 'No se ha podido cargar la lista de profesionales',
     pacienteFusionado: 'Este paciente se unió a otro registro. Registra el cobro en el que se conserva.',
     paginacion: {
       nombre: 'Páginas de pacientes',
