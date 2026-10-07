@@ -515,6 +515,28 @@ select pg_temp.assert(
   and not has_table_privilege('authenticated', 'public.pendiente_paciente', 'DELETE'),
   '30.E11 · la vista no da UPDATE, INSERT ni DELETE (catálogo)');
 
+-- E12 · la clave de envío (R3.1): `cobros.id` es la clave primaria y `authenticated` ya puede
+-- insertarlo, así que un reintento con el mismo id no duplica el cobro; con otro id, entra.
+call pg_temp.como(:PRO1);
+select pg_temp.assert_no_lanza(
+  format($f$insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por)
+            values (%L, %L, 7.00, %L, 'efectivo', %L)$f$,
+         'c0b30e12-0000-4000-8000-000000000001', :P30A, :'hoy_ca30', :PRO1),
+  '30.E12 · PRO1 inserta un cobro con id propio (la clave de envío)');
+select pg_temp.assert_lanza_codigo_msg(
+  format($f$insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por)
+            values (%L, %L, 7.00, %L, 'efectivo', %L)$f$,
+         'c0b30e12-0000-4000-8000-000000000001', :P30A, :'hoy_ca30', :PRO1),
+  '23505', 'cobros_pkey', '30.E12b · el mismo id otra vez: 23505 de la clave primaria');
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.cobros where id = %L', 'c0b30e12-0000-4000-8000-000000000001')) = 1,
+  '30.E12c · tras el reintento hay una sola fila con ese id');
+select pg_temp.assert_no_lanza(
+  format($f$insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por)
+            values (%L, %L, 7.00, %L, 'efectivo', %L)$f$,
+         'c0b30e12-0000-4000-8000-000000000002', :P30A, :'hoy_ca30', :PRO1),
+  '30.E12g · gemela: otro id, en la misma sesión y con el mismo importe, entra');
+
 call pg_temp.reset_sesion();
 
 -- =========================================================================================

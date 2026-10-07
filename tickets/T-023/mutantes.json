@@ -99,5 +99,39 @@
       "falla": "30.G4 · resumen_pendiente(PRO1) no iguala al agregado de la vista; G5 también lo cubre"
     }
   },
-  "fecha_ronda_2": "2026-10-07"
+  "fecha_ronda_2": "2026-10-07",
+  "fecha_ronda_3": "2026-10-07",
+  "sql_banco_ronda_3": {
+    "E12": {
+      "prueba": "30.E12 a E12g (scripts/rls/30-cobros.sql): el mismo id dos veces da 23505 cobros_pkey y una sola fila; otro id entra",
+      "nota": "La R3 no cambia la migración: no hay mutante SQL; la clave primaria ya es la guarda."
+    }
+  },
+  "ts_ronda_3": {
+    "M18": {
+      "mutacion": "`router.refresh()` de vuelta en el catch de formulario-cobro.tsx",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · B-H1: si la acción rechaza, el formulario sigue montado y no navega"
+    },
+    "M19": {
+      "mutacion": "el foco del error del servidor siempre en `pacienteId`",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · R3.3 foco en Fecha y en Motivo"
+    },
+    "M20": {
+      "mutacion": "un id nuevo en cada envío (sin comparar la huella)",
+      "rojo": true,
+      "falla": "formulario-cobro.test.tsx · R3.1 un segundo envío igual lleva el mismo id"
+    },
+    "M21": {
+      "mutacion": "cualquier 23505 como éxito, sin relectura",
+      "rojo": true,
+      "falla": "acciones.test.ts · 23505 sin fila propia, con error al releer y de otra restricción"
+    },
+    "M22": {
+      "mutacion": "el foco al rango sin la marca de módulo (clic y efecto sin `seguirFoco`)",
+      "rojo": true,
+      "falla": "paginacion-pendientes.test.tsx · el foco se mueve una sola vez por clic; montar sin clic previo no mueve el foco"
+    }
+  }
 }
