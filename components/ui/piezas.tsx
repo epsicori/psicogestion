@@ -77,7 +77,7 @@ export function FilaConAvatar({
 }
 
 /**
- * Un par `bg-<token> text-<token>` por tono, sin opacidad (`/10`): con opacidad el fondo real
+ * Un par de clases, fondo y texto, por tono, sin opacidad (`/10`): con opacidad el fondo real
  * depende de lo que haya debajo y el contraste no se puede medir. Cada par está en `PARES`
  * (`lib/contraste/tokens.ts`) y `piezas.test.tsx` lo exige.
  */

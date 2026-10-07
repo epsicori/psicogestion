@@ -161,7 +161,7 @@ export async function BloquePendientes({ searchParams }: Props) {
           );
         })}
       </ul>
-      {total > TAMANO_PAGINA && (
+      {TAMANO_PAGINA < total && (
         <nav
           aria-label={t('cobros.paginacion.nombre')}
           className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3"
