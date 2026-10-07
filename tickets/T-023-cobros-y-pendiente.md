@@ -5,7 +5,8 @@ modelo: opus
 fase: 2
 prioridad: alta
 depende_de: [T-021, T-007]
-estado: pendiente
+estado: hecho
+completado: 07-10-2026
 riesgo: alto
 territorio:
   - supabase/migrations/20261013120000_cobros_y_pendiente.sql

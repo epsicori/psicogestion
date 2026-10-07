@@ -3,13 +3,13 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 06-10-2026 · **T-043 hecho** (merge 31743f7, cinco rondas) · T-048 (8c4cb13) · T-049 (3f367b1).
+**Actualizado**: 07-10-2026 · **T-023 hecho** (merge 9600b7a, cinco rondas: 0 ALTA, 0 MEDIA, 3 BAJA) · T-043 (31743f7).
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-043, T-048 y T-049.
-- **En curso**: T-023 **ronda 5 implementada** el 07-10 sobre la ronda 4 («ya estaba registrado» como resultado propio que cierra y olvida la clave, `RegistrarCobro` montado siempre aunque falle la lista de pacientes, prueba de que un éxito solo olvida su clave); falta verificación y revisión de la ronda 5. Los mutantes M18 en adelante son de TypeScript y del spec (`tickets/T-023/mutantes.json`, `ts_ronda_3` a `ts_ronda_5`); el banco 30 llega hasta M17. T-050 revisado (ronda 1, 6acbd3f), sin integrar.
-- **Siguiente en `supabase/`**: T-023 (20261013120000) → T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
+- **Integrado en `main`**: T-000–T-043, T-048 y T-049 (T-023 incluido, migración 20261013120000).
+- **En curso**: T-050 revisado (ronda 1, 6acbd3f: 0 ALTA, 0 MEDIA, 3 BAJA de texto en este fichero), rama `worktree-agent-a49560e9e3018f241` (b4cc1f6) sin integrar ni verificar.
+- **Siguiente en `supabase/`**: T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
 
@@ -18,11 +18,13 @@
 
 ## Siguiente paso
 
-1. **T-023 ronda 5: verificador y dos revisores** sobre una copia `git archive <HEAD de la rama>`. Antes, `npx supabase db reset` y `npm run seed`: el paso 4 de `accesibilidad/facturacion.spec.ts` pasa con «Últimos cobros» vacío y con hasta 18 filas, y cada ejecución deja un cobro de 0,01 EUR a Lucía Márquez con referencia `T-023 spec <ts>` (no se borra). Después, la cola: T-026a → T-046 → T-023b → T-047.
-2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove).
+1. **T-050**: llevar sus dos commits sobre `main`, corregir H1-H3 de `tickets/T-050/revision.md` y verificar CA1 con `db reset` + `seed` + `test:rls`, sin arrancar entre 05:00–05:40 ni 02:10–03:30 de Madrid. Después, la cola: T-026a → T-046 → T-023b → T-047 (pintura de MiniMax en `minimax/respuestas/T-026a-pintura.md` y `T-047-pintura.md`; la prueba de T-026a debe esperar `bg-muted text-primary` para `success`).
+2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove). Los de T-023 ya están quitados.
 
 ## Hallazgos anotados
 
+- **T-023 ronda 5 (3 BAJA, `tickets/T-023/revision.md`)**: B-H1 `page.test.tsx:150` no comprueba la `key` de la isla (una `key` según `pacientes.ok` reabre el duplicado y todo sigue verde; arreglo `expect(r.key).toBeNull()`); B-H2 `registrar-cobro.tsx:42` con la lista caída el aviso solo deja recargar, y recargar vacía el `Map` de claves; B-H3 si la lista cae en el repintado tras un éxito, el foco queda en `body`.
+- **Spec `accesibilidad/facturacion.spec.ts`**: cada pasada deja un cobro de 0,01 EUR a Lucía Márquez (`T-023 spec <ts>`, no se borra); el paso 4 falla con más de 18 filas en «Últimos cobros». Limpiar con `db reset` + `seed` desde una rama con todas las migraciones.
 - **T-023, fuera de alcance (R2.7, ronda 3 y ronda 4)**:
   - una cita que pasa de `realizada` a `cancelada` rebaja el devengado (medido: 6000 → 0; quien ya había pagado pasa a `cobrado_de_mas` 6000). Queda rastro en `auditoria` (2 filas, `auditar_citas`) y el técnico no puede hacerlo (UPDATE 0). Falta una guarda de transición en `citas` (R2.8 de T-021). Ticket aparte, de agenda;
   - el técnico puede deducir el precio de una sesión restando el pendiente antes y después de una cita realizada. Riesgo aceptado: la vista no lleva sesiones, tipo ni fechas (familia de R2-H1 de T-021);
@@ -45,7 +47,7 @@
 - **`localizarContenedor` (`scripts/psql.mjs`)**: toma el primer `supabase_db_*` de `docker ps`; con `supabase_db_cinfa-e2e` levantado puede elegir el contenedor equivocado. Comprobar `Contenedor:` en la salida.
 - **`~/.claude/pipeline/territorio.mjs`**: no reconoce `territorio:` con comentario en la misma línea ni la lista YAML de T-043; muestra verde o «sin territorio». Usuario. Ejecutarlo dentro del worktree del ticket: desde `main` da falsos positivos.
 - **Gate de merge**: bloquea `git merge main` dentro de la rama de un ticket con sellos antiguos; el implementador lee el diseño con `git show main:<ruta>`.
-- **Build**: Turbopack falla con `node_modules` como junction en un worktree; usar `npx next build --webpack`.
+- **Build**: Turbopack falla con `node_modules` como junction en un worktree; usar `npx next build --webpack`. Si muere con `WasmHash._updateWithBuffer … reading 'length'`, borrar `.next/cache/webpack` y repetir.
 - **R4.9 propuesta de regla para `.claude/rules/supabase.md`**: lista de caracteres como enteros hexadecimales y `chr()`, nunca escapes barra invertida; y otra de T-021 R3.9: dos disparadores de cotas se ordenan por nombre y cada mensaje de error lleva un fragmento sin prefijo común (decisión usuario/arquitecto).
 - **T-048 R4-H1 (BAJA, patrón)**: `dialogo-reprogramar`, `calendario` y `zona-por-confirmar` sueltan sus promesas colgadas solo en la última línea de cada prueba; si un mutante la hace caer antes, la siguiente agota el tiempo. Arreglo: `afterEach` de módulo como en T-048.
 - **T-048 (BAJA)**: `rg "latido|animate-"` devuelve 3 coincidencias inocuas (aserciones negativas y un comentario).
