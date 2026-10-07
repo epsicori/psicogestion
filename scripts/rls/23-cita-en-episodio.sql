@@ -973,8 +973,9 @@ select pg_temp.assert((select modalidad_asistencia = 'online' from public.citas 
   '23.S5b la cita quedó online tras PRO1 y ADM');
 
 -- Una cita pasada no cambia de presencial a online ni al revés.
-select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:P39, :PRO1, -10, time '05:00', null), 'S · fijación de la cita pasada');
-select id as c_pasada from public.citas where paciente_id = :P39 and inicio = pg_temp.ts39(-10, time '05:00') \gset
+-- T-050 · D−9 y no D−10: el 16 deja C5P1 en now() − 10 días, que barre D−10 según la hora de arranque.
+select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:P39, :PRO1, -9, time '05:00', null), 'S · fijación de la cita pasada');
+select id as c_pasada from public.citas where paciente_id = :P39 and inicio = pg_temp.ts39(-9, time '05:00') \gset
 call pg_temp.como(:PRO1);
 select pg_temp.assert_lanza_codigo_msg(
   format('select public.agenda_cambiar_asistencia(%L, %L)', :'c_pasada', 'online'), '42501',
@@ -1164,9 +1165,11 @@ call pg_temp.reset_sesion();
 insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values (:T39, 'Teo', 'Cierre39', :PRO1, :CA);
 insert into public.episodios_asistenciales (id, paciente_id, profesional_id, centro_id, modalidad_relacional, abierto_en, cerrado_en)
 values (:ET39, :T39, :PRO1, :CA, 'individual', current_date - 60, null);
-select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:T39, :PRO1, -2, time '10:00', :ET39), 'Z · fijación de la cita pasada c_z en ET39 (abierto)');
-select id as c_z from public.citas where paciente_id = :T39 and inicio = pg_temp.ts39(-2, time '10:00') \gset
-update public.episodios_asistenciales set cerrado_en = current_date - 5 where id = :ET39;
+-- T-050 · D−5 a mediodía: ningún módulo anterior deja en D−5 una cita de PRO1 anclada a now() (el 15
+-- deja una en now() − 2 días, que barre D−2 según la hora de arranque). El cierre, un día antes.
+select pg_temp.assert_no_lanza(pg_temp.sql_ins39(:T39, :PRO1, -5, time '12:00', :ET39), 'Z · fijación de la cita pasada c_z en ET39 (abierto)');
+select id as c_z from public.citas where paciente_id = :T39 and inicio = pg_temp.ts39(-5, time '12:00') \gset
+update public.episodios_asistenciales set cerrado_en = current_date - 6 where id = :ET39;
 
 call pg_temp.como(:PRO1);
 select pg_temp.assert((select desbloqueado from pg_temp.desbloquear_historia('111111')), 'Z · PRO1 desbloquea la historia');
