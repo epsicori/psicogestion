@@ -52,6 +52,52 @@
       "mutacion": "`>=` en lugar de `>` en `when s.importe + b.importe > k.importe then 'pendiente'`",
       "rojo": true,
       "falla": "30.B3 · sale est=pendiente con pen=0 en lugar de cobrado"
+    },
+    "M11": {
+      "mutacion": "sin `p.fusionado_en is null` en la vista",
+      "rojo": true,
+      "falla": "30.F1 · sale la fila del absorbido (dev=22000)"
+    },
+    "M12a": {
+      "mutacion": "sin la rama `union all` de absorbidos en el lateral de citas",
+      "rojo": true,
+      "falla": "30.F2 · sale dev=21000"
+    },
+    "M12b": {
+      "mutacion": "sin la rama `union all` de absorbidos en el lateral de bonos",
+      "rojo": true,
+      "falla": "30.F2 · sale dev=13000"
+    },
+    "M12c": {
+      "mutacion": "sin la rama `union all` de absorbidos en el lateral de cobros",
+      "rojo": true,
+      "falla": "30.F2 · sale cob=2000"
+    },
+    "M13": {
+      "mutacion": "`t.paciente_id = p.id` en lugar de `c.paciente_id`",
+      "rojo": true,
+      "falla": "30.F2 · sale dev=27000"
+    },
+    "M14": {
+      "mutacion": "sin `(s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)`",
+      "rojo": true,
+      "falla": "30.A5a · sale dev=0 est=cobrado"
+    },
+    "M15": {
+      "mutacion": "`zona_horaria_centro(null)` en fn_validar_cobro",
+      "rojo": true,
+      "falla": "30.E10d (a las 10:42 de Madrid; con Madrid entre las 11:00 y las 24:00 caería en E10a) · debía lanzar 23514 y no lanzó nada"
+    },
+    "M16": {
+      "mutacion": "`public.perfiles` en lugar de `public.directorio_perfiles` en profesionales_del_pendiente",
+      "rojo": true,
+      "falla": "30.G1 · el administrador no ve los nombres"
+    },
+    "M17": {
+      "mutacion": "sin el `where` de p_profesional_id en resumen_pendiente",
+      "rojo": true,
+      "falla": "30.G4 · resumen_pendiente(PRO1) no iguala al agregado de la vista; G5 también lo cubre"
     }
-  }
+  },
+  "fecha_ronda_2": "2026-10-07"
 }

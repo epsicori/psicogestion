@@ -9,7 +9,9 @@
 -- repite cobros_lectura de T-021 (20261011120000_economico_esquema.sql, 10.4).
 --
 -- Contenido: (a) cobros.motivo y su check; (b) disparador validar_cobro (fecha futura);
--- (c) la vista pendiente_paciente. Ninguna política nueva, ningún UPDATE ni DELETE.
+-- (c) la vista pendiente_paciente, consolidada en el superviviente de una fusión; (d) dos
+-- funciones de lectura (resumen_pendiente, profesionales_del_pendiente). Ninguna política nueva,
+-- ningún UPDATE ni DELETE.
 -- =========================================================================
 
 
@@ -69,14 +71,16 @@ create trigger validar_cobro
 
 
 -- =========================================================================
--- (c) · pendiente_paciente: definer con barrera (la puerta lateral)
+-- (c) · pendiente_paciente: definer con barrera (la puerta lateral), consolidada en el superviviente
 -- =========================================================================
--- Sin CTE y con el where en el nivel exterior: es lo que security_barrier protege frente a los
--- predicados del llamante. La tarifa se resuelve contra tarifas_paciente (no contra la vista
--- invoker tarifas_paciente_vigencias): order by vigente_desde desc, orden desc limit 1 es
--- [vigente_desde, siguiente), incluido el intervalo vacío de una sustitución el mismo día.
--- El where es cobros_lectura con paciente_id -> p.id; el alias interior es p2 (y no p, como en la
--- política) solo para no tapar el p exterior.
+-- Una fila por paciente SUPERVIVIENTE (fusionado_en is null): suma lo suyo y lo de sus absorbidos
+-- (fusionado_en = p.id; un salto basta, ADR-031 y fn_normalizar_fusion_paciente). Sin CTE y con el
+-- where en el nivel exterior: es lo que security_barrier protege frente a los predicados del
+-- llamante. La tarifa se resuelve contra tarifas_paciente del paciente de la cita (c.paciente_id),
+-- no contra la vista invoker tarifas_paciente_vigencias: order by vigente_desde desc, orden desc
+-- limit 1 es [vigente_desde, siguiente), incluido el intervalo vacío de una sustitución el mismo
+-- día. El where es cobros_lectura con paciente_id -> p.id (el del superviviente); el alias interior
+-- es p2 (y no p, como en la política) solo para no tapar el p exterior.
 create view public.pendiente_paciente
   with (security_invoker = false, security_barrier = true)
 as
@@ -110,7 +114,9 @@ cross join lateral (
              tt.tarifa_base) as precio
       from public.citas c
       left join public.tipos_terapia tt on tt.id = c.tipo_terapia_id
-     where c.paciente_id = p.id
+     where c.paciente_id in (select p.id
+                             union all
+                             select m.id from public.pacientes m where m.fusionado_en = p.id)
        and c.estado = 'realizada'::public.estado_cita
        and c.bono_id is null
   ) x
@@ -118,14 +124,19 @@ cross join lateral (
 cross join lateral (
   select coalesce(sum(bo.importe), 0)::numeric as importe, count(*)::integer as bonos
     from public.bonos bo
-   where bo.paciente_id = p.id
+   where bo.paciente_id in (select p.id
+                            union all
+                            select m.id from public.pacientes m where m.fusionado_en = p.id)
 ) b
 cross join lateral (
   select coalesce(sum(co.importe), 0)::numeric as importe, count(*)::integer as cobros
     from public.cobros co
-   where co.paciente_id = p.id
+   where co.paciente_id in (select p.id
+                            union all
+                            select m.id from public.pacientes m where m.fusionado_en = p.id)
 ) k
-where (s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)
+where p.fusionado_en is null
+  and (s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)
   and (
     (select public.rol_actual()) = 'administrador'::public.rol_usuario
     or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
@@ -138,11 +149,60 @@ where (s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)
   );
 
 comment on view public.pendiente_paciente is
-  'Pendiente por paciente: lo devengado (citas realizadas sin bono a la tarifa vigente su día '
-  'local, más los bonos) menos lo cobrado. Definer con barrera: el técnico no lee citas ni '
-  'tarifas. El where repite cobros_lectura; si cambia una, cambia la otra (T-023).';
+  'Pendiente por paciente superviviente: lo devengado (citas realizadas sin bono a la tarifa '
+  'vigente su día local, más los bonos) menos lo cobrado. Suma lo suyo y lo de sus absorbidos '
+  '(fusionado_en = p.id, un salto, ADR-031); el absorbido no tiene fila. La tarifa de cada cita se '
+  'resuelve contra el paciente de la cita. profesional_id y el recorte por rol son los del '
+  'superviviente. Definer con barrera: el técnico no lee citas ni tarifas. El where repite '
+  'cobros_lectura; si cambia una, cambia la otra (T-023).';
 comment on column public.pendiente_paciente.citas_sin_tarifa is
   'Sesiones realizadas que cuentan 0 por no tener precio. Se enseña, no se entierra (P3).';
 
 revoke all on table public.pendiente_paciente from public, anon, authenticated, service_role;
 grant select on table public.pendiente_paciente to authenticated;
+
+
+-- =========================================================================
+-- (d) · Dos funciones de lectura (ronda 2: A-H1, A-H3)
+-- =========================================================================
+-- Invoker a propósito: leen la vista (definer, que recorta por rol_actual()) y directorio_perfiles
+-- (definer). No necesitan privilegio propio y no abren nada que la vista no abra.
+create function public.resumen_pendiente(p_profesional_id uuid default null)
+returns table (pendiente_total_centimos bigint,
+               pacientes_con_pendiente  integer,
+               pacientes_cobrado_de_mas integer,
+               filas                    integer)
+language sql stable security invoker set search_path = ''
+as $$
+  select coalesce(sum(v.pendiente_centimos), 0)::bigint,
+         (count(*) filter (where v.estado = 'pendiente'))::integer,
+         (count(*) filter (where v.estado = 'cobrado_de_mas'))::integer,
+         count(*)::integer
+    from public.pendiente_paciente v
+   where p_profesional_id is null or v.profesional_id = p_profesional_id;
+$$;
+
+revoke all on function public.resumen_pendiente(uuid) from public, anon;
+grant execute on function public.resumen_pendiente(uuid) to authenticated;
+
+comment on function public.resumen_pendiente(uuid) is
+  'Cifras exactas del pendiente que ve quien llama, que max_rows no recorta. p_profesional_id solo '
+  'estrecha: se parte de lo que la vista ya deja ver (T-023).';
+
+create function public.profesionales_del_pendiente()
+returns table (id uuid, nombre_completo text)
+language sql stable security invoker set search_path = ''
+as $$
+  select d.id, d.nombre_completo
+    from public.directorio_perfiles d
+   where d.id in (select v.profesional_id from public.pendiente_paciente v)
+   order by d.nombre_completo, d.id;
+$$;
+
+revoke all on function public.profesionales_del_pendiente() from public, anon;
+grant execute on function public.profesionales_del_pendiente() to authenticated;
+
+comment on function public.profesionales_del_pendiente() is
+  'Un profesional por cada fila visible del pendiente. El nombre sale de directorio_perfiles porque '
+  'perfiles solo enseña la fila propia; su tamaño lo acota el número de perfiles, no el de '
+  'pacientes (T-023).';

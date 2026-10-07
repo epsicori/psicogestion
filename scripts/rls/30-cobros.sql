@@ -18,7 +18,8 @@
 -- ANCLA (README, punto 10, regla 2): primer lunes de marzo de año + 11 (`lunes_30` = D). Las citas
 -- de PRO1 van de D-10 a D+5, una por día.
 --
--- Los mutantes M1-M10 están al final, anotados, y en tickets/T-023/mutantes.json.
+-- Ronda 2: A5 (filtro de partidas), A9b, E10 (zona del centro), F (fusión en un salto) y G (funciones de lectura).
+-- Los mutantes M1-M17 están al final, anotados, y en tickets/T-023/mutantes.json.
 
 \echo ''
 \echo '=== 30-cobros ==='
@@ -113,6 +114,49 @@ select pg_temp.assert(
     where t.paciente_id = :P30C and t.tipo_terapia_id = :T30) = array[80.00, 90.00]::numeric[],
   '30.fij · las dos tarifas de P30C del mismo día: orden 1 = 80,00 y orden 2 = 90,00');
 
+-- Ronda 2 · P30D (sin partidas), la fusión P30E <- P30F (la fusión se fija en el propio insert:
+-- fn_proteger_columnas_reservadas_paciente la prohíbe después, como en 01-fijacion.sql, PFUS) y dos
+-- centros con zona propia, uno por delante y otro por detrás de Madrid (E10).
+\set P30D  '\'30300000-0000-0000-0000-000000000007\''
+\set P30E  '\'30300000-0000-0000-0000-000000000008\''
+\set P30F  '\'30300000-0000-0000-0000-000000000009\''
+\set P30K  '\'30300000-0000-0000-0000-00000000000a\''
+\set P30P  '\'30300000-0000-0000-0000-00000000000b\''
+\set CK30  '\'30300000-0000-0000-0000-000000000060\''
+\set CP30  '\'30300000-0000-0000-0000-000000000061\''
+\set B30F  '\'30300000-0000-0000-0000-000000000034\''
+\set TAR30F '\'30300000-0000-0000-0000-000000000032\''
+\set COB30E '\'30300000-0000-0000-0000-000000000042\''
+\set COB30F '\'30300000-0000-0000-0000-000000000043\''
+
+insert into public.centros (id, nombre, zona_horaria) values
+  (:CK30, 'Centro T-023 Kiritimati', 'Pacific/Kiritimati'),
+  (:CP30, 'Centro T-023 Pago Pago',  'Pacific/Pago_Pago');
+insert into public.perfiles_centros (perfil_id, centro_id, principal) values
+  (:PRO1, :CK30, false),
+  (:PRO1, :CP30, false);
+
+insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values
+  (:P30D, 'Dora',  'T023 Sin partidas', :PRO1, :CA),
+  (:P30E, 'Elsa',  'T023 Superviviente', :PRO1, :CA),
+  (:P30K, 'Kira',  'T023 Kiritimati',  :PRO1, :CK30),
+  (:P30P, 'Pablo', 'T023 Pago Pago',   :PRO1, :CP30);
+insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id, fusionado_en, fusionado_el) values
+  (:P30F, 'Fede',  'T023 Absorbido', :PRO2, :CB, :P30E, now());
+
+-- P30E: una cita T30 realizada a la tarifa base (60,00) y un cobro de 20,00.
+-- P30F: tarifa propia 70,00 desde D-30, una cita T30 realizada en D-1, un bono de 150,00 y un cobro de 50,00.
+select pg_temp.cita30(21, :P30E, :PRO1, :CA, :T30, :'lunes_30'::date - 20, time '10:00');
+select pg_temp.cita30(22, :P30F, :PRO2, :CB, :T30, :'lunes_30'::date - 1,  time '10:00');
+insert into public.tarifas_paciente (id, paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por) values
+  (:TAR30F, :P30F, :T30, 70.00, 'exento_sanitario', :'lunes_30'::date - 30, :ADM);
+insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad, creado_por) values
+  (:B30F, :P30F, 3, 150.00, null, :ADM);
+update public.citas set estado = 'realizada' where id in (pg_temp.id_cita30(21), pg_temp.id_cita30(22));
+insert into public.cobros (id, paciente_id, importe, fecha, forma_pago, registrado_por) values
+  (:COB30E, :P30E, 20.00, :'hoy_ca30', 'efectivo', :ADM),
+  (:COB30F, :P30F, 50.00, :'hoy_ca30', 'efectivo', :ADM);
+
 
 -- =========================================================================================
 -- A · Catálogo
@@ -172,6 +216,27 @@ select pg_temp.assert(
   exists (select 1 from public.tablas_solo_adicion t where t.tabla = 'cobros')
   and (select count(*) from public.cobertura_solo_adicion()) = 0,
   '30.A9 · cobros sigue en tablas_solo_adicion y cobertura_solo_adicion() = 0');
+-- A9b · las dos funciones de lectura de la ronda 2 (el A10 de la ronda, las ocho columnas, es A2).
+select pg_temp.assert(
+  (select count(*) from pg_proc p
+    where p.oid in ('public.resumen_pendiente(uuid)'::regprocedure, 'public.profesionales_del_pendiente()'::regprocedure)
+      and not p.prosecdef
+      and p.proconfig @> array['search_path=""']
+      and not has_function_privilege('anon', p.oid, 'EXECUTE')
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')) = 2,
+  '30.A9b · resumen_pendiente y profesionales_del_pendiente existen, son invoker, con search_path vacío, sin EXECUTE para anon y con EXECUTE para authenticated');
+
+-- A5 · el filtro «tiene alguna partida»: P30D, sin citas, bonos ni cobros, no tiene fila.
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.fila30(:P30D) = 'sin fila',
+  '30.A5a · ADM: un paciente sin partidas no tiene fila en la vista: ' || pg_temp.fila30(:P30D));
+call pg_temp.reset_sesion();
+insert into public.bonos (paciente_id, sesiones_totales, importe, caducidad, creado_por) values
+  (:P30D, 1, 10.00, null, :ADM);
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.fila30(:P30D) = 'dev=1000 cob=0 pen=1000 exc=0 est=pendiente sin=0',
+  '30.A5b · gemela: con un bono de 10,00 sí tiene fila: ' || pg_temp.fila30(:P30D));
+call pg_temp.reset_sesion();
 
 
 -- =========================================================================================
@@ -453,7 +518,112 @@ select pg_temp.assert(
 call pg_temp.reset_sesion();
 
 -- =========================================================================================
--- Mutantes M1-M10 (medidos a mano en begin … rollback con 00 + 01 + 30; tickets/T-023/mutantes.json)
+-- E10 · La zona es la del centro del paciente (A-H4). Kiritimati (UTC+14) y Pago Pago (UTC-11)
+-- separan «hoy» del de Madrid a cualquier hora: con Madrid entre las 11:00 y las 24:00 (12:00-24:00
+-- en verano) el hoy de Kiritimati es mañana en Madrid; con Madrid entre las 0:00 y las 12:00
+-- (13:00 en verano) el hoy de Pago Pago es ayer en Madrid. Un «hoy» calculado con Madrid cae en
+-- E10a o en E10d.
+-- =========================================================================================
+select (now() at time zone 'Pacific/Kiritimati')::date::text as hoy_k \gset
+select (now() at time zone 'Pacific/Pago_Pago')::date::text  as hoy_p \gset
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(
+  format($f$insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por)
+            values (%L, 1.00, %L, 'efectivo', %L)$f$, :P30K, :'hoy_k', :ADM),
+  '30.E10a · ADM cobra a un paciente de Kiritimati con el hoy de Kiritimati');
+select pg_temp.assert_lanza_codigo_msg(
+  format($f$insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por)
+            values (%L, 1.00, %L::date + 1, 'efectivo', %L)$f$, :P30K, :'hoy_k', :ADM),
+  '23514', 'no puede ser posterior a hoy', '30.E10b · con el hoy de Kiritimati + 1 no entra');
+select pg_temp.assert_no_lanza(
+  format($f$insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por)
+            values (%L, 1.00, %L, 'efectivo', %L)$f$, :P30P, :'hoy_p', :ADM),
+  '30.E10c · ADM cobra a un paciente de Pago Pago con el hoy de Pago Pago');
+select pg_temp.assert_lanza_codigo_msg(
+  format($f$insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por)
+            values (%L, 1.00, %L::date + 1, 'efectivo', %L)$f$, :P30P, :'hoy_p', :ADM),
+  '23514', 'no puede ser posterior a hoy', '30.E10d · con el hoy de Pago Pago + 1 no entra');
+call pg_temp.reset_sesion();
+
+
+-- =========================================================================================
+-- F · Fusión en un salto (A-H2). P30F (absorbido, PRO2, CB) se fusionó en P30E (PRO1, CA).
+-- La cadena de F2: 60 de cita + 70 de la cita del absorbido a su tarifa + 150 de su bono = 280,
+-- cobrado 20 + 50 = 70.
+-- =========================================================================================
+call pg_temp.como(:ADM);
+select pg_temp.assert(pg_temp.fila30(:P30F) = 'sin fila',
+  '30.F1 · ADM: el absorbido no tiene fila: ' || pg_temp.fila30(:P30F));
+select pg_temp.assert(pg_temp.fila30(:P30E) = 'dev=28000 cob=7000 pen=21000 exc=0 est=pendiente sin=0'
+  and pg_temp.contar(format('select 1 from public.pendiente_paciente where paciente_id in (%L, %L)', :P30E, :P30F)) = 1,
+  '30.F2 · ADM: el superviviente suma lo suyo y lo del absorbido, y sale una sola vez: ' || pg_temp.fila30(:P30E));
+call pg_temp.como(:PRO1);
+select pg_temp.assert(pg_temp.fila30(:P30E) = 'dev=28000 cob=7000 pen=21000 exc=0 est=pendiente sin=0',
+  '30.F3 · PRO1, profesional del superviviente, ve lo del absorbido: ' || pg_temp.fila30(:P30E));
+call pg_temp.como(:PRO2);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.pendiente_paciente where paciente_id in (%L, %L)', :P30E, :P30F)) = 0
+  and pg_temp.fila30(:P30B) <> 'sin fila',
+  '30.F4 · PRO2, profesional del absorbido y no asignado al superviviente, no ve ninguna de las dos filas (gemela: sí ve P30B)');
+call pg_temp.como(:TEC1);
+select pg_temp.assert(pg_temp.fila30(:P30E) = 'dev=28000 cob=7000 pen=21000 exc=0 est=pendiente sin=0',
+  '30.F5 · TEC1, centro del superviviente, ve la cadena de F2: ' || pg_temp.fila30(:P30E));
+call pg_temp.como(:TEC2);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.pendiente_paciente where paciente_id in (%L, %L)', :P30E, :P30F)) = 0
+  and pg_temp.fila30(:P30B) <> 'sin fila',
+  '30.F6 · TEC2, centro del absorbido, no ve ninguna de las dos filas (gemela: sí ve P30B)');
+call pg_temp.reset_sesion();
+
+
+-- =========================================================================================
+-- G · Las dos funciones de lectura, llamadas como las llama la página (A-H1, A-H3)
+-- =========================================================================================
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  (select array_agg(f.id || '|' || f.nombre_completo order by f.id)
+     from public.profesionales_del_pendiente() f where f.id in (:PRO1, :PRO2))
+  = array[:PRO1 || '|Profesional Uno', :PRO2 || '|Profesional Dos'],
+  '30.G1 · ADM: profesionales_del_pendiente ofrece a PRO1 y PRO2 con su nombre (sin RLS fingida)');
+select pg_temp.assert(
+  (select coalesce(array_agg(f.id order by f.id), '{}') from public.profesionales_del_pendiente() f)
+  = (select coalesce(array_agg(distinct v.profesional_id order by v.profesional_id), '{}') from public.pendiente_paciente v),
+  '30.G2 · ADM: los ids de profesionales_del_pendiente son los profesionales de la vista');
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  (select count(*) from public.profesionales_del_pendiente() f) >= 1
+  and not exists (select 1 from public.profesionales_del_pendiente() f where f.id <> :PRO1),
+  '30.G3 · PRO1: solo se ofrece a sí mismo');
+call pg_temp.como(:SINPERFIL30);
+select pg_temp.assert((select count(*) from public.profesionales_del_pendiente() f) = 0,
+  '30.G3b · un uuid sin perfil (rol nulo): cero profesionales');
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  (select (r.pendiente_total_centimos, r.pacientes_con_pendiente, r.pacientes_cobrado_de_mas, r.filas)
+     from public.resumen_pendiente(:PRO1) r)
+  = (select (coalesce(sum(v.pendiente_centimos), 0)::bigint,
+             (count(*) filter (where v.estado = 'pendiente'))::integer,
+             (count(*) filter (where v.estado = 'cobrado_de_mas'))::integer,
+             count(*)::integer)
+       from public.pendiente_paciente v where v.profesional_id = :PRO1)
+  and (select (r.pendiente_total_centimos, r.pacientes_con_pendiente, r.pacientes_cobrado_de_mas, r.filas)
+         from public.resumen_pendiente(null) r)
+  = (select (coalesce(sum(v.pendiente_centimos), 0)::bigint,
+             (count(*) filter (where v.estado = 'pendiente'))::integer,
+             (count(*) filter (where v.estado = 'cobrado_de_mas'))::integer,
+             count(*)::integer)
+       from public.pendiente_paciente v),
+  '30.G4 · ADM: resumen_pendiente(PRO1) y resumen_pendiente(null) igualan al agregado de la vista');
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  (select (r.pendiente_total_centimos, r.pacientes_con_pendiente, r.pacientes_cobrado_de_mas, r.filas)
+     from public.resumen_pendiente(:PRO2) r) = (0::bigint, 0, 0, 0)
+  and (select r.filas from public.resumen_pendiente(:PRO1) r) >= 3,
+  '30.G5 · PRO1: resumen_pendiente(PRO2) = ceros (solo estrecha); gemela: el suyo tiene al menos 3 filas');
+call pg_temp.reset_sesion();
+
+-- =========================================================================================
+-- Mutantes M1-M17 (medidos a mano en begin … rollback con 00 + 01 + 30; tickets/T-023/mutantes.json)
 -- =========================================================================================
 -- M1  sin la condición de centro del técnico en el where              cae en D2
 -- M2  sin `and public.es_profesional_asignado(p.id)`                  cae en D5 (y D4, D9)
@@ -465,5 +635,15 @@ call pg_temp.reset_sesion();
 -- M8  sin `cobros_devolucion_motivo_ck`                               cae en A6; sin A, en E7
 -- M9  sin el disparador `validar_cobro`                               cae en A8; sin A, en E9
 -- M10 `>` por `>=` en `when … > k.importe`                            cae en B3
+-- Ronda 2 (medidos el 07-10-2026 con 00 + 01 + 30):
+-- M11  sin `p.fusionado_en is null`                                   cae en F1 (sale la fila de P30F)
+-- M12a sin la rama `union all` de absorbidos en citas                 cae en F2 (dev=21000)
+-- M12b ídem en bonos                                                  cae en F2 (dev=13000)
+-- M12c ídem en cobros                                                 cae en F2 (cob=2000)
+-- M13  `t.paciente_id = p.id` en lugar de `c.paciente_id`             cae en F2 (dev=27000)
+-- M14  sin `(s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)`          cae en A5a (sale dev=0 est=cobrado)
+-- M15  `zona_horaria_centro(null)` en fn_validar_cobro                cae en E10a o E10d, según la hora (a las 10:42 de Madrid, E10d)
+-- M16  `public.perfiles` en profesionales_del_pendiente               cae en G1
+-- M17  sin el `where` de p_profesional_id en resumen_pendiente        cae en G4 (G5 también lo cubre)
 
 \echo '30-cobros: OK'

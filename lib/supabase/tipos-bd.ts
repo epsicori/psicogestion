@@ -4038,6 +4038,13 @@ export type Database = {
         }
         Returns: undefined
       }
+      profesionales_del_pendiente: {
+        Args: never
+        Returns: {
+          id: string
+          nombre_completo: string
+        }[]
+      }
       prolongar_desbloqueo: { Args: never; Returns: string }
       recuento_notas_pendientes: {
         Args: never
@@ -4096,6 +4103,15 @@ export type Database = {
         Returns: {
           clasificacion: string
           instante: string
+        }[]
+      }
+      resumen_pendiente: {
+        Args: { p_profesional_id?: string }
+        Returns: {
+          filas: number
+          pacientes_cobrado_de_mas: number
+          pacientes_con_pendiente: number
+          pendiente_total_centimos: number
         }[]
       }
       retencion_efectiva: {
