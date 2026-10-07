@@ -1,5 +1,4 @@
 import { Clock3, WalletCards } from 'lucide-react';
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { iniciales } from '@/components/armazon/modulos';
@@ -24,6 +23,7 @@ import {
   cargarResumen,
   type PendienteConNombre,
 } from './datos';
+import { PaginacionPendientes } from './paginacion-pendientes';
 import { pildoraDe } from './presentacion';
 
 /**
@@ -109,9 +109,6 @@ function hrefDePagina(profesional: string | null, pagina: number): string {
   return consulta ? `/facturacion?${consulta}` : '/facturacion';
 }
 
-const ENLACE_DE_PAGINA =
-  'inline-flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
-
 export async function BloquePendientes({ searchParams }: Props) {
   const { profesionalFiltrado, pagina: paginaPedida } = await cargarContexto(searchParams);
   const resumen = await cargarResumen(profesionalFiltrado);
@@ -162,30 +159,16 @@ export async function BloquePendientes({ searchParams }: Props) {
         })}
       </ul>
       {TAMANO_PAGINA < total && (
-        <nav
-          aria-label={t('cobros.paginacion.nombre')}
-          className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3"
-        >
-          <p className="text-xs text-muted-foreground">
-            {tCon('cobros.paginacion.rango', {
-              desde: (pagina - 1) * TAMANO_PAGINA + 1,
-              hasta: Math.min(pagina * TAMANO_PAGINA, total),
-              total,
-            })}
-          </p>
-          <div className="flex gap-2">
-            {pagina > 1 && (
-              <Link href={hrefDePagina(profesionalFiltrado, pagina - 1)} className={ENLACE_DE_PAGINA}>
-                {t('cobros.paginacion.anteriores')}
-              </Link>
-            )}
-            {pagina < ultima && (
-              <Link href={hrefDePagina(profesionalFiltrado, pagina + 1)} className={ENLACE_DE_PAGINA}>
-                {t('cobros.paginacion.siguientes')}
-              </Link>
-            )}
-          </div>
-        </nav>
+        <PaginacionPendientes
+          pagina={pagina}
+          rango={tCon('cobros.paginacion.rango', {
+            desde: (pagina - 1) * TAMANO_PAGINA + 1,
+            hasta: Math.min(pagina * TAMANO_PAGINA, total),
+            total,
+          })}
+          anterior={pagina > 1 ? hrefDePagina(profesionalFiltrado, pagina - 1) : null}
+          siguiente={pagina < ultima ? hrefDePagina(profesionalFiltrado, pagina + 1) : null}
+        />
       )}
     </>
   );

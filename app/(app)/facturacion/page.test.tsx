@@ -69,7 +69,7 @@ const contextoDe = (rol: string) => ({
 
 beforeEach(() => {
   cargarContexto.mockReset();
-  cargarOpcionesProfesional.mockReset().mockResolvedValue([{ id: 'x', nombre: 'Laura Gil' }]);
+  cargarOpcionesProfesional.mockReset().mockResolvedValue({ ok: true, opciones: [{ id: 'x', nombre: 'Laura Gil' }] });
   cargarPacientesParaCobro.mockReset().mockResolvedValue({ ok: true, pacientes: [{ id: 'p', nombre: 'Ana', apellidos: 'Ruiz' }] });
 });
 
@@ -108,6 +108,18 @@ describe('PaginaFacturacion', () => {
     expect(screen.getByRole('combobox', { name: /profesional/i })).toHaveTextContent('Laura Gil');
     expect(cargarOpcionesProfesional).toHaveBeenCalledTimes(1);
     expect(cargarOpcionesProfesional).toHaveBeenCalledWith('1b2c3d4e-5f60-4a71-8b82-9c0d1e2f3a40');
+  });
+
+  it('A-H3: si no se pueden cargar los profesionales, el aviso y ningún selector', async () => {
+    cargarContexto.mockResolvedValue(contextoDe('administrador'));
+    cargarOpcionesProfesional.mockResolvedValue({ ok: false });
+    const nodo = porNombre('SelectorSiAdministrador');
+    const tipo = nodo.tipo as (p: Record<string, unknown>) => Promise<ReactNode>;
+
+    render(<>{await tipo(nodo.props)}</>);
+
+    expect(screen.getByText(t('cobros.errorProfesionales'))).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /profesional/i })).toBeNull();
   });
 
   it('si no se pueden cargar los pacientes, el aviso de error y ningún botón de registrar', async () => {

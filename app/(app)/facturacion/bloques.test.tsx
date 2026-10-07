@@ -239,12 +239,13 @@ describe('BloquePendientes', () => {
 
     it('una página que pasa de la última cae en la última (?pagina=999999)', async () => {
       cargarResumen.mockResolvedValue(resumenDe(120));
-      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: null, pagina: 99999, zona: 'Europe/Madrid', hoy: '2026-10-06' });
+      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: null, pagina: 999999, zona: 'Europe/Madrid', hoy: '2026-10-06' });
       cargarPendientes.mockResolvedValue({ ok: true, filas: [PARCIAL] });
 
       await pintar(BloquePendientes);
 
       expect(cargarPendientes).toHaveBeenCalledWith(null, 3);
+      expect(screen.getByText(tCon('cobros.paginacion.rango', { desde: 101, hasta: 120, total: 120 }))).toBeInTheDocument();
     });
 
     it('con 50 filas o menos no hay navegación', async () => {

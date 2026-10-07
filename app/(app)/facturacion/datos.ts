@@ -64,7 +64,7 @@ export type PacienteParaCobro = { id: string; nombre: string; apellidos: string 
 const cargarSesion = cache(exigirSesion);
 
 const esquemaFiltro = z.uuid();
-const esquemaPagina = z.coerce.number().int().min(1).max(100000);
+const esquemaPagina = z.coerce.number().int().min(1);
 
 /**
  * Rol, filtro, página, zona y reloj. El rol lo decide la base (`estado_de_cuenta()`), con la
@@ -259,27 +259,36 @@ export const cargarCobrosRecientes = cache(async (filtro: string | null): Promis
  * directorio (`directorio_perfiles`) porque `perfiles` solo enseña al administrador su propia fila.
  *
  * El profesional elegido va siempre entre las opciones, aunque la vista ya no lo traiga (una URL
- * escrita a mano): se lee del directorio, o se rotula «Profesional no encontrado». Un fallo deja
- * la lista vacía y el selector solo ofrece «todos».
+ * escrita a mano): se lee del directorio, o se rotula «Profesional no encontrado» (solo sin fila y sin error). Un
+ * fallo de la función o del directorio es `{ ok: false }`: la pantalla avisa en lugar de ofrecer
+ * un selector con «todos» que parecería completo.
  */
-export const cargarOpcionesProfesional = cache(async (elegido: string | null): Promise<OpcionProfesional[]> => {
+export type ResultadoOpcionesProfesional = { ok: true; opciones: OpcionProfesional[] } | { ok: false };
+
+export const cargarOpcionesProfesional = cache(async (elegido: string | null): Promise<ResultadoOpcionesProfesional> => {
   const { supabase } = await cargarSesion();
 
   const { data, error } = await supabase.rpc('profesionales_del_pendiente');
   if (error || !data) {
     console.error('cargarOpcionesProfesional: fallo al leer los profesionales', error?.code);
-    return [];
+    return { ok: false };
   }
   const opciones = data.map((p) => ({ id: p.id, nombre: p.nombre_completo }));
-  if (elegido === null || opciones.some((o) => o.id === elegido)) return opciones;
+  if (elegido === null || opciones.some((o) => o.id === elegido)) return { ok: true, opciones };
 
   const { data: perfil, error: errorPerfil } = await supabase
     .from('directorio_perfiles')
     .select('id, nombre_completo')
     .eq('id', elegido)
     .maybeSingle();
-  if (errorPerfil) console.error('cargarOpcionesProfesional: fallo al leer el directorio', errorPerfil.code);
-  return [{ id: elegido, nombre: perfil?.nombre_completo ?? t('cobros.profesionalDesconocido') }, ...opciones];
+  if (errorPerfil) {
+    console.error('cargarOpcionesProfesional: fallo al leer el directorio', errorPerfil.code);
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    opciones: [{ id: elegido, nombre: perfil?.nombre_completo ?? t('cobros.profesionalDesconocido') }, ...opciones],
+  };
 });
 
 export type ResultadoPacientesParaCobro = { ok: true; pacientes: PacienteParaCobro[] } | { ok: false };

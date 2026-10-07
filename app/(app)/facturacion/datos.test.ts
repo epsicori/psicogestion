@@ -149,7 +149,7 @@ describe('cargarContexto · la página sale de ?pagina y la leen todos los roles
     expect((await cargarContexto(Promise.resolve({ pagina: '3' }))).pagina).toBe(3);
   });
 
-  it.each([['abc'], ['0'], ['-2'], ['1.5'], ['100001'], [['2', '3']], [undefined], ['']])(
+  it.each([['abc'], ['0'], ['-2'], ['1.5'], ['1e21'], ['9007199254740993'], [['2', '3']], [undefined], ['']])(
     '?pagina=%j no valida → 1',
     async (valor) => {
       comoRol('administrador');
@@ -157,9 +157,9 @@ describe('cargarContexto · la página sale de ?pagina y la leen todos los roles
     },
   );
 
-  it('el máximo, 100000, sí vale', async () => {
+  it('B-H4: sin tope, 999999 vale (la página se acota después, contra el total)', async () => {
     comoRol('administrador');
-    expect((await cargarContexto(Promise.resolve({ pagina: '100000' }))).pagina).toBe(100000);
+    expect((await cargarContexto(Promise.resolve({ pagina: '999999' }))).pagina).toBe(999999);
   });
 });
 
@@ -316,7 +316,9 @@ describe('cargarOpcionesProfesional · por la función, nunca por perfiles', () 
   it('llama a rpc(profesionales_del_pendiente), nunca a from(perfiles), y devuelve id y nombre', async () => {
     const { supabase, llamadasRpc } = comoRol('administrador', {}, undefined, dosProfesionales);
 
-    const opciones = await cargarOpcionesProfesional(null);
+    const resultado = await cargarOpcionesProfesional(null);
+    expect(resultado.ok).toBe(true);
+    const opciones = resultado.ok ? resultado.opciones : [];
 
     expect(llamadasRpc.map(([n]) => n)).toContain('profesionales_del_pendiente');
     expect(supabase.from).not.toHaveBeenCalledWith('perfiles');
@@ -329,9 +331,9 @@ describe('cargarOpcionesProfesional · por la función, nunca por perfiles', () 
 
   it('con elegido entre las opciones no lee el directorio', async () => {
     const { supabase } = comoRol('administrador', {}, undefined, dosProfesionales);
-    const opciones = await cargarOpcionesProfesional(PRO2);
+    const resultado = await cargarOpcionesProfesional(PRO2);
     expect(supabase.from).not.toHaveBeenCalled();
-    expect(opciones).toHaveLength(2);
+    expect(resultado.ok && resultado.opciones).toHaveLength(2);
   });
 
   it('con elegido fuera de la lista lee directorio_perfiles y lo antepone con su nombre', async () => {
@@ -343,7 +345,8 @@ describe('cargarOpcionesProfesional · por la función, nunca por perfiles', () 
       dosProfesionales,
     );
 
-    const opciones = await cargarOpcionesProfesional(OTRO);
+    const resultado = await cargarOpcionesProfesional(OTRO);
+    const opciones = resultado.ok ? resultado.opciones : [];
 
     expect(supabase.from).toHaveBeenCalledWith('directorio_perfiles');
     expect(supabase.from).not.toHaveBeenCalledWith('perfiles');
@@ -355,14 +358,26 @@ describe('cargarOpcionesProfesional · por la función, nunca por perfiles', () 
   it('con elegido que no existe, lo antepone como «Profesional no encontrado»', async () => {
     const OTRO = '3d4e5f60-7182-4c93-8da4-1e2f3a4b5c60';
     comoRol('administrador', { directorio_perfiles: { data: null, error: null } }, undefined, dosProfesionales);
-    const opciones = await cargarOpcionesProfesional(OTRO);
-    expect(opciones[0]).toEqual({ id: OTRO, nombre: 'Profesional no encontrado' });
+    const resultado = await cargarOpcionesProfesional(OTRO);
+    expect(resultado.ok && resultado.opciones[0]).toEqual({ id: OTRO, nombre: 'Profesional no encontrado' });
   });
 
-  it('un fallo de la función deja la lista vacía', async () => {
+  it('A-H3: un fallo de la función es { ok: false }, no una lista vacía', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     comoRol('administrador', {}, undefined, { profesionales_del_pendiente: { data: null, error: { code: '42501' } } });
-    expect(await cargarOpcionesProfesional(PRO)).toEqual([]);
+    expect(await cargarOpcionesProfesional(PRO)).toEqual({ ok: false });
+  });
+
+  it('A-H3: un error del directorio es { ok: false }, no «Profesional no encontrado»', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const OTRO = '3d4e5f60-7182-4c93-8da4-1e2f3a4b5c60';
+    comoRol(
+      'administrador',
+      { directorio_perfiles: { data: null, error: { code: '57014' } } },
+      undefined,
+      dosProfesionales,
+    );
+    expect(await cargarOpcionesProfesional(OTRO)).toEqual({ ok: false });
   });
 });
 

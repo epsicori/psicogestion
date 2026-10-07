@@ -32,8 +32,9 @@ async function AccionRegistrar({ searchParams }: { searchParams: ParametrosDeBus
 async function SelectorSiAdministrador({ searchParams }: { searchParams: ParametrosDeBusqueda }) {
   const { rol, profesionalFiltrado } = await cargarContexto(searchParams);
   if (rol !== 'administrador') return null;
-  const opciones = await cargarOpcionesProfesional(profesionalFiltrado);
-  return <SelectorProfesional opciones={opciones} elegido={profesionalFiltrado} />;
+  const resultado = await cargarOpcionesProfesional(profesionalFiltrado);
+  if (!resultado.ok) return <AvisoDeError mensaje={t('cobros.errorProfesionales')} />;
+  return <SelectorProfesional opciones={resultado.opciones} elegido={profesionalFiltrado} />;
 }
 
 /**
