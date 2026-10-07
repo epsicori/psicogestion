@@ -622,3 +622,704 @@ fábrica (`.claude/rules/pipeline.md`).
 - **Las métricas «Facturado» y «Previsión trimestral», el libro de gastos y la tarjeta fiscal**: no
   tienen datos detrás (ADR-053; los gastos no tienen ticket), y un control sin dato no se dibuja.
 - **Bonos (alta, saldo y avisos)**: T-027. Aquí el bono solo devenga su importe.
+
+---
+
+## Anexo · Ronda 2 (07-10-2026)
+
+Este anexo se añade al diseño y no corrige nada de lo anterior, salvo donde dice «sustituye». En lo
+que toca, manda sobre §1-§7. Fuentes: `tickets/T-023/revision.json` (1 ALTA, 8 MEDIA, 6 BAJA),
+`revision-a.ronda1.json` (juicio de los tres puntos), `evidencia.json` y el bloque «Ronda 2
+(07-10-2026), decisiones del propietario» del contrato. El fallo de CA15 en el banco 23 es de T-050
+y este anexo no lo toca.
+
+### R2.0 · Hechos verificados (ronda 2), con ruta
+
+- **R2-V1** `directorio_perfiles` (`supabase/migrations/20260822160000_rls_funciones_y_politicas.sql:1390`):
+  - Es una vista definer con barrera, columnas `id, nombre_completo, rol, estado, centro_id`,
+    filtro `(select public.rol_actual()) is not null` y `grant select … to authenticated`.
+  - Ninguna migración posterior la redefine.
+  - Precedente de uso: `agenda_citas_rango` (invoker) la une con `left join`
+    (`20261007120000_cita_en_episodio_y_asistencia.sql:1560`).
+  - `perfiles` solo tiene `perfiles_lectura_propia`: el administrador lee su propia fila y ninguna
+    más. Es la causa de A-H1.
+- **R2-V2** En la rama:
+  - `datos.ts:186-207` lee la vista entera sin límite y después `from('perfiles').in('id', ids)`.
+  - `datos.ts:115-121` lee los nombres con `.in('id', ids)` sin trocear.
+  - `datos.ts:213-222` lee los pacientes sin rango y devuelve `[]` si falla.
+  - `supabase/config.toml:18` fija `max_rows = 1000`.
+- **R2-V3** Fusión (ADR-031):
+  - `fn_normalizar_fusion_paciente` (`20260822094547_…:1152`) hace que `fusionado_en` apunte
+    siempre a un superviviente final, así que un salto basta.
+  - Existe el índice parcial `pacientes_fusionado_en_idx (fusionado_en) where fusionado_en is not null`.
+  - `fn_proteger_columnas_reservadas_paciente` (`20260822160000_…:663`) impide cambiar
+    `fusionado_en` a quien no es administrador, también a `postgres` sin JWT. Por eso en el banco
+    la fusión se fija en el propio insert (precedente: `scripts/rls/01-fijacion.sql:101-104`, PFUS).
+- **R2-V4** Quién está asignado a un fusionado:
+  - `es_profesional_asignado(p)` es verdadero para el profesional del registro y también para el
+    del superviviente.
+  - `cobros_lectura` y `cobros_alta` (`20261011120000_economico_esquema.sql:1157` y `:1170`) no
+    miran `fusionado_en`.
+  - `fn_validar_cobro` (migración de la rama, `:49-50`) tampoco lo mira.
+- **R2-V5** Zona de los centros:
+  - `centros.zona_horaria` admite nulo (`20260822094547_…:151`).
+  - Un centro con zona propia se fija como en `scripts/rls/16-series.sql:1522`
+    (`insert into public.centros (id, nombre, zona_horaria)`).
+  - `CA` y `CB` nacen sin zona y heredan `Europe/Madrid`.
+- **R2-V6** Contrastes medidos con `lib/contraste` sobre los tokens de `app/globals.css`. Para los
+  colores con alfa se compone en sRGB sobre `card`.
+  - `Pildora success` actual (`text-primary-foreground` sobre `primary/10` en `card`): **1,13:1**.
+  - `primary` sobre `muted`: **7,95:1**.
+  - `primary` sobre `card`: 9,34:1.
+  - `muted-foreground` sobre `card`: **5,33:1**.
+  - `muted-foreground/70` sobre `card`: **2,92:1** (B-H8).
+  - El prototipo pinta su `StatusPill` success como `bg-muted text-primary`
+    (`app/prototipo/page.tsx:85`).
+- **R2-V7** Pantallas que usan `tono="success"` (en `main` y en la rama). Las mira el verificador:
+  - `app/(app)/pacientes/[id]/historia/notas/estado-de-nota.tsx`: Firmada, Modificada.
+  - `app/(app)/pacientes/[id]/historial-clinico.tsx:29,48,100`: nivel bajo, diagnóstico principal.
+  - `app/(app)/pacientes/[id]/page.tsx:92`: indicador de riesgo.
+  - `app/(app)/pacientes/[id]/panel-datos.tsx:61`: Vigente.
+  - `app/(app)/pacientes/[id]/panel-documentos.tsx:57,89`: Firmado.
+  - `app/(app)/pacientes/[id]/panel-resumen.tsx:46-47,59,75,201`: Confirmada, Realizada, Al día.
+  - `app/(app)/facturacion/presentacion.ts`: Cobrado (solo en la rama).
+- **R2-V8** `Dialogo` (`components/ui/dialogo.tsx`, fuera de territorio) llama a `alCerrar` con
+  Escape, con clic fuera y con la X. Quien lo monta decide si cierra. Precedentes:
+  - Foco tras errores del servidor y mensaje de «resultado desconocido»:
+    `app/(app)/cuenta/formulario-regenerar.tsx` (`campoConFoco` + `setFocus` en `useEffect`,
+    `try/catch/finally`).
+  - `aria-disabled`: `agenda/dialogo-reprogramar.tsx:312` y `agenda/documentacion/buscador.tsx:135`.
+- **R2-V9** No hay `axe` en las dependencias (lo dice `accesibilidad/avisos.spec.ts`).
+  - «El verificador de T-009» son las comprobaciones estructurales de `accesibilidad/acceso.spec.ts`:
+    sin desbordamiento a 360 px, controles dentro de la ventana, nombre accesible y foco de vuelta.
+  - El contraste lo cierran `lib/contraste/tokens.test.ts` y `components/ui/piezas.test.tsx`, no el spec.
+- **R2-V10** La siembra (`supabase/seed.sql`):
+  - Crea `admin@`, `ana@` y `bruno@psicogestion.test` de la misma forma en `auth.users`, con
+    contraseña `psico1234`.
+  - No siembra tarifas ni cobros, así que la vista sale vacía hasta que alguien registra un cobro.
+  - Lucía Márquez (`d0080001-…-0001`) es paciente de Ana.
+  - No hay ningún paciente fusionado.
+
+### R2.1 · La migración `20261013120000_cobros_y_pendiente.sql` (se edita en su sitio)
+
+La migración no está en `main`, así que no salta la regla 6 del linter (ediciones hacia atrás
+contra `main`).
+- Se conservan **sin cambios** las secciones (a), `motivo` y su check, y (b), `fn_validar_cobro` y
+  su disparador.
+- Se **sustituye** la sección (c).
+- Se **añade** una sección (d).
+
+**(c) La vista `pendiente_paciente`, con la fusión en un salto.** No cambian:
+- las ocho columnas y sus tipos;
+- el nombre;
+- las opciones (`security_invoker = false, security_barrier = true`);
+- el `revoke`/`grant`.
+
+Cambian tres cosas:
+- cada lateral suma los movimientos del superviviente **y** los de sus absorbidos;
+- la fila del absorbido desaparece;
+- el `profesional_id` y la RLS son los del superviviente.
+
+```sql
+create view public.pendiente_paciente
+  with (security_invoker = false, security_barrier = true)
+  as
+select p.id as paciente_id,
+       p.profesional_id,
+       ((s.importe + b.importe) * 100)::bigint                         as devengado_centimos,
+       (k.importe * 100)::bigint                                       as cobrado_centimos,
+       (greatest(s.importe + b.importe - k.importe, 0) * 100)::bigint  as pendiente_centimos,
+       (greatest(k.importe - s.importe - b.importe, 0) * 100)::bigint  as excedente_centimos,
+       (case when s.importe + b.importe > k.importe then 'pendiente'
+             when s.importe + b.importe = k.importe then 'cobrado'
+             else 'cobrado_de_mas' end)::text                          as estado,
+       s.sin_tarifa                                                    as citas_sin_tarifa
+from public.pacientes p
+cross join lateral (
+  select coalesce(sum(x.precio), 0)::numeric                      as importe,
+         count(*)::integer                                        as sesiones,
+         (count(*) filter (where x.precio is null))::integer      as sin_tarifa
+    from (
+      select coalesce(
+               (select t.importe
+                  from public.tarifas_paciente t
+                 where t.paciente_id = c.paciente_id      -- la tarifa del registro de la cita: nada se repunta
+                   and t.tipo_terapia_id = c.tipo_terapia_id
+                   and t.vigente_desde <= (c.inicio at time zone c.zona_horaria)::date
+                 order by t.vigente_desde desc, t.orden desc
+                 limit 1),
+               tt.tarifa_base) as precio
+        from public.citas c
+        left join public.tipos_terapia tt on tt.id = c.tipo_terapia_id
+       where c.paciente_id in (select p.id
+                               union all
+                               select m.id from public.pacientes m where m.fusionado_en = p.id)
+         and c.estado = 'realizada'::public.estado_cita
+         and c.bono_id is null
+    ) x
+) s
+cross join lateral (
+  select coalesce(sum(bo.importe), 0)::numeric as importe, count(*)::integer as bonos
+    from public.bonos bo
+   where bo.paciente_id in (select p.id
+                            union all
+                            select m.id from public.pacientes m where m.fusionado_en = p.id)
+) b
+cross join lateral (
+  select coalesce(sum(co.importe), 0)::numeric as importe, count(*)::integer as cobros
+    from public.cobros co
+   where co.paciente_id in (select p.id
+                            union all
+                            select m.id from public.pacientes m where m.fusionado_en = p.id)
+) k
+where p.fusionado_en is null
+  and (s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)
+  and ( (select public.rol_actual()) = 'administrador'::public.rol_usuario
+     or ((select public.rol_actual()) = 'profesional_sanitario'::public.rol_usuario
+         and public.es_profesional_asignado(p.id))
+     or ((select public.rol_actual()) = 'tecnico_administrativo'::public.rol_usuario
+         and p.id in (select p2.id from public.pacientes p2
+                       where p2.centro_id in (select public.centros_actuales()))) );
+```
+
+- El comentario de la vista se reescribe. Debe decir:
+  - hay una fila por paciente **superviviente**;
+  - suma lo suyo y lo de sus absorbidos (`fusionado_en = p.id`, un salto, ADR-031);
+  - el absorbido no tiene fila;
+  - la tarifa de cada cita se resuelve contra el paciente de la cita;
+  - `profesional_id` y el recorte por rol son los del superviviente.
+- Cada superviviente sale una sola vez: `p.id` es la clave de `pacientes` y los tres laterales
+  agregan.
+
+**(d) Dos funciones de lectura nuevas.** Las dos llevan:
+- `language sql stable security invoker set search_path = ''`;
+- alias en toda tabla del cuerpo (regla de `.claude/rules/supabase.md`);
+- `revoke all on function … from public, anon;`;
+- `grant execute on function … to authenticated;`.
+
+Son invoker a propósito: leen la vista (definer, que recorta por `rol_actual()`) y
+`directorio_perfiles` (definer). No necesitan privilegio propio y así no abren nada que la vista no
+abra.
+
+```sql
+create function public.resumen_pendiente(p_profesional_id uuid default null)
+returns table (pendiente_total_centimos bigint,
+               pacientes_con_pendiente  integer,
+               pacientes_cobrado_de_mas integer,
+               filas                    integer)
+language sql stable security invoker set search_path = ''
+as $$
+  select coalesce(sum(v.pendiente_centimos), 0)::bigint,
+         (count(*) filter (where v.estado = 'pendiente'))::integer,
+         (count(*) filter (where v.estado = 'cobrado_de_mas'))::integer,
+         count(*)::integer
+    from public.pendiente_paciente v
+   where p_profesional_id is null or v.profesional_id = p_profesional_id;
+$$;
+
+create function public.profesionales_del_pendiente()
+returns table (id uuid, nombre_completo text)
+language sql stable security invoker set search_path = ''
+as $$
+  select d.id, d.nombre_completo
+    from public.directorio_perfiles d
+   where d.id in (select v.profesional_id from public.pendiente_paciente v)
+   order by d.nombre_completo, d.id;
+$$;
+```
+
+- `p_profesional_id` **solo estrecha**: se parte de lo que la vista ya deja ver a quien llama. Un
+  profesional que pase el uuid de otro obtiene ceros.
+- `profesionales_del_pendiente()` devuelve una fila por cada profesional con alguna fila visible.
+  Su tamaño lo acota el número de perfiles de la organización, no el de pacientes.
+- Cada función lleva un comentario con su porqué:
+  - `resumen_pendiente`: da cifras exactas, que `max_rows` no recorta.
+  - `profesionales_del_pendiente`: el nombre sale de `directorio_perfiles` porque `perfiles` solo
+    enseña la fila propia.
+
+Después del cambio se ejecutan `npx supabase db reset && npm run tipos` (regenera
+`lib/supabase/tipos-bd.ts`; nunca se edita a mano) y `npm run lint:migraciones`.
+
+### R2.2 · El banco `scripts/rls/30-cobros.sql`: fijación y casos nuevos
+
+Los ids nuevos usan el prefijo `30300000-`, el mismo de ahora. **Ningún valor esperado de los casos
+existentes cambia.**
+- Si alguna aserción existente acota «los pacientes del banco» por prefijo de id, pasa a una lista
+  explícita (`P30A, P30B, P30C`), para que los pacientes nuevos no la muevan.
+- D9 sigue restringido a esos tres pacientes. Con la consolidación, la vista y `cobros` ya no tienen
+  por qué dar el mismo conjunto cuando un superviviente tiene absorbidos de otro centro, y eso es lo
+  esperado.
+
+**Fijación nueva (como `postgres`, antes del bloque A):**
+
+| Id | Qué | Datos |
+|---|---|---|
+| `P30D` | paciente de PRO1 en CA **sin partidas** | nada |
+| `P30E` | superviviente, PRO1, CA | una cita `T30` `realizada` (tarifa base 60,00, sin tarifa propia); un cobro de 20,00 |
+| `P30F` | absorbido, PRO2, CB, `fusionado_en = P30E`, `fusionado_el = now()` **en el insert** | tarifa propia de `T30` = 70,00 desde D-30; una cita `T30` `realizada` el día D-1; un bono de 150,00; un cobro de 50,00 |
+| `CK`, `CP` | centros con `zona_horaria` `'Pacific/Kiritimati'` (UTC+14) y `'Pacific/Pago_Pago'` (UTC−11) | patrón de `16-series.sql:1522` |
+| `P30K`, `P30P` | pacientes de PRO1 en `CK` y `CP` | nada |
+
+- Las citas y su paso a `realizada` se hacen igual que el banco ya lo hace para `P30C`: con
+  `pg_temp.cita30` y la misma transición. Los cobros siguen el patrón del bloque B.
+- Si algún disparador de pacientes exige que PRO1 pertenezca a `CK`/`CP`, se añade la fila de
+  `perfiles_centros` como en `scripts/rls/19-nota-en-episodio.sql:57`, y nada más.
+- Valores esperados de `P30E` consolidado:
+
+  | Columna | Valor | Cálculo |
+  |---|---|---|
+  | devengado | **28000** | 60 + 70 + 150 |
+  | cobrado | **7000** | 20 + 50 |
+  | pendiente | **21000** | |
+  | excedente | 0 | |
+  | estado | `pendiente` | |
+  | `citas_sin_tarifa` | 0 | |
+
+**A · catálogo (casos añadidos)**
+- A9, para las dos funciones (`resumen_pendiente(uuid)` y `profesionales_del_pendiente()`):
+  - existen;
+  - `prosecdef = false`;
+  - `proconfig` contiene `search_path=""`;
+  - `has_function_privilege('anon', …, 'EXECUTE')` es falso;
+  - `has_function_privilege('authenticated', …, 'EXECUTE')` es verdadero.
+- A10: la vista conserva sus **ocho** columnas exactas. Si la aserción del bloque A ya lo
+  comprueba, basta con que siga en verde.
+
+**A5 · el filtro «tiene alguna partida» (A-H5)**
+- A5a: como ADM, `pg_temp.fila30(P30D)` = `'sin fila'`.
+- A5b (gemela):
+  1. Como `postgres`, se inserta un bono de 10,00 a `P30D`.
+  2. Como ADM, la fila es `dev=1000 cob=0 pen=1000 exc=0 est=pendiente sin=0`.
+
+**F · fusión (A-H2)**
+
+En la tabla, «la cadena de F2» es `dev=28000 cob=7000 pen=21000 exc=0 est=pendiente sin=0`.
+
+| Caso | Sesión | Comprobación | Gemela, en la misma sesión |
+|---|---|---|---|
+| F1 | ADM | `fila30(P30F)` = `'sin fila'`: el absorbido no tiene fila | — |
+| F2 | ADM | `fila30(P30E)` = la cadena de F2, y `count(*)` de la vista con `paciente_id in (P30E, P30F)` = 1: sale una sola vez | — |
+| F3 | PRO1, profesional del superviviente | `fila30(P30E)` = la cadena de F2: ve lo del absorbido | — |
+| F4 | PRO2, profesional del absorbido y no asignado al superviviente | cero filas con `paciente_id in (P30E, P30F)` | `fila30(P30B)` ≠ `'sin fila'` |
+| F5 | TEC1, centro del superviviente | `fila30(P30E)` = la cadena de F2 | — |
+| F6 | TEC2, centro del absorbido | cero filas con `paciente_id in (P30E, P30F)` | `fila30(P30B)` ≠ `'sin fila'` |
+
+**G · las dos funciones (A-H1, A-H3), llamadas como las llama la página**
+- G1: como ADM, `select id, nombre_completo from public.profesionales_del_pendiente() where id in
+  (PRO1, PRO2) order by id` = `(PRO1, 'Profesional Uno'), (PRO2, 'Profesional Dos')`, con los
+  nombres de `01-fijacion.sql`. Es la prueba sin RLS fingida que pide A-H1.
+- G2: como ADM, el conjunto de ids de `profesionales_del_pendiente()` es igual a `select distinct
+  profesional_id from pendiente_paciente` en la misma sesión. Compara dos caminos sin fijar
+  cantidad.
+- G3:
+  - como PRO1, todas las filas de `profesionales_del_pendiente()` tienen `id = PRO1` y hay al
+    menos una;
+  - como un perfil con `rol_actual()` nulo (el `SINPERFIL30` del banco, o PROBAJA en baja), cero
+    filas.
+- G4, como ADM:
+  - `resumen_pendiente(PRO1)` es igual al agregado de la vista con `profesional_id = PRO1` en la
+    misma sesión: suma de `pendiente_centimos`, cuenta de `pendiente`, cuenta de `cobrado_de_mas`
+    y `count(*)`;
+  - `resumen_pendiente(null)` es igual al mismo agregado sin filtro.
+- G5, como PRO1:
+  - `resumen_pendiente(PRO2)` = `(0, 0, 0, 0)`;
+  - **gemela**: `resumen_pendiente(PRO1)` tiene `filas >= 3` (P30A, P30C, P30E).
+
+**E10 · la zona del centro del paciente en `validar_cobro` (A-H4)**
+- `hoy_k := (now() at time zone 'Pacific/Kiritimati')::date` y `hoy_p := (now() at time zone
+  'Pacific/Pago_Pago')::date`, las dos con `\gset`.
+- Los cuatro casos, como ADM:
+
+  | Caso | Cobro | Esperado |
+  |---|---|---|
+  | E10a | a `P30K` con fecha `hoy_k` | **entra** |
+  | E10b | a `P30K` con fecha `hoy_k + 1` | `assert_lanza_codigo_msg` 23514 `'no puede ser posterior a hoy'` |
+  | E10c | a `P30P` con fecha `hoy_p` | **entra** |
+  | E10d | a `P30P` con fecha `hoy_p + 1` | 23514 |
+
+- Por qué discrimina a cualquier hora (el mutante calcula «hoy» con la hora de Madrid):
+  - Kiritimati va por delante de Madrid 13 h en invierno y 12 h en verano. Con Madrid entre las
+    11:00 y las 24:00 en invierno (12:00-24:00 en verano), `hoy_k` es mañana en Madrid y el
+    mutante rechaza E10a.
+  - Pago Pago va por detrás 12 h en invierno y 13 h en verano. Con Madrid entre las 0:00 y las
+    12:00 en invierno (13:00 en verano), `hoy_p` es ayer en Madrid y el mutante acepta E10d.
+  - Las dos ventanas juntas cubren el día entero.
+
+**Mutantes nuevos.** Van al final del fichero, anotados como M1-M10, y en
+`tickets/T-023/mutantes.json`. Se miden a mano en `begin … rollback`.
+
+| Mutante | Dónde | Cae en |
+|---|---|---|
+| M11 sin `p.fusionado_en is null` | vista | F1 (sale la fila de P30F) |
+| M12a sin la rama `union all` de los absorbidos en el lateral de citas | vista | F2 (`dev=21000`) |
+| M12b ídem en bonos | vista | F2 (`dev=13000`) |
+| M12c ídem en cobros | vista | F2 (`cob=2000`) |
+| M13 `t.paciente_id = p.id` en lugar de `c.paciente_id` | vista | F2 (`dev=27000`) |
+| M14 sin `(s.sesiones > 0 or b.bonos > 0 or k.cobros > 0)` | vista | A5a |
+| M15 `zona_horaria_centro(null)` en `fn_validar_cobro` | función | E10a o E10d, según la hora |
+| M16 `public.perfiles` en lugar de `public.directorio_perfiles` | `profesionales_del_pendiente` | G1 |
+| M17 sin el `where` de `p_profesional_id` | `resumen_pendiente` | G4 y G5 |
+
+En `scripts/rls/README.md`, la fila del módulo 30 añade: «fusión en un salto (F), funciones de
+lectura (G), zona del centro (E10), filtro de partidas (A5)».
+
+### R2.3 · La pantalla `app/(app)/facturacion/**`
+
+**`datos.ts`**
+- `ContextoFacturacion` gana `pagina: number`.
+  - Sale de `?pagina` con `z.coerce.number().int().min(1).max(100000)`; si no valida, es 1.
+  - Se lee **para todos los roles**: solo pagina lo que la vista ya deja ver.
+- `export const TAMANO_PAGINA = 50`.
+- Nuevo `cargarResumen = cache(async (filtro: string | null))`:
+  - llama a `rpc('resumen_pendiente', filtro ? { p_profesional_id: filtro } : {})`;
+  - devuelve `{ ok: true; resumen: { pendienteTotal: Centimos; conPendiente: number; deMas:
+    number; filas: number } } | { ok: false }`;
+  - espera una sola fila. Si no hay exactamente una, o algún número no es `Number.isSafeInteger`
+    y ≥ 0, devuelve `{ ok: false }` y hace `console.error` del código.
+- `cargarPendientes(filtro, pagina)` (sustituye):
+  - Ordena con `.order('excedente_centimos', { ascending: false }).order('pendiente_centimos', {
+    ascending: false }).order('paciente_id')` y pagina con `.range((pagina - 1) * TAMANO_PAGINA,
+    pagina * TAMANO_PAGINA - 1)`.
+  - Ese orden es el mismo de `ordenar`: primero lo cobrado de más por excedente, luego lo pendiente
+    de mayor a menor y al final lo cobrado. El desempate por id lo hace estable entre páginas.
+  - Lee los nombres con `.in('id', ids)` sobre **50 ids como mucho**.
+  - Sigue contrastando cada fila con `pendiente()` (`aFilaDePendiente`).
+  - Ya no llama a `ordenar`.
+- `cargarOpcionesProfesional(elegido: string | null)` (sustituye):
+  - Llama a `rpc('profesionales_del_pendiente')` y devuelve `{ id, nombre: nombre_completo }`.
+  - Si `elegido` no está entre las opciones, lee
+    `from('directorio_perfiles').select('id, nombre_completo').eq('id', elegido).maybeSingle()` y
+    lo añade al principio con su nombre. Si no existe, lo añade con
+    `t('cobros.profesionalDesconocido')`.
+  - **En `app/(app)/facturacion/` no queda ningún `from('perfiles')`.**
+  - Un fallo deja `[]`, como ahora.
+- `cargarPacientesParaCobro()` (sustituye):
+  - Devuelve `{ ok: true; pacientes } | { ok: false }`.
+  - Lee por páginas de 1000, con `.order('apellidos').order('nombre').order('id').range(desde,
+    desde + 999)` y `.is('fusionado_en', null)`, hasta que una página trae menos de 1000 filas.
+  - Deduplica por `id`.
+  - Un error en cualquier página es `{ ok: false }` (B-H9, B-H10).
+
+**`presentacion.ts`**: se eliminan `ordenar` y `totalPendiente`, y sus casos en
+`presentacion.test.ts`. El orden y el total viven ya en la base: una sola fuente. `pildoraDe` no
+cambia.
+
+**`bloques.tsx`**
+- `BloqueMetrica` lee `cargarResumen(profesionalFiltrado)`:
+  - valor: `formatearImporte(pendienteTotal)`;
+  - matiz: `conPendiente`;
+  - segunda línea: `deMas`;
+  - con `{ ok: false }`, `AvisoDeError` (`cobros.errorPendientes`).
+- `BloquePendientes`:
+  - Lee `cargarResumen`, que está memoizado: la métrica y la lista hacen un solo viaje.
+  - Calcula `ultima = max(1, ceil(filas / TAMANO_PAGINA))` y `pagina = min(contexto.pagina,
+    ultima)`, y pide `cargarPendientes(filtro, pagina)`.
+  - Si `filas > TAMANO_PAGINA`, pinta bajo la lista un
+    `<nav aria-label={t('cobros.paginacion.nombre')}>` con:
+    - el texto `tCon('cobros.paginacion.rango', { desde, hasta, total })`;
+    - un `Link` de `next/link` «Anteriores» si `pagina > 1`;
+    - un `Link` «Siguientes» si `pagina < ultima`.
+  - El enlace que no aplica **no se pinta**. Los dos llevan `min-h-11` y un `href` que conserva
+    `?profesional` cuando lo hay.
+- B-H7: `FilaConAvatar` va **sin** `subtitulo`. Debajo, en el mismo `<li>`, va
+  `<p className="ml-12 text-xs break-words text-muted-foreground">{subtituloDe(fila)}</p>`, como ya
+  hace la línea de «sesiones sin precio». El `truncate` de `piezas.tsx` no cambia: el importe ya no
+  pasa por él.
+
+**`page.tsx`**
+- `AccionRegistrar`: si `cargarPacientesParaCobro()` devuelve `{ ok: false }`, pinta
+  `<AvisoDeError mensaje={t('cobros.errorPacientes')} />` **en lugar del botón**, sin diálogo vacío.
+- `SelectorSiAdministrador` llama a `cargarOpcionesProfesional(profesionalFiltrado)`.
+
+**`selector-profesional.tsx`** (B-H3)
+- No cambia su interfaz. Como `elegido` llega siempre entre las opciones, el desplegable refleja el
+  filtro activo.
+- `alElegir` construye la URL **sin** `pagina`: al cambiar de profesional se vuelve a la página 1.
+
+**`formulario-cobro.tsx`**
+- B-H1: el cuerpo de la transición va en `try { … } catch { … } finally { … }`.
+  - El `catch` llama a `setMensaje(t('cobros.resultadoDesconocido'))` y a `router.refresh()`, para
+    que «Últimos cobros» enseñe la verdad.
+  - El formulario sigue montado y conserva sus valores.
+- B-H2: el botón pasa a `aria-disabled={enviando}`, nunca a `disabled`.
+  - El envío se guarda con un `useRef<boolean>`: se pone a `true` antes de `iniciarTransicion` y a
+    `false` en el `finally`. Un segundo envío mientras dura el primero no llama a la acción.
+  - Tras errores de campo del servidor, el foco va al **primer** campo con error, en este orden:
+    `pacienteId, importe, fecha, formaPago, referencia, motivo`. Se usa el patrón de
+    `formulario-regenerar.tsx` (estado `campoConFoco` + `setFocus` en `useEffect`).
+- B-H11: prop nueva `alCambiarEnvio: (enviando: boolean) => void`, que se llama en un `useEffect`
+  sobre `enviando`.
+
+**`registrar-cobro.tsx`** (B-H11)
+- Guarda `enviando` (lo recibe por `alCambiarEnvio`) y su `alCerrar` es `() => { if (!enviando)
+  setAbierto(false); }`. Mientras se envía, ni Escape, ni el clic fuera, ni la X cierran el
+  diálogo, y el resultado no se pierde.
+- El aviso de éxito deja de ser `sr-only`: pasa a `<p role="status" className="text-sm
+  text-foreground empty:hidden">`, visible junto al botón hasta la siguiente apertura.
+
+**`acciones.ts`** (A-H2)
+- El paso 3 lee `select('centro_id, fusionado_en')`.
+- Si `fusionado_en` no es nulo, devuelve `{ ...ESTADO_INICIAL, errores: { pacienteId:
+  [t('cobros.pacienteFusionado')] } }` y **no inserta**.
+- El cobro va siempre al `paciente_id` elegido, y el formulario solo ofrece supervivientes. Lo que se
+  cobra al superviviente salda también lo que debía el absorbido, porque la vista suma los dos.
+- Solo responde así a quien ya ve el paciente bajo RLS, así que no abre un oráculo nuevo.
+
+**`lib/i18n/es.ts`**, claves nuevas del bloque `cobros` (texto fijado):
+- `profesionalDesconocido: 'Profesional no encontrado'`
+- `errorPacientes: 'No se ha podido cargar la lista de pacientes'`
+- `resultadoDesconocido: 'No sabemos si el cobro se ha registrado. Mira «Últimos cobros» antes de repetirlo.'`
+- `pacienteFusionado: 'Este paciente se unió a otro registro. Registra el cobro en el que se conserva.'`
+- `paginacion: { nombre: 'Páginas de pacientes', rango: 'Del {desde} al {hasta} de {total}', anteriores: 'Anteriores', siguientes: 'Siguientes' }`
+
+**Pruebas unitarias (jsdom)**
+- `datos.test.ts`: G1-G5 viven en el banco; aquí solo se prueba el cableado.
+  - (a) `cargarOpcionesProfesional` llama a `rpc('profesionales_del_pendiente')` y **nunca** a
+    `from('perfiles')`. Con `elegido` fuera de la lista, lee `directorio_perfiles` y lo antepone.
+  - (b) Para la página 2, `cargarPendientes` llama a `.range(50, 99)` y a los tres `.order` en ese
+    orden; `.in` recibe 50 ids o menos.
+  - (c) `cargarPacientesParaCobro` pide una segunda página cuando la primera trae 1000 filas, para
+    con la página corta y devuelve `{ ok: false }` si falla la segunda.
+  - (d) `cargarResumen` con dos filas o con un número no entero devuelve `{ ok: false }`.
+- `bloques.test.tsx`:
+  - con `filas = 120` en la página 2, «Del 51 al 100 de 120» y los dos enlaces;
+  - en la página 1, sin «Anteriores»;
+  - la métrica pinta el `pendienteTotal` del resumen aunque la página traiga menos filas;
+  - el importe de la fila está en un nodo sin la clase `truncate`.
+- `formulario-cobro.test.tsx`:
+  - si la acción rechaza, aparece el mensaje `resultadoDesconocido` y se llama a `router.refresh`;
+  - con doble envío, la acción se llama una sola vez, el botón tiene `aria-disabled="true"` y no
+    `disabled`, y el foco sigue en él;
+  - con errores del servidor en `fecha`, `document.activeElement.id === 'fecha'`;
+  - con errores en `pacienteId` y en `fecha`, el foco va a `pacienteId`.
+- `registrar-cobro.test.tsx`: con la acción pendiente, Escape no cierra el diálogo. Al resolverse,
+  se cierra y «Cobro registrado» es visible (sin `sr-only`).
+- `selector-profesional.test.tsx`: con `elegido` presente como opción, el desplegable lo muestra.
+  Elegir otro navega a `/facturacion?profesional=<uuid>` sin `pagina`.
+- `acciones.test.ts`: con un paciente con `fusionado_en`, error en `pacienteId` y sin llamar a
+  `insert`.
+- `page.test.tsx`: con `cargarPacientesParaCobro` en `{ ok: false }`, se pinta `AvisoDeError` y no
+  hay ningún botón «Registrar cobro».
+
+### R2.4 · `Pildora` y `Metrica` (B-H4, B-H8)
+
+- `components/ui/piezas.tsx`:
+  - Los estilos de `Pildora` pasan a una constante exportada, `ESTILOS_PILDORA`.
+  - `success` pasa a **`'bg-muted text-primary'`** (7,95:1, el del prototipo). `info` y `warning`
+    no cambian.
+  - La matiz de `Metrica` pasa de `text-muted-foreground/70` a **`text-muted-foreground`** (5,33:1
+    sobre `card`). Solo la usa Facturación.
+- `lib/contraste/tokens.ts`: se añade a `PARES`
+  `{ texto: 'primary', fondo: 'muted', donde: 'Píldora success de Pildora (components/ui/piezas.tsx): Cobrado, Firmada, Al día, Vigente…' }`.
+- `components/ui/piezas.test.tsx`:
+  - Un caso nuevo recorre `ESTILOS_PILDORA`. Para cada tono extrae `bg-<fondo>` y `text-<texto>`,
+    exige que **no** lleven `/` (alfa, que `lib/contraste` no sabe medir) y exige que
+    `{ texto, fondo }` esté en `PARES`.
+  - Con el `success` antiguo cae por el `/`; con un par que no esté en la lista, por la pertenencia.
+  - Otro caso: la matiz de `Metrica` no lleva `/`.
+- El cambio llega a la vez a todas las pantallas de R2-V7, por decisión del propietario. El
+  verificador las mira en CA12.
+
+### R2.5 · Hallazgo por hallazgo
+
+| Hallazgo | Qué se hace | Cómo se comprueba |
+|---|---|---|
+| **A-H1** ALTA | Opciones desde `profesionales_del_pendiente()` (nombre de `directorio_perfiles`) | Banco G1-G3 y M16; `grep -rn "from('perfiles')" "app/(app)/facturacion"` vacío; CA10 manual con datos |
+| **A-H2** | Vista consolidada en el superviviente (R2.1 c); la acción rechaza un fusionado | Banco F1-F6, M11-M13; `acciones.test.ts` |
+| **A-H3** (+B-H5, B-H10) | **Filtrado y agregado en la base + paginación**: métrica por `resumen_pendiente` (exacta), lista por `.range` de 50, nombres con ≤ 50 ids; selector por función; pacientes del formulario por páginas de 1000 | Banco G4-G5, M17; `datos.test.ts` (b)(c); `bloques.test.tsx` |
+| **B-H1** | `try/catch/finally` con «resultado desconocido» y `router.refresh()` | `formulario-cobro.test.tsx` |
+| **B-H2** | `aria-disabled` + guarda por ref; foco al primer campo con error del servidor | `formulario-cobro.test.tsx` |
+| **B-H3** | El elegido siempre entre las opciones (nombre del directorio o «Profesional no encontrado») | `datos.test.ts` (a), `selector-profesional.test.tsx` |
+| **B-H4** | `success` = `bg-muted text-primary`, par en `PARES` | `tokens.test.ts`, `piezas.test.tsx`; CA12 en las pantallas de R2-V7 |
+| **B-H6** | Spec reescrito (R2.6) | `npx playwright test accesibilidad/facturacion.spec.ts` |
+| **B-H7** | El importe en su propia línea, sin `truncate` | `bloques.test.tsx`; spec a 360 px |
+| **A-H4** BAJA | **Se arregla**: E10 con Kiritimati y Pago Pago | Banco E10a-d y M15 |
+| **A-H5** BAJA | **Se arregla**: A5a/A5b | Banco A5 y M14 |
+| **A-H6** BAJA | **Se arregla**: los tres puntos a `docs/state.md` (R2.7) | Lectura de `docs/state.md` §Hallazgos |
+| **B-H8** BAJA | **Se arregla**: matiz `text-muted-foreground` | `piezas.test.tsx` |
+| **B-H9** BAJA | **Se arregla**: `{ ok: false }` → `AvisoDeError` en lugar del botón | `page.test.tsx` |
+| **B-H11** BAJA | **Se arregla**: no se cierra mientras se envía; éxito visible | `registrar-cobro.test.tsx` |
+
+Ningún hallazgo va solo a `state.md`: todos caben en el territorio ampliado.
+
+### R2.6 · `accesibilidad/facturacion.spec.ts` (B-H6), reescrito
+
+- Precondición, escrita en la cabecera: `npx supabase db reset && npm run seed`.
+- El spec escribe **un** cobro en la base local sembrada: 0,01 € a «Márquez, Lucía», en efectivo,
+  con referencia `T-023 spec <Date.now()>` para reconocerlo. Esa base se resetea a menudo; lo
+  económico no se borra y no se intenta borrar.
+- `entrar` como `admin@psicogestion.test` / `psico1234`, con el mismo flujo que `avisos.spec.ts` y
+  `waitForURL('**/pacientes')`.
+  - Si el administrador cae en `/primera-vez`, **no se esquiva**: es un BLOQUEO que el
+    implementador devuelve. La siembra lo crea igual que a Ana (R2-V10).
+- En serie, a 360 × 740:
+  1. Sin desbordamiento horizontal. «Registrar cobro» mide ≥ 44 px y está dentro de la ventana. El
+     selector de profesional se ve y está dentro de la ventana (es el administrador).
+  2. Se abre el diálogo y se **envía vacío**. El foco va a «Paciente». Con los mensajes de error
+     pintados, el diálogo sigue dentro de la ventana y la página no desborda.
+  3. Se teclea `-5,00` en Importe: aparece «Motivo de la devolución» y el diálogo sigue dentro.
+  4. Se rellena el cobro de 0,01 € y se envía. El diálogo se cierra, el foco vuelve a «Registrar
+     cobro», «Cobro registrado» es **visible** y «Últimos cobros» contiene «Lucía Márquez».
+  5. Se abre y se cierra con Escape: el foco vuelve al botón.
+- No mide el contraste en el navegador (R2-V9).
+
+### R2.7 · Textos para `docs/state.md` §Hallazgos (A-H6)
+
+Se añaden tal cual. El implementador reescribe `state.md` respetando las 80 líneas.
+
+- **Cita `realizada` → `cancelada` mueve el pendiente (T-023, juicio de A)**: medido, devengado
+  6000 → 0 y quien ya había pagado pasa a `cobrado_de_mas` 6000. Queda rastro en `auditoria` (2
+  filas, `auditar_citas`) y el técnico no puede hacerlo (UPDATE 0). Causa: R2.8 de T-021, falta una
+  guarda de transición en `citas`. Ticket aparte, de agenda.
+- **El técnico puede deducir el precio de una sesión (T-023, juicio de A)**: restando el pendiente
+  antes y después de una cita realizada. Riesgo aceptado: el contrato pide «el mismo pendiente» y la
+  vista no lleva sesiones, tipo ni fechas. Familia de R2-H1 de T-021.
+- **Cobro a un paciente fusionado, abierto en la base (T-023, juicio de A)**: `cobros_alta` y
+  `fn_validar_cobro` aceptan el `paciente_id` de un absorbido. Desde la ronda 2 la vista consolida
+  en el superviviente y la acción lo rechaza, así que cerrarlo en la base ya no quita ninguna
+  salida. Ticket aparte, con su banco.
+- **«Últimos cobros» filtrado por profesional usa el del registro, no el del superviviente
+  (T-023 ronda 2)**: con el filtro del administrador, el cobro hecho a un absorbido de otro
+  profesional cuenta en la fila del superviviente pero no sale en la lista de los 20 últimos. No
+  cambia ninguna cifra.
+- En la línea existente **`directorio_perfiles` sin prueba RLS**: añadir «30-cobros la ejerce a
+  través de `profesionales_del_pendiente()` (ADM, PRO1, rol nulo); sigue sin módulo propio».
+
+### R2.8 · Lo que repite el verificador en la ronda 2
+
+Antes de empezar:
+- `npx supabase db reset && npm run seed && npm run tipos`;
+- `select max(version) from supabase_migrations.schema_migrations` debe dar `20261013120000`.
+
+| CA | Cómo |
+|---|---|
+| CA1, CA2, CA4, CA5 | `npm run test:rls`: bloques B y C del 30 en verde (valores sin cambios) |
+| CA3 | Bloque E del 30 en verde |
+| CA6, CA7 | Bloque D del 30 **y** F3-F6 en verde |
+| CA9 | Manual como Ana: sin selector |
+| **CA10** | Banco G en verde **y** prueba manual (detalle bajo la tabla) |
+| CA11 | Manual: ningún control de editar o borrar |
+| CA12 | Manual al lado de `/prototipo`, **más** la píldora success nueva en las pantallas de R2-V7 |
+| CA13 | Manual por rol (la vista cambió) |
+| CA14 | El spec de R2.6 en verde |
+| CA15 | `npm run lint`, `npm run build`, `npm test`, `npm run lint:migraciones`, el spec de R2.6 y `npm run test:rls` con todos los módulos en verde salvo el 23 (T-050), que se anota y no cuenta |
+
+Prueba manual de CA10:
+1. Como administrador, registrar un cobro a un paciente de Ana y otro a uno de Bruno.
+2. El selector ofrece «Ana Márquez» y «Bruno Ferrer» por su nombre.
+3. Elegir a Ana mueve la métrica y la lista.
+4. Poner a mano `?profesional=<uuid de Bruno>` muestra «Bruno Ferrer» en el desplegable.
+
+CA8 sigue NO_VERIFICABLE (T-023b). Además, los mutantes M11-M17 se miden y su resultado va a
+`tickets/T-023/mutantes.json`.
+
+### R2.9 · Qué revisar (los dos revisores y la autoevaluación)
+
+**Revisor A (base, RLS, dinero)**
+- La vista:
+  - ¿El absorbido no tiene fila (`p.fusionado_en is null`) y el superviviente sale una sola vez?
+  - ¿Cada lateral suma el `union all` de absorbidos? ¿Ninguno suma por `fusionado_en` de más de un
+    salto ni por `coalesce(fusionado_en, id)` sobre la fila de fuera?
+  - ¿La tarifa se sigue resolviendo contra `c.paciente_id` (M13)? ¿El recorte por rol mira el
+    `p.id` del superviviente?
+- Decisión deliberada que hay que juzgar: **el técnico del centro del superviviente ve sumado lo del
+  absorbido de otro centro, y el técnico del centro del absorbido deja de verlo** (F5, F6). Son solo
+  importes, sin dato clínico. Si se juzga inaceptable, es un BLOQUEO para el propietario, no un
+  arreglo silencioso.
+- PRO2, profesional del absorbido, sigue leyendo en `cobros` los cobros de P30F
+  (`es_profesional_asignado`), pero no tiene fila en la vista. Es coherente con la decisión «quien no
+  está asignado al superviviente no ve el pendiente», y queda anotado.
+- Las dos funciones:
+  - ¿Son `security invoker`, con `search_path = ''` y sin `execute` para `anon`/`public`?
+  - `p_profesional_id` solo estrecha (G5): ¿hay alguna forma de que amplíe?
+  - ¿`profesionales_del_pendiente` no lee `perfiles` (M16) ni devuelve `motivo_estado`?
+- `max_rows`:
+  - ¿Queda alguna lectura de la vista o de `pacientes` sin `range`/`limit`, o que pueda pasar de
+    1000 en silencio?
+  - ¿Queda algún `.in()` con más de 50 ids?
+- E10: ¿las dos zonas están en el **centro del paciente** y no en la sesión? Si se puede, comprobar
+  M15 a dos horas distintas; si no, razonarlo con la tabla de R2.2.
+- Las aserciones existentes no cambian de valor esperado; las acotadas por prefijo pasaron a lista.
+- Cada negativa nueva lleva su gemela en la misma sesión (F4, F6, G5) y su código exacto (E10b/d).
+
+**Revisor B (interfaz, foco, formularios)**
+- El botón:
+  - nunca es `disabled`;
+  - con doble envío, la acción se llama una sola vez;
+  - tras un error del servidor, el foco va al primer campo con error en el orden fijado, también
+    cuando el error es de `motivo`, que solo existe con importe negativo.
+- El `catch`:
+  - no deja el formulario en un estado del que no se pueda salir;
+  - su texto no afirma ni niega que el cobro exista.
+- El cierre: Escape, el clic fuera y la X no cierran durante el envío. Fuera del envío sí cierran,
+  y el foco vuelve al botón.
+- La paginación:
+  - el enlace que no aplica no se pinta (nada de controles sin acción);
+  - el `href` conserva `?profesional`, y el selector lo quita junto con `pagina`;
+  - `?pagina=999999` cae en la última página y `?pagina=abc` en la 1.
+- `Pildora success`:
+  - en las pantallas de R2-V7, ningún sitio dependía del verde lleno (`bg-primary`) para distinguir
+    estados;
+  - la prueba de `piezas.test.tsx` cae con el `success` antiguo por la razón correcta (el `/`).
+- El importe de la fila del pendiente se lee entero a 360 px (paso 1 del spec y `bloques.test.tsx`).
+- Cuando la lista de pacientes falla, `AvisoDeError` ocupa el sitio del botón: no queda un diálogo
+  vacío ni un botón que no hace nada.
+
+### R2.10 · Territorio
+
+Todo cabe en el `territorio:` ampliado del contrato. **No falta territorio.** Se escribe en:
+- la migración;
+- `scripts/rls/30-cobros.sql` y `scripts/rls/README.md`;
+- `lib/supabase/tipos-bd.ts` (regenerado);
+- `app/(app)/facturacion/**`;
+- `components/ui/piezas.tsx` y su prueba;
+- `lib/contraste/**`;
+- `lib/i18n/es.ts`;
+- `accesibilidad/facturacion.spec.ts`;
+- `tickets/T-023/**`, incluido `mutantes.json`;
+- `docs/bitacora/T-023*.md` y `docs/state.md`.
+
+No se tocan:
+- `components/ui/dialogo.tsx` ni `lib/formularios.ts`: R2.3 resuelve B-H2 y B-H11 desde los
+  ficheros de Facturación;
+- `scripts/rls/26-economico.sql`: no necesita cambios en esta ronda.
+
+### R2.11 · Delegable (ronda 2)
+
+**Nada.** Todo lo que cambia es de la fábrica según `.claude/rules/pipeline.md`:
+- RLS y dinero: la vista, las funciones y el banco;
+- foco y formulario: B-H1, B-H2, B-H11;
+- paginación con estado en la URL;
+- contraste con su prueba.
+
+Las claves de i18n van con el código que las usa.
+
+### R2.12 · Riesgos de la ronda 2, por probabilidad
+
+1. **Alta**: que un caso existente del 30 cuente filas por prefijo y los pacientes nuevos lo
+   muevan. Mitigación: lista explícita, sin tocar valores esperados.
+2. **Media**: que el administrador de la siembra no llegue a `/pacientes` sin segundo factor
+   (R2.6). Se devuelve como BLOQUEO; no se esquiva.
+3. **Media**: que el revisor A no comparta la decisión sobre el técnico (F5/F6). Está señalada en
+   R2.9 para que se juzgue de frente.
+4. **Media**: que un centro con zona propia en la fijación choque con algún disparador de pacientes
+   o de pertenencia. Mitigación: la de R2.2 (fila en `perfiles_centros`).
+5. **Baja**: el rendimiento del `in (… union all …)` en cada lateral. Usa el índice por
+   `paciente_id` de `citas`, `bonos` y `cobros`, y el parcial de `fusionado_en`. Si el `explain` del
+   verificador enseña un recorrido secuencial de `pacientes` por fila, se anota (no cambia el
+   resultado).
+6. **Baja**: en los empates el orden cambia respecto al anterior (ahora por `paciente_id`, antes
+   por posición). Ningún criterio fija el orden de los empates.
+
+### R2.13 · Lo que no entra en la ronda 2, y por qué
+
+- **Impedir en la base el cobro a un fusionado**: va a `state.md` (R2.7). Con la vista consolidada
+  ya no quita ninguna salida, pero es otro ticket con su banco.
+- **Un buscador de pacientes en el formulario**, en lugar del desplegable: la paginación de 1000
+  cierra B-H10, y buscar es interfaz nueva.
+- **La guarda `realizada → cancelada`** y **la deducción del precio por el técnico**: van a
+  `state.md`.
+- **Que «Últimos cobros» siga al superviviente con el filtro de profesional**: no mueve ninguna
+  cifra; va a `state.md`.
+- **CA15 por el banco 23**: es de T-050.
+- **Cambios en `Dialogo` o en `lib/formularios.ts`**: no hacen falta y están fuera de territorio.
