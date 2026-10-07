@@ -1,0 +1,34 @@
+{
+  "ticket": "T-050",
+  "ronda": 1,
+  "altas": 0,
+  "medias": 0,
+  "bajas": 3,
+  "nota": "Diff main...worktree-agent-a49560e9e3018f241 (HEAD b4cc1f6). Qué revisar §5 cumplido: los dos pares (día, hora) cambian en la inserción y en el \\gset, ningún mensaje ni código esperado cambia, la cita de Z (D−5 12:00) queda posterior al cierre (D−6), las líneas 1-972 son idénticas a main y no entra ninguna fecha fija. La simulación de la rama devuelve exactamente las cuatro filas de la bitácora. El margen mínimo medido (cada 5 min, un año) es de 970 min para c_z y de 125 min para c_pasada. CA1 sigue sin evidencia sobre main: lo cierra el verificador.",
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 61,
+      "descripcion": "El hallazgo «26.C4 falla en la base compartida» es un artefacto de la migración 20261013 de T-023, cuya rama ya corrige el 26.C4 (añade motivo al insert): no es un defecto de main.",
+      "escenario": "T-023 se integra con su 26 corregido y state.md sigue diciendo que 26.C4 falla. Quien lo lea investiga o abre ticket por un fallo inexistente, y la entrada ocupa una de las 80 líneas."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 59,
+      "descripcion": "La receta de C3b da D−6 y D−9 como días sin citas de PRO1 ancladas a now(). Con current_date en UTC, C7PAS y C5P1 entran en esos días entre las 00:00 y las 03:00 de Madrid; el comentario de 23-cita-en-episodio.sql:976 transmite la misma idea.",
+      "escenario": "El arreglo de C3b lleva la baja de V39 y C3b a D−9 a las 00:30. Un test:rls arrancado el 08-10 a las 00:50 de Madrid (22:50 UTC del 07-10) pone current_date − 9 en el 28-09, donde C5P1 cae a las 00:50: 23P01. La simulación mide 6206 arranques fallidos al año, y a las 03:00 el margen es de 5 min."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 60,
+      "descripcion": "Se presenta tickets/T-050/simulacion.sql como «Detector», pero sus listas rel y fija son values escritos a mano: una cita nueva anclada a now() no aparece hasta que alguien la añade (fija ya omite Pf, l.1042).",
+      "escenario": "Un ticket añade al 22 una cita de PRO1 en now() − 5 days. simulacion.sql sigue sin filas NUEVA, mientras test:rls cae en Z si arranca hacia las 11:00-12:30: un verde falso."
+    }
+  ]
+}
