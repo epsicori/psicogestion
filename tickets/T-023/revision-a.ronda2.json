@@ -1,0 +1,44 @@
+{
+  "ticket": "T-023",
+  "ronda": 2,
+  "revisor": "A (base, RLS y dinero)",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 3,
+  "ronda1": {
+    "A-H1": "cerrado",
+    "A-H2": "cerrado",
+    "A-H3": "cerrado",
+    "A-H4": "cerrado",
+    "A-H5": "cerrado",
+    "A-H6": "cerrado a medias (H1)"
+  },
+  "f5_f6": "aceptable, sin BLOQUEO: misma persona (ADR-031), solo importes; la incoherencia de pantalla va en H2",
+  "mutantes_m11_m17": "los nueve caen por el motivo correcto; M15 medido a una hora y cubierto por razonamiento a cualquier hora",
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 27,
+      "descripcion": "Dos textos de R2.7 llegan alterados. La línea 27 dice «sin rastro» cuando hay 2 filas medidas en auditoria. La línea 31 borra «directorio_perfiles sin prueba RLS» y dice que el 30 «cierra el hallazgo» para la vista, cuando R2.7 manda «sigue sin módulo propio» y G solo la ejerce por la función con ADM, PRO1 y rol nulo.",
+      "escenario": "Quien abra el ticket de la guarda realizada→cancelada lo diseña como un hueco de auditoría que no existe. Quien triage los hallazgos descarta el módulo RLS de directorio_perfiles, y una lectura de más del técnico en las tres pantallas de administración sigue sin ninguna prueba que la cace."
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "archivo": "docs/state.md",
+      "linea": 30,
+      "descripcion": "La incoherencia entre el pendiente consolidado y «Últimos cobros» solo se anota para el filtro del administrador. Faltan el técnico del centro del superviviente (cobros_lectura recorta por el registro) y el profesional del absorbido, cuyo caso R2.9 dice que «queda anotado» y no lo está.",
+      "escenario": "TEC1 (CA) ve a Elsa con cobrado 70,00 € (F5), pero en «Últimos cobros» solo le sale el cobro de 20,00, porque el de 50,00 de P30F es de CB. PRO2 ve el cobro de 50,00 de Fede y ningún pendiente. No hay nota ni ticket."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/datos.ts",
+      "linea": 281,
+      "descripcion": "Un error al leer directorio_perfiles del profesional elegido se rotula «Profesional no encontrado», igual que si no existiera (el error se presenta como ausencia), y esa rama no tiene prueba.",
+      "escenario": "?profesional=<Bruno>, sin filas en la vista y con un error transitorio en la lectura del directorio: el desplegable afirma «Profesional no encontrado» mientras la lista y la métrica siguen filtradas por Bruno."
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "ticket": "T-023",
+  "ronda": 2,
+  "revisor": "B",
+  "altas": 0,
+  "medias": 3,
+  "bajas": 5,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/facturacion/formulario-cobro.tsx",
+      "linea": 103,
+      "descripcion": "El router.refresh() del catch, si la red sigue caida, hace que Next 16 recargue la pagina entera (fetch-server-response.js:236-241 y :142-148; ppr-navigations.js:988-999). El aviso 'No sabemos si...' y lo escrito se pierden justo en el caso para el que existen.",
+      "escenario": "Se cae la wifi al pulsar Registrar y la accion rechaza. El catch pinta el aviso y llama a refresh, cuyo fetch RSC tambien falla. El navegador recarga /facturacion sin conexion. Al volver la red, el usuario ve un formulario limpio sin advertencia y repite el cobro. Si el primer insert llego, queda un cobro duplicado que no se puede borrar (regla 6)."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "archivo": "accesibilidad/facturacion.spec.ts",
+      "linea": 38,
+      "descripcion": "B-H6 queda abierto a medias. El spec no comprueba el selector del administrador a 360 px. Mide el dialogo antes de los errores y no lo mide con el motivo a la vista. Su comprobacion de 'Ultimos cobros' pasa con filas de una pasada anterior. Ningun paso mira el importe de la fila del pendiente, que R2.9 atribuye al paso 1.",
+      "escenario": "El selector se sale por la derecha a 360 px, o los errores de cuatro campos y el motivo sacan el boton del dialogo de la ventana: el spec sigue verde. En una segunda ejecucion, recientes.getByText('Lucia Marquez').first() da verde con el cobro de 0,01 EUR de la ejecucion anterior."
+    },
+    {
+      "id": "H3",
+      "severidad": "MEDIA",
+      "archivo": "app/(app)/facturacion/formulario-cobro.test.tsx",
+      "linea": 135,
+      "descripcion": "El orden del foco solo se prueba con {fecha, pacienteId} y foco esperado en Paciente. Faltan el caso 'solo fecha' que pide R2.3 y el caso motivo que pide R2.9.",
+      "escenario": "El mutante 'if (estado.errores) setCampoConFoco({campo:'pacienteId'})' deja la suite en verde (razonado, sin ejecutarlo). Con el, un 23514 de fecha futura, o un error de motivo de devolucion, lleva el foco a Paciente, y el lector de pantalla no anuncia el campo que esta mal."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/bloques.test.tsx",
+      "linea": 240,
+      "descripcion": "?pagina=999999 va a la pagina 1 (esquemaPagina con max(100000), datos.ts:67), no a la ultima. Dicen lo contrario el comentario de bloques.tsx:120, la bitacora y R2.9. La prueba que lo afirma simula pagina 99999.",
+      "escenario": "Con 120 filas, /facturacion?pagina=999999 pinta 'Del 1 al 50 de 120', sin 'Anteriores', en lugar de la pagina 3."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/datos.ts",
+      "linea": 270,
+      "descripcion": "Si falla profesionales_del_pendiente, cargarOpcionesProfesional devuelve [] aunque haya un elegido, y datos.test.ts:362 lo da por bueno. Un error al leer directorio_perfiles se rotula como 'Profesional no encontrado' (:281-282).",
+      "escenario": "Con ?profesional=<Ana> y la RPC en timeout, el Desplegable enseña 'Todos los profesionales' (desplegable.tsx:109) mientras la metrica y la lista siguen filtradas por Ana. Es la otra mitad del escenario de B-H3 de la ronda 1."
+    },
+    {
+      "id": "H6",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/bloques.tsx",
+      "linea": 177,
+      "descripcion": "Al llegar a la primera o a la ultima pagina se desmonta el enlace que tenia el foco. El arbol se reconcilia sin remontar (la stateKey no lleva la busqueda), el foco cae a body y el rango nuevo no se anuncia.",
+      "escenario": "Con el teclado, en la pagina 2 de 3, Intro en 'Siguientes': la pagina 3 no pinta ese enlace, el foco pasa a body, el siguiente Tab empieza desde arriba y 'Del 101 al 120 de 120' no se anuncia."
+    },
+    {
+      "id": "H7",
+      "severidad": "BAJA",
+      "archivo": "lib/i18n/es.ts",
+      "linea": 1383,
+      "descripcion": "El aviso de resultado desconocido manda a comprobar en 'Ultimos cobros', que son los 20 primeros por fecha desc y ademas respetan el filtro de profesional (datos.ts:226-229). Un cobro con fecha atrasada o fuera del filtro no sale.",
+      "escenario": "El 07-10 se registra un cobro con fecha 30-09 y la red falla. Hay mas de 20 cobros con fecha posterior, asi que el cobro que si entro no aparece en la lista. El usuario lo repite y queda duplicado."
+    },
+    {
+      "id": "H8",
+      "severidad": "BAJA",
+      "archivo": "app/(app)/facturacion/registrar-cobro.tsx",
+      "linea": 41,
+      "descripcion": "El role=status pasa de sr-only, presente desde el montaje, a empty:hidden, que es display:none mientras esta vacio. La region viva nace ya con su texto y la anuncia de forma poco fiable, a la vez que el foco vuelve al boton.",
+      "escenario": "Un usuario de NVDA registra un cobro: oye 'Registrar cobro, boton' y no oye 'Cobro registrado'. No medido con lector de pantalla; basta con quitar empty:hidden."
+    }
+  ]
+}
