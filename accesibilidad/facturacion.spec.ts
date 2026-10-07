@@ -11,8 +11,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * eso es de un céntimo y se reconoce por su referencia. Se entra como administrador, que ve todos
  * los cobros y no depende de a quién esté asignado el paciente.
  *
- * El paso 4 admite como mucho 18 filas «Lucía Márquez · 0,01 €» en «Últimos cobros» (la lista
- * recorta): con más, falla y pide resetear con `db reset && npm run seed`.
+ * El paso 4 pasa con «Últimos cobros» vacío (recién sembrado) y con hasta 18 filas: la lista enseña
+ * 20 y el paso puede añadir dos. Con más, falla y pide resetear con `db reset && npm run seed`.
  */
 
 const MOVIL = { width: 360, height: 740 };
@@ -123,20 +123,27 @@ test('3 · un importe negativo muestra «Motivo de la devolución»', async ({ p
   await comprobarQueCabe(page, dialogo, 'con cuatro errores y Motivo');
 });
 
-test('4 · un corte de red tras insertar no recarga ni pierde lo escrito, y el reintento no duplica el cobro', async ({
+test('4 · un corte de red tras insertar no recarga ni pierde lo escrito, y reenviar tras cerrar y reabrir no duplica el cobro', async ({
   page,
   context,
+  browser,
 }) => {
   await entrar(page);
+  const sesion = await context.storageState();
+
   const recientes = page.getByRole('region', { name: 'Últimos cobros' });
-  const filasDeLucia = recientes.getByRole('listitem').filter({ hasText: 'Lucía Márquez' }).filter({ hasText: '0,01' });
+  const lista = recientes.getByRole('listitem');
+  const vacia = recientes.getByText('Todavía no hay cobros');
+  const filasDeLucia = lista.filter({ hasText: 'Lucía Márquez' }).filter({ hasText: '0,01' });
 
   // La lista llega por Suspense: sin esperarla, `count()` leería 0 y el `+ 1` final sería otro.
-  await expect(recientes.getByRole('listitem').first()).toBeVisible();
+  await expect(lista.or(vacia).first()).toBeVisible();
+  const totalAntes = await lista.count();
+  expect(
+    totalAntes,
+    'hay más de 18 cobros en «Últimos cobros»: resetea con `db reset && npm run seed`',
+  ).toBeLessThanOrEqual(18);
   const antes = await filasDeLucia.count();
-  expect(antes, 'demasiados cobros de 0,01 € de la propia batería: resetea con `db reset && npm run seed`').toBeLessThanOrEqual(
-    18,
-  );
 
   const { boton, dialogo } = await abrirDialogo(page);
   await dialogo.getByLabel('Paciente').selectOption({ label: 'Márquez, Lucía' });
@@ -145,13 +152,16 @@ test('4 · un corte de red tras insertar no recarga ni pierde lo escrito, y el r
   await dialogo.getByLabel('Referencia', { exact: false }).fill(REFERENCIA);
 
   // El primer POST de la acción llega al servidor (el cobro se inserta) y la respuesta se pierde:
-  // el navegador se queda sin red y el envío falla como un corte real.
+  // el navegador se queda sin red y el envío falla como un corte real. Se guarda lo que contestó
+  // el servidor para comprobar que el primer envío llegó de verdad (B-H3).
   let cortado = false;
+  let primera: { estado: number; cuerpo: string } | null = null;
   await page.route('**/*', async (route) => {
     const peticion = route.request();
     if (!cortado && peticion.method() === 'POST' && peticion.headers()['next-action'] !== undefined) {
       cortado = true;
-      await route.fetch();
+      const respuesta = await route.fetch();
+      primera = { estado: respuesta.status(), cuerpo: await respuesta.text() };
       await context.setOffline(true);
       await route.abort('internetdisconnected');
       return;
@@ -171,15 +181,47 @@ test('4 · un corte de red tras insertar no recarga ni pierde lo escrito, y el r
   await expect(aviso).toBeVisible();
   await expect(dialogo.getByLabel('Importe')).toHaveValue('0,01');
 
-  // Vuelve la red y se repite el mismo envío: la clave de envío evita el segundo cobro.
+  // B-H3: el servidor sí recibió y contestó el primer envío.
+  const recibida = primera as { estado: number; cuerpo: string } | null;
+  expect(recibida?.estado, 'el primer envío no llegó a la acción (¿500 de Turbopack recompilando?)').toBe(200);
+  expect(recibida?.cuerpo).toContain('Cobro registrado');
+
+  // El recuento antes del reintento, en otro contexto con red (B-H2): sin esto, un primer envío que
+  // no insertó haría pasar el paso sin probar la deduplicación.
+  const otro = await browser.newContext({ storageState: sesion });
+  try {
+    const testigo = await otro.newPage();
+    await testigo.goto(new URL('/facturacion', page.url()).href);
+    const recientesTestigo = testigo.getByRole('region', { name: 'Últimos cobros' });
+    await expect(
+      recientesTestigo.getByRole('listitem').filter({ hasText: 'Lucía Márquez' }).filter({ hasText: '0,01' }),
+      'el primer envío no insertó: el paso no prueba la deduplicación',
+    ).toHaveCount(antes + 1);
+    await expect(recientesTestigo.getByRole('listitem')).toHaveCount(totalAntes + 1);
+  } finally {
+    await otro.close();
+  }
+
+  // B-H1: se cierra el diálogo de verdad (el formulario se desmonta) y se reabre.
+  await page.keyboard.press('Escape');
+  await expect(dialogo).toBeHidden();
+  await expect(boton).toBeFocused();
   await context.setOffline(false);
   await page.unroute('**/*');
-  await dialogo.getByRole('button', { name: 'Registrar cobro' }).click();
 
-  await expect(dialogo).toBeHidden();
+  const reabierto = await abrirDialogo(page);
+  await reabierto.dialogo.getByLabel('Paciente').selectOption({ label: 'Márquez, Lucía' });
+  // «0.01» y no «0,01»: la clave de envío se calcula sobre el importe normalizado.
+  await reabierto.dialogo.getByLabel('Importe').fill('0.01');
+  await reabierto.dialogo.getByLabel('Forma de pago').selectOption({ label: 'Efectivo' });
+  await reabierto.dialogo.getByLabel('Referencia', { exact: false }).fill(REFERENCIA);
+  await reabierto.dialogo.getByRole('button', { name: 'Registrar cobro' }).click();
+
+  await expect(reabierto.dialogo).toBeHidden();
   await expect(boton).toBeFocused();
   await expect(page.getByRole('status').filter({ hasText: 'Cobro registrado' })).toBeVisible();
   await expect(filasDeLucia, 'el reintento duplicó el cobro (o no se vio el nuevo)').toHaveCount(antes + 1);
+  await expect(lista, 'el reintento duplicó el cobro').toHaveCount(totalAntes + 1);
 
   // La línea del importe de «Por paciente» no se sale ni se corta a 360 px.
   const pendientes = page.getByRole('region', { name: 'Por paciente' });

@@ -20,7 +20,7 @@ const ID_FIJO = '3f2b8c1e-9d4a-4b6e-8f10-2a7c5d9e1b34';
 function pintar(
   alRegistrar = vi.fn(),
   alCambiarEnvio?: (enviando: boolean) => void,
-  claveDeEnvio: (huella: string) => string = vi.fn(() => ID_FIJO),
+  claveDeEnvio: (huella: string) => string = vi.fn<(huella: string) => string>(() => ID_FIJO),
 ) {
   render(
     <FormularioCobro
@@ -127,7 +127,7 @@ describe('FormularioCobro', () => {
   describe('R4.1: clave de envío', () => {
     it('claveDeEnvio recibe la huella de los datos validados y la acción, el id que devuelve', async () => {
       registrarCobro.mockResolvedValue({ mensaje: t('cobros.noSePudoRegistrar') });
-      const claveDeEnvio = vi.fn(() => ID_FIJO);
+      const claveDeEnvio = vi.fn<(huella: string) => string>(() => ID_FIJO);
       pintar(vi.fn(), undefined, claveDeEnvio);
       rellenar('60');
       await enviar();
@@ -141,7 +141,7 @@ describe('FormularioCobro', () => {
 
     it('con éxito, alRegistrar recibe esa misma huella', async () => {
       registrarCobro.mockResolvedValue({ mensaje: t('cobros.cobroRegistrado') });
-      const claveDeEnvio = vi.fn(() => ID_FIJO);
+      const claveDeEnvio = vi.fn<(huella: string) => string>(() => ID_FIJO);
       const alRegistrar = pintar(vi.fn(), undefined, claveDeEnvio);
       rellenar('60');
       await enviar();
@@ -171,7 +171,7 @@ describe('FormularioCobro', () => {
 
   it('B-H8: la región de avisos existe desde el montaje, vacía y sin empty:hidden', () => {
     const { container } = render(
-      <FormularioCobro pacientes={PACIENTES} hoy={HOY} alRegistrar={vi.fn()} />,
+      <FormularioCobro pacientes={PACIENTES} hoy={HOY} claveDeEnvio={() => ID_FIJO} alRegistrar={vi.fn()} />,
     );
     const region = container.querySelector('p[aria-live="polite"]');
     expect(region).not.toBeNull();

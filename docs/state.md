@@ -8,7 +8,7 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048 y T-049.
-- **En curso**: T-023 **ronda 3 implementada** el 07-10 sobre la ronda 2 (clave de envío, banco 30 con E12 y M18-M22, foco, BAJA); falta verificación y revisión de la ronda 3. T-050 (diseño) en marcha.
+- **En curso**: T-023 **ronda 4 implementada** el 07-10 sobre la ronda 3 (clave de envío por huella guardada en `RegistrarCobro`, clave propia antes de las guardas, `resultadoDesconocido` si falla la relectura, paso 4 del spec sin depender de la base, foco de paginación por página de destino, aviso del filtro de profesional); falta verificación y revisión de la ronda 4. Los mutantes M18 en adelante son de TypeScript y del spec (`tickets/T-023/mutantes.json`, `ts_ronda_3` y `ts_ronda_4`); el banco 30 llega hasta M17. T-050 revisado (ronda 1, 6acbd3f), sin integrar.
 - **Siguiente en `supabase/`**: T-023 (20261013120000) → T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -18,7 +18,7 @@
 
 ## Siguiente paso
 
-1. **T-023 ronda 2: verificador y dos revisores** sobre una copia `git archive <HEAD de la rama>`. Antes, `db reset` + `npm run seed` (el spec de `accesibilidad/facturacion.spec.ts` deja un cobro de 0,01 EUR con referencia `T-023 spec <ts>`; no se borra). Después, la cola: T-026a → T-046 → T-023b → T-047.
+1. **T-023 ronda 4: verificador y dos revisores** sobre una copia `git archive <HEAD de la rama>`. Antes, `npx supabase db reset` y `npm run seed`: el paso 4 de `accesibilidad/facturacion.spec.ts` pasa con «Últimos cobros» vacío y con hasta 18 filas, y cada ejecución deja un cobro de 0,01 EUR a Lucía Márquez con referencia `T-023 spec <ts>` (no se borra). Después, la cola: T-026a → T-046 → T-023b → T-047.
 2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove).
 
 ## Hallazgos anotados
