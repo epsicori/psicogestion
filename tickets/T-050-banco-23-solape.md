@@ -7,7 +7,8 @@ fase: 1
 prioridad: alta
 depende_de: []
 # abierto el 07-10-2026 por decisión del propietario (T-023 ronda 1, CA15): ajeno a T-023
-estado: pendiente
+estado: hecho
+completado: 2026-10-08
 delegable: no
 territorio:
   - scripts/rls/23-cita-en-episodio.sql

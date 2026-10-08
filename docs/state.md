@@ -3,12 +3,11 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 07-10-2026 · **T-023 hecho** (merge 9600b7a, cinco rondas: 0 ALTA, 0 MEDIA, 3 BAJA) · T-043 (31743f7).
+**Actualizado**: 08-10-2026 · **T-050 hecho** (merge 180f554: 0 ALTA, 0 MEDIA, 3 BAJA de texto).
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-043, T-048 y T-049 (T-023 incluido, migración 20261013120000).
-- **En curso**: T-050 revisado (ronda 1, 6acbd3f: 0 ALTA, 0 MEDIA, 3 BAJA de texto), llevado sobre `main` en `worktree-agent-a49560e9e3018f241` con H1-H3 corregidos; falta la verificación de CA1.
+- **Integrado en `main`**: T-000–T-043, T-048, T-049 y T-050 (T-023 en 20261013120000; T-050 sin migración).
 - **Siguiente en `supabase/`**: T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -18,8 +17,8 @@
 
 ## Siguiente paso
 
-1. **T-050**: verificar CA1 con `db reset` + `seed` + `test:rls`, sin arrancar entre 05:00–05:40 ni 02:10–03:30 de Madrid. Después, la cola: T-026a → T-046 → T-023b → T-047 (pintura de MiniMax en `minimax/respuestas/T-026a-pintura.md` y `T-047-pintura.md`; la prueba de T-026a debe esperar `bg-muted text-primary` para `success`).
-2. Limpiar worktrees: T-038, T-042, agent-*, rama a15498... (unlink junction antes de git worktree remove). Los de T-023 ya están quitados.
+1. **T-026a** (riesgo alto, diseño completo): migración 20261014120000; pintura de MiniMax en `minimax/respuestas/T-026a-pintura.md` con prueba esperando `bg-muted text-primary` para `success`. Después T-046 → T-023b → T-047.
+2. Limpiar worktrees: T-038, T-042, agent-* (incluido agent-a49560e9e3018f241), ramas a15498... y t050-r1-backup (unlink junction antes de git worktree remove). Los de T-023 ya están quitados.
 
 ## Hallazgos anotados
 
