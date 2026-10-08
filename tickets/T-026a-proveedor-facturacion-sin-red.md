@@ -21,12 +21,16 @@ territorio:                           # cerrado por tickets/T-026/diseno.md §6
   - lib/facturacion/**
   - lib/i18n/es.ts
   - app/api/facturacion/drenar/route.ts
+  - app/api/facturacion/drenar/route.test.ts               # ampliado por el propietario el 08-10-2026
   - app/(app)/ajustes/page.tsx        # solo el enlace en AccesosDeAdministracion
   - app/(app)/ajustes/facturacion/**
   - app/(app)/pacientes/[id]/page.tsx # solo sustituir <Facturacion /> por <PanelFacturacion /> con su Suspense
   - app/(app)/pacientes/[id]/panel-facturacion.tsx
   - app/(app)/pacientes/[id]/panel-facturacion.test.tsx
   - app/(app)/pacientes/[id]/acciones-facturacion.ts
+  - app/(app)/pacientes/[id]/acciones-facturacion.test.ts   # ampliado por el propietario el 08-10-2026
+  - app/(app)/pacientes/[id]/boton-preparar.tsx            # isla de cliente para los errores de «Preparar» (propietario, 08-10-2026)
+  - app/(app)/pacientes/[id]/boton-preparar.test.tsx
   - proxy.ts                          # solo /api/facturacion/drenar en RUTAS_PUBLICAS
   - .env.example                      # solo FACTURACION_DRENAR_SECRETO=
   - accesibilidad/facturacion-clave.spec.ts
