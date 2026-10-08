@@ -57,6 +57,14 @@ async function AccesosDeAdministracion() {
             {t('ajustes.acciones.altasCentro')}
           </Link>
         </li>
+        <li>
+          <Link
+            href="/ajustes/facturacion"
+            className="border-border hover:bg-muted focus-visible:ring-ring/50 block rounded-lg border px-4 py-3 text-sm font-medium outline-none focus-visible:ring-2"
+          >
+            {t('ajustes.acciones.programaFacturacion')}
+          </Link>
+        </li>
       </ul>
     </section>
   );
