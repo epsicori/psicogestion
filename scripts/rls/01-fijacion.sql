@@ -34,6 +34,10 @@
 \set TAR21  '\'a0210004-0000-4000-8000-000000000001\''
 \set BONO21 '\'a0210005-0000-4000-8000-000000000001\''
 \set CAD21  '\'a0210006-0000-4000-8000-000000000001\''
+-- T-026a: dos borradores más (BORRA de PRO1 sobre P1, BORRB de PRO2 sobre P2) que llegan hasta el
+-- espejo; los ids de sus versiones se leen con \gset al sellarlas.
+\set BORRA '\'a0260001-0000-4000-8000-000000000001\''
+\set BORRB '\'a0260001-0000-4000-8000-000000000002\''
 
 \echo '=== 01-fijación ==='
 
@@ -250,5 +254,51 @@ insert into public.bonos (id, paciente_id, sesiones_totales, importe, caducidad,
 insert into public.bonos_caducidades (id, bono_id, caducidad, registrada_por)
   -- fecha-fija: caducidad de bono, ninguna guarda la compara con el reloj
   values (:CAD21, :BONO21, date '2031-12-31', :ADM);
+
+-- T-026a · Una fila en cada tabla del programa de facturación (envíos, espejo, anotaciones) y el
+-- ajuste del proveedor, ANTES del módulo 10, y todo POR LAS FUNCIONES (una prueba que construye a
+-- mano prueba el esquema, no el comportamiento). Borradores nuevos, no BORR1: el banco 26 añade
+-- versiones a BORR1 y la congelación posterior al envío lo rompería. `creada_en` distinto del de
+-- BORR1 (índice global de huellas, README punto 9).
+insert into public.borradores_factura (id, paciente_id, profesional_id, creado_por) values
+  (:BORRA, :P1, :PRO1, :PRO1),
+  (:BORRB, :P2, :PRO2, :PRO2);
+select pg_temp.assert_no_lanza(
+  pg_temp.sql_version_simple(:BORRA, :PRO1, 60.00, timestamptz '2026-10-01 10:00:01+00', 'Ana Uno', :CA),
+  'T-026a · la versión 1 de BORRA (PRO1, P1) se sella');
+select pg_temp.assert_no_lanza(
+  pg_temp.sql_version_simple(:BORRB, :PRO2, 70.00, timestamptz '2026-10-01 10:00:02+00', 'Beto Dos', :CB),
+  'T-026a · la versión 1 de BORRB (PRO2, P2) se sella');
+select format('%L', v.id) as "VERA" from public.borradores_factura_versiones v
+ where v.borrador_id = :BORRA and v.numero_version = 1 \gset
+select format('%L', v.id) as "VERB" from public.borradores_factura_versiones v
+ where v.borrador_id = :BORRB and v.numero_version = 1 \gset
+
+-- El ajuste: el administrador conecta el programa con una clave ficticia.
+call pg_temp.como(:ADM);
+select public.guardar_clave_proveedor_facturacion('holded', 'claveFijacionT026a0001');
+call pg_temp.reset_sesion();
+
+-- El administrador prepara los dos borradores (la política de alta de versiones: admin, o autor asignado).
+call pg_temp.como(:ADM);
+select public.encolar_envio_borrador(:BORRA);
+select public.encolar_envio_borrador(:BORRB);
+call pg_temp.reset_sesion();
+
+select format('%L', e.id) as "EVA" from public.eventos_salientes e
+ where e.clave_idempotencia = 'facturacion.enviar_borrador:' || :BORRA \gset
+select format('%L', e.id) as "EVB" from public.eventos_salientes e
+ where e.clave_idempotencia = 'facturacion.enviar_borrador:' || :BORRB \gset
+
+-- El consumidor (service_role): reclama los dos, registra el envío y copia el espejo y una anotación.
+set local role service_role;
+select count(*) as "RECLAMADOS_FIJ" from public.reclamar_envios_facturacion(10) \gset
+select public.registrar_envio_borrador(:EVA, 'holded', 'DOC-A', 1::smallint, :VERA, current_date);
+select public.registrar_envio_borrador(:EVB, 'holded', 'DOC-B', 1::smallint, :VERB, current_date);
+select public.registrar_factura_espejo('holded', 'DOC-A', 'F-2026-0001', current_date, 6000, 0, 6000, 'https://programa.example/doc/A');
+select public.registrar_factura_espejo('holded', 'DOC-B', 'F-2026-0002', current_date, 7000, 0, 7000, 'https://programa.example/doc/B');
+select public.registrar_anotacion_documento('holded', 'DOC-A', 'rectificado');
+reset role;
+select pg_temp.assert(:RECLAMADOS_FIJ = 2, 'T-026a · la fijación reclamó los dos envíos');
 
 \echo '01-fijación: completa.'

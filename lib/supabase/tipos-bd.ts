@@ -426,6 +426,77 @@ export type Database = {
           },
         ]
       }
+      borradores_factura_envios: {
+        Row: {
+          borrador_id: string
+          enviado_en: string
+          evento_id: string
+          fecha_documento: string
+          id: string
+          numero_version: number
+          paciente_id: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id: string
+          proyeccion_version: number
+          version_id: string
+        }
+        Insert: {
+          borrador_id: string
+          enviado_en?: string
+          evento_id: string
+          fecha_documento: string
+          id?: string
+          numero_version: number
+          paciente_id: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id: string
+          proyeccion_version: number
+          version_id: string
+        }
+        Update: {
+          borrador_id?: string
+          enviado_en?: string
+          evento_id?: string
+          fecha_documento?: string
+          id?: string
+          numero_version?: number
+          paciente_id?: string
+          proveedor?: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id?: string
+          proyeccion_version?: number
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "borradores_factura_envios_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: true
+            referencedRelation: "borradores_factura"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_envios_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: true
+            referencedRelation: "borradores_factura_estado"
+            referencedColumns: ["borrador_id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_envios_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borradores_factura_envios_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+        ]
+      }
       borradores_factura_versiones: {
         Row: {
           algoritmo_version: number
@@ -795,6 +866,7 @@ export type Database = {
       }
       cobros: {
         Row: {
+          factura_espejo_id: string | null
           fecha: string
           forma_pago: Database["public"]["Enums"]["forma_pago"]
           id: string
@@ -806,6 +878,7 @@ export type Database = {
           registrado_por: string
         }
         Insert: {
+          factura_espejo_id?: string | null
           fecha: string
           forma_pago: Database["public"]["Enums"]["forma_pago"]
           id?: string
@@ -817,6 +890,7 @@ export type Database = {
           registrado_por: string
         }
         Update: {
+          factura_espejo_id?: string | null
           fecha?: string
           forma_pago?: Database["public"]["Enums"]["forma_pago"]
           id?: string
@@ -1662,6 +1736,168 @@ export type Database = {
           registrado_en?: string
         }
         Relationships: []
+      }
+      facturacion_ajuste: {
+        Row: {
+          actualizado_en: string
+          actualizado_por: string | null
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"] | null
+          secreto_id: string | null
+          sincronizado_hasta: string | null
+          unico: boolean
+        }
+        Insert: {
+          actualizado_en?: string
+          actualizado_por?: string | null
+          proveedor?:
+            | Database["public"]["Enums"]["proveedor_facturacion"]
+            | null
+          secreto_id?: string | null
+          sincronizado_hasta?: string | null
+          unico?: boolean
+        }
+        Update: {
+          actualizado_en?: string
+          actualizado_por?: string | null
+          proveedor?:
+            | Database["public"]["Enums"]["proveedor_facturacion"]
+            | null
+          secreto_id?: string | null
+          sincronizado_hasta?: string | null
+          unico?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturacion_ajuste_actualizado_por_fkey"
+            columns: ["actualizado_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facturacion_ajuste_actualizado_por_fkey"
+            columns: ["actualizado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facturas_anotaciones: {
+        Row: {
+          borrador_id: string
+          id: string
+          observada_en: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id: string
+          tipo: Database["public"]["Enums"]["anotacion_documento_proveedor"]
+        }
+        Insert: {
+          borrador_id: string
+          id?: string
+          observada_en?: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id: string
+          tipo: Database["public"]["Enums"]["anotacion_documento_proveedor"]
+        }
+        Update: {
+          borrador_id?: string
+          id?: string
+          observada_en?: string
+          proveedor?: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id?: string
+          tipo?: Database["public"]["Enums"]["anotacion_documento_proveedor"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturas_anotaciones_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: false
+            referencedRelation: "borradores_factura"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facturas_anotaciones_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: false
+            referencedRelation: "borradores_factura_estado"
+            referencedColumns: ["borrador_id"]
+          },
+        ]
+      }
+      facturas_espejo: {
+        Row: {
+          base: number
+          borrador_id: string
+          copiado_en: string
+          cuota_iva: number
+          fecha_expedicion: string
+          id: string
+          numero: string
+          paciente_id: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id: string
+          total: number
+          url_proveedor: string
+        }
+        Insert: {
+          base: number
+          borrador_id: string
+          copiado_en?: string
+          cuota_iva: number
+          fecha_expedicion: string
+          id?: string
+          numero: string
+          paciente_id: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id: string
+          total: number
+          url_proveedor: string
+        }
+        Update: {
+          base?: number
+          borrador_id?: string
+          copiado_en?: string
+          cuota_iva?: number
+          fecha_expedicion?: string
+          id?: string
+          numero?: string
+          paciente_id?: string
+          proveedor?: Database["public"]["Enums"]["proveedor_facturacion"]
+          proveedor_documento_id?: string
+          total?: number
+          url_proveedor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturas_espejo_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: true
+            referencedRelation: "borradores_factura"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facturas_espejo_borrador_id_fkey"
+            columns: ["borrador_id"]
+            isOneToOne: true
+            referencedRelation: "borradores_factura_estado"
+            referencedColumns: ["borrador_id"]
+          },
+          {
+            foreignKeyName: "facturas_espejo_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facturas_espejo_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+        ]
       }
       informes: {
         Row: {
@@ -3494,6 +3730,64 @@ export type Database = {
           },
         ]
       }
+      facturas_espejo_cabecera: {
+        Row: {
+          base: number | null
+          copiado_en: string | null
+          cuota_iva: number | null
+          fecha_expedicion: string | null
+          id: string | null
+          numero: string | null
+          paciente_id: string | null
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"] | null
+          total: number | null
+          url_proveedor: string | null
+        }
+        Insert: {
+          base?: number | null
+          copiado_en?: string | null
+          cuota_iva?: number | null
+          fecha_expedicion?: string | null
+          id?: string | null
+          numero?: string | null
+          paciente_id?: string | null
+          proveedor?:
+            | Database["public"]["Enums"]["proveedor_facturacion"]
+            | null
+          total?: number | null
+          url_proveedor?: string | null
+        }
+        Update: {
+          base?: number | null
+          copiado_en?: string | null
+          cuota_iva?: number | null
+          fecha_expedicion?: string | null
+          id?: string | null
+          numero?: string | null
+          paciente_id?: string | null
+          proveedor?:
+            | Database["public"]["Enums"]["proveedor_facturacion"]
+            | null
+          total?: number | null
+          url_proveedor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facturas_espejo_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pacientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facturas_espejo_paciente_id_fkey"
+            columns: ["paciente_id"]
+            isOneToOne: false
+            referencedRelation: "pendiente_paciente"
+            referencedColumns: ["paciente_id"]
+          },
+        ]
+      }
       pacientes_indicador_riesgo: {
         Row: {
           indicador: boolean | null
@@ -3791,6 +4085,10 @@ export type Database = {
         Args: { p_duracion_minutos: number; p_tipo_terapia_id: string }
         Returns: number
       }
+      avanzar_cursor_sincronizacion: {
+        Args: { p_hasta: string }
+        Returns: undefined
+      }
       bloquear_historia: { Args: never; Returns: number }
       calcular_propuesta_de_evento: {
         Args: {
@@ -3859,6 +4157,7 @@ export type Database = {
         }[]
       }
       clave_de_cifrado: { Args: { p_nombre: string }; Returns: string }
+      clave_proveedor_facturacion: { Args: never; Returns: string }
       cobertura_solo_adicion: {
         Args: never
         Returns: {
@@ -3903,6 +4202,23 @@ export type Database = {
         Returns: boolean
       }
       desbloqueo_vigente: { Args: never; Returns: string }
+      disparar_drenado_facturacion: { Args: never; Returns: undefined }
+      documentos_para_sincronizar: {
+        Args: {
+          p_ids?: string[]
+          p_limite?: number
+          p_proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+        }
+        Returns: {
+          anotaciones: Database["public"]["Enums"]["anotacion_documento_proveedor"][]
+          proveedor_documento_id: string
+          tiene_espejo: boolean
+        }[]
+      }
+      encolar_envio_borrador: {
+        Args: { p_borrador_id: string }
+        Returns: string
+      }
       enesimo_dia_del_mes: {
         Args: { p_dia_semana: number; p_mes: string; p_ordinal: number }
         Returns: string
@@ -3927,6 +4243,15 @@ export type Database = {
       es_zona_iana: { Args: { p_zona: string }; Returns: boolean }
       escalar_notas_pendientes: { Args: never; Returns: number }
       esta_en_curso: { Args: { p_cita_id: string }; Returns: boolean }
+      estado_clave_proveedor_facturacion: {
+        Args: never
+        Returns: {
+          actualizado_en: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          ultimos4: string
+        }[]
+      }
+      estado_cola_borrador: { Args: { p_borrador_id: string }; Returns: string }
       estado_de_cuenta: {
         Args: never
         Returns: {
@@ -3966,6 +4291,13 @@ export type Database = {
       }
       fijar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
       generar_codigos_recuperacion: { Args: never; Returns: string[] }
+      guardar_clave_proveedor_facturacion: {
+        Args: {
+          p_clave: string
+          p_proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+        }
+        Returns: undefined
+      }
       historia_desbloqueada: { Args: never; Returns: boolean }
       leer_identificacion: {
         Args: { p_paciente_id: string }
@@ -3997,6 +4329,13 @@ export type Database = {
           nota_id: string
           versiones: number
         }[]
+      }
+      notificar_discrepancia_facturacion: {
+        Args: {
+          p_proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          p_proveedor_documento_id: string
+        }
+        Returns: undefined
       }
       ocurrencias_serie: {
         Args: {
@@ -4046,6 +4385,28 @@ export type Database = {
         }[]
       }
       prolongar_desbloqueo: { Args: never; Returns: string }
+      proveedor_facturacion_activo: {
+        Args: never
+        Returns: Database["public"]["Enums"]["proveedor_facturacion"]
+      }
+      quitar_proveedor_facturacion: { Args: never; Returns: undefined }
+      reclamar_envios_facturacion: {
+        Args: { p_limite?: number }
+        Returns: {
+          borrador_id: string
+          destinatario_nif_cifrado: string
+          destinatario_nif_clave_version: number
+          destinatario_nif_etiqueta: string
+          destinatario_nif_nonce: string
+          destinatario_nombre: string
+          evento_id: string
+          fecha_documento: string
+          lineas: Json
+          numero_version: number
+          version_id: string
+          ya_enviado_documento_id: string
+        }[]
+      }
       recuento_notas_pendientes: {
         Args: never
         Returns: {
@@ -4075,6 +4436,25 @@ export type Database = {
           vistas: number
         }[]
       }
+      registrar_anotacion_documento: {
+        Args: {
+          p_proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          p_proveedor_documento_id: string
+          p_tipo: Database["public"]["Enums"]["anotacion_documento_proveedor"]
+        }
+        Returns: string
+      }
+      registrar_envio_borrador: {
+        Args: {
+          p_documento_id: string
+          p_evento_id: string
+          p_fecha_documento: string
+          p_proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          p_proyeccion_version: number
+          p_version_id: string
+        }
+        Returns: string
+      }
       registrar_evento_auditable: {
         Args: {
           p_detalle?: Json
@@ -4082,6 +4462,23 @@ export type Database = {
           p_registro_id: string
           p_tabla: string
         }
+        Returns: undefined
+      }
+      registrar_factura_espejo: {
+        Args: {
+          p_base_centimos: number
+          p_cuota_iva_centimos: number
+          p_fecha_expedicion: string
+          p_numero: string
+          p_proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          p_proveedor_documento_id: string
+          p_total_centimos: number
+          p_url_proveedor: string
+        }
+        Returns: string
+      }
+      registrar_fallo_envio_facturacion: {
+        Args: { p_codigo: string; p_evento_id: string; p_permanente: boolean }
         Returns: undefined
       }
       registrar_fichero_exportado: {
@@ -4168,6 +4565,10 @@ export type Database = {
       alcance_cambio_serie: "esta" | "esta_y_siguientes"
       alcance_nota: "individual" | "conjunta"
       alcance_representacion: "patria_potestad" | "custodia" | "solo_contacto"
+      anotacion_documento_proveedor:
+        | "borrado_sin_aprobar"
+        | "rectificado"
+        | "anulado"
       estado_cita:
         | "programada"
         | "confirmada"
@@ -4203,6 +4604,7 @@ export type Database = {
         | "evaluaciones"
         | "informes"
         | "documentos"
+      proveedor_facturacion: "holded"
       proyeccion_exportacion: "profesional" | "paciente"
       regimen_iva: "exento_sanitario" | "general"
       rol_usuario:
@@ -4376,6 +4778,11 @@ export const Constants = {
       alcance_cambio_serie: ["esta", "esta_y_siguientes"],
       alcance_nota: ["individual", "conjunta"],
       alcance_representacion: ["patria_potestad", "custodia", "solo_contacto"],
+      anotacion_documento_proveedor: [
+        "borrado_sin_aprobar",
+        "rectificado",
+        "anulado",
+      ],
       estado_cita: [
         "programada",
         "confirmada",
@@ -4416,6 +4823,7 @@ export const Constants = {
         "informes",
         "documentos",
       ],
+      proveedor_facturacion: ["holded"],
       proyeccion_exportacion: ["profesional", "paciente"],
       regimen_iva: ["exento_sanitario", "general"],
       rol_usuario: [

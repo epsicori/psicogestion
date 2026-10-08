@@ -36,6 +36,9 @@ export const TABLAS_SOLO_ADICION: readonly string[] = [
   'tarifas_paciente',
   'bonos',
   'bonos_caducidades',
+  'borradores_factura_envios',
+  'facturas_espejo',
+  'facturas_anotaciones',
 ];
 
 // Reglas degradadas a aviso porque el código existente ya las incumple y su
