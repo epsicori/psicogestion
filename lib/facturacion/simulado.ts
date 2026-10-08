@@ -40,7 +40,7 @@ function observar(d: Documento): DocumentoObservado {
   return { documentoId: d.id, situacion: d.situacion, hechos: d.hechos };
 }
 
-export function crearProveedorSimulado(): {
+export function crearProveedorSimulado(prefijo = 'SIM'): {
   proveedor: ProveedorFacturacion;
   ficha: FichaProveedor;
   control: ControlSimulado;
@@ -63,7 +63,7 @@ export function crearProveedorSimulado(): {
     async crearBorrador(b) {
       exigirDisponible();
       contador += 1;
-      const id = `SIM-${contador}`;
+      const id = `${prefijo}-${contador}`;
       docs.set(id, { id, recibido: structuredClone(b), situacion: 'borrador', hechos: null });
       if (perder) {
         perder = false;
