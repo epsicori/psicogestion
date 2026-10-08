@@ -1,20 +1,20 @@
 {
   "ticket": "T-050",
-  "resumen": "Rama worktree-agent-a49560e9e3018f241 HEAD 56122d0 verificada desde su worktree (scripts/ y scripts/rls/ de la rama; los scripts no necesitan node_modules). db reset --workdir del worktree aplico hasta 20261013120000 (max(version)=20261013120000 confirmado). seed completado. test:rls (arranque ~15:05 Madrid, fuera de ventanas): exit 0, 0 FALLO, 30 modulos, 23-cita-en-episodio completa (incl. Z, Z2, Z3), 29-hueco-raro OK, 30-cobros OK. Diff contra main: docs/bitacora/T-050.md, docs/state.md, scripts/rls/23-cita-en-episodio.sql, tickets/T-050/simulacion.sql; todo dentro del territorio. No se ejecutaron lint/build/npm test de la aplicacion: el ticket solo toca un banco SQL.",
+  "resumen": "Verificado en worktree agent-a49560e9e3018f241 (HEAD 56122d0) tras supabase db reset --workdir + npm run seed. max(version)=20261013120000; psql.mjs eligio supabase_db_Psicogestion (hay tambien supabase_db_cinfa-e2e, no usado). 09:30 Madrid, fuera de ventanas prohibidas.",
   "criterios": [
     {
       "id": 1,
       "texto": "npm run test:rls en verde, banco 23 incluido, tras db reset + seed",
       "veredicto": "PASA",
-      "comando": "npx supabase db reset --workdir <worktree>; node scripts/seed.mjs; node scripts/test-rls.mjs (cwd worktree)",
-      "evidencia": "exit=0; grep FALLO = 0; '23-cita-en-episodio: completa.' con '23.Z2 ... OK' y '23.Z3 ... OK'; '29-hueco-raro: OK'; '30-cobros: OK'; max(version)=20261013120000."
+      "comando": "npx supabase db reset --workdir <worktree>; npm run seed; npm run test:rls (desde el worktree)",
+      "evidencia": "EXIT 0. 30 modulos. 'OK: S · fijación de la cita pasada', 'OK: Z · fijación de la cita pasada c_z en ET39 (abierto)', 'OK: Z · PRO1 desbloquea la historia', '23-cita-en-episodio: completa.', '29-hueco-raro: OK', '30-cobros: OK'. Sin ningun FALLO/ERROR en la salida."
     },
     {
       "id": 2,
       "texto": "el lint de fechas fijas de T-049 sigue en verde",
       "veredicto": "PASA",
-      "comando": "node scripts/rls/fechas-fijas.mjs (cwd worktree)",
-      "evidencia": "fechas-fijas: 30 fichero(s), 24 literal(es) futuro(s) anotado(s), ninguno sin anotar (hoy = 2026-10-07). exit 0."
+      "comando": "node scripts/rls/fechas-fijas.mjs (y como primer paso de npm run test:rls)",
+      "evidencia": "fechas-fijas: 30 fichero(s), 24 literal(es) futuro(s) anotado(s), ninguno sin anotar (hoy = 2026-10-08). Exit 0."
     }
   ],
   "regresiones": []
