@@ -3,11 +3,11 @@
 > Memoria viva. Máximo 80 líneas (lo impone un hook). Solo presente. Diseño en tickets y bitácora;
 > reglas por ruta en `.claude/rules/` (se cargan solas).
 
-**Actualizado**: 08-10-2026 · **T-050 hecho** (merge 180f554: 0 ALTA, 0 MEDIA, 3 BAJA de texto).
+**Actualizado**: 08-10-2026 · **T-026a implementado** en la rama `worktree-agent-a5bed24d86d4a0141`, pendiente de verificación y revisión (bitácora `docs/bitacora/T-026a.md`).
 
 ## Dónde estamos
 
-- **Integrado en `main`**: T-000–T-043, T-048, T-049 y T-050 (T-023 en 20261013120000; T-050 sin migración).
+- **Integrado en `main`**: T-000–T-043, T-048, T-049 y T-050 (T-023 en 20261013120000). T-026a (20261014120000) espera verificador con `db reset` (CA1 no probado) y dos revisores.
 - **Siguiente en `supabase/`**: T-026a (20261014120000) → T-046 (20261015120000) → T-023b → T-047.
 
 ## Bloqueos
@@ -17,7 +17,7 @@
 
 ## Siguiente paso
 
-1. **T-026a** (riesgo alto, diseño completo): migración 20261014120000; pintura de MiniMax en `minimax/respuestas/T-026a-pintura.md` con prueba esperando `bg-muted text-primary` para `success`. Después T-046 → T-023b → T-047.
+1. **T-026a**: verificador (`db reset` + `seed` + `test:rls`, `test:facturacion`, build, spec `facturacion-clave`) y dos revisores. Después T-046 → T-023b → T-047.
 2. Limpiar worktrees: T-038, T-042, agent-* (incluido agent-a49560e9e3018f241), ramas a15498... y t050-r1-backup (unlink junction antes de git worktree remove). Los de T-023 ya están quitados.
 
 ## Hallazgos anotados
@@ -35,7 +35,7 @@
 - **B5-H1 (BAJA, T-043)**: el `setAviso('')` de las dos ramas de fallo del recálculo, en `formulario-alta.tsx:161` y `:181`, borra también el mensaje «acaba de ocuparse» de `hueco_ocupado`. Arreglo: vaciar solo si el aviso es el texto de la vuelta, más prueba negativa en las dos ramas. Detalle en `tickets/T-043/revision-b.ronda5.md`.
 - **Pruebas de `formulario-alta.test.tsx` (T-043)**: las anteriores a R11 encadenan `mockResolvedValueOnce` sin `mockReset`; si una falla, sus colas pasan a las siguientes. R11-R16 usan `respuestasDeRecalculo()`.
 - **T-043 (BAJA)**: con varias ejecuciones de vitest en paralelo, la prueba de `formulario-alta.test.tsx:966` cayó una vez por el plazo de 1 s de `waitFor`.
-- **Contratos de T-026a** (`tickets/T-026a/diseno.md`): la clave `identificacion_cifrado_v1` es contrato con T-046; Holded Q5 sigue abierto (`docs/legal/preguntas-holded.md`); `test:facturacion` no está en la tabla de comandos de `CLAUDE.md`; A4-H1 (T-021) pasa a T-046.
+- **Contratos de T-026a** (`tickets/T-026a/diseno.md`): la clave `identificacion_cifrado_v1` es contrato con T-046; Holded Q5 sigue abierto (`docs/legal/preguntas-holded.md`); `test:facturacion` no está en la tabla de comandos de `CLAUDE.md` (otros hallazgos de T-026a en su bitácora); A4-H1 (T-021) pasa a T-046.
 - **Propuesta al propietario (T-043, ronda 5)**: verificador y revisores miden siempre sobre una copia (`git archive <hash>` en su scratchpad) y nunca mutan el worktree de la rama; el revisor vio un mutante ajeno en `git status`. Requiere instrucción del orquestador (`.claude/`).
 - **T-021 A4-H1 (BAJA)**: si la parte general mueve Q < 0,5 céntimos, ninguna cuota sella (6.4 rechaza cuota 0; banda admite solo 0). T-026 debe acotar esto en Zod.
 - **T-021 · seguimiento (ronda 4)**: B4-H1 (constante 1 de `least(1,…)` sin fijar: 0.6 y 1.3 sobreviven), B4-H2 (rama |Q_i| < 1 sin prueba positiva), B4-H3 (techo tipo IVA lejos del borde), A4-H2 (U+1D159 fuera clase invisibles), A4-H3 (tramo extra sin aserción de catálogo) — anotados, T-026 o futuro.
