@@ -4086,8 +4086,8 @@ export type Database = {
         Returns: number
       }
       avanzar_cursor_sincronizacion: {
-        Args: { p_hasta: string }
-        Returns: undefined
+        Args: { p_hasta?: string }
+        Returns: string
       }
       bloquear_historia: { Args: never; Returns: number }
       calcular_propuesta_de_evento: {

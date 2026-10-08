@@ -804,9 +804,10 @@ begin
 end;
 $$;
 
--- 7.8 · El cursor del sincronizador: solo avanza.
-create function public.avanzar_cursor_sincronizacion(p_hasta timestamptz)
-returns void
+-- 7.8 · El cursor del sincronizador: solo avanza, y devuelve el valor resultante. Con nulo no lo mueve,
+-- así que sirve también para leerlo (el ajuste no es legible por service_role).
+create function public.avanzar_cursor_sincronizacion(p_hasta timestamptz default null)
+returns timestamptz
 language sql
 security definer
 set search_path = ''
@@ -814,7 +815,8 @@ as $$
   insert into public.facturacion_ajuste as a (unico, sincronizado_hasta)
   values (true, p_hasta)
   on conflict (unico) do update
-    set sincronizado_hasta = greatest(a.sincronizado_hasta, excluded.sincronizado_hasta);
+    set sincronizado_hasta = greatest(a.sincronizado_hasta, excluded.sincronizado_hasta)
+  returning a.sincronizado_hasta;
 $$;
 
 revoke all on function public.reclamar_envios_facturacion(integer)        from public, anon, authenticated, service_role;
@@ -1115,7 +1117,7 @@ comment on function public.documentos_para_sincronizar(public.proveedor_facturac
 comment on function public.notificar_discrepancia_facturacion(public.proveedor_facturacion, text) is
   'Avisa a cada administrador activo, una vez, de que una factura del programa ya no coincide con la copiada. No toca el espejo.';
 comment on function public.avanzar_cursor_sincronizacion(timestamptz) is
-  'El cursor del sincronizador solo avanza (greatest).';
+  'El cursor del sincronizador solo avanza (greatest) y devuelve su valor; con nulo no lo mueve y sirve para leerlo.';
 comment on function public.encolar_envio_borrador(uuid) is
   'Prepara un borrador en el programa: encola el evento. Permisos primero (administrador, o profesional autor y asignado) con el mismo 42501 para ajeno e inexistente. Idempotente; re-encolar un fallido lo deja pendiente.';
 comment on function public.fn_sellar_version_borrador_tras_envio() is
