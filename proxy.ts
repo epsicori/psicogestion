@@ -7,7 +7,7 @@ import { claveAnonSupabase, urlSupabase } from '@/lib/supabase/config';
 // '/prototipo' es la maqueta visual congelada: datos inventados, cero acceso a la
 // base de datos. Pública para poder mirarla sin sesión. Antes de producción, o se
 // protege o se borra (ver app/prototipo/README.md).
-const RUTAS_PUBLICAS = ['/login', '/prototipo'];
+const RUTAS_PUBLICAS = ['/login', '/prototipo', '/api/facturacion/drenar'];
 
 /**
  * Rutas que exigen sesión pero **no** exigen el primer acceso completo: son
