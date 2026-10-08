@@ -6,7 +6,7 @@ import { proveedorActivo } from '@/lib/facturacion/registro';
 import { t, tCon } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
-import { prepararDesdeFormulario } from './acciones-facturacion';
+import { BotonPreparar } from './boton-preparar';
 import { Bloque } from './bloques';
 
 /**
@@ -181,14 +181,7 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
               </div>
               <div className="flex items-center gap-2">
                 {puedePreparar && programa && (
-                  <form action={prepararDesdeFormulario.bind(null, b.id)}>
-                    <button
-                      type="submit"
-                      className="border-border hover:bg-muted focus-visible:ring-ring/50 rounded-lg border px-3 py-1.5 text-sm font-medium outline-none focus-visible:ring-2"
-                    >
-                      {tCon('facturacion.panel.preparar', { programa })}
-                    </button>
-                  </form>
+                  <BotonPreparar borradorId={b.id} programa={programa} />
                 )}
                 {enlace && programa && estado === 'enviado' && (
                   <a

@@ -45,8 +45,3 @@ export async function prepararBorradorEnProveedor(borradorId: unknown): Promise<
 
   return { ok: true };
 }
-
-/** Para `<form action>`: React exige que la acción de un formulario no devuelva nada. */
-export async function prepararDesdeFormulario(borradorId: string): Promise<void> {
-  await prepararBorradorEnProveedor(borradorId);
-}

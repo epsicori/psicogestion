@@ -19,7 +19,7 @@ vi.mock('@/lib/supabase/sesion', () => ({
 
 const activo = vi.hoisted(() => ({ valor: null as unknown }));
 vi.mock('@/lib/facturacion/registro', () => ({ proveedorActivo: async () => activo.valor }));
-vi.mock('./acciones-facturacion', () => ({ prepararDesdeFormulario: vi.fn() }));
+vi.mock('./acciones-facturacion', () => ({ prepararBorradorEnProveedor: vi.fn() }));
 
 const { PanelFacturacion, EstadoBorrador, TONO_DE_ESTADO } = await import('./panel-facturacion');
 
