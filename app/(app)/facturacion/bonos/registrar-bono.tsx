@@ -18,10 +18,38 @@ type Props = {
   hoy: string;
 };
 
+const PREFIJO_CLAVE = 'bono-envio:';
+
+/** La clave que sobrevivió a un desmontaje (cambio de pestaña de la ficha). Sin almacén, `undefined`. */
+function leerGuardada(huella: string): string | undefined {
+  try {
+    return window.sessionStorage.getItem(PREFIJO_CLAVE + huella) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function guardar(huella: string, clave: string): void {
+  try {
+    window.sessionStorage.setItem(PREFIJO_CLAVE + huella, clave);
+  } catch {
+    // Sin almacén la clave vive solo mientras este componente siga montado.
+  }
+}
+
+function olvidar(huella: string): void {
+  try {
+    window.sessionStorage.removeItem(PREFIJO_CLAVE + huella);
+  } catch {
+    // Nada que olvidar.
+  }
+}
+
 /**
- * El botón «Registrar bono» y su diálogo (T-027 §1.4). Calco de `RegistrarCobro`: al registrar, el
+ * El botón «Registrar bono' y su diálogo (T-027 §1.4). Calco de `RegistrarCobro`: al registrar, el
  * diálogo se cierra, el foco vuelve al botón y el `role="status"` lo anuncia. Las claves de envío viven
- * aquí, no en el formulario, que el diálogo desmonta al cerrarse.
+ * aquí, no en el formulario, que el diálogo desmonta al cerrarse; y también en `sessionStorage`, porque la
+ * ficha desmonta la pestaña entera al cambiar de pestaña.
  */
 export function RegistrarBono({ pacientes, pacienteFijo, hoy }: Props) {
   const [abierto, setAbierto] = useState(false);
@@ -30,10 +58,14 @@ export function RegistrarBono({ pacientes, pacienteFijo, hoy }: Props) {
   const claves = useRef(new Map<string, string>());
 
   function claveDeEnvio(huella: string): string {
-    const guardada = claves.current.get(huella);
-    if (guardada !== undefined) return guardada;
+    const guardada = claves.current.get(huella) ?? leerGuardada(huella);
+    if (guardada !== undefined) {
+      claves.current.set(huella, guardada);
+      return guardada;
+    }
     const nueva = crypto.randomUUID();
     claves.current.set(huella, nueva);
+    guardar(huella, nueva);
     return nueva;
   }
 
@@ -78,6 +110,7 @@ export function RegistrarBono({ pacientes, pacienteFijo, hoy }: Props) {
             claveDeEnvio={claveDeEnvio}
             alRegistrar={(huella, avisoDeExito) => {
               claves.current.delete(huella);
+              olvidar(huella);
               setAbierto(false);
               setAviso(avisoDeExito);
             }}

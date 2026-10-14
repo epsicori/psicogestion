@@ -112,4 +112,49 @@ describe('RegistrarBono', () => {
     fireEvent.click(screen.getByRole('button', { name: t('bonos.registrarBono') }));
     expect(screen.getByText('fijo:Ana Ruiz')).toBeInTheDocument();
   });
+  describe('la clave de envío sobrevive al desmontaje (cambio de pestaña de la ficha)', () => {
+    const abrirYPedir = () => {
+      fireEvent.click(screen.getByRole('button', { name: t('bonos.registrarBono') }));
+      fireEvent.click(screen.getByRole('button', { name: 'pedir-clave' }));
+    };
+
+    it('desmontar y volver a montar da la misma clave para los mismos datos; un éxito la olvida', async () => {
+      window.sessionStorage.clear();
+      claves.length = 0;
+      const primero = render(<RegistrarBono pacientes={[]} hoy="2026-10-14" />);
+      abrirYPedir();
+      primero.unmount();
+
+      render(<RegistrarBono pacientes={[]} hoy="2026-10-14" />);
+      abrirYPedir();
+      expect(claves[1]).toBe(claves[0]);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'enviar-de-pega' }));
+      });
+      abrirYPedir();
+      expect(claves[2]).not.toBe(claves[0]);
+    });
+
+    it('sin sessionStorage utilizable (lanza) sigue funcionando con la clave en memoria', () => {
+      claves.length = 0;
+      const spies = [
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+          throw new Error('bloqueado');
+        }),
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+          throw new Error('bloqueado');
+        }),
+      ];
+      try {
+        render(<RegistrarBono pacientes={[]} hoy="2026-10-14" />);
+        abrirYPedir();
+        fireEvent.click(screen.getByRole('button', { name: 'pedir-clave' }));
+        expect(claves).toHaveLength(2);
+        expect(claves[1]).toBe(claves[0]);
+      } finally {
+        spies.forEach((e) => e.mockRestore());
+      }
+    });
+  });
 });

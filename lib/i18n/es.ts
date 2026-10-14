@@ -1476,7 +1476,7 @@ export const es = {
     bonoYaRegistrado:
       'Este bono ya estaba registrado; no se ha añadido otro. Si es un bono nuevo con los mismos datos, regístralo otra vez.',
     resultadoDesconocido:
-      'No sabemos si el bono se ha registrado. Envíalo otra vez con los mismos datos, aquí o al volver a abrir esta ventana, sin salir de la página: si ya estaba registrado, no se duplica.',
+      'No sabemos si el bono se ha registrado. Envíalo otra vez con los mismos datos: si ya estaba registrado, no se duplica. Esto vale mientras no cierres esta pestaña del navegador.',
     noSePudoRegistrar: 'No se ha podido registrar el bono',
     paciente: 'Paciente',
     eligePaciente: 'Elige un paciente',
