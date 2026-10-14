@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,13 @@ vi.mock('./acciones', () => ({
   confirmarPropuestaAgenda: vi.fn(),
   descartarPropuestaAgenda: vi.fn(),
 }));
+
+const leerBonoDeCita = vi.fn();
+vi.mock('./acciones-bono', () => ({
+  leerBonoDeCita: (...a: unknown[]) => leerBonoDeCita(...a),
+  vincularBono: vi.fn(),
+}));
+leerBonoDeCita.mockResolvedValue({ visible: false });
 
 const { PanelCita } = await import('./panel-cita');
 
@@ -115,5 +122,27 @@ describe('PanelCita', () => {
   it('una cita no reprogramable no ofrece «Reprogramar»', () => {
     montar({ reprogramable: false });
     expect(screen.queryByRole('button', { name: 'Reprogramar' })).toBeNull();
+  });
+
+  it('pide el bono de ESA cita y, si es editable, pinta el selector bajo el estado', async () => {
+    leerBonoDeCita.mockResolvedValueOnce({
+      visible: true,
+      editable: true,
+      actual: null,
+      opciones: [{ id: 'b1', texto: 'Bono de 5 · quedan 4' }],
+    });
+    montar();
+    expect(await screen.findByRole('combobox', { name: 'Bono' })).toBeInTheDocument();
+    expect(leerBonoDeCita).toHaveBeenCalledWith(citaDePrueba().id);
+    const contenido = texto();
+    expect(contenido.indexOf('Programada')).toBeLessThan(contenido.indexOf('Bono'));
+  });
+
+  it('si el bono no es visible (técnico), el panel no cambia', async () => {
+    leerBonoDeCita.mockClear();
+    montar();
+    await waitFor(() => expect(leerBonoDeCita).toHaveBeenCalled());
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByText('Bono')).toBeNull();
   });
 });
