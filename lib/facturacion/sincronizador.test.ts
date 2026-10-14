@@ -19,6 +19,9 @@ function bdFalsa(opciones: {
   conEnvio?: InfoDoc[];
   cursor?: string | null;
   espejoDistinto?: Set<string>;
+  // Documentos que la base rechaza con un código de integridad (23514) o con otro (p. ej. 08006).
+  espejoRechazado?: Set<string>;
+  espejoCaido?: Set<string>;
 }) {
   const llamadas: Llamada[] = [];
   const bd = {
@@ -42,6 +45,18 @@ function bdFalsa(opciones: {
         opciones.espejoDistinto?.has(args.p_proveedor_documento_id as string)
       ) {
         return { data: null, error: { code: '23505', message: 'x' } };
+      }
+      if (
+        nombre === 'registrar_factura_espejo' &&
+        opciones.espejoRechazado?.has(args.p_proveedor_documento_id as string)
+      ) {
+        return { data: null, error: { code: '23514', message: 'x' } };
+      }
+      if (
+        nombre === 'registrar_factura_espejo' &&
+        opciones.espejoCaido?.has(args.p_proveedor_documento_id as string)
+      ) {
+        return { data: null, error: { code: '08006', message: 'x' } };
       }
       return { data: 'id', error: null };
     }),
@@ -174,6 +189,45 @@ describe('sincronizar', () => {
     expect(llamadas.find((l) => l.nombre === 'notificar_discrepancia_facturacion')?.args).toMatchObject({
       p_proveedor_documento_id: id,
     });
+  });
+
+  it('un documento que la base rechaza (23514) se avisa y los siguientes se copian igual', async () => {
+    const { proveedor, control, id } = await conDocumento();
+    control.aprobar(id, { ...HECHOS, totalCentimos: 5000 });
+    const otro = await proveedor.crearBorrador({
+      destinatario: { nombre: 'Otra', nif: null },
+      fecha: '2026-10-14',
+      lineas: [],
+    });
+    control.aprobar(otro.documentoId, { ...HECHOS, numero: 'F-2' });
+    const { bd, llamadas } = bdFalsa({
+      pendientes: [
+        { proveedor_documento_id: id, tiene_espejo: false, anotaciones: [] },
+        { proveedor_documento_id: otro.documentoId, tiene_espejo: false, anotaciones: [] },
+      ],
+      espejoRechazado: new Set([id]),
+    });
+
+    const r = await sincronizar({ bd: bd as never, proveedor, idProveedor: 'holded', ahora: AHORA });
+
+    expect(r).toMatchObject({ copiados: 1, discrepancias: 1 });
+    expect(llamadas.find((l) => l.nombre === 'notificar_discrepancia_facturacion')?.args).toMatchObject({
+      p_proveedor_documento_id: id,
+    });
+    // El cursor avanza: la pasada terminó.
+    expect(llamadas.filter((l) => l.nombre === 'avanzar_cursor_sincronizacion' && l.args.p_hasta)).toHaveLength(1);
+  });
+
+  it('un fallo que no es de integridad (la base cae) sigue abortando la pasada', async () => {
+    const { proveedor, control, id } = await conDocumento();
+    control.aprobar(id, HECHOS);
+    const { bd } = bdFalsa({
+      pendientes: [{ proveedor_documento_id: id, tiene_espejo: false, anotaciones: [] }],
+      espejoCaido: new Set([id]),
+    });
+    await expect(
+      sincronizar({ bd: bd as never, proveedor, idProveedor: 'holded', ahora: AHORA }),
+    ).rejects.toThrow('Fallo al sincronizar (espejo)');
   });
 
   it('avanza el cursor a diez minutos antes del inicio', async () => {

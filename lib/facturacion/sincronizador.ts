@@ -74,14 +74,20 @@ export async function sincronizar(dep: DependenciasSincronizacion): Promise<Resu
       p_url_proveedor: h.enlace,
     });
     if (error) {
-      if (error.code !== '23505') fallo(error, 'espejo');
-      // Los datos del programa ya no coinciden con los copiados: se avisa, no se pisa.
+      // Solo un rechazo de integridad (clase 23: otros datos, un total incoherente, un enlace que no es
+      // https, un borrado sin aprobar) es del documento; cualquier otro fallo es de la base y aborta.
+      if (!error.code?.startsWith('23')) fallo(error, 'espejo');
+      // Los datos del programa no encajan con lo que la base admite: se avisa y se sigue con el
+      // siguiente documento (si no, uno solo atascaría la sincronización entera); no se pisa nada.
       const { error: errorAviso } = await bd.rpc('notificar_discrepancia_facturacion', {
         p_proveedor: idProveedor,
         p_proveedor_documento_id: observado.documentoId,
       });
       if (errorAviso) fallo(errorAviso, 'aviso');
       resultado.discrepancias += 1;
+      // Con 23505 el espejo ya existe (con otros datos): la anotación posterior sigue siendo válida.
+      // Con cualquier otro rechazo no hay espejo y la anotación de rectificado/anulado sería incoherente.
+      if (error.code !== '23505') return;
     } else if (!info.tieneEspejo) {
       resultado.copiados += 1;
     }
