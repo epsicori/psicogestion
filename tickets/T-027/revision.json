@@ -1,0 +1,64 @@
+{
+  "ticket": "T-027",
+  "ronda": 1,
+  "commit": "ca6c1962b42c0edfeb9889a4c35764fe0131dd67",
+  "altas": 0,
+  "medias": 2,
+  "bajas": 4,
+  "hallazgos": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "causa": "contrato",
+      "archivo": "app/(app)/agenda/bono-de-cita.tsx",
+      "linea": 74,
+      "descripcion": "Tras guardar, el control no relee leerBonoDeCita (diseño §4 riesgo 6) y sigue ofreciendo cambios que la base ya prohíbe, sin avisar de que en cita pasada el vínculo es definitivo.",
+      "escenario": "Cita de ayer sin bono → se vincula «Bono de 5 · quedan 4» → el selector sigue ofreciendo «Sin bono» y otro bono; al corregir, «No se ha podido cambiar el bono de esta cita» (esEditable/42501), texto «quedan 4» viejo y sin «(vinculado)»; el error de bono no tiene salida en la interfaz."
+    },
+    {
+      "id": "H2",
+      "severidad": "MEDIA",
+      "causa": "cruce",
+      "archivo": "app/(app)/pacientes/[id]/page.tsx",
+      "linea": 151,
+      "descripcion": "En la ficha, FichaCliente monta solo la pestaña activa: cambiar de pestaña desmonta RegistrarBono y su Map de claves de envío, que bonos.resultadoDesconocido promete conservar «sin salir de la página».",
+      "escenario": "Ficha → Facturación → registrar bono 5 sesiones/150 € con corte de red tras el insert → «No sabemos si…» → pestaña Resumen y vuelta → reenvío con mismos datos genera uuid nuevo → segundo bono, no retirable (solo adición), pendiente del paciente 300 € en vez de 150 €."
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "app/(app)/agenda/bono-de-cita.tsx",
+      "linea": 101,
+      "descripcion": "disabled={pendiente || valor === guardado} deshabilita el botón enfocado al pulsar Guardar y lo deja deshabilitado tras el éxito: el foco cae a body.",
+      "escenario": "Usuario de teclado en el panel de la cita pulsa Guardar → el foco sale del panel y el siguiente Tab arranca desde el principio, no desde el bono."
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "lib/i18n/es.ts",
+      "linea": 1547,
+      "descripcion": "bonos.caducadoQueHacer usa «{n} sesiones sin usar» sin forma singular; panel-bonos.tsx:32 le pasa n = saldo.",
+      "escenario": "Bono de 5 con 4 consumidas que caduca → la ficha pinta «Este bono caducó el 01/10/2026 con 1 sesiones sin usar»."
+    },
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "app/(app)/agenda/acciones-bono.ts",
+      "linea": 144,
+      "descripcion": "El texto de la opción enseña lectura.saldo (totales − consumidas) mientras sePuedeElegir decide con comprometidas (consumidas + vinculadas).",
+      "escenario": "Bono de 5 sin realizadas y con 4 citas futuras vinculadas se ofrece como «Bono de 5 · quedan 5»; solo cabe una vinculación más y a la sexta cita el bono desaparece de la lista sin explicación."
+    },
+    {
+      "id": "H6",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "app/(app)/facturacion/bonos/page.tsx",
+      "linea": 111,
+      "descripcion": "Un ?profesional/?paciente válido que no está entre las opciones (derivadas de los bonos visibles) se sigue aplicando mientras el selector pinta «Todos…»; con el directorio caído el selector ni se pinta.",
+      "escenario": "Administrador con marcador /facturacion/bonos?profesional=X; X deja de ser profesional de cualquier bono → selector «Todos los profesionales» y vacío «No hay bonos» aunque la organización tiene bonos."
+    }
+  ]
+}
