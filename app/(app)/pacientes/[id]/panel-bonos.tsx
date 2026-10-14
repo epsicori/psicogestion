@@ -59,9 +59,8 @@ export async function PanelBonos({ pacienteId }: { pacienteId: string }) {
         )}
       </div>
 
-      {!resultado.ok ? (
-        <AvisoDeError mensaje={t('bonos.ficha.error')} />
-      ) : resultado.bonos.length === 0 ? (
+      {!resultado.ok && <AvisoDeError mensaje={t('bonos.ficha.error')} />}
+      {resultado.ok && resultado.bonos.length === 0 && (
         <Tarjeta className="p-5">
           <EstadoVacio
             icono={<Ticket className="size-5" aria-hidden="true" />}
@@ -69,7 +68,8 @@ export async function PanelBonos({ pacienteId }: { pacienteId: string }) {
             explicacion={t('bonos.ficha.vacioExplicacion')}
           />
         </Tarjeta>
-      ) : (
+      )}
+      {resultado.ok && resultado.bonos.length > 0 && (
         <Tarjeta className="p-5">
           <ul className="flex flex-col gap-4">
             {ordenarBonos(resultado.bonos).map((bono) => {

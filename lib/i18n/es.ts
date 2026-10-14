@@ -247,8 +247,9 @@ export const es = {
     },
   },
 
-  // Facturación en la ficha (T-026a)
+  // Facturación en la ficha (T-026a) y enlace de Facturación a Bonos (T-027).
   facturacion: {
+    enlaceBonos: 'Bonos',
     panel: {
       titulo: 'Borradores',
       vacio: 'Todavía no hay borradores de factura',
@@ -1558,12 +1559,6 @@ export const es = {
       errorLectura: 'No se ha podido cargar el bono de esta cita',
     },
   },
-
-  // Enlace de Facturación a Bonos (T-027).
-  facturacion: {
-    enlaceBonos: 'Bonos',
-  },
-
   // Notificaciones (T-015). `tipos` es EL sitio de las etiquetas por tipo: T-038 las reutiliza.
   notificaciones: {
     boton: {
