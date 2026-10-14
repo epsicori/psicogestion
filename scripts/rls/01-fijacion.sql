@@ -292,7 +292,7 @@ select format('%L', e.id) as "EVB" from public.eventos_salientes e
 
 -- El consumidor (service_role): reclama los dos, registra el envío y copia el espejo y una anotación.
 set local role service_role;
-select count(*) as "RECLAMADOS_FIJ" from public.reclamar_envios_facturacion(10) \gset
+select count(*) filter (where r.borrador_id in (:BORRA, :BORRB)) as "RECLAMADOS_FIJ" from public.reclamar_envios_facturacion(10) r \gset
 select public.registrar_envio_borrador(:EVA, 'holded', 'DOC-A', 1::smallint, :VERA, current_date);
 select public.registrar_envio_borrador(:EVB, 'holded', 'DOC-B', 1::smallint, :VERB, current_date);
 select public.registrar_factura_espejo('holded', 'DOC-A', 'F-2026-0001', current_date, 6000, 0, 6000, 'https://programa.example/doc/A');

@@ -708,10 +708,10 @@ select pg_temp.assert(
 select pg_temp.assert(
   (select array_agg(c.column_name::text order by c.ordinal_position) from information_schema.columns c
     where c.table_schema = 'public' and c.table_name = 'borradores_factura_estado')
-  = array['borrador_id', 'ultima_version', 'estado']
+  = array['borrador_id', 'ultima_version', 'estado', 'envio_ambiguo']
   and (select c.data_type from information_schema.columns c
         where c.table_schema = 'public' and c.table_name = 'borradores_factura_estado' and c.column_name = 'estado') = 'text',
-  '26.F9 · borradores_factura_estado: borrador_id, ultima_version, estado (text), en ese orden (PA.2)');
+  '26.F9 · borradores_factura_estado: borrador_id, ultima_version, estado (text), envio_ambiguo, en ese orden (PA.2; envio_ambiguo desde T-026a)');
 select pg_temp.assert(
   (select c.reloptions @> array['security_invoker=true'] from pg_class c where c.oid = 'public.borradores_factura_estado'::regclass)
   and (select c.reloptions @> array['security_barrier=true'] and not coalesce(c.reloptions @> array['security_invoker=true'], false)

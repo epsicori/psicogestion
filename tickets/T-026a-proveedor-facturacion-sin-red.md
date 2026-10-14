@@ -14,6 +14,7 @@ territorio:                           # cerrado por tickets/T-026/diseno.md §6
   - scripts/rls/01-fijacion.sql       # borradores nuevos BORRA/BORRB, no BORR1 (diseño §3, «Fijación en 01»)
   - scripts/rls/11-cobertura.sql      # las tres políticas nuevas en v_declaradas
   - scripts/rls/31-proveedor-facturacion.sql
+  - scripts/rls/26-economico.sql      # solo la aserción 26.F9 (columna envio_ambiguo de M1); ampliado por el propietario el 14-10-2026
   - scripts/rls/README.md
   - scripts/lint-migraciones.ts       # tres tablas nuevas en TABLAS_SOLO_ADICION
   - scripts/lint-migraciones.test.ts
