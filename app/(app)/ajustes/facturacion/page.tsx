@@ -1,3 +1,4 @@
+import { tz } from '@date-fns/tz';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { redirect } from 'next/navigation';
@@ -10,6 +11,8 @@ import { t, tCon } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
 import { FormularioClave } from './formulario-clave';
+
+const ZONA_POR_DEFECTO = 'Europe/Madrid';
 
 /**
  * Ajustes › Programa de facturación (T-026a). Solo el administrador; a los demás se les
@@ -32,14 +35,20 @@ async function CargaDelPrograma() {
     return <p className="text-muted-foreground text-sm">{t('ajustes.facturacion.ningunoDisponible')}</p>;
   }
 
-  const { data, error } = await sesion.supabase.rpc('estado_clave_proveedor_facturacion');
+  const [estadoClave, organizacion] = await Promise.all([
+    sesion.supabase.rpc('estado_clave_proveedor_facturacion'),
+    sesion.supabase.from('organizacion').select('zona_horaria').maybeSingle(),
+  ]);
+  const { data, error } = estadoClave;
   if (error) {
     return (
       <p role="alert" className="text-destructive text-sm">
-        {t('ajustes.facturacion.errores.fallo')}
+        {t('ajustes.facturacion.errores.lectura')}
       </p>
     );
   }
+  // La fecha se da en la zona de la organización, no en la del servidor (ADR-034).
+  const zona = organizacion.data?.zona_horaria ?? ZONA_POR_DEFECTO;
 
   const conectado = data?.[0] ?? null;
   const ficha = (conectado && FICHAS[conectado.proveedor]) || disponibles[0];
@@ -51,7 +60,10 @@ async function CargaDelPrograma() {
           ? tCon('ajustes.facturacion.conectado', {
               programa: ficha.nombre,
               ultimos4: conectado.ultimos4,
-              fecha: format(new Date(conectado.actualizado_en), "d 'de' MMMM 'de' yyyy", { locale: es }),
+              fecha: format(new Date(conectado.actualizado_en), "d 'de' MMMM 'de' yyyy", {
+                in: tz(zona),
+                locale: es,
+              }),
             })
           : t('ajustes.facturacion.sinConectar')}
       </p>

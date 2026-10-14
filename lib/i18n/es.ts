@@ -155,7 +155,8 @@ export const es = {
       errores: {
         clave_invalida: 'La clave no tiene un formato válido',
         sin_permiso: 'Solo el administrador gestiona el programa de facturación',
-        fallo: 'No se pudo guardar. Inténtalo de nuevo',
+        fallo: 'No se pudo completar la operación. Inténtalo de nuevo',
+        lectura: 'No se pudo leer el estado del programa de facturación. Recarga la página para intentarlo de nuevo',
         red: 'No se pudo contactar con el programa. Inténtalo de nuevo más tarde',
         limite: 'El programa pide esperar antes de otra petición. Inténtalo de nuevo en unos minutos',
         no_autorizado: 'El programa no acepta la clave. Revísala y guárdala de nuevo',
@@ -529,9 +530,6 @@ export const es = {
       'Aquí irán las pruebas pasadas, su corrección y los archivos adjuntos.',
     informesEnPreparacion:
       'Aquí irán los informes de alta, seguimiento y derivación, con su firma.',
-    facturacionVacia: 'Aquí no hay nada todavía',
-    facturacionVaciaExplicacion:
-      'La facturación de este paciente se construye en su propio ticket. Preferimos dejarlo vacío y decirlo a enseñar cifras que no son.',
     // Resumen: la agenda de este paciente, que vive FUERA del candado
     ultimaSesion: 'Última sesión',
     sinSesionesRealizadas: 'Todavía no se ha dado ninguna sesión por realizada',

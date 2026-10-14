@@ -89,4 +89,36 @@ describe('FormularioClave', () => {
     await waitFor(() => expect(acciones.desconectarProveedor).toHaveBeenCalledOnce());
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
+  it('Escape no cierra el diálogo de desconectar mientras la petición está en curso', async () => {
+    let terminar!: (r: { ok: false; error: 'fallo' }) => void;
+    acciones.desconectarProveedor.mockReturnValue(new Promise((ok) => (terminar = ok)));
+    pintar(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
+    const dialogo = await screen.findByRole('dialog');
+    const confirmar = [...dialogo.querySelectorAll('button')].find((b) => b.textContent === 'Desconectar')!;
+    await userEvent.click(confirmar);
+    await waitFor(() => expect(acciones.desconectarProveedor).toHaveBeenCalledOnce());
+
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    terminar({ ok: false, error: 'fallo' });
+    // El error llega con el diálogo todavía abierto: quien lo ha pedido lo ve.
+    expect(await screen.findByRole('dialog')).toHaveTextContent('No se pudo completar la operación');
+  });
+
+  it('un segundo envío con Enter mientras se guarda no lanza una segunda acción', async () => {
+    let terminar!: (r: { ok: true }) => void;
+    acciones.guardarClaveProveedor.mockReturnValue(new Promise((ok) => (terminar = ok)));
+    pintar();
+    const campo = screen.getByLabelText('Clave de acceso de Programa X');
+    await userEvent.type(campo, CLAVE);
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(acciones.guardarClaveProveedor).toHaveBeenCalledOnce());
+    await userEvent.keyboard('{Enter}');
+    expect(acciones.guardarClaveProveedor).toHaveBeenCalledOnce();
+    terminar({ ok: true });
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Clave guardada'));
+  });
 });

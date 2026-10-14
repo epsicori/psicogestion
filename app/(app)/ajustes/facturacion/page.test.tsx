@@ -6,8 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // que el enlace de Ajustes solo sale para el administrador.
 
 const rpc = vi.fn();
+const organizacion = vi.fn();
 vi.mock('@/lib/supabase/sesion', () => ({
-  exigirSesion: async () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a) }, usuario: { id: 'u1' } }),
+  exigirSesion: async () => ({
+    supabase: {
+      rpc: (...a: unknown[]) => rpc(...a),
+      from: (tabla: string) => ({ select: () => ({ maybeSingle: () => organizacion(tabla) }) }),
+    },
+    usuario: { id: 'u1' },
+  }),
 }));
 
 const estadoDeCuenta = vi.fn();
@@ -61,6 +68,7 @@ beforeEach(() => {
   estadoDeCuenta.mockResolvedValue({ rol: 'administrador' });
   registro.FICHAS = { holded: FICHA };
   rpc.mockResolvedValue({ data: [], error: null });
+  organizacion.mockResolvedValue({ data: { zona_horaria: 'Europe/Madrid' }, error: null });
 });
 
 describe('Ajustes › Programa de facturación', () => {
@@ -96,6 +104,30 @@ describe('Ajustes › Programa de facturación', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Probar conexión' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Desconectar' })).toBeInTheDocument();
+  });
+
+  it('la fecha de la clave se da en la zona de la organización, no en la del servidor', async () => {
+    // 22:30 UTC del 14-10 es el 15-10 a las 00:30 en Madrid; el servidor está en UTC.
+    const zonaPrevia = process.env.TZ;
+    process.env.TZ = 'UTC';
+    rpc.mockResolvedValue({
+      data: [{ proveedor: 'holded', ultimos4: '••••wxyz', actualizado_en: '2026-10-14T22:30:00Z' }],
+      error: null,
+    });
+    try {
+      render(<>{await resolver(PaginaPrograma(), 'CargaDelPrograma')}</>);
+      expect(screen.getByText(/actualizada el 15 de octubre de 2026/)).toBeInTheDocument();
+    } finally {
+      if (zonaPrevia === undefined) delete process.env.TZ;
+      else process.env.TZ = zonaPrevia;
+    }
+  });
+
+  it('si falla la lectura del estado, el aviso dice que no se pudo leer (no «guardar»)', async () => {
+    rpc.mockResolvedValue({ data: null, error: { code: 'XX000' } });
+    render(<>{await resolver(PaginaPrograma(), 'CargaDelPrograma')}</>);
+    expect(screen.getByRole('alert')).toHaveTextContent('No se pudo leer el estado del programa de facturación');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('guardar');
   });
 
   it.each(['profesional_sanitario', 'tecnico_administrativo'])('%s es redirigido a /ajustes', async (rol) => {

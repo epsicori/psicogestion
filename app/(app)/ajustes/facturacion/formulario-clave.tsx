@@ -60,6 +60,8 @@ export function FormularioClave({ proveedor, programa, conectado }: Props) {
   });
 
   const guardar = handleSubmit((datos) => {
+    // Un segundo Enter mientras se guarda no lanza otra acción (el botón solo usa aria-disabled).
+    if (enviando) return;
     setMensaje('');
     setErrorGeneral('');
     iniciarTransicion(async () => {
@@ -157,6 +159,9 @@ export function FormularioClave({ proveedor, programa, conectado }: Props) {
         error={errorDialogo}
         alConfirmar={desconectar}
         alCerrar={() => {
+          // La X, Escape y el clic fuera llegan aquí sin mirar la petición: mientras sigue en curso,
+          // el diálogo se queda, o su error aparecería después con el diálogo cerrado.
+          if (enviando) return;
           setDesconectando(false);
           setErrorDialogo('');
         }}
