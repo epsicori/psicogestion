@@ -40,6 +40,10 @@
   --color-profesional-4: var(--profesional-4);
   --color-profesional-5: var(--profesional-5);
   --color-profesional-6: var(--profesional-6);
+  --color-densidad-1: var(--densidad-1);
+  --color-densidad-2: var(--densidad-2);
+  --color-densidad-3: var(--densidad-3);
+  --color-densidad-4: var(--densidad-4);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -78,6 +82,12 @@
   --profesional-4: oklch(0.65 0.14 55);
   --profesional-5: oklch(0.6 0.15 20);
   --profesional-6: oklch(0.6 0.1 200);
+  /* Tonos de la escala de densidad de la agenda anual (T-047): cuatro escalones de un mismo
+     matiz, del más claro al más oscuro. Texto y barra van encima (lib/contraste/tokens.ts). */
+  --densidad-1: oklch(0.95 0.03 163);
+  --densidad-2: oklch(0.89 0.05 163);
+  --densidad-3: oklch(0.82 0.07 163);
+  --densidad-4: oklch(0.75 0.08 163);
 }
 
 @layer base {
@@ -127,5 +137,53 @@
   .latido-estado {
     animation: none;
     box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 35%, transparent);
+  }
+}
+
+/*
+ * La rejilla de los doce meses de la agenda anual (T-047, D2): las columnas dependen del ancho
+ * del contenedor, no del de la ventana, y el puntero decide cuántas caben. Con ratón (escritorio)
+ * un día mide 28 px y caben hasta cuatro meses por fila; al tacto el día mide 44 px, caben menos
+ * y a 360 px sale uno por fila. Sin desplazamiento horizontal en ningún ancho.
+ */
+.contenedor-anio {
+  container-type: inline-size;
+}
+
+.meses-anio {
+  display: grid;
+  gap: 1.5rem 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 40rem) {
+  .meses-anio {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 60rem) {
+  .meses-anio {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (pointer: fine) {
+  @container (min-width: 25rem) {
+    .meses-anio {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @container (min-width: 28rem) {
+    .meses-anio {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @container (min-width: 36rem) {
+    .meses-anio {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
   }
 }
