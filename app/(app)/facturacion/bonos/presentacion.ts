@@ -1,3 +1,5 @@
+import { t, tCon } from '@/lib/i18n';
+
 import type { EstadoBono, LecturaBono } from './estado';
 
 /**
@@ -46,6 +48,31 @@ export function ordenarBonos<T extends FilaDeBono>(bonos: T[]): T[] {
       (a.creadoEn < b.creadoEn ? 1 : a.creadoEn > b.creadoEn ? -1 : 0) ||
       (a.bonoId < b.bonoId ? -1 : 1),
   );
+}
+
+/** Tres tonos y ninguno rojo: ni «agotado» ni «caducado» son un error. */
+export function pildoraDeEstado(estado: EstadoBono): { tono: 'success' | 'info' | 'warning'; texto: string } {
+  switch (estado) {
+    case 'vigente':
+      return { tono: 'success', texto: t('bonos.estado.vigente') };
+    case 'agotado':
+      return { tono: 'info', texto: t('bonos.estado.agotado') };
+    case 'caducado':
+      return { tono: 'warning', texto: t('bonos.estado.caducado') };
+  }
+}
+
+/** «Quedan 3 sesiones» / «Queda 1 sesión» / «No quedan sesiones». */
+export function textoQuedan(saldo: number): string {
+  if (saldo <= 0) return t('bonos.quedan.ninguna');
+  if (saldo === 1) return t('bonos.quedan.una');
+  return tCon('bonos.quedan.varias', { n: saldo });
+}
+
+/** La línea de sesiones hechas de más, o `null` si no hay. */
+export function textoExcedidas(excedidas: number): string | null {
+  if (excedidas <= 0) return null;
+  return excedidas === 1 ? t('bonos.excedidas.una') : tCon('bonos.excedidas.varias', { n: excedidas });
 }
 
 /** Una página que pasa de la última cae en la última. */
