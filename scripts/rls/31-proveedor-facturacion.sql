@@ -462,22 +462,43 @@ select pg_temp.assert(
   '31.C9 · el aviso de discrepancia es el texto fijo y no nombra al paciente');
 
 -- C · discrepancia SIN espejo (R2-H1): la base rechazó la copia (aquí, una factura con IRPF: base 100,
--- IVA 21, total 106) y el sincronizador avisa igual. DOC-E tiene envío y no tiene espejo.
+-- IVA 21, total 106) y el sincronizador avisa igual. BORRG es propio de este bloque: tiene envío
+-- (DOC-G) y ni espejo ni borrado sin aprobar, para que el rechazo sea el del check y no el del borrado
+-- (DOC-E lo tiene desde D, y con él C11 pasaba por el motivo equivocado).
+\set BORRG '\'a0260001-0000-4000-8000-000000000007\''
+call pg_temp.reset_sesion();
+insert into public.borradores_factura (id, paciente_id, profesional_id, creado_por) values (:BORRG, :P1, :PRO1, :PRO1);
+select pg_temp.assert_no_lanza(
+  pg_temp.sql_version_simple(:BORRG, :PRO1, 100.00, timestamptz '2026-10-01 10:00:07+00', 'Ana Uno', :CA),
+  '31.fij · la versión 1 de BORRG se sella');
+select format('%L', v.id) as "VERG" from public.borradores_factura_versiones v
+ where v.borrador_id = :BORRG and v.numero_version = 1 \gset
+call pg_temp.como(:ADM);
+select public.encolar_envio_borrador(:BORRG) as "EVG_ID" \gset
+call pg_temp.reset_sesion();
 set local role service_role;
-select pg_temp.assert_lanza_codigo(
-  'select public.registrar_factura_espejo(''holded'', ''DOC-E'', ''F-E'', current_date, 10000, 2100, 10600, ''https://programa.example/doc/E'')',
-  '23514', '31.C11 · la factura con retención (base + cuota ≠ total) no se copia: 23514 y sin espejo');
-select public.notificar_discrepancia_facturacion('holded', 'DOC-E');
-select public.notificar_discrepancia_facturacion('holded', 'DOC-E');
+select count(*) as "RECL_G" from public.reclamar_envios_facturacion(10) r where r.borrador_id = :BORRG \gset
+select public.registrar_envio_borrador(:'EVG_ID', 'holded', 'DOC-G', 1::smallint, :VERG, current_date);
+reset role;
+select pg_temp.assert(:RECL_G = 1
+  and (select count(*) from public.facturas_anotaciones a where a.borrador_id = :BORRG) = 0,
+  '31.C11.fij · BORRG tiene envío (DOC-G) y ninguna anotación');
+
+set local role service_role;
+select pg_temp.assert_lanza_codigo_msg(
+  'select public.registrar_factura_espejo(''holded'', ''DOC-G'', ''F-G'', current_date, 10000, 2100, 10600, ''https://programa.example/doc/G'')',
+  '23514', 'facturas_espejo_check', '31.C11 · la factura con retención (base + cuota ≠ total) no se copia: la rechaza el check, sin espejo');
+select public.notificar_discrepancia_facturacion('holded', 'DOC-G');
+select public.notificar_discrepancia_facturacion('holded', 'DOC-G');
 reset role;
 select pg_temp.assert(
-  (select count(*) from public.facturas_espejo e where e.proveedor_documento_id = 'DOC-E') = 0
+  (select count(*) from public.facturas_espejo e where e.proveedor_documento_id = 'DOC-G') = 0
   and (select count(*) from public.notificaciones n
         where n.tipo = 'facturacion_discrepancia' and n.origen_tabla = 'borradores_factura_envios'
-          and n.origen_id = (select s.id from public.borradores_factura_envios s where s.proveedor_documento_id = 'DOC-E')) = :N_ADM
+          and n.origen_id = (select s.id from public.borradores_factura_envios s where s.proveedor_documento_id = 'DOC-G')) = :N_ADM
   and (select count(distinct n.perfil_id) from public.notificaciones n
         where n.tipo = 'facturacion_discrepancia' and n.origen_tabla = 'borradores_factura_envios'
-          and n.origen_id = (select s.id from public.borradores_factura_envios s where s.proveedor_documento_id = 'DOC-E')) = :N_ADM,
+          and n.origen_id = (select s.id from public.borradores_factura_envios s where s.proveedor_documento_id = 'DOC-G')) = :N_ADM,
   '31.C12 · sin espejo, el aviso cuelga del envío: una vez por administrador activo aunque se notifique dos veces');
 select pg_temp.assert(
   (select n.titulo = 'Factura que no se pudo copiar'
