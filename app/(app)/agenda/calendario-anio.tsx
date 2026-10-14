@@ -138,10 +138,9 @@ export function CalendarioAnio({ vista, parametros, centros, centroElegido, rol 
                 </div>
                 {filasDelMes(mes).map((fila, i) => (
                   <div key={i} role="row" className="grid grid-cols-7">
-                    {fila.map((dia, j) =>
-                      dia === null ? (
-                        <span key={j} role="gridcell" />
-                      ) : (
+                    {fila.map((dia, j) => {
+                      if (dia === null) return <span key={j} role="gridcell" />;
+                      return (
                         <span key={dia.fecha} role="gridcell" className="flex">
                           <Link
                             ref={(el) => {
@@ -173,8 +172,8 @@ export function CalendarioAnio({ vista, parametros, centros, centroElegido, rol 
                             />
                           </Link>
                         </span>
-                      ),
-                    )}
+                      );
+                    })}
                   </div>
                 ))}
               </div>
