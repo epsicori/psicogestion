@@ -75,6 +75,17 @@ describe('rangos', () => {
     expect(hasta.toISOString()).toBe('2026-10-11T22:00:00.000Z');
   });
 
+  it('año: del 1 de enero a las 00:00 al 1 de enero siguiente en la zona (T-047 CA7)', () => {
+    const madrid = rangoDeVista('anio', '2026-03-15', ZONA);
+    expect(madrid.desde.toISOString()).toBe('2025-12-31T23:00:00.000Z');
+    expect(madrid.hasta.toISOString()).toBe('2026-12-31T23:00:00.000Z');
+    const canarias = rangoDeVista('anio', '2026-03-15', 'Atlantic/Canary');
+    expect(canarias.desde.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect(canarias.hasta.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+    const bisiesto = rangoDeVista('anio', '2028-02-29', ZONA);
+    expect((bisiesto.hasta.getTime() - bisiesto.desde.getTime()) / 86_400_000).toBe(366);
+  });
+
   it('próximas: desde ahora hasta el final de mañana en la zona', () => {
     const ahora = new Date('2026-09-26T10:00:00Z');
     const { desde, hasta } = rangoDeProximas(ahora, '2026-09-26', ZONA);

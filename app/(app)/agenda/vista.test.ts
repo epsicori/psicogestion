@@ -398,3 +398,15 @@ describe('construirVista · el mes', () => {
     expect(v.citas.map((c) => [c.id, c.diaIndice, c.fechaLocal, c.tramo])).toEqual([['m', 31, '2026-10-01', 0]]);
   });
 });
+
+describe('construirVista · solo semana o mes (T-047 CA7)', () => {
+  it('con «anio» lanza, aunque el tipo se burle', () => {
+    expect(() => construirVista(entrada({ vista: 'anio' as never }))).toThrow('construirVista: solo semana o mes');
+  });
+
+  it('el tipo no admite «anio»', () => {
+    // @ts-expect-error la vista anual no tiene citas que construir
+    const mal: EntradaVista['vista'] = 'anio';
+    expect(mal).toBe('anio');
+  });
+});

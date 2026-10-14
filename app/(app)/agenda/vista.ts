@@ -14,12 +14,12 @@ import { formatearFechaLarga, formatearRango } from '@/lib/fechas/formato';
 import { t, tCon } from '@/lib/i18n';
 
 import { RUTA_NOTAS_DISPONIBLE, rutaNotas } from './notas';
-import type { Vista } from './parametros';
+import type { VistaConCitas } from './parametros';
 
 export type EntradaVista = {
   filas: FilaAgenda[];
   propuestas: PropuestaPendiente[];
-  vista: Vista;
+  vista: VistaConCitas;
   /** Ya resuelta: «hoy» lo calcula el llamante en la zona. */
   fecha: string;
   zona: string;
@@ -77,7 +77,7 @@ export type CitaVista = {
 
 /** Solo cadenas, números y booleanos: ningún `Date` cruza al cliente (ADR-034). */
 export type VistaCalendario = {
-  vista: Vista;
+  vista: VistaConCitas;
   zona: string;
   hoy: string;
   fechaFoco: string;
@@ -184,6 +184,8 @@ function hora(minuto: number): string {
  */
 export function construirVista(entrada: EntradaVista): VistaCalendario {
   const { vista, fecha, zona, hoy, usuarioId, rol } = entrada;
+  // El año no tiene citas que construir (`vista-anio.ts`): que un `as` no lo cuele por la rama del mes.
+  if (vista !== 'semana' && vista !== 'mes') throw new Error('construirVista: solo semana o mes');
 
   const profesionales = [
     ...new Map(entrada.filas.map((f) => [f.profesionalId, f.profesionalNombre ?? t('agenda.cita.profesional')])).entries(),
