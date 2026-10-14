@@ -16,7 +16,7 @@ vi.mock('../../facturacion/bonos/datos', () => ({
 }));
 const cargarPaciente = vi.fn();
 vi.mock('./datos', () => ({ cargarPaciente: (...a: unknown[]) => cargarPaciente(...a) }));
-const registrarBono = vi.fn((_: unknown) => null as ReactNode);
+const registrarBono = vi.fn<(props: unknown) => ReactNode>(() => null);
 vi.mock('../../facturacion/bonos/registrar-bono', () => ({
   RegistrarBono: (props: unknown) => {
     registrarBono(props);

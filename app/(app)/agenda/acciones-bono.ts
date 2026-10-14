@@ -38,7 +38,7 @@ type Supabase = Awaited<ReturnType<typeof exigirSesion>>['supabase'];
 type FilaCita = {
   id: string;
   paciente_id: string;
-  centro_id: string;
+  centro_id: string | null;
   estado: string;
   inicio: string;
   fin: string;
@@ -84,7 +84,10 @@ async function leerCita(supabase: Supabase, citaId: string): Promise<{ ok: true;
  * centro) y con las citas ya comprometidas contra él. Un error en cualquier lectura es `null`.
  */
 async function bonosDeLaCita(supabase: Supabase, cita: FilaCita): Promise<BonoDeLaCita[] | null> {
-  const { data: zona, error: errorZona } = await supabase.rpc('zona_horaria_centro', { p_centro_id: cita.centro_id });
+  const { data: zona, error: errorZona } = await supabase.rpc('zona_horaria_centro', {
+    // La función acepta null (zona de la organización) y el generador no lo modela (como en `registrarBono`).
+    p_centro_id: cita.centro_id as string,
+  });
   if (errorZona || typeof zona !== 'string' || zona.length === 0) {
     console.error('bono de la cita: fallo al leer la zona', errorZona?.code);
     return null;
