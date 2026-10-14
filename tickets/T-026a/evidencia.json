@@ -1,6 +1,6 @@
 {
   "ticket": "T-026a",
-  "resumen": "Ronda 3 sobre e9e9c7f (worktree .claude/worktrees/agent-a84ef43dca6f7a816; base supabase_db_Psicogestion, max(version)=20261014120000, sin reset; la base ya tenia eventos de test:facturacion). Todo PASA. CA25 que fallaba en 26.F9 ahora pasa: test:rls completo exit 0 con 2599 OK. Desde f27cf0c solo cambian 26.F9 (espera envio_ambiguo) y 01-fijacion.sql:295 (cuenta solo BORRA/BORRB); ninguno debilita la asercion (demostrado). Los CA1-CA24 no cambiaron de codigo (git diff f27cf0c e9e9c7f solo toca scripts/rls/01-fijacion.sql, 26-economico.sql, el contrato y la evidencia) y se dan por buenos; los del banco (CA2-CA12) se reejecutaron igualmente en el test:rls completo de esta ronda.",
+  "resumen": "Ronda 4 sobre d2d7e4d (worktree .claude/worktrees/agent-a84ef43dca6f7a816; Contenedor: supabase_db_Psicogestion; max(version)=20261014120000; sin reset). Todo PASA. Desde e9e9c7f cambian solo: la funcion notificar_discrepancia_facturacion (sin espejo, el aviso cuelga del envio), el banco 31 (C11-C14), sincronizador.test.ts y la bitacora. Reejecutado entero: lint (0 errores, 2 warnings ajenos en lib/cuentas/accesos.test.ts), lint:migraciones (35 limpias), npm test (217 ficheros, 2917 tests), test:rls completo (exit 0, 2598 lineas OK, 31.C11-C14 y 31.N1-N12 incluidas), test:facturacion (3 pasan), next build --webpack (exit 0), territorio a mano (66 ficheros, ninguno fuera; los unicos no listados literalmente son el propio contrato y la bitacora T-026a.md, que casan con tickets/T-026a* y docs/bitacora/T-026a*.md), qa.mjs visita (commit d2d7e4d, sin errores, 5xx ni desborde, logueado como administrador). Secuencia real en la base (begin..rollback) con un envio sin espejo ni borrado previo: registrar espejo con IRPF -> 23514 por facturas_espejo_check; aviso x2 -> 1 fila por administrador (1 admin activo), origen borradores_factura_envios, 0 espejos; despues registrar_anotacion borrado_sin_aprobar entra (la pasada sigue); aviso de documento inexistente -> 23503 'No hay envio para ese documento'. Observacion NO bloqueante: 31.C11 por si solo NO discrimina el IRPF, porque DOC-E ya tiene borrado_sin_aprobar (31:386) y registrar_factura_espejo da 23514 por esa causa antes de llegar al CHECK; la discriminacion la demostre aparte con un envio sin borrado (facturas_espejo_check). C12-C14 si dependen de la funcion nueva (con la antigua darian 23503). Los CA no tocados (CA1, CA4-CA10, CA13-CA16, CA18-CA24) no cambiaron de codigo desde e9e9c7f (git diff 67b1000 d2d7e4d: 4 ficheros); los del banco y cola.bd se reejecutaron igualmente en esta ronda; CA18 (E2E Playwright) y CA21-CA24 se dan por buenos por la evidencia anterior.",
   "criterios": [
     {
       "id": "CA1",
@@ -21,7 +21,7 @@
       "texto": "Espejo idempotente",
       "veredicto": "PASA",
       "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
-      "evidencia": "31.C1 mismo id; C2 23505; C3 conserva total; C4 23503; C5 23514"
+      "evidencia": "31.C1 mismo id; C2 23505; C3 conserva total; C4 23503; C5 23514 | Ronda 4: reejecutado en test:rls completo sobre d2d7e4d (OK)."
     },
     {
       "id": "CA4",
@@ -77,14 +77,14 @@
       "texto": "Vault y ajuste",
       "veredicto": "PASA",
       "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
-      "evidencia": "31.L1-L12 y M1/M2: TEC1/PRO1 42501, estado '••••', quitar borra vault.secrets, centinela fuera de auditoria"
+      "evidencia": "31.L1-L12 y M1/M2: TEC1/PRO1 42501, estado '••••', quitar borra vault.secrets, centinela fuera de auditoria | Ronda 4: reejecutado en test:rls completo sobre d2d7e4d (OK)."
     },
     {
       "id": "CA12",
       "texto": "Reclamo y retroceso",
       "veredicto": "PASA",
       "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
-      "evidencia": "31.N1-N12: segundo reclamo 0, sin concepto/cita_id, intento 8 fallido con una notificación por administrador deduplicada"
+      "evidencia": "31.N1-N12: segundo reclamo 0, sin concepto/cita_id, intento 8 fallido con una notificación por administrador deduplicada | Ronda 4: reejecutado en test:rls completo sobre d2d7e4d (OK)."
     },
     {
       "id": "CA13",
@@ -118,15 +118,15 @@
       "id": "CA17",
       "texto": "Sincronizador",
       "veredicto": "PASA",
-      "comando": "npm test",
-      "evidencia": "sincronizador.test.ts verde dentro de 2915 pruebas (incluye H1: documento rechazado no atasca)."
+      "comando": "npm test (lib/facturacion/sincronizador.test.ts, 217 ficheros 2917 tests OK) + secuencia SQL real en begin..rollback + 31.C11-C14 en test:rls",
+      "evidencia": "Nuevos: 'un documento rectificado cuyo espejo se rechaza (23502) se avisa y NO se anota' y 'un rechazo sin espejo cuyo aviso la base no admite aborta la pasada'. SQL real: IRPF 23514 (facturas_espejo_check) -> notificar x2 -> 1 notificacion por admin con origen borradores_factura_envios, titulo 'Factura que no se pudo copiar'; 0 espejos; registrar_anotacion borrado_sin_aprobar posterior = true (la pasada sigue); documento inexistente -> 23503. test:rls: 31.C12 OK, 31.C13 OK, 31.C14 OK."
     },
     {
       "id": "CA18",
       "texto": "La clave no sale",
       "veredicto": "PASA",
       "comando": "PUERTO=3126 npx playwright test accesibilidad/facturacion-clave.spec.ts (tras next build --webpack)",
-      "evidencia": "✓ 1 [chromium] › facturacion-clave.spec.ts:60:5 › la clave guardada no aparece en ninguna respuesta ni en el build (2.6s); 1 passed. Unitario de guardarClaveProveedor dentro de npm test."
+      "evidencia": "✓ 1 [chromium] › facturacion-clave.spec.ts:60:5 › la clave guardada no aparece en ninguna respuesta ni en el build (2.6s); 1 passed. Unitario de guardarClaveProveedor dentro de npm test. | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores."
     },
     {
       "id": "CA19",
@@ -147,35 +147,35 @@
       "texto": "Ajustes solo administrador",
       "veredicto": "PASA",
       "comando": "npm test (page.test.tsx, formulario-clave.test.tsx) + visita como administrador",
-      "evidencia": "Pruebas verdes. Captura ajustes_facturacion-1280.png: título «Programa de facturación» y «Todavía no hay ningún programa de facturación disponible para conectar», sin formulario ni botones."
+      "evidencia": "Pruebas verdes. Captura ajustes_facturacion-1280.png: título «Programa de facturación» y «Todavía no hay ningún programa de facturación disponible para conectar», sin formulario ni botones. | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores."
     },
     {
       "id": "CA22",
       "texto": "Ficha",
       "veredicto": "PASA",
       "comando": "npm test (panel-facturacion.test.tsx, boton-preparar.test.tsx); navegador en la pestaña Facturación",
-      "evidencia": "Pruebas verdes. En la app (admin, paciente d0080001-…03): «Todavía no hay borradores de factura», botones del tabpanel: []. Textos B2 en es.ts:264 «Emitida en {programa}» y :273 «Borrador borrado en {programa}»."
+      "evidencia": "Pruebas verdes. En la app (admin, paciente d0080001-…03): «Todavía no hay borradores de factura», botones del tabpanel: []. Textos B2 en es.ts:264 «Emitida en {programa}» y :273 «Borrador borrado en {programa}». | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores."
     },
     {
       "id": "CA23",
       "texto": "Vocabulario y caché",
       "veredicto": "PASA",
       "comando": "grep -rniE \"\\b(emitir|facturar|expedir|aprobar|crear factura|verifactu)\\b\" app components lib/i18n; grep use cache|unstable_cache",
-      "evidencia": "Única coincidencia: lib/i18n/es.ts:269 'Abrir en {programa} para emitir' (permitida). «Emitida en {programa}» no casa con el patrón. use cache/unstable_cache: solo un comentario en lib/facturacion/clave.ts:6 que dice «Sin use cache»."
+      "evidencia": "Única coincidencia: lib/i18n/es.ts:269 'Abrir en {programa} para emitir' (permitida). «Emitida en {programa}» no casa con el patrón. use cache/unstable_cache: solo un comentario en lib/facturacion/clave.ts:6 que dice «Sin use cache». | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores."
     },
     {
       "id": "CA24",
       "texto": "Manual, modo degradado",
       "veredicto": "PASA",
       "comando": "npx next start --port 3126 + playwright como admin; qa.mjs visita incluye /facturacion",
-      "evidencia": "App arranca, ficha sin botones de facturación, /facturacion sin errores de consola ni 5xx. El alta de cobros (T-023) la cubre el banco en test:rls; no se registró un cobro por la UI."
+      "evidencia": "App arranca, ficha sin botones de facturación, /facturacion sin errores de consola ni 5xx. El alta de cobros (T-023) la cubre el banco en test:rls; no se registró un cobro por la UI. | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores."
     },
     {
       "id": "CA25",
       "texto": "Cierre: npm test, test:facturacion, test:rls, lint:migraciones, lint, build, territorio",
       "veredicto": "PASA",
-      "comando": "npm run lint; npm run lint:migraciones; npm test; npm run test:facturacion; npm run test:rls; npx next build --webpack; git diff --name-only main...HEAD",
-      "evidencia": "lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts); lint:migraciones '35 migración(es) limpias'; npm test 217 ficheros, 2915 pruebas pasan; test:facturacion 'Tests 3 passed (1)' ejecutado ANTES de test:rls, con sus eventos en la base; test:rls exit 0, 2599 OK, '26.F9 · borradores_factura_estado: borrador_id, ultima_version, estado (text), envio_ambiguo, en ese orden' OK y '31-proveedor-facturacion: completo'; next build --webpack OK (tabla de rutas). Territorio a mano (node territorio.mjs no sirve desde el worktree): 64 ficheros en main...HEAD, todos dentro del territorio (26-economico.sql ya ampliado en el contrato; incluye el propio contrato). Prueba de que la cuenta no se debilita: copia del banco en scratchpad con reclamar_envios_facturacion(1) en lugar de (10) -> 'ASERCIÓN FALLIDA: T-026a · la fijación reclamó los dos envíos', exit 3. La aserción 26.F9 sigue comparando igualdad exacta del array de 4 columnas y el tipo text, así que cualquier columna de más o de menos la rompe. Nota: lib/supabase/tipos-bd.ts figura modificado sin comitear en el worktree desde antes de esta verificación (preexistente, no tocado)."
+      "comando": "npm run lint; npm run lint:migraciones; npm test; npm run test:facturacion; npm run test:rls (exit 0); npx next build --webpack (exit 0); node terr.mjs sobre git diff --name-only main...HEAD",
+      "evidencia": "lint 0 errores/2 warnings ajenos; lint-migraciones: 35 limpias; Tests 2917 passed (217 files); test:facturacion 3 passed; test:rls exit 0, Contenedor: supabase_db_Psicogestion, 2598 OK, sin errores; build exit 0; territorio: 66 ficheros, fuera=[docs/bitacora/T-026a.md, tickets/T-026a-proveedor...md] que son la bitacora y el propio contrato, cubiertos por docs/bitacora/T-026a*.md y por el contrato; pipeline/territorio.mjs T-026a lista ademas ficheros ajenos de la rama main (T-050...), comparado contra el arbol principal, no contra la rama."
     },
     {
       "id": "Fuera-T-026b",
@@ -187,7 +187,7 @@
   "regresiones": [],
   "pantalla": {
     "ticket": "T-026a",
-    "commit": "e9e9c7fb1d135c6bd7ed175ea07a83f638272b93",
+    "commit": "d2d7e4db9dc173c6155b96d0a056ec2e3e9fdcdb",
     "rutas": [
       "/ajustes",
       "/ajustes/facturacion",
