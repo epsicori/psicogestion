@@ -70,3 +70,31 @@ export function EsqueletoCuadro(): ReactNode {
     </div>
   );
 }
+
+/**
+ * Marca de carga para la vista anual: doce meses con su título y las cinco semanas de días.
+ * Las clases `contenedor-anio` y `meses-anio` son las mismas que la vista, para que el esqueleto
+ * ocupe el sitio que ocupará el año (T-047).
+ */
+export function EsqueletoAnio(): ReactNode {
+  return (
+    <div role="status" aria-label={t('agenda.esqueletos.anio')} className="contenedor-anio">
+      <div className="meses-anio">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div key={i}>
+            <div className="bg-muted mb-2 h-4 w-24 animate-pulse rounded motion-reduce:animate-none" />
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: 35 }).map((_, j) => (
+                <div
+                  key={j}
+                  className="bg-muted aspect-square animate-pulse rounded motion-reduce:animate-none"
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">{t('agenda.esqueletos.anio')}</span>
+    </div>
+  );
+}
