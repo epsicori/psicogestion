@@ -883,6 +883,7 @@ export const es = {
       calendario: 'Cargando calendario',
       lista: 'Cargando lista de citas',
       cuadro: 'Cargando cuadro de métricas',
+      anio: 'Cargando el año',
     },
     errorBloque: 'No se ha podido cargar este bloque. Vuelve a intentarlo en un momento.',
 
@@ -895,6 +896,9 @@ export const es = {
       vista: 'Vista del calendario',
       semana: 'Semana',
       mes: 'Mes',
+      anio: 'Año',
+      anioAnterior: 'Año anterior',
+      anioSiguiente: 'Año siguiente',
       centro: 'Centro',
       todosLosCentros: 'Todos los centros',
       profesional: 'Profesional',
@@ -905,6 +909,17 @@ export const es = {
     tituloSemanaDosMeses: '{desde} de {mesDesde} – {hasta} de {mesHasta} de {anio}',
     tituloSemanaDosAnios: '{desde} de {mesDesde} de {anioDesde} – {hasta} de {mesHasta} de {anioHasta}',
     tituloMes: '{mes} de {anio}',
+
+    // T-047 · La vista anual como mapa de densidad
+    anio: {
+      mes: '{mes} · {recuento}',
+      dia: '{fecha}, {recuento}',
+      sinCitas: 'sin citas',
+      vacio: 'Sin citas en {anio}',
+      vacioExplicacion: 'Elige un día para abrir su semana.',
+      inicialesSemana: 'L M X J V S D',
+      leyenda: { titulo: 'Citas por día, sin canceladas' },
+    },
 
     cita: {
       paciente: 'Paciente',
