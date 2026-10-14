@@ -1,0 +1,19 @@
+{
+  "ticket": "T-026a",
+  "ronda": 2,
+  "commit": "d9b528739d7a252b2e4cf1146132cfc1dd560d8c",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 0,
+  "hallazgos": [
+    {
+      "id": "R2-H1",
+      "severidad": "MEDIA",
+      "causa": "cruce",
+      "archivo": "lib/facturacion/sincronizador.ts",
+      "linea": 86,
+      "descripcion": "El arreglo de H1 avisa con notificar_discrepancia_facturacion, que lanza 23503 si el documento no tiene espejo (migración l.801-806). Eso es justo lo que pasa con todo rechazo distinto de 23505, así que la sincronización sigue abortando. La prueba nueva pasa solo porque su bd falsa acepta cualquier RPC.",
+      "escenario": "Un documento se aprueba en el programa con total distinto de base + cuota (o un enlace que no es https, o un número de más de 60 caracteres). registrar_factura_espejo da 23514 sin crear el espejo y notificar_discrepancia_facturacion da 23503 «No hay factura copiada». El sincronizador lanza «Fallo al sincronizar (aviso)», la ruta responde 500 y el cursor no avanza. Cada 5 minutos se repite: ningún espejo posterior se copia y no se avisa a nadie. Reproducido en supabase_db_Psicogestion dentro de begin … rollback con el envío BD-a1c87670-1."
+    }
+  ]
+}

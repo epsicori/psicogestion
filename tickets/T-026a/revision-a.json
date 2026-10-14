@@ -1,55 +1,19 @@
 {
   "ticket": "T-026a",
-  "ronda": 1,
-  "commit": "b57a26fb58acbcbc2981c203791d4acf8ef4e4f8",
+  "ronda": 2,
+  "commit": "d9b528739d7a252b2e4cf1146132cfc1dd560d8c",
   "altas": 0,
-  "medias": 2,
-  "bajas": 3,
+  "medias": 1,
+  "bajas": 0,
   "hallazgos": [
     {
-      "id": "H1",
-      "severidad": "MEDIA",
-      "causa": "local",
-      "archivo": "lib/facturacion/sincronizador.ts",
-      "linea": 77,
-      "descripcion": "Cualquier error de registrar_factura_espejo distinto de 23505 hace lanzar y aborta toda la sincronización antes de avanzar el cursor; la pasada A ordena por enviado_en y vuelve a tropezar siempre con el mismo documento.",
-      "escenario": "Un documento se aprueba en el programa con retención de IRPF (total distinto de base + cuota), con un enlace que no es https o con un número de más de 60 caracteres. registrar_factura_espejo devuelve 23514, el sincronizador lanza y la ruta responde 500. Cada 5 minutos pasa lo mismo: ningún espejo posterior se copia nunca, el cursor no avanza y no se avisa a nadie."
-    },
-    {
-      "id": "H2",
+      "id": "R2-H1",
       "severidad": "MEDIA",
       "causa": "cruce",
-      "archivo": "supabase/migrations/20261014120000_proveedor_facturacion.sql",
-      "linea": 619,
-      "descripcion": "El aviso facturacion_envio_fallido usa como origen el id del borrador con on conflict do nothing sobre el índice existente notificaciones_origen_unico: un borrador reencolado que vuelve a fallar no avisa a nadie.",
-      "escenario": "El envío falla y se avisa. El administrador lo vuelve a preparar (el evento pasa a pendiente con 0 intentos) y el segundo intento acaba en ambiguo. El insert del aviso choca con el primero y no se crea nada. El panel muestra fallido con el botón Preparar y, si se pulsa, se crea un segundo documento en el programa para el mismo borrador. El banco N11 no comprueba ningún aviso."
-    },
-    {
-      "id": "H3",
-      "severidad": "BAJA",
-      "causa": "local",
-      "archivo": "supabase/migrations/20261014120000_proveedor_facturacion.sql",
-      "linea": 1058,
-      "descripcion": "En borradores_factura_estado, la rama fallido va antes que descartado: un borrador descartado después de un envío fallido sigue saliendo como fallido y con el botón Preparar.",
-      "escenario": "El envío falla y después se sella una versión descartada (la congelación no actúa porque no hay envío). El estado sigue siendo fallido y el panel ofrece Preparar. encolar_envio_borrador responde siempre 23514 (sin versión que se pueda preparar)."
-    },
-    {
-      "id": "H4",
-      "severidad": "BAJA",
-      "causa": "local",
-      "archivo": "supabase/migrations/20261014120000_proveedor_facturacion.sql",
-      "linea": 905,
-      "descripcion": "Tras la anotación borrado_sin_aprobar, la fila de envío sigue ahí: el borrador queda congelado y enviado para siempre, sin poder prepararse de nuevo, corregirse ni descartarse.",
-      "escenario": "El administrador borra en Holded, sin aprobarlo, un documento con un error. El sincronizador lo anota. En la ficha el estado sale enviado, encolar devuelve el evento viejo sin hacer nada y la congelación impide sellar una versión corregida y descartarlo. El diseño no prevé esta salida."
-    },
-    {
-      "id": "H5",
-      "severidad": "BAJA",
-      "causa": "prueba",
-      "archivo": "scripts/rls/31-proveedor-facturacion.sql",
-      "linea": 531,
-      "descripcion": "31.G3/G4 no distinguen la rama es_profesional_asignado de la cabecera del espejo de la regla b.profesional_id = auth.uid() (D17), que el diseño (líneas 677-678) pide probar o anotar como mutante no matado.",
-      "escenario": "Si alguien cambia la rama del profesional de facturas_espejo_cabecera a b.profesional_id = auth.uid(), G3 y G4 siguen verdes, porque PRO1 y PRO2 son a la vez autores y asignados. Un profesional asignado que no es el autor deja de ver lo emitido sin que el banco lo note. La bitácora no lo anota como mutante no matado."
+      "archivo": "lib/facturacion/sincronizador.ts",
+      "linea": 86,
+      "descripcion": "El arreglo de H1 avisa con notificar_discrepancia_facturacion, que lanza 23503 si el documento no tiene espejo (migración l.801-806). Eso es justo lo que pasa con todo rechazo distinto de 23505, así que la sincronización sigue abortando. La prueba nueva pasa solo porque su bd falsa acepta cualquier RPC.",
+      "escenario": "Un documento se aprueba en el programa con total distinto de base + cuota (o un enlace que no es https, o un número de más de 60 caracteres). registrar_factura_espejo da 23514 sin crear el espejo y notificar_discrepancia_facturacion da 23503 «No hay factura copiada». El sincronizador lanza «Fallo al sincronizar (aviso)», la ruta responde 500 y el cursor no avanza. Cada 5 minutos se repite: ningún espejo posterior se copia y no se avisa a nadie. Reproducido en supabase_db_Psicogestion dentro de begin … rollback con el envío BD-a1c87670-1."
     }
   ]
 }

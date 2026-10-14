@@ -1,109 +1,29 @@
 {
   "ticket": "T-026a",
-  "ronda": 1,
-  "commit": "b57a26f",
+  "ronda": 2,
+  "commit": "d9b528739d7a252b2e4cf1146132cfc1dd560d8c",
   "altas": 0,
-  "medias": 4,
-  "bajas": 7,
+  "medias": 1,
+  "bajas": 1,
+  "cerrados_ronda_1": ["M1", "M2", "M3", "M4", "B1", "B2", "B3", "B4", "B5", "B6", "B7"],
   "hallazgos": [
     {
-      "id": "M1",
+      "id": "R2-M1",
       "severidad": "MEDIA",
-      "causa": "contrato",
-      "archivo": "app/(app)/pacientes/[id]/panel-facturacion.tsx",
-      "linea": 150,
-      "descripcion": "Todo 'fallido' se pinta como 'No se pudo preparar' con Preparar; la clave fallidoAmbiguo (es.ts:259) no se usa y la vista borradores_factura_estado no expone ultimo_error, contra el diseño de T-026 §1.7.",
-      "escenario": "crearBorrador crea el documento y registrar_envio falla tres veces → evento fallido 'ambiguo' → el panel ofrece Preparar sin aviso → encolar lo reabre → reclamo con ya_enviado nulo → segundo documento en el programa para el mismo borrador."
-    },
-    {
-      "id": "M2",
-      "severidad": "MEDIA",
-      "causa": "contrato",
-      "archivo": "app/(app)/pacientes/[id]/panel-facturacion.tsx",
-      "linea": 104,
-      "descripcion": "El estado 'facturado' y la lista del técnico no enlazan al documento: no se selecciona url_proveedor de facturas_espejo, contra diseño §1.7 y CA22.",
-      "escenario": "Un borrador pasa a facturado → la fila dice 'Emitida en X · nº 12' sin enlace; el técnico ve sus emitidas sin forma de abrir ninguna."
-    },
-    {
-      "id": "M3",
-      "severidad": "MEDIA",
-      "causa": "prueba",
-      "archivo": "app/(app)/pacientes/[id]/panel-facturacion.test.tsx",
-      "linea": 100,
-      "descripcion": "facturas_anotaciones siempre devuelve [] en las pruebas: ninguna de las tres anotaciones ni los textos de facturadoSinPrograma, descartado y fallido tienen aserción.",
-      "escenario": "Medido sobre copia: '{false && programa && datos.anotaciones…}', cambiar facturadoSinPrograma por el texto de enviado, y ofrecer Preparar en descartado sobreviven con 18/18 en verde."
-    },
-    {
-      "id": "M4",
-      "severidad": "MEDIA",
-      "causa": "contrato",
-      "archivo": "app/(app)/pacientes/[id]/panel-facturacion.tsx",
-      "linea": 173,
-      "descripcion": "Las anotaciones se pintan como texto y no como Pildora (CA22), y solo si hay programa activo, así que desaparecen en modo degradado.",
-      "escenario": "Borrador enviado con anotación borrado_sin_aprobar → se desconecta la clave → la ficha solo dice 'Borrador enviado' y el profesional cree pendiente de aprobar un borrador que ya no existe."
-    },
-    {
-      "id": "B1",
-      "severidad": "BAJA",
       "causa": "cruce",
-      "archivo": "supabase/migrations/20261014120000_proveedor_facturacion.sql",
-      "linea": 1058,
-      "descripcion": "La vista borradores_factura_estado evalúa 'fallido' antes que 'descartado', y el panel ofrece Preparar en un borrador descartado.",
-      "escenario": "Borrador con evento fallido → el profesional lo descarta (la congelación lo permite) → la ficha muestra 'No se pudo preparar' y Preparar, que siempre devuelve no_preparable."
+      "archivo": "lib/facturacion/sincronizador.ts",
+      "linea": 82,
+      "descripcion": "El arreglo de H1 llama a notificar_discrepancia_facturacion tras un rechazo de clase 23 distinto de 23505, pero esa función (migración :803-806, no tocada) exige un espejo que en ese caso no existe y lanza 23503, así que fallo('aviso') vuelve a abortar la pasada; la prueba nueva está verde porque la base falsa acepta el aviso sin espejo.",
+      "escenario": "Reproducido en begin…rollback: factura con retención IRPF (base 100, IVA 21, total 106) → registrar_factura_espejo 23514 por check (base + cuota_iva = total) → notificar_discrepancia_facturacion 23503 'No hay factura copiada' → sincronizar lanza 'Fallo al sincronizar (aviso)', ni el resto de la pasada A ni la B corren, el cursor no avanza, y se repite cada cinco minutos: ninguna factura posterior llega a 'Emitida'."
     },
     {
-      "id": "B2",
-      "severidad": "BAJA",
-      "causa": "contrato",
-      "archivo": "lib/i18n/es.ts",
-      "linea": 268,
-      "descripcion": "'Borrado en {programa} sin emitir' sale en el grep de CA23 fuera de la lista permitida, y 'Emitida · nº {numero}' (es.ts:262) no es la forma permitida 'Emitida en {programa}' de ADR-078.3.",
-      "escenario": "El grep de CA23 sobre es.ts devuelve una línea fuera de la lista → una verificación posterior o una regla de CI marca el CA como fallido; decide el propietario si se añaden a la lista o se reescriben."
-    },
-    {
-      "id": "B3",
-      "severidad": "BAJA",
-      "causa": "local",
-      "archivo": "app/(app)/pacientes/[id]/panel-facturacion.tsx",
-      "linea": 208,
-      "descripcion": "Sin programa, la lista de facturas emitidas del técnico se titula 'Borradores'.",
-      "escenario": "Un técnico abre la ficha en modo degradado (siempre en T-026a) → ve facturas emitidas bajo el rótulo 'Borradores'."
-    },
-    {
-      "id": "B4",
-      "severidad": "BAJA",
-      "causa": "local",
-      "archivo": "app/(app)/ajustes/facturacion/dialogo-desconectar.tsx",
-      "linea": 30,
-      "descripcion": "La X, Escape y el clic fuera del diálogo cierran sin mirar 'enviando', y el formulario de clave (formulario-clave.tsx:62) no bloquea un segundo envío con Enter.",
-      "escenario": "Desconectar y Escape antes de la respuesta → la petición falla → errorDialogo se guarda con el diálogo cerrado y reaparece al reabrirlo, describiendo un intento anterior; Enter dos veces lanza dos guardarClaveProveedor."
-    },
-    {
-      "id": "B5",
-      "severidad": "BAJA",
-      "causa": "contrato",
-      "archivo": "app/(app)/ajustes/facturacion/page.tsx",
-      "linea": 54,
-      "descripcion": "La fecha de la clave se formatea con new Date en la zona del servidor y no en la del centro (regla de fechas de nextjs.md, ADR-034).",
-      "escenario": "Servidor en UTC, clave guardada el 15-10 a las 00:30 en Madrid → Ajustes dice 'Conectado desde el 14 de octubre'."
-    },
-    {
-      "id": "B6",
-      "severidad": "BAJA",
-      "causa": "local",
-      "archivo": "app/(app)/ajustes/facturacion/page.tsx",
-      "linea": 39,
-      "descripcion": "El texto 'No se pudo guardar' (es.ts:158) se usa también para fallos de lectura, de prueba de conexión y de desconexión, y las claves ficha.facturacionVacia* (es.ts:532-533) quedan sin uso.",
-      "escenario": "La base no responde al abrir Ajustes › Programa de facturación → la página dice 'No se pudo guardar. Inténtalo de nuevo' sin que nadie haya guardado nada."
-    },
-    {
-      "id": "B7",
+      "id": "R2-B1",
       "severidad": "BAJA",
       "causa": "prueba",
-      "archivo": "lib/facturacion/importaciones.test.ts",
-      "linea": 22,
-      "descripcion": "La prueba de que el simulado no entra en producción solo detecta 'from …simulado' estático.",
-      "escenario": "Medido sobre copia: añadir \"export const _x = () => import('./simulado');\" a lib/facturacion/registro.ts deja la suite en verde."
+      "archivo": "lib/facturacion/sincronizador.ts",
+      "linea": 90,
+      "descripcion": "El 'return' que impide anotar rectificado/anulado en un documento cuyo espejo la base rechazó no tiene prueba, ni la tiene un código de clase 23 distinto de 23514/23505.",
+      "escenario": "Medido: quitar 'if (error.code !== '23505') return;' o restringir la clase 23 a 23505/23514 deja sincronizador.test.ts 10/10 en verde; con la línea quitada, un documento rectificado cuyo espejo se rechaza llama a registrar_anotacion_documento, que lanza 23514 sin espejo, y fallo('anotación') aborta la sincronización."
     }
   ]
 }

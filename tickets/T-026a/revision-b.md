@@ -1,66 +1,56 @@
-Sin hallazgos ALTA. (Revisor B, ronda 1, commit b57a26f: 0 ALTA · 4 MEDIA · 7 BAJA.)
+Sin hallazgos ALTA. (Revisor B, ronda 2, commit d9b5287: 0 ALTA · 1 MEDIA · 1 BAJA.)
 
-# T-026a · Revisión B (aplicación: lib/facturacion, acciones, Ajustes › Programa de facturación, Ficha › Facturación, textos, roles, pruebas)
+# T-026a · Revisión B, ronda 2 (delta `git diff 29d77bb d9b5287`)
 
-Base: `git diff main...HEAD`. Mutantes medidos sobre una copia `git archive HEAD` en el scratchpad, sin tocar el worktree.
+Método: los once hallazgos de mi ronda 1, uno por uno; después las regresiones del delta. Los mutantes se
+midieron sobre una copia `git archive d9b5287` en el scratchpad, con una junction a `node_modules`, y sin
+tocar el worktree. La base se consultó solo dentro de `begin … rollback`, en `supabase_db_Psicogestion`.
 
-Comprobado sin hallazgo: la ruta de drenado (503 sin secreto, 401 con secreto erróneo, `timingSafeEqual`, mutantes matados por `route.test.ts`); `proxy.ts` solo añade la ruta; `estado_de_cuenta` vacío si el perfil no está activo y el guard de la acción lo respeta; `facturas_espejo.total` en euros y `euros()` correcto; `guardarClaveProveedor` no devuelve la clave; los mensajes 23514 de `encolar` casan con los fragmentos que la acción traduce; la vista del técnico no expone `borrador_id` ni líneas; el nombre del programa no sale de `lib/facturacion` salvo `esquemas.ts`; sin `use cache`.
+## Estado de los hallazgos de la ronda 1
+
+| Id | Estado | Comprobación |
+|---|---|---|
+| M1 fallido ambiguo | CERRADO | La vista expone `envio_ambiguo` (`estado_cola_borrador` devuelve `ambiguo` si `ultimo_error = 'ambiguo'`). `cola.ts:123` lo registra siempre como permanente, así que la marca no se pierde en un reintento. El panel avisa y deja preparar, como fija T-026 §1.7. Banco 31 K8, K9 y K10. |
+| M2 factura sin enlace | CERRADO | `url_proveedor` se lee en `facturas_espejo` y en `facturas_espejo_cabecera`, que sí lo expone (migración :222). El `check '^https://'` (:65) impide un `javascript:` en el `href`. Mutante «sin enlace del técnico»: muerto, 2 rojas. |
+| M3 mutantes vivos | CERRADO | Los tres de la ronda 1 se repitieron: sin anotaciones (4 rojas), el texto de `enviado` en `facturadoSinPrograma` (1 roja) y Preparar en `descartado` (1 roja). |
+| M4 anotaciones | CERRADO | Las anotaciones van en `Pildora` y con «el programa de facturación» cuando no hay programa. El mutante `programa ?? ''` muere. |
+| B1 fallido antes que descartado | CERRADO | La vista evalúa `descartado` antes que `enviado`, `en_cola` y `fallido`. Fuera del bypass nuevo (que exige `borrado_sin_aprobar`), no hay otra forma de tener una versión descartada con envío: los estados del outbox son solo `pendiente`, `entregado` y `fallido`, y la congelación bloquea `pendiente` (incluido un reclamo en curso). Banco 31 K11. |
+| B2 textos | CERRADO | El grep de CA23 sobre `app components lib/i18n` solo devuelve `es.ts:269 'Abrir en {programa} para emitir'`. |
+| B3 título del técnico | CERRADO | `emitidasSinPrograma: 'Emitidas'`, con prueba. |
+| B4 diálogo y doble Enter | CERRADO | Si se quita cualquiera de las dos guardas `if (enviando) return`, su prueba falla. |
+| B5 zona de la fecha | CERRADO | `tz(organizacion.zona_horaria)`. Si se quita `in: tz(zona)`, la prueba de las 22:30Z (servidor en UTC) falla. |
+| B6 errores y claves muertas | CERRADO | `errores.lectura` para la lectura. `facturacionVacia*` ya no tiene ningún uso en `app`, `components` ni `lib`. |
+| B7 simulado | CERRADO | La expresión cubre `import()` y `require`, y se prueba a sí misma con seis formas y dos negativas. |
+
+Comprobado en el delta, sin hallazgo:
+- La ruta `drenar` y el secreto de la clave no cambian: `route.ts`, `clave.ts` y `acciones.ts` no están en el delta, y el formulario sigue sin recibir la clave.
+- `carga.reaperturas`: en `eventos_salientes` ningún disparador impide el `jsonb_set`, y el consumidor solo lee `carga ->> 'borrador_id'`.
+- El bypass de la congelación solo actúa con una versión descartada **y** la anotación `borrado_sin_aprobar`, que exige un envío. Por eso no puede haber un evento `pendiente` reabierto, porque `encolar` sale antes si hay envío. Banco J5, J6 y J7 con su gemela.
+- `tipos-bd.ts`: el cambio local sin comitear es solo de fin de línea. El contenido coincide con el generado.
+- Alcance: `26-economico.sql` solo toca 26.F9, por decisión del propietario; `01-fijacion.sql`, dentro del territorio.
+
+Descartados por falta de un escenario con daño:
+- El `origen_id` derivado con `md5` no apunta a ninguna fila de `borradores_factura`, pero hoy ningún consumidor de `notificaciones` lee `origen_id`.
+- El panel acepta `envio_ambiguo` con cualquier estado: si se quita la comprobación de `fallido`, el mutante sobrevive, pero solo cambia el texto de un borrador descartado.
+- El tono de la pastilla: si se fija el tono a `info`, el mutante sobrevive, y es pintura.
 
 ## MEDIA
 
-### M1 · `fallido` ambiguo se pinta como un fallo normal y se ofrece Preparar
-- `app/(app)/pacientes/[id]/panel-facturacion.tsx:150-162` (y `lib/i18n/es.ts:259`, vista `borradores_factura_estado` en `supabase/migrations/20261014120000_proveedor_facturacion.sql:1048-1060`).
-- El panel muestra para todo `fallido` «No se pudo preparar» con el botón Preparar; la clave `facturacion.panel.estado.fallidoAmbiguo` existe pero no se usa, y la vista no expone `ultimo_error`, así que la página no puede distinguir el caso ambiguo que el diseño de T-026 §1.7 obliga a avisar.
-- Escenario: (con el adaptador real de T-026b) `crearBorrador` crea el documento en el programa y `registrar_envio` falla tres veces → el evento queda `fallido` con error `ambiguo` → el panel ofrece Preparar sin aviso → `encolar` reabre el evento → el reclamo sale con `ya_enviado` nulo → segundo documento en el programa para el mismo borrador, que una persona puede aprobar dos veces.
+### R2-M1 · El arreglo de H1 sigue atascando el sincronizador: el aviso exige un espejo que no existe en ese caso
+- `lib/facturacion/sincronizador.ts:79-86`, con `supabase/migrations/20261014120000_proveedor_facturacion.sql:803-806` (`notificar_discrepancia_facturacion`, que el delta no toca).
+- Para cualquier rechazo de clase 23 que no sea 23505, no existe fila en `facturas_espejo`. Aun así, la corrección llama a `notificar_discrepancia_facturacion`. Esa función busca el espejo y, si no lo hay, lanza 23503 «No hay factura copiada para ese documento». Entonces `if (errorAviso) fallo(errorAviso, 'aviso')` aborta la pasada entera, igual que antes del arreglo. La prueba nueva (`sincronizador.test.ts:194`) sale verde por el motivo equivocado: la base falsa responde `ok` a `notificar_discrepancia_facturacion` haya espejo o no.
+- Escenario (reproducido en `begin … rollback` sobre el envío `BD-a1c87670-1`):
+  1. El programa expide una factura con retención de IRPF: base 100, IVA 21 y total 106.
+  2. `registrar_factura_espejo` rechaza la fila por el `check (base + cuota_iva = total)` (:67), con 23514.
+  3. `notificar_discrepancia_facturacion` lanza 23503.
+  4. `sincronizar` lanza «Fallo al sincronizar (aviso)». Los documentos posteriores de la pasada A no se copian, la pasada B no corre y el cursor no avanza.
+  5. Cada cinco minutos se repite lo mismo, porque la pasada A empieza por los más antiguos.
 
-### M2 · `facturado` sin enlace al documento, ni en la ficha ni en la lista del técnico
-- `app/(app)/pacientes/[id]/panel-facturacion.tsx:104-107, 186, 205-221`.
-- El diseño (§1.7) fija `facturado → enlace al documento (url_proveedor)` y para el técnico «número, fecha, total y enlace»; la consulta a `facturas_espejo` no selecciona `url_proveedor` y el único enlace del panel está condicionado a `estado === 'enviado'`.
-- Escenario: un borrador pasa a `facturado` → la fila muestra «Emitida en X · nº 12» sin forma de abrir la factura; el técnico ve su lista de emitidas sin ningún enlace. CA22 («cada estado con su acción») queda incumplido para `facturado`.
-
-### M3 · Las anotaciones y varios estados del panel no tienen ninguna prueba
-- `app/(app)/pacientes/[id]/panel-facturacion.test.tsx` (todas las respuestas de `facturas_anotaciones` son `ok([])`; la prueba «facturado sin programa» de la línea ~100 solo cubre `en_cola`).
-- Ningún caso pinta `borrado_sin_aprobar`, `rectificado` ni `anulado`, ni afirma el texto de `facturadoSinPrograma`, `descartado` o `fallido`.
-- Escenario medido: tres mutantes sobreviven con 18/18 en verde: (a) `{false && programa && datos.anotaciones…}` (no se pinta ninguna anotación), (b) sustituir el texto `facturadoSinPrograma` por el de `enviado` (una factura emitida se lee «Borrador enviado»), (c) ofrecer Preparar también en `descartado`. CA22 pide «las tres anotaciones como pastilla» y no hay prueba que lo sostenga.
-
-### M4 · Las anotaciones desaparecen en modo degradado y no son pastillas
-- `app/(app)/pacientes/[id]/panel-facturacion.tsx:173-180`.
-- Las anotaciones se pintan como `<span>` de texto (no `Pildora`, contra CA22) y solo si `programa` existe; en T-026a no hay programa disponible nunca, y en T-026b basta con Desconectar.
-- Escenario: un borrador `enviado` que alguien borró en el programa sin emitir (anotación `borrado_sin_aprobar`) → se desconecta la clave → la ficha sigue mostrando «Borrador enviado» y nada más: el profesional cree que el borrador está pendiente de aprobar cuando ya no existe.
+  Ninguna factura posterior llega a «Emitida» en la ficha. Pasa lo mismo con un `url_proveedor` que no es `https://` o con un número de más de 60 caracteres.
 
 ## BAJA
 
-### B1 · La vista evalúa `fallido` antes que `descartado`
-- `supabase/migrations/20261014120000_proveedor_facturacion.sql:1058-1059` (consumido por `panel-facturacion.tsx:150`).
-- La congelación permite una nueva versión descartada con el evento en `fallido`; la vista sigue diciendo `fallido`.
-- Escenario: un borrador falla (evento `fallido`) → el profesional lo descarta → la ficha muestra «No se pudo preparar» y el botón Preparar, que siempre devuelve `no_preparable`: un control sin acción real (regla de `CLAUDE.md` › Interfaz).
-
-### B2 · Dos textos en el límite de CA23 y ADR-078.3
-- `lib/i18n/es.ts:268` y `lib/i18n/es.ts:262`.
-- `borrado_sin_aprobar: 'Borrado en {programa} sin emitir'` sale en el grep de CA23 y no está en la lista permitida (es defendible porque describe el programa, no una acción de la app, y lo fija el diseño §1.7); `facturadoSinPrograma: 'Emitida · nº {numero}'` no es la forma permitida «Emitida en {programa}».
-- Escenario: el grep de CA23 sobre `es.ts` devuelve una línea fuera de la lista permitida → un verificador posterior, o una regla de CI, marca el CA como fallido. Lo decide el propietario: o se añaden a la lista, o se reescriben.
-
-### B3 · La lista del técnico se titula «Borradores» cuando no hay programa
-- `app/(app)/pacientes/[id]/panel-facturacion.tsx:208`.
-- Sin programa, el título cae en `facturacion.panel.titulo` («Borradores»).
-- Escenario: un técnico abre la ficha en modo degradado (siempre en T-026a) → ve las facturas emitidas del espejo bajo el rótulo «Borradores».
-
-### B4 · El diálogo Desconectar se cierra a media petición y el error queda obsoleto
-- `app/(app)/ajustes/facturacion/dialogo-desconectar.tsx:28-31` con `components/ui/dialogo.tsx:69-71`; también `app/(app)/ajustes/facturacion/formulario-clave.tsx:62`.
-- La X, Escape y el clic fuera llaman a `alCerrar` sin mirar `enviando` (solo los dos botones propios lo miran), y el formulario de clave solo usa `aria-disabled`, sin bloquear el envío con Enter mientras `enviando`.
-- Escenario: se pulsa Desconectar y Escape antes de la respuesta → la petición falla → `errorDialogo` se guarda con el diálogo cerrado (nadie lo lee) y reaparece al reabrirlo, describiendo un intento anterior. Pulsar Enter dos veces en el campo de clave lanza dos `guardarClaveProveedor` seguidos.
-
-### B5 · La fecha de la clave se formatea en la zona del servidor
-- `app/(app)/ajustes/facturacion/page.tsx:54`.
-- `format(new Date(conectado.actualizado_en), …)` sin la zona del centro (regla de fechas de `.claude/rules/nextjs.md`, ADR-034; `lib/fechas/zona.ts` existe).
-- Escenario: servidor en UTC, clave guardada el 15-10 a las 00:30 en Madrid → Ajustes dice «Conectado desde el 14 de octubre».
-
-### B6 · Textos de error que no describen la causa, y claves muertas
-- `app/(app)/ajustes/facturacion/page.tsx:39`, `lib/i18n/es.ts:158`, `lib/i18n/es.ts:532-533`.
-- `ajustes.facturacion.errores.fallo` («No se pudo guardar…») se usa también cuando falla la lectura del estado, la prueba de conexión y la desconexión; `ficha.facturacionVacia*` queda sin uso tras el cambio del panel.
-- Escenario: la base no responde al abrir Ajustes › Programa de facturación → la página dice «No se pudo guardar. Inténtalo de nuevo» sin que el usuario haya guardado nada.
-
-### B7 · La prueba de que el simulado no entra en producción solo mira `from '…simulado'`
-- `lib/facturacion/importaciones.test.ts:22`.
-- La expresión solo detecta importaciones estáticas.
-- Escenario medido: añadir `export const _x = () => import('./simulado');` a `lib/facturacion/registro.ts` deja la suite en verde: el adaptador simulado podría llegar al registro de producción sin que la prueba lo vea.
+### R2-B1 · El `return` que evita anotar un documento sin espejo no tiene prueba
+- `lib/facturacion/sincronizador.ts:90`.
+- `if (error.code !== '23505') return;` impide que un documento rechazado y marcado `rectificado` o `anulado` llame a `registrar_anotacion_documento`. Sin espejo, esa función lanza 23514 (migración, `registrar_anotacion_documento`), y `fallo(error, 'anotación')` volvería a abortar la pasada.
+- Escenario medido: quitar esa línea deja `sincronizador.test.ts` en verde, 10/10. Lo mismo pasa si se restringe la clase 23 a `23505`/`23514`, porque ninguna prueba usa otro código de la clase, como un 23502 por un número nulo. Un documento rectificado en el programa cuyo espejo la base rechaza volvería a atascar la sincronización sin que ninguna prueba lo vea. Hoy queda tapado por R2-M1, que aborta antes.
