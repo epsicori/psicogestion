@@ -6,7 +6,8 @@ riesgo: alto
 fase: 2
 prioridad: alta
 depende_de: [T-021, T-023, T-007]   # T-043 solo por el orden de migraciones (ver Notas)
-estado: pendiente
+estado: hecho
+completado: 2026-10-14
 delegable: volumen      # SOLO la pastilla de pintura `EstadoBorrador` (diseño §7); todo lo demás, la fábrica
 territorio:                           # cerrado por tickets/T-026/diseno.md §6
   - supabase/migrations/20261014120000_proveedor_facturacion.sql   # cola de un solo dueño: después de T-021 (20261011120000), T-043 (20261012120000) y T-023 (20261013120000)
