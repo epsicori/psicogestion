@@ -461,6 +461,36 @@ select pg_temp.assert(
     where n.tipo = 'facturacion_discrepancia' and n.origen_id = trim(both '''' from :ESPA)::uuid limit 1),
   '31.C9 · el aviso de discrepancia es el texto fijo y no nombra al paciente');
 
+-- C · discrepancia SIN espejo (R2-H1): la base rechazó la copia (aquí, una factura con IRPF: base 100,
+-- IVA 21, total 106) y el sincronizador avisa igual. DOC-E tiene envío y no tiene espejo.
+set local role service_role;
+select pg_temp.assert_lanza_codigo(
+  'select public.registrar_factura_espejo(''holded'', ''DOC-E'', ''F-E'', current_date, 10000, 2100, 10600, ''https://programa.example/doc/E'')',
+  '23514', '31.C11 · la factura con retención (base + cuota ≠ total) no se copia: 23514 y sin espejo');
+select public.notificar_discrepancia_facturacion('holded', 'DOC-E');
+select public.notificar_discrepancia_facturacion('holded', 'DOC-E');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.facturas_espejo e where e.proveedor_documento_id = 'DOC-E') = 0
+  and (select count(*) from public.notificaciones n
+        where n.tipo = 'facturacion_discrepancia' and n.origen_tabla = 'borradores_factura_envios'
+          and n.origen_id = (select s.id from public.borradores_factura_envios s where s.proveedor_documento_id = 'DOC-E')) = :N_ADM
+  and (select count(distinct n.perfil_id) from public.notificaciones n
+        where n.tipo = 'facturacion_discrepancia' and n.origen_tabla = 'borradores_factura_envios'
+          and n.origen_id = (select s.id from public.borradores_factura_envios s where s.proveedor_documento_id = 'DOC-E')) = :N_ADM,
+  '31.C12 · sin espejo, el aviso cuelga del envío: una vez por administrador activo aunque se notifique dos veces');
+select pg_temp.assert(
+  (select n.titulo = 'Factura que no se pudo copiar'
+          and n.detalle = 'Una factura del programa de facturación no se pudo copiar porque sus datos no encajan. Revísala en el programa.'
+     from public.notificaciones n
+    where n.tipo = 'facturacion_discrepancia' and n.origen_tabla = 'borradores_factura_envios' limit 1),
+  '31.C13 · el aviso sin espejo es texto fijo y no nombra al paciente');
+set local role service_role;
+select pg_temp.assert_lanza_codigo_msg(
+  'select public.notificar_discrepancia_facturacion(''holded'', ''DOC-X'')',
+  '23503', 'No hay envío para ese documento', '31.C14 · avisar de un documento sin envío ni espejo da 23503');
+reset role;
+
 set local role service_role;
 select public.avanzar_cursor_sincronizacion(timestamptz '2026-10-01 12:00:00+00');
 select public.avanzar_cursor_sincronizacion(timestamptz '2026-10-01 09:00:00+00');

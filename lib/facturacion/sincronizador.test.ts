@@ -22,8 +22,18 @@ function bdFalsa(opciones: {
   // Documentos que la base rechaza con un código de integridad (23514) o con otro (p. ej. 08006).
   espejoRechazado?: Set<string>;
   espejoCaido?: Set<string>;
+  // Código de integridad con el que se rechaza `espejoRechazado` (por defecto 23514).
+  codigoRechazo?: string;
+  // La función real avisa sin espejo colgando el aviso del envío (hay envío); sin esto la base falsa
+  // responde lo que respondía la versión anterior (23503 «no hay factura copiada») y la prueba lo vería.
+  avisoSinEspejo?: boolean;
 }) {
   const llamadas: Llamada[] = [];
+  const conEspejo = new Set(
+    [...(opciones.pendientes ?? []), ...(opciones.conEnvio ?? [])]
+      .filter((d) => d.tiene_espejo)
+      .map((d) => d.proveedor_documento_id),
+  );
   const bd = {
     rpc: vi.fn(async (nombre: string, args: Record<string, unknown> = {}) => {
       llamadas.push({ nombre, args });
@@ -50,13 +60,27 @@ function bdFalsa(opciones: {
         nombre === 'registrar_factura_espejo' &&
         opciones.espejoRechazado?.has(args.p_proveedor_documento_id as string)
       ) {
-        return { data: null, error: { code: '23514', message: 'x' } };
+        return { data: null, error: { code: opciones.codigoRechazo ?? '23514', message: 'x' } };
       }
       if (
         nombre === 'registrar_factura_espejo' &&
         opciones.espejoCaido?.has(args.p_proveedor_documento_id as string)
       ) {
         return { data: null, error: { code: '08006', message: 'x' } };
+      }
+      if (nombre === 'registrar_factura_espejo') conEspejo.add(args.p_proveedor_documento_id as string);
+      if (nombre === 'notificar_discrepancia_facturacion') {
+        if (!conEspejo.has(args.p_proveedor_documento_id as string) && !opciones.avisoSinEspejo) {
+          return { data: null, error: { code: '23503', message: 'x' } };
+        }
+      }
+      if (
+        nombre === 'registrar_anotacion_documento' &&
+        args.p_tipo !== 'borrado_sin_aprobar' &&
+        !conEspejo.has(args.p_proveedor_documento_id as string)
+      ) {
+        // Como la función real: rectificar o anular exige la factura copiada.
+        return { data: null, error: { code: '23514', message: 'x' } };
       }
       return { data: 'id', error: null };
     }),
@@ -206,6 +230,7 @@ describe('sincronizar', () => {
         { proveedor_documento_id: otro.documentoId, tiene_espejo: false, anotaciones: [] },
       ],
       espejoRechazado: new Set([id]),
+      avisoSinEspejo: true,
     });
 
     const r = await sincronizar({ bd: bd as never, proveedor, idProveedor: 'holded', ahora: AHORA });
@@ -216,6 +241,35 @@ describe('sincronizar', () => {
     });
     // El cursor avanza: la pasada terminó.
     expect(llamadas.filter((l) => l.nombre === 'avanzar_cursor_sincronizacion' && l.args.p_hasta)).toHaveLength(1);
+  });
+
+  it('un documento rectificado cuyo espejo se rechaza (23502) se avisa y NO se anota', async () => {
+    const { proveedor, control, id } = await conDocumento();
+    control.aprobar(id, HECHOS);
+    control.rectificar(id);
+    const { bd, llamadas } = bdFalsa({
+      pendientes: [{ proveedor_documento_id: id, tiene_espejo: false, anotaciones: [] }],
+      espejoRechazado: new Set([id]),
+      codigoRechazo: '23502',
+      avisoSinEspejo: true,
+    });
+
+    const r = await sincronizar({ bd: bd as never, proveedor, idProveedor: 'holded', ahora: AHORA });
+
+    expect(r).toEqual({ copiados: 0, anotados: 0, discrepancias: 1 });
+    expect(nombres(llamadas)).not.toContain('registrar_anotacion_documento');
+  });
+
+  it('un rechazo sin espejo cuyo aviso la base no admite aborta la pasada (la base falsa ya no lo acepta sola)', async () => {
+    const { proveedor, control, id } = await conDocumento();
+    control.aprobar(id, HECHOS);
+    const { bd } = bdFalsa({
+      pendientes: [{ proveedor_documento_id: id, tiene_espejo: false, anotaciones: [] }],
+      espejoRechazado: new Set([id]),
+    });
+    await expect(
+      sincronizar({ bd: bd as never, proveedor, idProveedor: 'holded', ahora: AHORA }),
+    ).rejects.toThrow('Fallo al sincronizar (aviso)');
   });
 
   it('un fallo que no es de integridad (la base cae) sigue abortando la pasada', async () => {

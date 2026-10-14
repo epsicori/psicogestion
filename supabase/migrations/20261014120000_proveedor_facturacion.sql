@@ -787,7 +787,9 @@ as $$
 $$;
 
 -- 7.7 · Avisar de una discrepancia: escala el hallazgo a los administradores, deduplicado, sin tocar el
--- espejo. El texto es fijo y no nombra al paciente (ADR-078).
+-- espejo. El texto es fijo y no nombra al paciente (ADR-078). Si la base rechazó la copia (total
+-- incoherente, enlace que no es https...), no hay espejo y el origen del aviso es el envío del documento;
+-- si ni siquiera hay envío, 23503.
 create function public.notificar_discrepancia_facturacion(
   p_proveedor public.proveedor_facturacion,
   p_proveedor_documento_id text)
@@ -798,17 +800,32 @@ set search_path = ''
 as $$
 declare
   v_espejo uuid;
+  v_envio uuid;
 begin
   select f.id into v_espejo from public.facturas_espejo f
    where f.proveedor = p_proveedor and f.proveedor_documento_id = p_proveedor_documento_id;
-  if v_espejo is null then
-    raise exception 'No hay factura copiada para ese documento' using errcode = '23503';
+
+  if v_espejo is not null then
+    insert into public.notificaciones (perfil_id, tipo, titulo, detalle, origen_tabla, origen_id)
+    select p.id, 'facturacion_discrepancia', 'Factura distinta en el programa',
+           'Los datos de una factura del programa de facturación ya no coinciden con los copiados. Revísala en el programa.',
+           'facturas_espejo', v_espejo
+      from public.perfiles p
+     where p.rol = 'administrador'::public.rol_usuario and p.estado = 'activo'::public.estado_perfil
+    on conflict (perfil_id, tipo, origen_tabla, origen_id) where origen_id is not null do nothing;
+    return;
+  end if;
+
+  select s.id into v_envio from public.borradores_factura_envios s
+   where s.proveedor = p_proveedor and s.proveedor_documento_id = p_proveedor_documento_id;
+  if v_envio is null then
+    raise exception 'No hay envío para ese documento' using errcode = '23503';
   end if;
 
   insert into public.notificaciones (perfil_id, tipo, titulo, detalle, origen_tabla, origen_id)
-  select p.id, 'facturacion_discrepancia', 'Factura distinta en el programa',
-         'Los datos de una factura del programa de facturación ya no coinciden con los copiados. Revísala en el programa.',
-         'facturas_espejo', v_espejo
+  select p.id, 'facturacion_discrepancia', 'Factura que no se pudo copiar',
+         'Una factura del programa de facturación no se pudo copiar porque sus datos no encajan. Revísala en el programa.',
+         'borradores_factura_envios', v_envio
     from public.perfiles p
    where p.rol = 'administrador'::public.rol_usuario and p.estado = 'activo'::public.estado_perfil
   on conflict (perfil_id, tipo, origen_tabla, origen_id) where origen_id is not null do nothing;
