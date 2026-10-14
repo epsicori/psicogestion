@@ -1463,6 +1463,107 @@ export const es = {
     },
   },
 
+  // Bonos de sesiones (T-027). Gestión interna: un bono no es una factura (ADR-053). Sin vocabulario de facturar.
+  bonos: {
+    versalita: 'Facturación',
+    titulo: 'Bonos',
+    subtitulo: 'Paquetes de sesiones y las que quedan de cada uno',
+    volver: 'Volver a Facturación',
+    registrarBono: 'Registrar bono',
+    registrando: 'Registrando…',
+    bonoRegistrado: 'Bono registrado',
+    bonoYaRegistrado:
+      'Este bono ya estaba registrado; no se ha añadido otro. Si es un bono nuevo con los mismos datos, regístralo otra vez.',
+    resultadoDesconocido:
+      'No sabemos si el bono se ha registrado. Envíalo otra vez con los mismos datos, aquí o al volver a abrir esta ventana, sin salir de la página: si ya estaba registrado, no se duplica.',
+    noSePudoRegistrar: 'No se ha podido registrar el bono',
+    paciente: 'Paciente',
+    eligePaciente: 'Elige un paciente',
+    sesiones: 'Número de sesiones',
+    importe: 'Importe del bono (€)',
+    caducidad: 'Caducidad (opcional)',
+    ayudaImporte: 'Registrar el bono no anota ningún cobro. Cuando el paciente pague, regístralo en «Registrar cobro».',
+    sesionesNoValidas: 'Escribe un número de sesiones entre 1 y 999.',
+    importeNoValido: 'Escribe un importe, por ejemplo 150,00',
+    importeCero: 'El importe del bono tiene que ser mayor que 0.',
+    importeNegativo: 'El importe del bono no puede ser negativo.',
+    importeDemasiadoGrande: 'El importe es demasiado grande',
+    caducidadNoValida: 'Esa fecha no es válida',
+    caducidadPasada: 'La caducidad no puede ser anterior a hoy.',
+    pacienteFusionado: 'Este paciente se unió a otro registro. Registra el bono en el que se conserva.',
+    errorPacientes: 'No se ha podido cargar la lista de pacientes',
+    errorBonos: 'No se han podido cargar los bonos',
+    pacienteDesconocido: 'Paciente no encontrado',
+    profesionalDesconocido: 'Profesional no encontrado',
+    filtros: {
+      nombre: 'Filtrar los bonos',
+      estado: 'Estado',
+      todosLosEstados: 'Todos los estados',
+      profesional: 'Profesional',
+      todosLosProfesionales: 'Todos los profesionales',
+      paciente: 'Paciente',
+      todosLosPacientes: 'Todos los pacientes',
+      filtrar: 'Filtrar',
+    },
+    estado: {
+      vigente: 'Vigente',
+      agotado: 'Agotado',
+      caducado: 'Caducado',
+    },
+    usadas: '{usadas} de {totales} sesiones usadas',
+    quedan: {
+      una: 'Queda 1 sesión',
+      varias: 'Quedan {n} sesiones',
+      ninguna: 'No quedan sesiones',
+    },
+    importeDelBono: 'Importe: {importe}',
+    caducaEl: 'Caduca el {fecha}',
+    sinCaducidad: 'Sin caducidad',
+    excedidas: {
+      una: 'Se ha hecho 1 sesión más de las del bono.',
+      varias: 'Se han hecho {n} sesiones más de las del bono.',
+    },
+    vacio: 'No hay bonos',
+    vacioExplicacion: 'Cuando registres un bono de sesiones, aparecerá aquí con las sesiones que le queden.',
+    paginacion: {
+      nombre: 'Páginas de bonos',
+      rango: 'Del {desde} al {hasta} de {total}',
+    },
+    ficha: {
+      titulo: 'Bonos de sesiones',
+      vacio: 'Este paciente no tiene bonos',
+      vacioExplicacion: 'Un bono es un paquete de sesiones. Cuando registres uno, verás aquí cuántas le quedan.',
+      error: 'No se han podido cargar los bonos de este paciente',
+    },
+    avisoPocas: {
+      una: 'Queda 1 sesión de este bono.',
+      varias: 'Quedan {n} sesiones de este bono.',
+    },
+    avisoCaduca: 'Este bono caduca el {fecha}.',
+    agotadoQueHacer:
+      'Este bono ya se ha usado entero. Para seguir con sesiones de bono, registra uno nuevo; si no, las próximas sesiones se cobran a la tarifa de siempre.',
+    caducadoQueHacer:
+      'Este bono caducó el {fecha} con {n} sesiones sin usar. Las sesiones sin usar no se pueden vincular a citas nuevas.',
+    cita: {
+      etiqueta: 'Bono',
+      cargando: 'Cargando el bono…',
+      sinBono: 'Sin bono',
+      guardar: 'Guardar',
+      guardando: 'Guardando…',
+      opcion: 'Bono de {totales} · quedan {saldo}',
+      opcionActual: 'Bono de {totales} · quedan {saldo} (vinculado)',
+      noSePudoVincular: 'No se ha podido cambiar el bono de esta cita',
+      vinculado: 'Cita vinculada al bono',
+      desvinculado: 'Cita sin bono',
+      errorLectura: 'No se ha podido cargar el bono de esta cita',
+    },
+  },
+
+  // Enlace de Facturación a Bonos (T-027).
+  facturacion: {
+    enlaceBonos: 'Bonos',
+  },
+
   // Notificaciones (T-015). `tipos` es EL sitio de las etiquetas por tipo: T-038 las reutiliza.
   notificaciones: {
     boton: {
