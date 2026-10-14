@@ -3590,6 +3590,7 @@ export type Database = {
       borradores_factura_estado: {
         Row: {
           borrador_id: string | null
+          envio_ambiguo: boolean | null
           estado: string | null
           ultima_version: number | null
         }

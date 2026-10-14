@@ -30,17 +30,33 @@ const PROGRAMA = {
 
 const ok = (data: unknown) => ({ data, error: null });
 
-function escenario(estado: string, profesional = 'pro-1') {
+function escenario(
+  estado: string,
+  profesional = 'pro-1',
+  extra: { ambiguo?: boolean; anotaciones?: string[] } = {},
+) {
   tablas.datos = {
     borradores_factura: ok([{ id: 'b1', profesional_id: profesional, creado_en: '2026-10-01T10:00:00Z' }]),
-    borradores_factura_estado: ok([{ borrador_id: 'b1', estado }]),
-    borradores_factura_envios: ok(estado === 'enviado' ? [{ borrador_id: 'b1', proveedor_documento_id: 'doc9' }] : []),
-    facturas_espejo: ok(
-      estado === 'facturado'
-        ? [{ borrador_id: 'b1', numero: 'F-12', fecha_expedicion: '2026-10-05', total: 121 }]
+    borradores_factura_estado: ok([{ borrador_id: 'b1', estado, envio_ambiguo: extra.ambiguo ?? false }]),
+    borradores_factura_envios: ok(
+      estado === 'enviado' || estado === 'facturado'
+        ? [{ borrador_id: 'b1', proveedor_documento_id: 'doc9' }]
         : [],
     ),
-    facturas_anotaciones: ok([]),
+    facturas_espejo: ok(
+      estado === 'facturado'
+        ? [
+            {
+              borrador_id: 'b1',
+              numero: 'F-12',
+              fecha_expedicion: '2026-10-05',
+              total: 121,
+              url_proveedor: 'https://x.test/factura/12',
+            },
+          ]
+        : [],
+    ),
+    facturas_anotaciones: ok((extra.anotaciones ?? []).map((tipo) => ({ borrador_id: 'b1', tipo }))),
   };
 }
 
@@ -142,22 +158,112 @@ describe('PanelFacturacion', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('facturado enseña número, fecha y total de la copia mínima', async () => {
+  it('facturado enseña «Emitida en {programa}», número, fecha y total, y un enlace a la factura', async () => {
     activo.valor = PROGRAMA;
     escenario('facturado');
     await pintar('administrador');
-    expect(screen.getByText('Emitida en Programa X · nº F-12')).toBeInTheDocument();
-    expect(screen.getByText(/05\/10\/2026 · 121,00/)).toBeInTheDocument();
+    expect(screen.getByText('Emitida en Programa X')).toBeInTheDocument();
+    expect(screen.getByText(/nº F-12 · 05\/10\/2026 · 121,00/)).toBeInTheDocument();
+    const enlace = screen.getByRole('link', { name: 'Ver en Programa X' });
+    expect(enlace).toHaveAttribute('href', 'https://x.test/factura/12');
+    expect(enlace).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('el técnico solo lee la copia emitida y nunca consulta borradores', async () => {
-    tablas.datos = {
-      facturas_espejo_cabecera: ok([{ id: 'f1', numero: 'F-12', fecha_expedicion: '2026-10-05', total: 121 }]),
-      borradores_factura: { data: null, error: { code: 'XX' } },
-    };
-    await pintar('tecnico_administrativo');
-    expect(screen.getByText('nº F-12')).toBeInTheDocument();
+  it('facturado sin programa lo dice sin nombrarlo y conserva número y enlace', async () => {
+    escenario('facturado');
+    await pintar('administrador');
+    expect(screen.getByText('Emitida en el programa de facturación')).toBeInTheDocument();
+    expect(screen.getByText(/nº F-12/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver en el programa de facturación' })).toHaveAttribute(
+      'href',
+      'https://x.test/factura/12',
+    );
+  });
+
+  it('fallido dice que no se pudo preparar y ofrece Preparar', async () => {
+    activo.valor = PROGRAMA;
+    escenario('fallido');
+    await pintar('administrador');
+    expect(screen.getByText('No se pudo preparar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preparar borrador en Programa X' })).toBeInTheDocument();
+  });
+
+  it('fallido ambiguo avisa de comprobar en el programa antes de volver a preparar, y deja preparar', async () => {
+    activo.valor = PROGRAMA;
+    escenario('fallido', 'pro-1', { ambiguo: true });
+    await pintar('administrador');
+    expect(
+      screen.getByText('Comprueba en Programa X si el borrador llegó antes de volver a prepararlo'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No se pudo preparar')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Preparar borrador en Programa X' })).toBeInTheDocument();
+  });
+
+  it('descartado se dice y no ofrece Preparar', async () => {
+    activo.valor = PROGRAMA;
+    escenario('descartado');
+    await pintar('administrador');
+    expect(screen.getByText('Descartado')).toBeInTheDocument();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it.each([
+    ['borrado_sin_aprobar', 'Borrador borrado en Programa X', 'enviado'],
+    ['rectificado', 'Rectificada en Programa X', 'facturado'],
+    ['anulado', 'Anulada en Programa X', 'facturado'],
+  ] as const)('la anotación %s sale como pastilla', async (tipo, texto, estado) => {
+    activo.valor = PROGRAMA;
+    escenario(estado, 'pro-1', { anotaciones: [tipo] });
+    await pintar('administrador');
+    expect(screen.getByText(texto).className).toContain('rounded-full');
+  });
+
+  it('las anotaciones se ven también sin programa conectado', async () => {
+    escenario('enviado', 'pro-1', { anotaciones: ['borrado_sin_aprobar'] });
+    await pintar('administrador');
+    expect(screen.getByText('Borrador borrado en el programa de facturación')).toBeInTheDocument();
+  });
+
+  it('un borrador borrado sin aprobar no ofrece abrirlo en el programa', async () => {
+    activo.valor = PROGRAMA;
+    escenario('enviado', 'pro-1', { anotaciones: ['borrado_sin_aprobar'] });
+    await pintar('administrador');
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  const CABECERA = {
+    facturas_espejo_cabecera: ok([
+      {
+        id: 'f1',
+        numero: 'F-12',
+        fecha_expedicion: '2026-10-05',
+        total: 121,
+        url_proveedor: 'https://x.test/factura/12',
+      },
+    ]),
+    borradores_factura: { data: null, error: { code: 'XX' } },
+  };
+
+  it('el técnico solo lee la copia emitida y nunca consulta borradores', async () => {
+    activo.valor = PROGRAMA;
+    tablas.datos = CABECERA;
+    await pintar('tecnico_administrativo');
+    expect(screen.getByText('Emitidas en Programa X')).toBeInTheDocument();
+    expect(screen.getByText('nº F-12')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver en Programa X' })).toHaveAttribute(
+      'href',
+      'https://x.test/factura/12',
+    );
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('el técnico sin programa ve «Emitidas», no «Borradores»', async () => {
+    tablas.datos = CABECERA;
+    await pintar('tecnico_administrativo');
+    expect(screen.getByText('Emitidas')).toBeInTheDocument();
+    expect(screen.queryByText('Borradores')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Ver en el programa de facturación' })).toBeInTheDocument();
   });
 
   it('un fallo de lectura enseña el aviso y no rompe la ficha', async () => {

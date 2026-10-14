@@ -53,17 +53,22 @@ type FilaEmitida = {
   numero: string | null;
   fecha_expedicion: string | null;
   total: number | null;
+  url_proveedor: string | null;
 };
+type TipoAnotacion = 'borrado_sin_aprobar' | 'rectificado' | 'anulado';
 type Borrador = { id: string; profesional_id: string };
 type Datos =
   | { tipo: 'emitidas'; filas: FilaEmitida[] }
   | {
       tipo: 'borradores';
       borradores: Borrador[];
-      estadoDe: Map<string, string | null>;
+      estadoDe: Map<string, { estado: string | null; ambiguo: boolean }>;
       documentoDe: Map<string, string>;
-      espejoDe: Map<string, { numero: string; fecha_expedicion: string; total: number }>;
-      anotaciones: { borrador_id: string; tipo: 'borrado_sin_aprobar' | 'rectificado' | 'anulado' }[];
+      espejoDe: Map<
+        string,
+        { numero: string; fecha_expedicion: string; total: number; url_proveedor: string }
+      >;
+      anotaciones: { borrador_id: string; tipo: TipoAnotacion }[];
     };
 
 /** Todas las lecturas, juntas y con su `try`: el JSX se construye fuera (un fallo de render no se atrapa). */
@@ -75,7 +80,7 @@ async function cargar(pacienteId: string, rol: Rol): Promise<Datos | null> {
     if (rol === 'tecnico_administrativo') {
       const { data, error } = await supabase
         .from('facturas_espejo_cabecera')
-        .select('id, numero, fecha_expedicion, total')
+        .select('id, numero, fecha_expedicion, total, url_proveedor')
         .eq('paciente_id', pacienteId)
         .order('fecha_expedicion', { ascending: false });
       if (error) throw error;
@@ -101,9 +106,15 @@ async function cargar(pacienteId: string, rol: Rol): Promise<Datos | null> {
     }
 
     const [estados, envios, espejo, anotaciones] = await Promise.all([
-      supabase.from('borradores_factura_estado').select('borrador_id, estado').in('borrador_id', ids),
+      supabase
+        .from('borradores_factura_estado')
+        .select('borrador_id, estado, envio_ambiguo')
+        .in('borrador_id', ids),
       supabase.from('borradores_factura_envios').select('borrador_id, proveedor_documento_id').in('borrador_id', ids),
-      supabase.from('facturas_espejo').select('borrador_id, numero, fecha_expedicion, total').in('borrador_id', ids),
+      supabase
+        .from('facturas_espejo')
+        .select('borrador_id, numero, fecha_expedicion, total, url_proveedor')
+        .in('borrador_id', ids),
       supabase.from('facturas_anotaciones').select('borrador_id, tipo').in('borrador_id', ids),
     ]);
     for (const r of [estados, envios, espejo, anotaciones]) if (r.error) throw r.error;
@@ -111,7 +122,12 @@ async function cargar(pacienteId: string, rol: Rol): Promise<Datos | null> {
     return {
       tipo: 'borradores',
       borradores: borradores ?? [],
-      estadoDe: new Map((estados.data ?? []).map((e) => [e.borrador_id as string, e.estado])),
+      estadoDe: new Map(
+        (estados.data ?? []).map((e) => [
+          e.borrador_id as string,
+          { estado: e.estado, ambiguo: e.envio_ambiguo === true },
+        ]),
+      ),
       documentoDe: new Map((envios.data ?? []).map((e) => [e.borrador_id, e.proveedor_documento_id])),
       espejoDe: new Map((espejo.data ?? []).map((e) => [e.borrador_id, e])),
       anotaciones: anotaciones.data ?? [],
@@ -120,6 +136,16 @@ async function cargar(pacienteId: string, rol: Rol): Promise<Datos | null> {
     console.error('PanelFacturacion: fallo al leer la facturación', error);
     return null;
   }
+}
+
+const CLASE_ENLACE = 'text-primary text-sm font-medium underline-offset-2 hover:underline';
+
+function EnlaceFactura({ href, programa }: { href: string; programa: string | null }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={CLASE_ENLACE}>
+      {tCon('facturacion.panel.verFactura', { programa: programa ?? t('facturacion.panel.programaGenerico') })}
+    </a>
+  );
 }
 
 export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string; rol: Rol }) {
@@ -132,6 +158,8 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
     return null;
   });
   const programa = activo?.ficha.nombre ?? null;
+  // Las anotaciones y el estado «emitida» son hechos ya ocurridos: se dicen aunque no haya programa.
+  const nombrePrograma = programa ?? t('facturacion.panel.programaGenerico');
 
   if (datos.tipo === 'emitidas') return <Emitidas filas={datos.filas} programa={programa} />;
   if (datos.borradores.length === 0) return <EstadoVacio frase={t('facturacion.panel.vacio')} />;
@@ -140,10 +168,14 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
     <Bloque titulo={t('facturacion.panel.titulo')}>
       <ul className="divide-border flex flex-col divide-y">
         {datos.borradores.map((b) => {
-          const bruto = datos.estadoDe.get(b.id) ?? null;
+          const lectura = datos.estadoDe.get(b.id);
+          const bruto = lectura?.estado ?? null;
           const estado: EstadoDeBorrador = esEstado(bruto) ? bruto : 'sin_enviar';
+          const ambiguo = estado === 'fallido' && lectura?.ambiguo === true;
           const factura = datos.espejoDe.get(b.id);
           const documento = datos.documentoDe.get(b.id);
+          const anotaciones = datos.anotaciones.filter((a) => a.borrador_id === b.id);
+          const borradoSinAprobar = anotaciones.some((a) => a.tipo === 'borrado_sin_aprobar');
           const enlace = activo && documento ? activo.ficha.enlaceDeBorrador(documento) : null;
           const puedePreparar =
             activo !== null &&
@@ -157,41 +189,38 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
                 : t('facturacion.panel.estado.en_colaSinPrograma')
               : estado === 'facturado'
                 ? programa
-                  ? tCon('facturacion.panel.estado.facturado', { programa, numero: factura?.numero ?? '' })
-                  : tCon('facturacion.panel.estado.facturadoSinPrograma', { numero: factura?.numero ?? '' })
-                : t(`facturacion.panel.estado.${estado}`);
+                  ? tCon('facturacion.panel.estado.facturado', { programa })
+                  : t('facturacion.panel.estado.facturadoSinPrograma')
+                : ambiguo
+                  ? programa
+                    ? tCon('facturacion.panel.estado.fallidoAmbiguo', { programa })
+                    : t('facturacion.panel.estado.fallidoAmbiguoSinPrograma')
+                  : t(`facturacion.panel.estado.${estado}`);
 
           return (
             <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col items-start gap-1">
                 <EstadoBorrador estado={estado} texto={texto} />
                 {factura && (
                   <span className="text-muted-foreground text-xs">
-                    {fechaCorta(factura.fecha_expedicion)} · {euros(factura.total)}
+                    nº {factura.numero} · {fechaCorta(factura.fecha_expedicion)} · {euros(factura.total)}
                   </span>
                 )}
-                {programa &&
-                  datos.anotaciones
-                    .filter((a) => a.borrador_id === b.id)
-                    .map((a) => (
-                      <span key={a.tipo} className="text-muted-foreground text-xs">
-                        {tCon(`facturacion.panel.anotacion.${a.tipo}`, { programa })}
-                      </span>
-                    ))}
+                {anotaciones.map((a) => (
+                  <Pildora key={a.tipo} tono={a.tipo === 'borrado_sin_aprobar' ? 'warning' : 'info'}>
+                    {tCon(`facturacion.panel.anotacion.${a.tipo}`, { programa: nombrePrograma })}
+                  </Pildora>
+                ))}
               </div>
               <div className="flex items-center gap-2">
-                {puedePreparar && programa && (
-                  <BotonPreparar borradorId={b.id} programa={programa} />
-                )}
-                {enlace && programa && estado === 'enviado' && (
-                  <a
-                    href={enlace}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary text-sm font-medium underline-offset-2 hover:underline"
-                  >
+                {puedePreparar && programa && <BotonPreparar borradorId={b.id} programa={programa} />}
+                {enlace && programa && estado === 'enviado' && !borradoSinAprobar && (
+                  <a href={enlace} target="_blank" rel="noopener noreferrer" className={CLASE_ENLACE}>
                     {tCon('facturacion.panel.abrir', { programa })}
                   </a>
+                )}
+                {estado === 'facturado' && factura?.url_proveedor && (
+                  <EnlaceFactura href={factura.url_proveedor} programa={programa} />
                 )}
               </div>
             </li>
@@ -205,14 +234,23 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
 function Emitidas({ filas, programa }: { filas: FilaEmitida[]; programa: string | null }): ReactNode {
   if (filas.length === 0) return <EstadoVacio frase={t('facturacion.panel.vacio')} />;
   return (
-    <Bloque titulo={programa ? tCon('facturacion.panel.emitidas', { programa }) : t('facturacion.panel.titulo')}>
+    <Bloque
+      titulo={
+        programa
+          ? tCon('facturacion.panel.emitidas', { programa })
+          : t('facturacion.panel.emitidasSinPrograma')
+      }
+    >
       <ul className="divide-border flex flex-col divide-y">
         {filas.map((f) => (
-          <li key={f.id} className="flex items-center justify-between py-3 text-sm">
+          <li key={f.id} className="flex items-center justify-between gap-3 py-3 text-sm">
             <span>nº {f.numero}</span>
-            <span className="text-muted-foreground">
-              {f.fecha_expedicion ? fechaCorta(f.fecha_expedicion) : ''}
-              {f.total !== null ? ` · ${euros(f.total)}` : ''}
+            <span className="text-muted-foreground flex items-center gap-3">
+              <span>
+                {f.fecha_expedicion ? fechaCorta(f.fecha_expedicion) : ''}
+                {f.total !== null ? ` · ${euros(f.total)}` : ''}
+              </span>
+              {f.url_proveedor && <EnlaceFactura href={f.url_proveedor} programa={programa} />}
             </span>
           </li>
         ))}
