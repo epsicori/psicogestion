@@ -1,194 +1,201 @@
 {
   "ticket": "T-026a",
-  "resumen": "Verificado en el worktree del ticket (rama worktree-agent-a5bed24d86d4a0141, commit e60a3ca), solo lectura salvo build y capturas. Base local supabase_db_Psicogestion con max(version)=20261014120000. Todo en verde: lint (0 errores, 2 warnings ajenos en lib/cuentas/accesos.test.ts), lint:migraciones 35 limpias, npm test 217 ficheros/2892 pruebas, test:facturacion 3/3, test:rls exit 0 con 31-proveedor-facturacion completo, next build --webpack OK, e2e CA18 pasa, visita de pantalla sin errores. Nota de territorio: el contrato de la rama amplia territorio (route.test.ts, acciones-facturacion.test.ts, boton-preparar.*) con anotacion del propietario 08-10-2026; el diff de la rama toca solo ficheros del territorio ampliado. node territorio.mjs T-026a no es utilizable desde el worktree (lista 994 ficheros por comparar contra otra referencia); se comprobo a mano con git diff --name-only main...HEAD.",
+  "resumen": "Ronda 2 sobre f27cf0c (worktree .claude/worktrees/agent-a84ef43dca6f7a816; base supabase_db_Psicogestion, max(version)=20261014120000, sin reset). Un FALLA: npm run test:rls corta en 26.F9 porque la corrección M1 añadió envio_ambiguo a borradores_factura_estado y el banco 26 (fuera del territorio) sigue esperando 3 columnas; con esa aserción ajustada en una copia, el banco entero pasa (2594 OK, 90 del bloque 31). Todo lo demás en verde: lint, lint:migraciones, npm test 2915, test:facturacion 3/3, build, e2e CA18, visita de pantalla sin errores a 1280/390.",
   "criterios": [
     {
       "id": "CA1",
-      "texto": "Migracion aplica, max(version)=20261014120000, lint:migraciones 0 hallazgos",
+      "texto": "Migración, max(version), lint:migraciones",
       "veredicto": "PASA",
-      "comando": "docker exec supabase_db_Psicogestion psql -U postgres -tAc \"select max(version) from supabase_migrations.schema_migrations\"; npm run lint:migraciones",
-      "evidencia": "20261014120000 ; lint-migraciones: 35 migración(es) limpias. (No se hizo db reset por instruccion: la base ya traia la migracion de la rama y test:rls la ejercita entera.)"
+      "comando": "psql max(version) en supabase_db_Psicogestion; npm run lint:migraciones",
+      "evidencia": "max(version)=20261014120000; lint-migraciones: 35 migración(es) limpias. No se hizo db reset (lo hizo el orquestador desde la rama justo antes)."
     },
     {
       "id": "CA2",
-      "texto": "Solo adicion: insert 42501, update/delete/truncate 42501 incl. postgres, 10-solo-adicion, cobertura=0",
+      "texto": "Solo adición",
       "veredicto": "PASA",
-      "comando": "npm run test:rls (salida a fichero, exit 0)",
-      "evidencia": "OK 31.B · ADM/PRO1/TEC1 no insertan en las tres tablas (42501); OK 31.B · 'update'/'delete' como 'authenticated' ... 42501; 31.A12 privilegios: authenticated solo SELECT, ni UPDATE/DELETE/TRUNCATE a postgres; 10-solo-adicion: borradores_factura_envios / facturas_espejo / facturas_anotaciones — tres capas verificadas y la capa 1 restaurada; 31.A15; 31.A16 cobertura_solo_adicion() = 0"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.B insert 42501 ADM/PRO1/TEC1; update/delete/truncate 42501 incl. postgres; 10-solo-adicion con las tres tablas; cobertura_solo_adicion()=0 (31.A15/A16)"
     },
     {
       "id": "CA3",
-      "texto": "Espejo idempotente y nunca actualizado",
+      "texto": "Espejo idempotente",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.C1 mismos datos dos veces mismo id; 31.C2 otro total 23505 «otros datos»; 31.C3 la fila conserva total original y xmin; 31.C4 sin envio 23503; 31.C5 tras borrado_sin_aprobar 23514"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.C1 mismo id; C2 23505; C3 conserva total; C4 23503; C5 23514"
     },
     {
       "id": "CA4",
-      "texto": "Forma del espejo: columnas exactas y ninguna prohibida",
+      "texto": "Forma del espejo",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.A2 facturas_espejo tiene exactamente la lista del ADR-077 punto 7, en su orden; OK 31.A6 ninguna columna casa con estado, pago, cobro, pdf, qr, registro ni huella"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.A2 columnas exactas en orden; 31.A6 ninguna prohibida"
     },
     {
       "id": "CA5",
       "texto": "Vocabulario de anotaciones",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.E1 tres valores; 31.E3 «pagado» 22P02; 31.E4/E5/E6 coherencia con el espejo 23514"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.E1 tres valores; E3 'pagado' 22P02; E4-E6 23514"
     },
     {
       "id": "CA6",
-      "texto": "Tecnico: vista cabecera y tabla",
+      "texto": "Técnico",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.G1 TEC1 ve la cabecera de P1 y no la de P2; 31.G2 ADM ve las dos; 31.F4 TEC1 no lee ninguna fila de las tres tablas; 31.A4 la vista no lleva borrador_id, cita_id, lineas ni destinatario; 31.G5 TEC2 filtra por centros"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.G1/G2 1 y 0, ADM 2; F4 tabla 0; A4 sin cita_id, lineas, borrador_id"
     },
     {
       "id": "CA7",
       "texto": "Cobro con espejo de otro paciente",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.H1 ADM 23514 «de otro paciente»; 31.H2 TEC1 23514; 31.H3 espejo inexistente 23503; 31.H4 PRO2 42501 no 23503; 31.H5 gemela correcta entra; 31.H6 cobro sin factura entra"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.H1-H6: 23514, 23514, 23503, 42501 antes del cotejo, gemela entra"
     },
     {
       "id": "CA8",
-      "texto": "Encolar sin oraculo",
+      "texto": "Encolar sin oráculo",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.I1 PRO2 sobre borrador ajeno y sobre uuid inexistente: mismo 42501 comparado por igualdad; 31.I4 sin programa 23514; 31.I5 ultima version descartada 23514; 31.I6 dos veces mismo evento_id; 31.I8 desde fallido vuelve a pendiente"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.I1 mismo 42501 por igualdad; I4 23514; I5 23514; I6 mismo evento_id; I8 fallido->pendiente"
     },
     {
       "id": "CA9",
-      "texto": "Congelacion de versiones",
+      "texto": "Congelación",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.J1 BORRA enviado 23514; 31.J2 evento pendiente 23514; 31.J4 con el envio fallido admite version nueva; 31.J3 PRO2 recibe 42501 del sellado, no 23514"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.J1-J7: 23514 con envío o pendiente; con fallido entra; PRO2 42501 del sellado"
     },
     {
       "id": "CA10",
       "texto": "Estado del borrador",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.A5 conserva las tres columnas de T-021 en orden y tipo; 31.K1..K7 recorren sin_enviar, en_cola, enviado, facturado, fallido y descartado"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.K1-K11 verdes: conserva borrador_id, ultima_version, estado (text) y recorre sin_enviar/en_cola/enviado/facturado/fallido/descartado. OBSERVACIÓN: la corrección M1 añadió la columna envio_ambiguo (4ª) y eso rompe la aserción 26.F9 del banco 26: ver CA25 y regresiones."
     },
     {
       "id": "CA11",
-      "texto": "Vault y ajuste, auditoria",
+      "texto": "Vault y ajuste",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.L1-L6 TEC1 y PRO1 42501 en guardar/quitar/estado; 31.L8 estado solo cuatro ultimos caracteres; 31.L9 ajuste ilegible; 31.L10/L11 Vault; 31.L12 quitar borra la clave; 31.M1 fila de auditoria por alta; 31.M2 ninguna fila de auditoria contiene la clave"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.L1-L12 y M1/M2: TEC1/PRO1 42501, estado '••••', quitar borra vault.secrets, centinela fuera de auditoria"
     },
     {
       "id": "CA12",
       "texto": "Reclamo y retroceso",
       "veredicto": "PASA",
-      "comando": "npm run test:rls",
-      "evidencia": "OK 31.N2 segundo reclamo devuelve 0; 31.N3 lineas sin concepto ni cita_id; 31.N7 retroceso exponencial; 31.N11 octavo intento fallido; 31.N9/N10 notificacion por admin deduplicada con texto fijo"
+      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "evidencia": "31.N1-N12: segundo reclamo 0, sin concepto/cita_id, intento 8 fallido con una notificación por administrador deduplicada"
     },
     {
       "id": "CA13",
       "texto": "Nada aprueba",
       "veredicto": "PASA",
-      "comando": "grep -rn \"approveDoc\\|APPROVE_DOC\" lib/ ; grep -rniE \"approve\" app components lib proxy.ts --exclude=*.test.ts --exclude=*.test.tsx",
-      "evidencia": "lib/facturacion/holded.ts:16:const APPROVE_DOC = false as const; holded.ts:17:void APPROVE_DOC; (solo esas dos lineas en ambas busquedas)"
+      "comando": "grep -rn \"approveDoc\\|APPROVE_DOC\" lib/; grep -rniE approve app components lib proxy.ts (sin tests ni tipos)",
+      "evidencia": "lib/facturacion/holded.ts:16 const APPROVE_DOC = false as const; :17 void APPROVE_DOC; nada más."
     },
     {
       "id": "CA14",
-      "texto": "Idempotencia por borrador (cola.bd.test.ts)",
+      "texto": "Idempotencia por borrador",
       "veredicto": "PASA",
       "comando": "npm run test:facturacion",
-      "evidencia": "Test Files 1 passed (1), Tests 3 passed (3): 'CA14 · dos drenados en paralelo crean un solo documento y un solo envio', 'CA14 · con la respuesta perdida: 1 documento, 0 envios, fallido con ambiguo', 'CA16 · proveedor caido'. Banco 31.D0/D2 cubre encolar x2 mismo evento."
+      "evidencia": "Test Files 1 passed, Tests 3 passed (cola.bd.test.ts): encolar x2, drenar x2 en paralelo, perderRespuesta."
     },
     {
       "id": "CA15",
-      "texto": "Proyeccion minima",
+      "texto": "Proyección mínima",
       "veredicto": "PASA",
-      "comando": "npx vitest run lib/facturacion app/api/facturacion app/(app)/ajustes/facturacion ... (11 ficheros)",
-      "evidencia": "Test Files 11 passed, Tests 107 passed, incluido lib/facturacion/proyeccion.test.ts; npm test completo: 217 ficheros, 2892 pruebas verdes"
+      "comando": "npm test",
+      "evidencia": "217 ficheros, 2915 pruebas pasan, incluida lib/facturacion/proyeccion.test.ts."
     },
     {
       "id": "CA16",
-      "texto": "Proveedor caido",
+      "texto": "Proveedor caído",
       "veredicto": "PASA",
       "comando": "npm run test:facturacion",
-      "evidencia": "'CA16 · con el proveedor caido sigue pendiente, con un intento y reintento futuro' pasa (3/3)"
+      "evidencia": "cola.bd.test.ts 3/3 con control.caido(true)."
     },
     {
       "id": "CA17",
       "texto": "Sincronizador",
       "veredicto": "PASA",
-      "comando": "npm test (lib/facturacion/sincronizador.test.ts)",
-      "evidencia": "Incluido en los 11 ficheros / 107 pruebas verdes y en npm test 2892 verdes"
+      "comando": "npm test",
+      "evidencia": "sincronizador.test.ts verde dentro de 2915 pruebas (incluye H1: documento rechazado no atasca)."
     },
     {
       "id": "CA18",
-      "texto": "La clave no sale (e2e + build)",
+      "texto": "La clave no sale",
       "veredicto": "PASA",
-      "comando": "PUERTO=3107 npx playwright test accesibilidad/facturacion-clave.spec.ts (tras next build --webpack)",
-      "evidencia": "✓ 1 [chromium] › facturacion-clave.spec.ts:60:5 › la clave guardada no aparece en ninguna respuesta ni en el build (2.6s); 1 passed. La prueba unitaria de guardarClaveProveedor esta en acciones.test.ts (verde)."
+      "comando": "PUERTO=3126 npx playwright test accesibilidad/facturacion-clave.spec.ts (tras next build --webpack)",
+      "evidencia": "✓ 1 [chromium] › facturacion-clave.spec.ts:60:5 › la clave guardada no aparece en ninguna respuesta ni en el build (2.6s); 1 passed. Unitario de guardarClaveProveedor dentro de npm test."
     },
     {
       "id": "CA19",
-      "texto": "Ruta de drenado 503/401",
+      "texto": "Ruta de drenado",
       "veredicto": "PASA",
-      "comando": "npm test (app/api/facturacion/drenar/route.test.ts); git diff main...HEAD -- proxy.ts",
-      "evidencia": "route.test.ts verde dentro de las 107/2892. Diff de proxy.ts: una sola linea, RUTAS_PUBLICAS = ['/login', '/prototipo', '/api/facturacion/drenar']"
+      "comando": "npm test; git diff main -- proxy.ts",
+      "evidencia": "route.test.ts verde. Diff de proxy.ts: solo RUTAS_PUBLICAS = ['/login','/prototipo','/api/facturacion/drenar']."
     },
     {
       "id": "CA20",
       "texto": "Holded encerrado",
       "veredicto": "PASA",
-      "comando": "grep -rniI holded app components lib proxy.ts scripts/*.ts --exclude-dir=facturacion ; grep -rln simulado app lib (sin tests)",
-      "evidencia": "Solo lib/supabase/tipos-bd.ts:4607 (proveedor_facturacion: \"holded\") y :4826 (enum [\"holded\"]): etiqueta del enum generada por `npm run tipos`, justificada. Ademas una mencion en app/(app)/pacientes/[id]/panel-facturacion.test.tsx:27 (fichero de prueba, id 'holded' en una ficha simulada; el criterio no excluia tests en la busqueda). Ningun fichero fuera de *.test.* referencia simulado salvo el propio simulado.ts; importaciones.test.ts recorre app/ y lib/ y pasa."
+      "comando": "grep -rniI holded app components lib proxy.ts scripts/*.ts --exclude-dir=facturacion (sin tests)",
+      "evidencia": "Solo lib/supabase/tipos-bd.ts:4608 (proveedor_facturacion: \"holded\") y :4827 (enum Constants): etiqueta del enum, generada por npm run tipos. La prueba que recorre app/ y lib/ por simulado.ts pasa en npm test."
     },
     {
       "id": "CA21",
-      "texto": "Ajustes solo para el administrador",
+      "texto": "Ajustes solo administrador",
       "veredicto": "PASA",
-      "comando": "npm test (app/(app)/ajustes/facturacion/page.test.tsx, formulario-clave.test.tsx) + navegador contra next start",
-      "evidencia": "Pruebas verdes. En el navegador: ADM ve el enlace «Programa de facturación» en /ajustes (1) y PRO no (0); PRO a /ajustes/facturacion acaba en http://127.0.0.1:3107/ajustes; ADM en /ajustes/facturacion: texto «Todavía no hay ningún programa de facturación disponible» 1, inputs 0, botones en main 0."
+      "comando": "npm test (page.test.tsx, formulario-clave.test.tsx) + visita como administrador",
+      "evidencia": "Pruebas verdes. Captura ajustes_facturacion-1280.png: título «Programa de facturación» y «Todavía no hay ningún programa de facturación disponible para conectar», sin formulario ni botones."
     },
     {
       "id": "CA22",
-      "texto": "Ficha: estados, anotaciones, sin proveedor sin botones",
+      "texto": "Ficha",
       "veredicto": "PASA",
-      "comando": "npm test (panel-facturacion.test.tsx, boton-preparar.test.tsx, acciones-facturacion.test.ts)",
-      "evidencia": "Verdes en las 107/2892. En navegador sin proveedor: panel Facturación de la ficha de Carmen Ruiz como ADM y PRO: 0 botones, 0 enlaces, texto «Todavía no hay borradores de factura»."
+      "comando": "npm test (panel-facturacion.test.tsx, boton-preparar.test.tsx); navegador en la pestaña Facturación",
+      "evidencia": "Pruebas verdes. En la app (admin, paciente d0080001-…03): «Todavía no hay borradores de factura», botones del tabpanel: []. Textos B2 en es.ts:264 «Emitida en {programa}» y :273 «Borrador borrado en {programa}»."
     },
     {
       "id": "CA23",
-      "texto": "Vocabulario ADR-078 y cache ADR-043",
+      "texto": "Vocabulario y caché",
       "veredicto": "PASA",
-      "comando": "grep -rniE \"\\b(emitir|facturar|expedir|aprobar|crear factura|verifactu)\\b\" app components lib/i18n (sin tests); grep -rnE \"use cache|unstable_cache\" lib/facturacion app/(app)/ajustes/facturacion panel-facturacion.tsx",
-      "evidencia": "lib/i18n/es.ts:266 'Abrir en {programa} para emitir' (permitido); lib/i18n/es.ts:268 borrado_sin_aprobar: 'Borrado en {programa} sin emitir' (variante de «emitir», pertenece al ticket; el contrato lista «Emitida en {programa}» y textos previos; se señala para el revisor aunque es texto negativo y coherente con ADR-078). Cache: solo un comentario en lib/facturacion/clave.ts:6 que dice «Sin use cache»; ningun uso real."
+      "comando": "grep -rniE \"\\b(emitir|facturar|expedir|aprobar|crear factura|verifactu)\\b\" app components lib/i18n; grep use cache|unstable_cache",
+      "evidencia": "Única coincidencia: lib/i18n/es.ts:269 'Abrir en {programa} para emitir' (permitida). «Emitida en {programa}» no casa con el patrón. use cache/unstable_cache: solo un comentario en lib/facturacion/clave.ts:6 que dice «Sin use cache»."
     },
     {
       "id": "CA24",
       "texto": "Manual, modo degradado",
       "veredicto": "PASA",
-      "comando": "Playwright contra next start (puerto 3107) + banco 31.H6",
-      "evidencia": "Sin ajuste de proveedor la app arranca, la ficha no tiene botones de facturacion (ADM y PRO: 0 botones). Cobros: 31.H6 «un cobro sin factura sigue entrando» y 31.H5 pasan; banco 30-cobros del test:rls en verde. Capturas: .claude/qa/visitas/T-026a/*.png. No se ejerció el formulario de /facturacion por UI."
+      "comando": "npx next start --port 3126 + playwright como admin; qa.mjs visita incluye /facturacion",
+      "evidencia": "App arranca, ficha sin botones de facturación, /facturacion sin errores de consola ni 5xx. El alta de cobros (T-023) la cubre el banco en test:rls; no se registró un cobro por la UI."
     },
     {
       "id": "CA25",
-      "texto": "Cierre: npm test, test:facturacion, test:rls, lint:migraciones, lint, build; territorio",
-      "veredicto": "PASA",
-      "comando": "npm test; npm run test:facturacion; npm run test:rls; npm run lint:migraciones; npm run lint; npx next build --webpack; git diff --name-only main...HEAD",
-      "evidencia": "npm test: Test Files 217 passed, Tests 2892 passed. test:facturacion 3 passed. test:rls exit=0. lint:migraciones 35 limpias. lint: 0 errores, 2 warnings preexistentes ajenos (lib/cuentas/accesos.test.ts). build webpack OK (rutas /ajustes/facturacion y /api/facturacion/drenar listadas). Territorio: todos los ficheros del diff estan en el territorio del contrato de la rama (que anade route.test.ts, acciones-facturacion.test.ts, boton-preparar.* por ampliacion del propietario 08-10-2026) mas lib/facturacion/nif.ts (dentro de lib/facturacion/**). node territorio.mjs no es concluyente desde el worktree (compara 994 ficheros)."
+      "texto": "Cierre: npm test, test:facturacion, test:rls, lint:migraciones, lint, build, territorio",
+      "veredicto": "FALLA",
+      "comando": "npm run test:rls",
+      "reproduccion": "En la rama f27cf0c con la base en max(version)=20261014120000: npm run test:rls -> psql:<stdin>:15745: ERROR: ASERCIÓN FALLIDA: 26.F9 · borradores_factura_estado: borrador_id, ultima_version, estado (text), en ese orden (PA.2); exit 3. Causa: la ronda 1 (M1) añadió la columna envio_ambiguo a la vista en la migración 20261014120000 y scripts/rls/26-economico.sql:709-714 sigue esperando array['borrador_id','ultima_version','estado']. 26-economico.sql no está en el territorio del ticket. La ronda anterior (e60a3ca) pasaba. El comando real corta ahí y no ejecuta los módulos posteriores al 26. Con la aserción ajustada en una copia, todo el banco pasa (exit 0, 2594 OK). Resto verde: lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts), lint:migraciones 35 limpias, npm test 217 ficheros/2915 pruebas, test:facturacion 3/3, next build --webpack OK. Territorio: node territorio.mjs no sirve desde el worktree (995 ficheros); a mano con git diff --name-only main...HEAD, 62 ficheros, todos en el territorio salvo el propio contrato tickets/T-026a-….md (+4 líneas de territorio ampliado por el propietario)."
     },
     {
       "id": "Fuera-T-026b",
-      "texto": "Manuales con Holded real (15), clave enmascarada por formulario (16), texto definitivo «sin plan de pago»",
+      "texto": "Manuales con Holded real (15), clave enmascarada por formulario (16), texto «sin plan de pago»",
       "veredicto": "NO_VERIFICABLE",
-      "motivo": "fuera: T-026b. Requieren el adaptador real de Holded y credenciales de pago."
+      "motivo": "fuera: T-026b (requieren el adaptador real de Holded y el formulario con ficha disponible)."
     }
   ],
-  "regresiones": [],
+  "regresiones": [
+    "scripts/rls/26-economico.sql:709-714 (aserción 26.F9) rompe con la columna envio_ambiguo añadida por la ronda 1 en borradores_factura_estado; test:rls falla en el comando real. Causada por el ticket, no preexistente."
+  ],
   "pantalla": {
     "ticket": "T-026a",
-    "commit": "e60a3ca38abc45172c0d17e5da3367471b2d9cfd",
-    "rutas": ["/ajustes", "/ajustes/facturacion", "/pacientes/d0080001-0000-4000-8000-000000000003"],
+    "commit": "f27cf0c12ddd12d6ab1471cb8261d78b0a4b748c",
+    "rutas": [
+      "/ajustes",
+      "/ajustes/facturacion",
+      "/pacientes/d0080001-0000-4000-8000-000000000003",
+      "/facturacion"
+    ],
     "consola": [],
     "paginas": [],
     "http5xx": [],
@@ -199,9 +206,11 @@
       ".claude/qa/visitas/T-026a/ajustes_facturacion-1280.png",
       ".claude/qa/visitas/T-026a/ajustes_facturacion-390.png",
       ".claude/qa/visitas/T-026a/pacientes_d0080001-0000-4000-8000-000000000003-1280.png",
-      ".claude/qa/visitas/T-026a/pacientes_d0080001-0000-4000-8000-000000000003-390.png"
+      ".claude/qa/visitas/T-026a/pacientes_d0080001-0000-4000-8000-000000000003-390.png",
+      ".claude/qa/visitas/T-026a/facturacion-1280.png",
+      ".claude/qa/visitas/T-026a/facturacion-390.png"
     ],
     "bloqueadas": [],
-    "notas": ["/ajustes/facturacion: acaba en /ajustes (visita como profesional; correcto). Segunda visita como administrador (ticket T-026a-adm, /ajustes y /ajustes/facturacion): consola, paginas, 5xx y desborde vacios."]
+    "notas": []
   }
 }
