@@ -27,7 +27,7 @@ type Props = {
 };
 
 const ENLACE_DIA =
-  'focus-visible:ring-ring/50 flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-md text-xs outline-none focus-visible:ring-2 sm:pointer-fine:min-h-7';
+  'border-card focus-visible:ring-ring/50 flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-md border-2 text-xs outline-none focus-visible:ring-2 sm:pointer-fine:min-h-7';
 
 /** Las filas de siete celdas de un mes: `null` es un hueco anterior al día 1 o posterior al último. */
 function filasDelMes(mes: MesAnio) {
@@ -137,7 +137,7 @@ export function CalendarioAnio({ vista, parametros, centros, centroElegido, rol 
                   ))}
                 </div>
                 {filasDelMes(mes).map((fila, i) => (
-                  <div key={i} role="row" className="grid grid-cols-7 gap-1">
+                  <div key={i} role="row" className="grid grid-cols-7">
                     {fila.map((dia, j) =>
                       dia === null ? (
                         <span key={j} role="gridcell" />

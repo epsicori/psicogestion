@@ -98,6 +98,15 @@ profesional. Hora en monoespaciada, franja de color del profesional, `tipo · pr
 modalidad`, centro y sala. Cambiar de vista **conserva la fecha enfocada**. Acción
 primaria: **Nueva cita**.
 
+**Vista anual (T-047).** Doce mini-meses, lunes primero. Con ratón en escritorio, cuatro por
+fila; al tacto, tantos como quepan a 44 px por día, y a 360 px uno por fila (sin
+desplazamiento horizontal). Cada día es un enlace a su semana y lleva tono y una barra
+proporcional en cinco escalones relativos al máximo del año visible (con sus filtros); la
+leyenda es numérica y dice «sin canceladas». El número de citas del día cuenta todas salvo las
+canceladas; el título de cada mes lleva su total. Un solo día es tabulable y las flechas, Inicio,
+Fin, RePág y AvPág lo mueven. Motivo: la tira de 53 semanas obliga a desplazar a 360 px (D2) y el
+color solo no basta (WCAG 1.4.1), por eso el número, la barra y la leyenda numérica.
+
 **Panel derecho**, tres bloques en este orden de prioridad:
 
 1. **Citas próximas** — las siguientes del día y del siguiente.
