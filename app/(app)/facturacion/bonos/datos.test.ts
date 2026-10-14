@@ -10,7 +10,8 @@ vi.mock('@/lib/cuentas/candado', () => ({ estadoDeCuenta: (...a: unknown[]) => e
 
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 
-const { cargarBonos, cargarContextoBonos, cargarProfesionalesDeBonos } = await import('./datos');
+const { cargarBonos, cargarContextoBonos, cargarProfesionalesDeBonos, cargarRelojDeBonos, pacienteAdmiteBonos } =
+  await import('./datos');
 
 const PRO = '1b2c3d4e-5f60-4a71-8b82-9c0d1e2f3a40';
 const PAC1 = '6f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60';
@@ -219,5 +220,36 @@ describe('cargarProfesionalesDeBonos', () => {
   it('un error del directorio es { ok: false }', async () => {
     comoRol('administrador', { directorio_perfiles: { data: null, error: { code: 'XX000' } } });
     expect(await cargarProfesionalesDeBonos([PRO])).toEqual({ ok: false });
+  });
+});
+
+describe('cargarRelojDeBonos (la ficha no tiene searchParams)', () => {
+  it('hoy y zona de la organización, sin mirar ningún parámetro', async () => {
+    const falso = comoRol('profesional_sanitario', {}, 'Atlantic/Canary');
+    const r = await cargarRelojDeBonos();
+    expect(r.zona).toBe('Atlantic/Canary');
+    expect(r.hoy).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(falso.supabase.rpc).toHaveBeenCalledWith('zona_horaria_centro', { p_centro_id: null });
+  });
+});
+
+describe('pacienteAdmiteBonos', () => {
+  it('un paciente sin fusionar sí', async () => {
+    const { llamadas } = comoRol('profesional_sanitario', { pacientes: { data: { fusionado_en: null }, error: null } });
+    expect(await pacienteAdmiteBonos(PAC1)).toBe(true);
+    expect(llamadas.pacientes).toContainEqual(['select', ['fusionado_en']]);
+    expect(llamadas.pacientes).toContainEqual(['eq', ['id', PAC1]]);
+  });
+
+  it('un paciente fusionado no', async () => {
+    comoRol('profesional_sanitario', { pacientes: { data: { fusionado_en: '2026-09-30T10:00:00Z' }, error: null } });
+    expect(await pacienteAdmiteBonos(PAC1)).toBe(false);
+  });
+
+  it('si no se puede leer (error o fila invisible), no se ofrece registrar', async () => {
+    comoRol('profesional_sanitario', { pacientes: { data: null, error: { code: 'XX000' } } });
+    expect(await pacienteAdmiteBonos(PAC1)).toBe(false);
+    comoRol('profesional_sanitario', { pacientes: { data: null, error: null } });
+    expect(await pacienteAdmiteBonos(PAC1)).toBe(false);
   });
 });

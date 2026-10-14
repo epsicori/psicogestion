@@ -71,6 +71,34 @@ function aTrozos<T>(lista: T[], tamano: number): T[][] {
   return trozos;
 }
 
+/** «Hoy» y la zona de la organización. Sin `searchParams`: lo usa también la ficha del paciente. */
+export const cargarRelojDeBonos = cache(async (): Promise<{ hoy: string; zona: string }> => {
+  await connection();
+  const { supabase } = await cargarSesion();
+  const { data: zona, error } = await supabase.rpc('zona_horaria_centro', {
+    // El generador no modela el null que la función acepta (como en `cargarContexto`).
+    p_centro_id: null as unknown as string,
+  });
+  if (error || typeof zona !== 'string' || zona.length === 0) {
+    throw new Error(`Bonos: no se pudo leer la zona de la organización (${error?.code ?? 'vacía'}).`);
+  }
+  return { hoy: hoyEn(new Date(), zona), zona };
+});
+
+/**
+ * ¿Se puede registrar un bono a este paciente? Un paciente fusionado no (ADR-031: sus citas viven en el
+ * superviviente). Si no se puede leer, tampoco: más vale no ofrecer el botón que ofrecer uno que falle.
+ */
+export const pacienteAdmiteBonos = cache(async (pacienteId: string): Promise<boolean> => {
+  const { supabase } = await cargarSesion();
+  const { data, error } = await supabase.from('pacientes').select('fusionado_en').eq('id', pacienteId).maybeSingle();
+  if (error) {
+    console.error('pacienteAdmiteBonos: fallo al leer el paciente', error.code);
+    return false;
+  }
+  return data !== null && data.fusionado_en === null;
+});
+
 /**
  * Rol, filtros, página, zona y reloj. El rol lo decide la base (`estado_de_cuenta()`). `?profesional` y
  * `?paciente` **solo se miran** si quien pide es administrador (choque 13): para cualquier otro se ignoran
@@ -94,17 +122,11 @@ export const cargarContextoBonos = cache(async (searchParams: ParametrosDeBusque
   }
   const numeroPagina = esquemaPagina.safeParse(parametros.pagina);
 
-  const { data: zona, error } = await sesion.supabase.rpc('zona_horaria_centro', {
-    // El generador no modela el null que la función acepta (como en `cargarContexto`).
-    p_centro_id: null as unknown as string,
-  });
-  if (error || typeof zona !== 'string' || zona.length === 0) {
-    throw new Error(`Bonos: no se pudo leer la zona de la organización (${error?.code ?? 'vacía'}).`);
-  }
+  const { hoy, zona } = await cargarRelojDeBonos();
 
   return {
     rol,
-    hoy: hoyEn(new Date(), zona),
+    hoy,
     zona,
     estado,
     profesional,
