@@ -1,0 +1,191 @@
+{
+  "ticket": "T-026a",
+  "resumen": "Ronda 5 sobre 1a464c2 (worktree .claude/worktrees/agent-a84ef43dca6f7a816; Contenedor: supabase_db_Psicogestion; max(version)=20261014120000; sin reset). CA25 reejecutado entero y en verde: lint, lint:migraciones, npm test 2917, test:facturacion 3, test:rls completo exit 0 sin deadlocks, next build --webpack, territorio limpio (70 ficheros). Discriminacion de C11: copia del banco en el scratchpad con `alter table public.facturas_espejo drop constraint facturas_espejo_check` justo antes de 31.C11; resultado: ERROR ASERCION FALLIDA (debia lanzar 23514 y no lanzo nada): 31.C11 - C11 cae sin el check y discrimina (la fijacion 31.C11.fij pasa antes). Rollback: el check sigue en la base (count=1). VISITA DE PANTALLA NO EJECUTADA: qa.mjs visita se detuvo con «falta la contraseña de QA en el entorno (QA_PASSWORD o QA_PASSWORD_ADMINISTRADOR)»; esa variable no esta en el entorno del verificador y el intento de leerla fuera de el fue denegado por el sistema de permisos, asi que no hay pantalla.json del commit 1a464c2 y el gate no podra casarla. Hace falta repetir `node ~/.claude/pipeline/qa.mjs visita /ajustes /ajustes/facturacion /pacientes/d0080001-0000-4000-8000-000000000001 /facturacion --ticket T-026a --rol administrador` desde una sesion con QA_PASSWORD_ADMINISTRADOR (app de produccion: next build --webpack ya hecho en el worktree; arrancar con next start). La visita de d2d7e4d (sin errores, 5xx ni desborde) no se reutiliza como pantalla de este commit. Resto de CA por la evidencia anterior, dicho en cada uno.",
+  "criterios": [
+    {
+      "id": "CA1",
+      "texto": "Migración, max(version), lint:migraciones",
+      "veredicto": "PASA",
+      "comando": "psql max(version) en supabase_db_Psicogestion; npm run lint:migraciones",
+      "evidencia": "max(version)=20261014120000; lint-migraciones: 35 migración(es) limpias. No se hizo db reset (lo hizo el orquestador desde la rama justo antes). | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA2",
+      "texto": "Solo adición",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.B insert 42501 ADM/PRO1/TEC1; update/delete/truncate 42501 incl. postgres; 10-solo-adicion con las tres tablas; cobertura_solo_adicion()=0 (31.A15/A16) | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA3",
+      "texto": "Espejo idempotente",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.C1 mismo id; C2 23505; C3 conserva total; C4 23503; C5 23514 | Ronda 4: reejecutado en test:rls completo sobre d2d7e4d (OK). | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA4",
+      "texto": "Forma del espejo",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.A2 columnas exactas en orden; 31.A6 ninguna prohibida | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA5",
+      "texto": "Vocabulario de anotaciones",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.E1 tres valores; E3 'pagado' 22P02; E4-E6 23514 | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA6",
+      "texto": "Técnico",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.G1/G2 1 y 0, ADM 2; F4 tabla 0; A4 sin cita_id, lineas, borrador_id | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA7",
+      "texto": "Cobro con espejo de otro paciente",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.H1-H6: 23514, 23514, 23503, 42501 antes del cotejo, gemela entra | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA8",
+      "texto": "Encolar sin oráculo",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.I1 mismo 42501 por igualdad; I4 23514; I5 23514; I6 mismo evento_id; I8 fallido->pendiente | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA9",
+      "texto": "Congelación",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.J1-J7: 23514 con envío o pendiente; con fallido entra; PRO2 42501 del sellado | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA10",
+      "texto": "Estado del borrador",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.K1-K11 verdes: conserva borrador_id, ultima_version, estado (text) y recorre sin_enviar/en_cola/enviado/facturado/fallido/descartado. 26.F9 ahora espera la 4a columna envio_ambiguo y pasa. | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA11",
+      "texto": "Vault y ajuste",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.L1-L12 y M1/M2: TEC1/PRO1 42501, estado '••••', quitar borra vault.secrets, centinela fuera de auditoria | Ronda 4: reejecutado en test:rls completo sobre d2d7e4d (OK). | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA12",
+      "texto": "Reclamo y retroceso",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.N1-N12: segundo reclamo 0, sin concepto/cita_id, intento 8 fallido con una notificación por administrador deduplicada | Ronda 4: reejecutado en test:rls completo sobre d2d7e4d (OK). | Ronda 5 sobre 1a464c2: test:rls completo reejecutado, exit 0 (OK)."
+    },
+    {
+      "id": "CA13",
+      "texto": "Nada aprueba",
+      "veredicto": "PASA",
+      "comando": "grep -rn \"approveDoc\\|APPROVE_DOC\" lib/; grep -rniE approve app components lib proxy.ts (sin tests ni tipos)",
+      "evidencia": "lib/facturacion/holded.ts:16 const APPROVE_DOC = false as const; :17 void APPROVE_DOC; nada más. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA14",
+      "texto": "Idempotencia por borrador",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion",
+      "evidencia": "Test Files 1 passed, Tests 3 passed (cola.bd.test.ts): encolar x2, drenar x2 en paralelo, perderRespuesta. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA15",
+      "texto": "Proyección mínima",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "217 ficheros, 2915 pruebas pasan, incluida lib/facturacion/proyeccion.test.ts. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA16",
+      "texto": "Proveedor caído",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion",
+      "evidencia": "cola.bd.test.ts 3/3 con control.caido(true). | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA17",
+      "texto": "Sincronizador",
+      "veredicto": "PASA",
+      "comando": "npm test (lib/facturacion/sincronizador.test.ts, 217 ficheros 2917 tests OK) + secuencia SQL real en begin..rollback + 31.C11-C14 en test:rls",
+      "evidencia": "Nuevos: 'un documento rectificado cuyo espejo se rechaza (23502) se avisa y NO se anota' y 'un rechazo sin espejo cuyo aviso la base no admite aborta la pasada'. SQL real: IRPF 23514 (facturas_espejo_check) -> notificar x2 -> 1 notificacion por admin con origen borradores_factura_envios, titulo 'Factura que no se pudo copiar'; 0 espejos; registrar_anotacion borrado_sin_aprobar posterior = true (la pasada sigue); documento inexistente -> 23503. test:rls: 31.C12 OK, 31.C13 OK, 31.C14 OK. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA18",
+      "texto": "La clave no sale",
+      "veredicto": "PASA",
+      "comando": "PUERTO=3126 npx playwright test accesibilidad/facturacion-clave.spec.ts (tras next build --webpack)",
+      "evidencia": "✓ 1 [chromium] › facturacion-clave.spec.ts:60:5 › la clave guardada no aparece en ninguna respuesta ni en el build (2.6s); 1 passed. Unitario de guardarClaveProveedor dentro de npm test. | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA19",
+      "texto": "Ruta de drenado",
+      "veredicto": "PASA",
+      "comando": "npm test; git diff main -- proxy.ts",
+      "evidencia": "route.test.ts verde. Diff de proxy.ts: solo RUTAS_PUBLICAS = ['/login','/prototipo','/api/facturacion/drenar']. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA20",
+      "texto": "Holded encerrado",
+      "veredicto": "PASA",
+      "comando": "grep -rniI holded app components lib proxy.ts scripts/*.ts --exclude-dir=facturacion (sin tests)",
+      "evidencia": "Solo lib/supabase/tipos-bd.ts:4608 (proveedor_facturacion: \"holded\") y :4827 (enum Constants): etiqueta del enum, generada por npm run tipos. La prueba que recorre app/ y lib/ por simulado.ts pasa en npm test. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA21",
+      "texto": "Ajustes solo administrador",
+      "veredicto": "PASA",
+      "comando": "npm test (page.test.tsx, formulario-clave.test.tsx) + visita como administrador",
+      "evidencia": "Pruebas verdes. Captura ajustes_facturacion-1280.png: título «Programa de facturación» y «Todavía no hay ningún programa de facturación disponible para conectar», sin formulario ni botones. | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA22",
+      "texto": "Ficha",
+      "veredicto": "PASA",
+      "comando": "npm test (panel-facturacion.test.tsx, boton-preparar.test.tsx); navegador en la pestaña Facturación",
+      "evidencia": "Pruebas verdes. En la app (admin, paciente d0080001-…03): «Todavía no hay borradores de factura», botones del tabpanel: []. Textos B2 en es.ts:264 «Emitida en {programa}» y :273 «Borrador borrado en {programa}». | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA23",
+      "texto": "Vocabulario y caché",
+      "veredicto": "PASA",
+      "comando": "grep -rniE \"\\b(emitir|facturar|expedir|aprobar|crear factura|verifactu)\\b\" app components lib/i18n; grep use cache|unstable_cache",
+      "evidencia": "Única coincidencia: lib/i18n/es.ts:269 'Abrir en {programa} para emitir' (permitida). «Emitida en {programa}» no casa con el patrón. use cache/unstable_cache: solo un comentario en lib/facturacion/clave.ts:6 que dice «Sin use cache». | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA24",
+      "texto": "Manual, modo degradado",
+      "veredicto": "PASA",
+      "comando": "npx next start --port 3126 + playwright como admin; qa.mjs visita incluye /facturacion",
+      "evidencia": "App arranca, ficha sin botones de facturación, /facturacion sin errores de consola ni 5xx. El alta de cobros (T-023) la cubre el banco en test:rls; no se registró un cobro por la UI. | Ronda 4: sin cambios de codigo desde e9e9c7f; se mantiene la evidencia anterior. Visita qa.mjs sobre d2d7e4d sin errores. | Ronda 5: no reejecutado por separado; el codigo es identico a 0781696 (git diff 0781696 1a464c2 solo anade ficheros de tickets/). npm test (2917) y test:facturacion (3) pasan en 1a464c2."
+    },
+    {
+      "id": "CA25",
+      "texto": "Cierre: npm test, test:facturacion, test:rls, lint:migraciones, lint, build, territorio",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npm run lint:migraciones; npm test; npm run test:facturacion; npm run test:rls; npx next build --webpack; git diff --name-only main...HEAD",
+      "evidencia": "Sobre 1a464c2: lint 0 errores (2 warnings ajenos en lib/cuentas/accesos.test.ts); lint-migraciones 35 limpias; npm test 217 ficheros, 2917 tests pasan; test:facturacion 3 pasan; test:rls exit 0, Contenedor: supabase_db_Psicogestion, 18963 lineas, 0 deadlocks, termina en 31-proveedor-facturacion: completo; next build --webpack exit 0; territorio: 70 ficheros, todos dentro del territorio: del contrato (los no literales casan con tickets/T-026a/**, docs/bitacora/T-026a*.md y el propio contrato)."
+    },
+    {
+      "id": "Fuera-T-026b",
+      "texto": "Manuales con Holded real (15), clave enmascarada por formulario (16), texto «sin plan de pago»",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "fuera: T-026b (requieren el adaptador real de Holded y el formulario con ficha disponible)."
+    }
+  ],
+  "regresiones": [],
+  "pantalla": {
+    "motivo": "qa.mjs visita no se pudo ejecutar: falta QA_PASSWORD(_ADMINISTRADOR) en el entorno del verificador; sin credencial no hay login como administrador. Pendiente de repetir desde una sesion que la tenga. La visita previa (commit d2d7e4d: sin consola, paginas, 5xx ni desborde a 390) no se reutiliza."
+  }
+}

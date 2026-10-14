@@ -1,0 +1,29 @@
+{
+  "ticket": "T-026a",
+  "ronda": 2,
+  "commit": "d9b528739d7a252b2e4cf1146132cfc1dd560d8c",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 1,
+  "cerrados_ronda_1": ["M1", "M2", "M3", "M4", "B1", "B2", "B3", "B4", "B5", "B6", "B7"],
+  "hallazgos": [
+    {
+      "id": "R2-M1",
+      "severidad": "MEDIA",
+      "causa": "cruce",
+      "archivo": "lib/facturacion/sincronizador.ts",
+      "linea": 82,
+      "descripcion": "El arreglo de H1 llama a notificar_discrepancia_facturacion tras un rechazo de clase 23 distinto de 23505, pero esa función (migración :803-806, no tocada) exige un espejo que en ese caso no existe y lanza 23503, así que fallo('aviso') vuelve a abortar la pasada; la prueba nueva está verde porque la base falsa acepta el aviso sin espejo.",
+      "escenario": "Reproducido en begin…rollback: factura con retención IRPF (base 100, IVA 21, total 106) → registrar_factura_espejo 23514 por check (base + cuota_iva = total) → notificar_discrepancia_facturacion 23503 'No hay factura copiada' → sincronizar lanza 'Fallo al sincronizar (aviso)', ni el resto de la pasada A ni la B corren, el cursor no avanza, y se repite cada cinco minutos: ninguna factura posterior llega a 'Emitida'."
+    },
+    {
+      "id": "R2-B1",
+      "severidad": "BAJA",
+      "causa": "prueba",
+      "archivo": "lib/facturacion/sincronizador.ts",
+      "linea": 90,
+      "descripcion": "El 'return' que impide anotar rectificado/anulado en un documento cuyo espejo la base rechazó no tiene prueba, ni la tiene un código de clase 23 distinto de 23514/23505.",
+      "escenario": "Medido: quitar 'if (error.code !== '23505') return;' o restringir la clase 23 a 23505/23514 deja sincronizador.test.ts 10/10 en verde; con la línea quitada, un documento rectificado cuyo espejo se rechaza llama a registrar_anotacion_documento, que lanza 23514 sin espejo, y fallo('anotación') aborta la sincronización."
+    }
+  ]
+}

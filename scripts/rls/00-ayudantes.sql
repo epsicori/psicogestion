@@ -337,4 +337,34 @@ as $$
     'cita_id', p_cita_id::text);
 $$;
 
+-- T-026a · El INSERT de una versión de borrador de una sola línea exenta (cantidad 1), con el
+-- sobre coherente ya calculado. Lo usan la fijación de `01` y el módulo 31: es la forma corta de
+-- sellar una versión sin repetir el molde de `26-economico`. `p_total` en euros. El llamante
+-- pasa `creada_en` (literal pasado, distinto por versión: el índice global de huellas, punto 9
+-- del README). `numero_version` lo calcula el disparador; el sobre lo adivina como máximo + 1,
+-- así que el texto se genera justo antes de ejecutarse.
+create or replace function pg_temp.sql_version_simple(
+  p_borrador    uuid,
+  p_por         uuid,
+  p_total       numeric,
+  p_creada_en   timestamptz,
+  p_nombre      text default 'Ana Uno',
+  p_centro      uuid default null,
+  p_descartado  boolean default false
+) returns text
+language sql
+stable
+as $$
+  select format(
+    'insert into public.borradores_factura_versiones (borrador_id, centro_id, destinatario_nombre, '
+    'lineas, base, cuota_iva, total, descartado, creada_por, creada_en, algoritmo_version, contenido_canonico) '
+    'values (%L, %L, %L, %L, %s, 0.00, %s, %L, %L, %L, 1, %L)',
+    p_borrador, p_centro, p_nombre,
+    jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, (p_total * 100)::integer)),
+    p_total, p_total, p_descartado, p_por, p_creada_en,
+    pg_temp.sobre_borrador(p_borrador, p_por, p_creada_en,
+      jsonb_build_array(pg_temp.linea_borrador('Sesión de psicoterapia', 1, (p_total * 100)::integer)),
+      p_total, 0.00, p_total, p_nombre, p_centro, p_descartado));
+$$;
+
 \echo '00-ayudantes: assert, assert_lanza, assert_no_lanza, contar, como(), sobre_prueba() y sobre_borrador() definidos.'

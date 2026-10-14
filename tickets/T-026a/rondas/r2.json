@@ -1,0 +1,26 @@
+{
+  "ticket": "T-026a",
+  "ronda": 2,
+  "commit": "0781696077f412aad1ac93416bfdf851fddf1e51",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 1,
+  "nota": "Combina revision-a.json (ronda 2 sobre d9b5287: 0 ALTA, 1 MEDIA R2-H1, 0 BAJA), revision-b.json (ronda 2 sobre d9b5287: 0 ALTA, 1 MEDIA R2-M1, 1 BAJA R2-B1) y revision-dirigida.json (comprobación dirigida sobre 0781696: cierra R2-H1, R2-M1 y R2-B1; 0 ALTA, 0 MEDIA, 1 BAJA D-B1). R2-H1 (A) y R2-M1 (B) son el mismo hallazgo: el aviso de discrepancia exigía un espejo que no existe tras un rechazo distinto de 23505. El commit revisado es 0781696. La cabeza de la rama es c48708a, y git diff 0781696 c48708a solo toca tickets/T-026a/ (la evidencia y la revisión dirigida). El sello de la evidencia y el de la revisión dirigida llevan la misma huella de código (777d1376…). D-B1 queda abierta como BAJA para un ticket de seguimiento.",
+  "cerrados_ronda_2": {
+    "R2-H1": "cerrado (A, MEDIA). notificar_discrepancia_facturacion avisa colgado del envío cuando no hay espejo. La dirigida lo midió en supabase_db_Psicogestion, dentro de begin … rollback, con dos pasadas sobre envíos reales sin espejo: el aviso entra sin error, el siguiente documento se copia, no hay duplicados y ningún aviso nombra al paciente.",
+    "R2-M1": "cerrado (B, MEDIA). Es el mismo arreglo que R2-H1, con la misma medición.",
+    "R2-B1": "cerrado (B, BAJA). sincronizador.test.ts (12 pruebas) mata cinco mutantes: quitar el return, dejar la clase 23 en 23505/23514, ignorar errorAviso, return solo en 23514 y no contar la discrepancia. La base falsa ya no acepta un aviso sin espejo salvo con avisoSinEspejo."
+  },
+  "hallazgos": [
+    {
+      "id": "D-B1",
+      "severidad": "BAJA",
+      "causa": "prueba",
+      "archivo": "supabase/migrations/20261014120000_proveedor_facturacion.sql",
+      "linea": 816,
+      "descripcion": "El return de la rama con espejo de notificar_discrepancia_facturacion no lo mata ninguna prueba. Quitarlo deja el banco RLS entero en verde (medido en begin … rollback, exit 0, 31.C8, C9 y C11-C14 en OK), porque ninguna aserción cuenta los avisos de un documento por todos sus orígenes.",
+      "escenario": "El programa cambia el total de una factura ya copiada, así que registrar_factura_espejo da 23505 y el sincronizador avisa. Si un refactor quita ese return, cada administrador recibe dos avisos del mismo documento, y uno de ellos («Una factura del programa de facturación no se pudo copiar…») es falso porque la factura sí está copiada. Ninguna prueba lo detecta. Se cierra contando en C8 los avisos facturacion_discrepancia de DOC-A también con el origen de su envío, que deben ser 0.",
+      "revisor": "dirigida"
+    }
+  ]
+}

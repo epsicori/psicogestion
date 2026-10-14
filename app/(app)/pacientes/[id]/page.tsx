@@ -11,6 +11,7 @@ import { FichaCliente } from './ficha-cliente';
 import { PanelDatos } from './panel-datos';
 import { PanelDiferido } from './panel-diferido';
 import { PanelDocumentos } from './panel-documentos';
+import { PanelFacturacion } from './panel-facturacion';
 import { PanelResumen } from './panel-resumen';
 import { edadEnAnios, fechaLarga, valoracionEsAntigua } from './presentacion';
 
@@ -146,20 +147,12 @@ async function Cuerpo({ params }: { params: Promise<{ id: string }> }) {
           <PanelDocumentos pacienteId={paciente.id} />
         </Suspense>
       }
-      facturacion={<Facturacion />}
+      facturacion={
+        <Suspense fallback={<Cargando filas={4} />}>
+          <PanelFacturacion pacienteId={paciente.id} rol={rol} />
+        </Suspense>
+      }
     />
-  );
-}
-
-/** Vacía y dicho con todas las letras, que es lo que pide el ticket: ni cifras falsas ni un esqueleto eterno. */
-function Facturacion() {
-  return (
-    <div className="border-border bg-card flex flex-col items-center gap-3 rounded-xl border px-6 py-12 text-center">
-      <p className="font-serif text-lg font-semibold">{t('ficha.facturacionVacia')}</p>
-      <p className="text-muted-foreground max-w-sm text-sm">
-        {t('ficha.facturacionVaciaExplicacion')}
-      </p>
-    </div>
   );
 }
 

@@ -14,6 +14,7 @@ territorio:                           # cerrado por tickets/T-026/diseno.md §6
   - scripts/rls/01-fijacion.sql       # borradores nuevos BORRA/BORRB, no BORR1 (diseño §3, «Fijación en 01»)
   - scripts/rls/11-cobertura.sql      # las tres políticas nuevas en v_declaradas
   - scripts/rls/31-proveedor-facturacion.sql
+  - scripts/rls/26-economico.sql      # solo la aserción 26.F9 (columna envio_ambiguo de M1); ampliado por el propietario el 14-10-2026
   - scripts/rls/README.md
   - scripts/lint-migraciones.ts       # tres tablas nuevas en TABLAS_SOLO_ADICION
   - scripts/lint-migraciones.test.ts
@@ -21,12 +22,16 @@ territorio:                           # cerrado por tickets/T-026/diseno.md §6
   - lib/facturacion/**
   - lib/i18n/es.ts
   - app/api/facturacion/drenar/route.ts
+  - app/api/facturacion/drenar/route.test.ts               # ampliado por el propietario el 08-10-2026
   - app/(app)/ajustes/page.tsx        # solo el enlace en AccesosDeAdministracion
   - app/(app)/ajustes/facturacion/**
   - app/(app)/pacientes/[id]/page.tsx # solo sustituir <Facturacion /> por <PanelFacturacion /> con su Suspense
   - app/(app)/pacientes/[id]/panel-facturacion.tsx
   - app/(app)/pacientes/[id]/panel-facturacion.test.tsx
   - app/(app)/pacientes/[id]/acciones-facturacion.ts
+  - app/(app)/pacientes/[id]/acciones-facturacion.test.ts   # ampliado por el propietario el 08-10-2026
+  - app/(app)/pacientes/[id]/boton-preparar.tsx            # isla de cliente para los errores de «Preparar» (propietario, 08-10-2026)
+  - app/(app)/pacientes/[id]/boton-preparar.test.tsx
   - proxy.ts                          # solo /api/facturacion/drenar en RUTAS_PUBLICAS
   - .env.example                      # solo FACTURACION_DRENAR_SECRETO=
   - accesibilidad/facturacion-clave.spec.ts

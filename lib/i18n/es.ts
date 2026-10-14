@@ -126,6 +126,7 @@ export const es = {
       reponerTotp: 'Reponer TOTP',
       darDeBaja: 'Dar de baja',
       altasCentro: 'Altas de centro',
+      programaFacturacion: 'Programa de facturación',
     },
     permisos: {
       soloAdministrador: 'Solo disponible para administradores',
@@ -136,6 +137,35 @@ export const es = {
       darDeBaja: '¿Dar de baja a {nombre}? Esta acción no se puede deshacer.',
       cancelar: 'Cancelar',
       confirmar: 'Confirmar',
+    },
+    facturacion: {
+      titulo: 'Programa de facturación',
+      ningunoDisponible: 'Todavía no hay ningún programa de facturación disponible para conectar',
+      sinConectar: 'Sin programa conectado',
+      conectado: '{programa} conectado · clave {ultimos4} · actualizada el {fecha}',
+      clave: 'Clave de acceso de {programa}',
+      guardar: 'Guardar clave',
+      probar: 'Probar conexión',
+      conexionCorrecta: 'La conexión con {programa} funciona',
+      desconectar: 'Desconectar',
+      desconectarConfirmar:
+        '¿Desconectar {programa}? Los borradores que estén en cola no se prepararán hasta que vuelvas a conectarlo.',
+      guardada: 'Clave guardada',
+      desconectado: 'Programa desconectado',
+      errores: {
+        clave_invalida: 'La clave no tiene un formato válido',
+        sin_permiso: 'Solo el administrador gestiona el programa de facturación',
+        fallo: 'No se pudo completar la operación. Inténtalo de nuevo',
+        lectura: 'No se pudo leer el estado del programa de facturación. Recarga la página para intentarlo de nuevo',
+        red: 'No se pudo contactar con el programa. Inténtalo de nuevo más tarde',
+        limite: 'El programa pide esperar antes de otra petición. Inténtalo de nuevo en unos minutos',
+        no_autorizado: 'El programa no acepta la clave. Revísala y guárdala de nuevo',
+        sin_plan:
+          'Tu cuenta de {programa} no tiene un plan que permita conectar otras aplicaciones. Revísalo en {programa}.',
+        rechazado: 'El programa rechazó la petición',
+        ambiguo: 'No se sabe si el programa recibió la petición',
+        no_disponible: 'Este programa todavía no está disponible',
+      },
     },
     resultados: {
       invitacionEnviada: 'Invitación enviada correctamente',
@@ -214,6 +244,45 @@ export const es = {
     resultados: {
       dada: 'Alta de centro dada.',
       retirada: 'Alta de centro retirada.',
+    },
+  },
+
+  // Facturación en la ficha (T-026a)
+  facturacion: {
+    panel: {
+      titulo: 'Borradores',
+      vacio: 'Todavía no hay borradores de factura',
+      estado: {
+        sin_enviar: 'Sin enviar',
+        en_cola: 'Preparándose en {programa}',
+        en_colaSinPrograma: 'En cola',
+        fallido: 'No se pudo preparar',
+        fallidoAmbiguo: 'Comprueba en {programa} si el borrador llegó antes de volver a prepararlo',
+        fallidoAmbiguoSinPrograma:
+          'Comprueba en el programa de facturación si el borrador llegó antes de volver a prepararlo',
+        enviado: 'Borrador enviado',
+        facturado: 'Emitida en {programa}',
+        facturadoSinPrograma: 'Emitida en el programa de facturación',
+        descartado: 'Descartado',
+      },
+      preparar: 'Preparar borrador en {programa}',
+      abrir: 'Abrir en {programa} para emitir',
+      verFactura: 'Ver en {programa}',
+      programaGenerico: 'el programa de facturación',
+      anotacion: {
+        borrado_sin_aprobar: 'Borrador borrado en {programa}',
+        rectificado: 'Rectificada en {programa}',
+        anulado: 'Anulada en {programa}',
+      },
+      emitidas: 'Emitidas en {programa}',
+      emitidasSinPrograma: 'Emitidas',
+      error: 'No se pudo cargar la facturación. El resto de la ficha sigue disponible',
+      errores: {
+        sin_permiso: 'No tienes permiso para preparar este borrador',
+        sin_programa: 'No hay ningún programa de facturación conectado',
+        no_preparable: 'Este borrador ya no se puede preparar',
+        fallo: 'No se pudo preparar el borrador. Inténtalo de nuevo',
+      },
     },
   },
 
@@ -466,9 +535,6 @@ export const es = {
       'Aquí irán las pruebas pasadas, su corrección y los archivos adjuntos.',
     informesEnPreparacion:
       'Aquí irán los informes de alta, seguimiento y derivación, con su firma.',
-    facturacionVacia: 'Aquí no hay nada todavía',
-    facturacionVaciaExplicacion:
-      'La facturación de este paciente se construye en su propio ticket. Preferimos dejarlo vacío y decirlo a enseñar cifras que no son.',
     // Resumen: la agenda de este paciente, que vive FUERA del candado
     ultimaSesion: 'Última sesión',
     sinSesionesRealizadas: 'Todavía no se ha dado ninguna sesión por realizada',

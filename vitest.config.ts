@@ -34,6 +34,8 @@ export default defineConfig({
       'minimax/**',
       'supabase/.temp/**',
       'supabase/.branches/**',
+      // Hablan con la base local: solo corren con vitest.bd.config.ts (npm run test:facturacion).
+      '**/*.bd.test.ts',
     ],
   },
 });
