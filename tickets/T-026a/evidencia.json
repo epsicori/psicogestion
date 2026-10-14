@@ -1,6 +1,6 @@
 {
   "ticket": "T-026a",
-  "resumen": "Ronda 2 sobre f27cf0c (worktree .claude/worktrees/agent-a84ef43dca6f7a816; base supabase_db_Psicogestion, max(version)=20261014120000, sin reset). Un FALLA: npm run test:rls corta en 26.F9 porque la corrección M1 añadió envio_ambiguo a borradores_factura_estado y el banco 26 (fuera del territorio) sigue esperando 3 columnas; con esa aserción ajustada en una copia, el banco entero pasa (2594 OK, 90 del bloque 31). Todo lo demás en verde: lint, lint:migraciones, npm test 2915, test:facturacion 3/3, build, e2e CA18, visita de pantalla sin errores a 1280/390.",
+  "resumen": "Ronda 3 sobre e9e9c7f (worktree .claude/worktrees/agent-a84ef43dca6f7a816; base supabase_db_Psicogestion, max(version)=20261014120000, sin reset; la base ya tenia eventos de test:facturacion). Todo PASA. CA25 que fallaba en 26.F9 ahora pasa: test:rls completo exit 0 con 2599 OK. Desde f27cf0c solo cambian 26.F9 (espera envio_ambiguo) y 01-fijacion.sql:295 (cuenta solo BORRA/BORRB); ninguno debilita la asercion (demostrado). Los CA1-CA24 no cambiaron de codigo (git diff f27cf0c e9e9c7f solo toca scripts/rls/01-fijacion.sql, 26-economico.sql, el contrato y la evidencia) y se dan por buenos; los del banco (CA2-CA12) se reejecutaron igualmente en el test:rls completo de esta ronda.",
   "criterios": [
     {
       "id": "CA1",
@@ -13,77 +13,77 @@
       "id": "CA2",
       "texto": "Solo adición",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.B insert 42501 ADM/PRO1/TEC1; update/delete/truncate 42501 incl. postgres; 10-solo-adicion con las tres tablas; cobertura_solo_adicion()=0 (31.A15/A16)"
     },
     {
       "id": "CA3",
       "texto": "Espejo idempotente",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.C1 mismo id; C2 23505; C3 conserva total; C4 23503; C5 23514"
     },
     {
       "id": "CA4",
       "texto": "Forma del espejo",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.A2 columnas exactas en orden; 31.A6 ninguna prohibida"
     },
     {
       "id": "CA5",
       "texto": "Vocabulario de anotaciones",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.E1 tres valores; E3 'pagado' 22P02; E4-E6 23514"
     },
     {
       "id": "CA6",
       "texto": "Técnico",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.G1/G2 1 y 0, ADM 2; F4 tabla 0; A4 sin cita_id, lineas, borrador_id"
     },
     {
       "id": "CA7",
       "texto": "Cobro con espejo de otro paciente",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.H1-H6: 23514, 23514, 23503, 42501 antes del cotejo, gemela entra"
     },
     {
       "id": "CA8",
       "texto": "Encolar sin oráculo",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.I1 mismo 42501 por igualdad; I4 23514; I5 23514; I6 mismo evento_id; I8 fallido->pendiente"
     },
     {
       "id": "CA9",
       "texto": "Congelación",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.J1-J7: 23514 con envío o pendiente; con fallido entra; PRO2 42501 del sellado"
     },
     {
       "id": "CA10",
       "texto": "Estado del borrador",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
-      "evidencia": "31.K1-K11 verdes: conserva borrador_id, ultima_version, estado (text) y recorre sin_enviar/en_cola/enviado/facturado/fallido/descartado. OBSERVACIÓN: la corrección M1 añadió la columna envio_ambiguo (4ª) y eso rompe la aserción 26.F9 del banco 26: ver CA25 y regresiones."
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
+      "evidencia": "31.K1-K11 verdes: conserva borrador_id, ultima_version, estado (text) y recorre sin_enviar/en_cola/enviado/facturado/fallido/descartado. 26.F9 ahora espera la 4a columna envio_ambiguo y pasa."
     },
     {
       "id": "CA11",
       "texto": "Vault y ajuste",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.L1-L12 y M1/M2: TEC1/PRO1 42501, estado '••••', quitar borra vault.secrets, centinela fuera de auditoria"
     },
     {
       "id": "CA12",
       "texto": "Reclamo y retroceso",
       "veredicto": "PASA",
-      "comando": "npm run test:rls con la aserción 26.F9 corregida en una copia (scripts/rls sin tocar): exit 0, 2594 OK, 90 del bloque 31",
+      "comando": "npm run test:rls (completo, comando real): exit 0, 2599 OK, Contenedor: supabase_db_Psicogestion",
       "evidencia": "31.N1-N12: segundo reclamo 0, sin concepto/cita_id, intento 8 fallido con una notificación por administrador deduplicada"
     },
     {
@@ -173,9 +173,9 @@
     {
       "id": "CA25",
       "texto": "Cierre: npm test, test:facturacion, test:rls, lint:migraciones, lint, build, territorio",
-      "veredicto": "FALLA",
-      "comando": "npm run test:rls",
-      "reproduccion": "En la rama f27cf0c con la base en max(version)=20261014120000: npm run test:rls -> psql:<stdin>:15745: ERROR: ASERCIÓN FALLIDA: 26.F9 · borradores_factura_estado: borrador_id, ultima_version, estado (text), en ese orden (PA.2); exit 3. Causa: la ronda 1 (M1) añadió la columna envio_ambiguo a la vista en la migración 20261014120000 y scripts/rls/26-economico.sql:709-714 sigue esperando array['borrador_id','ultima_version','estado']. 26-economico.sql no está en el territorio del ticket. La ronda anterior (e60a3ca) pasaba. El comando real corta ahí y no ejecuta los módulos posteriores al 26. Con la aserción ajustada en una copia, todo el banco pasa (exit 0, 2594 OK). Resto verde: lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts), lint:migraciones 35 limpias, npm test 217 ficheros/2915 pruebas, test:facturacion 3/3, next build --webpack OK. Territorio: node territorio.mjs no sirve desde el worktree (995 ficheros); a mano con git diff --name-only main...HEAD, 62 ficheros, todos en el territorio salvo el propio contrato tickets/T-026a-….md (+4 líneas de territorio ampliado por el propietario)."
+      "veredicto": "PASA",
+      "comando": "npm run lint; npm run lint:migraciones; npm test; npm run test:facturacion; npm run test:rls; npx next build --webpack; git diff --name-only main...HEAD",
+      "evidencia": "lint 0 errores (2 warnings preexistentes en lib/cuentas/accesos.test.ts); lint:migraciones '35 migración(es) limpias'; npm test 217 ficheros, 2915 pruebas pasan; test:facturacion 'Tests 3 passed (1)' ejecutado ANTES de test:rls, con sus eventos en la base; test:rls exit 0, 2599 OK, '26.F9 · borradores_factura_estado: borrador_id, ultima_version, estado (text), envio_ambiguo, en ese orden' OK y '31-proveedor-facturacion: completo'; next build --webpack OK (tabla de rutas). Territorio a mano (node territorio.mjs no sirve desde el worktree): 64 ficheros en main...HEAD, todos dentro del territorio (26-economico.sql ya ampliado en el contrato; incluye el propio contrato). Prueba de que la cuenta no se debilita: copia del banco en scratchpad con reclamar_envios_facturacion(1) en lugar de (10) -> 'ASERCIÓN FALLIDA: T-026a · la fijación reclamó los dos envíos', exit 3. La aserción 26.F9 sigue comparando igualdad exacta del array de 4 columnas y el tipo text, así que cualquier columna de más o de menos la rompe. Nota: lib/supabase/tipos-bd.ts figura modificado sin comitear en el worktree desde antes de esta verificación (preexistente, no tocado)."
     },
     {
       "id": "Fuera-T-026b",
@@ -184,12 +184,10 @@
       "motivo": "fuera: T-026b (requieren el adaptador real de Holded y el formulario con ficha disponible)."
     }
   ],
-  "regresiones": [
-    "scripts/rls/26-economico.sql:709-714 (aserción 26.F9) rompe con la columna envio_ambiguo añadida por la ronda 1 en borradores_factura_estado; test:rls falla en el comando real. Causada por el ticket, no preexistente."
-  ],
+  "regresiones": [],
   "pantalla": {
     "ticket": "T-026a",
-    "commit": "f27cf0c12ddd12d6ab1471cb8261d78b0a4b748c",
+    "commit": "e9e9c7fb1d135c6bd7ed175ea07a83f638272b93",
     "rutas": [
       "/ajustes",
       "/ajustes/facturacion",
