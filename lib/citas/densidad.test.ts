@@ -6,7 +6,7 @@ import type { Sesion } from './tipos';
 type Respuesta = { data: unknown; error: unknown };
 
 function sesionFalsa(rpc: Record<string, Respuesta>) {
-  const llamada = vi.fn((nombre: string) => Promise.resolve(rpc[nombre] ?? { data: null, error: null }));
+  const llamada = vi.fn((nombre: string, _args?: Record<string, unknown>) => Promise.resolve(rpc[nombre] ?? { data: null, error: null }));
   const sesion = {
     supabase: { rpc: llamada } as unknown as Sesion['supabase'],
     usuario: { id: 'u1' } as unknown as Sesion['usuario'],
@@ -53,9 +53,9 @@ describe('leerDensidadAnual', () => {
   it('sin filtros no manda nulos (undefined) y un data nulo es una lista vacía', async () => {
     const { sesion, llamada } = sesionFalsa({ agenda_densidad_anual: { data: null, error: null } });
     const r = await leerDensidadAnual(sesion, { ...CONSULTA, profesionalId: null });
-    const args = llamada.mock.calls[0][1] as Record<string, unknown>;
-    expect(args.p_centro_id).toBeUndefined();
-    expect(args.p_profesional_id).toBeUndefined();
+    const args = llamada.mock.calls[0][1];
+    expect(args?.p_centro_id).toBeUndefined();
+    expect(args?.p_profesional_id).toBeUndefined();
     expect(r).toEqual({ ok: true, dias: [] });
   });
 
