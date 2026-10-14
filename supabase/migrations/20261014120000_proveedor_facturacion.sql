@@ -580,6 +580,7 @@ as $$
 declare
   v_evento public.eventos_salientes%rowtype;
   v_detalle text;
+  v_origen uuid;
 begin
   if p_codigo is null or p_codigo not in
      ('red', 'limite', 'no_autorizado', 'sin_plan', 'rechazado', 'ambiguo', 'no_disponible', 'descartado') then
@@ -611,9 +612,19 @@ begin
         'No se pudo preparar el borrador en el programa de facturación.'
     end;
 
+    -- El aviso se deduplica por (perfil, tipo, origen). Cada reapertura manual del fallido
+    -- (`encolar_envio_borrador`) suma una a `carga.reaperturas`: la primera vez el origen es el propio
+    -- borrador y cada fallo permanente posterior tiene el suyo (derivado), de modo que un SEGUNDO fallo
+    -- tras reintentar a mano vuelve a avisar, y el mismo fallo repetido no duplica.
+    v_origen := case
+      when coalesce((v_evento.carga ->> 'reaperturas')::int, 0) = 0
+        then (v_evento.carga ->> 'borrador_id')::uuid
+      else md5((v_evento.carga ->> 'borrador_id') || ':' || (v_evento.carga ->> 'reaperturas'))::uuid
+    end;
+
     insert into public.notificaciones (perfil_id, tipo, titulo, detalle, origen_tabla, origen_id)
     select p.id, 'facturacion_envio_fallido', 'Borrador sin preparar en el programa', v_detalle,
-           'borradores_factura', (v_evento.carga ->> 'borrador_id')::uuid
+           'borradores_factura', v_origen
       from public.perfiles p
      where p.rol = 'administrador'::public.rol_usuario and p.estado = 'activo'::public.estado_perfil
     on conflict (perfil_id, tipo, origen_tabla, origen_id) where origen_id is not null do nothing;
@@ -916,11 +927,15 @@ begin
   select e.id, e.estado into v_evento_id, v_estado
     from public.eventos_salientes e where e.clave_idempotencia = v_clave;
 
-  -- El reenvío manual de un fallido: de nuevo pendiente, sin intentos ni error.
+  -- El reenvío manual de un fallido: de nuevo pendiente, sin intentos ni error. `carga.reaperturas`
+  -- cuenta las veces: el aviso del siguiente fallo permanente lleva otro origen y no se descarta como
+  -- duplicado del anterior (ver `registrar_fallo_envio_facturacion`).
   if v_estado = 'fallido' then
     update public.eventos_salientes e
        set estado = 'pendiente', intentos = 0, proximo_intento = now(),
-           ultimo_error = null, actualizado_en = now()
+           ultimo_error = null, actualizado_en = now(),
+           carga = jsonb_set(e.carga, '{reaperturas}',
+                             to_jsonb(coalesce((e.carga ->> 'reaperturas')::int, 0) + 1))
      where e.id = v_evento_id;
   end if;
   return v_evento_id;
@@ -946,6 +961,16 @@ set search_path = ''
 as $$
 begin
   perform 1 from public.borradores_factura b where b.id = new.borrador_id for key share;
+
+  -- Salida de un borrador que el programa borró sin aprobar: queda enviado para siempre y nada lo
+  -- cerraba. Se admite UNA versión descartada para poder darlo por muerto (la vista lo pinta
+  -- «descartado»). Una versión viva sigue rechazada: volver a prepararlo en el programa no cabe aquí
+  -- (`borradores_factura_envios` es única por borrador); se hace con un borrador nuevo.
+  if new.descartado
+     and exists (select 1 from public.facturas_anotaciones a
+                  where a.borrador_id = new.borrador_id and a.tipo = 'borrado_sin_aprobar') then
+    return new;
+  end if;
 
   if exists (select 1 from public.borradores_factura_envios s where s.borrador_id = new.borrador_id)
      or exists (select 1 from public.eventos_salientes e
@@ -1032,7 +1057,10 @@ stable
 security definer
 set search_path = ''
 as $$
-  select e.estado::text
+  -- 'pendiente', 'fallido' o 'ambiguo' (fallido cuyo último error es «no se sabe si llegó»: la pantalla
+  -- pide comprobar en el programa antes de volver a preparar).
+  select case when e.estado = 'fallido'::public.estado_evento_saliente and e.ultimo_error = 'ambiguo'
+              then 'ambiguo' else e.estado::text end
     from public.borradores_factura b
     join public.eventos_salientes e on e.clave_idempotencia = 'facturacion.enviar_borrador:' || b.id
    where b.id = p_borrador_id
@@ -1053,12 +1081,15 @@ select
   u.numero_version as ultima_version,
   case
     when exists (select 1 from public.facturas_espejo e where e.borrador_id = b.id) then 'facturado'
+    -- Descartado antes que enviado, en cola o fallido: la última versión descartada es lo último que se
+    -- dijo del borrador (también cierra el borrado sin aprobar, ver la congelación).
+    when u.descartado then 'descartado'
     when exists (select 1 from public.borradores_factura_envios s where s.borrador_id = b.id) then 'enviado'
     when public.estado_cola_borrador(b.id) = 'pendiente' then 'en_cola'
-    when public.estado_cola_borrador(b.id) = 'fallido' then 'fallido'
-    when u.descartado then 'descartado'
+    when public.estado_cola_borrador(b.id) in ('fallido', 'ambiguo') then 'fallido'
     else 'sin_enviar'
-  end as estado
+  end as estado,
+  (public.estado_cola_borrador(b.id) = 'ambiguo') as envio_ambiguo
 from public.borradores_factura b
 left join lateral (
   select v.numero_version, v.descartado

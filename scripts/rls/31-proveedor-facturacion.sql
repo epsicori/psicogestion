@@ -18,7 +18,8 @@
 --   F · lectura por rol, con gemelas; G · la vista del técnico, comparando los dos caminos;
 --   H · cobros con espejo (`validar_cobro_factura_espejo`), con fecha current_date − 1.
 --   I · encolar (permisos primero, mismo texto para ajeno e inexistente), J · congelación,
---   K · estados, N · reclamo (concesión, retroceso, intento 8, descartado), L · Vault, M · auditoría.
+--   K · estados (con el fallido ambiguo), N · reclamo (concesión, retroceso, intento 8, descartado), L · Vault,
+--   O · el espejo lo lee el profesional asignado, no el autor (BORRF), M · auditoría.
 --
 -- Ids propios con prefijo `a0260001-`: BORRA y BORRB vienen de `01`; BORRC, BORRD y BORRE son de este
 -- módulo. Los recuentos se filtran por esos ids, nunca por totales de tabla: el banco entero es UNA
@@ -116,8 +117,8 @@ select pg_temp.assert(
   (select array_agg(c.column_name || ':' || c.data_type order by c.ordinal_position)
      from information_schema.columns c
     where c.table_schema = 'public' and c.table_name = 'borradores_factura_estado')
-  = array['borrador_id:uuid', 'ultima_version:integer', 'estado:text'],
-  '31.A5 · borradores_factura_estado conserva las tres columnas de T-021, en su orden y con su tipo');
+  = array['borrador_id:uuid', 'ultima_version:integer', 'estado:text', 'envio_ambiguo:boolean'],
+  '31.A5 · borradores_factura_estado conserva las tres columnas de T-021, en su orden y con su tipo, y suma envio_ambiguo al final');
 select pg_temp.assert(
   (select count(*) from information_schema.columns c
     where c.table_schema = 'public' and c.table_name = 'facturas_espejo'
@@ -649,6 +650,24 @@ select pg_temp.assert_lanza_codigo_msg(:'SQL_J3', '42501', 'No puedes añadir un
   '31.J3 · PRO2 añadiendo una versión a BORRA recibe el 42501 del sellado, no el 23514 de la congelación');
 call pg_temp.reset_sesion();
 
+-- J · un borrador que el programa borró sin aprobar (BORRE, con su anotación) no queda enviado para
+-- siempre: admite una versión DESCARTADA que lo cierra. Una versión viva sigue rechazada, y la gemela
+-- sin anotación de borrado (BORRA, solo rectificado) también rechaza la descartada.
+select pg_temp.sql_version_simple(:BORRE, :PRO1, 31.00, timestamptz '2026-10-01 10:00:11+00', 'Ana Uno', :CA) as "SQL_J5" \gset
+select pg_temp.assert_lanza_codigo_msg(:'SQL_J5', '23514', 'ya se preparó en el programa',
+  '31.J5 · BORRE (borrado sin aprobar): una versión viva sigue dando 23514');
+select pg_temp.sql_version_simple(:BORRA, :PRO1, 61.00, timestamptz '2026-10-01 10:00:12+00', 'Ana Uno', :CA, true) as "SQL_J6" \gset
+select pg_temp.assert_lanza_codigo_msg(:'SQL_J6', '23514', 'ya se preparó en el programa',
+  '31.J6 · la gemela: BORRA (sin borrado sin aprobar) rechaza también una versión descartada');
+select pg_temp.sql_version_simple(:BORRE, :PRO1, 30.00, timestamptz '2026-10-01 10:00:13+00', 'Ana Uno', :CA, true) as "SQL_J7" \gset
+select pg_temp.assert_no_lanza(:'SQL_J7', '31.J7 · BORRE (borrado sin aprobar) admite una versión descartada que lo cierra');
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  (select v.estado from public.borradores_factura_estado v where v.borrador_id = :BORRE) = 'descartado'
+  and (select v.estado from public.borradores_factura_estado v where v.borrador_id = :BORRA) = 'facturado',
+  '31.K11 · BORRE sale descartado tras cerrarse; BORRA, facturado');
+call pg_temp.reset_sesion();
+
 -- =========================================================================================
 -- N · Reclamo, concesión, retroceso, intento 8, descartado y la cadena de estados de BORRC (K)
 -- =========================================================================================
@@ -752,6 +771,46 @@ reset role;
 select pg_temp.assert(:RECL_C4 = 1
     and (select e.estado = 'fallido' and e.intentos = 8 from public.eventos_salientes e where e.id = :'EVC1'),
   '31.N11 · el octavo intento transitorio deja el evento fallido');
+-- N11 · el segundo fallo permanente del MISMO borrador, tras reabrirlo a mano (I8), vuelve a avisar: el
+-- aviso de la primera vez (N9) tenía origen = el borrador, y sin un origen nuevo `on conflict do nothing`
+-- lo descartaba en silencio. El mismo fallo repetido, en cambio, no duplica.
+set local role service_role;
+select public.registrar_fallo_envio_facturacion(:'EVC1', 'red', false);
+select public.registrar_fallo_envio_facturacion(:'EVC1', 'red', false);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.notificaciones n
+    where n.tipo = 'facturacion_envio_fallido' and n.origen_tabla = 'borradores_factura'
+      and n.origen_id in (:BORRC::uuid, md5(:BORRC::text || ':1')::uuid)) = 2 * :N_ADM
+  and (select count(distinct n.origen_id) from public.notificaciones n
+        where n.tipo = 'facturacion_envio_fallido' and n.origen_tabla = 'borradores_factura'
+          and n.origen_id in (:BORRC::uuid, md5(:BORRC::text || ':1')::uuid)) = 2
+  and (select count(*) from public.notificaciones n
+        where n.tipo = 'facturacion_envio_fallido' and n.origen_id = md5(:BORRC::text || ':1')::uuid
+          and n.detalle = 'No se pudo preparar el borrador en el programa de facturación.') = :N_ADM,
+  '31.N11b · el segundo fallo permanente tras reabrir avisa otra vez a cada administrador, y repetido no duplica');
+
+-- K · el fallido «ambiguo» se distingue en la vista (la pantalla pide comprobar antes de reintentar).
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  (select v.estado = 'fallido' and v.envio_ambiguo is false
+     from public.borradores_factura_estado v where v.borrador_id = :BORRC),
+  '31.K8 · un fallido por red no es ambiguo');
+call pg_temp.reset_sesion();
+set local role service_role;
+select public.registrar_fallo_envio_facturacion(:'EVC1', 'ambiguo', true);
+reset role;
+call pg_temp.como(:ADM);
+select pg_temp.assert(
+  (select v.estado = 'fallido' and v.envio_ambiguo is true
+     from public.borradores_factura_estado v where v.borrador_id = :BORRC),
+  '31.K9 · un fallido con el código ambiguo sale con envio_ambiguo = true');
+call pg_temp.reset_sesion();
+call pg_temp.como(:TEC1);
+select pg_temp.assert(
+  (select count(*) from public.borradores_factura_estado v where v.borrador_id = :BORRC) = 0,
+  '31.K10 · TEC1 sigue sin ver el estado, ambiguo o no');
+call pg_temp.reset_sesion();
 
 -- Y otra vez a la cola; ahora llega a enviado y a facturado.
 call pg_temp.como(:ADM);
@@ -812,6 +871,48 @@ select public.clave_proveedor_facturacion() as "CLAVE_LEIDA" \gset
 reset role;
 select pg_temp.assert(:'CLAVE_LEIDA' = 'SENTINELA_T026_' || repeat('x', 16) || 'abcd',
   '31.L11 · el consumidor recupera la clave por la función de servicio');
+
+-- =========================================================================================
+-- O · La lectura del espejo sigue al profesional ASIGNADO al paciente, no al autor del borrador (D17)
+-- =========================================================================================
+-- BORRF: borrador de P1 escrito por PRO1, que entonces es su profesional. Cuando el espejo ya existe,
+-- P1 pasa a PRO2 (como en 12): PRO1 queda como autor no asignado y PRO2 como asignado no autor. Las dos
+-- reglas dan resultados opuestos; en BORRA y BORRB (autor = asignado) no se distinguen.
+call pg_temp.reset_sesion();
+\set BORRF '\'a0260001-0000-4000-8000-000000000006\''
+insert into public.borradores_factura (id, paciente_id, profesional_id, creado_por) values (:BORRF, :P1, :PRO1, :PRO1);
+select pg_temp.assert_no_lanza(
+  pg_temp.sql_version_simple(:BORRF, :PRO1, 20.00, timestamptz '2026-10-01 10:00:14+00', 'Ana Uno', :CA),
+  '31.O0 · la versión 1 de BORRF se sella');
+select format('%L', v.id) as "VERF" from public.borradores_factura_versiones v
+ where v.borrador_id = :BORRF and v.numero_version = 1 \gset
+call pg_temp.como(:ADM);
+select public.encolar_envio_borrador(:BORRF) as "EVF" \gset
+call pg_temp.reset_sesion();
+set local role service_role;
+select count(*) as "RECL_F" from public.reclamar_envios_facturacion(10) r where r.borrador_id = :BORRF \gset
+select public.registrar_envio_borrador(:'EVF', 'holded', 'DOC-F', 1::smallint, :VERF, current_date);
+select public.registrar_factura_espejo('holded', 'DOC-F', 'F-2026-0006', current_date, 2000, 0, 2000, 'https://programa.example/doc/F') as "ESPF" \gset
+reset role;
+select pg_temp.assert(:RECL_F = 1, '31.O1 · BORRF se reclama y llega a espejo por las funciones');
+call pg_temp.como(:ADM);
+update public.pacientes set profesional_id = :PRO2 where id = :P1;
+call pg_temp.reset_sesion();
+call pg_temp.como(:PRO2);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.facturas_espejo_cabecera where id = %L', :'ESPF')) = 1
+  and pg_temp.contar(format('select 1 from public.facturas_espejo where id = %L', :'ESPF')) = 1,
+  '31.O2 · PRO2 (asignado a P1, no autor de BORRF) ve la cabecera y el espejo de BORRF');
+call pg_temp.reset_sesion();
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.facturas_espejo_cabecera where id = %L', :'ESPF')) = 0
+  and pg_temp.contar(format('select 1 from public.facturas_espejo where id = %L', :'ESPF')) = 0,
+  '31.O3 · PRO1 (autor de BORRF, ya no asignado a P1) no ve ni la cabecera ni el espejo');
+call pg_temp.reset_sesion();
+call pg_temp.como(:ADM);
+update public.pacientes set profesional_id = :PRO1 where id = :P1;
+call pg_temp.reset_sesion();
 
 -- =========================================================================================
 -- M · Auditoría: una fila INSERT por fila fijada y ninguna con la clave
