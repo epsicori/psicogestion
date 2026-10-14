@@ -122,6 +122,7 @@ describe('acciones del bono de una cita', () => {
       expect(await leerBonoDeCita(CITA)).toEqual({
         visible: true,
         editable: true,
+        definitivo: false,
         actual: null,
         opciones: [{ id: BONO_A, texto: 'Bono de 5 · quedan 4' }],
       });
@@ -186,6 +187,7 @@ describe('acciones del bono de una cita', () => {
       expect(await leerBonoDeCita(CITA)).toEqual({
         visible: true,
         editable: true,
+        definitivo: false,
         actual: BONO_A,
         opciones: [
           { id: BONO_A, texto: 'Bono de 5 · quedan 0 (vinculado)' },
@@ -209,6 +211,27 @@ describe('acciones del bono de una cita', () => {
       expect(await leerBonoDeCita(CITA)).toMatchObject({ visible: true, editable: false });
       conSesion({ cita: { data: { ...CITA_FUTURA, ...pasada }, error: null } });
       expect(await leerBonoDeCita(CITA)).toMatchObject({ visible: true, editable: true });
+    });
+
+    it('el primer vínculo de una cita pasada o realizada es definitivo; el de una futura, no', async () => {
+      const pasada = { inicio: '2026-10-13T09:00:00Z', fin: '2026-10-13T10:00:00Z' };
+      conSesion({ cita: { data: { ...CITA_FUTURA, ...pasada }, error: null } });
+      expect(await leerBonoDeCita(CITA)).toMatchObject({ editable: true, definitivo: true });
+      conSesion({ cita: { data: { ...CITA_FUTURA, estado: 'realizada' }, error: null } });
+      expect(await leerBonoDeCita(CITA)).toMatchObject({ editable: true, definitivo: true });
+      conSesion({ cita: { data: CITA_FUTURA, error: null } });
+      expect(await leerBonoDeCita(CITA)).toMatchObject({ editable: true, definitivo: false });
+    });
+
+    it('el «quedan» de la opción descuenta las citas ya vinculadas sin realizar', async () => {
+      const vinculadas = [1, 2, 3, 4].map((n) => ({ id: `c${n}`, bono_id: BONO_A }));
+      conSesion({
+        bonos: { data: [consumo(BONO_A, 5, 0)], error: null },
+        comprometidas: { data: vinculadas, error: null },
+      });
+      expect(await leerBonoDeCita(CITA)).toMatchObject({
+        opciones: [{ id: BONO_A, texto: 'Bono de 5 · quedan 1' }],
+      });
     });
 
     it('cita cancelada sin bono: nada; con bono, solo lectura', async () => {

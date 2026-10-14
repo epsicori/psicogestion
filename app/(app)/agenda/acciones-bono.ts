@@ -26,7 +26,14 @@ export type BonoDeCita =
   /** No se pudo leer: se dice, no se enseña un selector vacío que parezca verdad. */
   | { visible: true; error: string }
   | { visible: true; editable: false; actual: string }
-  | { visible: true; editable: true; actual: string | null; opciones: OpcionBono[] };
+  | {
+      visible: true;
+      editable: true;
+      /** El primer vínculo de una cita ya pasada o realizada no se podrá deshacer (la base lo prohíbe). */
+      definitivo: boolean;
+      actual: string | null;
+      opciones: OpcionBono[];
+    };
 
 export type ResultadoVincular = { ok: true; mensaje: string } | { ok: false; mensaje: string };
 
@@ -141,10 +148,15 @@ function sePuedeElegir(bono: BonoDeLaCita, cita: FilaCita): boolean {
   return bono.lectura.estado === 'vigente' && bono.comprometidas < bono.sesionesTotales;
 }
 
-function textoDe(bono: BonoDeLaCita, actual: boolean): string {
+/**
+ * El texto de la opción. «Quedan» descuenta las citas ya vinculadas sin realizar (`comprometidas`), que
+ * son las que usa `sePuedeElegir`; en el bono de esta cita se descuenta también ella si aún no se realizó.
+ */
+function textoDe(bono: BonoDeLaCita, actual: boolean, cita: FilaCita): string {
+  const propia = actual && cita.estado !== 'realizada' ? 1 : 0;
   return tCon(actual ? 'bonos.cita.opcionActual' : 'bonos.cita.opcion', {
     totales: bono.sesionesTotales,
-    saldo: bono.lectura.saldo,
+    saldo: Math.max(0, bono.sesionesTotales - bono.comprometidas - propia),
   });
 }
 
@@ -167,17 +179,18 @@ export async function leerBonoDeCita(citaId: string): Promise<BonoDeCita> {
 
   if (!editable) {
     if (vinculado === null) return { visible: false };
-    return { visible: true, editable: false, actual: textoDe(vinculado, false) };
+    return { visible: true, editable: false, actual: textoDe(vinculado, false, cita) };
   }
 
   const opciones = bonos
     .filter((b) => sePuedeElegir(b, cita))
-    .map((b) => ({ id: b.id, texto: textoDe(b, b.id === cita.bono_id) }));
+    .map((b) => ({ id: b.id, texto: textoDe(b, b.id === cita.bono_id, cita) }));
   if (opciones.length === 0 && vinculado === null) return { visible: false };
 
   return {
     visible: true,
     editable: true,
+    definitivo: cita.bono_id === null && (cita.estado === 'realizada' || new Date(cita.fin).getTime() <= Date.now()),
     actual: vinculado === null ? null : vinculado.id,
     opciones,
   };
