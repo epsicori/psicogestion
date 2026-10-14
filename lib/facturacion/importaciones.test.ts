@@ -16,7 +16,7 @@ function ficheros(dir: string): string[] {
 
 // Estática (`from '…simulado'`, `import '…simulado'`), dinámica (`import('…simulado')`) o `require`.
 const IMPORTA_SIMULADO =
-  /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)['"`][^'"`]*simulado(?:\.ts)?['"`]/;
+  /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)['"`][^'"`]*simulado(?:\.ts)?['"`]/;
 
 describe('el detector de importaciones del simulado', () => {
   it.each([
