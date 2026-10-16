@@ -98,7 +98,7 @@ export async function BloqueFacturas({ searchParams }: Props) {
           ))}
         </ul>
       )}
-      {total > TAMANO_PAGINA_FACTURAS && (
+      {TAMANO_PAGINA_FACTURAS < total && (
         <PaginacionPendientes
           nombre={t('cobros.facturas.paginacion')}
           pagina={pagina}
