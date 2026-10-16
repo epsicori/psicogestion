@@ -62,7 +62,9 @@ type Datos =
   | {
       tipo: 'borradores';
       borradores: Borrador[];
-      estadoDe: Map<string, { estado: string | null; ambiguo: boolean }>;
+      /** El profesional asignado del paciente (T-046): decide si se ofrece «Nuevo borrador». */
+      asignadoId: string | null;
+      estadoDe: Map<string, { estado: string | null; ambiguo: boolean; version: number | null }>;
       documentoDe: Map<string, string>;
       espejoDe: Map<
         string,
@@ -87,17 +89,23 @@ async function cargar(pacienteId: string, rol: Rol): Promise<Datos | null> {
       return { tipo: 'emitidas', filas: data ?? [] };
     }
 
-    const { data: borradores, error } = await supabase
-      .from('borradores_factura')
-      .select('id, profesional_id, creado_en')
-      .eq('paciente_id', pacienteId)
-      .order('creado_en', { ascending: false });
+    const [{ data: borradores, error }, paciente] = await Promise.all([
+      supabase
+        .from('borradores_factura')
+        .select('id, profesional_id, creado_en')
+        .eq('paciente_id', pacienteId)
+        .order('creado_en', { ascending: false }),
+      supabase.from('pacientes').select('profesional_id').eq('id', pacienteId),
+    ]);
     if (error) throw error;
+    if (paciente.error) throw paciente.error;
+    const asignadoId = paciente.data?.[0]?.profesional_id ?? null;
     const ids = (borradores ?? []).map((b) => b.id);
     if (ids.length === 0) {
       return {
         tipo: 'borradores',
         borradores: [],
+        asignadoId,
         estadoDe: new Map(),
         documentoDe: new Map(),
         espejoDe: new Map(),
@@ -108,7 +116,7 @@ async function cargar(pacienteId: string, rol: Rol): Promise<Datos | null> {
     const [estados, envios, espejo, anotaciones] = await Promise.all([
       supabase
         .from('borradores_factura_estado')
-        .select('borrador_id, estado, envio_ambiguo')
+        .select('borrador_id, estado, envio_ambiguo, ultima_version')
         .in('borrador_id', ids),
       supabase.from('borradores_factura_envios').select('borrador_id, proveedor_documento_id').in('borrador_id', ids),
       supabase
@@ -122,10 +130,11 @@ async function cargar(pacienteId: string, rol: Rol): Promise<Datos | null> {
     return {
       tipo: 'borradores',
       borradores: borradores ?? [],
+      asignadoId,
       estadoDe: new Map(
         (estados.data ?? []).map((e) => [
           e.borrador_id as string,
-          { estado: e.estado, ambiguo: e.envio_ambiguo === true },
+          { estado: e.estado, ambiguo: e.envio_ambiguo === true, version: e.ultima_version ?? null },
         ]),
       ),
       documentoDe: new Map((envios.data ?? []).map((e) => [e.borrador_id, e.proveedor_documento_id])),
@@ -162,10 +171,28 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
   const nombrePrograma = programa ?? t('facturacion.panel.programaGenerico');
 
   if (datos.tipo === 'emitidas') return <Emitidas filas={datos.filas} programa={programa} />;
-  if (datos.borradores.length === 0) return <EstadoVacio frase={t('facturacion.panel.vacio')} />;
+
+  // T-046 · Preparar borradores: el administrador o el profesional asignado. El técnico no llega
+  // aquí (rama de arriba): la entrada no está, ni deshabilitada.
+  const puedeEditar = rol === 'administrador' || (rol === 'profesional_sanitario' && datos.asignadoId === usuario.id);
+  const nuevo = puedeEditar ? (
+    <a href={`/pacientes/${pacienteId}/borrador`} className={CLASE_ENLACE}>
+      {t('facturacion.panel.nuevo')}
+    </a>
+  ) : null;
+
+  if (datos.borradores.length === 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        <EstadoVacio frase={t('facturacion.panel.vacio')} />
+        {nuevo && <div>{nuevo}</div>}
+      </div>
+    );
+  }
 
   return (
     <Bloque titulo={t('facturacion.panel.titulo')}>
+      {nuevo && <div className="mb-2">{nuevo}</div>}
       <ul className="divide-border flex flex-col divide-y">
         {datos.borradores.map((b) => {
           const lectura = datos.estadoDe.get(b.id);
@@ -177,6 +204,10 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
           const anotaciones = datos.anotaciones.filter((a) => a.borrador_id === b.id);
           const borradoSinAprobar = anotaciones.some((a) => a.tipo === 'borrado_sin_aprobar');
           const enlace = activo && documento ? activo.ficha.enlaceDeBorrador(documento) : null;
+          const version = lectura?.version ?? null;
+          const puedeCorregir =
+            (estado === 'sin_enviar' || estado === 'fallido') &&
+            (rol === 'administrador' || (rol === 'profesional_sanitario' && b.profesional_id === usuario.id));
           const puedePreparar =
             activo !== null &&
             (estado === 'sin_enviar' || estado === 'fallido') &&
@@ -201,6 +232,11 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
             <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <div className="flex flex-col items-start gap-1">
                 <EstadoBorrador estado={estado} texto={texto} />
+                {version !== null && (
+                  <span className="text-muted-foreground text-xs">
+                    {tCon('facturacion.panel.version', { n: version })}
+                  </span>
+                )}
                 {factura && (
                   <span className="text-muted-foreground text-xs">
                     nº {factura.numero} · {fechaCorta(factura.fecha_expedicion)} · {euros(factura.total)}
@@ -213,6 +249,11 @@ export async function PanelFacturacion({ pacienteId, rol }: { pacienteId: string
                 ))}
               </div>
               <div className="flex items-center gap-2">
+                {puedeCorregir && (
+                  <a href={`/pacientes/${pacienteId}/borrador/${b.id}`} className={CLASE_ENLACE}>
+                    {t('facturacion.panel.corregir')}
+                  </a>
+                )}
                 {puedePreparar && programa && <BotonPreparar borradorId={b.id} programa={programa} />}
                 {enlace && programa && estado === 'enviado' && !borradoSinAprobar && (
                   <a href={enlace} target="_blank" rel="noopener noreferrer" className={CLASE_ENLACE}>

@@ -1,0 +1,156 @@
+{
+  "ticket": "T-046",
+  "resumen": "Ronda 3, solo CA15: con la base reseteada y sembrada desde el worktree (max(version)=20261015120000) y next start -p 3046, PUERTO=3046 npx playwright test --workers=1 da 38 passed, 0 fallos, antes de cualquier prueba BD. Tras vitest.bd.config.ts (11/11) documentacion-pendiente.spec.ts sigue pasando 4/4. Los 5 fallos de la ronda anterior eran de la base compartida contaminada. Los otros 17 criterios, de la ronda 2 (HEAD 397b195), sin cambios: lint 0 errores, npm test 3040/3040, test:rls exit 0, test:facturacion 11/11, build verde, CA14 en navegador a 360 px, visita de pantalla limpia.",
+  "criterios": [
+    {
+      "id": "CA1",
+      "texto": "Sobre congelado y cadena",
+      "veredicto": "PASA",
+      "comando": "npm test (vectores-borrador-sql.test.ts, sobre-borrador.test.ts); npm run test:rls (banco 32 V1-V6); npm run test:facturacion; select count(*) from borradores_factura b, lateral verificar_cadena_borrador(b.id)",
+      "evidencia": "test:rls exit 0 con \"OK: 32.V4/V5/V6 el literal es igual byte a byte a sobre_borrador_jcs()\" y la huella sellada igual a la congelada. npm run test:facturacion (vitest.bd.config.ts): 2 ficheros, 11 tests verdes; borrador.bd.test.ts corre contra la base local (max(version)=20261015120000) (CA1c: crear, corregir dos veces y descartar, cadena integra). En la base: 142 borradores, 0 filas de verificar_cadena_borrador, incluidos los dos de la visita (v1-v3 + descarte, y v1-v2 + descarte tras reasignar)."
+    },
+    {
+      "id": "CA2",
+      "texto": "Solo se anade",
+      "veredicto": "PASA",
+      "comando": "grep -rnE \"\\.(update|delete|upsert)\\(\" lib/economico \"app/(app)/pacientes/[id]/borrador\"",
+      "evidencia": "Solo dos ficheros de prueba: borrador.bd.test.ts:453 (el test reasigna al paciente con update en pacientes) y sobre-borrador.test.ts:47 (update de un hash crypto). Codigo de produccion: vacio. CA1c: la version N queda intacta tras N+1."
+    },
+    {
+      "id": "CA3",
+      "texto": "Concurrencia",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion",
+      "evidencia": "borrador.bd.test.ts \"CA3 · dos correcciones en paralelo desde la misma partida: una entra, la otra es conflicto\" verde (11/11)."
+    },
+    {
+      "id": "CA4",
+      "texto": "Congelado tras preparar",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (banco 32 §H); npm test (borrador.test.ts:490)",
+      "evidencia": "Banco 32: \"OK: 32.H1 BH queda en cola\", H2/H3 assert_lanza_codigo_msg 23514 \"ya se preparo en el programa\" para correccion y descarte, \"32.H4 BH sigue con una version\", \"32.H5 gemela: con el envio fallido, la correccion entra\", H6 dos versiones. La traduccion 23514 a \"Ya se preparó en {programa}: no admite cambios\" (es.ts:337) la cubre borrador.test.ts."
+    },
+    {
+      "id": "CA5",
+      "texto": "NIF (D2)",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion; PUERTO=3046 npx playwright test borrador; banco 32",
+      "evidencia": "borrador.bd.test.ts CA5 paciente (descifrar devuelve el centinela, espia sin llamadas al arrastrar, cuatro columnas N+1 = N) y CA5 tercero (CIF centinela cifrado, CIF con control mal rechazado sin version). E2E: la ficha trae el DNI 87654321X (control positivo) y ningun cuerpo de pagina, RSC o POST posterior al abrir el editor lleva el DNI ni el CIF (H2). En CA14 se pasa a tercero con CIF valido (v3)."
+    },
+    {
+      "id": "CA6",
+      "texto": "Permisos",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion; navegador como tecnico y como Ana tras la reasignacion",
+      "evidencia": "CA6 BD: tecnico, profesional no asignado y paciente inexistente dan la misma respuesta y no crean nada; gemelas admin y asignado crean. Navegador: el tecnico no ve \"Nuevo borrador\" en la ficha (pestanas Resumen, Ficha del paciente, Documentos y consentimientos, Facturacion) y /pacientes/<id>/borrador da la pagina 404; Ana, ya no asignada, recibe 404 en la ruta de correccion."
+    },
+    {
+      "id": "CA7",
+      "texto": "Sin cabeceras huerfanas",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion",
+      "evidencia": "CA7 · crear_borrador con un total que no cuadra: error y ninguna cabecera huerfana, verde."
+    },
+    {
+      "id": "CA16",
+      "texto": "Sesiones elegibles (D1, D4)",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion; navegador como Ana",
+      "evidencia": "CA16 BD: las realizadas sin bono son elegibles con la tarifa propuesta, la del bono no. Navegador: con tres sesiones elegibles se marcan dos y salen dos lineas (Sesion del 18/12/2016 y 19/12/2016) con precio 70,00 y regimen exento propuestos; se guarda v1 y la sesion ya usada deja de ofrecerse."
+    },
+    {
+      "id": "Migracion",
+      "texto": "max(version), lint:migraciones y banco 32",
+      "veredicto": "PASA",
+      "comando": "psql select max(version) from supabase_migrations.schema_migrations; npm run lint:migraciones; npm run test:rls",
+      "evidencia": "max(version)=20261015120000; lint-migraciones: 36 migraciones limpias; test:rls exit 0 (2678 avisos OK, banco 32 completo). No repeti supabase db reset: la base la comparten otros agentes y la migracion ya esta aplicada; el banco pasa contra ella."
+    },
+    {
+      "id": "CA8",
+      "texto": "Precio propuesto",
+      "veredicto": "PASA",
+      "comando": "npm test (precio.test.ts, esquemas.test.ts)",
+      "evidencia": "precio.test.ts: \"2026-03-29 00:30 en Madrid es el 29 aunque en UTC sea el 28\", Madrid toma la tarifa del 29 y Santiago la anterior, sin tarifa del paciente la tarifa_base, sin ninguna todo null (nunca 0). 3040 tests verdes."
+    },
+    {
+      "id": "CA9",
+      "texto": "Importes",
+      "veredicto": "PASA",
+      "comando": "npm test (importes.test.ts); grep -rn \"Number(\" lib/economico \"app/(app)/pacientes/[id]/borrador\" sin tests",
+      "evidencia": "importes.test.ts verde; el grep sobre ficheros que no son de prueba: vacio. Navegador: exento 70 + 70 mas linea libre 121 al 21 % (primera linea cambiada a 75): Base 245,00, IVA 21,00, Total 266,00."
+    },
+    {
+      "id": "CA10",
+      "texto": "Regimen marcado (D5)",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion; npm test (esquemas.test.ts, precio.test.ts)",
+      "evidencia": "CA10 · CA17 BD: una sesion con tarifa exenta pasada a general sella el elegido; esquemas.test.ts rechaza lineas sin regimen; precio.test.ts \"sin tarifa del paciente: precio de tarifa_base y regimen sin marcar\". La pantalla explica exento y 21 %: \"Exento: asistencia sanitaria a la persona, sin IVA. Al 21 %: lo que no es asistencia, como un informe pericial. No depende de quien pague\"."
+    },
+    {
+      "id": "CA17",
+      "texto": "Linea libre (D6)",
+      "veredicto": "PASA",
+      "comando": "npm run test:facturacion; navegador",
+      "evidencia": "CA17 BD: linea libre al 21 % entra por el sellado. Navegador: linea libre \"Informe pericial\" 121,00 al 21 % guardada en v2 con cuota 21,00."
+    },
+    {
+      "id": "CA11",
+      "texto": "Quien ve el editor",
+      "veredicto": "PASA",
+      "comando": "npm test (panel-facturacion.test.tsx); grep -rn \"/borrador\" \"app/(app)/agenda\"; navegador",
+      "evidencia": "grep en agenda: vacio. El tecnico no tiene la entrada (navegador) y recibe 404 en /borrador; admin y Ana (asignada) entran (visita de pantalla y CA14)."
+    },
+    {
+      "id": "CA12",
+      "texto": "Vocabulario",
+      "veredicto": "PASA",
+      "comando": "grep -rniE \"\\b(emitir|facturar|expedir|aprobar|crear factura|verifactu)\\b\" sobre lib/economico, app/(app)/pacientes/[id]/borrador y las lineas anadidas a lib/i18n/es.ts",
+      "evidencia": "Salida vacia en las tres."
+    },
+    {
+      "id": "CA13",
+      "texto": "Sin cache",
+      "veredicto": "PASA",
+      "comando": "grep -rnE \"use cache|unstable_cache\" lib/economico \"app/(app)/pacientes/[id]/borrador\"",
+      "evidencia": "Salida vacia."
+    },
+    {
+      "id": "CA14",
+      "texto": "Manual en navegador visible a 360 px",
+      "veredicto": "PASA",
+      "comando": "Chromium visible (headless:false, 360x740) contra next start :3046, guiones ca14b.cjs y ca14c.cjs del scratchpad, como Ana, tecnico y admin",
+      "evidencia": "Ana: dos sesiones con precio y regimen propuestos, guardado v1; linea libre Informe pericial 121,00 al 21 % y cambio de importe, \"Guardado: versión 2\" (Base 245,00 IVA 21,00 Total 266,00); tercero \"Mutua de prueba\" tipo juridica con CIF valido, \"Guardado: versión 3\" (BD numero_version=3). Descartar: el foco entra en Cancelar, Escape lo devuelve a \"Descartar\", confirmar deja el foco en <p role=status>Descartado (OK en la ruta de alta y en la de correccion), sin boton borrar; verificar_cadena_borrador 0 filas. Tecnico: ficha sin entrada y /borrador 404. Reasignacion (H1): Ana crea un borrador v1 de otro paciente, el paciente pasa a Bruno (UPDATE con session_replication_role=replica porque la sesion psql no es admin; restaurado a Ana al final), el administrador abre \"Corregir el borrador\", guarda v2 y descarta con el foco correcto en Descartado; cadena 0 filas; Ana ya no asignada recibe 404. Sin desbordes a 360 px (borrador.spec.ts sinDesbordar pasa). No se comparo literalmente con /prototipo: la visita a 1280 y 390 px no dio errores ni desbordes."
+    },
+    {
+      "id": "CA15",
+      "texto": "npm test, test:a11y, test:rls, lint, build y territorio",
+      "veredicto": "PASA",
+      "comando": "npx supabase db reset; npm run seed; npx next build --webpack; npx next start -p 3046; PUERTO=3046 npx playwright test --workers=1 (antes de cualquier prueba BD); npm test; npm run test:rls; npm run lint; git diff --name-only 0e4a587..HEAD",
+      "evidencia": "Base recien reseteada (max(version)=20261015120000) y sembrada (Contenedor: supabase_db_Psicogestion). Suite a11y entera contra el next start del worktree en el 3046, con --workers=1 y antes de las pruebas BD: \"38 passed (1.9m)\", 0 fallos. Hallazgo: tras correr vitest.bd.config.ts (11/11 verdes), accesibilidad/documentacion-pendiente.spec.ts vuelve a pasar 4/4 (no se reproduce la contaminacion). Del resto, de la ronda anterior: npm test 226 ficheros / 3040 verdes; test:rls exit 0; lint 0 errores (2 avisos ajenos); build webpack verde; diff dentro del territorio. Los 5 fallos anteriores venian de la base compartida contaminada, no del codigo."
+    }
+  ],
+  "regresiones": [],
+  "pantalla": {
+    "ticket": "T-046",
+    "commit": "397b19518bf3ab932214b710d0dd98d9af9711a4",
+    "rutas": [
+      "/pacientes/d0080001-0000-4000-8000-000000000003",
+      "/pacientes/d0080001-0000-4000-8000-000000000003/borrador",
+      "/pacientes/d0080001-0000-4000-8000-000000000003/borrador/13e737c8-6eac-480c-8d80-c8eb3395973c"
+    ],
+    "consola": [],
+    "paginas": [],
+    "http5xx": [],
+    "desborde_390": [],
+    "capturas": [
+      ".claude/qa/visitas/T-046/pacientes_d0080001-0000-4000-8000-000000000003-1280.png",
+      ".claude/qa/visitas/T-046/pacientes_d0080001-0000-4000-8000-000000000003-390.png",
+      ".claude/qa/visitas/T-046/pacientes_d0080001-0000-4000-8000-000000000003_borrador-1280.png",
+      ".claude/qa/visitas/T-046/pacientes_d0080001-0000-4000-8000-000000000003_borrador-390.png",
+      ".claude/qa/visitas/T-046/pacientes_d0080001-0000-4000-8000-000000000003_borrador_13e737c8-6eac-480c-8d80-c8eb3395973c-1280.png",
+      ".claude/qa/visitas/T-046/pacientes_d0080001-0000-4000-8000-000000000003_borrador_13e737c8-6eac-480c-8d80-c8eb3395973c-390.png"
+    ],
+    "bloqueadas": [],
+    "notas": []
+  }
+}

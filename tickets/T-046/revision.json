@@ -1,0 +1,30 @@
+{
+  "ticket": "T-046",
+  "ronda": 2,
+  "commit": "397b195",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 1,
+  "nota": "Dos revisores en paralelo (riesgo alto): corrección (revision-correccion.json: 0 ALTA, 0 MEDIA, 1 BAJA) y seguridad (revision-seguridad.json: 0/0/0). Ronda 2 sobre el delta 3ef2147..397b195. H1-H4 de corrección de la ronda 1, cerrados.",
+  "cerrados_ronda_1": {
+    "correccion": [
+      "H1",
+      "H2",
+      "H3",
+      "H4"
+    ],
+    "seguridad": []
+  },
+  "hallazgos": [
+    {
+      "id": "H5",
+      "severidad": "BAJA",
+      "causa": "prueba",
+      "archivo": "app/(app)/pacientes/[id]/borrador/aviso-de-estado.tsx",
+      "linea": 12,
+      "descripcion": "La marca de módulo descarteEnCurso solo se apaga cuando monta un AvisoDeEstado o cuando la acción devuelve error. Un descarte correcto en la ruta de alta, o una acción rechazada por red, la deja encendida en todo el documento, y la negativa 'no roba el foco' está verde solo porque la prueba anterior consume la marca.",
+      "escenario": "npx vitest run editor-borrador.test -t 'al confirmar el descarte|no roba el foco' -> la prueba de :188 falla con el status 'Descartado' enfocado. En la app hoy no hay camino porque las entradas a [borradorId] son <a>, pero con cualquier navegación en el cliente hacia una vista de solo lectura tras descartar en /borrador, su aviso le quita el foco a body y se salta el enlace Volver y el encabezado.",
+      "revisor": "correccion"
+    }
+  ]
+}
