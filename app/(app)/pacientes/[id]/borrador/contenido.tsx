@@ -81,7 +81,7 @@ export async function ContenidoEditor({
   const { paciente, borrador } = datos;
 
   const editable = !borrador || EDITABLES.has(borrador.estado);
-  const elegibles = editable ? await cargarElegibles(deps, paciente.id) : [];
+  const elegibles = editable ? await cargarElegibles(deps, paciente.id, borradorId) : [];
   if (elegibles === null) notFound();
 
   return (

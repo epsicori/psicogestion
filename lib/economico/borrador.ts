@@ -85,15 +85,31 @@ async function leerPacienteAtendible(deps: DepsBorrador, pacienteId: string) {
   return { rol, paciente: data as Paciente };
 }
 
-async function leerUltimaVersion(deps: DepsBorrador, pacienteId: string, borradorId: string) {
-  const { data: cabecera, error: e1 } = await deps.supabase
+/**
+ * El profesional de la cabecera de un borrador de este paciente, o `null` si no se ve, es de otro
+ * paciente o quien actúa no puede tocarlo. Un borrador existente es SIEMPRE de su cabecera, aunque
+ * el administrador haya reasignado después al paciente: el sellado de T-021 coteja el sobre con
+ * ella, y el disparador de citas de T-046 también. Como la política de alta de versiones, el
+ * profesional tiene que ser el de la cabecera y además seguir atendiendo al paciente (eso último
+ * ya lo exige `leerPacienteAtendible`).
+ */
+async function leerProfesionalDelBorrador(
+  deps: DepsBorrador,
+  atendible: { rol: string; paciente: Paciente },
+  borradorId: string,
+): Promise<string | null> {
+  const { data: cabecera, error } = await deps.supabase
     .from('borradores_factura')
-    .select('id, paciente_id')
+    .select('id, paciente_id, profesional_id')
     .eq('id', borradorId)
     .maybeSingle();
-  if (e1) fallo('borradores_factura', e1);
-  if (!cabecera || cabecera.paciente_id !== pacienteId) return null;
+  if (error) fallo('borradores_factura', error);
+  if (!cabecera || cabecera.paciente_id !== atendible.paciente.id) return null;
+  if (atendible.rol !== 'administrador' && cabecera.profesional_id !== deps.usuario.id) return null;
+  return cabecera.profesional_id;
+}
 
+async function leerUltimaVersion(deps: DepsBorrador, borradorId: string) {
   const { data, error } = await deps.supabase
     .from('borradores_factura_versiones')
     .select(COLUMNAS_VERSION)
@@ -163,6 +179,7 @@ function traducir(error: { code?: string; message?: string }, deps: DepsBorrador
 async function comprobarCitas(
   deps: DepsBorrador,
   paciente: Paciente,
+  profesionalId: string,
   borradorId: string | null,
   lineas: LineaBorrador[],
 ): Promise<ResultadoGuardar | null> {
@@ -186,7 +203,7 @@ async function comprobarCitas(
       !c ||
       c.paciente_id !== paciente.id ||
       c.estado !== 'realizada' ||
-      c.profesional_id !== paciente.profesional_id ||
+      c.profesional_id !== profesionalId ||
       c.bono_id !== null
     );
   });
@@ -235,10 +252,15 @@ async function guardar(deps: DepsBorrador, datos: unknown): Promise<ResultadoGua
   if (!atendible) return NO_DISPONIBLE;
   const { paciente } = atendible;
 
-  // 4 · Corregir: la última versión, viva y la misma de la que se partió.
+  // 4 · Corregir: la última versión, viva y la misma de la que se partió. El profesional es el de
+  // la cabecera si el borrador existe y, al crearlo, el que hoy atiende al paciente.
   let anterior: VersionLeida | null = null;
+  let profesionalId = paciente.profesional_id;
   if (entrada.borradorId !== null) {
-    anterior = await leerUltimaVersion(deps, paciente.id, entrada.borradorId);
+    const delBorrador = await leerProfesionalDelBorrador(deps, atendible, entrada.borradorId);
+    if (!delBorrador) return NO_DISPONIBLE;
+    profesionalId = delBorrador;
+    anterior = await leerUltimaVersion(deps, entrada.borradorId);
     if (!anterior) return NO_DISPONIBLE;
     if (anterior.descartado) return { ok: false, error: 'descartado' };
     if (anterior.numero_version !== entrada.partida) return { ok: false, error: 'conflicto' };
@@ -259,7 +281,7 @@ async function guardar(deps: DepsBorrador, datos: unknown): Promise<ResultadoGua
 
   // 5 · Las citas de todas las líneas (D9). Descartar siempre se puede (D5).
   if (!entrada.descartar) {
-    const rechazo = await comprobarCitas(deps, paciente, entrada.borradorId, lineas);
+    const rechazo = await comprobarCitas(deps, paciente, profesionalId, entrada.borradorId, lineas);
     if (rechazo) return rechazo;
   }
 
@@ -298,7 +320,7 @@ async function guardar(deps: DepsBorrador, datos: unknown): Promise<ResultadoGua
     borradorId,
     numeroVersion: anterior ? anterior.numero_version + 1 : 1,
     pacienteId: paciente.id,
-    profesionalId: paciente.profesional_id,
+    profesionalId,
     centroId: paciente.centro_id,
     creadaPor: deps.usuario.id,
     creadaEn: deps.ahora(),
@@ -399,7 +421,9 @@ export async function cargarEditor(
     const nombreCompleto = `${paciente.nombre} ${paciente.apellidos}`.trim();
     if (!borradorId) return { paciente: { id: paciente.id, nombreCompleto }, borrador: null };
 
-    const ultima = await leerUltimaVersion(deps, paciente.id, borradorId);
+    const profesionalId = await leerProfesionalDelBorrador(deps, atendible, borradorId);
+    if (!profesionalId) return null;
+    const ultima = await leerUltimaVersion(deps, borradorId);
     if (!ultima) return null;
 
     const { data: fila, error } = await deps.supabase
@@ -413,7 +437,7 @@ export async function cargarEditor(
       ? (bruto as EstadoEditable | EstadoBloqueado)
       : 'sin_enviar';
 
-    const elegibilidad = await elegibilidadDeCitas(deps, paciente, ultima.lineas);
+    const elegibilidad = await elegibilidadDeCitas(deps, paciente, profesionalId, ultima.lineas);
     const importes = calcularImportes(ultima.lineas);
     return {
       paciente: { id: paciente.id, nombreCompleto },
@@ -438,8 +462,13 @@ export async function cargarEditor(
   }
 }
 
-/** Las citas de las líneas que siguen siendo elegibles (realizada, del profesional, sin bono). */
-async function elegibilidadDeCitas(deps: DepsBorrador, paciente: Paciente, lineas: LineaBorrador[]) {
+/** Las citas de las líneas que siguen siendo elegibles (realizada, del profesional del borrador, sin bono). */
+async function elegibilidadDeCitas(
+  deps: DepsBorrador,
+  paciente: Paciente,
+  profesionalId: string,
+  lineas: LineaBorrador[],
+) {
   const ids = lineas.flatMap((l) => (l.cita_id ? [l.cita_id] : []));
   if (ids.length === 0) return new Set<string>();
   const { data, error } = await deps.supabase
@@ -453,7 +482,7 @@ async function elegibilidadDeCitas(deps: DepsBorrador, paciente: Paciente, linea
         (c) =>
           c.paciente_id === paciente.id &&
           c.estado === 'realizada' &&
-          c.profesional_id === paciente.profesional_id &&
+          c.profesional_id === profesionalId &&
           c.bono_id === null,
       )
       .map((c) => c.id),
@@ -466,23 +495,31 @@ const fechaEspanola = (dia: string) => {
 };
 
 /**
- * Las sesiones que pueden ir en un borrador nuevo: realizadas, del profesional del paciente, sin
- * bono y fuera de cualquier borrador vivo. Con el precio y el régimen PROPUESTOS (CA8, CA10). El
+ * Las sesiones que pueden ir en un borrador: realizadas, sin bono, fuera de cualquier borrador vivo y
+ * del profesional del borrador (el de su cabecera si ya existe; si es nuevo, el del paciente). Con el precio y el régimen PROPUESTOS (CA8, CA10). El
  * concepto es «Sesión del dd/mm/aaaa»: el nombre del tipo de terapia puede describir el
  * tratamiento (D20).
  */
-export async function cargarElegibles(deps: DepsBorrador, pacienteId: string): Promise<SesionElegible[] | null> {
+export async function cargarElegibles(
+  deps: DepsBorrador,
+  pacienteId: string,
+  borradorId?: string,
+): Promise<SesionElegible[] | null> {
   try {
     const atendible = await leerPacienteAtendible(deps, pacienteId);
     if (!atendible) return null;
     const { paciente } = atendible;
+    const profesionalId = borradorId
+      ? await leerProfesionalDelBorrador(deps, atendible, borradorId)
+      : paciente.profesional_id;
+    if (!profesionalId) return null;
 
     const [citas, tarifas, vivas] = await Promise.all([
       deps.supabase
         .from('citas')
         .select('id, inicio, zona_horaria, tipo_terapia_id')
         .eq('paciente_id', paciente.id)
-        .eq('profesional_id', paciente.profesional_id)
+        .eq('profesional_id', profesionalId)
         .eq('estado', 'realizada')
         .is('bono_id', null)
         .order('inicio', { ascending: true }),

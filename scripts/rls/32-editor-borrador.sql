@@ -12,6 +12,9 @@
 --   F · permisos antes que cotejo: el técnico y PRO2 reciben 42501, nunca el mensaje de la cita
 --   G · conflicto (CA3): un sobre con numero_version obsoleto da 23514
 --   H · congelado (CA4): con el evento pendiente, ni corrección ni descarte; con fallido, entra
+--   R · el administrador reasigna al paciente con un borrador vivo: la cabecera sigue mandando, el
+--       administrador corrige con la cita del profesional de la cabecera y descarta; ni el de antes
+--       ni el de ahora añaden (revisión H1)
 --   N · el NIF parcial da 22023
 --   V · los seis vectores de lib/economico/vectores-borrador.json: byte a byte frente al ayudante
 --       JCS del banco, iguales como jsonb a `pg_temp.sobre_borrador()` y con la huella congelada
@@ -26,6 +29,7 @@
 
 \set P32    '\'32320000-0000-4000-8000-000000000001\''
 \set P32X   '\'32320000-0000-4000-8000-000000000002\''
+\set P32R   '\'32320000-0000-4000-8000-000000000003\''
 \set T32    '\'32320000-0000-4000-8000-000000000010\''
 \set TAR32  '\'32320000-0000-4000-8000-000000000011\''
 \set BONO32 '\'32320000-0000-4000-8000-000000000012\''
@@ -39,6 +43,7 @@
 \set BEX    '\'32320000-0000-4000-8000-000000000308\''
 \set BF     '\'32320000-0000-4000-8000-000000000309\''
 \set BH     '\'32320000-0000-4000-8000-00000000030a\''
+\set BR     '\'32320000-0000-4000-8000-00000000030b\''
 \set CINEX  '\'32320000-0000-4000-8000-0000000003ff\''
 
 -- ---------------------------------------------------------------------------
@@ -53,7 +58,8 @@ insert into public.tipos_terapia (id, nombre, tarifa_base) values (:T32, 'Terapi
 
 insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values
   (:P32,  'Paz', 'T046 Borrador', :PRO1, :CA),
-  (:P32X, 'Otto', 'T046 Otro', :PRO1, :CA);
+  (:P32X, 'Otto', 'T046 Otro', :PRO1, :CA),
+  (:P32R, 'Rita', 'T046 Reasignada', :PRO1, :CA);
 
 insert into public.tarifas_paciente (id, paciente_id, tipo_terapia_id, importe, regimen_iva, vigente_desde, creada_por) values
   (:TAR32, :P32, :T32, 70.00, 'exento_sanitario', :'lunes_32'::date, :ADM);
@@ -91,11 +97,12 @@ select pg_temp.cita32(10, :P32,  :PRO1, :CA, :'lunes_32'::date + 9);            
 select pg_temp.cita32(11, :P32,  :PRO1, :CA, :'lunes_32'::date + 10);           -- C11 realizada (vector 4)
 select pg_temp.cita32(12, :P32,  :PRO1, :CA, :'lunes_32'::date + 11);           -- C12 realizada (vector 4)
 select pg_temp.cita32(13, :P32,  :PRO1, :CA, :'lunes_32'::date + 12);           -- C13 realizada (crear)
+select pg_temp.cita32(14, :P32R, :PRO1, :CA, :'lunes_32'::date + 13);           -- C14 realizada (R)
 
 update public.citas set estado = 'realizada'
  where id in (pg_temp.id_cita32(1), pg_temp.id_cita32(2), pg_temp.id_cita32(6), pg_temp.id_cita32(7),
               pg_temp.id_cita32(8), pg_temp.id_cita32(9), pg_temp.id_cita32(10), pg_temp.id_cita32(11),
-              pg_temp.id_cita32(12), pg_temp.id_cita32(13));
+              pg_temp.id_cita32(12), pg_temp.id_cita32(13), pg_temp.id_cita32(14));
 update public.citas set estado = 'cancelada' where id = pg_temp.id_cita32(4);
 update public.citas set estado = 'no_asistida' where id = pg_temp.id_cita32(5);
 
@@ -526,6 +533,47 @@ call pg_temp.como(:PRO1);
 select pg_temp.assert_no_lanza(:'SQL_H2', '32.H5 · gemela: con el envío fallido, la corrección entra');
 call pg_temp.reset_sesion();
 select pg_temp.assert(pg_temp.versiones32(:BH) = 2, '32.H6 · BH tiene ahora dos versiones');
+
+-- =========================================================================================
+-- R · El administrador reasigna al paciente con un borrador vivo (revisión H1)
+-- =========================================================================================
+-- El borrador es de su cabecera (PRO1) aunque P32R pase a PRO2: el sobre lleva PRO1 y la cita de
+-- PRO1 sigue entrando. La política de alta exige el profesional de la cabecera Y asignado: tras la
+-- reasignación, solo el administrador corrige y descarta.
+select pg_temp.sql_crear32(:BR, :P32R, :PRO1, :PRO1, pg_temp.lineas32(array[pg_temp.id_cita32(14)])) as "SQL_R1" \gset
+call pg_temp.como(:PRO1);
+select pg_temp.assert_no_lanza(:'SQL_R1', '32.R1 · PRO1 crea BR para P32R con su sesión C14');
+call pg_temp.reset_sesion();
+call pg_temp.como(:ADM);
+update public.pacientes set profesional_id = :PRO2 where id = :P32R;
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  (select p.profesional_id = :PRO2::uuid from public.pacientes p where p.id = :P32R)
+  and (select b.profesional_id = :PRO1::uuid from public.borradores_factura b where b.id = :BR),
+  '32.R2 · el administrador pasa P32R a PRO2; la cabecera de BR sigue siendo de PRO1');
+select pg_temp.sql_anadir32(:BR, :PRO1, pg_temp.lineas32(array[pg_temp.id_cita32(14), null])) as "SQL_R3" \gset
+call pg_temp.como(:PRO1);
+select pg_temp.assert_lanza_codigo_msg(:'SQL_R3', '42501', 'No puedes añadir una versión a este borrador',
+  '32.R3 · PRO1, ya no asignado, no corrige BR');
+call pg_temp.reset_sesion();
+select pg_temp.sql_anadir32(:BR, :PRO2, pg_temp.lineas32(array[pg_temp.id_cita32(14), null])) as "SQL_R4" \gset
+call pg_temp.como(:PRO2);
+select pg_temp.assert_lanza_codigo_msg(:'SQL_R4', '42501', 'No puedes añadir una versión a este borrador',
+  '32.R4 · PRO2, asignado pero sin ser el de la cabecera, no corrige BR');
+call pg_temp.reset_sesion();
+select pg_temp.sql_anadir32(:BR, :ADM, pg_temp.lineas32(array[pg_temp.id_cita32(14), null])) as "SQL_R5" \gset
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(:'SQL_R5', '32.R5 · el administrador corrige BR con la sesión de PRO1 (sobre con PRO1)');
+call pg_temp.reset_sesion();
+select pg_temp.sql_anadir32(:BR, :ADM, pg_temp.lineas32(array[pg_temp.id_cita32(14), null]), true) as "SQL_R6" \gset
+call pg_temp.como(:ADM);
+select pg_temp.assert_no_lanza(:'SQL_R6', '32.R6 · el administrador descarta BR');
+call pg_temp.reset_sesion();
+select pg_temp.assert(
+  pg_temp.versiones32(:BR) = 3
+  and (select bool_and(v.profesional_id = :PRO1::uuid) from public.borradores_factura_versiones v where v.borrador_id = :BR)
+  and (select count(*) from public.verificar_cadena_borrador(:BR)) = 0,
+  '32.R7 · BR tiene tres versiones, todas de PRO1, y su cadena verifica');
 
 -- =========================================================================================
 -- N · El NIF va completo o no va

@@ -172,7 +172,7 @@ function base(extra: { tablas?: Record<string, Fila[]>; rpc?: Record<string, Res
     tablas: {
       pacientes: [PACIENTE],
       citas: [],
-      borradores_factura: [{ id: BOR, paciente_id: PAC }],
+      borradores_factura: [{ id: BOR, paciente_id: PAC, profesional_id: PRO }],
       borradores_factura_versiones: [],
       ...extra.tablas,
     },

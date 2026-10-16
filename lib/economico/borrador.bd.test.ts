@@ -21,7 +21,7 @@ const { claveDeCifrado } = await import('@/lib/cifrado/claves');
 const { cifrarIdentificacion } = await import('@/lib/cifrado/identificacion');
 const { validarCif } = await import('@/lib/identidad/cif');
 const { claveAnonSupabase, urlSupabase } = await import('@/lib/supabase/config');
-const { cargarElegibles, guardarBorrador } = await import('./borrador');
+const { cargarEditor, cargarElegibles, guardarBorrador } = await import('./borrador');
 const { calcularImportes } = await import('./importes');
 
 type Deps = Parameters<typeof guardarBorrador>[0];
@@ -66,6 +66,11 @@ const deps = (s: Sesion): Deps =>
 function dniAlAzar() {
   const n = randomInt(0, 100_000_000);
   return String(n).padStart(8, '0') + 'TRWAGMYFPDXBNJZSQVHLCKE'[n % 23];
+}
+/** Un día del pasado y una hora en punto al azar: dos pasadas no deben pisarse la agenda de ana. */
+function momentoAlAzar(): [string, string] {
+  const dos = (n: number) => String(n).padStart(2, '0');
+  return [`20${dos(randomInt(1, 19))}-${dos(randomInt(1, 13))}-${dos(randomInt(1, 28))}`, dos(randomInt(7, 21))];
 }
 function cifAlAzar() {
   const cuerpo = 'B' + String(randomInt(0, 10_000_000)).padStart(7, '0');
@@ -132,13 +137,13 @@ beforeAll(async () => {
   // quinta con bono; un tipo de terapia propio y una tarifa del paciente, exenta, a 70 €.
   const tipo = randomUUID();
   const bono = randomUUID();
-  const dia = `20${String(randomInt(1, 19)).padStart(2, '0')}-${String(randomInt(1, 13)).padStart(2, '0')}-${String(randomInt(1, 28)).padStart(2, '0')}`;
+  const [dia, hora] = momentoAlAzar();
   for (let i = 0; i < 5; i++) CITAS.push(randomUUID());
   CITA_BONO = CITAS[4];
   const filas = CITAS.map(
     (id, i) => `('${id}', '${PAC}', '${ana.id}', '${tipo}',
-      (date '${dia}' + ${i} + time '10:00') at time zone 'Europe/Madrid',
-      (date '${dia}' + ${i} + time '10:50') at time zone 'Europe/Madrid', 'Europe/Madrid',
+      (date '${dia}' + ${i} + time '${hora}:00') at time zone 'Europe/Madrid',
+      (date '${dia}' + ${i} + time '${hora}:50') at time zone 'Europe/Madrid', 'Europe/Madrid',
       ${id === CITA_BONO ? `'${bono}'` : 'null'})`,
   ).join(',\n');
   consultar(`
@@ -405,3 +410,85 @@ describe('guardarBorrador contra la base', () => {
   });
 });
 
+describe('el administrador reasigna al paciente con un borrador vivo (revisión H1)', () => {
+  it('el borrador sigue con el profesional de su cabecera: el administrador lo corrige y lo descarta', async () => {
+    const [admin, bruno] = [await sesion('admin'), await sesion('bruno')];
+
+    // Un paciente propio de ana, con dos sesiones realizadas suyas.
+    const { data, error } = await ana.supabase.rpc('alta_paciente', {
+      p_nombre: 'Prueba',
+      p_apellidos: `T046 reasignado ${randomUUID().slice(0, 8)}`,
+      p_fecha_nacimiento: '1990-01-01',
+      p_sexo: null,
+      p_telefono: null,
+      ...(await cifrarIdentificacion({ documento: dniAlAzar() })),
+      p_alergias: null,
+      p_medicacion_actual: null,
+    } as never);
+    if (error || typeof data !== 'string') throw new Error(`alta_paciente: ${error?.message}`);
+    const P = data;
+    const [c1, c2] = [randomUUID(), randomUUID()];
+    const [dia, hora] = momentoAlAzar();
+    consultar(`
+insert into public.citas (id, paciente_id, profesional_id, inicio, fin, zona_horaria) values
+  ('${c1}', '${P}', '${ana.id}', (date '${dia}' + time '${hora}:00') at time zone 'Europe/Madrid',
+   (date '${dia}' + time '${hora}:50') at time zone 'Europe/Madrid', 'Europe/Madrid'),
+  ('${c2}', '${P}', '${ana.id}', (date '${dia}' + 1 + time '${hora}:00') at time zone 'Europe/Madrid',
+   (date '${dia}' + 1 + time '${hora}:50') at time zone 'Europe/Madrid', 'Europe/Madrid');
+update public.citas set estado = 'realizada' where id in ('${c1}', '${c2}');
+`);
+
+    const v1 = await guardarBorrador(deps(ana), {
+      pacienteId: P,
+      borradorId: null,
+      partida: null,
+      descartar: false,
+      destinatario: { modo: 'paciente' },
+      lineas: [deSesion(c1)],
+    });
+    if (!v1.ok) throw new Error(`crear: ${v1.error}`);
+    const B = v1.borradorId;
+
+    // El administrador pasa el paciente a bruno, con su sesión (la política y el disparador lo dejan).
+    const reasignado = await admin.supabase.from('pacientes').update({ profesional_id: bruno.id }).eq('id', P).select('id');
+    expect(reasignado.error).toBeNull();
+    expect(reasignado.data).toHaveLength(1);
+
+    // El editor del administrador: la sesión de ana sigue elegible en el borrador de ana, y la otra
+    // sesión de ana se le ofrece para ese borrador (no para uno nuevo, que sería de bruno).
+    const datos = await cargarEditor(deps(admin), P, B);
+    expect(datos?.borrador?.lineas.map((l) => l.citaNoElegible)).toEqual([false]);
+    expect((await cargarElegibles(deps(admin), P, B))?.map((e) => e.citaId)).toEqual([c2]);
+    expect((await cargarElegibles(deps(admin), P))?.map((e) => e.citaId)).toEqual([]);
+
+    // Ni ana (ya no lo atiende) ni bruno (el borrador no es suyo) lo tocan.
+    const corregir = (s: Sesion, partida: number) =>
+      guardarBorrador(deps(s), {
+        pacienteId: P,
+        borradorId: B,
+        partida,
+        descartar: false,
+        destinatario: { modo: 'conservar' },
+        lineas: [deSesion(c1), deSesion(c2)],
+      });
+    expect(await corregir(ana, 1)).toEqual({ ok: false, error: 'no_disponible' });
+    expect(await corregir(bruno, 1)).toEqual({ ok: false, error: 'no_disponible' });
+    expect(await cargarEditor(deps(ana), P, B)).toBeNull();
+    expect(await cargarEditor(deps(bruno), P, B)).toBeNull();
+
+    // El administrador corrige (con las dos sesiones de ana) y descarta.
+    expect(await corregir(admin, 1)).toEqual({ ok: true, borradorId: B, numeroVersion: 2 });
+    expect(
+      await guardarBorrador(deps(admin), {
+        pacienteId: P,
+        borradorId: B,
+        partida: 2,
+        descartar: true,
+        destinatario: { modo: 'conservar' },
+        lineas: [],
+      }),
+    ).toEqual({ ok: true, borradorId: B, numeroVersion: 3 });
+    expect(uno(`select profesional_id from public.borradores_factura_versiones where borrador_id = '${B}' and numero_version = 3`)).toBe(ana.id);
+    expect(uno(`select count(*) from public.verificar_cadena_borrador('${B}')`)).toBe('0');
+  });
+});
