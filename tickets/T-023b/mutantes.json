@@ -1,0 +1,17 @@
+{
+  "ticket": "T-023b",
+  "metodo": "cada mutante se aplica con psql sobre una base recien reseteada (db reset) y se lanza npm run test:rls (M1-M7) o scripts/t023b-concurrencia.mjs (M8-M9); el original vuelve a verde tras db reset + seed",
+  "mutantes": [
+    { "id": "M1", "cambio": "politica de alta sin la comprobacion de visibilidad del cobro", "cae": "33.E1 (lanza 23503 en vez de 42501)" },
+    { "id": "M2", "cambio": "politica de alta sin la comprobacion de visibilidad de la factura", "cae": "33.E1 (lanza 23503 en vez de 42501)" },
+    { "id": "M3", "cambio": "trigger sin el rechazo de asignar un cobro ya enlazado al registrarse", "cae": "33.D1 (debia lanzar 23514)" },
+    { "id": "M4", "cambio": "politica sin la guarda cobro_id is null", "cae": "33.G1 (42501 en vez de 23502)" },
+    { "id": "M5a", "cambio": "cota de devolucion: la asignacion de una devolucion no se comprueba", "cae": "33.J5 (debia lanzar 23514)" },
+    { "id": "M5b", "cambio": "cota de devolucion: el registro con factura no se comprueba", "cae": "33.J1 (debia lanzar 23514)" },
+    { "id": "M6", "cambio": "cobros_por_factura como definer", "cae": "33.A5" },
+    { "id": "M7", "cambio": "grant de insert a authenticated sobre todas las columnas", "cae": "33.A3" },
+    { "id": "M8", "cambio": "drop constraint cobros_facturas_cobro_unico", "cae": "carrera 1 de t023b-concurrencia.mjs (4 comprobaciones: 23505 0, suma 70, dos filas)" },
+    { "id": "M9", "cambio": "fn_comprobar_devolucion_en_factura sin pg_advisory_xact_lock", "cae": "carrera 2 de t023b-concurrencia.mjs (confirman 2, neto -20)" }
+  ],
+  "original_vuelve_a_verde": "npm run test:rls (OK: 33.) y t023b-concurrencia.mjs (exit 0, nueve OK) tras db reset + seed"
+}
