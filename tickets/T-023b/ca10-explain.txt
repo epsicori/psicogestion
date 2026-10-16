@@ -1,0 +1,361 @@
+BEGIN
+--- datos: pacientes, citas realizadas, facturas del espejo, cobros, enlazados y asignados ---
+INSERT 0 200
+INSERT 0 5000
+UPDATE 5000
+INSERT 0 300
+INSERT 0 300
+INSERT 0 2000
+INSERT 0 300
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ pacientes | citas_realizadas | facturas | cobros | cobros_en_facturas 
+-----------+------------------+----------+--------+--------------------
+       200 |             5000 |      300 |   2000 |                602
+(1 row)
+
+CREATE FUNCTION
+=== ADMINISTRADOR ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "b0080001-0000-4000-8000-000000000001", "role" : "authenticated"}
+(1 row)
+
+SET
+                                                                                                                                                       QUERY PLAN                                                                                                                                                        
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1076.62..1154.26 rows=1 width=100) (actual time=0.291..14.077 rows=202 loops=1)
+   Join Filter: ((((count(*))::integer) > 0) OR (((count(*))::integer) > 0) OR (((count(*))::integer) > 0))
+   Rows Removed by Join Filter: 5
+   Buffers: shared hit=33298
+   InitPlan 1
+     ->  Result  (cost=0.00..0.26 rows=1 width=4) (actual time=0.149..0.149 rows=1 loops=1)
+           Buffers: shared hit=12
+   InitPlan 2
+     ->  Result  (cost=0.00..0.26 rows=1 width=4) (never executed)
+   InitPlan 3
+     ->  Result  (cost=0.00..0.26 rows=1 width=4) (never executed)
+   ->  Nested Loop  (cost=1020.03..1097.59 rows=1 width=108) (actual time=0.231..12.470 rows=207 loops=1)
+         Buffers: shared hit=30672
+         ->  Nested Loop  (cost=992.23..1069.76 rows=1 width=72) (actual time=0.227..12.323 rows=207 loops=1)
+               Buffers: shared hit=30672
+               ->  Seq Scan on pacientes p  (cost=27.12..104.62 rows=1 width=32) (actual time=0.155..0.187 rows=207 loops=1)
+                     Filter: ((fusionado_en IS NULL) AND (((InitPlan 1).col1 = 'administrador'::rol_usuario) OR (((InitPlan 2).col1 = 'profesional_sanitario'::rol_usuario) AND es_profesional_asignado(id)) OR (((InitPlan 3).col1 = 'tecnico_administrativo'::rol_usuario) AND (ANY (id = (hashed SubPlan 4).col1)))))
+                     Rows Removed by Filter: 1
+                     Buffers: shared hit=16
+                     SubPlan 4
+                       ->  Hash Join  (cost=12.27..26.81 rows=125 width=16) (never executed)
+                             Hash Cond: (p2.centro_id = (centros_actuales()))
+                             ->  Seq Scan on pacientes p2  (cost=0.00..12.50 rows=250 width=32) (never executed)
+                             ->  Hash  (cost=9.77..9.77 rows=200 width=16) (never executed)
+                                   ->  HashAggregate  (cost=7.77..9.77 rows=200 width=16) (never executed)
+                                         Group Key: centros_actuales()
+                                         ->  ProjectSet  (cost=0.00..5.27 rows=1000 width=16) (never executed)
+                                               ->  Result  (cost=0.00..0.01 rows=1 width=0) (never executed)
+               ->  Aggregate  (cost=965.10..965.12 rows=1 width=40) (actual time=0.058..0.058 rows=1 loops=207)
+                     Buffers: shared hit=30656
+                     ->  Nested Loop Left Join  (cost=12.83..161.87 rows=49 width=70) (actual time=0.010..0.024 rows=24 loops=207)
+                           Buffers: shared hit=10629
+                           ->  Nested Loop  (cost=12.67..160.12 rows=49 width=54) (actual time=0.010..0.020 rows=24 loops=207)
+                                 Buffers: shared hit=10627
+                                 ->  Unique  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=207)
+                                       Buffers: shared hit=208
+                                       ->  Sort  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=207)
+                                             Sort Key: (p.id)
+                                             Sort Method: quicksort  Memory: 25kB
+                                             Buffers: shared hit=208
+                                             ->  Append  (cost=0.00..8.18 rows=2 width=16) (actual time=0.000..0.001 rows=1 loops=207)
+                                                   Buffers: shared hit=208
+                                                   ->  Result  (cost=0.00..0.01 rows=1 width=16) (actual time=0.000..0.000 rows=1 loops=207)
+                                                   ->  Index Scan using pacientes_fusionado_en_idx on pacientes m  (cost=0.14..8.16 rows=1 width=16) (actual time=0.000..0.000 rows=0 loops=207)
+                                                         Index Cond: (fusionado_en = p.id)
+                                                         Buffers: shared hit=208
+                                 ->  Bitmap Heap Scan on citas c  (cost=4.48..75.71 rows=25 width=54) (actual time=0.008..0.017 rows=24 loops=208)
+                                       Recheck Cond: (paciente_id = (p.id))
+                                       Filter: ((bono_id IS NULL) AND (estado = 'realizada'::estado_cita))
+                                       Rows Removed by Filter: 0
+                                       Heap Blocks: exact=10003
+                                       Buffers: shared hit=10419
+                                       ->  Bitmap Index Scan on citas_paciente_idx  (cost=0.00..4.47 rows=25 width=0) (actual time=0.001..0.001 rows=48 loops=208)
+                                             Index Cond: (paciente_id = (p.id))
+                                             Buffers: shared hit=416
+                           ->  Memoize  (cost=0.16..0.19 rows=1 width=32) (actual time=0.000..0.000 rows=1 loops=5006)
+                                 Cache Key: c.tipo_terapia_id
+                                 Cache Mode: logical
+                                 Hits: 5005  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                                 Buffers: shared hit=2
+                                 ->  Index Scan using tipos_terapia_pkey on tipos_terapia tt  (cost=0.15..0.18 rows=1 width=32) (actual time=0.010..0.010 rows=1 loops=1)
+                                       Index Cond: (id = c.tipo_terapia_id)
+                                       Buffers: shared hit=2
+                     SubPlan 5
+                       ->  Limit  (cost=8.19..8.19 rows=1 width=24) (actual time=0.001..0.001 rows=0 loops=5006)
+                             Buffers: shared hit=10015
+                             ->  Sort  (cost=8.19..8.19 rows=1 width=24) (actual time=0.000..0.000 rows=0 loops=5006)
+                                   Sort Key: t.vigente_desde DESC, t.orden DESC
+                                   Sort Method: quicksort  Memory: 25kB
+                                   Buffers: shared hit=10015
+                                   ->  Index Scan using tarifas_paciente_orden_uq on tarifas_paciente t  (cost=0.15..8.18 rows=1 width=24) (actual time=0.000..0.000 rows=0 loops=5006)
+                                         Index Cond: ((paciente_id = c.paciente_id) AND (tipo_terapia_id = c.tipo_terapia_id))
+                                         Filter: (vigente_desde <= ((c.inicio AT TIME ZONE c.zona_horaria))::date)
+                                         Buffers: shared hit=10012
+                     SubPlan 6
+                       ->  Limit  (cost=8.19..8.19 rows=1 width=24) (actual time=0.001..0.001 rows=0 loops=5006)
+                             Buffers: shared hit=10012
+                             ->  Sort  (cost=8.19..8.19 rows=1 width=24) (actual time=0.000..0.000 rows=0 loops=5006)
+                                   Sort Key: t_1.vigente_desde DESC, t_1.orden DESC
+                                   Sort Method: quicksort  Memory: 25kB
+                                   Buffers: shared hit=10012
+                                   ->  Index Scan using tarifas_paciente_orden_uq on tarifas_paciente t_1  (cost=0.15..8.18 rows=1 width=24) (actual time=0.000..0.000 rows=0 loops=5006)
+                                         Index Cond: ((paciente_id = c.paciente_id) AND (tipo_terapia_id = c.tipo_terapia_id))
+                                         Filter: (vigente_desde <= ((c.inicio AT TIME ZONE c.zona_horaria))::date)
+                                         Buffers: shared hit=10012
+         ->  Aggregate  (cost=27.81..27.82 rows=1 width=36) (actual time=0.000..0.001 rows=1 loops=207)
+               ->  Hash Semi Join  (cost=8.21..27.77 rows=8 width=16) (actual time=0.000..0.000 rows=0 loops=207)
+                     Hash Cond: (bo.paciente_id = (p.id))
+                     ->  Seq Scan on bonos bo  (cost=0.00..17.50 rows=750 width=32) (actual time=0.000..0.000 rows=0 loops=207)
+                     ->  Hash  (cost=8.18..8.18 rows=2 width=16) (never executed)
+                           ->  Append  (cost=0.00..8.18 rows=2 width=16) (never executed)
+                                 ->  Result  (cost=0.00..0.01 rows=1 width=16) (never executed)
+                                 ->  Index Scan using pacientes_fusionado_en_idx on pacientes m_1  (cost=0.14..8.16 rows=1 width=16) (never executed)
+                                       Index Cond: (fusionado_en = p.id)
+   ->  Aggregate  (cost=55.81..55.82 rows=1 width=36) (actual time=0.007..0.007 rows=1 loops=207)
+         Buffers: shared hit=2626
+         ->  Nested Loop  (cost=12.55..55.71 rows=20 width=5) (actual time=0.003..0.006 rows=10 loops=207)
+               Buffers: shared hit=2626
+               ->  Unique  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=207)
+                     Buffers: shared hit=208
+                     ->  Sort  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=207)
+                           Sort Key: (p.id)
+                           Sort Method: quicksort  Memory: 25kB
+                           Buffers: shared hit=208
+                           ->  Append  (cost=0.00..8.18 rows=2 width=16) (actual time=0.000..0.001 rows=1 loops=207)
+                                 Buffers: shared hit=208
+                                 ->  Result  (cost=0.00..0.01 rows=1 width=16) (actual time=0.000..0.000 rows=1 loops=207)
+                                 ->  Index Scan using pacientes_fusionado_en_idx on pacientes m_2  (cost=0.14..8.16 rows=1 width=16) (actual time=0.000..0.000 rows=0 loops=207)
+                                       Index Cond: (fusionado_en = p.id)
+                                       Buffers: shared hit=208
+               ->  Bitmap Heap Scan on cobros co  (cost=4.36..23.65 rows=10 width=21) (actual time=0.001..0.004 rows=10 loops=208)
+                     Recheck Cond: (paciente_id = (p.id))
+                     Heap Blocks: exact=2002
+                     Buffers: shared hit=2418
+                     ->  Bitmap Index Scan on cobros_paciente_idx  (cost=0.00..4.35 rows=10 width=0) (actual time=0.001..0.001 rows=10 loops=208)
+                           Index Cond: (paciente_id = (p.id))
+                           Buffers: shared hit=416
+ Planning:
+   Buffers: shared hit=211
+ Planning Time: 0.937 ms
+ Execution Time: 14.188 ms
+(121 rows)
+
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Function Scan on listado_facturas_espejo  (cost=0.26..10.26 rows=1000 width=221) (actual time=42.119..42.121 rows=20 loops=1)
+   Buffers: shared hit=12671
+ Planning Time: 0.033 ms
+ Execution Time: 42.234 ms
+(4 rows)
+
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Function Scan on listado_facturas_espejo  (cost=0.26..10.26 rows=1000 width=221) (actual time=40.481..40.483 rows=20 loops=1)
+   Buffers: shared hit=14566
+ Planning Time: 0.032 ms
+ Execution Time: 40.501 ms
+(4 rows)
+
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Function Scan on cobros_asignables  (cost=0.25..10.25 rows=1000 width=96) (actual time=3.711..3.712 rows=7 loops=1)
+   Buffers: shared hit=5543
+ Planning Time: 0.027 ms
+ Execution Time: 3.726 ms
+(4 rows)
+
+psql:<stdin>:139: NOTICE:  ADM · pendiente_paciente completo: 5.2 ms (umbral 500)
+psql:<stdin>:139: NOTICE:  ADM · listado página 1: 41.7 ms (umbral 150)
+psql:<stdin>:139: NOTICE:  ADM · listado con forma efectivo: 39.7 ms (umbral 150)
+ medir 
+-------
+ 
+(1 row)
+
+psql:<stdin>:139: NOTICE:  ADM · cobros_asignables: 5.2 ms (umbral 50)
+RESET
+=== TECNICO (TEC1, centro A) ===
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "b0080001-0000-4000-8000-000000000004", "role" : "authenticated"}
+(1 row)
+
+SET
+                                                                                                                                                       QUERY PLAN                                                                                                                                                        
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=1076.62..1154.26 rows=1 width=100) (actual time=0.550..7.965 rows=102 loops=1)
+   Join Filter: ((((count(*))::integer) > 0) OR (((count(*))::integer) > 0) OR (((count(*))::integer) > 0))
+   Rows Removed by Join Filter: 4
+   Buffers: shared hit=16822
+   InitPlan 1
+     ->  Result  (cost=0.00..0.26 rows=1 width=4) (actual time=0.081..0.081 rows=1 loops=1)
+           Buffers: shared hit=2
+   InitPlan 2
+     ->  Result  (cost=0.00..0.26 rows=1 width=4) (actual time=0.038..0.038 rows=1 loops=1)
+           Buffers: shared hit=2
+   InitPlan 3
+     ->  Result  (cost=0.00..0.26 rows=1 width=4) (actual time=0.033..0.033 rows=1 loops=1)
+           Buffers: shared hit=2
+   ->  Nested Loop  (cost=1020.03..1097.59 rows=1 width=108) (actual time=0.535..7.145 rows=106 loops=1)
+         Buffers: shared hit=15499
+         ->  Nested Loop  (cost=992.23..1069.76 rows=1 width=72) (actual time=0.533..7.063 rows=106 loops=1)
+               Buffers: shared hit=15499
+               ->  Seq Scan on pacientes p  (cost=27.12..104.62 rows=1 width=32) (actual time=0.491..0.547 rows=106 loops=1)
+                     Filter: ((fusionado_en IS NULL) AND (((InitPlan 1).col1 = 'administrador'::rol_usuario) OR (((InitPlan 2).col1 = 'profesional_sanitario'::rol_usuario) AND es_profesional_asignado(id)) OR (((InitPlan 3).col1 = 'tecnico_administrativo'::rol_usuario) AND (ANY (id = (hashed SubPlan 4).col1)))))
+                     Rows Removed by Filter: 102
+                     Buffers: shared hit=149
+                     SubPlan 4
+                       ->  Hash Join  (cost=12.27..26.81 rows=125 width=16) (actual time=0.297..0.324 rows=107 loops=1)
+                             Hash Cond: (p2.centro_id = (centros_actuales()))
+                             Buffers: shared hit=139
+                             ->  Seq Scan on pacientes p2  (cost=0.00..12.50 rows=250 width=32) (actual time=0.002..0.014 rows=208 loops=1)
+                                   Buffers: shared hit=4
+                             ->  Hash  (cost=9.77..9.77 rows=200 width=16) (actual time=0.293..0.294 rows=1 loops=1)
+                                   Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                   Buffers: shared hit=135
+                                   ->  HashAggregate  (cost=7.77..9.77 rows=200 width=16) (actual time=0.290..0.292 rows=1 loops=1)
+                                         Group Key: centros_actuales()
+                                         Batches: 1  Memory Usage: 40kB
+                                         Buffers: shared hit=135
+                                         ->  ProjectSet  (cost=0.00..5.27 rows=1000 width=16) (actual time=0.285..0.288 rows=1 loops=1)
+                                               Buffers: shared hit=135
+                                               ->  Result  (cost=0.00..0.01 rows=1 width=0) (actual time=0.000..0.000 rows=1 loops=1)
+               ->  Aggregate  (cost=965.10..965.12 rows=1 width=40) (actual time=0.061..0.061 rows=1 loops=106)
+                     Buffers: shared hit=15350
+                     ->  Nested Loop Left Join  (cost=12.83..161.87 rows=49 width=70) (actual time=0.011..0.027 rows=24 loops=106)
+                           Buffers: shared hit=5326
+                           ->  Nested Loop  (cost=12.67..160.12 rows=49 width=54) (actual time=0.011..0.022 rows=24 loops=106)
+                                 Buffers: shared hit=5324
+                                 ->  Unique  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=106)
+                                       Buffers: shared hit=107
+                                       ->  Sort  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=106)
+                                             Sort Key: (p.id)
+                                             Sort Method: quicksort  Memory: 25kB
+                                             Buffers: shared hit=107
+                                             ->  Append  (cost=0.00..8.18 rows=2 width=16) (actual time=0.000..0.001 rows=1 loops=106)
+                                                   Buffers: shared hit=107
+                                                   ->  Result  (cost=0.00..0.01 rows=1 width=16) (actual time=0.000..0.000 rows=1 loops=106)
+                                                   ->  Index Scan using pacientes_fusionado_en_idx on pacientes m  (cost=0.14..8.16 rows=1 width=16) (actual time=0.000..0.000 rows=0 loops=106)
+                                                         Index Cond: (fusionado_en = p.id)
+                                                         Buffers: shared hit=107
+                                 ->  Bitmap Heap Scan on citas c  (cost=4.48..75.71 rows=25 width=54) (actual time=0.009..0.019 rows=23 loops=107)
+                                       Recheck Cond: (paciente_id = (p.id))
+                                       Filter: ((bono_id IS NULL) AND (estado = 'realizada'::estado_cita))
+                                       Rows Removed by Filter: 0
+                                       Heap Blocks: exact=5003
+                                       Buffers: shared hit=5217
+                                       ->  Bitmap Index Scan on citas_paciente_idx  (cost=0.00..4.47 rows=25 width=0) (actual time=0.001..0.001 rows=47 loops=107)
+                                             Index Cond: (paciente_id = (p.id))
+                                             Buffers: shared hit=214
+                           ->  Memoize  (cost=0.16..0.19 rows=1 width=32) (actual time=0.000..0.000 rows=1 loops=2506)
+                                 Cache Key: c.tipo_terapia_id
+                                 Cache Mode: logical
+                                 Hits: 2505  Misses: 1  Evictions: 0  Overflows: 0  Memory Usage: 1kB
+                                 Buffers: shared hit=2
+                                 ->  Index Scan using tipos_terapia_pkey on tipos_terapia tt  (cost=0.15..0.18 rows=1 width=32) (actual time=0.002..0.002 rows=1 loops=1)
+                                       Index Cond: (id = c.tipo_terapia_id)
+                                       Buffers: shared hit=2
+                     SubPlan 5
+                       ->  Limit  (cost=8.19..8.19 rows=1 width=24) (actual time=0.001..0.001 rows=0 loops=2506)
+                             Buffers: shared hit=5012
+                             ->  Sort  (cost=8.19..8.19 rows=1 width=24) (actual time=0.001..0.001 rows=0 loops=2506)
+                                   Sort Key: t.vigente_desde DESC, t.orden DESC
+                                   Sort Method: quicksort  Memory: 25kB
+                                   Buffers: shared hit=5012
+                                   ->  Index Scan using tarifas_paciente_orden_uq on tarifas_paciente t  (cost=0.15..8.18 rows=1 width=24) (actual time=0.000..0.000 rows=0 loops=2506)
+                                         Index Cond: ((paciente_id = c.paciente_id) AND (tipo_terapia_id = c.tipo_terapia_id))
+                                         Filter: (vigente_desde <= ((c.inicio AT TIME ZONE c.zona_horaria))::date)
+                                         Buffers: shared hit=5012
+                     SubPlan 6
+                       ->  Limit  (cost=8.19..8.19 rows=1 width=24) (actual time=0.001..0.001 rows=0 loops=2506)
+                             Buffers: shared hit=5012
+                             ->  Sort  (cost=8.19..8.19 rows=1 width=24) (actual time=0.000..0.000 rows=0 loops=2506)
+                                   Sort Key: t_1.vigente_desde DESC, t_1.orden DESC
+                                   Sort Method: quicksort  Memory: 25kB
+                                   Buffers: shared hit=5012
+                                   ->  Index Scan using tarifas_paciente_orden_uq on tarifas_paciente t_1  (cost=0.15..8.18 rows=1 width=24) (actual time=0.000..0.000 rows=0 loops=2506)
+                                         Index Cond: ((paciente_id = c.paciente_id) AND (tipo_terapia_id = c.tipo_terapia_id))
+                                         Filter: (vigente_desde <= ((c.inicio AT TIME ZONE c.zona_horaria))::date)
+                                         Buffers: shared hit=5012
+         ->  Aggregate  (cost=27.81..27.82 rows=1 width=36) (actual time=0.001..0.001 rows=1 loops=106)
+               ->  Hash Semi Join  (cost=8.21..27.77 rows=8 width=16) (actual time=0.000..0.000 rows=0 loops=106)
+                     Hash Cond: (bo.paciente_id = (p.id))
+                     ->  Seq Scan on bonos bo  (cost=0.00..17.50 rows=750 width=32) (actual time=0.000..0.000 rows=0 loops=106)
+                     ->  Hash  (cost=8.18..8.18 rows=2 width=16) (never executed)
+                           ->  Append  (cost=0.00..8.18 rows=2 width=16) (never executed)
+                                 ->  Result  (cost=0.00..0.01 rows=1 width=16) (never executed)
+                                 ->  Index Scan using pacientes_fusionado_en_idx on pacientes m_1  (cost=0.14..8.16 rows=1 width=16) (never executed)
+                                       Index Cond: (fusionado_en = p.id)
+   ->  Aggregate  (cost=55.81..55.82 rows=1 width=36) (actual time=0.007..0.007 rows=1 loops=106)
+         Buffers: shared hit=1323
+         ->  Nested Loop  (cost=12.55..55.71 rows=20 width=5) (actual time=0.003..0.006 rows=9 loops=106)
+               Buffers: shared hit=1323
+               ->  Unique  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=106)
+                     Buffers: shared hit=107
+                     ->  Sort  (cost=8.19..8.20 rows=2 width=16) (actual time=0.001..0.001 rows=1 loops=106)
+                           Sort Key: (p.id)
+                           Sort Method: quicksort  Memory: 25kB
+                           Buffers: shared hit=107
+                           ->  Append  (cost=0.00..8.18 rows=2 width=16) (actual time=0.000..0.001 rows=1 loops=106)
+                                 Buffers: shared hit=107
+                                 ->  Result  (cost=0.00..0.01 rows=1 width=16) (actual time=0.000..0.000 rows=1 loops=106)
+                                 ->  Index Scan using pacientes_fusionado_en_idx on pacientes m_2  (cost=0.14..8.16 rows=1 width=16) (actual time=0.000..0.000 rows=0 loops=106)
+                                       Index Cond: (fusionado_en = p.id)
+                                       Buffers: shared hit=107
+               ->  Bitmap Heap Scan on cobros co  (cost=4.36..23.65 rows=10 width=21) (actual time=0.002..0.004 rows=9 loops=107)
+                     Recheck Cond: (paciente_id = (p.id))
+                     Heap Blocks: exact=1002
+                     Buffers: shared hit=1216
+                     ->  Bitmap Index Scan on cobros_paciente_idx  (cost=0.00..4.35 rows=10 width=0) (actual time=0.001..0.001 rows=9 loops=107)
+                           Index Cond: (paciente_id = (p.id))
+                           Buffers: shared hit=214
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.560 ms
+ Execution Time: 8.053 ms
+(130 rows)
+
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Function Scan on listado_facturas_espejo  (cost=0.26..10.26 rows=1000 width=221) (actual time=58.453..58.455 rows=20 loops=1)
+   Buffers: shared hit=10519
+ Planning Time: 0.033 ms
+ Execution Time: 58.864 ms
+(4 rows)
+
+                                                          QUERY PLAN                                                           
+-------------------------------------------------------------------------------------------------------------------------------
+ Function Scan on listado_facturas_espejo  (cost=0.26..10.26 rows=1000 width=221) (actual time=62.292..62.294 rows=20 loops=1)
+   Buffers: shared hit=12446
+ Planning Time: 0.031 ms
+ Execution Time: 62.315 ms
+(4 rows)
+
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Function Scan on cobros_asignables  (cost=0.25..10.25 rows=1000 width=96) (actual time=9.489..9.490 rows=7 loops=1)
+   Buffers: shared hit=3837
+ Planning Time: 0.026 ms
+ Execution Time: 9.504 ms
+(4 rows)
+
+psql:<stdin>:151: NOTICE:  TEC1 · pendiente_paciente completo: 2.6 ms (umbral 500)
+psql:<stdin>:151: NOTICE:  TEC1 · listado página 1: 60.2 ms (umbral 150)
+psql:<stdin>:151: NOTICE:  TEC1 · listado con forma efectivo: 64.7 ms (umbral 150)
+psql:<stdin>:151: NOTICE:  TEC1 · cobros_asignables: 0.8 ms (umbral 50)
+ medir 
+-------
+ 
+(1 row)
+
+RESET
+ROLLBACK
