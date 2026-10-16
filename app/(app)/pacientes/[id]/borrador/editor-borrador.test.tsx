@@ -15,6 +15,7 @@ vi.mock('./acciones', () => ({
 }));
 
 const { EditorBorrador } = await import('./editor-borrador');
+const { AvisoDeEstado } = await import('./aviso-de-estado');
 const { esquemaBorrador } = await import('./esquemas');
 
 const PAC = '11111111-1111-4111-8111-111111111111';
@@ -170,6 +171,23 @@ describe('EditorBorrador', () => {
     expect(screen.getByRole('status')).toBe(estado);
     expect(estado).toHaveFocus();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('si la página revalidada sustituye el editor por la vista de solo lectura, su aviso recoge el foco (H3)', async () => {
+    const u = userEvent.setup();
+    const { rerender } = render(<EditorBorrador pacienteId={PAC} borrador={borrador()} elegibles={[]} />);
+    await u.click(screen.getByRole('button', { name: 'Descartar' }));
+    await u.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descartar el borrador' }));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveFocus());
+    // Lo que hace la respuesta de la acción en la ruta de corrección: otra rama del árbol.
+    rerender(<AvisoDeEstado>Descartado</AvisoDeEstado>);
+    expect(screen.getByRole('status')).toHaveTextContent('Descartado');
+    expect(screen.getByRole('status')).toHaveFocus();
+  });
+
+  it('el aviso de la vista de solo lectura no roba el foco si no viene de un descarte (H3)', () => {
+    render(<AvisoDeEstado>Descartado</AvisoDeEstado>);
+    expect(screen.getByRole('status')).not.toHaveFocus();
   });
 
   it('el tipo del tercero vacío se dice en su campo; de vuelta al paciente, se guarda (H4)', async () => {

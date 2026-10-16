@@ -6,6 +6,7 @@ import { formatearImporte } from '@/lib/dinero/importe';
 import { cargarEditor, cargarElegibles, type DatosEditor } from '@/lib/economico/borrador';
 import { t, tCon } from '@/lib/i18n';
 
+import { AvisoDeEstado } from './aviso-de-estado';
 import { depsDeSesion } from './datos';
 import { EditorBorrador } from './editor-borrador';
 
@@ -27,9 +28,7 @@ export function VistaBorrador({ borrador, programa }: { borrador: Borrador; prog
         : t('facturacion.borrador.congeladoSinPrograma');
   return (
     <div className="flex flex-col gap-4">
-      <p role="status" className="text-sm font-medium">
-        {aviso}
-      </p>
+      <AvisoDeEstado>{aviso}</AvisoDeEstado>
       <p className="text-muted-foreground text-sm">{tCon('facturacion.borrador.version', { n: borrador.numeroVersion })}</p>
       <p className="text-sm">{borrador.destinatarioNombre}</p>
       <ul className="divide-border flex flex-col divide-y text-sm">

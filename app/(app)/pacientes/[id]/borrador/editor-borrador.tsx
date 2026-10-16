@@ -16,6 +16,7 @@ import { tipoIvaDe } from '@/lib/economico/tipos';
 import { t, tCon, type ClaveDeCatalogo } from '@/lib/i18n';
 
 import { descartarBorradorAccion, guardarBorradorAccion } from './acciones';
+import { marcarDescarteEnCurso } from './aviso-de-estado';
 import { DialogoDescartar } from './dialogo-descartar';
 import { esquemaBorrador, type EntradaDelFormulario, type ValoresBorrador } from './esquemas';
 
@@ -158,6 +159,8 @@ export function EditorBorrador({ pacienteId, borrador, elegibles }: Props) {
   const descartar = () => {
     if (!actual) return;
     setErrorDialogo('');
+    // En la ruta de corrección la respuesta puede traer ya la vista de solo lectura: su aviso recoge el foco.
+    marcarDescarteEnCurso(true);
     iniciarTransicion(async () => {
       const r = await descartarBorradorAccion({ pacienteId, borradorId: actual.id, partida: actual.version });
       if (r.ok) {
@@ -165,6 +168,7 @@ export function EditorBorrador({ pacienteId, borrador, elegibles }: Props) {
         setDescartado(true);
         setMensaje('');
       } else {
+        marcarDescarteEnCurso(false);
         setErrorDialogo(textoDeError(r));
       }
     });
