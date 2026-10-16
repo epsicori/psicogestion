@@ -154,6 +154,31 @@ describe('AsignarCobro', () => {
     expect(screen.getByRole('status')).toHaveTextContent(t('cobros.facturas.cobroYaEstaba'));
   });
 
+  it('si el botón se va con el diálogo abierto y luego llega el éxito, el foco va a la región (T-052, caso C)', async () => {
+    cargarCobrosAsignables.mockResolvedValue({ ok: true, cobros: [COBRO_A], hayMas: false });
+    let resolver: (v: { mensaje: string }) => void = () => {};
+    asignarCobroAFactura.mockReturnValue(new Promise((r) => (resolver = r)));
+    const { rerender } = render(<AsignarCobro factura={FACTURA} zona="Europe/Madrid" />);
+    const boton = screen.getByRole('button', { name: NOMBRE_DISPARADOR });
+    boton.focus();
+    await act(async () => {
+      fireEvent.click(boton);
+    });
+    fireEvent.change(screen.getByLabelText(t('cobros.facturas.cobro')), { target: { value: COBRO_A.id } });
+    await act(async () => {
+      fireEvent.submit(screen.getByLabelText(t('cobros.facturas.cobro')).closest('form')!);
+    });
+    await act(async () => {
+      rerender(<AsignarCobro factura={FACTURA} zona="Europe/Madrid" disponible={false} />);
+    });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await act(async () => {
+      resolver({ mensaje: t('cobros.facturas.cobroAsignado') });
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('status'));
+  });
+
   it.each([
     ['cobroYaEnlazado'],
     ['devolucionSuperaLoCobrado'],
