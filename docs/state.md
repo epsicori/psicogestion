@@ -18,7 +18,7 @@
 ## Siguiente paso
 
 1. **Merge de T-047** (`T-047-agenda-anual`, migración 20261017120000) en `main`.
-2. **T-051, T-052 y T-053**, con el diseño aprobado el 16-10.
+2. **T-052 y T-053**, con el diseño aprobado el 16-10.
 3. **T-027** (bonos, en `main`): c5 y c6 pasaron en QA visible (16-10); c7 abierto. Comprobar si `/prototipo` está en `main`: en el worktree de T-047 sí existe.
 4. Limpiar worktrees y ramas viejas (`agent-*`, `t050-r1-backup`…); unlink de la junction antes de `git worktree remove`.
 
@@ -40,7 +40,7 @@
 - **T-027 ronda 2 (5 BAJA)**: `bono-de-cita.tsx:147` y `:40`; `acciones-bono.ts:156`; `registrar-bono.tsx:40`; `:24`.
 - **T-027 fuera de alcance**: cita realizada con bono agotado no se cobra; no hay control de «marcar realizada».
 - **T-026a · D-B1 (BAJA, prueba)**: quitar el `return` de `supabase/migrations/20261014120000_proveedor_facturacion.sql:816` deja el banco en verde. Requiere ticket.
-- **QA visible (16-10)**: `QA_PASSWORD` en `.claude/settings.local.json` (ignorado por git). Bonos «Agotado» y «Caducado» hechos con SQL a mano (T-051).
+- **QA visible (16-10)**: `QA_PASSWORD` en `.claude/settings.local.json` (ignorado por git). Los bonos de los tres estados ya vienen de `seed-completo.sql` 8.quater (T-051).
 - **Contratos T-026a** (`tickets/T-026a/diseno.md`): Holded Q5 abierto (`docs/legal/preguntas-holded.md`).
 - **T-023 ronda 5** (3 BAJA, `tickets/T-023/revision.md`): B-H1 `page.test.tsx:150`; B-H2 `registrar-cobro.tsx:42`; B-H3 foco en `body`.
 - **T-023 fuera de alcance** (`tickets/T-023/revision.md`): `realizada`→`cancelada` rebaja el devengado (R2.8 de T-021); A-H2 (riesgo aceptado): reintento tras traspaso puede duplicar cobro.
