@@ -249,3 +249,14 @@ Quien redacte ese ticket **se para y escala**. No es un «no»: es que la decisi
 coste regulatorio —clasificación, documentación técnica, registro en AEMPS— que hay que
 poner sobre la mesa antes de escribir la primera línea, no después de tener la pantalla
 hecha.
+
+## Puesta en marcha · consulta propia antes de fin de 2026
+
+Aprobado por el propietario el 16-10-2026. El plan completo, con las decisiones de la entrevista, el calendario y lo que bloquea cada ticket, está en `docs/plan-puesta-en-marcha.md`. Se arranca con pacientes reales el **21-12-2026** si el ensayo general sale limpio.
+
+| Etapa | Tickets |
+|---|---|
+| 0 · en curso | T-047, T-051, T-052 |
+| 1 · datos reales | T-053 (H25), T-054 (despliegue) |
+| 2 · día a día | T-055 (disponibilidad), T-056 (festivos), T-057a/b/c (importador), T-058 (recordatorios wa.me) |
+| 3 · firmas e informes | T-059 (consentimientos), T-060 (asistencia), T-061 (informes) |
