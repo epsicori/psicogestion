@@ -20,6 +20,7 @@ vi.mock('./bloques', async (original) => ({
   BloquePendientes: () => null,
   BloqueCobros: () => null,
 }));
+vi.mock('./bloque-facturas', () => ({ BloqueFacturas: () => null }));
 // Los dos clientes, de pega: aquí solo importa si se montan y con qué.
 vi.mock('./selector-profesional', () => ({
   SelectorProfesional: ({ opciones }: { opciones: { id: string; nombre: string }[] }) => (
@@ -31,6 +32,7 @@ vi.mock('./selector-profesional', () => ({
 vi.mock('./registrar-cobro', () => ({ RegistrarCobro: () => null }));
 
 const { BloqueCobros, BloqueMetrica, BloquePendientes } = await import('./bloques');
+const { BloqueFacturas } = await import('./bloque-facturas');
 const { RegistrarCobro } = await import('./registrar-cobro');
 const { default: PaginaFacturacion } = await import('./page');
 
@@ -80,6 +82,23 @@ describe('PaginaFacturacion', () => {
       expect(nodo?.dentroDeSuspense).toBe(true);
       expect(nodo?.props.searchParams).toBe(PARAMETROS);
     }
+  });
+
+  it('T-023b: las facturas van en su propio marco, a ancho completo tras la rejilla, y su bloque dentro de un Suspense', () => {
+    const arbol = elementos(PaginaFacturacion({ searchParams: PARAMETROS }));
+    const bloque = arbol.find((n) => n.tipo === BloqueFacturas);
+    expect(bloque?.dentroDeSuspense).toBe(true);
+    expect(bloque?.props.searchParams).toBe(PARAMETROS);
+
+    const marco = arbol.find((n) => n.props.id === 'facturacion-facturas');
+    expect(marco?.props.titulo).toBe(t('cobros.facturas.titulo'));
+
+    // Fuera de la rejilla de dos columnas: es una lista ancha, con formulario y paginación.
+    const rejilla = arbol.find((n) => typeof n.props.className === 'string' && n.props.className.includes('lg:grid-cols-2'));
+    const dentroDeLaRejilla = elementos(rejilla?.props.children as ReactNode).map((n) => n.props.id);
+    expect(dentroDeLaRejilla).toContain('facturacion-pendientes');
+    expect(dentroDeLaRejilla).not.toContain('facturacion-facturas');
+    expect(arbol.indexOf(marco!)).toBeGreaterThan(arbol.indexOf(rejilla!));
   });
 
   it('T-027: un enlace estático «Bonos», fuera de todo Suspense', () => {

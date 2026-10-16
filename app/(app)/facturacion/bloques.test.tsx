@@ -26,6 +26,15 @@ const { BloqueCobros, BloqueMetrica, BloquePendientes } = await import('./bloque
 
 const PARAMETROS = Promise.resolve({});
 const PRO = '1b2c3d4e-5f60-4a71-8b82-9c0d1e2f3a40';
+/** Los filtros de la lista de facturas que trae el contexto (T-023b), sin nada elegido. */
+const SIN_FILTROS = {
+  desde: '2026-08-01',
+  hasta: '2026-10-06',
+  formaPago: null,
+  pagina: 1,
+  avisos: [],
+  explicitos: { desde: null, hasta: null, formaPago: null },
+};
 
 type Fila = {
   pacienteId: string;
@@ -76,7 +85,7 @@ const resumenDe = (filas: number, extra: Partial<{ pendienteTotal: number; conPe
 beforeEach(() => {
   cargarContexto
     .mockReset()
-    .mockResolvedValue({ rol: 'administrador', profesionalFiltrado: PRO, pagina: 1, zona: 'Europe/Madrid', hoy: '2026-10-06' });
+    .mockResolvedValue({ rol: 'administrador', profesionalFiltrado: PRO, pagina: 1, zona: 'Europe/Madrid', hoy: '2026-10-06', filtrosFacturas: SIN_FILTROS });
   cargarPendientes.mockReset();
   cargarResumen.mockReset().mockResolvedValue(resumenDe(3));
   cargarCobrosRecientes.mockReset();
@@ -198,7 +207,7 @@ describe('BloquePendientes', () => {
 
     it('con 120 filas en la página 2: «Del 51 al 100 de 120» y los dos enlaces, con ?profesional conservado', async () => {
       cargarResumen.mockResolvedValue(resumenDe(120));
-      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: PRO, pagina: 2, zona: 'Europe/Madrid', hoy: '2026-10-06' });
+      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: PRO, pagina: 2, zona: 'Europe/Madrid', hoy: '2026-10-06', filtrosFacturas: SIN_FILTROS });
       cargarPendientes.mockResolvedValue({ ok: true, filas: [PARCIAL] });
 
       await pintar(BloquePendientes);
@@ -213,9 +222,35 @@ describe('BloquePendientes', () => {
       for (const a of within(nav).getAllByRole('link')) expect(a.className).toContain('min-h-11');
     });
 
+    it('T-023b: paginar el pendiente conserva los filtros y la página de la lista de facturas', async () => {
+      cargarResumen.mockResolvedValue(resumenDe(120));
+      cargarContexto.mockResolvedValue({
+        rol: 'administrador',
+        profesionalFiltrado: null,
+        pagina: 2,
+        zona: 'Europe/Madrid',
+        hoy: '2026-10-06',
+        filtrosFacturas: {
+          ...SIN_FILTROS,
+          desde: '2026-09-01',
+          formaPago: 'bizum',
+          pagina: 3,
+          explicitos: { desde: '2026-09-01', hasta: null, formaPago: 'bizum' },
+        },
+      });
+      cargarPendientes.mockResolvedValue({ ok: true, filas: [PARCIAL] });
+
+      await pintar(BloquePendientes);
+
+      const parametros = (href: string | null) => Object.fromEntries(new URLSearchParams((href ?? '').split('?')[1]));
+      const [anterior, siguiente] = screen.getAllByRole('link').map((a) => parametros(a.getAttribute('href')));
+      expect(anterior).toEqual({ desde: '2026-09-01', forma: 'bizum', paginaFacturas: '3' });
+      expect(siguiente).toEqual({ pagina: '3', desde: '2026-09-01', forma: 'bizum', paginaFacturas: '3' });
+    });
+
     it('en la página 1 no hay «Anteriores»', async () => {
       cargarResumen.mockResolvedValue(resumenDe(120));
-      cargarContexto.mockResolvedValue({ rol: 'profesional_sanitario', profesionalFiltrado: null, pagina: 1, zona: 'Europe/Madrid', hoy: '2026-10-06' });
+      cargarContexto.mockResolvedValue({ rol: 'profesional_sanitario', profesionalFiltrado: null, pagina: 1, zona: 'Europe/Madrid', hoy: '2026-10-06', filtrosFacturas: SIN_FILTROS });
       cargarPendientes.mockResolvedValue({ ok: true, filas: [PARCIAL] });
 
       await pintar(BloquePendientes);
@@ -227,7 +262,7 @@ describe('BloquePendientes', () => {
 
     it('en la última página no hay «Siguientes» y el rango acaba en el total', async () => {
       cargarResumen.mockResolvedValue(resumenDe(120));
-      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: null, pagina: 3, zona: 'Europe/Madrid', hoy: '2026-10-06' });
+      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: null, pagina: 3, zona: 'Europe/Madrid', hoy: '2026-10-06', filtrosFacturas: SIN_FILTROS });
       cargarPendientes.mockResolvedValue({ ok: true, filas: [PARCIAL] });
 
       await pintar(BloquePendientes);
@@ -239,7 +274,7 @@ describe('BloquePendientes', () => {
 
     it('una página que pasa de la última cae en la última (?pagina=999999)', async () => {
       cargarResumen.mockResolvedValue(resumenDe(120));
-      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: null, pagina: 999999, zona: 'Europe/Madrid', hoy: '2026-10-06' });
+      cargarContexto.mockResolvedValue({ rol: 'administrador', profesionalFiltrado: null, pagina: 999999, zona: 'Europe/Madrid', hoy: '2026-10-06', filtrosFacturas: SIN_FILTROS });
       cargarPendientes.mockResolvedValue({ ok: true, filas: [PARCIAL] });
 
       await pintar(BloquePendientes);

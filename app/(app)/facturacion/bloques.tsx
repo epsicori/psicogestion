@@ -23,6 +23,7 @@ import {
   cargarResumen,
   type PendienteConNombre,
 } from './datos';
+import { hrefFacturacion } from './filtros-facturas';
 import { PaginacionPendientes } from './paginacion-pendientes';
 import { pildoraDe } from './presentacion';
 
@@ -100,17 +101,16 @@ function subtituloDe(fila: PendienteConNombre): string {
   }
 }
 
-/** `/facturacion` con el filtro de profesional y la página; la 1 va sin `pagina`. */
-function hrefDePagina(profesional: string | null, pagina: number): string {
-  const parametros = new URLSearchParams();
-  if (profesional) parametros.set('profesional', profesional);
-  if (pagina > 1) parametros.set('pagina', String(pagina));
-  const consulta = parametros.toString();
-  return consulta ? `/facturacion?${consulta}` : '/facturacion';
-}
-
 export async function BloquePendientes({ searchParams }: Props) {
-  const { profesionalFiltrado, pagina: paginaPedida } = await cargarContexto(searchParams);
+  const { profesionalFiltrado, pagina: paginaPedida, filtrosFacturas } = await cargarContexto(searchParams);
+  /** `/facturacion` con el filtro de profesional, los filtros y la página de las facturas, y la página pedida del pendiente. */
+  const hrefDePagina = (profesional: string | null, pagina: number): string =>
+    hrefFacturacion({
+      profesional,
+      pagina,
+      paginaFacturas: filtrosFacturas.pagina,
+      explicitos: filtrosFacturas.explicitos,
+    });
   const resumen = await cargarResumen(profesionalFiltrado);
   if (!resumen.ok) return <AvisoDeError mensaje={t('cobros.errorPendientes')} />;
 

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { FiltrosFacturas } from './filtros-facturas';
+
 const exigirSesion = vi.fn();
 vi.mock('@/lib/supabase/sesion', () => ({ exigirSesion: () => exigirSesion() }));
 
@@ -479,14 +481,14 @@ describe('cargarFacturas · el listado lo hace la base (T-023b)', () => {
   const FACTURA = '8a2b3c4d-5e6f-4a70-9b81-1c2d3e4f5a61';
   const PACIENTE = '6f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60';
   const COBRO = '9b3c4d5e-6f70-4b81-8c92-2d3e4f5a6b71';
-  const filtros = {
+  const filtros: FiltrosFacturas = {
     desde: '2026-08-01',
     hasta: '2026-10-16',
     formaPago: null,
     pagina: 1,
     avisos: [],
     explicitos: { desde: null, hasta: null, formaPago: null },
-  } as const;
+  };
 
   const cobro = (extra: Record<string, unknown> = {}) => ({
     cobro_id: COBRO,

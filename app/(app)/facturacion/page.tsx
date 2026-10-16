@@ -12,6 +12,7 @@ import {
   EsqueletoMetrica,
   MarcoFacturacion,
 } from './bloques';
+import { BloqueFacturas } from './bloque-facturas';
 import { cargarContexto, cargarOpcionesProfesional, cargarPacientesParaCobro } from './datos';
 import { RegistrarCobro } from './registrar-cobro';
 import { SelectorProfesional } from './selector-profesional';
@@ -100,6 +101,13 @@ export default function PaginaFacturacion({ searchParams }: { searchParams: Para
           </Suspense>
         </MarcoFacturacion>
       </div>
+
+      {/* T-023b: a ancho completo, fuera de la rejilla: lleva formulario de filtros, filas con acciones y paginación. */}
+      <MarcoFacturacion id="facturacion-facturas" titulo={t('cobros.facturas.titulo')}>
+        <Suspense fallback={<EsqueletoLista />}>
+          <BloqueFacturas searchParams={searchParams} />
+        </Suspense>
+      </MarcoFacturacion>
     </div>
   );
 }
