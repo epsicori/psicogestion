@@ -27,6 +27,8 @@ declare
     'cobros_alta', 'cobros_lectura',
     -- T-026a · el espejo mínimo del programa de facturación (ADR-077). Lo ejerce 31-proveedor-facturacion.
     'borradores_factura_envios_lectura', 'facturas_espejo_lectura', 'facturas_anotaciones_lectura',
+    -- T-023b · qué factura del programa paga un cobro anterior. Lo ejerce 33-cobros-facturas.
+    'cobros_facturas_alta', 'cobros_facturas_lectura',
     'tarifas_paciente_alta', 'tarifas_paciente_lectura',
     -- T-010 · dominio Agenda. El tecnico administrativo NO tiene politica de select
     -- sobre citas a proposito: lee por la vista citas_agenda (choque 4, invariante 3).
