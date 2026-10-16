@@ -158,4 +158,34 @@ describe('EditorBorrador', () => {
     );
     expect(await screen.findByRole('status')).toBeInTheDocument();
   });
+
+  it('al confirmar el descarte, la región de estado ya existía vacía, dice «Descartado» y recibe el foco (H3)', async () => {
+    const u = userEvent.setup();
+    render(<EditorBorrador pacienteId={PAC} borrador={borrador()} elegibles={[]} />);
+    const estado = screen.getByRole('status');
+    expect(estado).toBeEmptyDOMElement();
+    await u.click(screen.getByRole('button', { name: 'Descartar' }));
+    await u.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descartar el borrador' }));
+    await waitFor(() => expect(estado).toHaveTextContent('Descartado'));
+    expect(screen.getByRole('status')).toBe(estado);
+    expect(estado).toHaveFocus();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('el tipo del tercero vacío se dice en su campo; de vuelta al paciente, se guarda (H4)', async () => {
+    const u = userEvent.setup();
+    render(<EditorBorrador pacienteId={PAC} borrador={null} elegibles={[sesion()]} />);
+    await u.click(screen.getByRole('checkbox', { name: 'Sesión del 05/10/2026' }));
+    await u.click(screen.getByRole('radio', { name: 'Otra persona o entidad' }));
+    await u.type(screen.getByLabelText('Nombre o razón social'), 'Mutua Sur');
+    await u.selectOptions(screen.getByLabelText('Tipo'), '');
+    await u.click(screen.getByRole('button', { name: 'Guardar borrador' }));
+    expect(await screen.findByText('Elige si es una persona física o jurídica')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tipo')).toHaveAttribute('aria-invalid', 'true');
+    expect(guardarBorradorAccion).not.toHaveBeenCalled();
+
+    await u.click(screen.getByRole('radio', { name: 'El paciente' }));
+    await u.click(screen.getByRole('button', { name: 'Guardar borrador' }));
+    await waitFor(() => expect(guardarBorradorAccion).toHaveBeenCalledTimes(1));
+  });
 });

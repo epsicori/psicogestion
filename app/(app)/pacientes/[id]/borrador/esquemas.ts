@@ -68,7 +68,8 @@ const esquemaDestinatarioFormulario = z
   .object({
     modo: z.enum(['paciente', 'conservar', 'tercero']),
     nombre: z.string(),
-    tipo: z.enum(['fisica', 'juridica']),
+    // Vacío se admite aquí y se rechaza abajo solo con tercero: con el paciente, el selector ni se ve.
+    tipo: z.union([z.enum(['fisica', 'juridica']), z.literal('')]),
     nif: z.string(),
   })
   .superRefine((d, ctx) => {
@@ -76,6 +77,10 @@ const esquemaDestinatarioFormulario = z
     const nombre = d.nombre.trim();
     if (nombre.length === 0 || nombre.length > MAX_NOMBRE || SIN_CONTROL.test(nombre)) {
       ctx.addIssue({ code: 'custom', path: ['nombre'], message: t('facturacion.borrador.errores.nombre') });
+    }
+    if (d.tipo === '') {
+      ctx.addIssue({ code: 'custom', path: ['tipo'], message: t('facturacion.borrador.errores.tipo') });
+      return;
     }
     const nif = d.nif.trim();
     if (nif !== '' && !(d.tipo === 'fisica' ? validarNif(nif) : validarCif(nif))) {
@@ -88,7 +93,7 @@ const esquemaDestinatarioFormulario = z
     return {
       modo: 'tercero' as const,
       nombre: d.nombre.trim(),
-      tipo: d.tipo,
+      tipo: d.tipo as 'fisica' | 'juridica',
       nif: nif === '' ? null : d.tipo === 'fisica' ? esquemaNif.parse(nif) : esquemaCif.parse(nif),
     };
   });

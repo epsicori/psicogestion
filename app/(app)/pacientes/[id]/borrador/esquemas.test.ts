@@ -99,6 +99,14 @@ describe('esquemaBorrador', () => {
     );
     expect(esquemaBorrador.parse(valores()).destinatario).toEqual({ modo: 'paciente' });
   });
+
+  it('el tipo se exige solo con tercero: vacío, rechazado allí con su mensaje; con el paciente, da igual (H4)', () => {
+    expect(mensajes(valores({ destinatario: { modo: 'tercero', nombre: 'Mutua', tipo: '', nif: '' } }))).toEqual([
+      'Elige si es una persona física o jurídica',
+    ]);
+    const r = esquemaBorrador.safeParse(valores({ destinatario: { modo: 'paciente', nombre: '', tipo: '', nif: '' } }));
+    expect(r.success && r.data.destinatario).toEqual({ modo: 'paciente' });
+  });
 });
 
 describe('esquemaDescartar', () => {

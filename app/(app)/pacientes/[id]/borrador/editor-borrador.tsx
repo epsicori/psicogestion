@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
@@ -85,6 +85,13 @@ export function EditorBorrador({ pacienteId, borrador, elegibles }: Props) {
   const [descartando, setDescartando] = useState(false);
   const [errorDialogo, setErrorDialogo] = useState('');
   const [descartado, setDescartado] = useState(false);
+  // La región de estado vive siempre, vacía hasta que hay algo que decir: una región viva que nace
+  // ya con su texto no se anuncia. Tras descartar, el formulario (y con él el botón al que el diálogo
+  // devolvería el foco) desaparece: el foco va a esta región, que sigue ahí (H3).
+  const estado = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (descartado) estado.current?.focus();
+  }, [descartado]);
   // Al guardar, el editor pasa a corregir desde la versión recién creada.
   const [actual, setActual] = useState<{ id: string; version: number } | null>(
     borrador ? { id: borrador.id, version: borrador.numeroVersion } : null,
@@ -169,213 +176,207 @@ export function EditorBorrador({ pacienteId, borrador, elegibles }: Props) {
     </a>
   );
 
-  if (descartado) {
-    return (
-      <div className="flex flex-col gap-3">
-        <p role="status" className="text-sm font-medium">
-          {t('facturacion.borrador.descartadoAviso')}
-        </p>
-        {enlaceFicha}
-      </div>
-    );
-  }
-
-
   return (
     <div className="flex flex-col gap-6">
-      <form onSubmit={guardar} noValidate className="flex flex-col gap-6">
-        {actual && (
-          <p className="text-muted-foreground text-sm">{tCon('facturacion.borrador.version', { n: actual.version })}</p>
-        )}
-
-        <fieldset className="flex flex-col gap-1">
-          <legend className="mb-2 text-sm font-semibold">{t('facturacion.borrador.sesiones')}</legend>
-          {elegibles.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{t('facturacion.borrador.sinSesiones')}</p>
-          ) : (
-            elegibles.map((s) => (
-              <Casilla
-                key={s.citaId}
-                etiqueta={s.concepto}
-                checked={lineas.some((l) => l.cita_id === s.citaId)}
-                onChange={(e) => alternarSesion(s, e.currentTarget.checked)}
-              />
-            ))
-          )}
-        </fieldset>
-
-        <fieldset className="flex flex-col gap-4">
-          <legend className="mb-2 text-sm font-semibold">{t('facturacion.borrador.lineas')}</legend>
-          <p id="ayuda-regimen" className="text-muted-foreground text-sm">
-            {t('facturacion.borrador.ayudaRegimen')}
-          </p>
-          {fields.map((campo, i) => {
-            const errorLinea = errors.lineas?.[i];
-            const deSesion = lineas[i]?.cita_id ?? null;
-            return (
-              <div key={campo.id} className="border-border flex flex-col gap-3 rounded-lg border p-3">
-                {deSesion && noElegibles.has(deSesion) && (
-                  <p role="alert" className="text-destructive text-sm">
-                    {t('facturacion.borrador.citaNoElegible')}
-                  </p>
-                )}
-                <div className="flex flex-col gap-1">
-                  <Field
-                    id={`linea-${i}-concepto`}
-                    etiqueta={t('facturacion.borrador.concepto')}
-                    aria-describedby={`linea-${i}-ayuda`}
-                    errores={errorLinea?.concepto?.message ? [errorLinea.concepto.message] : undefined}
-                    {...register(`lineas.${i}.concepto`)}
-                  />
-                  <p id={`linea-${i}-ayuda`} className="text-muted-foreground text-xs">
-                    {t('facturacion.borrador.ayudaConcepto')}
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  {deSesion === null && (
-                    <Field
-                      id={`linea-${i}-cantidad`}
-                      etiqueta={t('facturacion.borrador.cantidad')}
-                      inputMode="numeric"
-                      errores={errorLinea?.cantidad?.message ? [errorLinea.cantidad.message] : undefined}
-                      {...register(`lineas.${i}.cantidad`)}
-                    />
-                  )}
-                  <Field
-                    id={`linea-${i}-precio`}
-                    etiqueta={t('facturacion.borrador.precio')}
-                    inputMode="decimal"
-                    errores={errorLinea?.precio?.message ? [errorLinea.precio.message] : undefined}
-                    {...register(`lineas.${i}.precio`)}
-                  />
-                  <Seleccion
-                    id={`linea-${i}-regimen`}
-                    etiqueta={t('facturacion.borrador.regimen')}
-                    textoVacio={t('facturacion.borrador.regimenElegir')}
-                    opciones={[
-                      { valor: 'exento_sanitario', texto: t('facturacion.borrador.exento') },
-                      { valor: 'general', texto: t('facturacion.borrador.general') },
-                    ]}
-                    errores={errorLinea?.regimen_iva?.message ? [errorLinea.regimen_iva.message] : undefined}
-                    {...register(`lineas.${i}.regimen_iva`)}
-                  />
-                </div>
-                <div>
-                  <Button type="button" variante="fantasma" tamano="sm" onClick={() => remove(i)}>
-                    {t('facturacion.borrador.quitar')}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-          {errors.lineas?.message && (
-            <p role="alert" className="text-destructive text-sm">
-              {errors.lineas.message}
-            </p>
-          )}
-          <div>
-            <Button type="button" variante="contorno" onClick={() => append(LINEA_LIBRE)}>
-              {t('facturacion.borrador.anadirLibre')}
-            </Button>
-          </div>
-        </fieldset>
-
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-sm font-semibold">{t('facturacion.borrador.destinatario')}</legend>
-          <label className="inline-flex min-h-11 items-center gap-3 text-sm">
-            <input type="radio" value="paciente" {...register('destinatario.modo')} />
-            {t('facturacion.borrador.destinatarioPaciente')}
-          </label>
-          {borrador && (
-            <label className="inline-flex min-h-11 items-center gap-3 text-sm">
-              <input type="radio" value="conservar" {...register('destinatario.modo')} />
-              {tCon('facturacion.borrador.destinatarioConservar', { nombre: borrador.destinatarioNombre })}
-              {borrador.tieneNif ? ` · ${t('facturacion.borrador.destinatarioConservarNif')}` : ''}
-            </label>
-          )}
-          <label className="inline-flex min-h-11 items-center gap-3 text-sm">
-            <input type="radio" value="tercero" {...register('destinatario.modo')} />
-            {t('facturacion.borrador.destinatarioTercero')}
-          </label>
-          {modo === 'tercero' && (
-            <div className="flex flex-col gap-3 pl-1">
-              <Field
-                id="tercero-nombre"
-                etiqueta={t('facturacion.borrador.terceroNombre')}
-                autoComplete="off"
-                errores={errors.destinatario?.nombre?.message ? [errors.destinatario.nombre.message] : undefined}
-                {...register('destinatario.nombre')}
-              />
-              <Seleccion
-                id="tercero-tipo"
-                etiqueta={t('facturacion.borrador.terceroTipo')}
-                textoVacio={t('facturacion.borrador.regimenElegir')}
-                opciones={[
-                  { valor: 'fisica', texto: t('facturacion.borrador.fisica') },
-                  { valor: 'juridica', texto: t('facturacion.borrador.juridica') },
-                ]}
-                {...register('destinatario.tipo')}
-              />
-              <Field
-                id="tercero-nif"
-                etiqueta={t('facturacion.borrador.terceroNif')}
-                autoComplete="off"
-                spellCheck={false}
-                errores={errors.destinatario?.nif?.message ? [errors.destinatario.nif.message] : undefined}
-                {...register('destinatario.nif')}
-              />
-            </div>
-          )}
-        </fieldset>
-
-        <dl className="grid grid-cols-3 gap-2 text-sm">
-          <div>
-            <dt className="text-muted-foreground">{t('facturacion.borrador.base')}</dt>
-            <dd>{importes ? formatearImporte(importes.base) : '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">{t('facturacion.borrador.cuota')}</dt>
-            <dd>{importes ? formatearImporte(importes.cuota) : '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">{t('facturacion.borrador.total')}</dt>
-            <dd className="font-semibold">{importes ? formatearImporte(importes.total) : '—'}</dd>
-          </div>
-        </dl>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="submit"
-            aria-disabled={enviando || bloqueadoPorCita || undefined}
-            className="aria-disabled:opacity-50"
-          >
-            {enviando ? t('facturacion.borrador.guardando') : t('facturacion.borrador.guardar')}
-          </Button>
+      {!descartado && (
+        <form onSubmit={guardar} noValidate className="flex flex-col gap-6">
           {actual && (
-            <Button
-              type="button"
-              variante="contorno"
-              onClick={() => {
-                setErrorDialogo('');
-                setDescartando(true);
-              }}
-            >
-              {t('facturacion.borrador.descartar')}
-            </Button>
+            <p className="text-muted-foreground text-sm">{tCon('facturacion.borrador.version', { n: actual.version })}</p>
           )}
-        </div>
-      </form>
 
-      {errorGeneral && (
+          <fieldset className="flex flex-col gap-1">
+            <legend className="mb-2 text-sm font-semibold">{t('facturacion.borrador.sesiones')}</legend>
+            {elegibles.length === 0 ? (
+              <p className="text-muted-foreground text-sm">{t('facturacion.borrador.sinSesiones')}</p>
+            ) : (
+              elegibles.map((s) => (
+                <Casilla
+                  key={s.citaId}
+                  etiqueta={s.concepto}
+                  checked={lineas.some((l) => l.cita_id === s.citaId)}
+                  onChange={(e) => alternarSesion(s, e.currentTarget.checked)}
+                />
+              ))
+            )}
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-4">
+            <legend className="mb-2 text-sm font-semibold">{t('facturacion.borrador.lineas')}</legend>
+            <p id="ayuda-regimen" className="text-muted-foreground text-sm">
+              {t('facturacion.borrador.ayudaRegimen')}
+            </p>
+            {fields.map((campo, i) => {
+              const errorLinea = errors.lineas?.[i];
+              const deSesion = lineas[i]?.cita_id ?? null;
+              return (
+                <div key={campo.id} className="border-border flex flex-col gap-3 rounded-lg border p-3">
+                  {deSesion && noElegibles.has(deSesion) && (
+                    <p role="alert" className="text-destructive text-sm">
+                      {t('facturacion.borrador.citaNoElegible')}
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-1">
+                    <Field
+                      id={`linea-${i}-concepto`}
+                      etiqueta={t('facturacion.borrador.concepto')}
+                      aria-describedby={`linea-${i}-ayuda`}
+                      errores={errorLinea?.concepto?.message ? [errorLinea.concepto.message] : undefined}
+                      {...register(`lineas.${i}.concepto`)}
+                    />
+                    <p id={`linea-${i}-ayuda`} className="text-muted-foreground text-xs">
+                      {t('facturacion.borrador.ayudaConcepto')}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {deSesion === null && (
+                      <Field
+                        id={`linea-${i}-cantidad`}
+                        etiqueta={t('facturacion.borrador.cantidad')}
+                        inputMode="numeric"
+                        errores={errorLinea?.cantidad?.message ? [errorLinea.cantidad.message] : undefined}
+                        {...register(`lineas.${i}.cantidad`)}
+                      />
+                    )}
+                    <Field
+                      id={`linea-${i}-precio`}
+                      etiqueta={t('facturacion.borrador.precio')}
+                      inputMode="decimal"
+                      errores={errorLinea?.precio?.message ? [errorLinea.precio.message] : undefined}
+                      {...register(`lineas.${i}.precio`)}
+                    />
+                    <Seleccion
+                      id={`linea-${i}-regimen`}
+                      etiqueta={t('facturacion.borrador.regimen')}
+                      textoVacio={t('facturacion.borrador.regimenElegir')}
+                      opciones={[
+                        { valor: 'exento_sanitario', texto: t('facturacion.borrador.exento') },
+                        { valor: 'general', texto: t('facturacion.borrador.general') },
+                      ]}
+                      errores={errorLinea?.regimen_iva?.message ? [errorLinea.regimen_iva.message] : undefined}
+                      {...register(`lineas.${i}.regimen_iva`)}
+                    />
+                  </div>
+                  <div>
+                    <Button type="button" variante="fantasma" tamano="sm" onClick={() => remove(i)}>
+                      {t('facturacion.borrador.quitar')}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {errors.lineas?.message && (
+              <p role="alert" className="text-destructive text-sm">
+                {errors.lineas.message}
+              </p>
+            )}
+            <div>
+              <Button type="button" variante="contorno" onClick={() => append(LINEA_LIBRE)}>
+                {t('facturacion.borrador.anadirLibre')}
+              </Button>
+            </div>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-2 text-sm font-semibold">{t('facturacion.borrador.destinatario')}</legend>
+            <label className="inline-flex min-h-11 items-center gap-3 text-sm">
+              <input type="radio" value="paciente" {...register('destinatario.modo')} />
+              {t('facturacion.borrador.destinatarioPaciente')}
+            </label>
+            {borrador && (
+              <label className="inline-flex min-h-11 items-center gap-3 text-sm">
+                <input type="radio" value="conservar" {...register('destinatario.modo')} />
+                {tCon('facturacion.borrador.destinatarioConservar', { nombre: borrador.destinatarioNombre })}
+                {borrador.tieneNif ? ` · ${t('facturacion.borrador.destinatarioConservarNif')}` : ''}
+              </label>
+            )}
+            <label className="inline-flex min-h-11 items-center gap-3 text-sm">
+              <input type="radio" value="tercero" {...register('destinatario.modo')} />
+              {t('facturacion.borrador.destinatarioTercero')}
+            </label>
+            {modo === 'tercero' && (
+              <div className="flex flex-col gap-3 pl-1">
+                <Field
+                  id="tercero-nombre"
+                  etiqueta={t('facturacion.borrador.terceroNombre')}
+                  autoComplete="off"
+                  errores={errors.destinatario?.nombre?.message ? [errors.destinatario.nombre.message] : undefined}
+                  {...register('destinatario.nombre')}
+                />
+                <Seleccion
+                  id="tercero-tipo"
+                  etiqueta={t('facturacion.borrador.terceroTipo')}
+                  textoVacio={t('facturacion.borrador.terceroTipoElegir')}
+                  opciones={[
+                    { valor: 'fisica', texto: t('facturacion.borrador.fisica') },
+                    { valor: 'juridica', texto: t('facturacion.borrador.juridica') },
+                  ]}
+                  errores={errors.destinatario?.tipo?.message ? [errors.destinatario.tipo.message] : undefined}
+                  {...register('destinatario.tipo')}
+                />
+                <Field
+                  id="tercero-nif"
+                  etiqueta={t('facturacion.borrador.terceroNif')}
+                  autoComplete="off"
+                  spellCheck={false}
+                  errores={errors.destinatario?.nif?.message ? [errors.destinatario.nif.message] : undefined}
+                  {...register('destinatario.nif')}
+                />
+              </div>
+            )}
+          </fieldset>
+
+          <dl className="grid grid-cols-3 gap-2 text-sm">
+            <div>
+              <dt className="text-muted-foreground">{t('facturacion.borrador.base')}</dt>
+              <dd>{importes ? formatearImporte(importes.base) : '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">{t('facturacion.borrador.cuota')}</dt>
+              <dd>{importes ? formatearImporte(importes.cuota) : '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">{t('facturacion.borrador.total')}</dt>
+              <dd className="font-semibold">{importes ? formatearImporte(importes.total) : '—'}</dd>
+            </div>
+          </dl>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="submit"
+              aria-disabled={enviando || bloqueadoPorCita || undefined}
+              className="aria-disabled:opacity-50"
+            >
+              {enviando ? t('facturacion.borrador.guardando') : t('facturacion.borrador.guardar')}
+            </Button>
+            {actual && (
+              <Button
+                type="button"
+                variante="contorno"
+                onClick={() => {
+                  setErrorDialogo('');
+                  setDescartando(true);
+                }}
+              >
+                {t('facturacion.borrador.descartar')}
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+
+      {errorGeneral && !descartado && (
         <p role="alert" className="text-destructive text-sm">
           {errorGeneral}
         </p>
       )}
-      {mensaje && (
-        <p role="status" className="text-sm">
-          {mensaje}
-        </p>
-      )}
+      <p
+        ref={estado}
+        role="status"
+        tabIndex={-1}
+        className={descartado ? 'text-sm font-medium outline-none' : 'text-sm outline-none'}
+      >
+        {descartado ? t('facturacion.borrador.descartadoAviso') : mensaje}
+      </p>
       {enlaceFicha}
 
       <DialogoDescartar
