@@ -2,12 +2,13 @@
 
 > Memoria viva. Máximo 80 líneas. Solo presente. Diseño en tickets y bitácora; reglas en `.claude/rules/`.
 
-**Actualizado**: 14-10-2026 · T-026a cerrado y fusionado en `main` (merge `99345aa`).
+**Actualizado**: 16-10-2026 · T-046 implementado en su rama, pendiente de verificación y revisión.
 
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048, T-049, T-050 (T-023 en 20261013120000) y T-026a (20261014120000, Holded «no disponible», sin red).
-- **Siguiente en `supabase/`**: T-046 (20261015120000) → T-023b → T-047.
+- **En rama**: T-046 (20261015120000, editor del borrador; bitácora `docs/bitacora/T-046.md`).
+- **Siguiente en `supabase/`**: T-046 → T-023b → T-047.
 
 ## Bloqueos
 
@@ -16,7 +17,7 @@
 
 ## Siguiente paso
 
-1. **T-046** (editor del borrador) y **T-023b** (listado de facturas y cobro contra factura).
+1. **T-046**: verificación y dos revisores; después **T-023b** (listado de facturas y cobro contra factura).
 2. **T-047**: rama hecha; espera a que se fusionen sus migraciones previas (20261015 y 20261016).
 3. **T-027** (bonos): parado a medias.
 4. Limpiar worktrees: T-038, T-042, agent-* (incluido agent-a49560e9e3018f241), ramas a15498..., t050-r1-backup y worktree-agent-a5bed24d86d4a0141 (T-026a). Unlink de la junction antes de `git worktree remove`.
@@ -39,13 +40,15 @@
 - **B5-H1 (BAJA, T-043)**: `setAviso('')` en `formulario-alta.tsx:161` y `:181` borra «acaba de ocuparse». Arreglo y prueba negativa en `tickets/T-043/revision-b.ronda5.md`.
 - **`formulario-alta.test.tsx` (T-043)**: colas de `mockResolvedValueOnce` sin `mockReset` antes de R11; la de la línea 966 cae con vitest en paralelo (`waitFor` de 1 s).
 - **Propuesta al propietario (T-043 r5)**: medir siempre sobre `git archive <hash>`, nunca en el worktree de la rama. Requiere `.claude/`.
-- **T-021 A4-H1 (BAJA)**: si Q < 0,5 céntimos ninguna cuota sella. Pasa a T-046.
+- **T-021 A4-H1**: resuelto en T-046 (cuota sobre la suma general; menos de 0,5 céntimos → `cuota_minima`).
 - **T-021 seguimiento (r4)**: B4-H1, B4-H2, B4-H3, A4-H2, A4-H3. Futuro.
 - **Solape de calendario 16/21 (T-049)**: coinciden un lunes en 2026-2028, en verde. Requiere ticket.
 - **Colisión interna del 16 (T-049)**: C7 frente a la serie de 12:00 de `desde_8_martes`, un jueves hacia mediodía en enero-febrero. Requiere ticket.
 - **`16-series.sql:702`**: comentario desfasado (nombra `current_date + 300`).
 - **T-049 H1/H2 (BAJA)**: `fechas-fijas.mjs` solo caza `AAAA-MM-DD`; un directorio como argumento sale 1 con traza.
 - **`scripts/psql.mjs` `localizarContenedor`**: toma el primer `supabase_db_*`; comprobar `Contenedor:`.
+- **T-046 · territorio**: `vitest.bd.config.ts` está en el territorio final del diseño §6 pero no en el `territorio:` del ticket; `territorio.mjs T-046` lista 1060 ficheros (no compara con la base de la rama).
+- **T-046 fuera de alcance**: T-027 deja poner bono a una cita que ya está en un borrador vivo; las citas de un paciente absorbido no se ofrecen en el borrador; `scripts/rls/README.md` fila 30 dice 40 aserciones y salen 41; `app/layout.tsx:45` (`LayoutProps`) falla en `tsc` sin build previo; P3 (fila `lib/economico/**` en `pipeline.md`) la decide el propietario.
 - **`territorio.mjs`**: no reconoce `territorio:` con comentario en la línea ni la lista YAML (T-043), ni lee bien sus comentarios (T-026a). Usuario. Ejecutarlo dentro del worktree.
 - **Gate de merge**: bloquea `git merge main` con sellos antiguos; el diseño se lee con `git show main:<ruta>`.
 - **Build**: Turbopack falla con `node_modules` como junction; usar `npx next build --webpack`. Si muere con `WasmHash…`, borrar `.next/cache/webpack`.
