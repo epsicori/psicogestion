@@ -28,7 +28,10 @@ const REFERENCIA = `T-023 spec ${Date.now()}`;
 const MARCA = Date.now();
 const NUMERO = `E2E-${MARCA}`;
 const REFERENCIA_SUELTO = `E2E-T023b-${MARCA}`;
-const AVISO_FORMA = 'La forma de pago no es válida: se muestran todas.';
+// Paso 10: una factura y un cobro suelto de Lucía (de Ana, centro Madrid) para que el técnico tenga «Asignar».
+const NUMERO_LUCIA = `E2E-L-${MARCA}`;
+const REFERENCIA_LUCIA = `E2E-T023b-L-${MARCA}`;
+const AVISO_FORMA ='La forma de pago no es válida: se muestran todas.';
 const ADMIN ='b0080001-0000-4000-8000-000000000001';
 
 test.describe.configure({ mode: 'serial' });
@@ -47,6 +50,19 @@ test.beforeAll(() => {
     insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por, referencia)
     select p.id, 0.01, current_date, 'efectivo', '${ADMIN}', '${REFERENCIA_SUELTO}'
       from public.pacientes p where p.nombre = 'Sofía' and p.apellidos = 'Nieto' limit 1;
+
+    with p as (select id, profesional_id from public.pacientes where nombre = 'Lucía' and apellidos = 'Márquez' limit 1),
+    b as (
+      insert into public.borradores_factura (id, paciente_id, profesional_id, creado_por)
+      select gen_random_uuid(), p.id, p.profesional_id, '${ADMIN}' from p returning id, paciente_id
+    )
+    insert into public.facturas_espejo
+      (id, borrador_id, paciente_id, proveedor, proveedor_documento_id, numero, fecha_expedicion, base, cuota_iva, total, url_proveedor)
+    select gen_random_uuid(), b.id, b.paciente_id, 'holded', 'E2E-T023b-L-${MARCA}', '${NUMERO_LUCIA}', current_date,
+           10.00, 0.00, 10.00, 'https://programa.example/doc/l-${MARCA}' from b;
+    insert into public.cobros (paciente_id, importe, fecha, forma_pago, registrado_por, referencia)
+    select p.id, 0.01, current_date, 'efectivo', '${ADMIN}', '${REFERENCIA_LUCIA}'
+      from public.pacientes p where p.nombre = 'Lucía' and p.apellidos = 'Márquez' limit 1;
   `;
   expect(ejecutarSql(contenedorDelProyecto(), guion)).toBe(0);
 });
@@ -339,17 +355,21 @@ test('8 · asignar el cobro suelto: Escape devuelve el foco, se asigna, aparece 
   const selector = dialogo.getByLabel('Cobro', { exact: true });
   const opcion = selector.locator('option', { hasText: REFERENCIA_SUELTO });
   await expect(opcion).toHaveCount(1);
+  // Precondición: es el único cobro suelto de Sofía (el marcador de posición y él). Si la base trae más,
+  // «ya no se ofrece» no probaría el último: se pide `db reset` + `seed`.
+  await expect(selector.locator('option'), 'Sofía tiene más cobros sueltos: db reset + seed').toHaveCount(2);
   await selector.selectOption((await opcion.getAttribute('value'))!);
   await dialogo.getByRole('button', { name: 'Asignar un cobro', exact: true }).click();
   await expect(dialogo).toBeHidden();
   await expect(fila(page).getByTestId('cobro-de-factura')).toHaveCount(2);
 
-  // Ya no se ofrece: o el botón desaparece (no quedan cobros sueltos) o la lista no lo trae.
-  if ((await boton.count()) > 0) {
-    await boton.click();
-    await expect(page.getByRole('dialog', { name: `Asignar un cobro · factura ${NUMERO}` })).toBeVisible();
-    await expect(page.getByRole('dialog').locator('option', { hasText: REFERENCIA_SUELTO })).toHaveCount(0);
-  }
+  // Era el ÚLTIMO cobro suelto de Sofía (precondición comprobada arriba): ya no se ofrece, sin condicional.
+  await expect(boton).toHaveCount(0);
+  // El aviso se anuncia y el foco no cae en `body`: la región de estado sigue ahí y lo recibe (H1).
+  const aviso = fila(page).getByRole('status').filter({ hasText: 'Cobro asignado a la factura' });
+  await expect(aviso).toBeVisible();
+  await expect(aviso).toBeFocused();
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
 });
 
 test('9 · el filtro de forma de pago vive en la URL y uno inválido se avisa', async ({ page }) => {
@@ -364,16 +384,26 @@ test('9 · el filtro de forma de pago vive en la URL y uno inválido se avisa', 
   await expect(page.getByText(AVISO_FORMA)).toBeVisible();
 });
 
-test('10 · el técnico ve la fila y ninguna respuesta lleva datos clínicos', async ({ page }) => {
+test('10 · el técnico ve la fila, abre «Asignar» y ninguna respuesta (documento, RSC ni POST de la acción) lleva datos clínicos', async ({
+  page,
+}) => {
   await page.setViewportSize(MOVIL);
-  const cuerpos: string[] = [];
-  page.on('response', async (respuesta) => {
-    if (respuesta.request().method() !== 'GET' || !respuesta.url().includes('/facturacion')) return;
-    try {
-      cuerpos.push(await respuesta.text());
-    } catch {
-      /* respuesta sin cuerpo */
+  // `page.on('response')` no puede leer el cuerpo de los POST de las Server Actions: se interceptan las
+  // páginas, las cargas RSC y los POST, se lee el cuerpo y se entrega tal cual (como accesibilidad/borrador.spec.ts).
+  const lecturas: Promise<string | null>[] = [];
+  await page.route('**/*', async (ruta) => {
+    const peticion = ruta.request();
+    if (peticion.method() !== 'POST' && !['document', 'fetch'].includes(peticion.resourceType())) {
+      await ruta.continue();
+      return;
     }
+    const lectura = ruta.fetch({ maxRedirects: 0 }).then(async (respuesta) => {
+      const cuerpo = await respuesta.text();
+      await ruta.fulfill({ response: respuesta, body: cuerpo });
+      return cuerpo;
+    });
+    lecturas.push(lectura.catch(() => null));
+    await lectura.catch(() => ruta.abort());
   });
   await page.goto('/login');
   await page.getByLabel('Correo').fill('tecnico@psicogestion.test');
@@ -381,8 +411,20 @@ test('10 · el técnico ve la fila y ninguna respuesta lleva datos clínicos', a
   await page.getByRole('button', { name: 'Entrar' }).click();
   await page.waitForURL((url) => !url.pathname.includes('/login'));
   await page.goto('/facturacion');
-  await expect(fila(page)).toBeVisible();
+  const filaLucia = page.getByRole('listitem').filter({ hasText: NUMERO_LUCIA });
+  await expect(filaLucia).toBeVisible();
+  // Abrir «Asignar» dispara la acción `cargarCobrosAsignables`: su respuesta es un POST.
+  await filaLucia.getByRole('button', { name: `Asignar un cobro a la factura ${NUMERO_LUCIA}`, exact: true }).click();
+  const dialogo = page.getByRole('dialog', { name: `Asignar un cobro · factura ${NUMERO_LUCIA}` });
+  await expect(dialogo.locator('option', { hasText: REFERENCIA_LUCIA })).toHaveCount(1);
+  const cuerpos = (await Promise.all(lecturas)).filter((c): c is string => c !== null);
   expect(cuerpos.length).toBeGreaterThan(0);
+  // Control: el POST de la acción se leyó de verdad (trae el cobro suelto que el diálogo enseña); sin esto,
+  // su ausencia de columnas prohibidas no diría nada.
+  expect(
+    cuerpos.some((c) => c.includes(REFERENCIA_LUCIA) && !c.includes('<html')),
+    'no se leyó la respuesta POST de cargarCobrosAsignables',
+  ).toBe(true);
   for (const prohibido of ['tipo_terapia_id', 'cita_id', 'borrador_id', 'destinatario', '"lineas"']) {
     expect(
       cuerpos.some((c) => c.includes(prohibido)),
