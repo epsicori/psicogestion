@@ -84,14 +84,15 @@ async function BloqueAnio({ parametros }: { parametros: ParametrosAgenda }) {
     listarProfesionalesDelAnio(sesion, { desde, hasta, zona, centroId: centro }),
   ]);
   if (!densidad.ok) return <AvisoDeError mensaje={densidad.mensaje} />;
+  // Una lista vacía ocultaría el selector con un filtro activo en la URL (D20).
+  if (!lista.ok) return <AvisoDeError mensaje={lista.mensaje} />;
 
   const vista = construirVistaAnio({
     fecha,
     zona,
     hoy,
     dias: densidad.dias,
-    // Sin la lista el año sigue: solo se queda sin el filtro de profesional.
-    profesionales: lista.ok ? lista.profesionales : [],
+    profesionales: lista.profesionales,
   });
 
   return (

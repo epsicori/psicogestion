@@ -160,4 +160,19 @@ describe('PaginaAgenda · vista anual (T-047)', () => {
     expect(arbol.type).not.toBe(CalendarioAnio);
     expect(arbol.props.mensaje).toBe('No se pudo.');
   });
+
+  it('si falla la lista de profesionales, BloqueAnio muestra el aviso de error y no una lista vacía', async () => {
+    contexto({});
+    vi.mocked(leerDensidadAnual).mockResolvedValue({ ok: true, dias: [{ dia: '2026-03-03', recuento: 2 }] });
+    vi.mocked(listarProfesionalesDelAnio).mockResolvedValue({
+      ok: false,
+      motivo: 'desconocido',
+      mensaje: 'No se pudo la lista.',
+    } as never);
+
+    const anio = suspenseDelCalendario(await cuerpoCon({ vista: 'anio' }));
+    const arbol = await ejecutar(anio.props.children);
+    expect(arbol.type).not.toBe(CalendarioAnio);
+    expect(arbol.props.mensaje).toBe('No se pudo la lista.');
+  });
 });

@@ -42,6 +42,7 @@ test.describe('escritorio', () => {
     await entrar(page);
     await page.goto(URL_ANIO);
 
+    await expect(page.locator('a[data-dia]').first()).toBeVisible();
     await expect(page.getByRole('grid')).toHaveCount(12);
     // Tab entra en un único día: el resto tiene tabindex=-1.
     await expect(page.locator('a[data-dia][tabindex="0"]')).toHaveCount(1);
@@ -73,6 +74,9 @@ test.describe('escritorio', () => {
   test('con ratón caben cuatro meses por fila y el documento no se desplaza', async ({ page }) => {
     await entrar(page);
     await page.goto(URL_ANIO);
+    // Hasta que no hay días no es la página resuelta: antes se ve el esqueleto, que mide 0.
+    await expect(page.locator('a[data-dia]').first()).toBeVisible();
+    await expect(page.getByRole('grid')).toHaveCount(12);
     const ys = await page.evaluate(() =>
       Array.from(document.querySelectorAll('.meses-anio > section')).map((s) => Math.round(s.getBoundingClientRect().top)),
     );
@@ -89,6 +93,7 @@ test.describe('360 px táctil', () => {
   test('sin desplazamiento horizontal y todo día mide al menos 44 × 44 px', async ({ page }) => {
     await entrar(page);
     await page.goto(URL_ANIO);
+    await expect(page.locator('a[data-dia]').first()).toBeVisible();
     await expect(page.getByRole('grid')).toHaveCount(12);
 
     expect(await desbordamiento(page)).toBeLessThanOrEqual(0);
