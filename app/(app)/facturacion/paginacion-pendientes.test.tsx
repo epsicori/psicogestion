@@ -46,6 +46,20 @@ describe('PaginacionPendientes (B-H6)', () => {
     );
   });
 
+  it('T-027: con `nombre` la navegación se llama como se pide (los bonos no son «pendiente de cobro»)', () => {
+    render(
+      <PaginacionPendientes
+        pagina={1}
+        rango="rango"
+        anterior={null}
+        siguiente="/facturacion/bonos?pagina=2"
+        nombre={t('bonos.paginacion.nombre')}
+      />,
+    );
+    expect(screen.getByRole('navigation', { name: t('bonos.paginacion.nombre') })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: t('cobros.paginacion.nombre') })).toBeNull();
+  });
+
   it('clic en «Siguientes» y nueva página: el foco va al rango', () => {
     const { rerender } = render(pintarPagina(1));
     fireEvent.click(screen.getByRole('link', { name: t('cobros.paginacion.siguientes') }));

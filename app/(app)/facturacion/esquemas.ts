@@ -10,7 +10,7 @@ export const FORMAS_DE_PAGO = ['efectivo', 'transferencia', 'tarjeta', 'bizum', 
 export const LIMITE_CENTIMOS = 999_999_999_999;
 
 /** `aCentimos` lanza con lo que no es un importe; aquí eso es `null`. */
-function leerCentimos(texto: string): Centimos | null {
+export function leerCentimos(texto: string): Centimos | null {
   try {
     return aCentimos(texto);
   } catch {
@@ -19,7 +19,7 @@ function leerCentimos(texto: string): Centimos | null {
 }
 
 /** «» o solo espacios (lo que manda un campo vacío) → `undefined`, como en `pacientes/esquemas.ts`. */
-const opcional = (esquema: z.ZodType<string>) =>
+export const opcional = (esquema: z.ZodType<string>) =>
   z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), esquema.optional());
 
 /**

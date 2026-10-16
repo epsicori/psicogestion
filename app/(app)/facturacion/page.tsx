@@ -72,6 +72,14 @@ export default function PaginaFacturacion({ searchParams }: { searchParams: Para
         }
       />
 
+      {/* Estático: no depende de la petición ni de ningún dato. Los bonos se consultan en su pantalla. */}
+      <Link
+        href="/facturacion/bonos"
+        className="inline-flex min-h-11 w-fit items-center text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        {t('facturacion.enlaceBonos')}
+      </Link>
+
       <Suspense fallback={null}>
         <SelectorSiAdministrador searchParams={searchParams} />
       </Suspense>

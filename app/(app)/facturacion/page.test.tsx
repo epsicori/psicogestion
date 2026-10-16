@@ -82,6 +82,14 @@ describe('PaginaFacturacion', () => {
     }
   });
 
+  it('T-027: un enlace estático «Bonos», fuera de todo Suspense', () => {
+    const enlace = elementos(PaginaFacturacion({ searchParams: PARAMETROS })).find(
+      (n) => n.props.href === '/facturacion/bonos',
+    );
+    expect(enlace?.dentroDeSuspense).toBe(false);
+    expect(enlace?.props.children).toBe(t('facturacion.enlaceBonos'));
+  });
+
   it.each(['profesional_sanitario', 'tecnico_administrativo'])(
     'para %s no hay selector de profesional, ni se cargan las opciones',
     async (rol) => {

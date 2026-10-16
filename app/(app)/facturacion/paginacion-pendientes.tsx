@@ -11,6 +11,8 @@ type Props = {
   rango: string;
   anterior: string | null;
   siguiente: string | null;
+  /** El nombre accesible de la navegación. Por defecto, el de «Pendiente de cobro». */
+  nombre?: string;
 };
 
 const ENLACE_DE_PAGINA =
@@ -27,7 +29,13 @@ const ENLACE_DE_PAGINA =
 let destino: number | null = null;
 
 /** La navegación de «Pendiente de cobro»: tras pasar de página, el foco va al rango, no se pierde. */
-export function PaginacionPendientes({ pagina, rango, anterior, siguiente }: Props) {
+export function PaginacionPendientes({
+  pagina,
+  rango,
+  anterior,
+  siguiente,
+  nombre = t('cobros.paginacion.nombre'),
+}: Props) {
   const rangoRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -44,7 +52,7 @@ export function PaginacionPendientes({ pagina, rango, anterior, siguiente }: Pro
 
   return (
     <nav
-      aria-label={t('cobros.paginacion.nombre')}
+      aria-label={nombre}
       className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3"
     >
       <p ref={rangoRef} tabIndex={-1} className="text-xs text-muted-foreground outline-none">

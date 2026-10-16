@@ -9,6 +9,7 @@ import { PanelAnclado } from '@/components/ui/panel-anclado';
 import { t, tCon } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
+import { BonoDeCita } from './bono-de-cita';
 import { FilaPropuesta } from './fila-propuesta';
 import type { CitaVista } from './vista';
 
@@ -72,6 +73,8 @@ export function PanelCita({ cita, ancla, respaldo, limites, alCerrar, pausado, a
         <Campo etiqueta={t('agenda.panelCita.estado')}>
           <PuntoEstadoCita estado={cita.estado} late={false} />
         </Campo>
+        {/* El bono se pide al abrir el panel (T-027 §1.8); el técnico no lo ve: no lee `citas`. */}
+        <BonoDeCita key={cita.id} citaId={cita.id} />
         {cita.deSerie && (
           <Campo etiqueta={t('agenda.panelCita.serie')}>
             {cita.desviada

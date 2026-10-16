@@ -2,7 +2,7 @@
 
 > Memoria viva. Máximo 80 líneas. Solo presente. Diseño en tickets y bitácora; reglas en `.claude/rules/`.
 
-**Actualizado**: 14-10-2026 · T-026a cerrado y fusionado en `main` (merge `99345aa`).
+**Actualizado**: 16-10-2026 · T-027 cerrado en su rama (0b698a8, sin migración); T-026a en `main` (`99345aa`).
 
 ## Dónde estamos
 
@@ -18,10 +18,13 @@
 
 1. **T-046** (editor del borrador) y **T-023b** (listado de facturas y cobro contra factura).
 2. **T-047**: rama hecha; espera a que se fusionen sus migraciones previas (20261015 y 20261016).
-3. **T-027** (bonos): parado a medias.
+3. **T-027** (bonos): hecho en rama, espera merge. Propietario: comprobar a mano los criterios 5-7 (sin `QA_PASSWORD_ADMINISTRADOR` no hubo QA; `docs/bitacora/T-027.md`).
 4. Limpiar worktrees: T-038, T-042, agent-* (incluido agent-a49560e9e3018f241), ramas a15498..., t050-r1-backup y worktree-agent-a5bed24d86d4a0141 (T-026a). Unlink de la junction antes de `git worktree remove`.
 
 ## Hallazgos anotados
+
+- **T-027 ronda 2 (5 BAJA, `tickets/T-027/revision.md`)**: H3 `bono-de-cita.tsx:147` foco a `body` tras el éxito; H7 `:40` guardas de relectura sin prueba; H8 `acciones-bono.ts:156` «quedan» de cita pasada sin descontar la propia; H9 `registrar-bono.tsx:40` `removeItem` que lanza sin prueba; H10 `:24` clave en `sessionStorage` sin ligar al usuario.
+- **T-027 fuera de alcance**: cita realizada con bono agotado no se cobra; no hay control de «marcar realizada» (ticket de asistencia); T-027 debería impedir dar un bono a una cita en un borrador sin descartar (diseño de T-046).
 
 - **T-026a · D-B1 (BAJA, prueba)**: quitar el `return` de `supabase/migrations/20261014120000_proveedor_facturacion.sql:816` deja el banco en verde. Arreglo: en 31.C8, exigir 0 avisos de DOC-A con origen `borradores_factura_envios`. Requiere ticket.
 - **T-026a · QA**: la visita de los verificadores necesita `QA_PASSWORD_ADMINISTRADOR` en el entorno; sin ella no hay `pantalla.json`. Pendiente la de 1a464c2.

@@ -5,7 +5,8 @@ modelo: sonnet
 fase: 2
 prioridad: media
 depende_de: [T-021, T-023, T-007]
-estado: pendiente
+estado: hecho
+completado: 2026-10-16
 ---
 
 # Contexto

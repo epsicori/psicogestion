@@ -8,6 +8,7 @@ import { t, tCon } from '@/lib/i18n';
 
 import { cargarIndicadorDeRiesgo, cargarPaciente, cargarRol } from './datos';
 import { FichaCliente } from './ficha-cliente';
+import { PanelBonos } from './panel-bonos';
 import { PanelDatos } from './panel-datos';
 import { PanelDiferido } from './panel-diferido';
 import { PanelDocumentos } from './panel-documentos';
@@ -148,9 +149,14 @@ async function Cuerpo({ params }: { params: Promise<{ id: string }> }) {
         </Suspense>
       }
       facturacion={
-        <Suspense fallback={<Cargando filas={4} />}>
-          <PanelFacturacion pacienteId={paciente.id} rol={rol} />
-        </Suspense>
+        <div className="flex flex-col gap-8">
+          <Suspense fallback={<Cargando filas={4} />}>
+            <PanelFacturacion pacienteId={paciente.id} rol={rol} />
+          </Suspense>
+          <Suspense fallback={<Cargando filas={3} />}>
+            <PanelBonos pacienteId={paciente.id} />
+          </Suspense>
+        </div>
       }
     />
   );

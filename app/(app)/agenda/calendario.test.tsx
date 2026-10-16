@@ -11,6 +11,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn() }),
 }));
 
+// El panel de la cita monta el bono (T-027), que lee por una Server Function: aquí no hay nada que leer.
+vi.mock('./acciones-bono', () => ({
+  leerBonoDeCita: vi.fn().mockResolvedValue({ visible: false }),
+  vincularBono: vi.fn(),
+}));
+
 // FilaPropuesta importa las acciones, que tocan Supabase: aquí no se ejecuta ninguna.
 vi.mock('./acciones', () => ({
   confirmarPropuestaAgenda: vi.fn(),
