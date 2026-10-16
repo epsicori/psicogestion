@@ -6,7 +6,8 @@ riesgo: alto            # lectura nueva en la base sobre `citas` y `citas_agenda
 fase: 1
 prioridad: media
 depende_de: [T-014, T-039]   # T-014: el calendario, la barra y los filtros; T-039: la última forma de `agenda_citas_rango` y `citas_agenda`
-estado: pendiente
+estado: hecho
+completado: 2026-10-16
 delegable: volumen      # SOLO dos piezas de pintura: la leyenda de densidad y el esqueleto del año (§Delegable); todo lo demás, la fábrica
 territorio:             # provisional; lo cierra tickets/T-047/diseno.md §6
   - supabase/migrations/20261017120000_agenda_densidad_anual.sql   # cola de un solo dueño: después de la reserva de T-023b (20261016120000)

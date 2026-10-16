@@ -30,3 +30,6 @@ Lecciones de la vista semanal y el reprogramar. Antes de escribir lógica de cit
 - La frase de serie («los viernes a las 10:00») sale de `describirPrevisualizacion`, que **solo formatea** lo que da `agenda_previsualizar_edicion_serie`. No calcula ordinal, día de semana, ni fechas nuevas. (T-014 + T-011b)
 - Los ordinales (1.º–5.º) son indexar arrays de `diasPlural`, `ordinales`; nunca cálculo.
 - «Último» sale solo si `regla.ultimo` de la base.
+
+## Vista anual
+- Un filtro de centro o de profesional no admite `or centro_id is null`: deja entrar citas sin centro en cualquier filtro. Las lecturas del año (`agenda_densidad_anual`, `agenda_profesionales_anuales`) usan el oráculo `agenda_citas_rango` mes a mes. (T-047)
