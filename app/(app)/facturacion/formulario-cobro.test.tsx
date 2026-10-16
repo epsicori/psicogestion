@@ -239,4 +239,68 @@ describe('FormularioCobro', () => {
     pintar();
     expect(document.body.textContent).not.toMatch(/emitir|facturar|expedir|aprobar|crear factura/i);
   });
+
+  describe('modo factura (T-023b)', () => {
+    const FACTURA = { id: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d', numero: 'F-2026-0007', pacienteId: PACIENTE, paciente: 'Ruiz, Ana' };
+
+    function pintarDeFactura() {
+      const alRegistrar = vi.fn();
+      render(
+        <FormularioCobro
+          pacientes={[]}
+          factura={FACTURA}
+          hoy={HOY}
+          claveDeEnvio={() => ID_FIJO}
+          alRegistrar={alRegistrar}
+        />,
+      );
+      return alRegistrar;
+    }
+
+    function rellenarDeFactura(importe: string) {
+      fireEvent.change(screen.getByLabelText(t('cobros.importe')), { target: { value: importe } });
+      fireEvent.change(screen.getByLabelText(t('cobros.formaPago')), { target: { value: 'bizum' } });
+    }
+
+    it('el paciente es texto fijo, sin selector, y el cobro va con pacienteId y facturaEspejoId de la factura', async () => {
+      registrarCobro.mockResolvedValue({ mensaje: t('cobros.cobroRegistrado') });
+      const alRegistrar = pintarDeFactura();
+      expect(screen.queryByLabelText(t('cobros.paciente'))).toBeNull();
+      expect(screen.getByText('Ruiz, Ana')).toBeInTheDocument();
+      rellenarDeFactura('60,00');
+      await enviar();
+      await waitFor(() => expect(alRegistrar).toHaveBeenCalledTimes(1));
+      expect(registrarCobro).toHaveBeenCalledWith(
+        expect.objectContaining({ pacienteId: PACIENTE, facturaEspejoId: FACTURA.id, importe: '60,00' }),
+      );
+    });
+
+    it('una devolución que supera lo cobrado se ve junto al importe y no se da por registrada', async () => {
+      registrarCobro.mockResolvedValue({ errores: { importe: [t('cobros.facturas.devolucionSuperaLoCobrado')] } });
+      const alRegistrar = pintarDeFactura();
+      rellenarDeFactura('-5,00');
+      fireEvent.change(screen.getByLabelText(t('cobros.motivo')), { target: { value: 'Error' } });
+      await enviar();
+      expect(await screen.findByText(t('cobros.facturas.devolucionSuperaLoCobrado'))).toBeInTheDocument();
+      expect(alRegistrar).not.toHaveBeenCalled();
+      await waitFor(() => expect(document.activeElement?.id).toBe('importe'));
+    });
+
+    it('un error de paciente (p. ej. fusionado) se anuncia en la región de avisos, que no tiene campo donde pintarse', async () => {
+      registrarCobro.mockResolvedValue({ errores: { pacienteId: [t('cobros.pacienteFusionado')] } });
+      pintarDeFactura();
+      rellenarDeFactura('60,00');
+      await enviar();
+      expect(await screen.findByText(t('cobros.pacienteFusionado'))).toBeInTheDocument();
+    });
+
+    it('sin la prop factura, ni texto fijo ni facturaEspejoId (igual que antes)', async () => {
+      registrarCobro.mockResolvedValue({ mensaje: t('cobros.cobroRegistrado') });
+      pintar();
+      rellenar('60,00');
+      await enviar();
+      await waitFor(() => expect(registrarCobro).toHaveBeenCalled());
+      expect(registrarCobro.mock.calls[0][0].facturaEspejoId).toBeUndefined();
+    });
+  });
 });

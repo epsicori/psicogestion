@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialogo } from '@/components/ui/dialogo';
 import { AvisoDeError } from '@/components/ui/piezas';
-import { t } from '@/lib/i18n';
+import { t, tCon } from '@/lib/i18n';
 
 import { FormularioCobro } from './formulario-cobro';
 
@@ -14,6 +14,11 @@ type Props = {
   /** `null`: no se pudo cargar la lista. No se ofrece registrar a ciegas. */
   pacientes: { id: string; nombre: string; apellidos: string }[] | null;
   hoy: string;
+  /**
+   * Modo factura (T-023b): el cobro se registra contra esta factura del espejo. El paciente es el de
+   * la factura (texto fijo, no se elige) y no hace falta la lista de pacientes.
+   */
+  factura?: { id: string; numero: string; pacienteId: string; paciente: string };
 };
 
 /**
@@ -21,7 +26,7 @@ type Props = {
  * botón (lo hace `Dialogo`) y el `role="status"` lo anuncia. La lista se refresca con el
  * `revalidatePath` de la acción.
  */
-export function RegistrarCobro({ pacientes, hoy }: Props) {
+export function RegistrarCobro({ pacientes, hoy, factura }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [aviso, setAviso] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -39,7 +44,7 @@ export function RegistrarCobro({ pacientes, hoy }: Props) {
 
   return (
     <>
-      {pacientes === null ? (
+      {pacientes === null && !factura ? (
         <AvisoDeError mensaje={t('cobros.errorPacientes')} />
       ) : (
         <Button
@@ -51,25 +56,28 @@ export function RegistrarCobro({ pacientes, hoy }: Props) {
           }}
         >
           <Plus />
-          {t('cobros.registrarCobro')}
+          {factura ? tCon('cobros.facturas.registrarDeFactura', { numero: factura.numero }) : t('cobros.registrarCobro')}
         </Button>
       )}
       {/* Visible: «Cobro registrado» es la confirmación de una acción económica, no solo para lectores. */}
       <p role="status" className="text-sm text-foreground">
         {aviso}
       </p>
-      {pacientes !== null && (
+      {(pacientes !== null || factura) && (
         <Dialogo
           abierto={abierto}
           // Con un envío en vuelo no se cierra: el usuario no vería su resultado (B-H11).
           alCerrar={() => {
             if (!enviando) setAbierto(false);
           }}
-          titulo={t('cobros.registrarCobro')}
+          titulo={
+            factura ? tCon('cobros.facturas.tituloRegistrar', { numero: factura.numero }) : t('cobros.registrarCobro')
+          }
           ancho="amplio"
         >
           <FormularioCobro
-            pacientes={pacientes}
+            pacientes={pacientes ?? []}
+            factura={factura}
             hoy={hoy}
             alCambiarEnvio={setEnviando}
             claveDeEnvio={claveDeEnvio}

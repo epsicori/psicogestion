@@ -1,29 +1,31 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { t } from '@/lib/i18n';
+import { t, tCon } from '@/lib/i18n';
 
 // El formulario se sustituye: aquí se prueba el diálogo, el foco y el aviso, no los campos.
+const formulario = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
 vi.mock('./formulario-cobro', () => ({
-  FormularioCobro: ({
-    alRegistrar,
-    alCambiarEnvio,
-  }: {
+  FormularioCobro: (props: {
     alRegistrar: (huella: string, aviso: string) => void;
     alCambiarEnvio: (enviando: boolean) => void;
-  }) => (
-    <>
-      <button type="button" onClick={() => alRegistrar('huella-de-pega', t('cobros.cobroRegistrado'))}>
-        enviar-de-pega
-      </button>
-      <button type="button" onClick={() => alCambiarEnvio(true)}>
-        empieza-de-pega
-      </button>
-      <button type="button" onClick={() => alCambiarEnvio(false)}>
-        acaba-de-pega
-      </button>
-    </>
-  ),
+  }) => {
+    formulario.props.push(props);
+    const { alRegistrar, alCambiarEnvio } = props;
+    return (
+      <>
+        <button type="button" onClick={() => alRegistrar('huella-de-pega', t('cobros.cobroRegistrado'))}>
+          enviar-de-pega
+        </button>
+        <button type="button" onClick={() => alCambiarEnvio(true)}>
+          empieza-de-pega
+        </button>
+        <button type="button" onClick={() => alCambiarEnvio(false)}>
+          acaba-de-pega
+        </button>
+      </>
+    );
+  },
 }));
 
 const { RegistrarCobro } = await import('./registrar-cobro');
@@ -92,5 +94,27 @@ describe('RegistrarCobro', () => {
     const aviso = screen.getByRole('status');
     expect(aviso).toHaveTextContent(t('cobros.cobroRegistrado'));
     expect(aviso.className).not.toContain('sr-only');
+  });
+
+  describe('modo factura (T-023b)', () => {
+    const FACTURA = { id: 'f0000000-0000-4000-8000-000000000001', numero: 'F-2026-0007', pacienteId: 'p1', paciente: 'Ruiz, Ana' };
+
+    it('el disparador nombra la factura y el diálogo también; el formulario recibe la factura', () => {
+      formulario.props.length = 0;
+      render(<RegistrarCobro pacientes={[]} hoy="2026-10-06" factura={FACTURA} />);
+      const boton = screen.getByRole('button', { name: tCon('cobros.facturas.registrarDeFactura', { numero: FACTURA.numero }) });
+      fireEvent.click(boton);
+      expect(
+        screen.getByRole('dialog', { name: tCon('cobros.facturas.tituloRegistrar', { numero: FACTURA.numero }) }),
+      ).toBeInTheDocument();
+      expect(formulario.props.at(-1)?.factura).toEqual(FACTURA);
+    });
+
+    it('en modo factura no hace falta la lista de pacientes: con null sigue habiendo disparador', () => {
+      render(<RegistrarCobro pacientes={null} hoy="2026-10-06" factura={FACTURA} />);
+      expect(
+        screen.getByRole('button', { name: tCon('cobros.facturas.registrarDeFactura', { numero: FACTURA.numero }) }),
+      ).toBeInTheDocument();
+    });
   });
 });
