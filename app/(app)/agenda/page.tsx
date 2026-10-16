@@ -3,20 +3,23 @@ import { Suspense } from 'react';
 
 import { AvisoDeError, Tarjeta } from '@/components/ui/piezas';
 import { leerCitasRango } from '@/lib/citas/agenda';
+import { leerDensidadAnual, listarProfesionalesDelAnio } from '@/lib/citas/densidad';
 import { listarPropuestasPendientes } from '@/lib/citas/propuestas';
 import { t } from '@/lib/i18n';
 
 import { rangoDeVista } from './bloques';
 import { Calendario } from './calendario';
+import { CalendarioAnio } from './calendario-anio';
 import { Cuadro } from './cuadro';
 import { cargarContexto } from './datos';
 import { Documentacion } from './documentacion';
-import { EsqueletoCalendario, EsqueletoCuadro, EsqueletoLista } from './esqueletos';
+import { EsqueletoAnio, EsqueletoCalendario, EsqueletoCuadro, EsqueletoLista } from './esqueletos';
 import { MarcoBloque } from './marco';
-import { leerParametros, type ParametrosAgenda } from './parametros';
+import { leerParametros, type ParametrosAgenda, type VistaConCitas } from './parametros';
 import { PorConfirmar } from './por-confirmar';
 import { Proximas } from './proximas';
 import { construirVista } from './vista';
+import { construirVistaAnio } from './vista-anio';
 import { ZonaPorConfirmar } from './zona-por-confirmar';
 
 type ParametrosDeBusqueda = Promise<Record<string, string | string[] | undefined>>;
@@ -26,7 +29,7 @@ type ParametrosDeBusqueda = Promise<Record<string, string | string[] | undefined
  * y reloj salen de `cargarContexto`, que memoiza por petición: cada bloque lo pide y se lee una
  * vez. Nada se guarda entre peticiones (ADR-043): es lo que ve quien mira, no lo que ve todo el mundo.
  */
-async function BloqueCalendario({ parametros }: { parametros: ParametrosAgenda }) {
+async function BloqueCalendario({ parametros }: { parametros: ParametrosAgenda & { vista: VistaConCitas } }) {
   const contexto = await cargarContexto(parametros.centro);
   if (!contexto.ok) return <AvisoDeError mensaje={contexto.mensaje} />;
   const { sesion, rol, centros, centro, zona, hoy, ahora } = contexto;
@@ -63,16 +66,64 @@ async function BloqueCalendario({ parametros }: { parametros: ParametrosAgenda }
   );
 }
 
+/**
+ * La vista anual (T-047): dos lecturas agregadas en la base —los recuentos por día y los
+ * profesionales con citas del año— y ninguna fila de cita. Misma regla que el bloque anterior:
+ * nada se guarda entre peticiones (ADR-043).
+ */
+async function BloqueAnio({ parametros }: { parametros: ParametrosAgenda }) {
+  const contexto = await cargarContexto(parametros.centro);
+  if (!contexto.ok) return <AvisoDeError mensaje={contexto.mensaje} />;
+  const { sesion, rol, centros, centro, zona, hoy } = contexto;
+
+  const fecha = parametros.fecha ?? hoy;
+  const { desde, hasta } = rangoDeVista('anio', fecha, zona);
+
+  const [densidad, lista] = await Promise.all([
+    leerDensidadAnual(sesion, { desde, hasta, zona, centroId: centro, profesionalId: parametros.profesional }),
+    listarProfesionalesDelAnio(sesion, { desde, hasta, zona, centroId: centro }),
+  ]);
+  if (!densidad.ok) return <AvisoDeError mensaje={densidad.mensaje} />;
+  // Una lista vacía ocultaría el selector con un filtro activo en la URL (D20).
+  if (!lista.ok) return <AvisoDeError mensaje={lista.mensaje} />;
+
+  const vista = construirVistaAnio({
+    fecha,
+    zona,
+    hoy,
+    dias: densidad.dias,
+    profesionales: lista.profesionales,
+  });
+
+  return (
+    <CalendarioAnio
+      key={`anio-${vista.fechaFoco}`}
+      vista={vista}
+      parametros={{ centro: parametros.centro, profesional: parametros.profesional }}
+      centros={centros}
+      centroElegido={centro ?? 'todos'}
+      rol={rol}
+    />
+  );
+}
+
 async function Cuerpo({ searchParams }: { searchParams: ParametrosDeBusqueda }) {
   const parametros = leerParametros(await searchParams);
+  const { vista } = parametros;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="flex min-w-0 flex-col gap-6">
         <Tarjeta className="p-4">
-          <Suspense fallback={<EsqueletoCalendario />}>
-            <BloqueCalendario parametros={parametros} />
-          </Suspense>
+          {vista === 'anio' ? (
+            <Suspense fallback={<EsqueletoAnio />}>
+              <BloqueAnio parametros={parametros} />
+            </Suspense>
+          ) : (
+            <Suspense fallback={<EsqueletoCalendario />}>
+              <BloqueCalendario parametros={{ ...parametros, vista }} />
+            </Suspense>
+          )}
         </Tarjeta>
         <Suspense fallback={<EsqueletoCuadro />}>
           <Cuadro centroParametro={parametros.centro} />

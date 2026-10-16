@@ -2,19 +2,19 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import type { RolUsuario } from '@/components/armazon/modulos';
 import { LeyendaEstadosCita } from '@/components/ui/estado-cita';
-import { Seleccion } from '@/components/ui/seleccion';
 import { t } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
+import { ENLACE_BARRA, FiltrosAgenda, SelectorVista } from './barra-agenda';
 import { DialogoReprogramar } from './dialogo-reprogramar';
 import { ListaDia } from './lista-dia';
 import { PanelCita } from './panel-cita';
 import { PanelDia } from './panel-dia';
+import { hrefAgenda, type Vista } from './parametros';
 import { RejillaMes } from './rejilla-mes';
 import { RejillaSemana } from './rejilla-semana';
 import type { CitaVista, DiaVista, VistaCalendario } from './vista';
@@ -34,16 +34,12 @@ type Panel = { tipo: 'dia'; dia: DiaVista; ancla: HTMLElement } | { tipo: 'cita'
 
 type Reprogramando = { cita: CitaVista; inicial: { fecha: string; hora: string }; desdeArrastre: boolean };
 
-const ENLACE =
-  'border-border bg-background hover:bg-muted focus-visible:ring-ring/50 inline-flex min-h-11 items-center justify-center rounded-lg border px-3 text-sm font-medium outline-none focus-visible:ring-2';
-
 /**
  * La isla del calendario (T-014 §1.6.3): la barra, los filtros, la leyenda, la semana o el mes
  * y lo que se abre encima. Recibe la vista ya calculada en servidor (cadenas y números, ningún
  * `Date`) y solo guarda estado de interfaz: el día en foco, la pila de paneles y el diálogo.
  */
 export function Calendario({ vista, parametros, centros, centroElegido, rol }: Props) {
-  const router = useRouter();
   const [contenedor, setContenedor] = useState<HTMLElement | null>(null);
   const [fechaFoco, setFechaFoco] = useState(vista.fechaFoco);
   const [pila, setPila] = useState<Panel[]>([]);
@@ -97,14 +93,8 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
     }
   }, [pulso, vista.citas, contenedor]);
 
-  function href(cambios: { vista?: 'semana' | 'mes'; fecha?: string | null; centro?: string | null; profesional?: string | null }) {
-    const valores = { vista: vista.vista, fecha: null as string | null, ...parametros, ...cambios };
-    const p = new URLSearchParams();
-    p.set('vista', valores.vista);
-    if (valores.fecha) p.set('fecha', valores.fecha);
-    if (valores.centro) p.set('centro', valores.centro);
-    if (valores.profesional) p.set('profesional', valores.profesional);
-    return `/agenda?${p.toString()}`;
+  function href(cambios: { vista?: Vista; fecha?: string | null; centro?: string | null; profesional?: string | null }) {
+    return hrefAgenda({ vista: vista.vista, fecha: null, ...parametros, ...cambios });
   }
 
   const enMes = vista.vista === 'mes';
@@ -169,82 +159,40 @@ export function Calendario({ vista, parametros, centros, centroElegido, rol }: P
     setPulso((n) => n + 1);
   }
 
-  const opcionesCentro = centros.map((c) => ({ valor: c.id, texto: c.nombre }));
-  const opcionesProfesional = vista.profesionales.map((p) => ({ valor: p.id, texto: p.nombre }));
-  const mostrarCentro = centros.length >= 2;
-  const mostrarProfesional = rol !== 'profesional_sanitario' && vista.profesionales.length >= 2;
-
   return (
     <div ref={setContenedor} className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Link
           href={href({ fecha: vista.anterior })}
           aria-label={enMes ? t('agenda.barra.mesAnterior') : t('agenda.barra.semanaAnterior')}
-          className={cn(ENLACE, 'w-11 px-0')}
+          className={cn(ENLACE_BARRA, 'w-11 px-0')}
         >
           <ChevronLeft aria-hidden="true" className="size-4" />
         </Link>
-        <Link href={href({ fecha: null })} className={ENLACE}>
+        <Link href={href({ fecha: null })} className={ENLACE_BARRA}>
           {t('agenda.barra.hoy')}
         </Link>
         <Link
           href={href({ fecha: vista.siguiente })}
           aria-label={enMes ? t('agenda.barra.mesSiguiente') : t('agenda.barra.semanaSiguiente')}
-          className={cn(ENLACE, 'w-11 px-0')}
+          className={cn(ENLACE_BARRA, 'w-11 px-0')}
         >
           <ChevronRight aria-hidden="true" className="size-4" />
         </Link>
 
         <h2 className="font-serif text-lg">{vista.titulo}</h2>
 
-        <div role="group" aria-label={t('agenda.barra.vista')} className="ml-auto flex gap-1">
-          <Link
-            href={href({ vista: 'semana', fecha: fechaFoco })}
-            aria-current={enMes ? undefined : 'page'}
-            className={cn(ENLACE, !enMes && 'bg-primary text-primary-foreground hover:bg-primary/90 border-primary')}
-          >
-            {t('agenda.barra.semana')}
-          </Link>
-          <Link
-            href={href({ vista: 'mes', fecha: fechaFoco })}
-            aria-current={enMes ? 'page' : undefined}
-            className={cn(ENLACE, enMes && 'bg-primary text-primary-foreground hover:bg-primary/90 border-primary')}
-          >
-            {t('agenda.barra.mes')}
-          </Link>
-        </div>
+        <SelectorVista actual={vista.vista} hrefDe={(v) => href({ vista: v, fecha: fechaFoco })} />
       </div>
 
-      {(mostrarCentro || mostrarProfesional) && (
-        <div className="flex flex-wrap gap-3">
-          {mostrarCentro && (
-            <Seleccion
-              id="filtro-centro"
-              etiqueta={t('agenda.barra.centro')}
-              textoVacio={t('agenda.barra.todosLosCentros')}
-              opciones={opcionesCentro}
-              value={centroElegido === 'todos' ? '' : centroElegido}
-              onChange={(evento) =>
-                router.replace(href({ fecha: vista.fechaFoco, centro: evento.target.value || 'todos' }), { scroll: false })
-              }
-            />
-          )}
-          {mostrarProfesional && (
-            <Seleccion
-              id="filtro-profesional"
-              etiqueta={t('agenda.barra.profesional')}
-              textoVacio={t('agenda.barra.todosLosProfesionales')}
-              opciones={opcionesProfesional}
-              value={parametros.profesional ?? ''}
-              onChange={(evento) =>
-                router.replace(href({ fecha: vista.fechaFoco, profesional: evento.target.value || null }), {
-                  scroll: false,
-                })
-              }
-            />
-          )}
-        </div>
-      )}
+      <FiltrosAgenda
+        centros={centros}
+        centroElegido={centroElegido}
+        rol={rol}
+        profesionales={vista.profesionales}
+        profesionalElegido={parametros.profesional}
+        hrefCon={(cambios) => href({ fecha: vista.fechaFoco, ...cambios })}
+      />
 
       {enMes ? (
         <RejillaMes

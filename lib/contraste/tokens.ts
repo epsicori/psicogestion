@@ -20,6 +20,8 @@ import { interpretarOklch, razonDeContraste, type Oklch } from './contraste';
 /** Umbral AA de WCAG 2.2 para texto normal. El de texto grande es 3.0. */
 export const UMBRAL_AA = 4.5;
 export const UMBRAL_AA_GRANDE = 3.0;
+/** Objetos gráficos y componentes de interfaz (WCAG 1.4.11): 3:1 contra los colores adyacentes. */
+export const UMBRAL_GRAFICO = 3.0;
 
 export type Par = {
   /** Token del texto, sin los dos guiones. */
@@ -30,6 +32,8 @@ export type Par = {
   donde: string;
   /** Cierto si en la interfaz ese par solo aparece en texto grande (≥ 24 px o ≥ 19 px en negrita). */
   grande?: boolean;
+  /** Cierto si es un elemento gráfico sin texto (una barra, un icono): 1.4.11, no 1.4.3. */
+  grafico?: boolean;
 };
 
 /**
@@ -59,6 +63,14 @@ export const PARES: Par[] = [
   { texto: 'primary', fondo: 'background', donde: 'Rótulo «Espacio de trabajo» de la cabecera de Pacientes' },
   { texto: 'primary', fondo: 'muted', donde: 'Píldora success de Pildora (components/ui/piezas.tsx): Cobrado, Firmada, Al día, Vigente…' },
   { texto: 'primary', fondo: 'card', donde: 'Barra de 3 px del hueco habitual en el alta de cita (D7, T-028 B); va con su texto «Habitual»' },
+  { texto: 'foreground', fondo: 'densidad-1', donde: 'Número del día en el mapa de densidad de la agenda anual (T-047)' },
+  { texto: 'foreground', fondo: 'densidad-2', donde: 'Número del día en el mapa de densidad de la agenda anual (T-047)' },
+  { texto: 'foreground', fondo: 'densidad-3', donde: 'Número del día en el mapa de densidad de la agenda anual (T-047)' },
+  { texto: 'foreground', fondo: 'densidad-4', donde: 'Número del día en el mapa de densidad de la agenda anual (T-047)' },
+  { texto: 'primary', fondo: 'densidad-1', grafico: true, donde: 'Barra de 3 px proporcional del día en la agenda anual y en su leyenda (T-047); el color solo no basta, va con el número' },
+  { texto: 'primary', fondo: 'densidad-2', grafico: true, donde: 'Barra de 3 px proporcional del día en la agenda anual y en su leyenda (T-047); el color solo no basta, va con el número' },
+  { texto: 'primary', fondo: 'densidad-3', grafico: true, donde: 'Barra de 3 px proporcional del día en la agenda anual y en su leyenda (T-047); el color solo no basta, va con el número' },
+  { texto: 'primary', fondo: 'densidad-4', grafico: true, donde: 'Barra de 3 px proporcional del día en la agenda anual y en su leyenda (T-047); el color solo no basta, va con el número' },
 ];
 
 const RUTA_GLOBALS = join(process.cwd(), 'app', 'globals.css');
@@ -114,7 +126,7 @@ export function revisarTokens(tokens: Map<string, Oklch> = leerTokens()): Fallo[
       );
     }
 
-    const umbral = par.grande ? UMBRAL_AA_GRANDE : UMBRAL_AA;
+    const umbral = par.grande ? UMBRAL_AA_GRANDE : par.grafico ? UMBRAL_GRAFICO : UMBRAL_AA;
     const razon = razonDeContraste(fondo, texto);
     if (razon < umbral) {
       fallos.push({ par, razon, umbral });

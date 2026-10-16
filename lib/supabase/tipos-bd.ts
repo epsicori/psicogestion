@@ -4046,6 +4046,19 @@ export type Database = {
         }
         Returns: Json
       }
+      agenda_densidad_anual: {
+        Args: {
+          p_centro_id?: string
+          p_desde: string
+          p_hasta: string
+          p_profesional_id?: string
+          p_zona: string
+        }
+        Returns: {
+          dia: string
+          recuento: number
+        }[]
+      }
       agenda_descartar_propuesta: {
         Args: { p_propuesta_id: string }
         Returns: undefined
@@ -4090,6 +4103,18 @@ export type Database = {
           p_zona_horaria?: string
         }
         Returns: Json
+      }
+      agenda_profesionales_anuales: {
+        Args: {
+          p_centro_id?: string
+          p_desde: string
+          p_hasta: string
+          p_zona: string
+        }
+        Returns: {
+          profesional_id: string
+          profesional_nombre: string
+        }[]
       }
       agenda_propuestas_de_evento: {
         Args: { p_evento_id: string }

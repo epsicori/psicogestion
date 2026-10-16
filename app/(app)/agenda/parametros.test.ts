@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { leerParametros } from './parametros';
+import { hrefAgenda, leerParametros } from './parametros';
 
 const UUID = '6f1c1b4e-2a1d-4c7e-9a3b-0d2e5f8a9b10';
 
@@ -16,7 +16,15 @@ describe('leerParametros', () => {
   });
 
   it('una vista desconocida es la semana', () => {
-    expect(leerParametros({ vista: 'anio' }).vista).toBe('semana');
+    expect(leerParametros({ vista: 'trimestre' }).vista).toBe('semana');
+  });
+
+  it('vista=anio es el año; año, ANIO, repetido o vacío caen en la semana (T-047 CA6)', () => {
+    expect(leerParametros({ vista: 'anio' }).vista).toBe('anio');
+    expect(leerParametros({ vista: 'año' }).vista).toBe('semana');
+    expect(leerParametros({ vista: 'ANIO' }).vista).toBe('semana');
+    expect(leerParametros({ vista: ['anio', 'anio'] }).vista).toBe('semana');
+    expect(leerParametros({ vista: '' }).vista).toBe('semana');
   });
 
   it('el 30 de febrero es «sin fecha», nunca el 2 de marzo', () => {
@@ -43,5 +51,20 @@ describe('leerParametros', () => {
       centro: null,
       profesional: null,
     });
+  });
+});
+
+describe('hrefAgenda', () => {
+  it('pone vista y, si los hay, fecha, centro y profesional, en ese orden', () => {
+    expect(hrefAgenda({ vista: 'anio', fecha: null, centro: null, profesional: null })).toBe('/agenda?vista=anio');
+    expect(hrefAgenda({ vista: 'semana', fecha: '2026-03-10', centro: null, profesional: null })).toBe(
+      '/agenda?vista=semana&fecha=2026-03-10',
+    );
+    expect(hrefAgenda({ vista: 'mes', fecha: '2026-03-10', centro: UUID, profesional: UUID })).toBe(
+      `/agenda?vista=mes&fecha=2026-03-10&centro=${UUID}&profesional=${UUID}`,
+    );
+    expect(hrefAgenda({ vista: 'mes', fecha: null, centro: 'todos', profesional: UUID })).toBe(
+      `/agenda?vista=mes&centro=todos&profesional=${UUID}`,
+    );
   });
 });

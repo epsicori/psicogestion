@@ -1,0 +1,160 @@
+{
+  "ticket": "T-047",
+  "resumen": "Ronda 2, HEAD 3847b29, trabajado en el worktree del ticket (rama T-047-agenda-anual), max(version)=20261017120000. Lint, 3426 pruebas, tsc, lint:migraciones, build (webpack), banco RLS 34 y E2E de accesibilidad (3/3 y 9/9 con repeat) en verde; visita qa.mjs limpia en tres roles. El criterio 13, que fallaba en la ronda 1, pasa. Base resembrada al terminar.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "Oraculo por rol",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (exit 0; banco 34 de 35 modulos)",
+      "evidencia": "C1-C4 ADM, C5-C8 PRO34A, C9-C12 TEC1: densidad = oraculo en las cuatro combinaciones de filtro; C: ADM no vacio; D2 gemela. Sin ninguna discrepancia."
+    },
+    {
+      "id": 2,
+      "texto": "El filtro del llamante no abre nada",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (exit 0; banco 34 de 35 modulos)",
+      "evidencia": "D1 tecnico CA con centro CB: cero filas; D2 PRO34A con PRO34B: cero; D4 PRO34A con TEC1: nada; D3 TEC1 como profesional_id: el 14-03 vale exactamente 1; D5 ADM con TEC1: 1."
+    },
+    {
+      "id": 3,
+      "texto": "Forma y permisos",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (exit 0; banco 34 de 35 modulos)",
+      "evidencia": "A1 TABLE(dia date, recuento integer); A2 sin columnas de cita; A3 security invoker y stable; A5 execute solo authenticated; A6 anon recibe 42501; B1-B5 nulos, invertido, mas de un ano: 22023, el ano exacto pasa en Madrid y Canarias."
+    },
+    {
+      "id": 4,
+      "texto": "Coste y tope de filas",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (exit 0; banco 34 de 35 modulos)",
+      "evidencia": "G1 >=10000 citas sinteticas; G2 densidad = oraculo; G3 <=366 filas; G4 314 filas en 23 ms; EXPLAIN ANALYZE: Function Scan on agenda_densidad_anual rows=314 Execution Time: 22.437 ms (< 1 s)."
+    },
+    {
+      "id": 5,
+      "texto": "test:rls no empeora respecto a main",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (exit 0; banco 34 de 35 modulos)",
+      "evidencia": "El comando sale con 0 y no hay ningun FALLO ni ERROR en el banco 34; 2910 aserciones OK en la corrida completa, incluidos 16-series y 23-cita-en-episodio, que no fallan en esta corrida."
+    },
+    {
+      "id": 6,
+      "texto": "leerParametros acepta vista=anio",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "248 ficheros, 3426 pruebas verdes (parametros.test.ts incluido)."
+    },
+    {
+      "id": 7,
+      "texto": "rangoDeVista anio / construirVista",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "bloques.test.ts: Europe/Madrid, Atlantic/Canary y bisiesto 2028 (366 dias); vista-anio.test.ts y vista.test.ts verdes."
+    },
+    {
+      "id": 8,
+      "texto": "lib/agenda/anio.ts",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "anio.test.ts verde: 365/366 dias, tramos y teclado con cruces de mes y topes de ano."
+    },
+    {
+      "id": 9,
+      "texto": "Vista anual serializable",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "vista-anio.test.ts:136 JSON.parse(JSON.stringify(v)) toEqual v, verde."
+    },
+    {
+      "id": 10,
+      "texto": "Selector de tres vistas, fecha enfocada, enlaces",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "Pruebas de calendario y de la isla anual verdes (771 pruebas en app/(app)/agenda, lib/agenda/anio y lib/citas/densidad)."
+    },
+    {
+      "id": 11,
+      "texto": "Nombre accesible del dia",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "Pruebas de la rejilla anual verdes."
+    },
+    {
+      "id": 12,
+      "texto": "Sin use cache",
+      "veredicto": "PASA",
+      "comando": "grep -rn \"use cache\" \"app/(app)/agenda\" lib/citas/densidad.ts",
+      "evidencia": "Una unica coincidencia: app/(app)/agenda/datos.ts:18, un comentario que dice NUNCA use cache (ADR-043), fichero que la rama no toca (git diff main...HEAD vacio). Ninguna directiva ni uso."
+    },
+    {
+      "id": 13,
+      "texto": "E2E accesibilidad/agenda-anual.spec.ts",
+      "veredicto": "PASA",
+      "comando": "npx next build --webpack; npx next start -p 3124; PUERTO=3124 npx playwright test accesibilidad/agenda-anual.spec.ts --workers=1 (y --repeat-each=3)",
+      "evidencia": "3 passed (4.0s): un solo dia tabulable + flechas + RePag/AvPag + Intro; 4 meses por fila sin desplazamiento; 360 px tactil sin desborde y dias >=44x44. Con --repeat-each=3: 9 passed (11.8s)."
+    },
+    {
+      "id": 14,
+      "texto": "lint y build limpios",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npx next build --webpack; npx tsc --noEmit; npm run lint:migraciones",
+      "evidencia": "lint 0 errores y 3 warnings no-unused-vars preexistentes; build webpack OK; tsc exit 0; 38 migraciones limpias. NOTA: npm run build (Turbopack) falla en este worktree por la junction de node_modules (Symlink [project]/node_modules points out of the filesystem root), problema del entorno, no del codigo; se usa --webpack como en la ronda 1."
+    },
+    {
+      "id": "manual-grises",
+      "texto": "Escala de grises y colores forzados",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Exige imprimir a PDF en grises y activar colores forzados de Windows: ver la leyenda a 1280 px con contraste forzado y en grises; los cinco escalones deben distinguirse sin la leyenda de color. Automatizado: tokens de contraste en npm test verdes."
+    },
+    {
+      "id": "manual-lector",
+      "texto": "Lector de pantalla recorriendo marzo",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Exige NVDA o Narrador: abrir /agenda?vista=anio, recorrer marzo con flechas; debe decir fecha larga y recuento de cada dia y el total del mes."
+    },
+    {
+      "id": "manual-roles",
+      "texto": "Tecnico y profesional ven lo suyo, sin desglose",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Parcial: banco 34 (C5-C12, D, E7) prueba el alcance por rol y la visita visible como tecnico muestra el ano sin tipos ni desglose por estado y con totales por mes. Falta el cotejo manual dia a dia contra el mes menos canceladas."
+    },
+    {
+      "id": "manual-telefono",
+      "texto": "360 px en telefono real",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Exige un telefono: abrir /agenda?vista=anio, comprobar los doce meses en columna, legibles y pulsables. Automatizado: E2E a 360 px tactil verde."
+    },
+    {
+      "id": "manual-prototipo",
+      "texto": "Lado a lado con /prototipo",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Juicio visual humano: /agenda?vista=anio junto a /prototipo, mismo vocabulario y sin controles de adorno."
+    }
+  ],
+  "regresiones": [],
+  "pantalla": {
+    "ticket": "T-047",
+    "commit": "3847b2985c2dc0aac7bd2ec554fdb177b8ee16df",
+    "rutas": [
+      "/agenda?vista=anio",
+      "/agenda?vista=semana",
+      "/agenda?vista=mes"
+    ],
+    "consola": [],
+    "paginas": [],
+    "http5xx": [],
+    "desborde_390": [],
+    "capturas": [
+      ".claude/qa/visitas/T-047/agenda_vista_anio-1280.png",
+      ".claude/qa/visitas/T-047/agenda_vista_anio-390.png",
+      ".claude/qa/visitas/T-047/agenda_vista_semana-1280.png",
+      ".claude/qa/visitas/T-047/agenda_vista_semana-390.png",
+      ".claude/qa/visitas/T-047/agenda_vista_mes-1280.png",
+      ".claude/qa/visitas/T-047/agenda_vista_mes-390.png"
+    ],
+    "bloqueadas": [],
+    "notas": [
+      "Visita del HEAD 3847b29 hecha tres veces con navegador visible contra next start (build webpack) en :3124, como administrador, profesional y tecnico: las tres con consola, paginas, 5xx y desborde_390 vacios; el JSON es el de la ultima (tecnico), el mismo commit."
+    ]
+  }
+}

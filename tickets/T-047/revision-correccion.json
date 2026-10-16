@@ -1,0 +1,3 @@
+{"ticket":"T-047","ronda":2,"commit":"3847b2985c2dc0aac7bd2ec554fdb177b8ee16df","altas":0,"medias":0,"bajas":1,"cerrados_ronda_1":["C-H1","C-H2","C-H3","C-H4","C-H5"],"hallazgos":[
+{"id":"H1","severidad":"BAJA","causa":"prueba","archivo":"scripts/rls/34-agenda-anual.sql","linea":13,"descripcion":"La cabecera del banco 34 ya no describe su fijación: omite el perfil PRO34S y sigue diciendo que TEC1 solo es profesional de C34TEC, cuando desde la ronda 2 también lo es de C34TECB, en el centro B.","escenario":"Quien añada una aserción de administrador fiándose de la cabecera, por ejemplo total34('Europe/Madrid', null, TEC1) = 1, la verá fallar con 2, porque el administrador ve también la cita de CB, y tendrá que descubrir en los insert que la cabecera está desfasada."}
+]}

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { EsqueletoCalendario, EsqueletoLista, EsqueletoCuadro } from './esqueletos';
+import { EsqueletoAnio, EsqueletoCalendario, EsqueletoLista, EsqueletoCuadro } from './esqueletos';
 import { t } from '@/lib/i18n';
 
 // Estas piezas no tienen comportamiento, así que no llevan prueba de teclado. Lo que sí
@@ -39,5 +39,15 @@ describe('esqueletos', () => {
       'aria-label',
       t('agenda.esqueletos.cuadro')
     );
+  });
+
+  it('EsqueletoAnio lleva role=status con aria-label del catálogo, 12 meses y 432 piezas animadas', () => {
+    const { container } = render(<EsqueletoAnio />);
+
+    expect(screen.getByRole('status')).toHaveAttribute('aria-label', t('agenda.esqueletos.anio'));
+    expect(container.querySelector('.meses-anio')?.children).toHaveLength(12);
+    const animados = container.querySelectorAll('.animate-pulse');
+    expect(animados).toHaveLength(12 * 36);
+    animados.forEach((el) => expect(el.className).toContain('motion-reduce:animate-none'));
   });
 });

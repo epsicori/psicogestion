@@ -1,0 +1,32 @@
+{
+  "ticket": "T-047",
+  "tipo": "seguridad",
+  "ronda": 2,
+  "commit": "3847b2985c2dc0aac7bd2ec554fdb177b8ee16df",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 0,
+  "cerrados": [
+    {
+      "id": "H1",
+      "severidad": "MEDIA",
+      "comprobacion": "supabase gen types --local con la base en 20261017120000: idéntico al comiteado"
+    },
+    {
+      "id": "H2",
+      "severidad": "BAJA",
+      "comprobacion": "con grant execute a anon el 42501 sale de es_zona_iana y A6 (con fragmento) cae; con el revoke, pasa"
+    },
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "comprobacion": "mutante sin filtro de rol en la lista medido en begin … rollback: muere en F7 (TEC1 · CB)"
+    },
+    {
+      "id": "H4",
+      "severidad": "BAJA",
+      "comprobacion": "mutante or v.centro_id is null en la lista medido en begin … rollback: muere en F1 ADM · CA; mutantes.json en la rama"
+    }
+  ],
+  "hallazgos": []
+}

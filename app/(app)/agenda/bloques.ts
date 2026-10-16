@@ -35,15 +35,28 @@ export function hoyEn(ahora: Date, zona: string): string {
 
 /**
  * El rango que pide el calendario. La semana, `limitesDeSemana` de la fecha anclada a las
- * 12:00; el mes, de la medianoche del primero de los 42 días a la del día siguiente al último.
+ * 12:00; el mes, de la medianoche del primero de los 42 días a la del día siguiente al último;
+ * el año, del 1 de enero a las 00:00 al 1 de enero siguiente a las 00:00 en la zona (año natural, T-047).
  */
 export function rangoDeVista(vista: Vista, fecha: string, zona: string): Rango {
-  if (vista === 'semana') {
-    const { inicio, fin } = limitesDeSemana(new TZDate(...aPartes(fecha), 12, 0, 0, zona), zona);
-    return { desde: new Date(inicio.getTime()), hasta: new Date(fin.getTime()) };
+  switch (vista) {
+    case 'semana': {
+      const { inicio, fin } = limitesDeSemana(new TZDate(...aPartes(fecha), 12, 0, 0, zona), zona);
+      return { desde: new Date(inicio.getTime()), hasta: new Date(fin.getTime()) };
+    }
+    case 'mes': {
+      const dias = diasDelMes(fecha);
+      return { desde: medianoche(dias[0].fecha, zona), hasta: medianoche(sumarDias(dias[dias.length - 1].fecha, 1), zona) };
+    }
+    case 'anio': {
+      const a = Number(fecha.slice(0, 4));
+      return { desde: medianoche(`${a}-01-01`, zona), hasta: medianoche(`${a + 1}-01-01`, zona) };
+    }
+    default: {
+      const _nunca: never = vista;
+      throw new Error(`rangoDeVista: vista desconocida ${String(_nunca)}`);
+    }
   }
-  const dias = diasDelMes(fecha);
-  return { desde: medianoche(dias[0].fecha, zona), hasta: medianoche(sumarDias(dias[dias.length - 1].fecha, 1), zona) };
 }
 
 /** De ahora al final de mañana en la zona. */
