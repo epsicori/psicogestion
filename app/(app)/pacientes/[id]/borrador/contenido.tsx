@@ -67,7 +67,7 @@ export function VistaBorrador({ borrador, programa }: { borrador: Borrador; prog
 /**
  * La pantalla del editor (T-046), nueva o de corrección. `null` del núcleo es un 404: el técnico,
  * quien no es el profesional asignado, un paciente invisible o un borrador de otro paciente no
- * saben ni que existe. Nada de esto entra en `use cache` (ADR-043).
+ * saben ni que existe. Nada de esto se guarda en caché (ADR-043).
  */
 export async function ContenidoEditor({
   params,
