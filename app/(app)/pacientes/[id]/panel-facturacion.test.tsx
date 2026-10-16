@@ -60,6 +60,10 @@ function escenario(
   };
 }
 
+/** Los enlaces al programa: los del editor (T-046) son rutas internas de la ficha. */
+const enlacesAlPrograma = () =>
+  screen.queryAllByRole('link').filter((a) => !(a.getAttribute('href') ?? '').startsWith('/pacientes/'));
+
 async function pintar(rol: 'administrador' | 'profesional_sanitario' | 'tecnico_administrativo') {
   render(await PanelFacturacion({ pacienteId: 'p1', rol }));
 }
@@ -110,7 +114,7 @@ describe('PanelFacturacion', () => {
     await pintar('administrador');
     expect(screen.getByText('Sin enviar')).toBeInTheDocument();
     expect(screen.queryByRole('button')).toBeNull();
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(enlacesAlPrograma()).toEqual([]);
   });
 
   it('en cola sin programa dice solo «En cola»; facturado sin programa, sin su nombre', async () => {
@@ -229,7 +233,7 @@ describe('PanelFacturacion', () => {
     activo.valor = PROGRAMA;
     escenario('enviado', 'pro-1', { anotaciones: ['borrado_sin_aprobar'] });
     await pintar('administrador');
-    expect(screen.queryByRole('link')).toBeNull();
+    expect(enlacesAlPrograma()).toEqual([]);
   });
 
   const CABECERA = {
@@ -270,5 +274,63 @@ describe('PanelFacturacion', () => {
     tablas.datos = { borradores_factura: { data: null, error: { code: 'XX000' } } };
     await pintar('administrador');
     expect(screen.getByRole('alert')).toHaveTextContent('No se pudo cargar la facturación');
+  });
+
+  describe('T-046 · entrada al editor', () => {
+    const conPaciente = (profesional: string) => {
+      tablas.datos.pacientes = ok([{ profesional_id: profesional }]);
+    };
+
+    it('CA11 · el técnico no tiene «Nuevo borrador» ni «Corregir» en el DOM', async () => {
+      tablas.datos = { ...CABECERA, pacientes: ok([{ profesional_id: 'pro-1' }]) };
+      await pintar('tecnico_administrativo');
+      expect(screen.queryByRole('link', { name: /nuevo borrador/i })).toBeNull();
+      expect(screen.queryByRole('link', { name: /corregir/i })).toBeNull();
+    });
+
+    it('CA11 · el administrador tiene «Nuevo borrador», también sin borradores', async () => {
+      tablas.datos = { borradores_factura: ok([]), pacientes: ok([{ profesional_id: 'otro' }]) };
+      await pintar('administrador');
+      expect(screen.getByRole('link', { name: 'Nuevo borrador' })).toHaveAttribute('href', '/pacientes/p1/borrador');
+    });
+
+    it('CA11 · el profesional asignado tiene «Nuevo borrador»; el no asignado, no', async () => {
+      escenario('sin_enviar', 'pro-1');
+      conPaciente('pro-1');
+      await pintar('profesional_sanitario');
+      expect(screen.getByRole('link', { name: 'Nuevo borrador' })).toBeInTheDocument();
+    });
+
+    it('un profesional que no es el asignado no ve «Nuevo borrador»', async () => {
+      escenario('sin_enviar', 'otro');
+      conPaciente('otro');
+      await pintar('profesional_sanitario');
+      expect(screen.queryByRole('link', { name: /nuevo borrador/i })).toBeNull();
+      expect(screen.queryByRole('link', { name: /corregir/i })).toBeNull();
+    });
+
+    it.each(['sin_enviar', 'fallido'])('«Corregir» en %s para el autor, con la versión', async (estado) => {
+      escenario(estado, 'pro-1');
+      tablas.datos.borradores_factura_estado = ok([
+        { borrador_id: 'b1', estado, envio_ambiguo: false, ultima_version: 3 },
+      ]);
+      conPaciente('pro-1');
+      await pintar('profesional_sanitario');
+      expect(screen.getByRole('link', { name: 'Corregir' })).toHaveAttribute('href', '/pacientes/p1/borrador/b1');
+      expect(screen.getByText('versión 3')).toBeInTheDocument();
+    });
+
+    it.each(['en_cola', 'enviado', 'facturado', 'descartado'])('sin «Corregir» en %s', async (estado) => {
+      escenario(estado, 'pro-1');
+      conPaciente('pro-1');
+      await pintar('administrador');
+      expect(screen.queryByRole('link', { name: /corregir/i })).toBeNull();
+    });
+
+    it('el administrador corrige el de otro profesional', async () => {
+      escenario('sin_enviar', 'otro');
+      await pintar('administrador');
+      expect(screen.getByRole('link', { name: 'Corregir' })).toBeInTheDocument();
+    });
   });
 });
