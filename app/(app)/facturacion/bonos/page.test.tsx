@@ -172,6 +172,34 @@ describe('PaginaBonos', () => {
     expect(within(filas[0]).getByText('Luis Ruiz')).toBeInTheDocument();
   });
 
+  it('un ?profesional o ?paciente que ya no está entre las opciones no filtra en silencio', async () => {
+    const AUSENTE = 'c0000000-0000-4000-8000-0000000000ff';
+    cargarContextoBonos.mockResolvedValue(contexto('administrador', { profesional: AUSENTE }));
+    await pintarLista();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByLabelText(t('bonos.filtros.profesional'))).toHaveValue('');
+  });
+
+  it('un ?paciente ausente de las opciones tampoco filtra', async () => {
+    cargarContextoBonos.mockResolvedValue(contexto('administrador', { paciente: 'c0000000-0000-4000-8000-0000000000ff' }));
+    await pintarLista();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByLabelText(t('bonos.filtros.paciente'))).toHaveValue('');
+  });
+
+  it('si falla el directorio de profesionales, el ?profesional de la URL no se aplica a ciegas', async () => {
+    cargarContextoBonos.mockResolvedValue(contexto('administrador', { profesional: 'c0000000-0000-4000-8000-0000000000ff' }));
+    cargarProfesionalesDeBonos.mockResolvedValue({ ok: false });
+    await pintarLista();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('un filtro que sí está entre las opciones sigue estrechando', async () => {
+    cargarContextoBonos.mockResolvedValue(contexto('administrador', { paciente: 'p2' }));
+    await pintarLista();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
   it('ninguna fila lleva botones ni enlaces, y no hay nada de facturar', async () => {
     cargarContextoBonos.mockResolvedValue(contexto('administrador'));
     await pintarLista();

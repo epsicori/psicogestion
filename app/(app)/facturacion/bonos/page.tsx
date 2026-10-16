@@ -88,14 +88,20 @@ async function ListaDeBonos({ searchParams }: Props) {
       )
     : [];
 
+  // Un filtro de la URL que no esté entre las opciones (el bono se reasignó, el directorio falló) no
+  // se aplica: filtraría en silencio mientras el selector pinta «Todos» (T-027 H6).
+  const profesional =
+    contexto.profesional && opcionesProfesional?.some((o) => o.valor === contexto.profesional)
+      ? contexto.profesional
+      : null;
+  const paciente =
+    contexto.paciente && opcionesPaciente.some((o) => o.valor === contexto.paciente) ? contexto.paciente : null;
+  const efectivo: ContextoBonos = { ...contexto, profesional, paciente };
+
   const filtrados = ordenarBonos(
-    filtrarBonos(resultado.bonos, {
-      estado: contexto.estado,
-      profesional: contexto.profesional,
-      paciente: contexto.paciente,
-    }),
+    filtrarBonos(resultado.bonos, { estado: efectivo.estado, profesional, paciente }),
   );
-  const { pagina, ultima, total, filas } = paginarBonos(filtrados, contexto.pagina);
+  const { pagina, ultima, total, filas } = paginarBonos(filtrados, efectivo.pagina);
 
   return (
     <>
@@ -114,7 +120,7 @@ async function ListaDeBonos({ searchParams }: Props) {
             name="profesional"
             etiqueta={t('bonos.filtros.profesional')}
             textoVacio={t('bonos.filtros.todosLosProfesionales')}
-            defaultValue={contexto.profesional ?? ''}
+            defaultValue={efectivo.profesional ?? ''}
             opciones={opcionesProfesional}
           />
         )}
@@ -124,7 +130,7 @@ async function ListaDeBonos({ searchParams }: Props) {
             name="paciente"
             etiqueta={t('bonos.filtros.paciente')}
             textoVacio={t('bonos.filtros.todosLosPacientes')}
-            defaultValue={contexto.paciente ?? ''}
+            defaultValue={efectivo.paciente ?? ''}
             opciones={opcionesPaciente}
           />
         )}
@@ -179,8 +185,8 @@ async function ListaDeBonos({ searchParams }: Props) {
                 hasta: (pagina - 1) * TAMANO_PAGINA_BONOS + filas.length,
                 total,
               })}
-              anterior={pagina > 1 ? hrefDePagina(contexto, pagina - 1) : null}
-              siguiente={pagina < ultima ? hrefDePagina(contexto, pagina + 1) : null}
+              anterior={pagina > 1 ? hrefDePagina(efectivo, pagina - 1) : null}
+              siguiente={pagina < ultima ? hrefDePagina(efectivo, pagina + 1) : null}
             />
           ) : null}
         </Tarjeta>
