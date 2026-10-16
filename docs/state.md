@@ -7,7 +7,7 @@
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048, T-049, T-050 (T-023 en 20261013120000), T-026a (20261014120000, Holded «no disponible», sin red), T-027 (d366323) y T-046 (20261015120000, editor del borrador; bitácora `docs/bitacora/T-046.md`).
-- **Siguiente en `supabase/`**: T-023b (20261016) → T-047 (20261017).
+- **T-023b (20261016120000)**: implementado en su rama, en revisión (bitácora `docs/bitacora/T-023b.md`). Siguiente en `supabase/`: T-047 (20261017).
 
 ## Bloqueos
 
@@ -16,7 +16,7 @@
 
 ## Siguiente paso
 
-1. **T-023b** (listado de facturas y cobro contra factura; migración 20261016).
+1. **T-023b**: verificación y revisores; guion manual a 360 px con `tickets/T-023b/preparar-espejo.sql`.
 2. **T-047** (migración 20261017): rama hecha; espera a que se fusionen sus migraciones previas (20261015 y 20261016).
 3. **T-051** (siembra de bonos en los tres estados).
 4. **T-027** (bonos, en `main`): c5 y c6 pasaron en QA visible (16-10); c7 abierto (`/prototipo` no está en el árbol).
