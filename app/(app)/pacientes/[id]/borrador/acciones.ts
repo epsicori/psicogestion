@@ -2,12 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { claveDeCifrado } from '@/lib/cifrado/claves';
-import { guardarBorrador, type DepsBorrador } from '@/lib/economico/borrador';
+import { guardarBorrador } from '@/lib/economico/borrador';
 import type { ResultadoGuardar } from '@/lib/economico/entrada';
-import { proveedorActivo } from '@/lib/facturacion/registro';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
+import { depsDeSesion } from './datos';
 import { esquemaBorrador, esquemaDescartar } from './esquemas';
 
 /**
@@ -16,21 +15,8 @@ import { esquemaBorrador, esquemaDescartar } from './esquemas';
  * la sesión y `creada_en` del reloj del servidor. Devuelven **solo** `ResultadoGuardar`: ni filas ni
  * NIF. Sin `redirect`: el editor dice «Guardado: versión N» y enlaza a la ficha.
  */
-async function deps(): Promise<DepsBorrador> {
-  const { supabase, usuario } = await exigirSesion();
-  const activo = await proveedorActivo().catch(() => null);
-  const programa = activo?.ficha.nombre ?? null;
-  return {
-    supabase,
-    usuario: { id: usuario.id },
-    ahora: () => new Date(),
-    claveDeCifrado,
-    proveedor: () => programa,
-  };
-}
-
 async function guardarYRefrescar(entrada: { pacienteId: string }): Promise<ResultadoGuardar> {
-  const resultado = await guardarBorrador(await deps(), entrada);
+  const resultado = await guardarBorrador(await depsDeSesion(), entrada);
   if (resultado.ok) revalidatePath(`/pacientes/${entrada.pacienteId}`);
   return resultado;
 }
