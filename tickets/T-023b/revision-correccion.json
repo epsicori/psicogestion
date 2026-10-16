@@ -1,0 +1,21 @@
+{
+  "ticket": "T-023b",
+  "ronda": 2,
+  "commit": "f6a2a51db96b2f2db8d47d77c2f9a0032ec69053",
+  "revisor": "correccion",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 0,
+  "cerrados": ["H1", "H2", "H3", "H4", "H5"],
+  "hallazgos": [
+    {
+      "id": "N1",
+      "severidad": "MEDIA",
+      "causa": "local",
+      "archivo": "app/(app)/facturacion/asignar-cobro.tsx",
+      "linea": 67,
+      "descripcion": "El efecto de foco (!disponible && aviso !== '') se dispara en todas las filas del mismo paciente que conservan un aviso antiguo, porque cobrosSinFactura es por paciente y aviso solo se limpia al abrir; gana la última fila del árbol, no la que actuó.",
+      "escenario": "Sofía con facturas F1 (arriba) y F2 (abajo) y dos cobros sueltos: asignar c1 a F2 y luego c2 a F1 → el repintado pone disponible=false en ambas y el foco acaba en la región de estado de F2 con el aviso viejo (medido en jsdom: F1=false F2=true)."
+    }
+  ]
+}
