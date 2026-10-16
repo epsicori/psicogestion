@@ -4046,10 +4046,6 @@ export type Database = {
         }
         Returns: Json
       }
-      agenda_descartar_propuesta: {
-        Args: { p_propuesta_id: string }
-        Returns: undefined
-      }
       agenda_densidad_anual: {
         Args: {
           p_centro_id?: string
@@ -4062,6 +4058,10 @@ export type Database = {
           dia: string
           recuento: number
         }[]
+      }
+      agenda_descartar_propuesta: {
+        Args: { p_propuesta_id: string }
+        Returns: undefined
       }
       agenda_editar_serie: {
         Args: {
