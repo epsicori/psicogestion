@@ -1,0 +1,37 @@
+{
+  "ticket": "T-051",
+  "ronda": 1,
+  "commit": "954d8dd50cc50c25be3f3d71adee956b41edc894",
+  "altas": 0,
+  "medias": 1,
+  "bajas": 2,
+  "hallazgos": [
+    {
+      "id": "M1",
+      "severidad": "MEDIA",
+      "causa": "contrato",
+      "archivo": "docs/state.md",
+      "linea": 20,
+      "descripcion": "state.md sigue dando T-047 como pendiente de merge (líneas 5, 11 y 20) y no dice en ningún sitio que T-051 está cerrado en su rama a la espera de merge, aunque la rama sale del propio merge de T-047 (a9b5903).",
+      "escenario": "La siguiente sesión lee state.md (constitución §4) y encuentra como paso 1 «Merge de T-047», que ya está en main. No sabe que falta mergear T-051, y la línea 43 da los bonos por sembrados cuando en main aún no lo están."
+    },
+    {
+      "id": "B1",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "supabase/seed-completo.sql",
+      "linea": 607,
+      "descripcion": "El comentario de Sofía dice que current_date + 20 es la única fecha relativa al día de la siembra y la misma excepción que la sección 8; pero 8.bis y 8.ter también usan current_date, y la sección 8 (alertas) solo usa k_fecha_base.",
+      "escenario": "Alguien que busca la excepción en la sección 8 (líneas 467-496) no la encuentra; o se fía de «única» y, al revisar si la siembra depende del día, deja fuera 8.bis (líneas 523, 537, 556) y 8.ter (línea 575)."
+    },
+    {
+      "id": "B2",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "supabase/seed-completo.sql",
+      "linea": 625,
+      "descripcion": "La caducidad de Sofía (current_date + 20) se fija en la primera siembra y on conflict do nothing no la refresca; el comentario promete que el aviso sigue saliendo, pero solo vale tras un db reset.",
+      "escenario": "Base compartida sembrada el 16-10, con caducidad 2026-11-05. El 06-11, sin db reset, la QA visible ve a Sofía Caducado en vez de vigente con aviso, y npm run seed no lo corrige."
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "ticket": "T-051",
+  "resumen": "Los cuatro bonos sembrados salen en sus estados, idempotentes; suites verdes; 0 errores de consola; sin desborde a 360/390 con la siembra limpia.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "Tras db reset + seed, la consulta da las cuatro filas de las Notas",
+      "veredicto": "PASA",
+      "comando": "db reset; npm run seed; psql como admin (set local role authenticated + jwt) sobre bonos_consumo",
+      "evidencia": "Lucía 2/2 caducidad null; Carmen 5/0 2026-10-01; Hugo 10/0 null; Sofía 8/0 2026-11-05 (4 filas). Nota: como superusuario postgres la vista bonos_consumo da 0 filas por rol_actual(); hay que simular al administrador."
+    },
+    {
+      "id": 2,
+      "texto": "Idempotencia: segundo seed no cambia bonos, citas con bono_id ni la consulta",
+      "veredicto": "PASA",
+      "comando": "npm run seed (x2) y diff de la salida de la consulta + conteos",
+      "evidencia": "diff vacío (IDEM); bonos y citas con bono_id sin cambio (4/2 antes y después del segundo seed; 5/3 tras las pruebas BD, que crean 1 bono y 1 cita, idéntico en las dos tomas)."
+    },
+    {
+      "id": 3,
+      "texto": "verificar:huellas, test:rls, test:facturacion y npm test verdes",
+      "veredicto": "PASA",
+      "comando": "npm run verificar:huellas; npm run test:rls; npm run test:facturacion; npm test; npm run lint; npx next build --webpack",
+      "evidencia": "huellas: cadena íntegra: cero anomalías; rls: OK sin fallos (ROLLBACK/COMMIT, último OK 35.D6b); facturacion: 2 files, 11 tests passed; npm test: 248 files, 3426 tests passed; lint 0 errores (3 avisos previos); build OK."
+    },
+    {
+      "id": 4,
+      "texto": "git diff --stat main -- supabase/migrations/ scripts/rls/ vacío",
+      "veredicto": "PASA",
+      "comando": "git diff --stat main -- supabase/migrations/ scripts/rls/",
+      "evidencia": "salida vacía (el diff toca solo docs/bitacora/T-051.md, docs/state.md y supabase/seed-completo.sql)."
+    },
+    {
+      "id": 5,
+      "texto": "QA visible /facturacion/bonos como admin y ana: Carmen Caducado con fecha, Lucía Agotado 2 de 2, Hugo vigente sin aviso, Sofía vigente con aviso de caducidad",
+      "veredicto": "PASA",
+      "comando": "qa.mjs visita /facturacion/bonos --ticket T-051 --rol administrador (y profesional); script Playwright a 360 px con admin y ana",
+      "evidencia": "Admin y ana: Lucía Márquez Agotado '2 de 2 sesiones usadas · No quedan sesiones'; Sofía Nieto Vigente 'Caduca el 05/11/2026'; Carmen Ruiz Caducado 'Caduca el 01/10/2026'; Hugo Vidal Vigente '0 de 10... Sin caducidad'. Sin controles que cambien el estado. 0 errores de consola. Capturas a 1280, 390 y 360 en .claude/qa/visitas/T-051/. Observación: la pantalla no pinta una insignia aparte de aviso; el aviso de Sofía es el texto 'Caduca el'."
+    },
+    {
+      "id": 6,
+      "texto": "/facturacion «Por paciente» sin desbordar a 360 px; facturacion.spec",
+      "veredicto": "PASA",
+      "comando": "script a 360 px (scrollWidth 360 = innerWidth, admin y ana); PUERTO=3152 npx playwright test accesibilidad/facturacion.spec.ts",
+      "evidencia": "10 passed (incl. test 1 'a 360 px la página no desborda'). Con datos sembrados limpios, desborde_390 vacío. En una toma anterior, con la base contaminada por filas de pruebas T046 (nombres largos 'Prueba T046 reasignado ...', ajenas a la siembra), /facturacion desbordó a 390 px; tras db reset+seed no."
+    }
+  ],
+  "regresiones": [
+    "Ninguna atribuible al ticket. Nota de entorno: con filas de prueba de T-046 (nombres largos) en la base, /facturacion desborda a 390 px; no ocurre con la siembra limpia y no depende del ticket."
+  ],
+  "pantalla": {
+    "ticket": "T-051",
+    "commit": "52f1ce13e0a8515c865b0beda76be821471e289d",
+    "rutas": [
+      "/facturacion/bonos",
+      "/facturacion"
+    ],
+    "consola": [],
+    "paginas": [],
+    "http5xx": [],
+    "desborde_390": [],
+    "capturas": [
+      ".claude/qa/visitas/T-051/facturacion_bonos-1280.png",
+      ".claude/qa/visitas/T-051/facturacion_bonos-390.png",
+      ".claude/qa/visitas/T-051/facturacion-1280.png",
+      ".claude/qa/visitas/T-051/facturacion-390.png"
+    ],
+    "bloqueadas": [],
+    "notas": []
+  }
+}

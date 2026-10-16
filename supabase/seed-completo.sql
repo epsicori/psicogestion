@@ -594,6 +594,43 @@ begin
   perform set_config('request.jwt.claims', '', true);
 
   -- -----------------------------------------------------------------------
+  -- 8.quater · T-051 · Bonos
+  --
+  -- Los cuatro estados de /facturacion/bonos, que la interfaz no puede fabricar: AGOTADO exige
+  -- citas realizadas con el bono (no hay control de «marcar realizada») y CADUCADO exige una
+  -- caducidad pasada (el formulario de alta no la admite). El estado no se guarda: lo deriva
+  -- leerBono de bonos_consumo y del día de hoy.
+  --   1 · Lucía, 2 sesiones: AGOTADO, 2 de 2, con sus dos realizadas MÁS ANTIGUAS de 8.bis
+  --       (dejan cuatro sin bono, que siguen devengando y siendo elegibles para un borrador).
+  --   2 · Carmen, 5 sesiones, caducidad k_fecha_base + 30 días: CADUCADO (fecha fija).
+  --   3 · Hugo, 10 sesiones, sin caducidad: VIGENTE sin aviso.
+  --   4 · Sofía, 8 sesiones, caducidad current_date + 20: VIGENTE con aviso de caducidad. Es la
+  --       única fecha relativa al día de la siembra, la misma excepción que 8 y 8.bis: con una
+  --       fecha fija el aviso dejaría de salir al mes.
+  -- bonos es de solo adición: se inserta con on conflict do nothing. El bono de las citas de
+  -- Lucía se pone con la única vía que admite fn_bono_de_la_cita (de nulo a un bono, una vez);
+  -- la guarda `bono_id is null` da la idempotencia. Va DESPUÉS de 8.bis, que pasa las citas a
+  -- realizada, y bonos_consumo solo cuenta las realizadas.
+  -- -----------------------------------------------------------------------
+  insert into public.bonos
+    (id, paciente_id, sesiones_totales, importe, caducidad, creado_por, creado_en)
+  values
+    ('e0510001-0000-4000-8000-000000000001', 'd0080001-0000-4000-8000-000000000001',
+      2,  90.00, null, k_adm, k_fecha_base),
+    ('e0510001-0000-4000-8000-000000000002', k_p_carmen,
+      5, 200.00, (k_fecha_base + interval '30 days')::date, k_adm, k_fecha_base),
+    ('e0510001-0000-4000-8000-000000000003', k_p_hugo,
+     10, 400.00, null, k_adm, k_fecha_base),
+    ('e0510001-0000-4000-8000-000000000004', k_p_sofia,
+      8, 320.00, current_date + 20, k_adm, k_fecha_base)
+  on conflict (id) do nothing;
+
+  update public.citas
+     set bono_id = 'e0510001-0000-4000-8000-000000000001'
+   where id in ('e0280004-0000-4000-8000-000000000005', 'e0280004-0000-4000-8000-000000000006')
+     and bono_id is null;
+
+  -- -----------------------------------------------------------------------
   -- 9 · Y AHORA la baja, no antes
   --
   -- El orden importa y es la razón de que esto esté al final: la profesional tenía
