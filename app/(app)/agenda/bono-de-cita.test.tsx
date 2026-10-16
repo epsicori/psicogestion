@@ -20,6 +20,7 @@ const BONO_B = '3d4e5f6a-7b82-4c93-8da4-4f5a6b7c8d90';
 const EDITABLE = {
   visible: true,
   editable: true,
+  definitivo: false,
   actual: null,
   opciones: [
     { id: BONO_A, texto: 'Bono de 5 · quedan 4' },
@@ -133,5 +134,67 @@ describe('BonoDeCita', () => {
     await usuario.click(screen.getByRole('button', { name: t('bonos.cita.guardar') }));
 
     expect(await screen.findByText(t('bonos.cita.noSePudoVincular'))).toBeInTheDocument();
+  });
+  it('tras guardar vuelve a leer la cita: si ya no se puede editar, pasa a solo lectura y el mensaje sigue', async () => {
+    const usuario = userEvent.setup();
+    leerBonoDeCita.mockResolvedValueOnce({ ...EDITABLE, definitivo: true });
+    leerBonoDeCita.mockResolvedValueOnce({ visible: true, editable: false, actual: 'Bono de 5 · quedan 3 (vinculado)' });
+    vincularBono.mockResolvedValue({ ok: true, mensaje: t('bonos.cita.vinculado') });
+    render(<BonoDeCita citaId={CITA} />);
+
+    await usuario.selectOptions(await screen.findByRole('combobox'), BONO_A);
+    await usuario.click(screen.getByRole('button', { name: t('bonos.cita.guardar') }));
+
+    expect(await screen.findByText('Bono de 5 · quedan 3 (vinculado)')).toBeInTheDocument();
+    expect(leerBonoDeCita).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent(t('bonos.cita.vinculado'));
+  });
+
+  it('si la relectura falla, se queda con lo que había y el mensaje de éxito', async () => {
+    const usuario = userEvent.setup();
+    leerBonoDeCita.mockResolvedValueOnce(EDITABLE);
+    leerBonoDeCita.mockRejectedValueOnce(new Error('red'));
+    vincularBono.mockResolvedValue({ ok: true, mensaje: t('bonos.cita.vinculado') });
+    render(<BonoDeCita citaId={CITA} />);
+
+    await usuario.selectOptions(await screen.findByRole('combobox'), BONO_A);
+    await usuario.click(screen.getByRole('button', { name: t('bonos.cita.guardar') }));
+
+    expect(await screen.findByText(t('bonos.cita.vinculado'))).toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+  });
+
+  it('en una cita pasada o realizada avisa de que el vínculo no se podrá deshacer, y solo ahí', async () => {
+    leerBonoDeCita.mockResolvedValueOnce({ ...EDITABLE, definitivo: true });
+    const { unmount } = render(<BonoDeCita citaId={CITA} />);
+    expect(await screen.findByText(t('bonos.cita.avisoDefinitivo'))).toBeInTheDocument();
+    unmount();
+
+    leerBonoDeCita.mockResolvedValueOnce(EDITABLE);
+    render(<BonoDeCita citaId={CITA} />);
+    await screen.findByRole('combobox');
+    expect(screen.queryByText(t('bonos.cita.avisoDefinitivo'))).toBeNull();
+  });
+
+  it('mientras guarda, el botón no se deshabilita (el foco no se pierde) y no admite un segundo envío', async () => {
+    const usuario = userEvent.setup();
+    leerBonoDeCita.mockResolvedValue(EDITABLE);
+    let terminar: (r: { ok: true; mensaje: string }) => void = () => {};
+    vincularBono.mockReturnValue(new Promise((resolver) => (terminar = resolver)));
+    render(<BonoDeCita citaId={CITA} />);
+
+    await usuario.selectOptions(await screen.findByRole('combobox'), BONO_A);
+    const boton = screen.getByRole('button', { name: t('bonos.cita.guardar') });
+    await usuario.click(boton);
+
+    const guardando = await screen.findByRole('button', { name: t('bonos.cita.guardando') });
+    expect(guardando).not.toBeDisabled();
+    expect(guardando).toHaveAttribute('aria-disabled', 'true');
+    expect(guardando).toHaveFocus();
+    await usuario.click(guardando);
+    expect(vincularBono).toHaveBeenCalledTimes(1);
+    terminar({ ok: true, mensaje: t('bonos.cita.vinculado') });
+    await screen.findByText(t('bonos.cita.vinculado'));
   });
 });

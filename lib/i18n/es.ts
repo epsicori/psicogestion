@@ -1557,6 +1557,8 @@ export const es = {
       vinculado: 'Cita vinculada al bono',
       desvinculado: 'Cita sin bono',
       errorLectura: 'No se ha podido cargar el bono de esta cita',
+      avisoDefinitivo:
+        'Esta cita ya se realizó o ya pasó: una vez la vincules a un bono, no podrás cambiarlo ni quitarlo.',
     },
   },
   // Notificaciones (T-015). `tipos` es EL sitio de las etiquetas por tipo: T-038 las reutiliza.

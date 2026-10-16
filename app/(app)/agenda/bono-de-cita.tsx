@@ -16,6 +16,7 @@ import { leerBonoDeCita, vincularBono, type BonoDeCita } from './acciones-bono';
  */
 export function BonoDeCita({ citaId }: { citaId: string }) {
   const [lectura, setLectura] = useState<BonoDeCita | null>(null);
+  const [mensaje, setMensaje] = useState('');
 
   useEffect(() => {
     let vigente = true;
@@ -30,6 +31,17 @@ export function BonoDeCita({ citaId }: { citaId: string }) {
       vigente = false;
     };
   }, [citaId]);
+
+  /** Tras guardar se vuelve a leer: lo que ya no se puede cambiar deja de ofrecerse. Si falla, se queda lo que había. */
+  async function alGuardar(texto: string) {
+    setMensaje(texto);
+    try {
+      const nueva = await leerBonoDeCita(citaId);
+      if (nueva.visible && !('error' in nueva)) setLectura(nueva);
+    } catch {
+      // La lectura anterior sigue siendo lo último que se sabe.
+    }
+  }
 
   if (lectura === null) {
     return (
@@ -51,35 +63,62 @@ export function BonoDeCita({ citaId }: { citaId: string }) {
       <div className="flex flex-col gap-0.5 text-sm">
         <span className="text-foreground text-xs">{t('bonos.cita.etiqueta')}</span>
         <span className="text-foreground">{lectura.actual}</span>
+        <p role="status" className="text-foreground text-xs">
+          {mensaje}
+        </p>
       </div>
     );
   }
-  return <Selector citaId={citaId} actual={lectura.actual} opciones={lectura.opciones} />;
+  return (
+    <Selector
+      citaId={citaId}
+      actual={lectura.actual}
+      opciones={lectura.opciones}
+      definitivo={lectura.definitivo}
+      mensaje={mensaje}
+      alCambiar={() => setMensaje('')}
+      alGuardar={alGuardar}
+    />
+  );
 }
 
 function Selector({
   citaId,
   actual,
   opciones,
+  definitivo,
+  mensaje,
+  alCambiar,
+  alGuardar,
 }: {
   citaId: string;
   actual: string | null;
   opciones: { id: string; texto: string }[];
+  definitivo: boolean;
+  mensaje: string;
+  alCambiar: () => void;
+  alGuardar: (mensaje: string) => Promise<void>;
 }) {
   const [valor, setValor] = useState(actual ?? '');
   const [guardado, setGuardado] = useState(actual ?? '');
-  const [mensaje, setMensaje] = useState('');
+  const [mensajeDeFallo, setMensajeDeFallo] = useState('');
   const [pendiente, empezar] = useTransition();
 
   function guardar() {
-    setMensaje('');
+    // Sin `disabled` mientras guarda (el foco caería al `body`): el segundo clic se ignora aquí.
+    if (pendiente) return;
+    setMensajeDeFallo('');
     empezar(async () => {
       try {
         const r = await vincularBono({ citaId, bonoId: valor });
-        setMensaje(r.mensaje);
-        if (r.ok) setGuardado(valor);
+        if (r.ok) {
+          setGuardado(valor);
+          await alGuardar(r.mensaje);
+        } else {
+          setMensajeDeFallo(r.mensaje);
+        }
       } catch {
-        setMensaje(t('bonos.cita.noSePudoVincular'));
+        setMensajeDeFallo(t('bonos.cita.noSePudoVincular'));
       }
     });
   }
@@ -94,15 +133,24 @@ function Selector({
         value={valor}
         onChange={(e) => {
           setValor(e.target.value);
-          setMensaje('');
+          setMensajeDeFallo('');
+          alCambiar();
         }}
       />
+      {definitivo && (
+        <p className="text-foreground text-xs">{t('bonos.cita.avisoDefinitivo')}</p>
+      )}
       <div className="flex flex-wrap items-center gap-3">
-        <Button variante="contorno" onClick={guardar} disabled={pendiente || valor === guardado}>
+        <Button
+          variante="contorno"
+          onClick={guardar}
+          disabled={valor === guardado}
+          aria-disabled={pendiente || undefined}
+        >
           {pendiente ? t('bonos.cita.guardando') : t('bonos.cita.guardar')}
         </Button>
         <p role="status" className="text-foreground text-xs">
-          {mensaje}
+          {mensajeDeFallo || mensaje}
         </p>
       </div>
     </div>
