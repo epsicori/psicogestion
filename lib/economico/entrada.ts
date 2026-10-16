@@ -59,10 +59,12 @@ export const esquemaEntradaGuardar = z
     partida: z.number().int().min(1).nullable(),
     descartar: z.boolean(),
     destinatario: esquemaDestinatario,
-    lineas: z.array(esquemaLinea).min(1).max(MAX_LINEAS),
+    // Al descartar, las líneas no se leen: la versión conserva las de la anterior (D5).
+    lineas: z.array(esquemaLinea).max(MAX_LINEAS),
   })
   .superRefine((e, ctx) => {
     const crear = e.borradorId === null;
+    if (!e.descartar && e.lineas.length === 0) ctx.addIssue({ code: 'custom', path: ['lineas'], message: 'vacío' });
     if (crear && e.partida !== null) ctx.addIssue({ code: 'custom', path: ['partida'], message: 'sobra' });
     if (!crear && e.partida === null) ctx.addIssue({ code: 'custom', path: ['partida'], message: 'falta' });
     if (crear && e.descartar) ctx.addIssue({ code: 'custom', path: ['descartar'], message: 'nada que descartar' });

@@ -304,6 +304,17 @@ describe('guardarBorrador · corregir', () => {
     expect(args.p_destinatario_nombre).toBe('Mutua Ejemplo');
     expect(f.llamadas.some((l) => l.nombre === 'leer_identificacion')).toBe(false);
   });
+
+  it('descartar sin líneas en la entrada: la versión lleva las de N', async () => {
+    const n = version();
+    const f = base({ tablas: { borradores_factura_versiones: [n] } });
+    const r = await guardarBorrador(
+      deps(f),
+      crear({ borradorId: BOR, partida: 2, descartar: true, destinatario: { modo: 'conservar' }, lineas: [] }),
+    );
+    expect(r).toMatchObject({ ok: true });
+    expect(escrituras(f)[0].args.p_lineas).toEqual(n.lineas);
+  });
 });
 
 describe('guardarBorrador · las citas de las líneas (CA16)', () => {
