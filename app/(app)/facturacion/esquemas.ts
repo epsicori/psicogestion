@@ -61,6 +61,8 @@ export function crearEsquemaCobro(hoy: string) {
       formaPago: z.enum(FORMAS_DE_PAGO, { error: t('cobros.formaPagoNoValida') }),
       referencia: opcional(z.string().trim().max(120, { error: t('cobros.referenciaDemasiadoLarga') })),
       motivo: opcional(z.string().trim().max(300, { error: t('cobros.motivoDemasiadoLargo') })),
+      // T-023b · la factura del espejo a la que se enlaza el cobro al registrarlo. Opcional: sin ella, el cobro de siempre.
+      facturaEspejoId: z.uuid({ error: t('cobros.facturas.facturaNoValida') }).optional(),
     })
     .superRefine((datos, ctx) => {
       const centimos = leerCentimos(datos.importe);
@@ -95,5 +97,15 @@ export function huellaDeCobro(datos: DatosCobro): string {
     datos.formaPago,
     datos.referencia ?? null,
     centimos < 0 ? (datos.motivo ?? null) : null,
+    // Al final: la huella de un cobro sin factura solo gana un `null` (T-023b).
+    datos.facturaEspejoId ?? null,
   ]);
 }
+
+/** Asignar un cobro anterior a una factura del espejo (T-023b): dos identificadores, nada más. */
+export const esquemaAsignacion = z.object({
+  cobroId: z.uuid({ error: t('cobros.facturas.eligeCobro') }),
+  facturaEspejoId: z.uuid({ error: t('cobros.facturas.facturaNoValida') }),
+});
+
+export type DatosAsignacion = z.output<typeof esquemaAsignacion>;
