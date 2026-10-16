@@ -1,0 +1,63 @@
+{
+  "ticket": "T-027",
+  "ronda": 2,
+  "commit": "0b698a824d319f1f686b6e61ee0af6f6b7c37eee",
+  "altas": 0,
+  "medias": 0,
+  "bajas": 5,
+  "nota": "Ronda 2 sobre 0b698a8, delta desde ca6c196. Un solo revisor. Abiertas: H3 reabierta (BAJA) y H7 a H10 nuevas (BAJA).",
+  "cerrados_ronda_2": {
+    "H1": "cerrado (MEDIA). alGuardar relee leerBonoDeCita y el vínculo de una cita pasada pasa a solo lectura; definitivo avisa antes de Guardar. Las pruebas fallan sin el arreglo; los huecos que quedan son H3 y H7.",
+    "H2": "cerrado (MEDIA). La clave de envío vive también en sessionStorage por huella, se olvida en el éxito y cae a memoria sin almacén; el texto ya no promete «sin salir de la página». Tres mutantes del núcleo matan las pruebas; quedan H9 y H10.",
+    "H4": "cerrado (BAJA). caducadoQueHacer.una y .varias; el mutante sin singular falla la prueba.",
+    "H5": "cerrado (BAJA). El «quedan» de la opción descuenta las citas vinculadas; el mutante con lectura.saldo falla la prueba. Casos a medias en H8.",
+    "H6": "cerrado (BAJA). Un filtro de la URL fuera de las opciones no se aplica, tampoco con el directorio caído; los mutantes sin cada guarda fallan."
+  },
+  "hallazgos": [
+    {
+      "id": "H3",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "app/(app)/agenda/bono-de-cita.tsx",
+      "linea": 147,
+      "descripcion": "Reabierto: se quitó pendiente del disabled, pero tras el éxito el botón enfocado se deshabilita (valor === guardado) y, en cita pasada, el selector se desmonta para pasar a solo lectura con otra región role=status que nace ya rellena.",
+      "escenario": "Usuario de teclado vincula una cita de ayer a «Bono de 5 · quedan 4» y pulsa Guardar → medido en jsdom: document.activeElement = BODY y la región de estado es un nodo nuevo creado con el texto puesto; el foco sale del panel y el lector puede no leer «Cita vinculada al bono» en una acción irreversible. Ninguna prueba mide el foco tras el éxito."
+    },
+    {
+      "id": "H7",
+      "severidad": "BAJA",
+      "causa": "prueba",
+      "archivo": "app/(app)/agenda/bono-de-cita.tsx",
+      "linea": 40,
+      "descripcion": "Las dos guardas de la relectura (nueva.visible y no error) y la limpieza del mensaje en alCambiar sobreviven a su mutante: bono-de-cita.test sigue en 14 de 14 verde.",
+      "escenario": "Tras guardar «Cita sin bono», la relectura devuelve {visible:false}: sin nueva.visible el control entero desaparece con su aviso; sin la guarda del error, un fallo de lectura sustituye el selector por «No se ha podido cargar el bono» justo tras un éxito; sin alCambiar, «Cita vinculada al bono» sigue pintado mientras el usuario ya eligió otro bono sin guardar."
+    },
+    {
+      "id": "H8",
+      "severidad": "BAJA",
+      "causa": "local",
+      "archivo": "app/(app)/agenda/acciones-bono.ts",
+      "linea": 156,
+      "descripcion": "textoDe en solo lectura recibe actual=false, así que propia=0: una cita programada o confirmada ya pasada con bono no se descuenta a sí misma (no es consumida ni comprometida por el neq); además el mutante propia=0 sobrevive a las 26 pruebas de acciones-bono.test.",
+      "escenario": "Cita de ayer en programada vinculada a un bono de 5 sin consumo → la relectura pinta «Bono de 5 · quedan 5», igual que antes de vincular, mientras otra cita futura del mismo bono dice «quedan 4 (vinculado)»; el usuario puede entender que el vínculo no ha contado."
+    },
+    {
+      "id": "H9",
+      "severidad": "BAJA",
+      "causa": "prueba",
+      "archivo": "app/(app)/facturacion/bonos/registrar-bono.tsx",
+      "linea": 40,
+      "descripcion": "Nadie prueba que olvidar aguante un removeItem que lanza: quitar su try/catch deja las 9 pruebas del fichero en verde (medido); la prueba de sin almacén solo hace lanzar getItem y setItem.",
+      "escenario": "Navegador con el almacén bloqueado: alRegistrar borra la clave del Map y olvidar lanza; la excepción cae en el catch del formulario, que pinta «No sabemos si el bono se ha registrado» tras un éxito con el diálogo abierto; el reenvío genera una clave nueva y entra un segundo bono, no retirable (solo adición)."
+    },
+    {
+      "id": "H10",
+      "severidad": "BAJA",
+      "causa": "cruce",
+      "archivo": "app/(app)/facturacion/bonos/registrar-bono.tsx",
+      "linea": 24,
+      "descripcion": "La clave de envío guardada en sessionStorage (con uuid del paciente, sesiones, importe y caducidad en la clave) sobrevive al cierre de sesión y otro usuario de la misma pestaña la reutiliza con los mismos datos.",
+      "escenario": "A registra 5 sesiones/150 € para P, la red corta la respuesta tras el insert y A cierra sesión; B entra en la misma pestaña y registra el mismo bono de P → reutiliza la id de A, leerBonoPropio (creado_por B) no ve nada, el insert da 23505 o 42501, la relectura no ve la fila y sale el mensaje genérico «No se ha podido registrar el bono»; la clave sigue ahí y cada reintento falla igual hasta cambiar un dato o cerrar la pestaña. Además el uuid del paciente y el importe quedan legibles en el almacén."
+    }
+  ]
+}

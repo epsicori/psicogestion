@@ -1,109 +1,72 @@
-Sin hallazgos ALTA. Ronda 1 sobre ca6c1962b42c0edfeb9889a4c35764fe0131dd67: 0 ALTA, 2 MEDIA, 4 BAJA.
+Sin hallazgos ALTA. Ronda 2 sobre 0b698a824d319f1f686b6e61ee0af6f6b7c37eee: 0 ALTA, 0 MEDIA, 5 BAJA abiertas (H3 reabierta, H7 a H10 nuevas). H1, H2, H4, H5 y H6 cerrados.
 
-# T-027 · Revisión, ronda 1 (revisor único, riesgo medio)
+# T-027 · Revisión, ronda 2 (revisor único, riesgo medio)
 
-Base: `main` (c86b7bb, merge-base). Diff `git diff main...HEAD`: 8 commits, 35 ficheros, ninguno en
-`supabase/**`.
+Delta revisado: `git diff ca6c196..0b698a8` (571c033, fbdc073, d8ba8c2, 139a94a, f745a7b, 0b698a8). Ninguno toca `supabase/**`.
+La ronda 1 queda en `tickets/T-027/rondas/r1.json`.
 
 ## Qué medí
 
-- Vitest completo en el worktree: 228 ficheros, 3079 pruebas en verde. Lo de bonos, agenda y ficha
-  (23 ficheros, 386 pruebas), también en verde.
-- Banco RLS 35 (`scripts/rls/35-bonos.sql`) dentro de `begin … rollback` contra
-  `supabase_db_Psicogestion`: todas las 35.* OK hasta 35.D6b.
-- Mutante: `bonos_consumo` contando también `programada`. Lo caza el banco: falla 35.A2b y la
-  transacción aborta ahí. El comentario de la línea 23 cita «35.A2, B1, B2, B3»; es una inexactitud de
-  redacción y no la cuento como hallazgo.
-- Territorio (§6): todo dentro, salvo `app/(app)/agenda/calendario.test.tsx` (un `vi.mock` de
-  `./acciones-bono` para que el panel de la cita no llame a una Server Function). La bitácora lo
-  declara como desviación y no le pongo hallazgo.
+Todo en una copia (`git archive` de 0b698a8 con junction a `node_modules`, borrada al acabar; `node_modules` de main conserva sus 384 entradas).
 
-## §5 «Qué revisar», punto por punto
+- Vitest completo: 228 ficheros, 3092 pruebas en verde. ESLint limpio sobre agenda, `facturacion/bonos`, `panel-bonos` y `lib/i18n`. El único error de `tsc` es `LayoutProps` de `app/layout.tsx` (tipos generados por Next que la copia no tiene; no es del diff).
+- Mutantes (una línea cada uno, en la copia, con `sed`):
 
-- **Esquemas**: `'0'`, `'-1'`, `'1.5'`, `'1000'`, `''`, `'abc'`, `'1e2'` y `'00'` salen rechazados en
-  sesiones. Para el importe: `'0'` y `'0,00'` dan `importeCero`, `'-5'` da `importeNegativo`. Caducidad:
-  la de ayer da `caducidadPasada` y `'2026-02-30'` da `caducidadNoValida`. Correcto.
-- **Estado y bordes** (3/2 sesiones, 30/31 días, hoy, agotado + caducado, 6 de 5): están cubiertos en
-  `estado.test`.
-- **`registrarBono`**: copia el patrón de `registrarCobro`. Hace lectura previa propia (`creado_por`),
-  trata el 23505 `bonos_pkey` con relectura y, si la relectura falla, devuelve un fallo genérico.
-  El importe pasa por `importeParaBd` y nunca toca `cobros`. Correcto.
-- **`cargarContextoBonos`**: solo el administrador lee `?profesional` y `?paciente`, y los filtros
-  estrechan la lista. Correcto.
-- **`vincularBono`**: usa `.select('id')`, y 0 filas cuenta como fallo. `esEditable` reproduce el
-  disparador `fn_bono_de_la_cita`: 42501 si el bono previo no es nulo y la cita está realizada o ya
-  pasada; null → bono siempre se admite; cancelada no se edita. Correcto.
-- **Sin migración**: correcto.
+| Mutante | Resultado |
+|---|---|
+| H2: sin `leerGuardada` / sin `guardar` / sin `olvidar` | falla `registrar-bono.test` (1, 1 y 2 pruebas) |
+| H1: sin `if (pendiente) return` / `disabled` con `pendiente` | falla «mientras guarda…» |
+| H1: sin `setMensaje(texto)` | fallan 5 pruebas |
+| H1: `definitivo` sin la rama «ya pasada» | falla la prueba del vínculo definitivo |
+| H5: «quedan» con `lectura.saldo` (el código de la ronda 1) | falla la prueba de las 4 vinculadas |
+| H4: sin la forma singular | falla «caducado con una sola sesión» |
+| H6: sin guarda en `profesional` / en `paciente` | fallan 2 / 1 pruebas |
 
-## MEDIA
+## Los seis de la ronda 1
 
-### H1 · `app/(app)/agenda/bono-de-cita.tsx:74` — tras guardar, el control no vuelve a leer el bono de la cita (el diseño §4, riesgo 6, lo pide) y sigue ofreciendo cambios que la base ya prohíbe
-
-`guardar()` solo hace `setGuardado(valor)`. No vuelve a llamar a `leerBonoDeCita`, así que `editable`,
-las opciones y sus textos siguen siendo los de la apertura del panel.
-
-Escenario: una cita de ayer, sin bono (editable, porque null → bono siempre se admite). Se elige
-«Bono de 5 · quedan 4» y se pulsa Guardar → «Cita vinculada al bono». El selector sigue ofreciendo
-«Sin bono» y el otro bono, con el botón Guardar. Con el vínculo ya hecho, `esEditable` da falso:
-la cita está pasada y ya tiene bono. Si el usuario corrige su elección, recibe «No se ha podido
-cambiar el bono de esta cita» sin ninguna explicación. Además, la opción vinculada sigue diciendo
-«quedan 4» y sin «(vinculado)».
-
-Lo que empeora el caso: en una cita pasada o realizada, el primer vínculo es definitivo (el disparador
-da 42501 y los bonos solo admiten adiciones), y nada lo avisa antes de Guardar. Una equivocación de
-bono no tiene salida en la interfaz. Basta con volver a leer después del éxito para que el control
-pase a solo lectura; el aviso previo lo decide el propietario.
-
-### H2 · `app/(app)/pacientes/[id]/page.tsx:151-158` (y `ficha-cliente.tsx:71`, fuera del diff) — en la ficha, cambiar de pestaña desmonta `RegistrarBono` y pierde la clave de envío que el texto «resultado desconocido» promete conservar
-
-`FichaCliente` monta solo la pestaña activa (`{activa === 'facturacion' && facturacion}`). El
-`useRef(new Map())` de claves de envío de `RegistrarBono` (registrar-bono.tsx:30) muere con ella. El
-texto `bonos.resultadoDesconocido` dice «Envíalo otra vez con los mismos datos, aquí o al volver a abrir
-esta ventana, sin salir de la página: si ya estaba registrado, no se duplica». Cambiar de pestaña no
-cambia la URL, así que para el usuario no es «salir de la página».
-
-Escenario: en la ficha, pestaña Facturación, se registra un bono de 5 sesiones por 150 €. La red corta
-la respuesta, pero el insert sí llegó → «No sabemos si el bono se ha registrado…». El usuario mira la
-pestaña Resumen, vuelve a Facturación y reenvía los mismos datos. El Map es nuevo y genera un uuid nuevo
-→ entra un segundo bono. `bonos` es de solo adición, así que el duplicado no se puede retirar, y el
-pendiente del paciente suma 300 € en lugar de 150 €.
-
-En `/facturacion/bonos` no pasa (allí no hay pestañas). Hay dos arreglos posibles: subir las claves a
-algo que sobreviva al cambio de pestaña, o restringir el texto a «sin cambiar de pestaña» y probarlo.
+- **H1 cerrado.** `alGuardar` relee `leerBonoDeCita`; el vínculo de una cita pasada pasa a solo lectura con el mensaje intacto, y `definitivo` avisa antes de Guardar solo en cita realizada o ya pasada sin bono. Las pruebas fallan sin el arreglo. Quedan dos huecos de prueba y un efecto lateral de foco: H3 y H7.
+- **H2 cerrado.** La clave de envío vive también en `sessionStorage` (por huella), se olvida en el éxito, y sin almacén cae a la memoria. El texto ya no promete «sin salir de la página» y dice «mientras no cierres esta pestaña». Las pruebas matan los tres mutantes del núcleo. Quedan un hueco de prueba (H9) y un efecto de la persistencia (H10).
+- **H3 reabierto a medias.** Se quitó `pendiente` del `disabled`, pero el botón sigue deshabilitado al éxito y, en el caso que H1 acaba de hacer común, el selector se desmonta: ver H3 abajo.
+- **H4 cerrado.** `caducadoQueHacer.una` / `.varias`, con prueba del singular que falla sin el ternario.
+- **H5 cerrado en lo que pedía** (las 4 vinculadas), pero el arreglo deja un caso a medias y su término `propia` sin prueba: H8.
+- **H6 cerrado.** Un `?profesional` o `?paciente` fuera de las opciones no se aplica, tampoco con el directorio caído. Las pruebas fallan sin cada guarda. Los dos mutantes de `hrefDePagina` con `contexto` sobreviven, pero son equivalentes: la página limpia el filtro otra vez al pintar.
 
 ## BAJA
 
-### H3 · `app/(app)/agenda/bono-de-cita.tsx:101` — `disabled={pendiente || valor === guardado}` tira el foco al pulsar Guardar
+### H3 (reabierto) · `app/(app)/agenda/bono-de-cita.tsx:147` — tras el éxito el botón se deshabilita y, en cita pasada, el selector entero se desmonta: el foco cae a `body` y el aviso nace en una región nueva
 
-Al pulsar, el botón se deshabilita (`pendiente`) y el foco cae a `body`. Tras el éxito sigue
-deshabilitado (`valor === guardado`). Escenario: un usuario de teclado en el panel anclado de la cita
-pulsa Guardar → el foco sale del panel, y el siguiente Tab empieza desde el principio del documento o
-del panel, no desde el bono. El mensaje sí se anuncia por `role="status"`.
+La ronda 1 decía «`disabled={pendiente || valor === guardado}` tira el foco, y lo deja deshabilitado tras el éxito». El arreglo quitó `pendiente`, pero `disabled={valor === guardado}` sigue: `setGuardado(valor)` se ejecuta antes de la relectura, así que el botón enfocado se deshabilita nada más confirmarse el vínculo. Peor, el caso que H1 acaba de hacer habitual (cita ya pasada sin bono) pasa de `Selector` a la rama de solo lectura, que pinta otro `<p role="status">`.
 
-### H4 · `lib/i18n/es.ts:1547` + `app/(app)/pacientes/[id]/panel-bonos.tsx:32-35` — `caducadoQueHacer` tiene el plural fijo
+Medido con una sonda en jsdom (borrada): en el caso definitivo `document.activeElement` es `BODY`, la región de estado es otro nodo (`mismaRegion=false`) y nace ya con el texto «Cita vinculada al bono». En el caso futuro el botón sigue siendo el mismo y queda `disabled`.
 
-El texto es «…caducó el {fecha} con {n} sesiones sin usar», y `n` es `lectura.saldo`. Escenario: un
-bono de 5 con 4 consumidas que caduca → «Este bono caducó el 01/10/2026 con 1 sesiones sin usar». Los
-avisos de «quedan» sí tienen la forma `una`/`varias`.
+Escenario: un usuario de teclado vincula una cita de ayer a «Bono de 5 · quedan 4» y pulsa Guardar → el foco sale del panel (el siguiente Tab arranca desde el principio) y un lector de pantalla puede no leer «Cita vinculada al bono», porque la región se crea con el texto puesto. La acción es irreversible. Las pruebas del ticket solo miden el foco mientras guarda, no tras el éxito.
 
-### H5 · `app/(app)/agenda/acciones-bono.ts:144-149` — el texto de la opción dice «quedan {saldo}» sin descontar las citas ya vinculadas
+### H7 · `app/(app)/agenda/bono-de-cita.tsx:40` — las dos guardas de la relectura y la limpieza del mensaje sobreviven a su mutante
 
-`sePuedeElegir` decide con `comprometidas` (consumidas + vinculadas). El texto, en cambio, enseña
-`lectura.saldo` (totales − consumidas). Escenario: un bono de 5 sin sesiones realizadas y con 4 citas
-futuras ya vinculadas se ofrece como «Bono de 5 · quedan 5». Solo cabe una cita más: la quinta
-vinculación entra y la sexta desaparece de la lista sin explicación.
+Tres mutantes verdes en `bono-de-cita.test.tsx` (14 pruebas): `if (!('error' in nueva)) setLectura(nueva)` (sin `nueva.visible`), `if (nueva.visible) setLectura(nueva)` (sin la guarda del error) y `alCambiar={() => undefined}`. La prueba de la relectura solo cubre el rechazo de la promesa, no una relectura que vuelva `{visible:false}` o `{visible:true, error}`.
 
-### H6 · `app/(app)/facturacion/bonos/page.tsx:111-128` — un `?profesional`/`?paciente` válido que ya no está entre las opciones filtra en silencio y el selector pinta «Todos…»
+Escenario: tras guardar «Cita sin bono», `leerBonoDeCita` devuelve `{visible:false}` (ya no queda ninguna opción). Si alguien quita `nueva.visible`, el control entero desaparece y se lleva el aviso «Cita sin bono» con él. Con la guarda del error quitada, un fallo de lectura de la relectura sustituye el selector por «No se ha podido cargar el bono de esta cita» justo después de un éxito. Sin `alCambiar`, el «Cita vinculada al bono» sigue pintado mientras el usuario ya eligió otro bono sin guardar. Ninguna de las tres cosas las ve el banco.
 
-Las opciones salen de los bonos visibles. `filtrarBonos` aplica el uuid de la URL aunque no esté entre
-ellas. Escenario: el administrador guarda `/facturacion/bonos?profesional=X`. Se reasigna a otro
-profesional el único paciente de X con bono, y X deja de ser el profesional del bono → la página pinta
-el selector en «Todos los profesionales» y el vacío «No hay bonos», aunque la organización tiene bonos.
-Si falla el directorio, el selector de profesional ni se pinta, pero el filtro de la URL se sigue
-aplicando. Es el mismo patrón que T-023 B.
+### H8 · `app/(app)/agenda/acciones-bono.ts:156` — en solo lectura el «quedan» de una cita pasada sin realizar no se descuenta a sí misma, y su término `propia` no tiene prueba
+
+`textoDe(vinculado, false, cita)` (línea 182) pasa `actual = false`, así que `propia` vale 0. Pero una cita `programada` o `confirmada` ya pasada con bono no cuenta en `sesiones_consumidas` (solo cuentan las realizadas) ni en `comprometidas` (la consulta usa `.neq('id', cita.id)`). El mismo bono visto desde una cita futura sí se descuenta (`propia = 1`). Además, el mutante `const propia = 0` sobrevive a las 26 pruebas de `acciones-bono.test.ts`: ninguna fija el descuento de la propia cita.
+
+Escenario: una cita de ayer en `programada` (aún sin marcar realizada) se vincula a un bono de 5 sin consumo → tras el éxito la relectura pinta «Bono de 5 · quedan 5», igual que antes de vincular; otra cita futura del mismo bono dice «quedan 4 (vinculado)». El usuario puede entender que el vínculo no ha contado.
+
+### H9 · `app/(app)/facturacion/bonos/registrar-bono.tsx:40` — nadie prueba que `olvidar` aguante un `removeItem` que lanza
+
+La prueba de «sin sessionStorage utilizable» hace lanzar `getItem` y `setItem`, pero no `removeItem`. Quitar el `try/catch` de `olvidar` deja las 9 pruebas del fichero en verde (medido).
+
+Escenario: en un navegador con el almacén bloqueado, `alRegistrar` ejecuta `claves.current.delete(huella)` y luego `olvidar`, que lanza; la excepción cae en el `catch` de `formulario-bono.tsx` y pinta «No sabemos si el bono se ha registrado» tras un éxito, con el diálogo abierto. El reenvío genera una clave nueva (la antigua ya se borró del `Map`) y entra un segundo bono, que no se puede retirar (solo adición).
+
+### H10 · `app/(app)/facturacion/bonos/registrar-bono.tsx:24` — la clave de envío en `sessionStorage` sobrevive al cierre de sesión: otro usuario en la misma pestaña queda atascado con el mismo bono
+
+La clave (`bono-envio:` + huella con el uuid del paciente, las sesiones, el importe en céntimos y la caducidad) se guarda en claro en `sessionStorage` y nada la borra al cerrar sesión. Si la clave sigue ahí, otro usuario de esa pestaña que registre un bono con los mismos datos la reutiliza.
+
+Escenario: el usuario A registra el bono 5 sesiones / 150 € del paciente P, la red corta la respuesta tras el insert, A cierra sesión sin reintentar. El usuario B entra en esa pestaña y registra el mismo bono de P: reutiliza la `id` de A; `leerBonoPropio` (con `creado_por = B`) no encuentra nada, el insert da 23505 (o 42501 por la RLS), la relectura tampoco ve la fila, y `registrarBono` devuelve el mensaje genérico «No se ha podido registrar el bono». La clave sigue ahí, así que cada reintento falla igual hasta que B cambie un dato o cierre la pestaña. El mensaje no da salida. Además, el uuid del paciente y el importe quedan legibles en el almacén del navegador tras cerrar sesión. Se arregla con la clave ligada al usuario (su id en el prefijo) o borrándola al cerrar sesión.
 
 ## Fuera de hallazgo
 
-- Lo que el diseño manda anotar en `docs/state.md` («cita realizada con bono agotado no se cobra»; «no
-  hay control de marcar realizada») está, por ahora, solo en `docs/bitacora/T-027.md`. El diseño dice
-  «al cerrar», así que queda para el cierre del orquestador.
+- `app/(app)/facturacion/bonos/registrar-bono.tsx:47`: el comentario de la cabecera abre «Registrar bono' con una comilla que no cierra (¿una `«»` mal escrita?). Cosmético.
+- La bitácora `docs/bitacora/T-027.md` no recoge los cambios de la ronda 2 (sessionStorage, `definitivo`, `comprometidas` en el texto). Es del cierre del orquestador; el diseño manda anotar en `docs/state.md` «cita realizada con bono agotado no se cobra» y «no hay control de marcar realizada» (sigue pendiente desde la ronda 1).
+- `tickets/T-027/evidencia.json` y `evidencia.sha` aparecen modificados en el worktree: son del verificador, no los he tocado.
