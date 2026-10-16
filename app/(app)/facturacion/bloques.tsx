@@ -41,8 +41,9 @@ type Props = { searchParams: ParametrosDeBusqueda };
 
 /** El marco de un bloque: tarjeta y título, el mismo en el bloque y en su esqueleto. */
 export function MarcoFacturacion({ id, titulo, children }: { id: string; titulo: string; children: ReactNode }) {
+  // Hijo de rejilla: sin `min-w-0` no encoge por debajo de su contenido y la página desborda a 360 px (T-052).
   return (
-    <Tarjeta className="p-5">
+    <Tarjeta className="min-w-0 p-5">
       <section aria-labelledby={id} className="flex flex-col gap-4">
         <h3 id={id} className="font-serif text-lg font-semibold text-foreground">
           {titulo}

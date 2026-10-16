@@ -1,0 +1,66 @@
+{
+  "ticket": "T-052",
+  "resumen": "Seis criterios PASA. Trabajado en el worktree del ticket (HEAD 5aca298, base a9b5903), next start en el 3187. Base resembrada al terminar (max(version)=20261017120000 antes del reset). Nota: el diff contra main (b0023a4) sale sucio por T-051, mergeado después de la base; contra la base a9b5903 (git diff main...HEAD) solo toca el territorio del ticket.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "N1: la prueba de dos filas pasa con el arreglo y falla con el asignar-cobro.tsx de a9b5903, diciendo dónde quedó el foco",
+      "veredicto": "PASA",
+      "comando": "git show a9b5903:asignar-cobro.tsx > fichero; npx vitest run app/(app)/facturacion; restaurado el fichero y repetido",
+      "evidencia": "SIN arreglo: × el foco acaba en la región de la fila donde se actuó por última vez (F1 antes que F2) | AssertionError: expected 'región de F2' to be 'región de F1' | Tests 1 failed | 461 passed (462). CON arreglo: Test Files 24 passed (24), Tests 462 passed (462)."
+    },
+    {
+      "id": 2,
+      "texto": "H1 sigue verde y, cuando quedan cobros, el foco vuelve al botón",
+      "veredicto": "PASA",
+      "comando": "npx vitest run app/(app)/facturacion (acciones-factura.test.tsx)",
+      "evidencia": "El test «al asignar el ÚLTIMO cobro suelto… (H1)» está intacto (el diff solo antepone import y añade el describe T-052) y pasa; el describe nuevo afirma expect(dondeEstaElFoco()).toBe('botón de F2') tras la primera asignación (queda un cobro) y 'botón de F1'. 462/462 verdes. QA visible: tras la primera asignación el foco queda en el botón «Asignar un cobro» de F1."
+    },
+    {
+      "id": 3,
+      "texto": "min-w-0: el paso 11 del spec pasa con --workers=1 contra next start sobre db reset + seed; sin el arreglo falla con desborde > 0",
+      "veredicto": "PASA",
+      "comando": "PUERTO=3187 npx playwright test --workers=1 (con arreglo); con bloques.tsx de a9b5903 + next build --webpack: playwright test accesibilidad/facturacion.spec.ts -g '11 ·'",
+      "evidencia": "CON arreglo: 47 passed (2.4m), incluido el paso 11. SIN arreglo: ✘ 11 · a 360 px, contenido ancho… (min-w-0) | Error: la página se sale a lo ancho a 360 px con contenido ancho en la rejilla | Expected: <= 0 | Received: 455 | 1 failed. bloques.tsx restaurado y build rehecho."
+    },
+    {
+      "id": 4,
+      "texto": "npm test, npm run lint, npx next build --webpack y suite a11y entera en verde",
+      "veredicto": "PASA",
+      "comando": "npm test; npm run lint; npx next build --webpack; PUERTO=3187 npx playwright test --workers=1",
+      "evidencia": "npm test: Test Files 248 passed (248), Tests 3429 passed (3429). lint: 0 errors, 3 warnings (no-unused-vars en ficheros ajenos). build webpack: exit 0. a11y: 47 passed (2.4m)."
+    },
+    {
+      "id": 5,
+      "texto": "git diff --stat main -- supabase/ scripts/rls/ vacío",
+      "veredicto": "PASA",
+      "comando": "git diff --stat a9b5903 HEAD -- supabase/ scripts/rls/ ; git diff --stat main...HEAD",
+      "evidencia": "Vacío contra la base a9b5903 (merge-base). Contra la punta actual de main (b0023a4) aparece supabase/seed-completo.sql, pero es el seed de T-051 mergeado después de bifurcar la rama, no un cambio de T-052; main...HEAD lista solo 7 ficheros del territorio (spec, tests, asignar-cobro.tsx, bloques.tsx, bitácora, state)."
+    },
+    {
+      "id": 6,
+      "texto": "QA visible como administrador: dos facturas del espejo y dos cobros, teclado, foco en la región tras la segunda; /facturacion a 360 px sin barra horizontal; capturas; qa.mjs visita",
+      "veredicto": "PASA",
+      "comando": "SQL (paciente Zzmarca T048 00: 2 facturas QA52-F1/F2 y 2 cobros) + Chromium visible con teclado (Enter en el botón, ArrowDown en el select, Tab, Enter) + node qa.mjs visita /facturacion --ticket T-052 --base http://127.0.0.1:3187",
+      "evidencia": "F1: foco tras asignar = BUTTON 'Asignar un cobro' de la fila F1 (queda un cobro). F2: foco tras asignar = P role=status 'Cobro asignado a la factura' de la fila F2. 360 px: scrollWidth-clientWidth = 0. visita: consola/paginas/http5xx/desborde_390 vacíos. Capturas en .claude/qa/visitas/T-052/ (dialogo-QA52-F1/F2, tras-QA52-F1/F2, facturacion-360, facturacion-1280, facturacion-390)."
+    }
+  ],
+  "regresiones": [],
+  "pantalla": {
+    "ticket": "T-052",
+    "commit": "5aca298240a87b34c2e147eb577244787dec5896",
+    "rutas": [
+      "/facturacion"
+    ],
+    "consola": [],
+    "paginas": [],
+    "http5xx": [],
+    "desborde_390": [],
+    "capturas": [
+      ".claude/qa/visitas/T-052/facturacion-1280.png",
+      ".claude/qa/visitas/T-052/facturacion-390.png"
+    ],
+    "bloqueadas": [],
+    "notas": []
+  }
+}

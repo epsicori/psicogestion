@@ -50,6 +50,9 @@ function textoDeOpcion(cobro: CobroAsignable, zona: string): string {
  */
 export function AsignarCobro({ factura, zona, disponible = true }: Props) {
   const estado = useRef<HTMLParagraphElement>(null);
+  const disparador = useRef<HTMLButtonElement>(null);
+  // Marca de ESTA instancia: se arma con un éxito suyo y se gasta al mover el foco a la región.
+  const focoTrasExito = useRef(false);
   const [abierto, setAbierto] = useState(false);
   const [aviso, setAviso] = useState('');
   const [carga, setCarga] = useState<Carga>({ estado: 'cargando' });
@@ -62,17 +65,31 @@ export function AsignarCobro({ factura, zona, disponible = true }: Props) {
   const apertura = useRef(0);
   const [pedirFoco, setPedirFoco] = useState(0);
 
-  // El botón que recibía el foco al cerrar el diálogo desaparece cuando ya no quedan cobros sueltos:
-  // el foco pasa a la región de estado, que sigue ahí (H1).
+  // Al ir el último cobro suelto el botón desaparece y la región de estado recoge el foco, pero solo en la
+  // instancia con un éxito propio cuyo foco no se ha ido a otra parte (T-023b N1: no en la fila hermana).
   useEffect(() => {
-    if (!disponible && aviso !== '') estado.current?.focus();
+    if (!focoTrasExito.current || disponible || aviso === '') return;
+    focoTrasExito.current = false;
+    estado.current?.focus();
   }, [disponible, aviso]);
+
+  // Si el foco va a cualquier sitio que no sea mi botón o mi región, el usuario ya está en otra cosa.
+  useEffect(() => {
+    function alEnfocar(evento: FocusEvent) {
+      if (!focoTrasExito.current) return;
+      if (evento.target === disparador.current || evento.target === estado.current) return;
+      focoTrasExito.current = false;
+    }
+    document.addEventListener('focusin', alEnfocar);
+    return () => document.removeEventListener('focusin', alEnfocar);
+  }, []);
 
   useEffect(() => {
     if (pedirFoco > 0 && !enviando) selector.current?.focus();
   }, [pedirFoco, enviando]);
 
   function abrir() {
+    focoTrasExito.current = false;
     const esta = ++apertura.current;
     setAviso('');
     setError('');
@@ -108,6 +125,7 @@ export function AsignarCobro({ factura, zona, disponible = true }: Props) {
       try {
         const estado = await asignarCobroAFactura({ cobroId: elegido, facturaEspejoId: factura.id });
         if (!estado.errores && estado.mensaje !== undefined && MENSAJES_DE_EXITO.includes(estado.mensaje)) {
+          focoTrasExito.current = true;
           setAbierto(false);
           setAviso(estado.mensaje);
           return;
@@ -129,6 +147,7 @@ export function AsignarCobro({ factura, zona, disponible = true }: Props) {
     <>
       {disponible && (
         <Button
+          ref={disparador}
           type="button"
           variante="contorno"
           className="min-h-11"

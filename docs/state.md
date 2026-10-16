@@ -2,7 +2,7 @@
 
 > Memoria viva. Máximo 80 líneas. Solo presente. Diseño en tickets y bitácora; reglas en `.claude/rules/`.
 
-**Actualizado**: 16-10-2026 · T-047 (`a9b5903`) y T-051 (`1ecb64c`) en `main` · T-052 implementado en su rama, pendiente de verificar.
+**Actualizado**: 16-10-2026 · T-047 (`a9b5903`), T-051 (`1ecb64c`) y T-052 en `main` · siguiente: T-053.
 
 ## Dónde estamos
 
@@ -10,6 +10,7 @@
 - **T-023b (20261016120000)**: integrado con su merge; banco RLS 33 (63 OK). Bitácora `docs/bitacora/T-023b.md`.
 - **T-047 (20261017120000)**: integrado (`a9b5903`); banco RLS 34. Bitácora `docs/bitacora/T-047.md`.
 - **T-051**: integrado (`1ecb64c`); la siembra trae bonos vigente, agotado y caducado. Bitácora `docs/bitacora/T-051.md`.
+- **T-052**: integrado; el foco tras asignar un cobro va solo a la fila donde se actuó (N1) y `/facturacion` no desborda a 360 px. Bitácora `docs/bitacora/T-052.md`.
 
 ## Bloqueos
 
@@ -18,17 +19,15 @@
 
 ## Siguiente paso
 
-1. **T-052**: verificar y revisar la rama `T-052-foco-ancho-facturacion`; merge.
-2. **T-053** (H25), con el diseño aprobado el 16-10 (`tickets/T-053/diseno.md`).
-3. **T-027** (bonos, en `main`): c5 y c6 pasaron en QA visible (16-10); c7 abierto. Comprobar si `/prototipo` está en `main`: en el worktree de T-047 sí existe.
-4. Limpiar worktrees y ramas viejas (`agent-*`, `t050-r1-backup`…); unlink de la junction antes de `git worktree remove`.
+1. **T-053** (H25), con el diseño aprobado el 16-10 (`tickets/T-053/diseno.md`).
+2. **T-027** (bonos, en `main`): c5 y c6 pasaron en QA visible (16-10); c7 abierto. Comprobar si `/prototipo` está en `main`: en el worktree de T-047 sí existe.
+3. Limpiar worktrees y ramas viejas (`agent-*`, `t050-r1-backup`…); unlink de la junction antes de `git worktree remove`.
 
 ## Hallazgos abiertos
 
 - **R2-C-H1 (BAJA, T-047, prueba)**: `scripts/rls/34-agenda-anual.sql:13-15`. La cabecera no nombra PRO34S y dice que TEC1 es profesional solo de `C34TEC`; también lo es de `C34TECB`. Arreglo: corregir la cabecera.
 - **T-051 B2 (BAJA)**: la caducidad de Sofía (`current_date + 20`) se fija en la primera siembra; tras el 05-11 hace falta `db reset`, no basta `npm run seed`. B1: el comentario de `seed-completo.sql:607` dice «la única fecha relativa» y no lo es.
 - **Banco 34 (`test:rls`)**: tarda unos 4 minutos (4 min 21 s en ronda 2) por el insert sintético de 10 600 citas.
-- **T-023b N1 (MEDIA)**, `app/(app)/facturacion/asignar-cobro.tsx:67-69`: el foco cae en la hermana con dos facturas del paciente. Requiere ticket.
 - **`paginacion-pendientes.tsx`**: la variable de módulo `destino` se comparte entre instancias. Requiere ticket.
 - **Suite a11y en frío**: timeouts de login en la 1.ª pasada; más de 1 worker contiende (`acceso:138`, `avisos:29`).
 - **Spec `accesibilidad/facturacion.spec.ts`**: cada pasada deja cobros; resembrar con `db reset` + `seed`.
@@ -37,7 +36,6 @@
 - **T-046 H5 (BAJA, prueba)**: `aviso-de-estado.tsx:12`, la marca `descarteEnCurso` queda encendida si el descarte falla por red. Requiere ticket.
 - **Playwright `page.on('response')`**: no lee POST de Server Actions; lo usa `facturacion-clave.spec.ts:76`.
 - **Base compartida a11y**: 5 specs fallan con la base contaminada. CA de a11y: `db reset` + `seed` y `next start`.
-- **`/facturacion` a 360 px**: desborda 64 px con la base contaminada (`app/(app)/facturacion/page.tsx:83-89` sin `min-w-0`). Requiere ticket.
 - **T-027 sin control de borrador vivo**: deja poner un bono a una cita que ya está en un borrador sin descartar. Requiere ticket.
 - **T-027 ronda 2 (5 BAJA)**: `bono-de-cita.tsx:147` y `:40`; `acciones-bono.ts:156`; `registrar-bono.tsx:40`; `:24`.
 - **T-027 fuera de alcance**: cita realizada con bono agotado no se cobra; no hay control de «marcar realizada».
