@@ -353,6 +353,30 @@ select pg_temp.assert(
   pg_temp.contar(format('select 1 from public.cobros_por_factura where factura_espejo_id = %L', :ESPA)) = 0,
   '33.H6 · TEC2 no ve ningún cobro de ESPA');
 call pg_temp.reset_sesion();
+-- La TABLA, no la vista (S1): la vista ya esconde la fila porque hace join con `cobros`; la política de lectura
+-- de `cobros_facturas` es la que impide el /rest/v1/cobros_facturas de un usuario ajeno.
+call pg_temp.como(:PRO2);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.cobros_facturas where factura_espejo_id = %L', :ESPA)) = 0
+  and pg_temp.contar('select 1 from public.cobros_facturas') = 0,
+  '33.H8 · PRO2 lee la TABLA cobros_facturas: 0 filas de ESPA y 0 en total');
+call pg_temp.reset_sesion();
+call pg_temp.como(:TEC2);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.cobros_facturas where factura_espejo_id = %L', :ESPA)) = 0
+  and pg_temp.contar('select 1 from public.cobros_facturas where cobro_id in (select id from public.cobros where paciente_id = ' || quote_literal(:P1) || ')') = 0,
+  '33.H9 · TEC2 (centro B) lee la TABLA cobros_facturas: 0 filas de ESPA');
+call pg_temp.reset_sesion();
+call pg_temp.como(:PRO1);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.cobros_facturas where factura_espejo_id = %L', :ESPA)) >= 1,
+  '33.H10 · gemela: PRO1 (el asignado) lee la TABLA y ve las filas de ESPA');
+call pg_temp.reset_sesion();
+call pg_temp.como(:TEC1);
+select pg_temp.assert(
+  pg_temp.contar(format('select 1 from public.cobros_facturas where factura_espejo_id = %L', :ESPA)) >= 1,
+  '33.H11 · gemela: TEC1 (centro A) lee la TABLA y ve las filas de ESPA');
+call pg_temp.reset_sesion();
 set local role anon;
 select pg_temp.assert_lanza_codigo('select count(*) from public.cobros_por_factura', '42501', '33.H7 · anon no puede leer la vista');
 reset role;

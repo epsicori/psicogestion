@@ -2,8 +2,10 @@
   "ticket": "T-023b",
   "metodo": "cada mutante se aplica con psql sobre una base recien reseteada (db reset) y se lanza npm run test:rls (M1-M7) o scripts/t023b-concurrencia.mjs (M8-M9); el original vuelve a verde tras db reset + seed",
   "mutantes": [
-    { "id": "M1", "cambio": "politica de alta sin la comprobacion de visibilidad del cobro", "cae": "33.E1 (lanza 23503 en vez de 42501)" },
-    { "id": "M2", "cambio": "politica de alta sin la comprobacion de visibilidad de la factura", "cae": "33.E1 (lanza 23503 en vez de 42501)" },
+    { "id": "M1", "cambio": "DISPARADOR fn_validar_cobro_factura sin el paso 1 (permisos: la replica de cobros_alta)", "cae": "33.E1 (lanza 23503 en vez de 42501)" },
+    { "id": "M2", "cambio": "DISPARADOR fn_validar_cobro_factura con los pasos 2-3 (existencia de factura) antes del paso 1 (permisos)", "cae": "33.E1 (lanza 23503 en vez de 42501)" },
+    { "id": "M1p", "cambio": "POLITICA cobros_facturas_alta reducida a with check (creada_por = auth.uid()), sin la comprobacion de visibilidad del cobro", "cae": "NINGUNA: mutante equivalente. El disparador BEFORE INSERT responde antes que el WITH CHECK y ya lanza el 42501; la politica de alta es una segunda pared redundante que ninguna prueba distingue (medido: test:rls exit 0, 63 OK 33.)" },
+    { "id": "M10", "cambio": "POLITICA cobros_facturas_lectura con using (true)", "cae": "33.H8 (PRO2 lee la TABLA y ve filas); la vista y cobros_asignables no la detectan porque hacen join con cobros" },
     { "id": "M3", "cambio": "trigger sin el rechazo de asignar un cobro ya enlazado al registrarse", "cae": "33.D1 (debia lanzar 23514)" },
     { "id": "M4", "cambio": "politica sin la guarda cobro_id is null", "cae": "33.G1 (42501 en vez de 23502)" },
     { "id": "M5a", "cambio": "cota de devolucion: la asignacion de una devolucion no se comprueba", "cae": "33.J5 (debia lanzar 23514)" },
