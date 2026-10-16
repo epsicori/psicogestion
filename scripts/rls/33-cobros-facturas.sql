@@ -187,14 +187,14 @@ begin
   end loop;
 end $$;
 -- postgres con el privilegio devuelto: lo frena el disparador (capa 2); el truncado, el de sentencia (capa 3).
-grant update, delete on table public.cobros_facturas to postgres;
+grant update, delete, truncate on table public.cobros_facturas to postgres;
 select pg_temp.assert_lanza_codigo_msg('update public.cobros_facturas set factura_espejo_id = factura_espejo_id',
   '42501', 'es de solo adición', '33.B2 · postgres con UPDATE devuelto: el disparador de fila bloquea');
 select pg_temp.assert_lanza_codigo_msg('delete from public.cobros_facturas',
   '42501', 'es de solo adición', '33.B3 · postgres con DELETE devuelto: el disparador de fila bloquea');
 select pg_temp.assert_lanza_codigo_msg('truncate table public.cobros_facturas',
   '42501', 'es de solo adición', '33.B4 · TRUNCATE: el disparador de sentencia bloquea');
-revoke update, delete on table public.cobros_facturas from postgres;
+revoke update, delete, truncate on table public.cobros_facturas from postgres;
 select pg_temp.assert((select count(*) from public.cobertura_solo_adicion()) = 0,
   '33.B5 · cobertura_solo_adicion() devuelve 0 filas');
 select pg_temp.assert((select count(*) from public.cobros_facturas) = :N_CF_ANTES,

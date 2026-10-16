@@ -25,8 +25,8 @@ describe('regla 1 · solo adición', () => {
     expect(reglas(analizarFichero('m.sql', 'truncate accesos_historia;\n'))).toEqual([1]);
   });
 
-  it.each(['borradores_factura_envios', 'facturas_espejo', 'facturas_anotaciones'])(
-    'marca un delete sobre %s (T-026a)',
+  it.each(['borradores_factura_envios', 'facturas_espejo', 'facturas_anotaciones', 'cobros_facturas'])(
+    'marca un delete sobre %s (T-026a, T-023b)',
     (tabla) => {
       const hallazgos = analizarFichero('m.sql', `delete from public.${tabla} where id = 1;
 `);
@@ -227,6 +227,7 @@ describe('constantes exportadas', () => {
       'borradores_factura_envios',
       'facturas_espejo',
       'facturas_anotaciones',
+      'cobros_facturas',
     ]);
   });
 });
