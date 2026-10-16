@@ -97,7 +97,7 @@ function Selector({
   definitivo: boolean;
   mensaje: string;
   alCambiar: () => void;
-  alGuardar: (mensaje: string) => Promise<void>;
+  alGuardar(mensaje: string): Promise<void>;
 }) {
   const [valor, setValor] = useState(actual ?? '');
   const [guardado, setGuardado] = useState(actual ?? '');
