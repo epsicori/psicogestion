@@ -118,6 +118,13 @@ describe('PanelBonos', () => {
     expect(screen.getByText(/caducó el 30\/09\/2026 con 4 sesiones sin usar/)).toBeInTheDocument();
   });
 
+  it('caducado con una sola sesión sin usar: singular', async () => {
+    cargarBonos.mockResolvedValue({ ok: true, bonos: [bono('1', 5, 4, '2026-10-01')] });
+    await pintar();
+    expect(screen.getByText(/caducó el 01\/10\/2026 con 1 sesión sin usar/)).toBeInTheDocument();
+    expect(screen.queryByText(/1 sesiones/)).toBeNull();
+  });
+
   it('el aviso va bajo SU bono, no bajo otro', async () => {
     cargarBonos.mockResolvedValue({ ok: true, bonos: [bono('1', 10, 1), bono('2', 5, 4)] });
     await pintar();

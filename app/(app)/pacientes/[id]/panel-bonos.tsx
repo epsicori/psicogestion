@@ -29,10 +29,10 @@ function lineaDeAviso(bono: BonoConPaciente, zona: string): string | null {
 function queHacer(bono: BonoConPaciente, zona: string): string | null {
   if (bono.lectura.estado === 'agotado') return t('bonos.agotadoQueHacer');
   if (bono.lectura.estado === 'caducado' && bono.caducidad) {
-    return tCon('bonos.caducadoQueHacer', {
-      fecha: formatearFechaSinZona(bono.caducidad, zona),
-      n: bono.lectura.saldo,
-    });
+    const fecha = formatearFechaSinZona(bono.caducidad, zona);
+    return bono.lectura.saldo === 1
+      ? tCon('bonos.caducadoQueHacer.una', { fecha })
+      : tCon('bonos.caducadoQueHacer.varias', { fecha, n: bono.lectura.saldo });
   }
   return null;
 }

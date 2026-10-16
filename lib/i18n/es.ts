@@ -1543,8 +1543,11 @@ export const es = {
     avisoCaduca: 'Este bono caduca el {fecha}.',
     agotadoQueHacer:
       'Este bono ya se ha usado entero. Para seguir con sesiones de bono, registra uno nuevo; si no, las próximas sesiones se cobran a la tarifa de siempre.',
-    caducadoQueHacer:
-      'Este bono caducó el {fecha} con {n} sesiones sin usar. Las sesiones sin usar no se pueden vincular a citas nuevas.',
+    caducadoQueHacer: {
+      una: 'Este bono caducó el {fecha} con 1 sesión sin usar. Las sesiones sin usar no se pueden vincular a citas nuevas.',
+      varias:
+        'Este bono caducó el {fecha} con {n} sesiones sin usar. Las sesiones sin usar no se pueden vincular a citas nuevas.',
+    },
     cita: {
       etiqueta: 'Bono',
       cargando: 'Cargando el bono…',
