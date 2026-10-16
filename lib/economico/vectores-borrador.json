@@ -1,0 +1,194 @@
+[
+  {
+    "nombre": "1 · NFC en concepto y destinatario (e + U+0301)",
+    "entrada": {
+      "borradorId": "32320000-0000-4000-8000-000000000201",
+      "numeroVersion": 1,
+      "pacienteId": "32320000-0000-4000-8000-000000000001",
+      "profesionalId": "b0030001-0000-4000-8000-000000000002",
+      "centroId": "c0030001-0000-4000-8000-00000000000a",
+      "creadaPor": "b0030001-0000-4000-8000-000000000002",
+      "creadaEn": "2026-10-02T09:00:01.100Z",
+      "descartado": false,
+      "destinatarioNombre": "José Pérez",
+      "nif": null,
+      "lineas": [
+        {
+          "concepto": "Sesión de evaluación",
+          "cantidad": 1,
+          "precio_unitario_centimos": 6000,
+          "regimen_iva": "exento_sanitario",
+          "tipo_iva_centesimas": 0,
+          "cita_id": null
+        }
+      ],
+      "baseCentimos": 6000,
+      "cuotaCentimos": 0,
+      "totalCentimos": 6000
+    },
+    "contenido_canonico": "{\"base_centimos\":6000,\"borrador_id\":\"32320000-0000-4000-8000-000000000201\",\"centro_id\":\"c0030001-0000-4000-8000-00000000000a\",\"creada_en\":\"2026-10-02T09:00:01.100Z\",\"creada_por\":\"b0030001-0000-4000-8000-000000000002\",\"cuota_iva_centimos\":0,\"descartado\":false,\"destinatario_nif\":null,\"destinatario_nombre\":\"José Pérez\",\"esquema_version\":1,\"lineas\":[{\"cantidad\":1,\"cita_id\":null,\"concepto\":\"Sesión de evaluación\",\"precio_unitario_centimos\":6000,\"regimen_iva\":\"exento_sanitario\",\"tipo_iva_centesimas\":0}],\"numero_version\":1,\"paciente_id\":\"32320000-0000-4000-8000-000000000001\",\"profesional_id\":\"b0030001-0000-4000-8000-000000000002\",\"total_centimos\":6000}",
+    "huella_hex": "9985bcb5928ceeb788a57f542ef0e95959965e0227e47f87554ff7413856196f"
+  },
+  {
+    "nombre": "2 · NIF nulo",
+    "entrada": {
+      "borradorId": "32320000-0000-4000-8000-000000000202",
+      "numeroVersion": 1,
+      "pacienteId": "32320000-0000-4000-8000-000000000001",
+      "profesionalId": "b0030001-0000-4000-8000-000000000002",
+      "centroId": "c0030001-0000-4000-8000-00000000000a",
+      "creadaPor": "b0030001-0000-4000-8000-000000000002",
+      "creadaEn": "2026-10-02T09:00:02.200Z",
+      "descartado": false,
+      "destinatarioNombre": "Destinatario T-046",
+      "nif": null,
+      "lineas": [
+        {
+          "concepto": "Sesión individual",
+          "cantidad": 1,
+          "precio_unitario_centimos": 6000,
+          "regimen_iva": "exento_sanitario",
+          "tipo_iva_centesimas": 0,
+          "cita_id": null
+        }
+      ],
+      "baseCentimos": 6000,
+      "cuotaCentimos": 0,
+      "totalCentimos": 6000
+    },
+    "contenido_canonico": "{\"base_centimos\":6000,\"borrador_id\":\"32320000-0000-4000-8000-000000000202\",\"centro_id\":\"c0030001-0000-4000-8000-00000000000a\",\"creada_en\":\"2026-10-02T09:00:02.200Z\",\"creada_por\":\"b0030001-0000-4000-8000-000000000002\",\"cuota_iva_centimos\":0,\"descartado\":false,\"destinatario_nif\":null,\"destinatario_nombre\":\"Destinatario T-046\",\"esquema_version\":1,\"lineas\":[{\"cantidad\":1,\"cita_id\":null,\"concepto\":\"Sesión individual\",\"precio_unitario_centimos\":6000,\"regimen_iva\":\"exento_sanitario\",\"tipo_iva_centesimas\":0}],\"numero_version\":1,\"paciente_id\":\"32320000-0000-4000-8000-000000000001\",\"profesional_id\":\"b0030001-0000-4000-8000-000000000002\",\"total_centimos\":6000}",
+    "huella_hex": "5aa98095129559a4a5bd574b3f3cbb359f852bc3c37eeeecbaa3d6b0e33f48a0"
+  },
+  {
+    "nombre": "3 · una línea con cita_id nulo y cantidad 2",
+    "entrada": {
+      "borradorId": "32320000-0000-4000-8000-000000000203",
+      "numeroVersion": 1,
+      "pacienteId": "32320000-0000-4000-8000-000000000001",
+      "profesionalId": "b0030001-0000-4000-8000-000000000002",
+      "centroId": "c0030001-0000-4000-8000-00000000000a",
+      "creadaPor": "b0030001-0000-4000-8000-000000000002",
+      "creadaEn": "2026-10-02T09:00:03.300Z",
+      "descartado": false,
+      "destinatarioNombre": "Destinatario T-046",
+      "nif": null,
+      "lineas": [
+        {
+          "concepto": "Informe escrito",
+          "cantidad": 2,
+          "precio_unitario_centimos": 2500,
+          "regimen_iva": "exento_sanitario",
+          "tipo_iva_centesimas": 0,
+          "cita_id": null
+        }
+      ],
+      "baseCentimos": 5000,
+      "cuotaCentimos": 0,
+      "totalCentimos": 5000
+    },
+    "contenido_canonico": "{\"base_centimos\":5000,\"borrador_id\":\"32320000-0000-4000-8000-000000000203\",\"centro_id\":\"c0030001-0000-4000-8000-00000000000a\",\"creada_en\":\"2026-10-02T09:00:03.300Z\",\"creada_por\":\"b0030001-0000-4000-8000-000000000002\",\"cuota_iva_centimos\":0,\"descartado\":false,\"destinatario_nif\":null,\"destinatario_nombre\":\"Destinatario T-046\",\"esquema_version\":1,\"lineas\":[{\"cantidad\":2,\"cita_id\":null,\"concepto\":\"Informe escrito\",\"precio_unitario_centimos\":2500,\"regimen_iva\":\"exento_sanitario\",\"tipo_iva_centesimas\":0}],\"numero_version\":1,\"paciente_id\":\"32320000-0000-4000-8000-000000000001\",\"profesional_id\":\"b0030001-0000-4000-8000-000000000002\",\"total_centimos\":5000}",
+    "huella_hex": "e06fcbb9793778ca1d41986c929d1ce41ba8256d3cc1fd0f1690ad11e213d133"
+  },
+  {
+    "nombre": "4 · NIF presente y mezcla general/exento con dos citas",
+    "entrada": {
+      "borradorId": "32320000-0000-4000-8000-000000000204",
+      "numeroVersion": 1,
+      "pacienteId": "32320000-0000-4000-8000-000000000001",
+      "profesionalId": "b0030001-0000-4000-8000-000000000002",
+      "centroId": "c0030001-0000-4000-8000-00000000000a",
+      "creadaPor": "b0030001-0000-4000-8000-000000000002",
+      "creadaEn": "2026-10-02T09:00:04.400Z",
+      "descartado": false,
+      "destinatarioNombre": "Destinatario T-046",
+      "nif": {
+        "cifrado": "Y2lmcmFkby1kZS1wcnVlYmE=",
+        "nonce": "BwcHBwcHBwcHBwcH",
+        "etiqueta": "CQkJCQkJCQkJCQkJCQkJCQ=="
+      },
+      "lineas": [
+        {
+          "concepto": "Sesión del 01/03",
+          "cantidad": 1,
+          "precio_unitario_centimos": 6000,
+          "regimen_iva": "exento_sanitario",
+          "tipo_iva_centesimas": 0,
+          "cita_id": "32320000-0000-4000-8000-000000000111"
+        },
+        {
+          "concepto": "Sesión del 02/03",
+          "cantidad": 1,
+          "precio_unitario_centimos": 12100,
+          "regimen_iva": "general",
+          "tipo_iva_centesimas": 2100,
+          "cita_id": "32320000-0000-4000-8000-000000000112"
+        }
+      ],
+      "baseCentimos": 16000,
+      "cuotaCentimos": 2100,
+      "totalCentimos": 18100
+    },
+    "contenido_canonico": "{\"base_centimos\":16000,\"borrador_id\":\"32320000-0000-4000-8000-000000000204\",\"centro_id\":\"c0030001-0000-4000-8000-00000000000a\",\"creada_en\":\"2026-10-02T09:00:04.400Z\",\"creada_por\":\"b0030001-0000-4000-8000-000000000002\",\"cuota_iva_centimos\":2100,\"descartado\":false,\"destinatario_nif\":{\"cifrado\":\"Y2lmcmFkby1kZS1wcnVlYmE=\",\"clave_version\":1,\"etiqueta\":\"CQkJCQkJCQkJCQkJCQkJCQ==\",\"nonce\":\"BwcHBwcHBwcHBwcH\"},\"destinatario_nombre\":\"Destinatario T-046\",\"esquema_version\":1,\"lineas\":[{\"cantidad\":1,\"cita_id\":\"32320000-0000-4000-8000-000000000111\",\"concepto\":\"Sesión del 01/03\",\"precio_unitario_centimos\":6000,\"regimen_iva\":\"exento_sanitario\",\"tipo_iva_centesimas\":0},{\"cantidad\":1,\"cita_id\":\"32320000-0000-4000-8000-000000000112\",\"concepto\":\"Sesión del 02/03\",\"precio_unitario_centimos\":12100,\"regimen_iva\":\"general\",\"tipo_iva_centesimas\":2100}],\"numero_version\":1,\"paciente_id\":\"32320000-0000-4000-8000-000000000001\",\"profesional_id\":\"b0030001-0000-4000-8000-000000000002\",\"total_centimos\":18100}",
+    "huella_hex": "8f8113580ccb6f5c68682d5a54d6efb56fae23f020c3ce0eacf3d99b64c06fe9"
+  },
+  {
+    "nombre": "5 · descartado, sin centro",
+    "entrada": {
+      "borradorId": "32320000-0000-4000-8000-000000000205",
+      "numeroVersion": 1,
+      "pacienteId": "32320000-0000-4000-8000-000000000001",
+      "profesionalId": "b0030001-0000-4000-8000-000000000002",
+      "centroId": null,
+      "creadaPor": "b0030001-0000-4000-8000-000000000002",
+      "creadaEn": "2026-10-02T09:00:05.500Z",
+      "descartado": true,
+      "destinatarioNombre": "Destinatario T-046",
+      "nif": null,
+      "lineas": [
+        {
+          "concepto": "Sesión individual",
+          "cantidad": 1,
+          "precio_unitario_centimos": 6000,
+          "regimen_iva": "exento_sanitario",
+          "tipo_iva_centesimas": 0,
+          "cita_id": null
+        }
+      ],
+      "baseCentimos": 6000,
+      "cuotaCentimos": 0,
+      "totalCentimos": 6000
+    },
+    "contenido_canonico": "{\"base_centimos\":6000,\"borrador_id\":\"32320000-0000-4000-8000-000000000205\",\"centro_id\":null,\"creada_en\":\"2026-10-02T09:00:05.500Z\",\"creada_por\":\"b0030001-0000-4000-8000-000000000002\",\"cuota_iva_centimos\":0,\"descartado\":true,\"destinatario_nif\":null,\"destinatario_nombre\":\"Destinatario T-046\",\"esquema_version\":1,\"lineas\":[{\"cantidad\":1,\"cita_id\":null,\"concepto\":\"Sesión individual\",\"precio_unitario_centimos\":6000,\"regimen_iva\":\"exento_sanitario\",\"tipo_iva_centesimas\":0}],\"numero_version\":1,\"paciente_id\":\"32320000-0000-4000-8000-000000000001\",\"profesional_id\":\"b0030001-0000-4000-8000-000000000002\",\"total_centimos\":6000}",
+    "huella_hex": "848e1f9bbcdce86ef046f6acdbb28ffb305e72bea50ed77334dbdcc093f13aea"
+  },
+  {
+    "nombre": "6 · comillas y barra invertida en el concepto",
+    "entrada": {
+      "borradorId": "32320000-0000-4000-8000-000000000206",
+      "numeroVersion": 1,
+      "pacienteId": "32320000-0000-4000-8000-000000000001",
+      "profesionalId": "b0030001-0000-4000-8000-000000000002",
+      "centroId": "c0030001-0000-4000-8000-00000000000a",
+      "creadaPor": "b0030001-0000-4000-8000-000000000002",
+      "creadaEn": "2026-10-02T09:00:06.600Z",
+      "descartado": false,
+      "destinatarioNombre": "Destinatario T-046",
+      "nif": null,
+      "lineas": [
+        {
+          "concepto": "Sesión \"online\" C:\\ruta\\a",
+          "cantidad": 1,
+          "precio_unitario_centimos": 6000,
+          "regimen_iva": "exento_sanitario",
+          "tipo_iva_centesimas": 0,
+          "cita_id": null
+        }
+      ],
+      "baseCentimos": 6000,
+      "cuotaCentimos": 0,
+      "totalCentimos": 6000
+    },
+    "contenido_canonico": "{\"base_centimos\":6000,\"borrador_id\":\"32320000-0000-4000-8000-000000000206\",\"centro_id\":\"c0030001-0000-4000-8000-00000000000a\",\"creada_en\":\"2026-10-02T09:00:06.600Z\",\"creada_por\":\"b0030001-0000-4000-8000-000000000002\",\"cuota_iva_centimos\":0,\"descartado\":false,\"destinatario_nif\":null,\"destinatario_nombre\":\"Destinatario T-046\",\"esquema_version\":1,\"lineas\":[{\"cantidad\":1,\"cita_id\":null,\"concepto\":\"Sesión \\\"online\\\" C:\\\\ruta\\\\a\",\"precio_unitario_centimos\":6000,\"regimen_iva\":\"exento_sanitario\",\"tipo_iva_centesimas\":0}],\"numero_version\":1,\"paciente_id\":\"32320000-0000-4000-8000-000000000001\",\"profesional_id\":\"b0030001-0000-4000-8000-000000000002\",\"total_centimos\":6000}",
+    "huella_hex": "1ae5c2590a430030c9c7fc7230d9d7103f3b8d585cfc25492219f873548edbb0"
+  }
+]
