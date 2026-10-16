@@ -4086,6 +4086,24 @@ export type Database = {
         Args: { p_duracion_minutos: number; p_tipo_terapia_id: string }
         Returns: number
       }
+      anadir_version_borrador: {
+        Args: {
+          p_base_centimos: number
+          p_borrador_id: string
+          p_centro_id: string
+          p_contenido_canonico: string
+          p_creada_en: string
+          p_cuota_centimos: number
+          p_descartado: boolean
+          p_destinatario_nombre: string
+          p_lineas: Json
+          p_nif_cifrado: string
+          p_nif_etiqueta: string
+          p_nif_nonce: string
+          p_total_centimos: number
+        }
+        Returns: number
+      }
       avanzar_cursor_sincronizacion: {
         Args: { p_hasta?: string }
         Returns: string
@@ -4178,6 +4196,25 @@ export type Database = {
         Returns: undefined
       }
       comprobar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
+      crear_borrador: {
+        Args: {
+          p_base_centimos: number
+          p_borrador_id: string
+          p_centro_id: string
+          p_contenido_canonico: string
+          p_creada_en: string
+          p_cuota_centimos: number
+          p_destinatario_nombre: string
+          p_lineas: Json
+          p_nif_cifrado: string
+          p_nif_etiqueta: string
+          p_nif_nonce: string
+          p_paciente_id: string
+          p_profesional_id: string
+          p_total_centimos: number
+        }
+        Returns: number
+      }
       dar_alta_centro: {
         Args: { p_centro_id: string; p_perfil_id: string }
         Returns: string
