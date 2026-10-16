@@ -23,6 +23,8 @@ import {
 
 type Props = {
   pacientes: { id: string; nombre: string; apellidos: string }[];
+  /** Modo factura (T-023b): paciente fijo y cobro contra esta factura del espejo. */
+  factura?: { id: string; numero: string; pacienteId: string; paciente: string };
   /** «Hoy» en la zona de la organización, calculado en servidor (ADR-034). */
   hoy: string;
   /** El id de envío de esa huella: el mismo mientras no haya un éxito (R4.1; lo guarda `RegistrarCobro`). */
@@ -56,7 +58,7 @@ function esNegativo(importe: string | undefined): boolean {
  * el mismo esquema en cliente y en la acción, y a la acción va la SALIDA del esquema. Aquí no se
  * emite ni se aprueba nada (ADR-078): se anota lo que se ha cobrado.
  */
-export function FormularioCobro({ pacientes, hoy, claveDeEnvio, alRegistrar, alCambiarEnvio }: Props) {
+export function FormularioCobro({ pacientes, factura, hoy, claveDeEnvio, alRegistrar, alCambiarEnvio }: Props) {
   const [enviando, iniciarTransicion] = useTransition();
   const enviandoRef = useRef(false);
   const [mensaje, setMensaje] = useState('');
@@ -72,7 +74,14 @@ export function FormularioCobro({ pacientes, hoy, claveDeEnvio, alRegistrar, alC
     formState: { errors },
   } = useForm<EntradaCobro, unknown, DatosCobro>({
     resolver: zodResolver(esquema),
-    defaultValues: { pacienteId: '', importe: '', fecha: hoy, referencia: '', motivo: '' },
+    defaultValues: {
+      pacienteId: factura?.pacienteId ?? '',
+      importe: '',
+      fecha: hoy,
+      referencia: '',
+      motivo: '',
+      ...(factura ? { facturaEspejoId: factura.id } : {}),
+    },
   });
 
   // useWatch y no watch(): watch() no se puede memoizar y el compilador de React lo salta.
@@ -106,9 +115,13 @@ export function FormularioCobro({ pacientes, hoy, claveDeEnvio, alRegistrar, alC
           return;
         }
         aplicarErroresDelServidor(estado, setError);
-        const primero = ORDEN_DE_CAMPOS.find((campo) => estado.errores?.[campo]?.length);
+        // En modo factura no hay campo de paciente donde pintar su error: va a la región de avisos.
+        const errorDePaciente = factura ? estado.errores?.pacienteId?.[0] : undefined;
+        const primero = ORDEN_DE_CAMPOS.find(
+          (campo) => estado.errores?.[campo]?.length && !(factura && campo === 'pacienteId'),
+        );
         if (primero) setCampoConFoco({ campo: primero });
-        setMensaje(estado.errores ? '' : (estado.mensaje ?? t('cobros.noSePudoRegistrar')));
+        setMensaje(errorDePaciente ?? (estado.errores ? '' : (estado.mensaje ?? t('cobros.noSePudoRegistrar'))));
       } catch {
         // Un fallo de red o un 500 no dice si el cobro se registró. No se refresca (un refresh sin
         // red recarga la página y pierde lo escrito): se avisa y se deja reintentar con la misma clave (B-H1).
@@ -123,14 +136,21 @@ export function FormularioCobro({ pacientes, hoy, claveDeEnvio, alRegistrar, alC
 
   return (
     <form onSubmit={(evento) => handleSubmit(alSerValido)(evento)} noValidate className="flex flex-col gap-4">
-      <Seleccion
-        id="pacienteId"
-        etiqueta={t('cobros.paciente')}
-        textoVacio={t('cobros.eligePaciente')}
-        opciones={pacientes.map((p) => ({ valor: p.id, texto: `${p.apellidos}, ${p.nombre}` }))}
-        errores={errorDe(errors.pacienteId?.message)}
-        {...register('pacienteId')}
-      />
+      {factura ? (
+        <p className="text-sm text-foreground">
+          <span className="text-muted-foreground">{t('cobros.paciente')}: </span>
+          {factura.paciente}
+        </p>
+      ) : (
+        <Seleccion
+          id="pacienteId"
+          etiqueta={t('cobros.paciente')}
+          textoVacio={t('cobros.eligePaciente')}
+          opciones={pacientes.map((p) => ({ valor: p.id, texto: `${p.apellidos}, ${p.nombre}` }))}
+          errores={errorDe(errors.pacienteId?.message)}
+          {...register('pacienteId')}
+        />
+      )}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <div className="flex flex-1 flex-col gap-1">

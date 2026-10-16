@@ -8,7 +8,7 @@ vi.mock('next/cache', () => ({ revalidatePath: (...args: unknown[]) => revalidat
 const exigirSesion = vi.fn();
 vi.mock('@/lib/supabase/sesion', () => ({ exigirSesion: () => exigirSesion() }));
 
-const { registrarCobro } = await import('./acciones');
+const { asignarCobroAFactura, cargarCobrosAsignables, registrarCobro } = await import('./acciones');
 
 const PACIENTE = '6f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60';
 const CENTRO = '7a2b3c4d-5e6f-4a70-9b81-1c2d3e4f5a60';
@@ -43,6 +43,10 @@ function crearSupabaseFalso({
   const rpc = vi.fn().mockResolvedValue(zona);
   return { from, rpc, insertar, select, eq, selectCobros, eqCobros };
 }
+
+const FACTURA = '8a2b3c4d-5e6f-4a70-9b81-1c2d3e4f5a61';
+const OTRA_FACTURA = '1a2b3c4d-5e6f-4a70-9b81-1c2d3e4f5a99';
+const COBRO = '9b3c4d5e-6f70-4b81-8c92-2d3e4f5a6b71';
 
 const BASE = {
   id: ID,
@@ -82,6 +86,7 @@ describe('registrarCobro', () => {
       referencia: null,
       motivo: 'Sesión cobrada dos veces',
       registrado_por: USUARIO,
+      factura_espejo_id: null,
     });
     expect(revalidatePath).toHaveBeenCalledWith('/facturacion');
     expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
@@ -118,7 +123,17 @@ describe('registrarCobro', () => {
     const fila = supabase.insertar.mock.calls[0][0];
     expect(fila.registrado_por).toBe(USUARIO);
     expect(Object.keys(fila).sort()).toEqual(
-      ['fecha', 'forma_pago', 'id', 'importe', 'motivo', 'paciente_id', 'referencia', 'registrado_por'].sort(),
+      [
+        'factura_espejo_id',
+        'fecha',
+        'forma_pago',
+        'id',
+        'importe',
+        'motivo',
+        'paciente_id',
+        'referencia',
+        'registrado_por',
+      ].sort(),
     );
   });
 
@@ -364,5 +379,246 @@ describe('registrarCobro', () => {
       expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
       expect(JSON.stringify(consola.mock.calls)).toContain('57014');
     });
+  });
+});
+
+describe('registrarCobro · contra una factura (T-023b)', () => {
+  beforeEach(() => {
+    revalidatePath.mockReset();
+    exigirSesion.mockReset();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('la factura se inserta en factura_espejo_id', async () => {
+    const supabase = crearSupabaseFalso();
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await registrarCobro({ ...BASE, facturaEspejoId: FACTURA });
+    expect(supabase.insertar).toHaveBeenCalledWith(expect.objectContaining({ factura_espejo_id: FACTURA }));
+    expect(estado).toEqual({ mensaje: t('cobros.cobroRegistrado') });
+  });
+
+  it('una factura que no es uuid es un error de campo y no inserta', async () => {
+    const supabase = crearSupabaseFalso();
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await registrarCobro({ ...BASE, facturaEspejoId: 'F-1' });
+    expect(estado.errores?.facturaEspejoId).toEqual([t('cobros.facturas.facturaNoValida')]);
+    expect(supabase.insertar).not.toHaveBeenCalled();
+  });
+
+  it('el 23514 «la devolución supera lo cobrado» vuelve en el campo importe', async () => {
+    const supabase = crearSupabaseFalso({
+      insert: {
+        data: null,
+        error: { code: '23514', message: 'la devolución supera lo cobrado en esta factura (T-023b)' },
+      },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await registrarCobro({ ...BASE, importe: '-90', motivo: 'x', facturaEspejoId: FACTURA });
+    expect(estado).toEqual({ errores: { importe: [t('cobros.facturas.devolucionSuperaLoCobrado')] } });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+/** Lo justo para asignar: `cobros_facturas.insert()` y `cobros_por_factura.select().eq().maybeSingle()`; más el rpc. */
+function supabaseDeAsignar({
+  insert = { data: null, error: null } as Resultado,
+  relectura = { data: null, error: null } as Resultado,
+  asignables = { data: [], error: null } as Resultado,
+} = {}) {
+  const insertar = vi.fn().mockResolvedValue(insert);
+  const maybeSingle = vi.fn().mockResolvedValue(relectura);
+  const eq = vi.fn().mockReturnValue({ maybeSingle });
+  const select = vi.fn().mockReturnValue({ eq });
+  const from = vi.fn((tabla: string) => (tabla === 'cobros_facturas' ? { insert: insertar } : { select }));
+  const rpc = vi.fn().mockResolvedValue(asignables);
+  return { from, rpc, insertar, select, eq, maybeSingle };
+}
+
+describe('asignarCobroAFactura (T-023b)', () => {
+  const ENTRADA = { cobroId: COBRO, facturaEspejoId: FACTURA };
+  const UNICO = { code: '23505', message: 'duplicate key … "cobros_facturas_cobro_unico"' };
+
+  beforeEach(() => {
+    revalidatePath.mockReset();
+    exigirSesion.mockReset();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('inserta exactamente cobro_id y factura_espejo_id, sin creada_por, y revalida', async () => {
+    const supabase = supabaseDeAsignar();
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura({ ...ENTRADA, creadaPor: 'otro', creada_por: 'otro' });
+    expect(supabase.from).toHaveBeenCalledWith('cobros_facturas');
+    expect(supabase.insertar).toHaveBeenCalledWith({ cobro_id: COBRO, factura_espejo_id: FACTURA });
+    expect(revalidatePath).toHaveBeenCalledWith('/facturacion');
+    expect(estado).toEqual({ mensaje: t('cobros.facturas.cobroAsignado') });
+  });
+
+  it.each([
+    ['sin cobro', { facturaEspejoId: FACTURA }],
+    ['cobro que no es uuid', { cobroId: 'x', facturaEspejoId: FACTURA }],
+    ['sin factura', { cobroId: COBRO }],
+    ['no es un objeto', 'hola'],
+  ])('%s: error y no inserta', async (_nombre, entrada) => {
+    const supabase = supabaseDeAsignar();
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(entrada);
+    expect(estado.mensaje ?? estado.errores).toBeDefined();
+    expect(supabase.insertar).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('un 23505 de cobros_facturas_cobro_unico con el cobro ya en ESTA factura es éxito (cobroYaEstaba)', async () => {
+    const supabase = supabaseDeAsignar({
+      insert: { data: null, error: UNICO },
+      relectura: { data: { factura_espejo_id: FACTURA }, error: null },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(ENTRADA);
+    expect(estado).toEqual({ mensaje: t('cobros.facturas.cobroYaEstaba') });
+    expect(supabase.from).toHaveBeenCalledWith('cobros_por_factura');
+    expect(supabase.eq).toHaveBeenCalledWith('cobro_id', COBRO);
+    expect(revalidatePath).toHaveBeenCalledWith('/facturacion');
+  });
+
+  it('un 23505 con el cobro en OTRA factura es «ya está en una factura»', async () => {
+    const supabase = supabaseDeAsignar({
+      insert: { data: null, error: UNICO },
+      relectura: { data: { factura_espejo_id: OTRA_FACTURA }, error: null },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(ENTRADA);
+    expect(estado).toEqual({ mensaje: t('cobros.facturas.cobroYaEnlazado') });
+  });
+
+  it('un 23514 «ya está enlazado» se trata igual que el 23505', async () => {
+    const supabase = supabaseDeAsignar({
+      insert: { data: null, error: { code: '23514', message: 'el cobro ya está enlazado a una factura (T-023b)' } },
+      relectura: { data: { factura_espejo_id: OTRA_FACTURA }, error: null },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(ENTRADA);
+    expect(estado).toEqual({ mensaje: t('cobros.facturas.cobroYaEnlazado') });
+  });
+
+  it('un error al releer es resultadoDesconocido, y el registro lleva solo el código', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = supabaseDeAsignar({
+      insert: { data: null, error: UNICO },
+      relectura: { data: null, error: { code: '57014', message: 'canceling statement' } },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(ENTRADA);
+    expect(estado).toEqual({ mensaje: t('cobros.resultadoDesconocido') });
+    expect(JSON.stringify(consola.mock.calls)).toContain('57014');
+    expect(JSON.stringify(consola.mock.calls)).not.toContain(COBRO);
+  });
+
+  it('un 23505 sin fila visible al releer es el mensaje genérico (sin oráculo)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = supabaseDeAsignar({
+      insert: { data: null, error: UNICO },
+      relectura: { data: null, error: null },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(ENTRADA);
+    expect(estado).toEqual({ mensaje: t('cobros.facturas.noSePudoAsignar') });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('un 23514 «supera lo cobrado» es el mensaje de la devolución', async () => {
+    const supabase = supabaseDeAsignar({
+      insert: { data: null, error: { code: '23514', message: 'la devolución supera lo cobrado en esta factura' } },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(ENTRADA);
+    expect(estado).toEqual({ mensaje: t('cobros.facturas.devolucionSuperaLoCobrado') });
+  });
+
+  it('un 42501 es el mensaje genérico, con solo el código en el registro y sin revalidar', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = supabaseDeAsignar({
+      insert: { data: null, error: { code: '42501', message: 'No puedes asignar este cobro (T-023b)' } },
+    });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const estado = await asignarCobroAFactura(ENTRADA);
+    expect(estado).toEqual({ mensaje: t('cobros.facturas.noSePudoAsignar') });
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(JSON.stringify(consola.mock.calls)).toContain('42501');
+    expect(JSON.stringify(consola.mock.calls)).not.toContain(COBRO);
+  });
+});
+
+describe('cargarCobrosAsignables (T-023b)', () => {
+  const fila = (n: number) => ({
+    cobro_id: `9b3c4d5e-6f70-4b81-8c92-${String(n).padStart(12, '0')}`,
+    importe_centimos: 2500,
+    fecha: '2026-10-01',
+    forma_pago: 'efectivo',
+    referencia: null,
+    motivo: null,
+  });
+  beforeEach(() => exigirSesion.mockReset());
+  afterEach(() => vi.restoreAllMocks());
+
+  it('llama al rpc con la factura y devuelve los cobros en el tipo cerrado', async () => {
+    const supabase = supabaseDeAsignar({ asignables: { data: [fila(1)], error: null } });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    const r = await cargarCobrosAsignables({ facturaEspejoId: FACTURA });
+    expect(supabase.rpc).toHaveBeenCalledWith('cobros_asignables', { p_factura_espejo_id: FACTURA });
+    expect(r).toEqual({
+      ok: true,
+      hayMas: false,
+      cobros: [
+        {
+          id: fila(1).cobro_id,
+          importeCentimos: 2500,
+          fecha: '2026-10-01',
+          formaPago: 'efectivo',
+          referencia: null,
+          motivo: null,
+        },
+      ],
+    });
+  });
+
+  it('201 filas: se muestran 200 y hayMas es true; 200 filas: hayMas false', async () => {
+    const doscientas = Array.from({ length: 200 }, (_, i) => fila(i + 1));
+    exigirSesion.mockResolvedValue({
+      supabase: supabaseDeAsignar({ asignables: { data: [...doscientas, fila(201)], error: null } }),
+      usuario: { id: USUARIO },
+    });
+    const r = await cargarCobrosAsignables({ facturaEspejoId: FACTURA });
+    expect(r.ok && r.cobros.length).toBe(200);
+    expect(r.ok && r.hayMas).toBe(true);
+
+    exigirSesion.mockResolvedValue({
+      supabase: supabaseDeAsignar({ asignables: { data: doscientas, error: null } }),
+      usuario: { id: USUARIO },
+    });
+    const r2 = await cargarCobrosAsignables({ facturaEspejoId: FACTURA });
+    expect(r2.ok && r2.hayMas).toBe(false);
+  });
+
+  it('un error de la base o una factura que no es uuid es { ok: false }, sin llamar al rpc en el segundo caso', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = supabaseDeAsignar({ asignables: { data: null, error: { code: '57014', message: 'x' } } });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    expect(await cargarCobrosAsignables({ facturaEspejoId: FACTURA })).toEqual({ ok: false });
+    supabase.rpc.mockClear();
+    expect(await cargarCobrosAsignables({ facturaEspejoId: 'x' })).toEqual({ ok: false });
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+
+  it('una fila con forma rara es { ok: false }', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const supabase = supabaseDeAsignar({ asignables: { data: [{ ...fila(1), forma_pago: 'cheque' }], error: null } });
+    exigirSesion.mockResolvedValue({ supabase, usuario: { id: USUARIO } });
+    expect(await cargarCobrosAsignables({ facturaEspejoId: FACTURA })).toEqual({ ok: false });
   });
 });

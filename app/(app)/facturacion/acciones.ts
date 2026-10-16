@@ -9,7 +9,7 @@ import { ESTADO_INICIAL, type EstadoFormulario } from '@/lib/formularios';
 import { exigirSesion } from '@/lib/supabase/sesion';
 
 import { hoyEn } from '../agenda/bloques';
-import { crearEsquemaCobro, importeParaBd } from './esquemas';
+import { FORMAS_DE_PAGO, crearEsquemaCobro, esquemaAsignacion, importeParaBd } from './esquemas';
 
 /** La clave de envío (R3.1): la genera el formulario y es la clave primaria del cobro. */
 const esquemaClave = z.object({ id: z.uuid() });
@@ -94,7 +94,7 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
   if (!resultado.success) {
     return { ...ESTADO_INICIAL, errores: z.flattenError(resultado.error).fieldErrors };
   }
-  const { importe, fecha, formaPago, referencia, motivo } = resultado.data;
+  const { importe, fecha, formaPago, referencia, motivo, facturaEspejoId } = resultado.data;
 
   // 6. El `id` es la clave de envío; `registrado_en` lo pone la base y `registrado_por` sale de la sesión.
   const centimos = aCentimos(importe);
@@ -109,6 +109,8 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
     referencia: referencia ?? null,
     motivo: centimos < 0 ? (motivo ?? null) : null,
     registrado_por: usuario.id,
+    // T-023b · la factura del espejo a la que se enlaza al registrar; la base comprueba que sea del mismo paciente.
+    factura_espejo_id: facturaEspejoId ?? null,
   });
 
   // 7. Los dos 23514 que tienen campo vuelven junto a su campo; el resto, mensaje genérico.
@@ -118,6 +120,9 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
     }
     if (error.code === '23514' && error.message?.includes('cobros_devolucion_motivo_ck')) {
       return { ...ESTADO_INICIAL, errores: { motivo: [t('cobros.devolucionNecesitaMotivo')] } };
+    }
+    if (error.code === '23514' && error.message?.includes('la devolución supera lo cobrado')) {
+      return { ...ESTADO_INICIAL, errores: { importe: [t('cobros.facturas.devolucionSuperaLoCobrado')] } };
     }
     // Reintento de un envío que ya entró: la clave primaria repetida. Solo se da por bueno si el
     // cobro existe, es de esta sesión y la RLS lo deja ver; con otra cosa no hay oráculo (R3.1).
@@ -141,4 +146,113 @@ export async function registrarCobro(datos: unknown): Promise<EstadoFormulario> 
   // 8. La pantalla se refresca en el mismo viaje.
   revalidatePath('/facturacion');
   return { ...ESTADO_INICIAL, mensaje: t('cobros.cobroRegistrado') };
+}
+
+/**
+ * Asigna un cobro ya registrado a una factura del espejo (T-023b). Inserta SOLO `{ cobro_id, factura_espejo_id }`:
+ * `creada_por` y `creada_en` los pone la base, y sin `.select()` (la política de lectura no es la de alta).
+ * La base decide (mismo paciente, rol, cota de las devoluciones, un cobro en una sola factura); aquí solo se traduce.
+ */
+export async function asignarCobroAFactura(datos: unknown): Promise<EstadoFormulario> {
+  const { supabase } = await exigirSesion();
+
+  const resultado = esquemaAsignacion.safeParse(datos);
+  if (!resultado.success) {
+    const errores = z.flattenError(resultado.error).fieldErrors;
+    if (Object.keys(errores).length > 0) return { ...ESTADO_INICIAL, errores };
+    return { ...ESTADO_INICIAL, mensaje: t('cobros.facturas.noSePudoAsignar') };
+  }
+  const { cobroId, facturaEspejoId } = resultado.data;
+
+  const { error } = await supabase
+    .from('cobros_facturas')
+    .insert({ cobro_id: cobroId, factura_espejo_id: facturaEspejoId });
+
+  if (!error) {
+    revalidatePath('/facturacion');
+    return { ...ESTADO_INICIAL, mensaje: t('cobros.facturas.cobroAsignado') };
+  }
+
+  // Ya estaba en una factura (dos clics, dos pestañas): se relee por la vista y se dice en qué factura.
+  const yaEnlazado =
+    (error.code === '23505' && error.message?.includes('cobros_facturas_cobro_unico')) ||
+    (error.code === '23514' && error.message?.includes('ya está enlazado'));
+  if (yaEnlazado) {
+    const { data: fila, error: errorRelectura } = await supabase
+      .from('cobros_por_factura')
+      .select('factura_espejo_id')
+      .eq('cobro_id', cobroId)
+      .maybeSingle();
+    if (errorRelectura) {
+      console.error('asignarCobroAFactura: falló la relectura tras el duplicado', errorRelectura.code);
+      return { ...ESTADO_INICIAL, mensaje: t('cobros.resultadoDesconocido') };
+    }
+    if (fila?.factura_espejo_id === facturaEspejoId) {
+      revalidatePath('/facturacion');
+      return { ...ESTADO_INICIAL, mensaje: t('cobros.facturas.cobroYaEstaba') };
+    }
+    if (fila) return { ...ESTADO_INICIAL, mensaje: t('cobros.facturas.cobroYaEnlazado') };
+    // Sin fila visible: nada que confirmar y ningún oráculo; cae en el mensaje genérico.
+  } else if (error.code === '23514' && error.message?.includes('supera lo cobrado')) {
+    return { ...ESTADO_INICIAL, mensaje: t('cobros.facturas.devolucionSuperaLoCobrado') };
+  }
+
+  // Solo el código: ni el cobro ni la factura en el registro.
+  console.error('asignarCobroAFactura: la base rechazó la asignación', error.code);
+  return { ...ESTADO_INICIAL, mensaje: t('cobros.facturas.noSePudoAsignar') };
+}
+
+export type CobroAsignable = {
+  id: string;
+  importeCentimos: number;
+  fecha: string;
+  formaPago: (typeof FORMAS_DE_PAGO)[number];
+  referencia: string | null;
+  motivo: string | null;
+};
+
+export type ResultadoCobrosAsignables = { ok: true; cobros: CobroAsignable[]; hayMas: boolean } | { ok: false };
+
+const MAXIMO_ASIGNABLES = 200;
+
+const esquemaFilaAsignable = z.object({
+  cobro_id: z.uuid(),
+  importe_centimos: z.number().int(),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  forma_pago: z.enum(FORMAS_DE_PAGO),
+  referencia: z.string().nullable(),
+  motivo: z.string().nullable(),
+});
+
+/** Los cobros del paciente de la factura que aún no están en ninguna: los que ofrece el diálogo de asignar. */
+export async function cargarCobrosAsignables(entrada: unknown): Promise<ResultadoCobrosAsignables> {
+  const { supabase } = await exigirSesion();
+
+  const factura = z.object({ facturaEspejoId: z.uuid() }).safeParse(entrada);
+  if (!factura.success) return { ok: false };
+
+  const { data, error } = await supabase.rpc('cobros_asignables', {
+    p_factura_espejo_id: factura.data.facturaEspejoId,
+  });
+  if (error) {
+    console.error('cargarCobrosAsignables: falló la lectura', error.code);
+    return { ok: false };
+  }
+  const filas = z.array(esquemaFilaAsignable).safeParse(data ?? []);
+  if (!filas.success) {
+    console.error('cargarCobrosAsignables: forma inesperada');
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    hayMas: filas.data.length > MAXIMO_ASIGNABLES,
+    cobros: filas.data.slice(0, MAXIMO_ASIGNABLES).map((f) => ({
+      id: f.cobro_id,
+      importeCentimos: f.importe_centimos,
+      fecha: f.fecha,
+      formaPago: f.forma_pago,
+      referencia: f.referencia,
+      motivo: f.motivo,
+    })),
+  };
 }

@@ -1,0 +1,52 @@
+{
+  "ticket": "T-023b",
+  "criterio": "CA4",
+  "contenedor": "supabase_db_Psicogestion",
+  "carreras": {
+    "dos_devoluciones": {
+      "espero": true,
+      "conexiones": [
+        {
+          "app": "t023b-c2-1",
+          "estado": 0,
+          "salida": "\n",
+          "error": ""
+        },
+        {
+          "app": "t023b-c2-2",
+          "estado": 0,
+          "salida": "",
+          "error": "psql:<stdin>:4: ERROR:  23514: la devolución supera lo cobrado en la factura\nCONTEXT:  PL/pgSQL function public.fn_comprobar_devolucion_en_factura(uuid,numeric) line 13 at RAISE\nSQL statement \"SELECT public.fn_comprobar_devolucion_en_factura(new.factura_espejo_id, v_cobro.importe)\"\nPL/pgSQL function public.fn_validar_cobro_factura() line 45 at PERFORM\nLOCATION:  exec_stmt_raise, pl_exec.c:3911\npsql:<stdin>:5: ERROR:  25P02: current transaction is aborted, commands ignored until end of transaction block\nLOCATION:  exec_simple_query, postgres.c:1140\n"
+        }
+      ],
+      "cuenta": {
+        "asignaciones_del_suelto": 0,
+        "asignaciones_de_devoluciones": 1,
+        "suma_factura": 20
+      }
+    },
+    "mismo_cobro": {
+      "espero": true,
+      "conexiones": [
+        {
+          "app": "t023b-c1-1",
+          "estado": 0,
+          "salida": "\n",
+          "error": ""
+        },
+        {
+          "app": "t023b-c1-2",
+          "estado": 0,
+          "salida": "",
+          "error": "psql:<stdin>:4: ERROR:  23505: duplicate key value violates unique constraint \"cobros_facturas_cobro_unico\"\nSCHEMA NAME:  public\nTABLE NAME:  cobros_facturas\nCONSTRAINT NAME:  cobros_facturas_cobro_unico\nLOCATION:  _bt_check_unique, nbtinsert.c:666\npsql:<stdin>:5: ERROR:  25P02: current transaction is aborted, commands ignored until end of transaction block\nLOCATION:  exec_simple_query, postgres.c:1140\n"
+        }
+      ],
+      "cuenta": {
+        "asignaciones_del_suelto": 1,
+        "asignaciones_de_devoluciones": 1,
+        "suma_factura": 45
+      }
+    }
+  },
+  "fallos": []
+}

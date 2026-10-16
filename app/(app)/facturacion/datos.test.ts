@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { FiltrosFacturas } from './filtros-facturas';
+
 const exigirSesion = vi.fn();
 vi.mock('@/lib/supabase/sesion', () => ({ exigirSesion: () => exigirSesion() }));
 
@@ -9,8 +11,13 @@ vi.mock('@/lib/cuentas/candado', () => ({ estadoDeCuenta: (...a: unknown[]) => e
 const connection = vi.fn().mockResolvedValue(undefined);
 vi.mock('next/server', () => ({ connection: () => connection() }));
 
+// Solo el nombre del programa: `registro` importa clientes de Supabase que aquí no hacen falta.
+vi.mock('@/lib/facturacion/registro', () => ({ FICHAS: { holded: { id: 'holded', nombre: 'Holded' } } }));
+
 const {
   TAMANO_PAGINA,
+  TAMANO_PAGINA_FACTURAS,
+  cargarFacturas,
   cargarCobrosRecientes,
   cargarContexto,
   cargarOpcionesProfesional,
@@ -443,5 +450,185 @@ describe('cargarPacientesParaCobro · por páginas de 1000', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     comoRol('administrador', { pacientes: { data: null, error: { code: '42501' } } });
     expect(await cargarPacientesParaCobro()).toEqual({ ok: false });
+  });
+});
+
+describe('cargarContexto · los filtros de facturas salen de la URL (T-023b)', () => {
+  it('desde, hasta, forma y paginaFacturas se leen para todos los roles, con el «hoy» de la organización', async () => {
+    comoRol('tecnico_administrativo');
+    const contexto = await cargarContexto(
+      Promise.resolve({ desde: '2026-09-01', hasta: '2026-09-30', forma: 'bizum', paginaFacturas: '2' }),
+    );
+    expect(contexto.filtrosFacturas).toMatchObject({
+      desde: '2026-09-01',
+      hasta: '2026-09-30',
+      formaPago: 'bizum',
+      pagina: 2,
+      avisos: [],
+    });
+  });
+
+  it('sin parámetros: los de siempre a partir del «hoy» del contexto', async () => {
+    comoRol('administrador');
+    const contexto = await cargarContexto(Promise.resolve({}));
+    expect(contexto.filtrosFacturas.hasta).toBe(contexto.hoy);
+    expect(contexto.filtrosFacturas.desde < contexto.hoy).toBe(true);
+    expect(contexto.filtrosFacturas.desde.endsWith('-01')).toBe(true);
+  });
+});
+
+describe('cargarFacturas · el listado lo hace la base (T-023b)', () => {
+  const FACTURA = '8a2b3c4d-5e6f-4a70-9b81-1c2d3e4f5a61';
+  const PACIENTE = '6f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60';
+  const COBRO = '9b3c4d5e-6f70-4b81-8c92-2d3e4f5a6b71';
+  const filtros: FiltrosFacturas = {
+    desde: '2026-08-01',
+    hasta: '2026-10-16',
+    formaPago: null,
+    pagina: 1,
+    avisos: [],
+    explicitos: { desde: null, hasta: null, formaPago: null },
+  };
+
+  const cobro = (extra: Record<string, unknown> = {}) => ({
+    cobro_id: COBRO,
+    importe_centimos: 2500,
+    fecha: '2026-10-01',
+    forma_pago: 'efectivo',
+    referencia: null,
+    motivo: null,
+    ...extra,
+  });
+  const fila = (extra: Record<string, unknown> = {}) => ({
+    id: FACTURA,
+    paciente_id: PACIENTE,
+    paciente_nombre: 'Lucía',
+    paciente_apellidos: 'Gómez',
+    paciente_fusionado: false,
+    proveedor: 'holded',
+    numero: 'F-2026-0001',
+    fecha_expedicion: '2026-10-02',
+    total_centimos: 6000,
+    url_proveedor: 'https://programa.example/doc/1',
+    cobros: [cobro()],
+    cobros_sin_factura: 2,
+    total_filas: 45,
+    ...extra,
+  });
+
+  /** Un rpc que responde a `listado_facturas_espejo` con las respuestas dadas, una por llamada (la última se repite). */
+  function conListado(...respuestas: Resultado[]) {
+    const llamadas: unknown[] = [];
+    const rpc = vi.fn((nombre: string, parametros?: unknown) => {
+      llamadas.push(parametros);
+      const r = respuestas[Math.min(llamadas.length - 1, respuestas.length - 1)];
+      return Promise.resolve(nombre === 'listado_facturas_espejo' ? r : { data: null, error: { code: 'XX' } });
+    });
+    exigirSesion.mockResolvedValue({ supabase: { rpc, from: vi.fn() }, usuario: { id: 'usr' } });
+    return { rpc, llamadas };
+  }
+
+  it('llama a la función con las fechas, la página de 20 y sin forma ni profesional si no los hay', async () => {
+    const { llamadas, rpc } = conListado({ data: [fila()], error: null });
+    await cargarFacturas(filtros, null);
+    expect(rpc).toHaveBeenCalledWith('listado_facturas_espejo', expect.any(Object));
+    expect(llamadas[0]).toEqual({
+      p_desde: '2026-08-01',
+      p_hasta: '2026-10-16',
+      p_limite: TAMANO_PAGINA_FACTURAS,
+      p_desplazamiento: 0,
+    });
+    expect(TAMANO_PAGINA_FACTURAS).toBe(20);
+  });
+
+  it('con forma de pago y profesional los manda; la página 3 desplaza 40', async () => {
+    const { llamadas } = conListado({ data: [fila()], error: null });
+    await cargarFacturas({ ...filtros, formaPago: 'efectivo', pagina: 3 }, PRO);
+    expect(llamadas[0]).toEqual({
+      p_desde: '2026-08-01',
+      p_hasta: '2026-10-16',
+      p_forma_pago: 'efectivo',
+      p_profesional_id: PRO,
+      p_limite: 20,
+      p_desplazamiento: 40,
+    });
+  });
+
+  it('devuelve el tipo cerrado: nombre del programa, total en céntimos, cobros y el total de filas', async () => {
+    conListado({ data: [fila()], error: null });
+    const r = await cargarFacturas(filtros, null);
+    expect(r).toEqual({
+      ok: true,
+      total: 45,
+      pagina: 1,
+      facturas: [
+        {
+          id: FACTURA,
+          pacienteId: PACIENTE,
+          nombre: 'Lucía',
+          apellidos: 'Gómez',
+          fusionado: false,
+          programa: 'Holded',
+          numero: 'F-2026-0001',
+          fecha: '2026-10-02',
+          totalCentimos: 6000,
+          url: 'https://programa.example/doc/1',
+          cobros: [
+            { id: COBRO, importeCentimos: 2500, fecha: '2026-10-01', formaPago: 'efectivo', referencia: null, motivo: null },
+          ],
+          cobrosSinFactura: 2,
+        },
+      ],
+    });
+  });
+
+  it('un proveedor sin ficha usa el nombre genérico', async () => {
+    conListado({ data: [fila({ proveedor: 'otro' })], error: null });
+    const r = await cargarFacturas(filtros, null);
+    expect(r.ok && r.facturas[0].programa).toBe('el programa de facturación');
+  });
+
+  it('una url que no es https no se enlaza', async () => {
+    conListado({ data: [fila({ url_proveedor: 'javascript:alert(1)' })], error: null });
+    const r = await cargarFacturas(filtros, null);
+    expect(r.ok && r.facturas[0].url).toBeNull();
+  });
+
+  it('sin filas en la página 1: lista vacía y total 0, con una sola llamada', async () => {
+    const { rpc } = conListado({ data: [], error: null });
+    expect(await cargarFacturas(filtros, null)).toEqual({ ok: true, facturas: [], total: 0, pagina: 1 });
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('una página que pasa de la última cae en la última (45 filas → página 3 de 20)', async () => {
+    const { llamadas } = conListado(
+      { data: [], error: null },
+      { data: [fila({ total_filas: 45 })], error: null },
+      { data: [fila({ total_filas: 45 })], error: null },
+    );
+    const r = await cargarFacturas({ ...filtros, pagina: 99 }, null);
+    expect(r.ok && r.pagina).toBe(3);
+    expect(llamadas.map((l) => (l as { p_desplazamiento: number }).p_desplazamiento)).toEqual([1960, 0, 40]);
+  });
+
+  it('un error de la base es { ok: false } y el registro lleva solo el código', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    conListado({ data: null, error: { code: '57014', message: 'secreto' } });
+    expect(await cargarFacturas(filtros, null)).toEqual({ ok: false });
+    expect(JSON.stringify(consola.mock.calls)).toContain('57014');
+    expect(JSON.stringify(consola.mock.calls)).not.toContain('secreto');
+  });
+
+  it.each([
+    ['forma de pago desconocida', { cobros: [cobro({ forma_pago: 'cheque' })] }],
+    ['cobros que no es un arreglo', { cobros: { a: 1 } }],
+    ['importe en cero', { cobros: [cobro({ importe_centimos: 0 })] }],
+    ['importe con decimales', { cobros: [cobro({ importe_centimos: 12.5 })] }],
+    ['fecha rara', { cobros: [cobro({ fecha: 'ayer' })] }],
+    ['total que no es entero', { total_centimos: 'mucho' }],
+  ])('una fila con %s es { ok: false }, nunca una cifra', async (_nombre, extra) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    conListado({ data: [fila(extra)], error: null });
+    expect(await cargarFacturas(filtros, null)).toEqual({ ok: false });
   });
 });

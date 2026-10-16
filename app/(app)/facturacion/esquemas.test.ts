@@ -3,11 +3,21 @@ import { z } from 'zod';
 
 import { t } from '@/lib/i18n';
 
-import { FORMAS_DE_PAGO, LIMITE_CENTIMOS, crearEsquemaCobro, huellaDeCobro, importeParaBd } from './esquemas';
+import {
+  FORMAS_DE_PAGO,
+  LIMITE_CENTIMOS,
+  crearEsquemaCobro,
+  esquemaAsignacion,
+  huellaDeCobro,
+  importeParaBd,
+} from './esquemas';
 
 const HOY = '2026-10-06';
 // Un uuid v4, como los de `gen_random_uuid()`: `z.uuid()` exige la versión y la variante.
 const PACIENTE = '6f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60';
+
+// Un uuid v4 de factura del espejo.
+const FACTURA = '8a2b3c4d-5e6f-4a70-9b81-1c2d3e4f5a61';
 
 const base = {
   pacienteId: PACIENTE,
@@ -167,6 +177,16 @@ describe('huellaDeCobro (R4.1)', () => {
     );
   });
 
+  it('el cobro contra una factura y el mismo sin factura dan huellas distintas (T-023b)', () => {
+    expect(huellaDeCobro(datos({ facturaEspejoId: FACTURA }))).not.toBe(huellaDeCobro(datos()));
+  });
+
+  it('la factura va al final del arreglo y, sin ella, es null (T-023b)', () => {
+    expect(JSON.parse(huellaDeCobro(datos())).at(-1)).toBeNull();
+    expect(JSON.parse(huellaDeCobro(datos({ facturaEspejoId: FACTURA }))).at(-1)).toBe(FACTURA);
+    expect(JSON.parse(huellaDeCobro(datos())).slice(0, 6)).toEqual([PACIENTE, 6000, HOY, 'efectivo', null, null]);
+  });
+
   it.each([
     ['pacienteId', '7f1c2a3b-4d5e-4f60-8a71-0b2c3d4e5f60'],
     ['fecha', '2026-10-05'],
@@ -174,5 +194,41 @@ describe('huellaDeCobro (R4.1)', () => {
     ['referencia', 'TR-1'],
   ])('cambiar %s cambia la huella', (campo, valor) => {
     expect(huellaDeCobro(datos({ [campo]: valor }))).not.toBe(huellaDeCobro(datos()));
+  });
+});
+
+describe('crearEsquemaCobro · la factura (T-023b)', () => {
+  it('acepta un cobro sin factura y con un uuid de factura', () => {
+    expect(erroresDe(base)).toEqual({});
+    expect(erroresDe({ ...base, facturaEspejoId: FACTURA })).toEqual({});
+  });
+
+  it('rechaza una factura que no es un uuid, con su mensaje en su campo', () => {
+    expect(erroresDe({ ...base, facturaEspejoId: 'F-2026-0001' }).facturaEspejoId).toEqual([
+      t('cobros.facturas.facturaNoValida'),
+    ]);
+  });
+
+  it('la salida conserva la factura y parse(parse(x)) es parse(x)', () => {
+    const esquema = crearEsquemaCobro(HOY);
+    const una = esquema.parse({ ...base, facturaEspejoId: FACTURA });
+    expect(una.facturaEspejoId).toBe(FACTURA);
+    expect(esquema.parse(una)).toEqual(una);
+  });
+});
+
+describe('esquemaAsignacion (T-023b)', () => {
+  it('acepta dos uuid', () => {
+    expect(esquemaAsignacion.safeParse({ cobroId: PACIENTE, facturaEspejoId: FACTURA }).success).toBe(true);
+  });
+
+  it('un cobro que no es uuid da «Elige un cobro» en su campo', () => {
+    const r = esquemaAsignacion.safeParse({ cobroId: '', facturaEspejoId: FACTURA });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(z.flattenError(r.error).fieldErrors.cobroId).toEqual([t('cobros.facturas.eligeCobro')]);
+  });
+
+  it('una factura que no es uuid falla', () => {
+    expect(esquemaAsignacion.safeParse({ cobroId: PACIENTE, facturaEspejoId: 'x' }).success).toBe(false);
   });
 });

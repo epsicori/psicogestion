@@ -301,4 +301,14 @@ select public.registrar_anotacion_documento('holded', 'DOC-A', 'rectificado');
 reset role;
 select pg_temp.assert(:RECLAMADOS_FIJ = 2, 'T-026a · la fijación reclamó los dos envíos');
 
+-- T-023b · Una fila en cobros_facturas ANTES del módulo 10, y por la vía de la aplicación (ADM, sesión de
+-- authenticated): sobre una tabla vacía el disparador de fila no salta y `10-solo-adicion` fallaría con
+-- «debía lanzar y no lanzó» (H11 del diseño). COB1 (P1, 60,00) se asigna a la factura de P1 (DOC-A).
+-- `31` y `33` vuelven a hacer el mismo \gset con el mismo valor: inocuo.
+select format('%L', e.id) as "ESPA" from public.facturas_espejo e where e.proveedor_documento_id = 'DOC-A' \gset
+select format('%L', e.id) as "ESPB" from public.facturas_espejo e where e.proveedor_documento_id = 'DOC-B' \gset
+call pg_temp.como(:ADM);
+insert into public.cobros_facturas (cobro_id, factura_espejo_id) values (:COB1, :ESPA);
+call pg_temp.reset_sesion();
+
 \echo '01-fijación: completa.'

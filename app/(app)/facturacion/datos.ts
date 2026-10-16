@@ -7,11 +7,14 @@ import { z } from 'zod';
 import type { RolUsuario } from '@/components/armazon/modulos';
 import { estadoDeCuenta } from '@/lib/cuentas/candado';
 import type { Centimos } from '@/lib/dinero/importe';
+import { FICHAS } from '@/lib/facturacion/registro';
 import { t } from '@/lib/i18n';
 import { exigirSesion } from '@/lib/supabase/sesion';
 import type { Database } from '@/lib/supabase/tipos-bd';
 
 import { hoyEn, leerRol } from '../agenda/bloques';
+import { FORMAS_DE_PAGO } from './esquemas';
+import { leerFiltrosFacturas, type FiltrosFacturas } from './filtros-facturas';
 import { aFilaDePendiente, importeDeBd, type FilaDePendiente } from './presentacion';
 
 /**
@@ -31,6 +34,9 @@ type ParametrosDeBusqueda = Promise<Record<string, string | string[] | undefined
 /** Filas de la lista del pendiente por página. */
 export const TAMANO_PAGINA = 50;
 
+/** Filas de la lista de facturas por página (T-023b). */
+export const TAMANO_PAGINA_FACTURAS = 20;
+
 /** Filas por página al leer los pacientes del formulario: el tope de `max_rows`. */
 const TAMANO_LOTE_PACIENTES = 1000;
 
@@ -42,6 +48,8 @@ export type ContextoFacturacion = {
   pagina: number;
   zona: string;
   hoy: string;
+  /** Los filtros de la lista de facturas (T-023b); la leen todos los roles, la base recorta por rol. */
+  filtrosFacturas: FiltrosFacturas;
 };
 
 export type PendienteConNombre = FilaDePendiente & { nombre: string; apellidos: string };
@@ -95,7 +103,8 @@ export const cargarContexto = cache(async (searchParams: ParametrosDeBusqueda): 
     throw new Error(`Facturación: no se pudo leer la zona de la organización (${error?.code ?? 'vacía'}).`);
   }
 
-  return { rol, profesionalFiltrado, pagina, zona, hoy: hoyEn(new Date(), zona) };
+  const hoy = hoyEn(new Date(), zona);
+  return { rol, profesionalFiltrado, pagina, zona, hoy, filtrosFacturas: leerFiltrosFacturas(parametros, hoy) };
 });
 
 export type ResumenPendiente = {
@@ -321,3 +330,145 @@ export const cargarPacientesParaCobro = cache(async (): Promise<ResultadoPacient
   }
   return { ok: true, pacientes: [...porId.values()] };
 });
+
+export type CobroDeFactura = {
+  id: string;
+  /** Con signo: una devolución es negativa. */
+  importeCentimos: number;
+  fecha: string;
+  formaPago: Database['public']['Enums']['forma_pago'];
+  referencia: string | null;
+  motivo: string | null;
+};
+
+export type FacturaListada = {
+  id: string;
+  pacienteId: string;
+  nombre: string;
+  apellidos: string;
+  /** El paciente se unió a otro registro: la factura se ve, pero no admite cobros nuevos (ADR-031). */
+  fusionado: boolean;
+  /** El nombre del programa que la expidió, para la frase «Emitida en {programa}». */
+  programa: string;
+  numero: string;
+  fecha: string;
+  totalCentimos: Centimos;
+  /** Enlace al documento en el programa; null si no es un https válido (nunca se pinta un enlace dudoso). */
+  url: string | null;
+  cobros: CobroDeFactura[];
+  /** Cobros del paciente que no están en ninguna factura: lo que se podría asignar. */
+  cobrosSinFactura: number;
+};
+
+export type ResultadoFacturas =
+  | { ok: true; facturas: FacturaListada[]; total: number; pagina: number }
+  | { ok: false };
+
+const esquemaFecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const esquemaCobroDeFactura = z.object({
+  cobro_id: z.uuid(),
+  importe_centimos: z.number().int().refine((n) => n !== 0),
+  fecha: esquemaFecha,
+  forma_pago: z.enum(FORMAS_DE_PAGO),
+  referencia: z.string().nullable(),
+  motivo: z.string().nullable(),
+});
+const esquemaFilaDeFactura = z.object({
+  id: z.uuid(),
+  paciente_id: z.uuid(),
+  paciente_nombre: z.string().nullable(),
+  paciente_apellidos: z.string().nullable(),
+  paciente_fusionado: z.boolean(),
+  proveedor: z.string(),
+  numero: z.string(),
+  fecha_expedicion: esquemaFecha,
+  total_centimos: z.number().int().min(0),
+  url_proveedor: z.string().nullable(),
+  cobros: z.array(esquemaCobroDeFactura),
+  cobros_sin_factura: z.number().int().min(0),
+  total_filas: z.number().int().min(0),
+});
+
+const esUrlHttps = (valor: string | null): valor is string => {
+  if (!valor) return false;
+  try {
+    return new URL(valor).protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Una página de las facturas del espejo, de `listado_facturas_espejo()` (T-023b): el filtro, el orden, el corte
+ * y los cobros de cada factura (leídos de `cobros_por_factura`) los hace la base, bajo la RLS de quien pide.
+ * Aquí solo se cablea y se valida: una fila con forma rara es un error del bloque, nunca una cifra.
+ * Una página que pasa de la última cae en la última (se averigua el total con la primera).
+ * El `profesional` solo llega para el administrador (lo decide `cargarContexto`).
+ */
+export const cargarFacturas = cache(
+  async (filtros: FiltrosFacturas, profesional: string | null): Promise<ResultadoFacturas> => {
+    const { supabase } = await cargarSesion();
+
+    async function pedir(pagina: number) {
+      const { data, error } = await supabase.rpc('listado_facturas_espejo', {
+        p_desde: filtros.desde,
+        p_hasta: filtros.hasta,
+        ...(filtros.formaPago ? { p_forma_pago: filtros.formaPago } : {}),
+        ...(profesional ? { p_profesional_id: profesional } : {}),
+        p_limite: TAMANO_PAGINA_FACTURAS,
+        p_desplazamiento: (pagina - 1) * TAMANO_PAGINA_FACTURAS,
+      });
+      if (error || !data) {
+        console.error('cargarFacturas: fallo al leer listado_facturas_espejo', error?.code);
+        return null;
+      }
+      return data;
+    }
+
+    let pagina = filtros.pagina;
+    let filas = await pedir(pagina);
+    if (filas === null) return { ok: false };
+    if (filas.length === 0 && pagina > 1) {
+      const primera = await pedir(1);
+      if (primera === null) return { ok: false };
+      const total = primera[0]?.total_filas ?? 0;
+      if (total === 0) return { ok: true, facturas: [], total: 0, pagina: 1 };
+      pagina = Math.ceil(total / TAMANO_PAGINA_FACTURAS);
+      filas = pagina === 1 ? primera : await pedir(pagina);
+      if (filas === null) return { ok: false };
+    }
+    if (filas.length === 0) return { ok: true, facturas: [], total: 0, pagina };
+
+    const validas = z.array(esquemaFilaDeFactura).safeParse(filas);
+    if (!validas.success) {
+      console.error('cargarFacturas: forma inesperada en listado_facturas_espejo');
+      return { ok: false };
+    }
+    return {
+      ok: true,
+      total: validas.data[0].total_filas,
+      pagina,
+      facturas: validas.data.map((f) => ({
+        id: f.id,
+        pacienteId: f.paciente_id,
+        nombre: f.paciente_nombre ?? '',
+        apellidos: f.paciente_apellidos ?? '',
+        fusionado: f.paciente_fusionado,
+        programa: FICHAS[f.proveedor as keyof typeof FICHAS]?.nombre ?? t('facturacion.panel.programaGenerico'),
+        numero: f.numero,
+        fecha: f.fecha_expedicion,
+        totalCentimos: f.total_centimos as Centimos,
+        url: esUrlHttps(f.url_proveedor) ? f.url_proveedor : null,
+        cobros: f.cobros.map((c) => ({
+          id: c.cobro_id,
+          importeCentimos: c.importe_centimos,
+          fecha: c.fecha,
+          formaPago: c.forma_pago,
+          referencia: c.referencia,
+          motivo: c.motivo,
+        })),
+        cobrosSinFactura: f.cobros_sin_factura,
+      })),
+    };
+  },
+);

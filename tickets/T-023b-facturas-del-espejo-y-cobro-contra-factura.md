@@ -6,7 +6,8 @@ riesgo: alto
 fase: 2
 prioridad: media
 depende_de: [T-023, T-026a]   # los datos reales del espejo llegan con T-026b; las pruebas usan la fijación de T-026a
-estado: pendiente
+estado: hecho
+completado: 2026-10-16
 delegable: no                 # dinero, RLS y una tabla de solo adición
 territorio:                   # provisional; lo cierra tickets/T-023b/diseno.md §6
   - supabase/migrations/20261016120000_cobros_facturas.sql   # cola de un solo dueño: tras T-026a (20261014120000) y la reserva de T-046 (20261015120000)

@@ -932,6 +932,45 @@ export type Database = {
           },
         ]
       }
+      cobros_facturas: {
+        Row: {
+          cobro_id: string
+          creada_en: string
+          creada_por: string
+          factura_espejo_id: string
+          id: string
+        }
+        Insert: {
+          cobro_id: string
+          creada_en?: string
+          creada_por?: string
+          factura_espejo_id: string
+          id?: string
+        }
+        Update: {
+          cobro_id?: string
+          creada_en?: string
+          creada_por?: string
+          factura_espejo_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cobros_facturas_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "directorio_perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cobros_facturas_creada_por_fkey"
+            columns: ["creada_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       codigos_recuperacion_totp: {
         Row: {
           bloqueado_hasta: string | null
@@ -3699,6 +3738,21 @@ export type Database = {
           },
         ]
       }
+      cobros_por_factura: {
+        Row: {
+          cobro_id: string | null
+          enlazado_en: string | null
+          factura_espejo_id: string | null
+          fecha: string | null
+          forma_pago: Database["public"]["Enums"]["forma_pago"] | null
+          importe: number | null
+          motivo: string | null
+          paciente_id: string | null
+          referencia: string | null
+          via: string | null
+        }
+        Relationships: []
+      }
       directorio_perfiles: {
         Row: {
           centro_id: string | null
@@ -4187,6 +4241,17 @@ export type Database = {
           tabla: string
         }[]
       }
+      cobros_asignables: {
+        Args: { p_factura_espejo_id: string }
+        Returns: {
+          cobro_id: string
+          fecha: string
+          forma_pago: Database["public"]["Enums"]["forma_pago"]
+          importe_centimos: number
+          motivo: string
+          referencia: string
+        }[]
+      }
       comprobar_codigo_recuperacion: {
         Args: { p_codigo: string }
         Returns: undefined
@@ -4328,6 +4393,10 @@ export type Database = {
         Returns: string
       }
       fijar_pin_historia: { Args: { p_pin: string }; Returns: undefined }
+      fn_comprobar_devolucion_en_factura: {
+        Args: { p_factura_espejo_id: string; p_importe: number }
+        Returns: undefined
+      }
       generar_codigos_recuperacion: { Args: never; Returns: string[] }
       guardar_clave_proveedor_facturacion: {
         Args: {
@@ -4349,6 +4418,31 @@ export type Database = {
           domicilio_etiqueta: string
           domicilio_nonce: string
           tipo_documento: string
+        }[]
+      }
+      listado_facturas_espejo: {
+        Args: {
+          p_desde: string
+          p_desplazamiento?: number
+          p_forma_pago?: Database["public"]["Enums"]["forma_pago"]
+          p_hasta: string
+          p_limite?: number
+          p_profesional_id?: string
+        }
+        Returns: {
+          cobros: Json
+          cobros_sin_factura: number
+          fecha_expedicion: string
+          id: string
+          numero: string
+          paciente_apellidos: string
+          paciente_fusionado: boolean
+          paciente_id: string
+          paciente_nombre: string
+          proveedor: Database["public"]["Enums"]["proveedor_facturacion"]
+          total_centimos: number
+          total_filas: number
+          url_proveedor: string
         }[]
       }
       nivel_nota_pendiente: {
