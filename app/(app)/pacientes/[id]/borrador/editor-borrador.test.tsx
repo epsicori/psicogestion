@@ -15,6 +15,7 @@ vi.mock('./acciones', () => ({
 }));
 
 const { EditorBorrador } = await import('./editor-borrador');
+const { esquemaBorrador } = await import('./esquemas');
 
 const PAC = '11111111-1111-4111-8111-111111111111';
 const CITA = '22222222-2222-4222-8222-222222222222';
@@ -92,11 +93,10 @@ describe('EditorBorrador', () => {
     expect(screen.getByText(/121,00/)).toBeInTheDocument();
     await u.click(screen.getByRole('button', { name: 'Guardar borrador' }));
     await waitFor(() => expect(guardarBorradorAccion).toHaveBeenCalled());
-    expect(guardarBorradorAccion.mock.calls[0][0].lineas[0]).toMatchObject({
-      cita_id: null,
-      precio_centimos: 12100,
-      regimen_iva: 'general',
-    });
+    // La acción recibe los valores tal cual y los valida con el mismo esquema que el formulario.
+    const enviado = guardarBorradorAccion.mock.calls[0][0];
+    expect(enviado.lineas[0]).toMatchObject({ cita_id: null, precio: '121,00', regimen_iva: 'general' });
+    expect(esquemaBorrador.parse(enviado).lineas[0]).toMatchObject({ precio_centimos: 12100 });
     expect(await screen.findByRole('status')).toHaveTextContent('Guardado: versión 1');
   });
 

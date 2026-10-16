@@ -97,6 +97,7 @@ export function EditorBorrador({ pacienteId, borrador, elegibles }: Props) {
     control,
     register,
     handleSubmit,
+    getValues,
     setValue,
     formState: { errors },
   } = useForm<ValoresBorrador, unknown, EntradaDelFormulario>({
@@ -127,12 +128,15 @@ export function EditorBorrador({ pacienteId, borrador, elegibles }: Props) {
     if (!marcada && indice !== -1) remove(indice);
   };
 
-  const guardar = handleSubmit((datos) => {
+  // La acción recibe los VALORES del formulario, no la salida ya transformada: los valida otra vez
+  // con el mismo esquema, y ese esquema lee texto («121,00»), no céntimos.
+  const guardar = handleSubmit(() => {
     if (enviando || bloqueadoPorCita) return;
     setMensaje('');
     setErrorGeneral('');
+    const valores = getValues();
     iniciarTransicion(async () => {
-      const r = await guardarBorradorAccion(datos);
+      const r = await guardarBorradorAccion(valores);
       if (r.ok) {
         setActual({ id: r.borradorId, version: r.numeroVersion });
         setValue('borradorId', r.borradorId);
