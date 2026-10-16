@@ -2,7 +2,7 @@
 
 > Memoria viva. Máximo 80 líneas. Solo presente. Diseño en tickets y bitácora; reglas en `.claude/rules/`.
 
-**Actualizado**: 16-10-2026 · T-046 implementado en su rama, pendiente de verificación y revisión.
+**Actualizado**: 16-10-2026 · T-046 ronda 2 (H1–H4 de las revisiones) hecha en su rama, pendiente de verificación.
 
 ## Dónde estamos
 
@@ -17,7 +17,7 @@
 
 ## Siguiente paso
 
-1. **T-046**: verificación y dos revisores; después **T-023b** (listado de facturas y cobro contra factura).
+1. **T-046**: verificación de la ronda 2; después **T-023b** (listado de facturas y cobro contra factura).
 2. **T-047**: rama hecha; espera a que se fusionen sus migraciones previas (20261015 y 20261016).
 3. **T-027** (bonos): parado a medias.
 4. Limpiar worktrees: T-038, T-042, agent-* (incluido agent-a49560e9e3018f241), ramas a15498..., t050-r1-backup y worktree-agent-a5bed24d86d4a0141 (T-026a). Unlink de la junction antes de `git worktree remove`.
