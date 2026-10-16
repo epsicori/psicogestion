@@ -20,6 +20,8 @@ import { ejecutarSql } from '../scripts/psql.mjs';
  * T-023b: pasos 6-10, sobre una factura del espejo de Sofía Nieto (de Ana, centro Madrid, el del técnico)
  * que `beforeAll` inserta como `postgres` junto con un cobro suelto de 0,01 €. Las dos filas se quedan
  * (solo adición) y se reconocen por la marca de tiempo de su número y su referencia.
+ *
+ * T-052: paso 11, el desborde a 360 px con contenido ancho en la rejilla (`min-w-0`); no escribe en la base.
  */
 
 const MOVIL = { width: 360, height: 740 };
@@ -431,4 +433,43 @@ test('10 · el técnico ve la fila, abre «Asignar» y ninguna respuesta (docume
       `una respuesta de /facturacion contiene «${prohibido}»`,
     ).toBe(false);
   }
+});
+
+test('11 · a 360 px, contenido ancho en «Por paciente» y «Últimos cobros» no desborda la página (min-w-0)', async ({ page }) => {
+  await entrar(page);
+  const marcos = ['facturacion-pendientes', 'facturacion-cobros'];
+  for (const id of marcos) {
+    const marco = page.locator(`section[aria-labelledby="${id}"]`);
+    await expect(marco).toBeVisible();
+    // Sin esqueleto: se inyecta en el contenido real, no en el `Cargando` que el Suspense va a sustituir.
+    await expect(marco.getByRole('status', { name: 'Cargando' })).toHaveCount(0);
+  }
+  const medida = await page.evaluate((ids) => {
+    let insertados = 0;
+    let anchoRelleno = 0;
+    for (const id of ids) {
+      const seccion = document.querySelector(`section[aria-labelledby="${id}"]`);
+      if (!seccion) continue;
+      const destino = seccion.querySelector('li') ?? seccion;
+      // Imita `truncate`: bloque que recorta y no parte. Su contenido mínimo es de 600 px.
+      const envoltura = document.createElement('span');
+      envoltura.dataset.t052 = 'ancho';
+      envoltura.style.cssText = 'display:block;overflow:hidden;white-space:nowrap';
+      const relleno = document.createElement('span');
+      relleno.style.cssText = 'display:inline-block;width:600px';
+      relleno.textContent = ' ';
+      envoltura.append(relleno);
+      destino.append(envoltura);
+      anchoRelleno = Math.max(anchoRelleno, relleno.getBoundingClientRect().width);
+      insertados += 1;
+    }
+    return {
+      insertados,
+      anchoRelleno,
+      desborde: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  }, marcos);
+  expect(medida.insertados, 'no se encontró uno de los dos marcos de la rejilla').toBe(2);
+  expect(medida.anchoRelleno, 'el contenido inyectado no mide 600 px: la prueba no prueba nada').toBe(600);
+  expect(medida.desborde, 'la página se sale a lo ancho a 360 px con contenido ancho en la rejilla').toBeLessThanOrEqual(0);
 });
