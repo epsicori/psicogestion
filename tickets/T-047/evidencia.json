@@ -1,0 +1,162 @@
+{
+  "ticket": "T-047",
+  "resumen": "Base, banco RLS 34, unitarias, lint, build, tsc y QA visible en tres roles pasan. FALLA el criterio 13: la prueba E2E accesibilidad/agenda-anual.spec.ts \"con raton caben cuatro meses por fila\" falla de forma reproducible (3/3) porque mide las secciones justo tras goto, cuando la pagina aun muestra el esqueleto (rectangulos 0/0/0, 12 en la primera fila); con la pagina resuelta la app da 4 por fila (tops 463 x4, 699 x4, 935 x4). El defecto esta en la espera de la spec, no en la app, pero el contrato exige la spec en verde. Trabaje en el worktree del ticket; max(version)=20261017120000; base resembrada y servidor parado.",
+  "criterios": [
+    {
+      "id": 1,
+      "texto": "Oraculo por rol (densidad = agenda_citas_rango sin canceladas, por filtros)",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (banco 34-agenda-anual, 81 OK, 0 ERROR en toda la salida, exit 0)",
+      "evidencia": "OK: C1 ADM sin filtro: densidad = oraculo; C: ADM CB+PRO34A = oraculo; C9 TEC1 sin filtro = oraculo; D5 ADM con p_profesional_id=TEC1 recibe el 14-03 con 1; E5 GEMELA zona Canary cuenta el 16-03. En la app: octubre 4 citas (5 en BD, 1 cancelada) = D1."
+    },
+    {
+      "id": 2,
+      "texto": "Lo que el llamante elige no abre nada",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (banco 34-agenda-anual, 81 OK, 0 ERROR en toda la salida, exit 0)",
+      "evidencia": "OK: D1 GEMELA (tecnico con p_centro_id=CA recibe citas; centro ajeno cero), D5, F3 GEMELA: TEC1 aparece UNA sola vez como profesional."
+    },
+    {
+      "id": 3,
+      "texto": "Forma y permisos",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (banco 34-agenda-anual, 81 OK, 0 ERROR en toda la salida, exit 0)",
+      "evidencia": "OK: A1 TABLE(dia date, recuento integer); A2 sin columnas de la cita; A3 security invoker y stable; A5 execute solo authenticated; A6 anon 42501; B1 22023 faltan los extremos; B2 22023 al reves o sin duracion; B3 22023 zona."
+    },
+    {
+      "id": 4,
+      "texto": "Coste y tope de filas (>=10000 citas, <1 s)",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls (banco 34-agenda-anual, 81 OK, 0 ERROR en toda la salida, exit 0)",
+      "evidencia": "OK: G1 >=10000 citas sinteticas; G2 ano entero densidad = oraculo; G3 <=366 filas; G4 314 filas en 22 ms; G5 EXPLAIN: Function Scan on agenda_densidad_anual (actual time=23.183..23.190 rows=314) Execution Time: 23.213 ms; cuerpo: GroupAggregate sobre 9599 filas, Index Scan citas_centro_inicio_idx, Execution Time 5.046 ms."
+    },
+    {
+      "id": 5,
+      "texto": "Nada se rompe alrededor (test:rls no empeora)",
+      "veredicto": "PASA",
+      "comando": "npm run test:rls",
+      "evidencia": "exit 0, sin ERROR ni fallos en los bancos 1-35."
+    },
+    {
+      "id": 6,
+      "texto": "leerParametros acepta vista=anio",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "npm test -> Test Files 248 passed (248), Tests 3423 passed (3423) (parametros.test.ts)"
+    },
+    {
+      "id": 7,
+      "texto": "rangoDeVista anio / construirVista no trata anio como mes",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "npm test -> Test Files 248 passed (248), Tests 3423 passed (3423) (bloques.test.ts, vista.test.ts)"
+    },
+    {
+      "id": 8,
+      "texto": "lib/agenda/anio.ts: meses, tramos, teclado",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "npm test -> Test Files 248 passed (248), Tests 3423 passed (3423) (anio.test.ts). En navegador: 365 dias, un unico tabindex=0; desde 03-10: Der 03-11, Abajo 03-18, Fin 03-22, RePag 04-22, Inicio 04-20, AvPag 03-20."
+    },
+    {
+      "id": 9,
+      "texto": "Vista anual al cliente sin Date (JSON round-trip)",
+      "veredicto": "PASA",
+      "comando": "npm test",
+      "evidencia": "npm test -> Test Files 248 passed (248), Tests 3423 passed (3423)"
+    },
+    {
+      "id": 10,
+      "texto": "Selector de tres opciones, Ano lleva fecha, Mes lleva fecha con foco, enlace conserva filtros",
+      "veredicto": "PASA",
+      "comando": "npm test + navegador",
+      "evidencia": "npm test -> Test Files 248 passed (248), Tests 3423 passed (3423); en navegador, tras mover el foco hasta 2026-03-20 y pulsar Mes: /agenda?vista=mes&fecha=2026-03-20 (admin, ana, tecnico)."
+    },
+    {
+      "id": 11,
+      "texto": "Nombre accesible del dia",
+      "veredicto": "PASA",
+      "comando": "npm test + navegador",
+      "evidencia": "npm test -> Test Files 248 passed (248), Tests 3423 passed (3423); en navegador aria-label: martes, 10 de marzo de 2026, sin citas; meses rotulados Septiembre · 4 citas, Marzo · sin citas."
+    },
+    {
+      "id": 12,
+      "texto": "rg use cache en agenda y densidad.ts no devuelve nada",
+      "veredicto": "PASA",
+      "comando": "rg -n \"use cache\" \"app/(app)/agenda\" lib/citas/densidad.ts",
+      "evidencia": "Unica coincidencia: app/(app)/agenda/datos.ts:18, un comentario que dice NUNCA use cache (ADR-043); fichero sin cambios en la rama (git diff main...HEAD vacio). Ninguna directiva real ni en densidad.ts."
+    },
+    {
+      "id": 13,
+      "texto": "npx playwright test accesibilidad/agenda-anual.spec.ts en verde",
+      "veredicto": "FALLA",
+      "comando": "PUERTO=3124 npx playwright test --workers=1 (suite entera) y -g \"cuatro meses\" x2",
+      "evidencia": "Suite entera: 44 passed, 1 failed, 1 did not run. Fallo agenda-anual.spec.ts:81 meses en la primera fila a 1440 px con raton: Expected 4, Received 12. La prueba de teclado pasa; la de 360 px pasa sola (-g 360: 1 passed) pero queda did not run en la corrida normal por el modo serial.",
+      "reproduccion": "db reset + seed, npx next build --webpack, npx next start -p 3124, PUERTO=3124 npx playwright test accesibilidad/agenda-anual.spec.ts --workers=1 -> falla siempre la prueba de cuatro meses por fila. Causa: la spec evalua .meses-anio > section justo tras page.goto; en ese instante es el esqueleto con rectangulos 0/0/0 (todos en la misma fila). Con 1500 ms de espera la app da tops 463/463/463/463, 699..., 935... (4 por fila, 158 px). Falta esperar a a[data-dia] antes de medir."
+    },
+    {
+      "id": 14,
+      "texto": "npm run lint && npm run build limpios",
+      "veredicto": "PASA",
+      "comando": "npm run lint; npm run lint:migraciones; npx next build --webpack; npx tsc --noEmit",
+      "evidencia": "lint: 0 errores, 3 warnings no-unused-vars; lint:migraciones 38 limpias; build OK; tsc exit 0."
+    },
+    {
+      "id": "M1",
+      "texto": "Manual: escala de grises y colores forzados",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Requiere imprimir a PDF en grises y activar colores forzados de Windows. En captura cada escalon lleva marca ademas de tono (0 vacio, 1 barra corta, 2 barra larga): tickets/T-047/qa/anio-admin-1280.png."
+    },
+    {
+      "id": "M2",
+      "texto": "Manual: lector de pantalla",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Hace falta NVDA o Narrador. Guion: abrir /agenda?vista=anio, recorrer marzo con flechas; debe decir fecha larga y recuento por dia y el total del mes."
+    },
+    {
+      "id": "M3",
+      "texto": "Manual: roles tecnico y profesional",
+      "veredicto": "PASA",
+      "comando": "navegador visible, admin/ana/tecnico a 1280 y 360 px",
+      "evidencia": "Los tres roles ven septiembre 4 y octubre 4 citas, sin texto de estados en el main; el total de octubre excluye la cancelada (BD: 5 totales, 4 no canceladas). Capturas en tickets/T-047/qa/. El aislamiento por rol lo prueba el banco 34. Limitacion: la semilla no distingue roles en este rango."
+    },
+    {
+      "id": "M4",
+      "texto": "Manual: 360 px en telefono real",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Sin telefono real. Emulacion tactil 360 px: sin desborde, 12 meses en columna, minimo de dia 44 px en admin, ana y tecnico."
+    },
+    {
+      "id": "M5",
+      "texto": "Manual: mismo vocabulario visual que /prototipo",
+      "veredicto": "NO_VERIFICABLE",
+      "motivo": "Juicio visual del propietario; capturas en tickets/T-047/qa/anio-*-1280.png."
+    }
+  ],
+  "regresiones": [
+    "Ninguna ajena al ticket: npm test 3423/3423 y las otras 44 pruebas E2E pasan."
+  ],
+  "pantalla": {
+    "ticket": "T-047",
+    "commit": "47abe5f553bb0b6455cbd078af59d5d51c0de520",
+    "rutas": [
+      "/agenda?vista=anio",
+      "/agenda?vista=anio&fecha=2026-03-10",
+      "/agenda?vista=anio&fecha=2026-03-10&centro=x"
+    ],
+    "consola": [],
+    "paginas": [],
+    "http5xx": [],
+    "desborde_390": [],
+    "capturas": [
+      ".claude/qa/visitas/T-047/agenda_vista_anio-1280.png",
+      ".claude/qa/visitas/T-047/agenda_vista_anio-390.png",
+      ".claude/qa/visitas/T-047/agenda_vista_anio_fecha_2026-03-10-1280.png",
+      ".claude/qa/visitas/T-047/agenda_vista_anio_fecha_2026-03-10-390.png",
+      ".claude/qa/visitas/T-047/agenda_vista_anio_fecha_2026-03-10_centro_x-1280.png",
+      ".claude/qa/visitas/T-047/agenda_vista_anio_fecha_2026-03-10_centro_x-390.png"
+    ],
+    "bloqueadas": [],
+    "notas": []
+  }
+}
