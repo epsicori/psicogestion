@@ -19,7 +19,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['lib/facturacion/**/*.bd.test.ts'],
+    include: ['lib/facturacion/**/*.bd.test.ts', 'lib/economico/**/*.bd.test.ts'],
     testTimeout: 30000,
   },
 });
