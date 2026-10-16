@@ -1,47 +1,32 @@
 {
   "ticket": "T-047",
   "tipo": "seguridad",
-  "ronda": 1,
-  "commit": "47abe5f553bb0b6455cbd078af59d5d51c0de520",
+  "ronda": 2,
+  "commit": "3847b2985c2dc0aac7bd2ec554fdb177b8ee16df",
   "altas": 0,
-  "medias": 1,
-  "bajas": 3,
-  "hallazgos": [
+  "medias": 0,
+  "bajas": 0,
+  "cerrados": [
     {
       "id": "H1",
       "severidad": "MEDIA",
-      "causa": "contrato",
-      "archivo": "lib/supabase/tipos-bd.ts",
-      "linea": 4053,
-      "descripcion": "tipos-bd.ts editado a mano (las dos RPC) y distinto de lo que genera npm run tipos: el generador pone agenda_densidad_anual antes de agenda_descartar_propuesta.",
-      "escenario": "CI ejecuta npm run tipos y git diff --exit-code -- lib/supabase/tipos-bd.ts: hay diferencia de orden, el paso «Los tipos generados no se editan a mano» falla y el PR queda rojo."
+      "comprobacion": "supabase gen types --local con la base en 20261017120000: idéntico al comiteado"
     },
     {
       "id": "H2",
       "severidad": "BAJA",
-      "causa": "prueba",
-      "archivo": "scripts/rls/34-agenda-anual.sql",
-      "linea": 305,
-      "descripcion": "A6 (anon recibe 42501) usa assert_lanza_codigo sin fragmento: sigue verde aunque anon tenga execute, porque el 42501 lo lanza es_zona_iana por dentro.",
-      "escenario": "grant execute on agenda_densidad_anual to public (o la lista a anon) + set local role anon + llamada: 42501 «permission denied for function es_zona_iana»; A6 verde y el mutante M12 solo lo tumba A5 (catálogo)."
+      "comprobacion": "con grant execute a anon el 42501 sale de es_zona_iana y A6 (con fragmento) cae; con el revoke, pasa"
     },
     {
       "id": "H3",
       "severidad": "BAJA",
-      "causa": "prueba",
-      "archivo": "scripts/rls/34-agenda-anual.sql",
-      "linea": 537,
-      "descripcion": "Ninguna aserción tumba quitar el filtro de rol de la rama citas en agenda_profesionales_anuales: «TEC1 una sola vez» lo garantiza el distinct, y F1 usa except, que deduplica.",
-      "escenario": "Mutante sin rol_actual() in (administrador, profesional_sanitario) en la lista (migración :125): el banco 34 entero sigue verde. En producción, un técnico que es profesional_id de una cita de un centro ajeno o sin centro se vería a sí mismo en el selector."
+      "comprobacion": "mutante sin filtro de rol en la lista medido en begin … rollback: muere en F7 (TEC1 · CB)"
     },
     {
       "id": "H4",
       "severidad": "BAJA",
-      "causa": "prueba",
-      "archivo": "scripts/rls/34-agenda-anual.sql",
-      "linea": 516,
-      "descripcion": "El filtro de centro de la lista admite el mutante «or centro_id is null» sin que caiga F1 ni F2: la única cita sin centro (C34SINC) es de PRO34N, que ya está en CA por otras citas. Además, el README remite a tickets/T-047/mutantes.json, que no existe en 47abe5f.",
-      "escenario": "Mutante p_centro_id is null or v.centro_id = p_centro_id or v.centro_id is null en la lista: el banco 34 sigue verde. En producción, el administrador que filtra por CA vería en el selector a un profesional cuyas únicas citas del año no tienen centro."
+      "comprobacion": "mutante or v.centro_id is null en la lista medido en begin … rollback: muere en F1 ADM · CA; mutantes.json en la rama"
     }
-  ]
+  ],
+  "hallazgos": []
 }
