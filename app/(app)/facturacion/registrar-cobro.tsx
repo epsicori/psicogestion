@@ -50,13 +50,15 @@ export function RegistrarCobro({ pacientes, hoy, factura }: Props) {
         <Button
           type="button"
           className="min-h-11"
+          // En la fila de una factura el rótulo visible es el corto; el nombre accesible lleva el número (D14).
+          aria-label={factura ? tCon('cobros.facturas.registrarDeFactura', { numero: factura.numero }) : undefined}
           onClick={() => {
             setAviso('');
             setAbierto(true);
           }}
         >
           <Plus />
-          {factura ? tCon('cobros.facturas.registrarDeFactura', { numero: factura.numero }) : t('cobros.registrarCobro')}
+          {t('cobros.registrarCobro')}
         </Button>
       )}
       {/* Visible: «Cobro registrado» es la confirmación de una acción económica, no solo para lectores. */}
