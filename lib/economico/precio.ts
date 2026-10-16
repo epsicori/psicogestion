@@ -19,7 +19,7 @@ export type TarifaLeida = {
   orden: number;
 };
 
-export type CitaParaPrecio = { inicio: string; zona_horaria: string; tipo_terapia_id: string };
+export type CitaParaPrecio = { inicio: string; zona_horaria: string; tipo_terapia_id: string | null };
 
 export type Propuesta = { precioCentimos: Centimos | null; regimen: RegimenIva | null };
 

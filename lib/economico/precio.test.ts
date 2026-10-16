@@ -88,6 +88,11 @@ describe('proponerLinea', () => {
     expect(proponerLinea(cita, [], null)).toEqual({ precioCentimos: null, regimen: null });
   });
 
+  it('una cita sin tipo de terapia no toma ninguna tarifa', () => {
+    const cita = { inicio: '2026-06-01T10:00:00Z', zona_horaria: 'Europe/Madrid', tipo_terapia_id: null };
+    expect(proponerLinea(cita, tarifas, null)).toEqual({ precioCentimos: null, regimen: null });
+  });
+
   it('una tarifa_base de 0,00 no propone un 0 silencioso', () => {
     const cita = { inicio: '2026-06-01T10:00:00Z', zona_horaria: 'Europe/Madrid', tipo_terapia_id: TIPO };
     expect(proponerLinea(cita, [], { tarifa_base: '0.00' })).toEqual({ precioCentimos: null, regimen: null });
