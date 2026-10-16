@@ -19,6 +19,7 @@ territorio:             # provisional; lo cierra tickets/T-046/diseno.md §6
   - scripts/rls/32-*.sql                            # ídem, con su fila en el README
   - scripts/rls/README.md                           # ídem
   - lib/supabase/tipos-bd.ts                        # ídem, solo regenerado
+  - vitest.bd.config.ts                             # diseño §6 punto 7: las pruebas contra la base
   - tickets/T-046/**
   - docs/bitacora/T-046*.md
   - docs/state.md
