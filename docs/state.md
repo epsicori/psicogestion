@@ -2,13 +2,14 @@
 
 > Memoria viva. Máximo 80 líneas. Solo presente. Diseño en tickets y bitácora; reglas en `.claude/rules/`.
 
-**Actualizado**: 16-10-2026 · T-047 cerrado en su rama (pendiente de merge) · T-023b (`f6a2a51`) · T-046, T-027 y T-026a en `main`.
+**Actualizado**: 16-10-2026 · T-047 (`a9b5903`) y T-051 (`1ecb64c`) en `main` · T-052 implementado en su rama, pendiente de verificar.
 
 ## Dónde estamos
 
 - **Integrado en `main`**: T-000–T-043, T-048, T-049, T-050 (T-023 en 20261013120000), T-026a (20261014120000), T-027 (d366323) y T-046 (20261015120000; bitácora `docs/bitacora/T-046.md`).
 - **T-023b (20261016120000)**: integrado con su merge; banco RLS 33 (63 OK). Bitácora `docs/bitacora/T-023b.md`.
-- **T-047 (20261017120000)**: cerrado en la rama `T-047-agenda-anual` (HEAD `fbdbe22`); entra en `main` con su merge. Bitácora `docs/bitacora/T-047.md`.
+- **T-047 (20261017120000)**: integrado (`a9b5903`); banco RLS 34. Bitácora `docs/bitacora/T-047.md`.
+- **T-051**: integrado (`1ecb64c`); la siembra trae bonos vigente, agotado y caducado. Bitácora `docs/bitacora/T-051.md`.
 
 ## Bloqueos
 
@@ -17,14 +18,15 @@
 
 ## Siguiente paso
 
-1. **Merge de T-047** (`T-047-agenda-anual`, migración 20261017120000) en `main`.
-2. **T-052 y T-053**, con el diseño aprobado el 16-10.
+1. **T-052**: verificar y revisar la rama `T-052-foco-ancho-facturacion`; merge.
+2. **T-053** (H25), con el diseño aprobado el 16-10 (`tickets/T-053/diseno.md`).
 3. **T-027** (bonos, en `main`): c5 y c6 pasaron en QA visible (16-10); c7 abierto. Comprobar si `/prototipo` está en `main`: en el worktree de T-047 sí existe.
 4. Limpiar worktrees y ramas viejas (`agent-*`, `t050-r1-backup`…); unlink de la junction antes de `git worktree remove`.
 
 ## Hallazgos abiertos
 
 - **R2-C-H1 (BAJA, T-047, prueba)**: `scripts/rls/34-agenda-anual.sql:13-15`. La cabecera no nombra PRO34S y dice que TEC1 es profesional solo de `C34TEC`; también lo es de `C34TECB`. Arreglo: corregir la cabecera.
+- **T-051 B2 (BAJA)**: la caducidad de Sofía (`current_date + 20`) se fija en la primera siembra; tras el 05-11 hace falta `db reset`, no basta `npm run seed`. B1: el comentario de `seed-completo.sql:607` dice «la única fecha relativa» y no lo es.
 - **Banco 34 (`test:rls`)**: tarda unos 4 minutos (4 min 21 s en ronda 2) por el insert sintético de 10 600 citas.
 - **T-023b N1 (MEDIA)**, `app/(app)/facturacion/asignar-cobro.tsx:67-69`: el foco cae en la hermana con dos facturas del paciente. Requiere ticket.
 - **`paginacion-pendientes.tsx`**: la variable de módulo `destino` se comparte entre instancias. Requiere ticket.
