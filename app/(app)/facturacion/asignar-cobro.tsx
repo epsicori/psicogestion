@@ -17,6 +17,11 @@ type Props = {
   factura: { id: string; numero: string };
   /** Zona de la organización: las fechas del diálogo se formatean con ella (ADR-034). */
   zona: string;
+  /**
+   * `false` cuando ya no quedan cobros sueltos del paciente: el botón se retira, pero el componente sigue
+   * montado para que el aviso de la asignación recién hecha no se pierda ni el foco caiga en `body`.
+   */
+  disponible?: boolean;
 };
 
 type Carga =
@@ -43,7 +48,8 @@ function textoDeOpcion(cobro: CobroAsignable, zona: string): string {
  * de la factura que aún no están en ninguna; la base decide si la asignación vale y aquí solo se
  * traduce su respuesta. Nada se edita ni se borra: se enlaza un cobro que ya existía.
  */
-export function AsignarCobro({ factura, zona }: Props) {
+export function AsignarCobro({ factura, zona, disponible = true }: Props) {
+  const estado = useRef<HTMLParagraphElement>(null);
   const [abierto, setAbierto] = useState(false);
   const [aviso, setAviso] = useState('');
   const [carga, setCarga] = useState<Carga>({ estado: 'cargando' });
@@ -55,6 +61,12 @@ export function AsignarCobro({ factura, zona }: Props) {
   // Cuenta de aperturas: una respuesta que llega tras cerrar y reabrir no pisa la lista de la apertura nueva.
   const apertura = useRef(0);
   const [pedirFoco, setPedirFoco] = useState(0);
+
+  // El botón que recibía el foco al cerrar el diálogo desaparece cuando ya no quedan cobros sueltos:
+  // el foco pasa a la región de estado, que sigue ahí (H1).
+  useEffect(() => {
+    if (!disponible && aviso !== '') estado.current?.focus();
+  }, [disponible, aviso]);
 
   useEffect(() => {
     if (pedirFoco > 0 && !enviando) selector.current?.focus();
@@ -115,18 +127,21 @@ export function AsignarCobro({ factura, zona }: Props) {
 
   return (
     <>
-      <Button
-        type="button"
-        variante="contorno"
-        className="min-h-11"
-        onClick={abrir}
-        aria-label={tCon('cobros.facturas.asignarDeFactura', { numero: factura.numero })}
-      >
-        <Link2 aria-hidden="true" />
-        {t('cobros.facturas.asignar')}
-      </Button>
-      {/* Visible: «Cobro asignado» confirma una acción económica, no solo para lectores. */}
-      <p role="status" className="text-sm text-foreground">
+      {disponible && (
+        <Button
+          type="button"
+          variante="contorno"
+          className="min-h-11"
+          onClick={abrir}
+          aria-label={tCon('cobros.facturas.asignarDeFactura', { numero: factura.numero })}
+        >
+          <Link2 aria-hidden="true" />
+          {t('cobros.facturas.asignar')}
+        </Button>
+      )}
+      {/* Visible: «Cobro asignado» confirma una acción económica, no solo para lectores. Siempre montada:
+          si el último cobro suelto se asigna, el botón se va y esta región es el destino estable del foco. */}
+      <p ref={estado} role="status" tabIndex={-1} className="text-sm text-foreground">
         {aviso}
       </p>
       <Dialogo

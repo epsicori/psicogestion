@@ -19,7 +19,11 @@ export function AccionesDeFactura({ factura, cobrosSinFactura, zona, hoy }: Prop
   return (
     <div className="flex flex-wrap items-start gap-2">
       <RegistrarCobro pacientes={null} hoy={hoy} factura={factura} />
-      {cobrosSinFactura > 0 && <AsignarCobro factura={{ id: factura.id, numero: factura.numero }} zona={zona} />}
+      <AsignarCobro
+        factura={{ id: factura.id, numero: factura.numero }}
+        zona={zona}
+        disponible={cobrosSinFactura > 0}
+      />
     </div>
   );
 }
