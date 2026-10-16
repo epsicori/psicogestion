@@ -15,6 +15,7 @@
 | **Disponibilidad** | Varía por centro: días y franjas distintos en cada uno. |
 | **Festivos** | Nacionales, autonómicos y locales (pueden variar por centro), vacaciones del profesional y cierres de centro. |
 | **Fuera de horario o en festivo** | **Avisa y deja agendar.** Las sugerencias de hueco nunca lo proponen. |
+| **Calendario del profesional** | Las citas aparecen en el calendario del móvil del profesional, como en Doctoralia, **sin nombre del paciente**: «Cita · centro · modalidad» y un enlace a la app. Se arranca con una suscripción `.ics`. |
 | **Recordatorios** | Hoy se mandan a mano por WhatsApp. La app tendrá una **lista diaria** y además un **botón en cada cita**. Por defecto, **48 h antes con dos enlaces de un solo uso, «Confirmo» y «No puedo ir»**. La antelación la personaliza cada profesional. |
 | **Firmas del primer día** | Consentimiento informado, asistencia por cita y rúbrica del profesional en los informes. La firma cualificada eIDAS y los periciales quedan para después. |
 | **Dispositivo del paciente** | **Tablet con lápiz, en consulta.** El trazo se guarda como prueba, unido a la huella del documento. **No se usa para identificar a nadie**: así no es dato biométrico de categoría especial. El propietario lo confirma con su asesor de protección de datos. |
@@ -47,6 +48,7 @@ Los números son una propuesta. El riesgo sigue la regla de `CLAUDE.md`.
 | **T-057b** | **Importador · citas**: futuras e historial, desde `.ics` de Google Calendar y desde Doctoralia. Casa cada cita con su paciente. Las importadas nunca generan notas. | alto |
 | **T-057c** | **Importador · notas antiguas como documento**: adjuntos en la ficha, marcados como importados, fuera de la cadena de notas firmadas. | alto |
 | **T-058** | **Recordatorios wa.me**: lista de las citas por recordar y botón en la cita. La antelación es configurable, 48 h por defecto. Incluye los enlaces firmados de un solo uso, que van a una ruta pública: confirmar o anular, con caducidad y auditoría. | alto (ruta pública) |
+| **T-062** | **Calendario del profesional en su móvil**: una suscripción `.ics` privada y revocable por profesional, que vale para Google, Apple y Outlook. Cada evento lleva solo «Cita · centro · modalidad» y un enlace a la cita en la app, que pide inicio de sesión. **Ningún dato del paciente sale de la app.** El token se guarda con huella, se puede revocar y queda auditado. Google tarda horas en refrescar estas suscripciones: si en el uso real molesta, se pasa al envío inmediato por la API de Google (ver «Después»). | alto (ruta pública con token) |
 
 ### Etapa 3 · firmas e informes
 | Ticket | Qué | Riesgo |
@@ -57,6 +59,7 @@ Los números son una propuesta. El riesgo sigue la regla de `CLAUDE.md`.
 
 ### Después de la puesta en marcha
 - Firma cualificada eIDAS e informes periciales.
+- Envío inmediato de las citas a Google Calendar por su API, con eventos sin datos del paciente, si el retraso de la suscripción `.ics` molesta. Exige pasar la verificación de Google para el permiso de calendario: sin ella, la conexión caduca cada 7 días.
 - Holded: T-026b y T-025, a la espera de sus respuestas.
 - Testers: alta de instancia por cliente, contrato del art. 28 e importador probado con más de 100 pacientes.
 - Hallazgos medios antiguos: T-039, T-040 y T-021.
@@ -67,7 +70,7 @@ Los números son una propuesta. El riesgo sigue la regla de `CLAUDE.md`.
 |---|---|
 | 16-10 a 25-10 | Etapa 0 cerrada; T-053 |
 | 26-10 a 08-11 | T-054 despliegue; T-055 y T-056 |
-| 09-11 a 29-11 | T-057a, b y c; T-058 |
+| 09-11 a 29-11 | T-057a, b y c; T-058; T-062 |
 | 30-11 a 13-12 | T-059, T-060 y T-061 |
 | 14-12 a 20-12 | Ensayo general: importación real en la instancia de producción, una semana en paralelo con el sistema actual |
 | **21-12** | Arranque con pacientes reales, si el ensayo sale limpio |

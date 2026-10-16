@@ -258,5 +258,5 @@ Aprobado por el propietario el 16-10-2026. El plan completo, con las decisiones 
 |---|---|
 | 0 · en curso | T-047, T-051, T-052 |
 | 1 · datos reales | T-053 (H25), T-054 (despliegue) |
-| 2 · día a día | T-055 (disponibilidad), T-056 (festivos), T-057a/b/c (importador), T-058 (recordatorios wa.me) |
+| 2 · día a día | T-055 (disponibilidad), T-056 (festivos), T-057a/b/c (importador), T-058 (recordatorios wa.me), T-062 (calendario del profesional) |
 | 3 · firmas e informes | T-059 (consentimientos), T-060 (asistencia), T-061 (informes) |
