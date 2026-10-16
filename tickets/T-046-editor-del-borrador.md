@@ -6,7 +6,8 @@ riesgo: alto
 fase: 2
 prioridad: alta
 depende_de: [T-021, T-026a, T-031, T-032]   # T-031: lib/dinero; T-032: cifrado y leer_identificacion
-estado: pendiente
+estado: hecho
+completado: 2026-10-16
 delegable: no           # formulario, dinero, cifrado del NIF y cadena de huellas: la fábrica
 territorio:             # provisional; lo cierra tickets/T-046/diseno.md §6
   - lib/economico/**                                # nuevo: el sobre TS del borrador (T-021 D12); dueño: la fábrica
