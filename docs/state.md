@@ -18,7 +18,7 @@
 ## Siguiente paso
 
 1. **Merge de T-047** (`T-047-agenda-anual`, migración 20261017120000) en `main`.
-2. **T-051, T-052 y T-053**, con el diseño aprobado el 16-10.
+2. **T-051 y T-053**, con el diseño aprobado el 16-10. **T-052** (`T-052-foco-ancho-facturacion`) cerrado en su rama, pendiente de verificación y merge.
 3. **T-027** (bonos, en `main`): c5 y c6 pasaron en QA visible (16-10); c7 abierto. Comprobar si `/prototipo` está en `main`: en el worktree de T-047 sí existe.
 4. Limpiar worktrees y ramas viejas (`agent-*`, `t050-r1-backup`…); unlink de la junction antes de `git worktree remove`.
 
@@ -26,7 +26,6 @@
 
 - **R2-C-H1 (BAJA, T-047, prueba)**: `scripts/rls/34-agenda-anual.sql:13-15`. La cabecera no nombra PRO34S y dice que TEC1 es profesional solo de `C34TEC`; también lo es de `C34TECB`. Arreglo: corregir la cabecera.
 - **Banco 34 (`test:rls`)**: tarda unos 4 minutos (4 min 21 s en ronda 2) por el insert sintético de 10 600 citas.
-- **T-023b N1 (MEDIA)**, `app/(app)/facturacion/asignar-cobro.tsx:67-69`: el foco cae en la hermana con dos facturas del paciente. Requiere ticket.
 - **`paginacion-pendientes.tsx`**: la variable de módulo `destino` se comparte entre instancias. Requiere ticket.
 - **Suite a11y en frío**: timeouts de login en la 1.ª pasada; más de 1 worker contiende (`acceso:138`, `avisos:29`).
 - **Spec `accesibilidad/facturacion.spec.ts`**: cada pasada deja cobros; resembrar con `db reset` + `seed`.
@@ -35,7 +34,6 @@
 - **T-046 H5 (BAJA, prueba)**: `aviso-de-estado.tsx:12`, la marca `descarteEnCurso` queda encendida si el descarte falla por red. Requiere ticket.
 - **Playwright `page.on('response')`**: no lee POST de Server Actions; lo usa `facturacion-clave.spec.ts:76`.
 - **Base compartida a11y**: 5 specs fallan con la base contaminada. CA de a11y: `db reset` + `seed` y `next start`.
-- **`/facturacion` a 360 px**: desborda 64 px con la base contaminada (`app/(app)/facturacion/page.tsx:83-89` sin `min-w-0`). Requiere ticket.
 - **T-027 sin control de borrador vivo**: deja poner un bono a una cita que ya está en un borrador sin descartar. Requiere ticket.
 - **T-027 ronda 2 (5 BAJA)**: `bono-de-cita.tsx:147` y `:40`; `acciones-bono.ts:156`; `registrar-bono.tsx:40`; `:24`.
 - **T-027 fuera de alcance**: cita realizada con bono agotado no se cobra; no hay control de «marcar realizada».
