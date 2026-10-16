@@ -1,0 +1,126 @@
+{
+  "ticket": "T-047",
+  "ronda": 2,
+  "fecha": "2026-10-16",
+  "banco": "scripts/rls/34-agenda-anual.sql",
+  "como_se_midio": "Cada mutante se aplicó sobre la migración 20261017120000_agenda_densidad_anual.sql (sustitución de texto, create or replace function) y se ejecutó, dentro de UNA transacción `begin … rollback` sobre el contenedor supabase_db_Psicogestion, el guion 00-ayudantes + 01-fijacion + migración mutada + 34-agenda-anual (completo, con el año sintético de 10 600 citas). psql con ON_ERROR_STOP=1: se anota la primera aserción que cae (las siguientes ya no corren). BASE es la misma ejecución sin mutar y termina en 0. Un mutante MUERE si psql sale con código distinto de 0 por una ASERCIÓN FALLIDA.",
+  "base": { "codigo_salida": 0, "avisos_ok": 92, "resultado": "verde" },
+  "mutantes": [
+    {
+      "id": "M1",
+      "mutacion": "Quitar el filtro de rol (rol_actual() in administrador, profesional_sanitario) de la rama `citas` de agenda_densidad_anual",
+      "asercion_asesina": "C9 TEC1 · sin filtro: densidad = oráculo (el diseño preveía D3; C9 cae antes por el mismo motivo: TEC1 cuenta C34TEC dos veces)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M2",
+      "mutacion": "Pertenencia por solape (c.inicio < hasta and c.fin > desde) en la rama `citas`",
+      "asercion_asesina": "E1: el año de PRO34N vale 5 (entra C34PREV)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M3",
+      "mutacion": "Borde superior abierto en las dos ramas: inicio <= p_hasta",
+      "asercion_asesina": "E1: el año de PRO34N vale 5 (entra C34FIN)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M4",
+      "mutacion": "Quitar `estado <> 'cancelada'` de la densidad",
+      "asercion_asesina": "C1 ADM · sin filtro: densidad = oráculo",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M5",
+      "mutacion": "Quitar el filtro de centro de la densidad",
+      "asercion_asesina": "C2 ADM · CA: densidad = oráculo",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M6",
+      "mutacion": "`or v.centro_id is null` en el filtro de centro de la densidad",
+      "asercion_asesina": "C2 ADM · CA: densidad = oráculo (E6 también lo tumbaría: C34SINC)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M7",
+      "mutacion": "Quitar el filtro de profesional de la densidad",
+      "asercion_asesina": "C3 ADM · PRO34A: densidad = oráculo",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M8",
+      "mutacion": "Agrupar por (inicio at time zone 'UTC')::date",
+      "asercion_asesina": "C1 ADM · sin filtro: densidad = oráculo (las citas de las 08:00 locales no cambian de día en UTC, pero las de 00:30 y 23:30 sí; E3 y E5 también)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M9",
+      "mutacion": "agenda_densidad_anual en security definer",
+      "asercion_asesina": "A3: las dos funciones son security invoker y stable",
+      "resultado": "MUERE",
+      "codigo_salida": 3,
+      "nota": "Medido tras corregir el sustituidor: la primera pasada cambió el comentario de la cabecera, no la función, y sobrevivió por error de medición. Con ON_ERROR_STOP, A3 corta antes de que C5, D2 y las comparaciones por oráculo se ejecuten con el mutante."
+    },
+    {
+      "id": "M9L",
+      "mutacion": "agenda_profesionales_anuales en security definer",
+      "asercion_asesina": "A3: las dos funciones son security invoker y stable",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M10",
+      "mutacion": "Quitar la guarda de zona (es_zona_iana) de la densidad",
+      "asercion_asesina": "B3: densidad con la zona nula (debía lanzar 22023 y no lanzó nada)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M11",
+      "mutacion": "Quitar la guarda del año natural de la densidad",
+      "asercion_asesina": "B4: densidad con un año y un microsegundo (debía lanzar 22023 y no lanzó nada)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "M12",
+      "mutacion": "Sin `revoke … from public`: grant execute a public y a anon en las dos funciones",
+      "asercion_asesina": "A5: la densidad: execute para authenticated, ni anon ni service_role (A6, con el fragmento «function agenda_densidad_anual», no llega a ejecutarse: ON_ERROR_STOP corta en A5)",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    },
+    {
+      "id": "S-H3",
+      "mutacion": "Quitar el filtro de rol de la rama `citas` de agenda_profesionales_anuales",
+      "asercion_asesina": "F7: TEC1 con p_centro_id = CB no recibe ningún profesional (ni a sí mismo por su cita de CB)",
+      "resultado": "MUERE",
+      "codigo_salida": 3,
+      "nota": "En la ronda 1 sobrevivía. La fijación gana C34TECB (TEC1 como profesional de una cita de CB)."
+    },
+    {
+      "id": "S-H4",
+      "mutacion": "`or v.centro_id is null` en el filtro de centro de agenda_profesionales_anuales",
+      "asercion_asesina": "F1 ADM · CA: la lista = el oráculo (F6 lo concreta: PRO34S, cuya única cita no tiene centro, no puede salir con p_centro_id = CA)",
+      "resultado": "MUERE",
+      "codigo_salida": 3,
+      "nota": "En la ronda 1 sobrevivía. La fijación gana el perfil PRO34S y la cita C34SINPRO, sin centro."
+    },
+    {
+      "id": "L-CENTRO",
+      "mutacion": "Quitar el filtro de centro de agenda_profesionales_anuales (where true)",
+      "asercion_asesina": "F1 ADM · CA: la lista = el oráculo",
+      "resultado": "MUERE",
+      "codigo_salida": 3
+    }
+  ],
+  "supervivientes": []
+}
