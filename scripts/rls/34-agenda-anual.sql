@@ -38,6 +38,9 @@
 \set C34NCAN    '\'a3400004-0000-4000-8000-000000000008\''
 \set C34TEC     '\'a3400004-0000-4000-8000-000000000009\''
 \set C34SOLOCAN '\'a3400004-0000-4000-8000-00000000000a\''
+\set C34TECB   '\'a3400004-0000-4000-8000-00000000000b\''
+\set C34SINPRO '\'a3400004-0000-4000-8000-00000000000c\''
+\set PRO34S '\'a3400001-0000-4000-8000-00000000000e\''
 
 select (extract(year from now())::int + 9) as anio_34 \gset
 select set_config('t34.anio', :'anio_34', false);
@@ -196,10 +199,14 @@ values
   ('00000000-0000-0000-0000-000000000000', :PRO34N, 'authenticated', 'authenticated', 'pro34n@rls.test', now(), now(),
    '{"provider":"email","providers":["email"]}'::jsonb,
    ('{"rol":"profesional_sanitario","nombre_completo":"Profesional 34 N","centro_id":"' || :CA || '"}')::jsonb,
+   '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', :PRO34S, 'authenticated', 'authenticated', 'pro34s@rls.test', now(), now(),
+   '{"provider":"email","providers":["email"]}'::jsonb,
+   ('{"rol":"profesional_sanitario","nombre_completo":"Profesional 34 S","centro_id":"' || :CA || '"}')::jsonb,
    '', '', '', '');
 
 -- Sin descanso: las citas de 30 minutos van contiguas y la exclusión las admite.
-update public.perfiles set descanso_activo = false where id in (:PRO34A, :PRO34B, :PRO34C, :PRO34N);
+update public.perfiles set descanso_activo = false where id in (:PRO34A, :PRO34B, :PRO34C, :PRO34N, :PRO34S);
 
 insert into public.pacientes (id, nombre, apellidos, profesional_id, centro_id) values
   (:P34A, 'Ana',   'Treinta y cuatro A', :PRO34A, :CA),
@@ -260,7 +267,15 @@ values
   (:C34TEC,  :P34A, :TEC1, :CA, :TT34, pg_temp.i34(3, 14, time '19:00'), pg_temp.i34(3, 14, time '19:30'),
    'Europe/Madrid', 'programada'),
   (:C34SOLOCAN, :P34C, :PRO34C, :CA, :TT34, pg_temp.i34(3, 18, time '19:00'), pg_temp.i34(3, 18, time '19:30'),
-   'Europe/Madrid', 'cancelada');
+   'Europe/Madrid', 'cancelada'),
+  -- S-H3: el TÉCNICO como profesional de una cita del centro B, que no es suyo. Por la rama
+  -- `citas` la política se la deja leer (profesional_id = auth.uid()); solo el filtro de rol de la
+  -- lista evita que, con p_centro_id = CB, el técnico reciba su propio id.
+  (:C34TECB, :P34B, :TEC1, :CB, :TT34, pg_temp.i34(3, 15, time '19:00'), pg_temp.i34(3, 15, time '19:30'),
+   'Europe/Madrid', 'programada'),
+  -- S-H4: PRO34S solo tiene una cita, y sin centro: no debe salir con p_centro_id = CA.
+  (:C34SINPRO, :P34C, :PRO34S, null, :TT34, pg_temp.i34(3, 19, time '19:00'), pg_temp.i34(3, 19, time '19:30'),
+   'Europe/Madrid', 'programada');
 
 -- =========================================================================
 -- A · Forma y permisos
@@ -302,12 +317,12 @@ select pg_temp.assert(
   'A5: la lista: execute para authenticated, ni anon ni service_role');
 
 set local role anon;
-select pg_temp.assert_lanza_codigo(
+select pg_temp.assert_lanza_codigo_msg(
   'select * from public.agenda_densidad_anual(pg_temp.i34(1, 1), pg_temp.i34(1, 1, time ''00:00'', ''Europe/Madrid'', 1), ''Europe/Madrid'')',
-  '42501', 'A6: anon no puede llamar a la densidad');
-select pg_temp.assert_lanza_codigo(
+  '42501', 'function agenda_densidad_anual', 'A6: anon no puede llamar a la densidad');
+select pg_temp.assert_lanza_codigo_msg(
   'select * from public.agenda_profesionales_anuales(pg_temp.i34(1, 1), pg_temp.i34(1, 1, time ''00:00'', ''Europe/Madrid'', 1), ''Europe/Madrid'')',
-  '42501', 'A6: anon no puede llamar a la lista');
+  '42501', 'function agenda_profesionales_anuales', 'A6: anon no puede llamar a la lista');
 reset role;
 
 select pg_temp.assert(
@@ -518,6 +533,16 @@ select pg_temp.assert(
                where l.profesional_id = :PRO34B),
   'F2: con p_centro_id = CA la lista de ADM no incluye a PRO34B');
 
+-- S-H4: el filtro de centro de la lista no deja pasar las citas sin centro.
+select pg_temp.assert(
+  not exists (select 1 from public.agenda_profesionales_anuales(pg_temp.i34(1, 1), pg_temp.i34(1, 1, time '00:00', 'Europe/Madrid', 1), 'Europe/Madrid', :CA) l
+               where l.profesional_id = :PRO34S),
+  'F6: con p_centro_id = CA la lista de ADM no incluye a PRO34S, cuya única cita no tiene centro');
+select pg_temp.assert(
+  exists (select 1 from public.agenda_profesionales_anuales(pg_temp.i34(1, 1), pg_temp.i34(1, 1, time '00:00', 'Europe/Madrid', 1), 'Europe/Madrid') l
+           where l.profesional_id = :PRO34S),
+  'F6 GEMELA: sin centro la lista de ADM sí incluye a PRO34S');
+
 call pg_temp.como(:PRO34A);
 select pg_temp.assert(pg_temp.dif_lista_34(null) = 0, 'F1 PRO34A · sin centro: la lista = el oráculo');
 select pg_temp.assert(pg_temp.dif_lista_34(:CA) = 0, 'F1 PRO34A · CA: la lista = el oráculo');
@@ -544,6 +569,18 @@ select pg_temp.assert(
   and exists (select 1 from public.agenda_profesionales_anuales(pg_temp.i34(1, 1), pg_temp.i34(1, 1, time '00:00', 'Europe/Madrid', 1), 'Europe/Madrid') l
                where l.profesional_id = :PRO34A),
   'F3: todos los nombres que recibe el técnico son no nulos (y la lista no está vacía)');
+
+-- S-H3: con p_centro_id = CB el técnico de CA no recibe a nadie (su cita de CB solo la leería por
+-- la rama `citas`, que el filtro de rol le cierra). Gemela: con CA sí se recibe a sí mismo.
+select pg_temp.assert(
+  not exists (select 1 from public.agenda_profesionales_anuales(pg_temp.i34(1, 1), pg_temp.i34(1, 1, time '00:00', 'Europe/Madrid', 1), 'Europe/Madrid', :CB)),
+  'F7: TEC1 con p_centro_id = CB no recibe ningún profesional (ni a sí mismo por su cita de CB)');
+select pg_temp.assert(
+  exists (select 1 from public.agenda_profesionales_anuales(pg_temp.i34(1, 1), pg_temp.i34(1, 1, time '00:00', 'Europe/Madrid', 1), 'Europe/Madrid', :CA) l
+           where l.profesional_id = :TEC1),
+  'F7 GEMELA: con p_centro_id = CA recibe a TEC1');
+select pg_temp.assert(pg_temp.dia34('Europe/Madrid', null, :TEC1, 3, 15) is null,
+  'F7: y la densidad del técnico no cuenta su cita de CB el 15-03');
 
 call pg_temp.como(:ADM);
 select pg_temp.assert(

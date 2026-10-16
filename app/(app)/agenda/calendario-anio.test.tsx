@@ -169,6 +169,26 @@ describe('CalendarioAnio · teclado', () => {
     expect(within(marzo()).getByRole('link', { name: /17 de marzo/ })).toHaveFocus();
   });
 
+  it('la flecha abajo del 28 de marzo cae en el 4 de abril, otra cuadrícula', async () => {
+    const user = userEvent.setup();
+    montar();
+    within(marzo()).getByRole('link', { name: /28 de marzo/ }).focus();
+    await user.keyboard('{ArrowDown}');
+    const abril = screen.getByRole('grid', { name: /Abril/ });
+    expect(within(abril).getByRole('link', { name: /, 4 de abril/ })).toHaveFocus();
+  });
+
+  it('la flecha derecha del 31 de marzo pasa al 1 de abril, en la cuadrícula del mes siguiente', async () => {
+    const user = userEvent.setup();
+    montar();
+    within(marzo()).getByRole('link', { name: /31 de marzo/ }).focus();
+    await user.keyboard('{ArrowRight}');
+    const abril = screen.getByRole('grid', { name: /Abril/ });
+    const destino = within(abril).getByRole('link', { name: /, 1 de abril/ });
+    expect(destino).toHaveFocus();
+    expect(destino.tabIndex).toBe(0);
+  });
+
   it('una tecla que no es de navegación no se intercepta; con Ctrl tampoco', () => {
     montar();
     const dia = within(marzo()).getByRole('link', { name: /10 de marzo/ });
@@ -185,6 +205,9 @@ describe('CalendarioAnio · teclado', () => {
     dia.focus();
     await user.keyboard('{ArrowRight}');
     expect(dia).toHaveFocus();
+    // Y el tabulador sigue en la rejilla: exactamente un día con tabindex=0, y es este.
+    const tabulables = screen.getAllByRole('link').filter((a) => a.getAttribute('tabindex') === '0');
+    expect(tabulables).toEqual([dia]);
   });
 });
 
