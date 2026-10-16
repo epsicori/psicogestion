@@ -5,7 +5,7 @@ import { Cargando } from '@/components/ui/piezas';
 import { ContenidoEditor } from '../contenido';
 
 /**
- * `/pacientes/<uuid>/borrador/<uuid>`: corregir un borrador (T-046). Una versión nueva completa a
+ * `/pacientes/[id]/borrador/[borradorId]`: corregir un borrador (T-046). Una versión nueva completa a
  * partir de la última; si está descartado o ya preparado en el programa, solo lectura.
  */
 export default function PaginaCorregirBorrador({
