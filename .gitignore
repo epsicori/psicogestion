@@ -56,3 +56,6 @@ next-env.d.ts
 .claude/wip
 .claude/allow-main
 .claude/allow-merge
+
+# Textos de consentimiento del propietario: llevan datos personales suyos; se cargan en la app de cada instancia, no en el código.
+docs/CONSENTIMIENTOS/
