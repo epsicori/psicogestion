@@ -224,3 +224,12 @@ El que declara el contrato.
 - Avisar de las citas existentes cuando se crea un festivo encima: es otra pieza (bandeja).
 - Distinguir el cierre del festivo en la serie (D3).
 - Retirar el festivo personal (D7).
+
+## Gate del propietario (17-10-2026)
+
+- Diseño y partición en T-056a y T-056b: **aprobados, implementa**.
+- P1: festivos siempre por centro, los nacionales también (una fila por centro): **sí**.
+- P2: las vacaciones valen para todos los centros, con opción de limitarlas a uno: **sí**.
+- P3: solo el administrador da de alta festivos y cierres: **sí**.
+- P4: un cierre de centro cuenta como festivo en las propuestas de serie: **sí**.
+- Siembra: festivos locales y cierre **inventados** hasta que el propietario entregue los reales.

@@ -353,3 +353,12 @@ El que declara el contrato, más `scripts/rls/23-cita-en-episodio.sql` (en T-055
 - DELETE de franjas (D7), franjas que cruzan la medianoche (el check de T-010) y el solape entre centros (D4).
 - Borrar `disponibilidad.zona_horaria` (D5).
 - Exigir la confirmación fuera de franja en la base (D2).
+
+## Gate del propietario (17-10-2026)
+
+- Diseño y partición en T-055a y T-055b: **aprobados, implementa**.
+- P1: cada profesional edita sus franjas y el administrador las de todos; el técnico no: **sí**.
+- P2: la primera sesión de una serie en festivo se sigue rechazando: **sí** (la serie no cambia).
+- P3: mover una cita fuera de horario o a un festivo avisa como texto dentro del diálogo, sin paso de confirmación, en T-055b: **sí**.
+- P4: las alternativas de serie no se ajustan a franja en este ticket: **sí**.
+- Siembra: horario **inventado** hasta que el propietario entregue el real.
